@@ -1,0 +1,1 @@
+"""Deriv adapter support module."""
