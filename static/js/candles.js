@@ -1,2 +1,2 @@
-// subscriptions market data module
+// candles market data module
 window.AlgoBotMarketData = window.AlgoBotMarketData || {};
