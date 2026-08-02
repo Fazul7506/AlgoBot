@@ -1,0 +1,40 @@
+DEBUG 2026-06-15 22:47:45,809 connection 1456 4560 Failed to enable maintenance notifications: unknown subcommand 'MAINT_NOTIFICATIONS'. Try CLIENT HELP.
+INFO 2026-06-15 22:47:45,810 market_service 1456 4560 Redis connection established
+INFO 2026-06-15 22:47:45,908 market_service 1456 4560 Loaded 6 market symbols
+INFO 2026-06-15 22:47:46,027 market_service 1456 4560 Loaded 6 market symbols
+INFO 2026-06-15 22:48:09,809 market_service 4124 7144 Loaded 7 market symbols
+INFO 2026-06-15 22:48:16,792 market_service 10024 11312 Loaded 7 market symbols
+INFO 2026-06-15 23:36:05,304 market_service 5224 9276 Loaded 5 market symbols
+INFO 2026-06-15 23:36:19,052 market_service 10220 2280 Loaded 7 market symbols
+INFO 2026-06-26 23:22:42,087 market_service 6956 12936 Loaded 5 market symbols
+INFO 2026-06-26 23:22:52,311 market_service 4920 12196 Loaded 7 market symbols
+DEBUG 2026-06-26 23:25:34,747 connection 1228 11896 Failed to enable maintenance notifications: unknown subcommand 'MAINT_NOTIFICATIONS'. Try CLIENT HELP.
+INFO 2026-06-26 23:25:34,799 market_service 1228 11896 Redis connection established
+INFO 2026-06-26 23:25:34,839 market_service 1228 11896 Loaded 5 market symbols
+INFO 2026-06-26 23:25:37,601 market_service 1228 11896 Loaded 5 market symbols
+INFO 2026-06-27 01:22:34,608 market_service 12964 1892 Loaded 7 market symbols
+INFO 2026-06-27 01:22:41,298 market_service 5580 5928 Loaded 7 market symbols
+INFO 2026-06-27 01:28:48,394 market_service 10076 11296 Loaded 8 market symbols
+INFO 2026-06-27 01:31:58,960 market_service 4168 5984 Loaded 8 market symbols
+INFO 2026-06-28 10:30:42,747 market_service 13416 13420 Loaded 8 market symbols
+INFO 2026-06-28 10:31:28,746 market_service 11684 10412 Loaded 8 market symbols
+INFO 2026-06-28 10:44:57,770 market_service 2044 10836 Loaded 5 market symbols
+INFO 2026-06-28 10:45:14,304 market_service 14276 11092 Loaded 7 market symbols
+INFO 2026-06-28 10:50:22,277 market_service 10716 14296 Loaded 8 market symbols
+INFO 2026-06-28 11:25:49,920 notification_service 6136 5196 Push notification: Trade opened: R_75 via trend
+INFO 2026-06-28 11:29:07,393 market_service 2440 14008 Loaded 5 market symbols
+INFO 2026-06-28 11:29:31,870 market_service 10068 5400 Loaded 7 market symbols
+INFO 2026-06-28 11:34:21,622 market_service 7204 5564 Loaded 8 market symbols
+INFO 2026-06-28 11:34:25,085 notification_service 13392 6024 Push notification: Trade opened: R_75 via trend
+INFO 2026-06-28 19:21:13,587 notification_service 10268 8648 Push notification: Trade opened: R_75 via trend
+INFO 2026-06-28 19:35:54,756 notification_service 11360 11736 Push notification: Trade opened: R_75 via trend
+INFO 2026-07-04 23:41:11,120 market_service 5888 12972 Loaded 8 market symbols
+INFO 2026-07-04 23:41:23,096 market_service 12136 9552 Loaded 8 market symbols
+INFO 2026-07-04 23:44:06,934 market_service 7120 6560 Loaded 8 market symbols
+INFO 2026-07-04 23:44:08,626 notification_service 9560 244 Push notification: Trade opened: R_75 via trend
+INFO 2026-07-05 00:09:03,772 market_service 3840 12964 Loaded 5 market symbols
+INFO 2026-07-05 00:10:54,122 market_service 8272 5536 Loaded 5 market symbols
+INFO 2026-07-05 00:14:30,765 market_service 7976 11976 Loaded 5 market symbols
+INFO 2026-07-05 00:15:09,952 market_service 7304 8908 Loaded 5 market symbols
+INFO 2026-07-05 00:30:40,804 market_service 504 9324 Loaded 6 market symbols
+INFO 2026-07-05 00:31:12,110 notification_service 9700 2040 Push notification: Trade opened: R_75 via trend
