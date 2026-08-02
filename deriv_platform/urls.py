@@ -116,6 +116,7 @@ urlpatterns = [
     path('api/', include('apps.smart_money.urls')),
     path('api/', include('apps.backtesting.urls')),
     path('api/', include('apps.ai_engine.urls')),
+    path('api/', include('apps.monitoring.urls')),
     
     # Legacy URLs
     path('connect-deriv/', deriv_login, name='connect_deriv'),

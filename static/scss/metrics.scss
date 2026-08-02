@@ -1,0 +1,7 @@
+.monitoring-metrics {
+  --monitoring-ok: #16a34a;
+  --monitoring-warning: #f59e0b;
+  --monitoring-critical: #dc2626;
+  .monitoring-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+  .status-card { border: 1px solid rgba(148, 163, 184, .3); border-radius: .75rem; padding: 1rem; background: rgba(15, 23, 42, .04); }
+}
