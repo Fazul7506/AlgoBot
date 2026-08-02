@@ -5,7 +5,9 @@ from . import constants as c
 from apps.broker.services import BrokerService
 class ExecutionEngine:
     def place_order(self, user, **data):
-        order=OrderService().create_order(user, **data); OrderValidationService().validate(order); ExecutionQueueService().enqueue(order, data.get('priority',5)); return order
+        order=OrderService().create_order(user, **data); OrderValidationService().validate(order);
+        from apps.risk.engine import RiskEngine
+        RiskEngine().approve_or_raise(order, data.get('risk_context') or {}); ExecutionQueueService().enqueue(order, data.get('priority',5)); return order
     def cancel_order(self, order): return OrderService().cancel(order)
     def modify_order(self, order, **changes): return OrderService().modify(order, **changes)
     async def execute(self, order):

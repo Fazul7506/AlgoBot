@@ -111,6 +111,7 @@ urlpatterns = [
     path('api/', include('apps.market_data.urls')),
     path('api/', include('apps.indicators.urls')),
     path('api/', include('apps.execution.urls')),
+    path('api/', include('apps.risk.urls')),
     path('api/', include('apps.strategies.urls')),
     
     # Legacy URLs
