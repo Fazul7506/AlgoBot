@@ -108,7 +108,7 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/', include('apps.broker.urls')),
     path('api/', include('apps.deriv.urls')),
-    path('api/', include('apps.market_data.urls')),
+    path('api/', include('apps.execution.urls')),
     
     # Legacy URLs
     path('connect-deriv/', deriv_login, name='connect_deriv'),

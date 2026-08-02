@@ -25,7 +25,7 @@ DJANGO_APPS = [
     "django.contrib.staticfiles",
 ]
 THIRD_PARTY_APPS = ["rest_framework", "rest_framework_simplejwt"]
-LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data"]
+LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.execution", "apps.trading", "apps.contracts"]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
