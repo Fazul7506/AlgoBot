@@ -114,6 +114,7 @@ urlpatterns = [
     path('api/', include('apps.risk.urls')),
     path('api/', include('apps.strategies.urls')),
     path('api/', include('apps.smart_money.urls')),
+    path('api/', include('apps.backtesting.urls')),
     path('api/', include('apps.ai_engine.urls')),
     path('api/', include('apps.monitoring.urls')),
     

@@ -1,2 +1,1 @@
-// statistics market data module
-window.AlgoBotMarketData = window.AlgoBotMarketData || {};
+export const phase10 = { init() { console.log('Phase 10 statistics ready'); } };
