@@ -112,6 +112,7 @@ urlpatterns = [
     path('api/', include('apps.indicators.urls')),
     path('api/', include('apps.execution.urls')),
     path('api/', include('apps.strategies.urls')),
+    path('api/', include('apps.smart_money.urls')),
     
     # Legacy URLs
     path('connect-deriv/', deriv_login, name='connect_deriv'),
