@@ -1,2 +1,2 @@
-// subscriptions market data module
+// ticks market data module
 window.AlgoBotMarketData = window.AlgoBotMarketData || {};

@@ -1,2 +1,2 @@
-// subscriptions market data module
+// replay market data module
 window.AlgoBotMarketData = window.AlgoBotMarketData || {};
