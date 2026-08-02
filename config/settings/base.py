@@ -28,7 +28,7 @@ THIRD_PARTY_APPS = ["rest_framework", "rest_framework_simplejwt"]
 LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.smart_money"]
 LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis"]
 LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.execution", "apps.trading", "apps.contracts", "apps.risk"]
-LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies"]
+LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.smart_money", "apps.risk", "apps.ai_engine", "apps.ml_models", "apps.feature_store", "apps.training"]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
