@@ -1,0 +1,11 @@
+from .trend_following import TrendFollowingStrategy
+from .mean_reversion import MeanReversionStrategy
+from .breakout import BreakoutStrategy
+from .momentum import MomentumStrategy
+from .scalping import ScalpingStrategy
+from .swing import SwingStrategy
+from .range import RangeStrategy
+from .volatility import VolatilityStrategy
+from .support_resistance import SupportResistanceStrategy
+from .smart_money import SmartMoneyStrategy
+BUILT_IN_STRATEGIES=[TrendFollowingStrategy,MeanReversionStrategy,BreakoutStrategy,MomentumStrategy,ScalpingStrategy,SwingStrategy,RangeStrategy,VolatilityStrategy,SupportResistanceStrategy,SmartMoneyStrategy]
