@@ -1,0 +1,6 @@
+-r base.txt
+black
+ruff
+isort
+mypy
+bandit

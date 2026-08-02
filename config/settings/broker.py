@@ -1,0 +1,10 @@
+"""Broker and third-party provider settings."""
+
+from .utils import env
+
+TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = env("TELEGRAM_CHAT_ID", "")
+PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", "stripe")
+STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", env("STRIPE_API_KEY", ""))
+STRIPE_API_KEY = STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", "")
