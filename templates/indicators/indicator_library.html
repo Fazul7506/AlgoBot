@@ -1,1 +1,5 @@
-{% extends 'base.html' %}{% block content %}<section class="indicator-dashboard"><h1>indicator library</h1><div class="indicator-card">Trend Gauge</div><div class="rsi-gauge">RSI Gauge</div><div class="macd-panel">MACD Panel</div><div class="bollinger-panel">Bollinger Bands</div><div class="pattern-card">Active Pattern</div><table class="support-resistance-table"><tr><th>Support</th><th>Resistance</th></tr></table><div class="mtf-matrix">MTF Matrix</div><div class="indicator-settings-modal">Settings</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Indicator Library | AlgoBot{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Indicator Library" module="Indicators" %}
+{% endblock %}

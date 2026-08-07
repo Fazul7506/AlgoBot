@@ -39,7 +39,7 @@ class MarketSymbolViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = MarketSymbol.objects.filter(is_active=True)
     serializer_class = MarketSymbolSerializer
     pagination_class = StandardPagination
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -109,7 +109,7 @@ class MarketSymbolViewSet(viewsets.ReadOnlyModelViewSet):
 
 class MarketRegimeViewSet(viewsets.ViewSet):
     """API endpoints for market regime detection and dashboard."""
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
 
     def list(self, request):
         symbol = request.query_params.get('symbol')
@@ -186,7 +186,7 @@ class PriceHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = PriceHistory.objects.all()
     serializer_class = PriceHistorySerializer
     pagination_class = StandardPagination
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -321,7 +321,7 @@ class MarketSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
     
     queryset = MarketSnapshot.objects.all()
     serializer_class = MarketSnapshotSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
     
     @action(detail=False, methods=['get'])
     def all_snapshots(self, request):
@@ -357,7 +357,7 @@ class TickDataViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = TickData.objects.all()
     serializer_class = TickDataSerializer
     pagination_class = StandardPagination
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -432,7 +432,7 @@ class DataStreamSessionViewSet(viewsets.ReadOnlyModelViewSet):
 class MarketDataStatsViewSet(viewsets.ViewSet):
     """API endpoints for market data statistics"""
     
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
     
     @action(detail=False, methods=['get'])
     def overview(self, request):

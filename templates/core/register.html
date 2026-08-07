@@ -1,3 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Register | AlgoBot{% endblock %}
-{% block content %}<h1>Create your AlgoBot workspace</h1><p>Start with secure AI-assisted trading operations.</p><a href="/connect-deriv/">Connect with Deriv</a>{% endblock %}
+{% block content %}
+<section class="auth-card" aria-labelledby="register-title">
+  <p class="eyebrow">Institutional onboarding</p>
+  <h1 id="register-title">Create your AlgoBot workspace</h1>
+  <p class="hero-copy">Start with a secure account; trading features remain hidden until authentication completes.</p>
+  <form method="post" action="/api/auth/register/" novalidate>
+    {% csrf_token %}
+    <label>Username<input name="username" autocomplete="username" required minlength="3"></label>
+    <label>Email<input name="email" type="email" autocomplete="email" required></label>
+    <label>Password<input name="password" type="password" autocomplete="new-password" required minlength="8"></label>
+    <div class="form-actions"><a href="/login/">Already registered?</a><button type="submit">Create account</button></div>
+  </form>
+</section>
+{% endblock %}

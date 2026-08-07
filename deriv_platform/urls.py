@@ -16,6 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic import RedirectView
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -42,7 +43,7 @@ from core.views import (
     home, login_page, register_page, dashboard_page, markets_page, strategies_page,
     trading_page, backtesting_page, predictions_page, performance_page, settings_page,
     profile_page, terms_page, privacy_page, risk_page,
-    billing_success_page, billing_cancel_page,
+    billing_success_page, billing_cancel_page, forgot_password_page, reset_password_page, verify_email_page, cookie_policy_page, licensing_page, contact_page, about_page, public_status_page,
 )
 from core.views_payment import stripe_webhook
 
@@ -81,6 +82,15 @@ urlpatterns = [
     path('', home, name='home'),
     path('login/', login_page, name='login_page'),
     path('register/', register_page, name='register_page'),
+    path('accounts/login/', RedirectView.as_view(pattern_name='login_page', permanent=False), name='legacy_login_redirect'),
+    path('forgot-password/', forgot_password_page, name='forgot_password'),
+    path('reset-password/', reset_password_page, name='reset_password'),
+    path('verify-email/', verify_email_page, name='verify_email'),
+    path('cookies/', cookie_policy_page, name='cookie_policy'),
+    path('licensing/', licensing_page, name='licensing'),
+    path('contact/', contact_page, name='contact'),
+    path('about/', about_page, name='about'),
+    path('status/', public_status_page, name='public_status'),
     path('dashboard/', dashboard_page, name='dashboard_page'),
     path('analytics/', include('apps.analytics.urls')),
     path('monitoring/', include('apps.monitoring.urls')),

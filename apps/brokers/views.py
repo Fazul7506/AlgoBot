@@ -3,7 +3,7 @@ from rest_framework import viewsets, permissions, decorators, response, status
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
 from .serializers import *
 from .services import BrokerConnectionService, ExecutionEngine, BrokerHealthService
-class BrokerViewSet(viewsets.ReadOnlyModelViewSet): queryset=Broker.objects.all(); serializer_class=BrokerSerializer; permission_classes=[permissions.IsAuthenticatedOrReadOnly]
+class BrokerViewSet(viewsets.ReadOnlyModelViewSet): queryset=Broker.objects.all(); serializer_class=BrokerSerializer; permission_classes=[permissions.IsAuthenticated]
 class BrokerAccountViewSet(viewsets.ModelViewSet):
     serializer_class=BrokerAccountSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return BrokerAccount.objects.filter(user=self.request.user)

@@ -1,5 +1,5 @@
-{% load static %}
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>AlgoBot Sandbox</title><link rel="stylesheet" href="{% static 'css/developer.css' %}"></head>
-<body class="developer-page"><main class="platform-shell"><header class="hero"><p class="eyebrow">AlgoBot Enterprise</p><h1>Sandbox</h1><p>Institutional-grade controls, analytics, automation, and operational workflows.</p></header><section class="card-grid"><article class="metric-card"><span>Status</span><strong>Operational</strong></article><article class="metric-card"><span>Health</span><strong>100%</strong></article><article class="metric-card"><span>Latency</span><strong>&lt;100 ms</strong></article></section></main><script src="{% static 'js/developer.js' %}" defer></script></body></html>
+{% extends "base.html" %}
+{% block title %}Sandbox | AlgoBot{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Sandbox" module="Developer" %}
+{% endblock %}

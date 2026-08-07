@@ -81,6 +81,30 @@ def privacy_page(request):
     return render(request, 'core/privacy.html')
 
 
+def forgot_password_page(request):
+    return render(request, 'core/forgot_password.html')
+
+def reset_password_page(request):
+    return render(request, 'core/reset_password.html')
+
+def verify_email_page(request):
+    return render(request, 'core/verify_email.html')
+
+def cookie_policy_page(request):
+    return render(request, 'core/cookies.html')
+
+def licensing_page(request):
+    return render(request, 'core/licensing.html')
+
+def contact_page(request):
+    return render(request, 'core/contact.html')
+
+def about_page(request):
+    return render(request, 'core/about.html')
+
+def public_status_page(request):
+    return render(request, 'core/system_status.html')
+
 @login_required
 def risk_page(request):
     return render(request, 'core/risk.html')

@@ -3,7 +3,7 @@ from .models import AIModel, Prediction, FeatureVector, TrainingJob, AIRecommend
 from .serializers import *
 from .services import AIEngine, TrainingService, ExplainabilityService, FeatureStoreService
 from .validators import validate_feature_context
-class AIModelViewSet(viewsets.ModelViewSet): queryset=AIModel.objects.all(); serializer_class=AIModelSerializer; permission_classes=[permissions.IsAuthenticatedOrReadOnly]
+class AIModelViewSet(viewsets.ModelViewSet): queryset=AIModel.objects.all(); serializer_class=AIModelSerializer; permission_classes=[permissions.IsAuthenticated]
 class PredictionViewSet(viewsets.ReadOnlyModelViewSet): queryset=Prediction.objects.all(); serializer_class=PredictionSerializer
 class RecommendationViewSet(viewsets.ReadOnlyModelViewSet): queryset=AIRecommendation.objects.all(); serializer_class=AIRecommendationSerializer
 class MarketRegimeViewSet(viewsets.ReadOnlyModelViewSet): queryset=MarketRegime.objects.all(); serializer_class=MarketRegimeSerializer
