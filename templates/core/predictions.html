@@ -1,3 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Predictions | AlgoBot{% endblock %}
-{% block content %}<h1>Prediction engine</h1><p>Review AI confidence, model explanations, and market regime forecasts.</p>{% endblock %}
+{% block title %}AI prediction center | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="AI prediction center" module="AI" page_id="core-predictions" %}
+{% endblock %}

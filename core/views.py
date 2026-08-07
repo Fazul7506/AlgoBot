@@ -6,6 +6,7 @@ from django.conf import settings
 from django.shortcuts import redirect, render
 from django.http import HttpResponse
 from django.contrib.auth.models import User
+from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -27,38 +28,47 @@ def register_page(request):
     return render(request, 'core/register.html')
 
 
+@login_required
 def dashboard_page(request):
     return render(request, 'core/dashboard.html')
 
 
+@login_required
 def markets_page(request):
     return render(request, 'core/markets.html')
 
 
+@login_required
 def strategies_page(request):
     return render(request, 'core/strategies.html')
 
 
+@login_required
 def trading_page(request):
     return render(request, 'core/trading.html')
 
 
+@login_required
 def backtesting_page(request):
     return render(request, 'core/backtesting.html')
 
 
+@login_required
 def predictions_page(request):
     return render(request, 'core/predictions.html')
 
 
+@login_required
 def performance_page(request):
     return render(request, 'core/performance.html')
 
 
+@login_required
 def settings_page(request):
     return render(request, 'core/settings.html')
 
 
+@login_required
 def profile_page(request):
     return render(request, 'core/profile.html')
 
@@ -71,14 +81,17 @@ def privacy_page(request):
     return render(request, 'core/privacy.html')
 
 
+@login_required
 def risk_page(request):
     return render(request, 'core/risk.html')
 
 
+@login_required
 def billing_success_page(request):
     return render(request, 'core/billing_success.html')
 
 
+@login_required
 def billing_cancel_page(request):
     return render(request, 'core/billing_cancel.html')
 

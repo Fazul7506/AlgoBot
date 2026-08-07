@@ -1,3 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Settings | AlgoBot{% endblock %}
-{% block content %}<h1>System preferences</h1><p>Manage security, integrations, notification channels, and platform defaults.</p>{% endblock %}
+{% block title %}Account and platform settings | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Account and platform settings" module="Settings" page_id="core-settings" %}
+{% endblock %}

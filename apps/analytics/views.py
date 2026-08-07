@@ -4,6 +4,7 @@ import csv
 from django.db.models import Avg, Count, Sum
 from django.http import HttpResponse
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 from trading.models import PerformanceSnapshot, Trade
 
 
@@ -28,10 +29,12 @@ def _analytics_context(user=None):
     }
 
 
+@login_required
 def analytics_dashboard(request):
     return render(request, "analytics/dashboard.html", _analytics_context(request.user))
 
 
+@login_required
 def analytics_export(request):
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="trading-analytics.csv"'

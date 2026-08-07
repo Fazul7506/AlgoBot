@@ -10,8 +10,25 @@
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to content</a>
-  <aside class="app-sidebar" aria-label="Primary navigation"><div class="brand">AlgoBot<span>Enterprise</span></div><nav><a href="/">Overview</a><a href="/trading/">Trading</a><a href="/risk/">Risk</a><a href="/analytics/">Analytics</a><a href="/monitoring/">Monitoring</a><a href="/settings/">Settings</a></nav></aside>
-  <div class="app-shell"><header class="topbar"><div>Institutional Trading Operations</div><div class="topbar-actions"><kbd>⌘K</kbd><button type="button" data-theme-toggle>Theme</button></div></header><main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main><footer class="app-footer">AlgoBot Enterprise • Secure trading infrastructure • Audit-ready operations</footer></div>
+  <aside class="app-sidebar" aria-label="Primary navigation">
+    <a class="brand" href="/">AlgoBot<span>Enterprise</span></a>
+    <nav>
+      <h2>Command</h2>
+      <a href="/dashboard/">Dashboard</a><a href="/trading/">Trading terminal</a><a href="/markets/">Markets</a><a href="/analytics/">Analytics</a><a href="/performance/">Performance</a>
+      <h2>Quant</h2>
+      <a href="/strategies/">Strategies</a><a href="/backtesting/">Backtesting</a><a href="/predictions/">AI predictions</a><a href="/api/smc/">Smart Money / ICT</a><a href="/api/indicators/">Indicators</a>
+      <h2>Operations</h2>
+      <a href="/risk/">Risk</a><a href="/monitoring/">Monitoring</a><a href="/api/portfolio/">Portfolio</a><a href="/api/automation/workflows/">Automation</a><a href="/api/notifications/">Notifications</a>
+      <h2>Integrations</h2>
+      <a href="/api/brokers/">Brokers</a><a href="/connect-deriv/">Connect Deriv</a><a href="/api/developer/docs/">Developer APIs</a><a href="/api/system/status/">System status</a><a href="/settings/">Settings</a>
+      {% if request.user.is_staff %}<h2>Administration</h2><a href="/admin/">Django admin</a><a href="/api/enterprise/executive/">Enterprise</a>{% endif %}
+    </nav>
+  </aside>
+  <div class="app-shell">
+    <header class="topbar"><div>Institutional Trading Operations</div><div class="topbar-actions">{% if request.user.is_authenticated %}<span>{{ request.user.username }}</span>{% else %}<a href="/login/">Login</a>{% endif %}<kbd>⌘K</kbd><button type="button" data-theme-toggle>Theme</button></div></header>
+    <main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main>
+    <footer class="app-footer">AlgoBot Enterprise • Secure trading infrastructure • Audit-ready operations</footer>
+  </div>
   <script src="{% static 'js/enterprise_templates.js' %}" defer></script>
   {% block extra_js %}{% endblock %}
 </body>
