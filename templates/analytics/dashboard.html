@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+<h1>Trading Analytics</h1>
+<section class="metrics-grid">
+  <article><h3>Total Trades</h3><p>{{ total_trades }}</p></article>
+  <article><h3>Win Rate</h3><p>{{ win_rate|floatformat:2 }}%</p></article>
+  <article><h3>Profit Factor</h3><p>{{ profit_factor|floatformat:2 }}</p></article>
+  <article><h3>Average Profit</h3><p>{{ average_profit|floatformat:2 }}</p></article>
+</section>
+<a href="{% url 'analytics-export' %}">Export CSV</a>
+{{ equity_curve|json_script:"equity-curve-data" }}
+{{ strategy_distribution|json_script:"strategy-distribution-data" }}
+{% endblock %}

@@ -51,8 +51,15 @@ class Strategy(models.Model):
 class Trade(models.Model):
     """Trade execution record"""
     TRADE_STATUS = [
+        ('NEW', 'New'),
+        ('VALIDATED', 'Validated'),
+        ('QUEUED', 'Queued'),
+        ('SUBMITTED', 'Submitted'),
+        ('ACCEPTED', 'Accepted'),
         ('OPEN', 'Open'),
+        ('PARTIALLY_CLOSED', 'Partially Closed'),
         ('CLOSED', 'Closed'),
+        ('ARCHIVED', 'Archived'),
         ('CANCELLED', 'Cancelled'),
     ]
 
@@ -69,6 +76,8 @@ class Trade(models.Model):
     profit = models.FloatField(default=0)
     profit_pct = models.FloatField(default=0)
     status = models.CharField(max_length=20, choices=TRADE_STATUS, default='OPEN')
+    client_request_id = models.CharField(max_length=80, blank=True, db_index=True)
+    broker_reference = models.CharField(max_length=160, blank=True, db_index=True)
     
     strategy_confidence = models.FloatField(default=0)
     entry_reason = models.TextField(blank=True)
@@ -81,9 +90,147 @@ class Trade(models.Model):
 
     class Meta:
         ordering = ['-opened_at']
+        indexes = [
+            models.Index(fields=['user', 'status', '-opened_at']),
+            models.Index(fields=['symbol', 'status']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'client_request_id'], condition=~models.Q(client_request_id=''), name='unique_trade_client_request'),
+        ]
 
     def __str__(self):
         return f"{self.symbol} {self.contract_type} - {self.status}"
+
+
+class TradeStateTransition(models.Model):
+    """Immutable audit trail for explicit institutional trade lifecycle changes."""
+    trade = models.ForeignKey(Trade, on_delete=models.CASCADE, related_name='state_transitions')
+    from_state = models.CharField(max_length=20, blank=True)
+    to_state = models.CharField(max_length=20)
+    reason = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['trade', '-created_at']), models.Index(fields=['to_state', '-created_at'])]
+
+
+class TradeExecution(models.Model):
+    trade = models.ForeignKey(Trade, on_delete=models.CASCADE, related_name='executions')
+    broker = models.CharField(max_length=60, default='deriv')
+    status = models.CharField(max_length=40, db_index=True)
+    request_payload = models.JSONField(default=dict, blank=True)
+    response_payload = models.JSONField(default=dict, blank=True)
+    latency_ms = models.FloatField(default=0)
+    attempt = models.PositiveSmallIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['trade', '-created_at']), models.Index(fields=['broker', 'status'])]
+
+
+class PortfolioSnapshot(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='portfolio_snapshots')
+    balance = models.FloatField(default=0)
+    equity = models.FloatField(default=0)
+    margin = models.FloatField(default=0)
+    open_positions = models.PositiveIntegerField(default=0)
+    daily_pnl = models.FloatField(default=0)
+    risk_utilization = models.FloatField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', '-created_at'])]
+
+
+class StrategyPerformance(models.Model):
+    strategy = models.ForeignKey(Strategy, on_delete=models.CASCADE, related_name='performance_snapshots')
+    symbol = models.CharField(max_length=20, blank=True)
+    total_trades = models.PositiveIntegerField(default=0)
+    win_rate = models.FloatField(default=0)
+    profit_factor = models.FloatField(default=0)
+    max_drawdown = models.FloatField(default=0)
+    net_pnl = models.FloatField(default=0)
+    snapshot_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-snapshot_at']
+        indexes = [models.Index(fields=['strategy', '-snapshot_at']), models.Index(fields=['symbol', '-snapshot_at'])]
+
+
+class RiskEvent(models.Model):
+    SEVERITY_CHOICES = [('INFO', 'Info'), ('WARNING', 'Warning'), ('CRITICAL', 'Critical')]
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    trade = models.ForeignKey(Trade, on_delete=models.SET_NULL, null=True, blank=True, related_name='risk_events')
+    event_type = models.CharField(max_length=80, db_index=True)
+    severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default='INFO', db_index=True)
+    message = models.TextField()
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['event_type', 'severity', '-created_at'])]
+
+
+class ConnectionLog(models.Model):
+    broker = models.CharField(max_length=60, db_index=True)
+    account_id = models.CharField(max_length=80, blank=True, db_index=True)
+    status = models.CharField(max_length=40, db_index=True)
+    latency_ms = models.FloatField(default=0)
+    message = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['broker', 'status', '-created_at'])]
+
+
+class PredictionHistory(models.Model):
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    symbol = models.CharField(max_length=20, db_index=True)
+    model_name = models.CharField(max_length=120, db_index=True)
+    prediction = models.JSONField(default=dict)
+    confidence = models.FloatField(default=0)
+    actual_outcome = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['symbol', 'model_name', '-created_at'])]
+
+
+class UserPreferences(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='trading_preferences')
+    default_symbol = models.CharField(max_length=20, default='R_75')
+    default_strategy = models.ForeignKey(Strategy, on_delete=models.SET_NULL, null=True, blank=True)
+    trading_enabled = models.BooleanField(default=False)
+    risk_percent = models.FloatField(default=0.02)
+    max_daily_loss = models.FloatField(default=0)
+    max_exposure = models.FloatField(default=0)
+    notification_preferences = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class MarketCandle(models.Model):
+    symbol = models.CharField(max_length=20)
+    timeframe = models.CharField(max_length=10)
+    timestamp = models.DateTimeField()
+    open = models.FloatField()
+    high = models.FloatField()
+    low = models.FloatField()
+    close = models.FloatField()
+    volume = models.FloatField(default=0)
+    source = models.CharField(max_length=60, default='deriv')
+
+    class Meta:
+        ordering = ['timestamp']
+        indexes = [models.Index(fields=['symbol', 'timeframe', 'timestamp'])]
+        constraints = [models.UniqueConstraint(fields=['symbol', 'timeframe', 'timestamp', 'source'], name='unique_market_candle')]
 
 
 class BacktestResult(models.Model):

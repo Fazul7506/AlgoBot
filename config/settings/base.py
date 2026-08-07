@@ -44,6 +44,7 @@ LOCAL_APPS = [
     "apps.feature_store",
     "apps.training",
     "apps.monitoring",
+    "apps.analytics",
     "apps.logging_system",
     "apps.alerts",
     "apps.audit",
