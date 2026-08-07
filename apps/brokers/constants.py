@@ -1,0 +1,12 @@
+BROKER_DERIV = 'deriv'
+BROKER_PAPER = 'paper'
+BROKER_TYPES = [BROKER_DERIV, BROKER_PAPER, 'mt5', 'mt4', 'oanda', 'binance', 'bybit', 'kraken', 'interactive_brokers', 'alpaca', 'ctrader', 'dxtrade', 'tradingview']
+BROKER_STATUSES = ['active', 'disabled', 'maintenance', 'degraded', 'offline']
+CONNECTION_STATUSES = ['disconnected', 'connecting', 'connected', 'degraded', 'failed', 'reconnecting']
+ACCOUNT_STATUSES = ['active', 'disabled', 'margin_call', 'suspended']
+ORDER_TYPES = ['market', 'limit', 'stop', 'stop_limit', 'trailing_stop', 'bracket', 'oco', 'ioc', 'fok', 'gtc', 'day', 'gtd']
+ORDER_STATUSES = ['created', 'validated', 'approved', 'queued', 'submitted', 'pending', 'executed', 'partially_filled', 'filled', 'rejected', 'expired', 'cancelled', 'closed', 'failed', 'reconciled']
+DIRECTIONS = ['buy', 'sell', 'rise', 'fall', 'call', 'put']
+CONTRACT_TYPES = ['rise_fall', 'higher_lower', 'touch_no_touch', 'in_out', 'matches_differs', 'even_odd', 'accumulators', 'multiplier', 'lookbacks', 'vanillas', 'turbos', 'reset_call', 'reset_put']
+ROUTING_MODES = ['priority', 'round_robin', 'load_balancing', 'latency_based', 'ai_assisted']
+HEALTH_EVENTS = ['BrokerConnected','BrokerDisconnected','BrokerReconnected','AccountUpdated','BalanceUpdated','OrderSubmitted','OrderExecuted','OrderRejected','PositionOpened','PositionClosed','ExecutionCompleted','FailoverActivated','BrokerRecovered','LatencyChanged']
