@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='smc-dashboard'><h1>Heatmap</h1><div data-smc-widget='heatmap'>Institutional SMC intelligence widget: heatmap</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Heatmap | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Heatmap" module="Smart Money" page_id="smart_money-heatmap" %}
+{% endblock %}

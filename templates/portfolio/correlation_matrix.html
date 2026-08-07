@@ -1,4 +1,5 @@
-<section class="portfolio-dashboard" data-component="correlation_matrix">
-  <h1>correlation matrix</h1>
-  <div class="portfolio-summary-card">Institutional portfolio analytics, NAV, allocation, exposure, benchmark, forecast, and reporting widgets.</div>
-</section>
+{% extends "base.html" %}
+{% block title %}correlation matrix | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="correlation matrix" module="Portfolio" page_id="portfolio-correlation_matrix" %}
+{% endblock %}

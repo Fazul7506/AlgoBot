@@ -1,1 +1,5 @@
-<section class='risk-page risk-kill_switch'><h1>Kill Switch</h1><div data-risk-widget='kill_switch'></div></section>
+{% extends "base.html" %}
+{% block title %}Kill Switch | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Kill Switch" module="Risk" page_id="risk-kill_switch" %}
+{% endblock %}

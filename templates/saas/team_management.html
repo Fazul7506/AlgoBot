@@ -1,1 +1,5 @@
-<section class="saas-page"><h1>Team Management</h1></section>
+{% extends "base.html" %}
+{% block title %}Team Management | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Team Management" module="Saas" page_id="saas-team_management" %}
+{% endblock %}

@@ -1,1 +1,5 @@
-<section class="saas-page"><h1>Customer Portal</h1></section>
+{% extends "base.html" %}
+{% block title %}Customer Portal | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Customer Portal" module="Saas" page_id="saas-customer_portal" %}
+{% endblock %}

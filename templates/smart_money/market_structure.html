@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='smc-dashboard'><h1>Market Structure</h1><div data-smc-widget='market_structure'>Institutional SMC intelligence widget: market_structure</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Market Structure | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Market Structure" module="Smart Money" page_id="smart_money-market_structure" %}
+{% endblock %}

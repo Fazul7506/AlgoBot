@@ -1,1 +1,5 @@
-<section class="saas-page"><h1>Invoice History</h1></section>
+{% extends "base.html" %}
+{% block title %}Invoice History | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Invoice History" module="Saas" page_id="saas-invoice_history" %}
+{% endblock %}

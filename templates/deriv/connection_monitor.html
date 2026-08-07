@@ -1,1 +1,5 @@
-{% extends 'base.html' %}{% block content %}<section class='deriv-component'>connection_monitor</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Connection Monitor | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Connection Monitor" module="Deriv" page_id="deriv-connection_monitor" %}
+{% endblock %}

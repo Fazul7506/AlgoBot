@@ -1,1 +1,5 @@
-<section class='risk-page risk-trading_sessions'><h1>Trading Sessions</h1><div data-risk-widget='trading_sessions'></div></section>
+{% extends "base.html" %}
+{% block title %}Trading Sessions | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Trading Sessions" module="Risk" page_id="risk-trading_sessions" %}
+{% endblock %}

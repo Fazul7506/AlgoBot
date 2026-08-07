@@ -1,4 +1,5 @@
-<section class="portfolio-dashboard" data-component="forecasting_dashboard">
-  <h1>forecasting dashboard</h1>
-  <div class="portfolio-summary-card">Institutional portfolio analytics, NAV, allocation, exposure, benchmark, forecast, and reporting widgets.</div>
-</section>
+{% extends "base.html" %}
+{% block title %}forecasting dashboard | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="forecasting dashboard" module="Portfolio" page_id="portfolio-forecasting_dashboard" %}
+{% endblock %}

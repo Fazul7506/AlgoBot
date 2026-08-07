@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='smc-dashboard'><h1>Inverse Fvg</h1><div data-smc-widget='inverse_fvg'>Institutional SMC intelligence widget: inverse_fvg</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Inverse Fvg | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Inverse Fvg" module="Smart Money" page_id="smart_money-inverse_fvg" %}
+{% endblock %}

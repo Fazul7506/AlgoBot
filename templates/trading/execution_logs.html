@@ -1,6 +1,5 @@
-<section class="trading-engine execution_logs">
-  <h1>execution logs</h1>
-  <div data-component="order-ticket"></div><div data-component="position-card"></div><div data-component="contract-card"></div>
-  <div data-component="execution-timeline"></div><span data-component="trade-status-badge"></span>
-  <div data-component="profit-widget"></div><div data-component="order-summary"></div><div data-component="queue-status"></div><div data-component="retry-indicator"></div><div data-component="latency-meter"></div>
-</section>
+{% extends "base.html" %}
+{% block title %}execution logs | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="execution logs" module="Trading" page_id="trading-execution_logs" %}
+{% endblock %}

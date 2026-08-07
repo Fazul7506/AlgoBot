@@ -1,1 +1,5 @@
-{% extends 'base.html' %}{% block content %}<section class='deriv-component'>authorize</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Authorize | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Authorize" module="Deriv" page_id="deriv-authorize" %}
+{% endblock %}

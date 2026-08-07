@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='smc-dashboard'><h1>Confluence Dashboard</h1><div data-smc-widget='confluence_dashboard'>Institutional SMC intelligence widget: confluence_dashboard</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Confluence Dashboard | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Confluence Dashboard" module="Smart Money" page_id="smart_money-confluence_dashboard" %}
+{% endblock %}

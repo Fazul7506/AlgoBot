@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='phase10 portfolio_backtest'><h1>Portfolio Backtest</h1><div data-component='portfolio_backtest'>Phase 10 institutional backtesting, simulation, optimization, replay, and analytics workspace.</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Portfolio Backtest | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Portfolio Backtest" module="Backtesting" page_id="backtesting-portfolio_backtest" %}
+{% endblock %}

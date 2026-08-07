@@ -1,1 +1,5 @@
-{% extends 'base.html' %}{% block content %}<section class='deriv-component'>dashboard</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Dashboard | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Dashboard" module="Deriv" page_id="deriv-dashboard" %}
+{% endblock %}

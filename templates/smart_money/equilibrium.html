@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='smc-dashboard'><h1>Equilibrium</h1><div data-smc-widget='equilibrium'>Institutional SMC intelligence widget: equilibrium</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Equilibrium | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Equilibrium" module="Smart Money" page_id="smart_money-equilibrium" %}
+{% endblock %}

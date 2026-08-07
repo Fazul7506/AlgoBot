@@ -1,1 +1,5 @@
-{% extends "base.html" %}{% block content %}<section class="ai-dashboard"><h1>AI ensemble models</h1><div data-component="ai-widget">Enterprise AI decision support dashboard widget.</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}AI ensemble models | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="AI ensemble models" module="Ai" page_id="ai-ensemble_models" %}
+{% endblock %}

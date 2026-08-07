@@ -1,1 +1,5 @@
-{% extends "base.html" %}{% block content %}<section class="ai-dashboard"><h1>AI hyperparameter optimization</h1><div data-component="ai-widget">Enterprise AI decision support dashboard widget.</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}AI hyperparameter optimization | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="AI hyperparameter optimization" module="Ai" page_id="ai-hyperparameter_optimization" %}
+{% endblock %}

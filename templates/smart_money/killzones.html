@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='smc-dashboard'><h1>Killzones</h1><div data-smc-widget='killzones'>Institutional SMC intelligence widget: killzones</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Killzones | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Killzones" module="Smart Money" page_id="smart_money-killzones" %}
+{% endblock %}

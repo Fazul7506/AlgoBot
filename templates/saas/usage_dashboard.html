@@ -1,1 +1,5 @@
-<section class="saas-page"><h1>Usage Dashboard</h1></section>
+{% extends "base.html" %}
+{% block title %}Usage Dashboard | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Usage Dashboard" module="Saas" page_id="saas-usage_dashboard" %}
+{% endblock %}

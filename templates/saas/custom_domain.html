@@ -1,1 +1,5 @@
-<section class="saas-page"><h1>Custom Domain</h1></section>
+{% extends "base.html" %}
+{% block title %}Custom Domain | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Custom Domain" module="Saas" page_id="saas-custom_domain" %}
+{% endblock %}

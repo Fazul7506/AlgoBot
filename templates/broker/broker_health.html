@@ -1,1 +1,5 @@
-{% extends 'base.html' %}{% block content %}<section class='broker-component'>broker_health</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Broker Health | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Broker Health" module="Broker" page_id="broker-broker_health" %}
+{% endblock %}

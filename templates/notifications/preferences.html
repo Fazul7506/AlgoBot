@@ -1,1 +1,5 @@
-<section class="notifications-page" data-page="preferences"><h1>Notifications Preferences</h1><div class="notification-bell">Notification Bell</div><div class="live-feed">Live Notification Feed</div><div class="delivery-status-table">Delivery Status Table</div></section>
+{% extends "base.html" %}
+{% block title %}Notifications Preferences | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Notifications Preferences" module="Notifications" page_id="notifications-preferences" %}
+{% endblock %}

@@ -1,4 +1,5 @@
-<section class="portfolio-dashboard" data-component="benchmark_dashboard">
-  <h1>benchmark dashboard</h1>
-  <div class="portfolio-summary-card">Institutional portfolio analytics, NAV, allocation, exposure, benchmark, forecast, and reporting widgets.</div>
-</section>
+{% extends "base.html" %}
+{% block title %}benchmark dashboard | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="benchmark dashboard" module="Portfolio" page_id="portfolio-benchmark_dashboard" %}
+{% endblock %}

@@ -1,1 +1,5 @@
-<section class="copy-trading-page"><h1>Reviews</h1></section>
+{% extends "base.html" %}
+{% block title %}Reviews | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Reviews" module="Copy Trading" page_id="copy_trading-reviews" %}
+{% endblock %}

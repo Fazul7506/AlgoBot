@@ -1,1 +1,5 @@
-<section class='risk-page risk-circuit_breakers'><h1>Circuit Breakers</h1><div data-risk-widget='circuit_breakers'></div></section>
+{% extends "base.html" %}
+{% block title %}Circuit Breakers | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Circuit Breakers" module="Risk" page_id="risk-circuit_breakers" %}
+{% endblock %}

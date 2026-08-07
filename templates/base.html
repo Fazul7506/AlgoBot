@@ -1,0 +1,18 @@
+{% load static %}
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}AlgoBot Enterprise{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/enterprise_templates.css' %}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <aside class="app-sidebar" aria-label="Primary navigation"><div class="brand">AlgoBot<span>Enterprise</span></div><nav><a href="/">Overview</a><a href="/trading/">Trading</a><a href="/risk/">Risk</a><a href="/analytics/">Analytics</a><a href="/monitoring/">Monitoring</a><a href="/settings/">Settings</a></nav></aside>
+  <div class="app-shell"><header class="topbar"><div>Institutional Trading Operations</div><div class="topbar-actions"><kbd>⌘K</kbd><button type="button" data-theme-toggle>Theme</button></div></header><main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main><footer class="app-footer">AlgoBot Enterprise • Secure trading infrastructure • Audit-ready operations</footer></div>
+  <script src="{% static 'js/enterprise_templates.js' %}" defer></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

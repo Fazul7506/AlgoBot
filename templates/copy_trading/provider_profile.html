@@ -1,1 +1,5 @@
-<section class="copy-trading-page"><h1>Provider Profile</h1></section>
+{% extends "base.html" %}
+{% block title %}Provider Profile | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Provider Profile" module="Copy Trading" page_id="copy_trading-provider_profile" %}
+{% endblock %}

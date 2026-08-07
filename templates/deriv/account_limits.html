@@ -1,1 +1,5 @@
-{% extends 'base.html' %}{% block content %}<section class='deriv-component'>account_limits</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Account Limits | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Account Limits" module="Deriv" page_id="deriv-account_limits" %}
+{% endblock %}
