@@ -13,7 +13,7 @@ LOGGING = {
     "formatters": {
         "verbose": {"format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}", "style": "{"},
         "json": {
-            "format": '{"level":"{levelname}","time":"{asctime}","logger":"{name}","module":"{module}","message":"{message}"}',
+            "format": '{{"level":"{levelname}","time":"{asctime}","logger":"{name}","module":"{module}","message":"{message}"}}',
             "style": "{",
         },
     },
