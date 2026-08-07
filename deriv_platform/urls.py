@@ -121,6 +121,9 @@ urlpatterns = [
     path('api/', include('apps.portfolio.urls')),
     path('api/', include('apps.automation.urls')),
     path('api/', include('apps.notifications.urls')),
+    path('api/developer/', include('apps.developer.urls')),
+    path('api/system/', include('apps.deployment.urls')),
+    path('api/enterprise/', include('apps.enterprise.urls')),
     
     # Legacy URLs
     path('connect-deriv/', deriv_login, name='connect_deriv'),

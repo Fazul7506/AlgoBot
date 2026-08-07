@@ -33,6 +33,7 @@ LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data"
 LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.smart_money", "apps.risk", "apps.ai_engine", "apps.ml_models", "apps.feature_store", "apps.training", "apps.portfolio", "apps.brokers", "apps.tenants", "apps.copy_trading"]
 LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.smart_money", "apps.risk", "apps.ai_engine", "apps.ml_models", "apps.feature_store", "apps.training", "apps.portfolio", "apps.automation", "apps.notifications"]
 LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.smart_money", "apps.risk", "apps.ai_engine", "apps.ml_models", "apps.feature_store", "apps.training", "apps.portfolio", "apps.brokers"]
+LOCAL_APPS += ["apps.developer", "apps.deployment", "apps.enterprise"]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
