@@ -364,9 +364,83 @@ class AIModel(models.Model):
 
 
 class DerivAccount(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    account_id = models.CharField(max_length=50)
+    """Deriv OAuth account with encrypted token storage."""
+    
+    TOKEN_STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('expired', 'Expired'),
+        ('revoked', 'Revoked'),
+        ('refreshing', 'Refreshing'),
+    ]
+    
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='deriv_account')
+    account_id = models.CharField(max_length=50, db_index=True)
+    
+    # Encrypted token fields
     access_token = models.TextField()
     refresh_token = models.TextField(blank=True, null=True)
-    expires_at = models.DateTimeField()
+    
+    # Token metadata
+    token_status = models.CharField(
+        max_length=20,
+        choices=TOKEN_STATUS_CHOICES,
+        default='active',
+        db_index=True
+    )
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_refresh = models.DateTimeField(null=True, blank=True)
+    
+    # Account metadata
+    account_type = models.CharField(max_length=20, blank=True)  # 'demo' or 'real'
+    currency = models.CharField(max_length=10, blank=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['user', '-updated_at']),
+            models.Index(fields=['account_id', 'token_status']),
+        ]
+    
+    def __str__(self):
+        return f"DerivAccount {self.account_id} ({self.user.username})"
+    
+    def set_access_token(self, token: str) -> None:
+        """Encrypt and store access token."""
+        from core.services.encryption_service import CredentialEncryptionService
+        self.access_token = CredentialEncryptionService().encrypt(token)
+    
+    def get_access_token(self) -> str:
+        """Decrypt and retrieve access token."""
+        from core.services.encryption_service import CredentialEncryptionService
+        return CredentialEncryptionService().decrypt(self.access_token)
+    
+    def set_refresh_token(self, token: str) -> None:
+        """Encrypt and store refresh token."""
+        from core.services.encryption_service import CredentialEncryptionService
+        self.refresh_token = CredentialEncryptionService().encrypt(token) if token else None
+    
+    def get_refresh_token(self) -> str:
+        """Decrypt and retrieve refresh token."""
+        from core.services.encryption_service import CredentialEncryptionService
+        if not self.refresh_token:
+            return None
+        return CredentialEncryptionService().decrypt(self.refresh_token)
+    
+    @property
+    def is_token_expired(self) -> bool:
+        """Check if access token has expired."""
+        from django.utils import timezone
+        return bool(self.expires_at and self.expires_at <= timezone.now())
+    
+    @property
+    def needs_refresh(self) -> bool:
+        """Check if token should be refreshed (within 5 minutes of expiry)."""
+        from django.utils import timezone
+        from datetime import timedelta
+        if not self.expires_at:
+            return False
+        refresh_buffer = timedelta(minutes=5)
+        return self.expires_at - timedelta(minutes=5) <= timezone.now()

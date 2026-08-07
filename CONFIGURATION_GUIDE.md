@@ -96,3 +96,272 @@ Production settings now fail fast when these critical values are missing: `SECRE
 - **OpenAI-backed AI features:** `OPENAI_API_KEY`.
 - **Sentry monitoring:** `SENTRY_DSN`.
 - **Redis cache/Celery:** `REDIS_URL`, `USE_REDIS`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `USE_CELERY`.
+
+---
+
+## Deriv OAuth Configuration
+
+This section provides comprehensive details on Deriv OAuth-specific configuration variables and setup.
+
+### Overview
+
+AlgoBot Enterprise uses OAuth 2.0 with PKCE to securely authenticate users with Deriv. The OAuth implementation includes:
+
+- **PKCE Flow**: Code challenge/verifier pairs for enhanced security
+- **State Validation**: CSRF protection through state parameters
+- **Token Encryption**: OAuth tokens encrypted at rest in database
+- **Automatic Refresh**: Token refresh when approaching expiry
+- **Session Management**: Secure session-based OAuth state storage
+
+See [OAUTH_SETUP.md](OAUTH_SETUP.md) for complete OAuth implementation guide.
+
+### OAuth-Specific Variables
+
+#### DERIV_OAUTH_CLIENT_ID (Primary OAuth Variable)
+
+| Attribute | Value |
+|-----------|-------|
+| **Aliases** | `DERIV_APP_ID` |
+| **Purpose** | OAuth application ID from Deriv |
+| **Required** | Yes (for OAuth) |
+| **Type** | String (numeric) |
+| **Secret** | Yes - do not share |
+| **Example** | `12345` |
+| **Where Used** | OAuth authorization flow, token exchange |
+| **Default** | Empty (falls back to `DERIV_APP_ID`) |
+
+**How to Obtain**:
+1. Visit [Deriv Developer Dashboard](https://app.deriv.com/account/api-token)
+2. Navigate to Settings → OAuth Applications
+3. Create new OAuth application
+4. Copy the "App ID"
+
+**Configuration**:
+```bash
+# Environment variable
+export DERIV_OAUTH_CLIENT_ID=12345
+
+# Or in settings
+DERIV_OAUTH_CLIENT_ID = env("DERIV_OAUTH_CLIENT_ID", env("DERIV_APP_ID", ""))
+```
+
+#### DERIV_REDIRECT_URI (OAuth Callback)
+
+| Attribute | Value |
+|-----------|-------|
+| **Purpose** | OAuth callback endpoint URL |
+| **Required** | Yes (for OAuth) |
+| **Type** | URL String |
+| **Secret** | No - publicly visible |
+| **Example Dev** | `http://localhost:8000/callback/` |
+| **Example Prod** | `https://algobot.example.com/callback/` |
+| **Where Used** | OAuth authorization request, state validation |
+| **Default** | `${BASE_URL}/callback` |
+
+**Important Notes**:
+- Must exactly match redirect URI registered with Deriv
+- Must include trailing slash
+- Must be valid HTTP or HTTPS URL
+- Cannot use query parameters
+- Different per environment (dev, staging, production)
+
+**Configuration**:
+```bash
+# Environment variable (usually derived from BASE_URL)
+export DERIV_REDIRECT_URI=https://algobot.example.com/callback/
+
+# Or in settings
+DERIV_REDIRECT_URI = env("DERIV_REDIRECT_URI", f"{BASE_URL}/callback")
+```
+
+**Deriv Registration**:
+1. Log in to Deriv Developer Dashboard
+2. Go to OAuth Applications → Edit your app
+3. Add redirect URI under "Authorized URLs"
+4. Save changes (may take a few minutes to propagate)
+
+#### CREDENTIALS_ENCRYPTION_KEY (Token Encryption)
+
+| Attribute | Value |
+|-----------|-------|
+| **Purpose** | Encryption key for storing OAuth tokens |
+| **Required** | No (optional but highly recommended) |
+| **Type** | Base64-encoded Fernet key |
+| **Secret** | Yes - handle securely |
+| **Example** | `gAAAAABi3d...` (long base64 string) |
+| **Where Used** | `CredentialEncryptionService`, `DerivAccount` model |
+| **Default** | Empty (falls back to Base64 encoding) |
+
+**Behavior**:
+- If set: Tokens encrypted with Fernet (recommended)
+- If not set: Tokens encoded with Base64 (weak, not recommended for production)
+
+**Generate Key**:
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+**Configuration**:
+```bash
+# Set in environment
+export CREDENTIALS_ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+
+# Or in settings
+CREDENTIALS_ENCRYPTION_KEY = env("CREDENTIALS_ENCRYPTION_KEY", "")
+```
+
+**Security**:
+- Use unique key per environment
+- Rotate periodically
+- Store in secrets management system (AWS Secrets Manager, Vault, etc.)
+- Never commit to version control
+- Never share or log the key
+
+#### DERIV_API_TOKEN (Not Used for OAuth)
+
+| Attribute | Value |
+|-----------|-------|
+| **Purpose** | Direct Deriv API token (NOT for OAuth) |
+| **Required** | No (optional, for direct API access) |
+| **Type** | String (secret) |
+| **Secret** | Yes - do not share |
+| **Where Used** | Broker operations, direct API calls |
+| **Note** | OAuth does NOT use this; OAuth uses OAuth tokens |
+
+**Important**: Do NOT confuse with OAuth tokens. This is for direct Deriv API access if needed.
+
+### OAuth Configuration by Environment
+
+#### Development
+
+```bash
+# .env.local
+DEBUG=True
+BASE_URL=http://localhost:8000
+DERIV_OAUTH_CLIENT_ID=dev-app-id-from-deriv
+DERIV_REDIRECT_URI=http://localhost:8000/callback/
+CREDENTIALS_ENCRYPTION_KEY=dev-key-optional
+```
+
+**Deriv Setup**:
+1. Create OAuth app in Deriv (test/sandbox if available)
+2. Register redirect URIs:
+   - `http://localhost:8000/callback/`
+   - `http://127.0.0.1:8000/callback/`
+
+#### Staging
+
+```bash
+# .env.staging
+DEBUG=False
+BASE_URL=https://staging.algobot.example.com
+DERIV_OAUTH_CLIENT_ID=staging-app-id
+DERIV_REDIRECT_URI=https://staging.algobot.example.com/callback/
+CREDENTIALS_ENCRYPTION_KEY=staging-encryption-key
+```
+
+**Deriv Setup**:
+1. Create separate OAuth app for staging
+2. Register redirect URI: `https://staging.algobot.example.com/callback/`
+
+#### Production
+
+```bash
+# Production environment variables (never in .env)
+DEBUG=False
+BASE_URL=https://algobot.example.com
+DERIV_OAUTH_CLIENT_ID=production-app-id
+DERIV_REDIRECT_URI=https://algobot.example.com/callback/
+CREDENTIALS_ENCRYPTION_KEY=production-encryption-key
+SESSION_COOKIE_SECURE=True
+CSRF_COOKIE_SECURE=True
+SECURE_SSL_REDIRECT=True
+```
+
+**Deriv Setup**:
+1. Create production OAuth app with Deriv
+2. Register redirect URI: `https://algobot.example.com/callback/`
+3. Use production Deriv servers (not sandbox)
+
+### OAuth Configuration Validation
+
+**Automatic Validation**:
+- Runs on application startup in `core/apps.py`
+- Checks for required variables: `DERIV_OAUTH_CLIENT_ID`, `DERIV_REDIRECT_URI`, `BASE_URL`
+- Logs warning if `CREDENTIALS_ENCRYPTION_KEY` not set
+- Fails fast in production if required variables missing
+
+**Manual Validation**:
+```bash
+python manage.py shell
+```
+
+```python
+from core.services.oauth_service import DerivOAuthService
+is_valid, error = DerivOAuthService.validate_configuration()
+print(f"Valid: {is_valid}, Error: {error}")
+```
+
+**Production Blockers**:
+If running with `DEBUG=False`, these variables are required:
+- `DERIV_OAUTH_CLIENT_ID`
+- `DERIV_REDIRECT_URI`
+- `BASE_URL`
+
+### OAuth API Endpoints
+
+Once configured, these endpoints are available:
+
+| Endpoint | Method | Purpose | Auth Required |
+|----------|--------|---------|----------------|
+| `/connect-deriv/` | GET | Initiate OAuth login | No |
+| `/callback/` | GET | OAuth callback handler | No |
+| `/api/deriv/status/` | GET | Get account status | Yes |
+| `/api/deriv/disconnect/` | POST | Disconnect account | Yes |
+| `/api/deriv/refresh-token/` | POST | Refresh access token | Yes |
+| `/api/deriv/reconnect/` | POST | Validate/reconnect account | Yes |
+
+### Common OAuth Configuration Mistakes
+
+1. **Mismatched Redirect URIs**
+   - Code: `https://app.com/callback/`
+   - Deriv: `https://app.com/callback` (no slash)
+   - Solution: Ensure both match exactly (including trailing slash)
+
+2. **Using HTTP in Production**
+   - Problem: OAuth over HTTP is insecure
+   - Solution: Always use HTTPS in production
+
+3. **Hardcoded Secrets**
+   - Problem: Credentials in version control
+   - Solution: Use environment variables only
+
+4. **Wrong Encryption Key**
+   - Problem: Tokens encrypted with wrong key per server
+   - Solution: Use same encryption key for all servers
+
+5. **Missing Deriv Registration**
+   - Problem: Redirect URI not registered with Deriv
+   - Solution: Register in Deriv Developer Dashboard
+
+### Troubleshooting
+
+**Configuration Errors**:
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| "OAuth not configured" | Missing env variables | Set DERIV_OAUTH_CLIENT_ID and DERIV_REDIRECT_URI |
+| "State validation failed" | CSRF token mismatch | Check session storage, try incognito mode |
+| "Redirect URI mismatch" | Mismatch with Deriv | Register exact URI with Deriv |
+| "Token exchange failed" | Network/API issue | Check Deriv API status, retry |
+| "Invalid token response" | Deriv returned bad data | Check Deriv API health |
+
+**Debug Mode**:
+```bash
+# Enable debug logging
+LOGGING_LEVEL=DEBUG python manage.py runserver
+```
+
+See [OAUTH_SETUP.md](OAUTH_SETUP.md#troubleshooting) for comprehensive troubleshooting guide.
+
+---
