@@ -1,6 +1,8 @@
 import secrets
 import hashlib
 import base64
+import logging
+from urllib.parse import urlencode, urlparse
 
 import requests
 from django.conf import settings
@@ -9,7 +11,11 @@ from django.http import HttpResponse
 from django.contrib.auth.models import User
 
 from trading.models import DerivAccount
-import core.oauth_store as oauth_store
+
+oauth_logger = logging.getLogger("oauth")
+DERIV_AUTHORIZE_URL = "https://auth.deriv.com/oauth2/auth"
+DERIV_TOKEN_URL = "https://auth.deriv.com/oauth2/token"
+OAUTH_TIMEOUT = (3.05, 10)
 
 
 def home(request):
@@ -81,6 +87,9 @@ def billing_cancel_page(request):
 
 
 def deriv_login(request):
+    if not settings.DERIV_OAUTH_CLIENT_ID or not settings.DERIV_REDIRECT_URI:
+        oauth_logger.error("deriv_oauth_misconfigured", extra={"has_client_id": bool(settings.DERIV_OAUTH_CLIENT_ID)})
+        return HttpResponse("Deriv OAuth is not configured.", status=503)
 
     verifier = secrets.token_urlsafe(64)
 
@@ -96,19 +105,25 @@ def deriv_login(request):
 
     state = secrets.token_urlsafe(32)
 
-    oauth_store.oauth_state = state
-    oauth_store.pkce_verifier = verifier
+    # OAuth/PKCE correlation values must be per-browser-session. Module-level
+    # globals leak across users and workers, breaking callback integrity in
+    # production deployments.
+    request.session["oauth_state"] = state
+    request.session["pkce_verifier"] = verifier
+    request.session["oauth_redirect_uri"] = settings.DERIV_REDIRECT_URI
+    request.session.modified = True
 
-    url = (
-        "https://auth.deriv.com/oauth2/auth"
-        f"?response_type=code"
-        f"&client_id={settings.DERIV_OAUTH_CLIENT_ID}"
-        f"&redirect_uri={settings.DERIV_REDIRECT_URI}"
-        f"&scope=trade"
-        f"&state={state}"
-        f"&code_challenge={challenge}"
-        f"&code_challenge_method=S256"
-    )
+    query = urlencode({
+        "response_type": "code",
+        "client_id": settings.DERIV_OAUTH_CLIENT_ID,
+        "redirect_uri": settings.DERIV_REDIRECT_URI,
+        "scope": "trade",
+        "state": state,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+    })
+    url = f"{DERIV_AUTHORIZE_URL}?{query}"
+    oauth_logger.info("deriv_oauth_started", extra={"redirect_host": urlparse(settings.DERIV_REDIRECT_URI).netloc})
 
     return redirect(url)
 
@@ -116,37 +131,48 @@ def callback(request):
 
     received_state = request.GET.get("state")
 
-    expected_state = oauth_store.oauth_state
+    expected_state = request.session.get("oauth_state")
 
-    print("RECEIVED:", received_state)
-    print("EXPECTED:", expected_state)
-
-    if received_state != expected_state:
-        return HttpResponse(
-            f"FAILED\n\nReceived: {received_state}\nExpected: {expected_state}"
-        )
+    if not received_state or not expected_state or not secrets.compare_digest(received_state, expected_state):
+        oauth_logger.warning("deriv_oauth_state_mismatch", extra={"has_received_state": bool(received_state), "has_expected_state": bool(expected_state)})
+        return HttpResponse("OAuth state validation failed.", status=400)
     
     code = request.GET.get("code")
 
     if not code:
-        return HttpResponse(
-            "No authorization code received."
-        )
+        oauth_logger.warning("deriv_oauth_missing_code")
+        return HttpResponse("No authorization code received.", status=400)
 
-    verifier = oauth_store.pkce_verifier
+    verifier = request.session.get("pkce_verifier")
+    redirect_uri = request.session.get("oauth_redirect_uri")
+    if not verifier or redirect_uri != settings.DERIV_REDIRECT_URI:
+        oauth_logger.warning("deriv_oauth_pkce_or_redirect_validation_failed", extra={"has_verifier": bool(verifier)})
+        return HttpResponse("OAuth callback integrity validation failed.", status=400)
 
-    token_response = requests.post(
-        "https://auth.deriv.com/oauth2/token",
-        data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "client_id": settings.DERIV_OAUTH_CLIENT_ID,
-            "redirect_uri": settings.DERIV_REDIRECT_URI,
-            "code_verifier": verifier,
-        }
-    )
+    token_payload = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "client_id": settings.DERIV_OAUTH_CLIENT_ID,
+        "redirect_uri": settings.DERIV_REDIRECT_URI,
+        "code_verifier": verifier,
+    }
+    try:
+        token_response = requests.post(DERIV_TOKEN_URL, data=token_payload, timeout=OAUTH_TIMEOUT)
+        token_response.raise_for_status()
+        token_data = token_response.json()
+    except requests.Timeout:
+        oauth_logger.exception("deriv_oauth_token_timeout")
+        return HttpResponse("Deriv OAuth token exchange timed out.", status=504)
+    except requests.RequestException:
+        oauth_logger.exception("deriv_oauth_token_network_error")
+        return HttpResponse("Deriv OAuth token exchange failed.", status=502)
+    except ValueError:
+        oauth_logger.exception("deriv_oauth_invalid_json")
+        return HttpResponse("Deriv returned an invalid OAuth response.", status=502)
 
-    token_data = token_response.json()
+    if not isinstance(token_data, dict) or not token_data.get("access_token"):
+        oauth_logger.error("deriv_oauth_missing_access_token", extra={"keys": sorted(token_data.keys()) if isinstance(token_data, dict) else []})
+        return HttpResponse("Deriv OAuth response did not include an access token.", status=502)
 
     from django.utils import timezone
     from datetime import timedelta
@@ -198,6 +224,10 @@ def callback(request):
                 'expires_at': expires_at,
             }
         )
+        for key in ("oauth_state", "pkce_verifier", "oauth_redirect_uri"):
+            request.session.pop(key, None)
+        request.session.modified = True
+        oauth_logger.info("deriv_oauth_completed", extra={"user_id": user.id, "account_id": account_id})
 
         refresh = RefreshToken.for_user(user)
         access = str(refresh.access_token)
@@ -206,7 +236,8 @@ def callback(request):
         dashboard_redirect = f'/dashboard/?access={access}&refresh={refresh_token_jwt}'
         return redirect(dashboard_redirect)
     except Exception as exc:
+        oauth_logger.exception("deriv_oauth_callback_failed")
         return HttpResponse(
-            f"FAILED TO COMPLETE DERIV CALLBACK: {str(exc)}\n\n{token_data}",
+            "FAILED TO COMPLETE DERIV CALLBACK",
             status=500
         )

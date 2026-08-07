@@ -82,6 +82,8 @@ urlpatterns = [
     path('login/', login_page, name='login_page'),
     path('register/', register_page, name='register_page'),
     path('dashboard/', dashboard_page, name='dashboard_page'),
+    path('analytics/', include('apps.analytics.urls')),
+    path('monitoring/', include('apps.monitoring.urls')),
     path('markets/', markets_page, name='markets_page'),
     path('strategies/', strategies_page, name='strategies_page'),
     path('trading/', trading_page, name='trading_page'),
@@ -124,6 +126,7 @@ urlpatterns = [
     path('api/developer/', include('apps.developer.urls')),
     path('api/system/', include('apps.deployment.urls')),
     path('api/enterprise/', include('apps.enterprise.urls')),
+    path('health/', include('apps.health.urls')),
     
     # Legacy URLs
     path('connect-deriv/', deriv_login, name='connect_deriv'),
