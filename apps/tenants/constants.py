@@ -1,0 +1,8 @@
+TENANT_STATUSES=("trial","active","past_due","suspended","cancelled")
+SUBSCRIPTION_PLANS=("free","starter","professional","business","enterprise","custom")
+BILLING_CYCLES=("monthly","quarterly","yearly","lifetime","custom_enterprise")
+PAYMENT_PROVIDERS=("stripe","paypal","flutterwave","mpesa","paddle","lemon_squeezy")
+ROLES=("platform_owner","organization_owner","administrator","manager","trader","analyst","developer","support","auditor","viewer")
+PERMISSION_AREAS=("trading","strategies","ai","brokers","risk","portfolio","billing","reports","api_keys","user_management","settings","developer_tools")
+FEATURES=("ai_engine","copy_trading","api_access","paper_trading","backtesting","monitoring","portfolio_analytics","multi_broker","white_label","custom_branding")
+USAGE_METRICS=("api_calls","trades","strategies","ai_predictions","broker_connections","notifications","storage","bandwidth","users","reports","automations")
