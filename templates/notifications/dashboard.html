@@ -1,1 +1,5 @@
-<section class="notifications-page" data-page="dashboard"><h1>Notifications Dashboard</h1><div class="notification-bell">Notification Bell</div><div class="live-feed">Live Notification Feed</div><div class="delivery-status-table">Delivery Status Table</div></section>
+{% extends "base.html" %}
+{% block title %}Notifications Dashboard | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Notifications Dashboard" module="Notifications" page_id="notifications-dashboard" %}
+{% endblock %}

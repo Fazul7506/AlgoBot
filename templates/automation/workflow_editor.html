@@ -1,1 +1,5 @@
-<section class="automation-page" data-page="workflow_editor"><h1>Automation Workflow Editor</h1><div id="workflow-canvas" class="workflow-canvas">Workflow Canvas</div><aside class="node-palette">Node Palette</aside><div class="execution-timeline">Execution Timeline</div></section>
+{% extends "base.html" %}
+{% block title %}Automation Workflow Editor | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Automation Workflow Editor" module="Automation" page_id="automation-workflow_editor" %}
+{% endblock %}

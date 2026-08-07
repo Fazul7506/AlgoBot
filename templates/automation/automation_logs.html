@@ -1,1 +1,5 @@
-<section class="automation-page" data-page="automation_logs"><h1>Automation Automation Logs</h1><div id="workflow-canvas" class="workflow-canvas">Workflow Canvas</div><aside class="node-palette">Node Palette</aside><div class="execution-timeline">Execution Timeline</div></section>
+{% extends "base.html" %}
+{% block title %}Automation Automation Logs | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Automation Automation Logs" module="Automation" page_id="automation-automation_logs" %}
+{% endblock %}

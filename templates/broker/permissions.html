@@ -1,1 +1,5 @@
-{% extends 'base.html' %}{% block content %}<section class='broker-component'>permissions</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Permissions | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Permissions" module="Broker" page_id="broker-permissions" %}
+{% endblock %}

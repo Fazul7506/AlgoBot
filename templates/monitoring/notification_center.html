@@ -1,18 +1,5 @@
 {% extends "base.html" %}
+{% block title %}notification center | AlgoBot Enterprise{% endblock %}
 {% block content %}
-<section class="monitoring-page monitoring-notification_center">
-  <h1>notification center</h1>
-  <div class="monitoring-grid" data-monitoring-widget="notification_center">
-    <article class="status-card">Overall System Health</article>
-    <article class="status-card">Broker Connection Widget</article>
-    <article class="status-card">Trade Activity Widget</article>
-    <article class="status-card">AI Health Widget</article>
-    <article class="status-card">Risk Monitor</article>
-    <article class="status-card">Alert Feed</article>
-    <article class="status-card">Incident Timeline</article>
-    <article class="status-card">Audit Table</article>
-    <article class="status-card">Log Viewer</article>
-    <article class="status-card">Service Dependency Graph</article>
-  </div>
-</section>
+{% include "components/enterprise_page.html" with title="notification center" module="Monitoring" page_id="monitoring-notification_center" %}
 {% endblock %}

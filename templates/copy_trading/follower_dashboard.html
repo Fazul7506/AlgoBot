@@ -1,1 +1,5 @@
-<section class="copy-trading-page"><h1>Follower Dashboard</h1></section>
+{% extends "base.html" %}
+{% block title %}Follower Dashboard | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Follower Dashboard" module="Copy Trading" page_id="copy_trading-follower_dashboard" %}
+{% endblock %}

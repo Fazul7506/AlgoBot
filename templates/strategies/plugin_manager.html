@@ -1,1 +1,5 @@
-<section class="strategy-page"><h1>plugin manager</h1><div data-component="strategy-card signal-card confidence-meter performance-chart parameter-editor strategy-toggle execution-timeline comparison-table"></div></section>
+{% extends "base.html" %}
+{% block title %}plugin manager | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="plugin manager" module="Strategies" page_id="strategies-plugin_manager" %}
+{% endblock %}

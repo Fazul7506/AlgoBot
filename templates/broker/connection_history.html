@@ -1,1 +1,5 @@
-{% extends 'base.html' %}{% block content %}<section class='broker-component'>connection_history</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Connection History | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Connection History" module="Broker" page_id="broker-connection_history" %}
+{% endblock %}

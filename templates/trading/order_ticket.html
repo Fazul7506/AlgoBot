@@ -1,6 +1,5 @@
-<section class="trading-engine order_ticket">
-  <h1>order ticket</h1>
-  <div data-component="order-ticket"></div><div data-component="position-card"></div><div data-component="contract-card"></div>
-  <div data-component="execution-timeline"></div><span data-component="trade-status-badge"></span>
-  <div data-component="profit-widget"></div><div data-component="order-summary"></div><div data-component="queue-status"></div><div data-component="retry-indicator"></div><div data-component="latency-meter"></div>
-</section>
+{% extends "base.html" %}
+{% block title %}order ticket | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="order ticket" module="Trading" page_id="trading-order_ticket" %}
+{% endblock %}

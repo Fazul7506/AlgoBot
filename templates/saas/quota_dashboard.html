@@ -1,1 +1,5 @@
-<section class="saas-page"><h1>Quota Dashboard</h1></section>
+{% extends "base.html" %}
+{% block title %}Quota Dashboard | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Quota Dashboard" module="Saas" page_id="saas-quota_dashboard" %}
+{% endblock %}

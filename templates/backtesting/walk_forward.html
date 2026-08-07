@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='phase10 walk_forward'><h1>Walk Forward</h1><div data-component='walk_forward'>Phase 10 institutional backtesting, simulation, optimization, replay, and analytics workspace.</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Walk Forward | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Walk Forward" module="Backtesting" page_id="backtesting-walk_forward" %}
+{% endblock %}

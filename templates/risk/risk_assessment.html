@@ -1,1 +1,5 @@
-<section class='risk-page risk-risk_assessment'><h1>Risk Assessment</h1><div data-risk-widget='risk_assessment'></div></section>
+{% extends "base.html" %}
+{% block title %}Risk Assessment | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Risk Assessment" module="Risk" page_id="risk-risk_assessment" %}
+{% endblock %}

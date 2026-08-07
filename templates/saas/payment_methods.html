@@ -1,1 +1,5 @@
-<section class="saas-page"><h1>Payment Methods</h1></section>
+{% extends "base.html" %}
+{% block title %}Payment Methods | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Payment Methods" module="Saas" page_id="saas-payment_methods" %}
+{% endblock %}

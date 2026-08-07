@@ -1,1 +1,5 @@
-<section class='risk-page risk-risk_logs'><h1>Risk Logs</h1><div data-risk-widget='risk_logs'></div></section>
+{% extends "base.html" %}
+{% block title %}Risk Logs | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Risk Logs" module="Risk" page_id="risk-risk_logs" %}
+{% endblock %}

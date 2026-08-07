@@ -1,1 +1,5 @@
-<section class="saas-page"><h1>User Management</h1></section>
+{% extends "base.html" %}
+{% block title %}User Management | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="User Management" module="Saas" page_id="saas-user_management" %}
+{% endblock %}

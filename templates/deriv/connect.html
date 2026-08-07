@@ -1,1 +1,5 @@
-{% extends 'base.html' %}{% block content %}<section class='deriv-component'>connect</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Connect | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Connect" module="Deriv" page_id="deriv-connect" %}
+{% endblock %}

@@ -1,1 +1,5 @@
-<section class="strategy-page"><h1>strategy settings</h1><div data-component="strategy-card signal-card confidence-meter performance-chart parameter-editor strategy-toggle execution-timeline comparison-table"></div></section>
+{% extends "base.html" %}
+{% block title %}strategy settings | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="strategy settings" module="Strategies" page_id="strategies-strategy_settings" %}
+{% endblock %}

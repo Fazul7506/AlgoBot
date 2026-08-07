@@ -1,1 +1,5 @@
-<section class="copy-trading-page"><h1>Leaderboard</h1></section>
+{% extends "base.html" %}
+{% block title %}Leaderboard | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Leaderboard" module="Copy Trading" page_id="copy_trading-leaderboard" %}
+{% endblock %}

@@ -1,18 +1,5 @@
 {% extends "base.html" %}
+{% block title %}ai health | AlgoBot Enterprise{% endblock %}
 {% block content %}
-<section class="monitoring-page monitoring-ai_health">
-  <h1>ai health</h1>
-  <div class="monitoring-grid" data-monitoring-widget="ai_health">
-    <article class="status-card">Overall System Health</article>
-    <article class="status-card">Broker Connection Widget</article>
-    <article class="status-card">Trade Activity Widget</article>
-    <article class="status-card">AI Health Widget</article>
-    <article class="status-card">Risk Monitor</article>
-    <article class="status-card">Alert Feed</article>
-    <article class="status-card">Incident Timeline</article>
-    <article class="status-card">Audit Table</article>
-    <article class="status-card">Log Viewer</article>
-    <article class="status-card">Service Dependency Graph</article>
-  </div>
-</section>
+{% include "components/enterprise_page.html" with title="ai health" module="Monitoring" page_id="monitoring-ai_health" %}
 {% endblock %}

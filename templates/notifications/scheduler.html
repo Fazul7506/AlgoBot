@@ -1,1 +1,5 @@
-<section class="notifications-page" data-page="scheduler"><h1>Notifications Scheduler</h1><div class="notification-bell">Notification Bell</div><div class="live-feed">Live Notification Feed</div><div class="delivery-status-table">Delivery Status Table</div></section>
+{% extends "base.html" %}
+{% block title %}Notifications Scheduler | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Notifications Scheduler" module="Notifications" page_id="notifications-scheduler" %}
+{% endblock %}

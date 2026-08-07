@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='phase10 ai_dataset_generator'><h1>Ai Dataset Generator</h1><div data-component='ai_dataset_generator'>Phase 10 institutional backtesting, simulation, optimization, replay, and analytics workspace.</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Ai Dataset Generator | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Ai Dataset Generator" module="Backtesting" page_id="backtesting-ai_dataset_generator" %}
+{% endblock %}

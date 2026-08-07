@@ -1,1 +1,5 @@
-<section class="saas-page"><h1>Workspace Dashboard</h1></section>
+{% extends "base.html" %}
+{% block title %}Workspace Dashboard | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Workspace Dashboard" module="Saas" page_id="saas-workspace_dashboard" %}
+{% endblock %}

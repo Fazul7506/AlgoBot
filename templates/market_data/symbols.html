@@ -1,1 +1,5 @@
-<section class='market-data'><h1>Symbols</h1><div data-market-widget='symbols'></div></section>
+{% extends "base.html" %}
+{% block title %}Symbols | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Symbols" module="Market Data" page_id="market_data-symbols" %}
+{% endblock %}

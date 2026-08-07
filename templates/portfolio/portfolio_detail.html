@@ -1,4 +1,5 @@
-<section class="portfolio-dashboard" data-component="portfolio_detail">
-  <h1>portfolio detail</h1>
-  <div class="portfolio-summary-card">Institutional portfolio analytics, NAV, allocation, exposure, benchmark, forecast, and reporting widgets.</div>
-</section>
+{% extends "base.html" %}
+{% block title %}portfolio detail | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="portfolio detail" module="Portfolio" page_id="portfolio-portfolio_detail" %}
+{% endblock %}

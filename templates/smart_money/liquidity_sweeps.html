@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='smc-dashboard'><h1>Liquidity Sweeps</h1><div data-smc-widget='liquidity_sweeps'>Institutional SMC intelligence widget: liquidity_sweeps</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Liquidity Sweeps | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Liquidity Sweeps" module="Smart Money" page_id="smart_money-liquidity_sweeps" %}
+{% endblock %}

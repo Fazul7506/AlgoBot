@@ -1,1 +1,5 @@
-<section class='risk-page risk-margin_monitor'><h1>Margin Monitor</h1><div data-risk-widget='margin_monitor'></div></section>
+{% extends "base.html" %}
+{% block title %}Margin Monitor | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Margin Monitor" module="Risk" page_id="risk-margin_monitor" %}
+{% endblock %}

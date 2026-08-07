@@ -1,1 +1,5 @@
-{% extends 'base.html' %}{% block content %}<section class='deriv-component'>websocket_monitor</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Websocket Monitor | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Websocket Monitor" module="Deriv" page_id="deriv-websocket_monitor" %}
+{% endblock %}

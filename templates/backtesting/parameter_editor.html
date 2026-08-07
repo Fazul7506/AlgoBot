@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='phase10 parameter_editor'><h1>Parameter Editor</h1><div data-component='parameter_editor'>Phase 10 institutional backtesting, simulation, optimization, replay, and analytics workspace.</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Parameter Editor | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Parameter Editor" module="Backtesting" page_id="backtesting-parameter_editor" %}
+{% endblock %}

@@ -1,1 +1,5 @@
-<section class="saas-page"><h1>Admin Portal</h1></section>
+{% extends "base.html" %}
+{% block title %}Admin Portal | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Admin Portal" module="Saas" page_id="saas-admin_portal" %}
+{% endblock %}

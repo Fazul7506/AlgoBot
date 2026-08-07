@@ -1,1 +1,5 @@
-<section class='risk-page risk-dashboard'><h1>Dashboard</h1><div data-risk-widget='dashboard'></div></section>
+{% extends "base.html" %}
+{% block title %}Dashboard | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Dashboard" module="Risk" page_id="risk-dashboard" %}
+{% endblock %}

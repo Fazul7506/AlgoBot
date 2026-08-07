@@ -1,1 +1,5 @@
-<section class="copy-trading-page"><h1>Strategy Detail</h1></section>
+{% extends "base.html" %}
+{% block title %}Strategy Detail | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Strategy Detail" module="Copy Trading" page_id="copy_trading-strategy_detail" %}
+{% endblock %}

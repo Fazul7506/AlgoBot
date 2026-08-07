@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='smc-dashboard'><h1>Smt Divergence</h1><div data-smc-widget='smt_divergence'>Institutional SMC intelligence widget: smt_divergence</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Smt Divergence | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Smt Divergence" module="Smart Money" page_id="smart_money-smt_divergence" %}
+{% endblock %}

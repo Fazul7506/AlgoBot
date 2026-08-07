@@ -1,1 +1,5 @@
-<section class='risk-page risk-position_sizing'><h1>Position Sizing</h1><div data-risk-widget='position_sizing'></div></section>
+{% extends "base.html" %}
+{% block title %}Position Sizing | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Position Sizing" module="Risk" page_id="risk-position_sizing" %}
+{% endblock %}

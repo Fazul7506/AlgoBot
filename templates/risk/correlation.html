@@ -1,1 +1,5 @@
-<section class='risk-page risk-correlation'><h1>Correlation</h1><div data-risk-widget='correlation'></div></section>
+{% extends "base.html" %}
+{% block title %}Correlation | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Correlation" module="Risk" page_id="risk-correlation" %}
+{% endblock %}

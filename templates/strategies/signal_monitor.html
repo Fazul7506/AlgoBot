@@ -1,1 +1,5 @@
-<section class="strategy-page"><h1>signal monitor</h1><div data-component="strategy-card signal-card confidence-meter performance-chart parameter-editor strategy-toggle execution-timeline comparison-table"></div></section>
+{% extends "base.html" %}
+{% block title %}signal monitor | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="signal monitor" module="Strategies" page_id="strategies-signal_monitor" %}
+{% endblock %}

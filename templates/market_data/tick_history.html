@@ -1,1 +1,5 @@
-<section class='market-data'><h1>Tick History</h1><div data-market-widget='tick_history'></div></section>
+{% extends "base.html" %}
+{% block title %}Tick History | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Tick History" module="Market Data" page_id="market_data-tick_history" %}
+{% endblock %}

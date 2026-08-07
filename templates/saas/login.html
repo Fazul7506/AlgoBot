@@ -1,1 +1,5 @@
-<section class="saas-page"><h1>Login</h1></section>
+{% extends "base.html" %}
+{% block title %}Login | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Login" module="Saas" page_id="saas-login" %}
+{% endblock %}

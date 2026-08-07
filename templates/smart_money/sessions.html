@@ -1,2 +1,5 @@
-{% extends 'base.html' %}
-{% block content %}<section class='smc-dashboard'><h1>Sessions</h1><div data-smc-widget='sessions'>Institutional SMC intelligence widget: sessions</div></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Sessions | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Sessions" module="Smart Money" page_id="smart_money-sessions" %}
+{% endblock %}
