@@ -106,6 +106,7 @@ urlpatterns = [
     
     # User API endpoints
     path('api/', include(router.urls)),
+    path('api/', include('apps.brokers.urls')),
     path('api/', include('apps.broker.urls')),
     path('api/', include('apps.deriv.urls')),
     path('api/', include('apps.market_data.urls')),
