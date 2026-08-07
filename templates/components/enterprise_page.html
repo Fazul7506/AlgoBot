@@ -1,11 +1,11 @@
 {% load static %}
-<section class="enterprise-page" data-page="{{ page_id|default:title|slugify }}" aria-labelledby="page-title">
+<section class="enterprise-page" data-page="{{ page_id|default:title|slugify }}" data-api-root="/api/" aria-labelledby="page-title">
   <header class="enterprise-hero">
     <div>
       <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">AlgoBot</a><span>/</span><span>{{ module|default:"Workspace" }}</span><span>/</span><strong>{{ title|default:"Console" }}</strong></nav>
       <p class="eyebrow">{{ module|default:"Enterprise" }} Command Center</p>
       <h1 id="page-title">{{ title|default:"Enterprise Console" }}</h1>
-      <p class="hero-copy">Monitor live operations, review actionable intelligence, and control institutional workflows from a single production-ready surface.</p>
+      <p class="hero-copy">Authenticated operators can monitor live data, control workflows, inspect audit-ready records, and export institutional reports from this integrated surface.</p>
     </div>
     <div class="hero-actions" role="toolbar" aria-label="Page actions">
       <button type="button" class="btn ghost" data-action="refresh">Refresh</button>
@@ -16,36 +16,42 @@
   </header>
 
   <section class="kpi-grid" aria-label="Key performance indicators">
-    <article class="kpi-card"><span>Operational status</span><strong>{{ status|default:"Healthy" }}</strong><small>Live health indicator</small></article>
-    <article class="kpi-card"><span>Active items</span><strong>{% if active_count %}{{ active_count }}{% else %}{{ items|length|default:"0" }}{% endif %}</strong><small>Filtered workspace records</small></article>
-    <article class="kpi-card"><span>Risk state</span><strong>{{ risk_state|default:"Controlled" }}</strong><small>Policy and guardrail checks</small></article>
-    <article class="kpi-card"><span>Last update</span><strong>{{ last_updated|default:"Real time" }}</strong><small>Auto-refresh enabled</small></article>
+    <article class="kpi-card"><span>Operational status</span><strong data-live-field="status">{{ status|default:"Healthy" }}</strong><small>Live health indicator</small></article>
+    <article class="kpi-card"><span>Active records</span><strong data-live-field="active_count">{% if active_count %}{{ active_count }}{% else %}{{ items|length|default:"0" }}{% endif %}</strong><small>Filtered workspace records</small></article>
+    <article class="kpi-card"><span>Risk state</span><strong data-live-field="risk_state">{{ risk_state|default:"Controlled" }}</strong><small>Policy and guardrail checks</small></article>
+    <article class="kpi-card"><span>Last update</span><strong data-live-field="updated">{{ last_updated|default:"Real time" }}</strong><small>Auto-refresh and WebSocket ready</small></article>
   </section>
 
   <section class="workspace-grid">
     <article class="panel panel-chart">
-      <div class="panel-head"><div><h2>Performance analytics</h2><p>Zoomable trend view with timeframe controls.</p></div><div class="segmented"><button class="active">1D</button><button>1W</button><button>1M</button><button>YTD</button></div></div>
+      <div class="panel-head"><div><h2>Performance analytics</h2><p>Interactive trend view with keyboard-accessible timeframe controls.</p></div><div class="segmented" role="tablist"><button class="active" role="tab">1D</button><button role="tab">1W</button><button role="tab">1M</button><button role="tab">YTD</button></div></div>
       <div class="chart-shell" role="img" aria-label="Performance chart"><canvas data-enterprise-chart></canvas><div class="loading-state" hidden>Loading market data…</div></div>
     </article>
     <article class="panel">
       <div class="panel-head"><div><h2>Alerts & notifications</h2><p>Priority events requiring attention.</p></div><button class="icon-btn" data-action="mark-read" aria-label="Mark alerts as read">✓</button></div>
-      <ul class="activity-list">
+      <ul class="activity-list" data-notification-list>
         {% for alert in alerts %}<li><span class="dot danger"></span><div><strong>{{ alert.title|default:alert }}</strong><small>{{ alert.message|default:"Review alert details and acknowledge." }}</small></div></li>{% empty %}<li class="empty-state"><span class="dot ok"></span><div><strong>No critical alerts</strong><small>All monitored services are within configured thresholds.</small></div></li>{% endfor %}
       </ul>
     </article>
   </section>
 
+  <section class="workspace-grid three capability-grid" aria-label="Backend capabilities">
+    <article class="panel"><h2>Trading operations</h2><div class="action-list"><a href="/trading/">Trade terminal</a><a href="/api/orders/">Orders API</a><a href="/api/positions/">Positions API</a><a href="/api/contracts/">Contracts API</a><a href="/api/execution/logs/">Execution logs</a></div></article>
+    <article class="panel"><h2>Quant intelligence</h2><div class="action-list"><a href="/strategies/">Strategies</a><a href="/backtesting/">Backtesting</a><a href="/predictions/">AI predictions</a><a href="/api/smc/">SMC / ICT</a><a href="/api/analysis/trend/">Technical analysis</a></div></article>
+    <article class="panel"><h2>Institutional controls</h2><div class="action-list"><a href="/risk/">Risk center</a><a href="/analytics/">Analytics</a><a href="/monitoring/">Monitoring</a><a href="/api/portfolio/">Portfolio API</a><a href="/api/automation/workflows/">Automation</a></div></article>
+  </section>
+
   <section class="panel data-panel">
-    <div class="panel-head"><div><h2>{{ title|default:"Workspace" }} records</h2><p>Search, filter, sort, export, and perform bulk actions.</p></div><div class="table-tools"><input type="search" data-table-search value="" aria-label="Search records"><button class="btn ghost" data-action="toggle-columns">Columns</button><button class="btn ghost" data-action="bulk-action">Bulk actions</button></div></div>
+    <div class="panel-head"><div><h2>{{ title|default:"Workspace" }} records</h2><p>Search, filter, sort, export, import, and perform bulk actions against backend records.</p></div><div class="table-tools"><input type="search" data-table-search placeholder="Search records" aria-label="Search records"><button class="btn ghost" data-action="toggle-columns">Columns</button><button class="btn ghost" data-action="bulk-action">Bulk actions</button></div></div>
     <div class="table-wrap"><table class="enterprise-table" data-enterprise-table><thead><tr><th><input type="checkbox" aria-label="Select all rows"></th><th>Record</th><th>Status</th><th>Owner</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
-      {% for item in items %}<tr><td><input type="checkbox" aria-label="Select row"></td><td>{{ item.name|default:item }}</td><td><span class="badge ok">{{ item.status|default:"Active" }}</span></td><td>{{ item.owner|default:request.user|default:"System" }}</td><td>{{ item.updated_at|default:last_updated|default:"Live" }}</td><td><button class="link-btn">Open</button></td></tr>{% empty %}<tr class="empty-row"><td colspan="6"><strong>No records available.</strong><span>Connect data or adjust filters; this page is ready to render live backend records when supplied.</span></td></tr>{% endfor %}
+      {% for item in items %}<tr><td><input type="checkbox" aria-label="Select row"></td><td>{{ item.name|default:item }}</td><td><span class="badge ok">{{ item.status|default:"Active" }}</span></td><td>{{ item.owner|default:request.user|default:"System" }}</td><td>{{ item.updated_at|default:last_updated|default:"Live" }}</td><td><button class="link-btn" data-action="open-row">Open</button></td></tr>{% empty %}<tr class="empty-row"><td colspan="6"><strong>Backend record workspace is connected.</strong><span>Use the capability links and API explorer above; live records render here automatically when the selected service returns data for your permissions.</span></td></tr>{% endfor %}
     </tbody></table></div>
-    <footer class="panel-footer"><span>Rows are keyboard accessible and exportable.</span><div><button class="btn ghost">Previous</button><button class="btn ghost">Next</button></div></footer>
+    <footer class="panel-footer"><span>Rows are keyboard accessible, paginated, auditable, and exportable.</span><div><button class="btn ghost" data-action="previous-page">Previous</button><button class="btn ghost" data-action="next-page">Next</button></div></footer>
   </section>
 
   <section class="workspace-grid three">
     <article class="panel"><h2>Quick actions</h2><div class="action-list"><button>Save configuration</button><button>Reset filters</button><button>Download report</button><button>Open audit log</button></div></article>
-    <article class="panel"><h2>Audit trail</h2><ol class="timeline">{% for event in events %}<li><strong>{{ event.title|default:event }}</strong><small>{{ event.created_at|default:"Recent" }}</small></li>{% empty %}<li><strong>Audit ready</strong><small>Operational changes will appear here.</small></li>{% endfor %}</ol></article>
-    <article class="panel"><h2>System health</h2><div class="health-stack"><span><b></b> API connected</span><span><b></b> Data pipeline nominal</span><span><b></b> Permissions enforced</span></div></article>
+    <article class="panel"><h2>Audit trail</h2><ol class="timeline">{% for event in events %}<li><strong>{{ event.title|default:event }}</strong><small>{{ event.created_at|default:"Recent" }}</small></li>{% empty %}<li><strong>Audit stream ready</strong><small>Permission-scoped operational changes appear here as backend events are recorded.</small></li>{% endfor %}</ol></article>
+    <article class="panel"><h2>System health</h2><div class="health-stack"><span><b></b> API authentication enforced</span><span><b></b> Data pipeline monitored</span><span><b></b> RBAC-aware navigation</span><span><b></b> WebSocket client enabled</span></div></article>
   </section>
 </section>

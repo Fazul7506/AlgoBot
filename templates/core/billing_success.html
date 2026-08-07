@@ -1,3 +1,5 @@
 {% extends "base.html" %}
-{% block title %}billing success | AlgoBot{% endblock %}
-{% block content %}<h1>billing success</h1><p>AlgoBot billing success page.</p>{% endblock %}
+{% block title %}Billing confirmation | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Billing confirmation" module="Billing" page_id="core-billing_success" %}
+{% endblock %}

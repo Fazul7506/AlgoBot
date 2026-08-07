@@ -1,3 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Trading | AlgoBot{% endblock %}
-{% block content %}<h1>Live execution workflow</h1><p>Submit trades, review positions, and monitor execution queues.</p>{% endblock %}
+{% block title %}Trade execution terminal | AlgoBot Enterprise{% endblock %}
+{% block content %}
+{% include "components/enterprise_page.html" with title="Trade execution terminal" module="Trading" page_id="core-trading" %}
+{% endblock %}

@@ -244,3 +244,5 @@ input[type=search]{
   flex:1}
 }
 
+.brand{text-decoration:none;color:var(--text)}
+.app-sidebar nav h2{margin:18px 0 4px;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.14em}.topbar a,.capability-grid a{color:var(--accent)}.action-list a{display:block;border:1px solid var(--line);background:#132a49;color:var(--text);border-radius:12px;padding:10px 14px;text-decoration:none}.action-list a:focus,.action-list a:hover{filter:brightness(1.15);outline:2px solid var(--accent)}.toast-stack{position:fixed;right:20px;bottom:20px;display:grid;gap:10px;z-index:20}.toast{background:#10233d;border:1px solid var(--line);box-shadow:var(--shadow);border-radius:14px;padding:12px 14px;color:var(--text)}html[data-theme=light]{color-scheme:light;--bg:#f5f8fc;--panel:#fff;--panel2:#e9f0fa;--line:#c9d7ea;--text:#102033;--muted:#53677f}html[data-theme=light] body{background:#f5f8fc}html[data-theme=light] .app-sidebar,html[data-theme=light] .topbar{background:#ffffffdd}html[data-theme=light] .enterprise-hero,html[data-theme=light] .panel,html[data-theme=light] .kpi-card{background:#fff}
