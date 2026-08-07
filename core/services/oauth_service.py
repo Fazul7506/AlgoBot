@@ -44,9 +44,16 @@ class DerivOAuthService:
         """
         Validate OAuth configuration on startup.
         
+        Skips validation in development mode (DEBUG=True).
+        Validates strictly in production mode (DEBUG=False).
+        
         Returns:
             Tuple of (is_valid, error_message)
         """
+        # Skip validation in development mode
+        if settings.DEBUG:
+            return True, None
+        
         required_config = {
             'DERIV_OAUTH_CLIENT_ID': settings.DERIV_OAUTH_CLIENT_ID,
             'DERIV_REDIRECT_URI': settings.DERIV_REDIRECT_URI,
