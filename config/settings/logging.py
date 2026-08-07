@@ -4,6 +4,7 @@ from .base import BASE_DIR
 from .utils import env
 
 LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
 SENTRY_DSN = env("SENTRY_DSN", "")
 
 LOGGING = {

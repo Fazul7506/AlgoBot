@@ -13,7 +13,7 @@ SECRET_KEY = env("SECRET_KEY", env("DJANGO_SECRET_KEY", "django-insecure-local-d
 DEBUG = env_bool("DEBUG", env_bool("DJANGO_DEBUG", True))
 ALLOWED_HOSTS = env_list(
     "ALLOWED_HOSTS",
-    ["giblet-squeegee-flatly.ngrok-free.dev", "127.0.0.1", "localhost", "testserver"],
+    ["127.0.0.1", "localhost", "testserver"],
 )
 
 DJANGO_APPS = [
@@ -25,15 +25,44 @@ DJANGO_APPS = [
     "django.contrib.staticfiles",
 ]
 THIRD_PARTY_APPS = ["rest_framework", "rest_framework_simplejwt"]
-LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.smart_money"]
-LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis"]
-LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.execution", "apps.trading", "apps.contracts", "apps.risk"]
-LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.smart_money", "apps.risk", "apps.ai_engine", "apps.ml_models", "apps.feature_store", "apps.training", "apps.monitoring", "apps.logging_system", "apps.alerts", "apps.audit", "apps.health", "apps.metrics"]
-LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.backtesting", "apps.paper_trading", "apps.optimization", "apps.simulation"]
-LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.smart_money", "apps.risk", "apps.ai_engine", "apps.ml_models", "apps.feature_store", "apps.training", "apps.portfolio", "apps.brokers", "apps.tenants", "apps.copy_trading"]
-LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.smart_money", "apps.risk", "apps.ai_engine", "apps.ml_models", "apps.feature_store", "apps.training", "apps.portfolio", "apps.automation", "apps.notifications"]
-LOCAL_APPS = ["core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators", "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.smart_money", "apps.risk", "apps.ai_engine", "apps.ml_models", "apps.feature_store", "apps.training", "apps.portfolio", "apps.brokers"]
-LOCAL_APPS += ["apps.developer", "apps.deployment", "apps.enterprise"]
+LOCAL_APPS = [
+    "core",
+    "trading",
+    "apps.broker",
+    "apps.deriv",
+    "apps.market_data",
+    "apps.indicators",
+    "apps.analysis",
+    "apps.execution",
+    "apps.trading",
+    "apps.contracts",
+    "apps.strategies",
+    "apps.smart_money",
+    "apps.risk",
+    "apps.ai_engine",
+    "apps.ml_models",
+    "apps.feature_store",
+    "apps.training",
+    "apps.monitoring",
+    "apps.logging_system",
+    "apps.alerts",
+    "apps.audit",
+    "apps.health",
+    "apps.metrics",
+    "apps.backtesting",
+    "apps.paper_trading",
+    "apps.optimization",
+    "apps.simulation",
+    "apps.portfolio",
+    "apps.brokers",
+    "apps.tenants",
+    "apps.copy_trading",
+    "apps.automation",
+    "apps.notifications",
+    "apps.developer",
+    "apps.deployment",
+    "apps.enterprise",
+]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
@@ -78,10 +107,10 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 BASE_URL = env("BASE_URL", "http://127.0.0.1:8000")
-DERIV_APP_ID = env("DERIV_APP_ID", env("DERIV_OAUTH_CLIENT_ID", "33uZsD0IM0MIzc2VbaYIb"))
+DERIV_APP_ID = env("DERIV_APP_ID", env("DERIV_OAUTH_CLIENT_ID", ""))
 DERIV_API_TOKEN = env("DERIV_API_TOKEN", "")
 DERIV_OAUTH_CLIENT_ID = DERIV_APP_ID
-DERIV_REDIRECT_URI = env("DERIV_REDIRECT_URI", "https://giblet-squeegee-flatly.ngrok-free.dev/callback")
+DERIV_REDIRECT_URI = env("DERIV_REDIRECT_URI", f"{BASE_URL}/callback")
 OPENAI_API_KEY = env("OPENAI_API_KEY", "")
 
 REST_FRAMEWORK = {
