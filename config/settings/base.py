@@ -13,7 +13,7 @@ SECRET_KEY = env("SECRET_KEY", env("DJANGO_SECRET_KEY", "django-insecure-local-d
 DEBUG = env_bool("DEBUG", env_bool("DJANGO_DEBUG", True))
 ALLOWED_HOSTS = env_list(
     "ALLOWED_HOSTS",
-    ["127.0.0.1", "localhost", "testserver"],
+    ["127.0.0.1", "localhost", "testserver", "giblet-squeegee-flatly.ngrok-free.dev"],
 )
 
 DJANGO_APPS = [
