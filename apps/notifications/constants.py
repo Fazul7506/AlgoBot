@@ -1,0 +1,5 @@
+CHANNELS=["in_app","email","telegram","discord","slack","teams","push","sms","whatsapp","webhook","rest_callback","desktop","mobile"]
+CATEGORIES=["trading","risk","ai","portfolio","broker","strategy","market","security","billing","monitoring","automation","deployment","system","maintenance","general"]
+PRIORITIES=["info","success","warning","error","critical","emergency"]
+DELIVERY_STATUSES=["queued","sending","sent","delivered","opened","clicked","failed","retried","cancelled"]
+WEBSOCKET_EVENTS=["NotificationCreated","NotificationRead","NotificationDelivered","NotificationFailed","BroadcastStarted","BroadcastCompleted","ChannelOffline","ChannelRecovered","WebhookTriggered","EscalationStarted","EscalationResolved"]
