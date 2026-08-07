@@ -1,0 +1,7 @@
+PORTFOLIO_STATUS = [("active", "Active"), ("paused", "Paused"), ("closed", "Closed")]
+ACCOUNT_STATUS = [("active", "Active"), ("inactive", "Inactive"), ("syncing", "Syncing")]
+ALLOCATION_METHODS = ["fixed", "percentage", "dynamic", "risk", "volatility", "kelly", "ai", "equal_weight", "market_weight", "custom"]
+OPTIMIZATION_METHODS = ["mpt", "mean_variance", "risk_parity", "black_litterman", "minimum_variance", "maximum_sharpe", "maximum_diversification", "custom", "ai"]
+REBALANCING_MODES = ["manual", "scheduled", "threshold", "risk", "ai_assisted", "event_driven"]
+REPORT_FORMATS = ["pdf", "excel", "csv", "json"]
+WEBSOCKET_EVENTS = ["PortfolioUpdated", "AllocationChanged", "ExposureUpdated", "ForecastGenerated", "BenchmarkUpdated", "CashFlowRecorded", "RebalancingCompleted", "PerformanceUpdated", "RiskScoreChanged"]
