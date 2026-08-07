@@ -34,7 +34,7 @@ class IndicatorValueViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = IndicatorValue.objects.all()
     serializer_class = IndicatorValueSerializer
     pagination_class = StandardPagination
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -110,7 +110,7 @@ class TechnicalSignalViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = TechnicalSignal.objects.all()
     serializer_class = TechnicalSignalSerializer
     pagination_class = StandardPagination
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -289,7 +289,7 @@ class IndicatorAlertViewSet(viewsets.ModelViewSet):
 class IndicatorDashboardViewSet(viewsets.ViewSet):
     """API endpoints for indicator dashboard"""
     
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
     
     @action(detail=False, methods=['get'])
     def symbol_analysis(self, request):

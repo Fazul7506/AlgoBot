@@ -1,3 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Login | AlgoBot{% endblock %}
-{% block content %}<h1>Sign in to AlgoBot</h1><p>Access your secure trading workspace.</p><a href="/connect-deriv/">Connect with Deriv</a>{% endblock %}
+{% block content %}
+<section class="auth-card" aria-labelledby="login-title">
+  <p class="eyebrow">Secure workspace access</p>
+  <h1 id="login-title">Sign in to AlgoBot</h1>
+  <p class="hero-copy">Authenticate before accessing dashboards, AI modules, portfolio controls, automation, or trading operations.</p>
+  <form method="post" action="/api/auth/login/" novalidate>
+    {% csrf_token %}
+    <label>Email or username<input name="username" autocomplete="username" required aria-describedby="login-help"></label>
+    <label>Password<input name="password" type="password" autocomplete="current-password" required minlength="8"></label>
+    <small id="login-help">Your session is permission-scoped and audit logged.</small>
+    <div class="form-actions"><a href="/register/">Create account</a><a href="/privacy/">Privacy policy</a><button type="submit">Sign in</button></div>
+  </form>
+</section>
+{% endblock %}

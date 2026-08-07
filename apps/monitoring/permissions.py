@@ -1,8 +1,8 @@
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated
 
-class MonitoringPermission(IsAuthenticatedOrReadOnly):
+class MonitoringPermission(IsAuthenticated):
     pass
-class AlertPermission(IsAuthenticatedOrReadOnly):
+class AlertPermission(IsAuthenticated):
     pass
-class AuditLogPermission(IsAuthenticatedOrReadOnly):
+class AuditLogPermission(IsAuthenticated):
     pass
