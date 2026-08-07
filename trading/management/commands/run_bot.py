@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 import asyncio
 import signal
 
-from trading.bot_engine import DerivBotEngine
+from trading.bot_engine import BrokerBotEngine
 from django.contrib.auth.models import User
 from asgiref.sync import sync_to_async
 
@@ -53,7 +53,7 @@ class Command(BaseCommand):
         )
 
         for user in users:
-            engine = DerivBotEngine()
+            engine = BrokerBotEngine()
 
             task = asyncio.create_task(
                 self.run_engine(engine, user),
@@ -94,10 +94,11 @@ class Command(BaseCommand):
     # --------------------------------------------------
     async def _get_token(self, user):
 
-        from trading.models import DerivAccount
+        from apps.broker.models import BrokerAccount
 
         account = await sync_to_async(
-            DerivAccount.objects.get
-        )(user=user)
+            BrokerAccount.objects.select_related("broker").get
+        )(user=user, is_default=True)
 
-        return account.access_token
+        token = await sync_to_async(lambda: getattr(account, "token", None))()
+        return token.get_access_token() if token else ""
