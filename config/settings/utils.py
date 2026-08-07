@@ -25,3 +25,14 @@ def env_list(name: str, default: Iterable[str] = ()) -> list[str]:
     if not value:
         return list(default)
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+
+def validate_required_settings(*, production: bool, values: dict[str, str]) -> None:
+    """Raise a clear error when production-critical configuration is missing."""
+    if not production:
+        return
+    missing = [name for name, value in values.items() if not str(value or "").strip()]
+    if missing:
+        joined = ", ".join(sorted(missing))
+        raise RuntimeError(f"Missing required production configuration: {joined}")
