@@ -39,7 +39,7 @@ from trading.views.indicators import (
 )
 from trading.strategies.strategy_api import StrategyViewSet
 from core.views import (
-    deriv_login, callback,
+    deriv_login, callback, broker_connect_page, broker_marketplace_page,
     home, login_page, register_page, dashboard_page, markets_page, strategies_page,
     trading_page, backtesting_page, predictions_page, performance_page, settings_page,
     profile_page, terms_page, privacy_page, risk_page,
@@ -97,6 +97,8 @@ urlpatterns = [
     path('markets/', markets_page, name='markets_page'),
     path('strategies/', strategies_page, name='strategies_page'),
     path('trading/', trading_page, name='trading_page'),
+    path('brokers/', broker_marketplace_page, name='broker_marketplace'),
+    path('brokers/connect/', broker_connect_page, name='broker_connect_page'),
     path('backtesting/', backtesting_page, name='backtesting_page'),
     path('predictions/', predictions_page, name='predictions_page'),
     path('performance/', performance_page, name='performance_page'),
@@ -120,7 +122,6 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/', include('apps.brokers.urls')),
     path('api/', include('apps.broker.urls')),
-    path('api/', include('apps.deriv.urls')),
     path('api/', include('apps.market_data.urls')),
     path('api/', include('apps.indicators.urls')),
     path('api/', include('apps.execution.urls')),
@@ -138,8 +139,7 @@ urlpatterns = [
     path('api/enterprise/', include('apps.enterprise.urls')),
     path('health/', include('apps.health.urls')),
     
-    # Legacy URLs
-    path('connect-deriv/', deriv_login, name='connect_deriv'),
-    path('callback/', callback, name='callback'),
+    # Broker-neutral OAuth callback
+    path('brokers/callback/', callback, name='broker_callback'),
     path('webhooks/stripe/', stripe_webhook, name='stripe_webhook'),
 ]

@@ -1,34 +1,69 @@
-import asyncio, time
+import asyncio, importlib, time
 from decimal import Decimal
-from django.db import transaction
 from django.utils import timezone
-from .adapters.deriv import DerivAdapter
-from .adapters.paper import PaperTradingAdapter
+from . import constants as c
 from .exceptions import BrokerRoutingError
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
 
+
 class BrokerRegistry:
-    adapters={'deriv':DerivAdapter,'paper':PaperTradingAdapter}
-    def register(self, broker_type, adapter_cls): self.adapters[broker_type]=adapter_cls
-    def get(self, broker_type): return self.adapters[broker_type]
-    def adapter(self, broker, account=None): return self.get(broker.broker_type)(broker=broker, account=account, credentials=getattr(account,'credentials',{}))
+    """Dynamic adapter registry; no trading core imports vendor modules directly."""
+    adapter_paths = {
+        'paper': 'apps.brokers.adapters.paper.PaperTradingAdapter',
+        'deriv': 'apps.brokers.adapters.deriv.DerivAdapter',
+        **{broker: f'apps.brokers.adapters.{broker}.Adapter' for broker in c.SCAFFOLD_BROKERS},
+    }
+
+    def register(self, broker_type, adapter_cls_or_path): self.adapter_paths[broker_type] = adapter_cls_or_path
+    def get(self, broker_type):
+        target = self.adapter_paths[broker_type]
+        if isinstance(target, str):
+            module, cls = target.rsplit('.', 1)
+            target = getattr(importlib.import_module(module), cls)
+            self.adapter_paths[broker_type] = target
+        return target
+    def adapter(self, broker, account=None): return self.get(broker.broker_type)(broker=broker, account=account, credentials=getattr(account, 'credentials', {}))
+
+
 class BrokerManager:
+    """Controls broker lifecycle, routing defaults, connection health, and failover."""
+    broker_catalog = {
+        'deriv': {'name': 'Deriv', 'status': 'active', 'websocket_endpoint': 'wss://ws.derivws.com/websockets/v3', 'supports_live': True, 'auth': 'oauth'},
+        'paper': {'name': 'Paper Trading', 'status': 'active', 'supports_live': False, 'auth': 'none'},
+        'binance': {'name': 'Binance', 'auth': 'api_key_secret'}, 'bybit': {'name': 'Bybit', 'auth': 'api_key_secret'},
+        'oanda': {'name': 'OANDA', 'auth': 'api_token'}, 'interactive_brokers': {'name': 'Interactive Brokers', 'auth': 'session_gateway'},
+        'metatrader_gateway': {'name': 'MetaTrader Gateway', 'auth': 'username_password'}, 'dxtrade': {'name': 'DXTrade', 'auth': 'session_token'},
+        'ctrader': {'name': 'cTrader', 'auth': 'oauth'}, 'alpaca': {'name': 'Alpaca', 'auth': 'api_key_secret'},
+        'forex_com': {'name': 'Forex.com', 'auth': 'username_password'}, 'pepperstone': {'name': 'Pepperstone', 'auth': 'metatrader_or_ctrader'},
+        'ic_markets': {'name': 'IC Markets', 'auth': 'metatrader_or_ctrader'}, 'exness': {'name': 'Exness', 'auth': 'api_key_or_session'},
+    }
     def ensure_defaults(self):
-        Broker.objects.get_or_create(name='Deriv', broker_type='deriv', defaults={'websocket_endpoint':'wss://ws.derivws.com/websockets/v3','supports_live':True})
-        Broker.objects.get_or_create(name='Paper Trading', broker_type='paper', defaults={'supports_live':False})
+        for broker_type, data in self.broker_catalog.items():
+            defaults = {'status': data.get('status', 'coming_soon'), 'supports_live': data.get('supports_live', False), 'metadata': {'auth': data['auth'], 'adapter_state': 'production' if broker_type in c.PRODUCTION_BROKERS else 'scaffold'}}
+            if data.get('websocket_endpoint'): defaults['websocket_endpoint'] = data['websocket_endpoint']
+            Broker.objects.get_or_create(name=data['name'], broker_type=broker_type, defaults=defaults)
+    def register_broker(self, broker_type, adapter_path, **metadata): BrokerRegistry().register(broker_type, adapter_path); return metadata
+    def enable(self, broker): broker.status = 'active'; broker.save(update_fields=['status']); return broker
+    def disable(self, broker): broker.status = 'disabled'; broker.save(update_fields=['status']); return broker
+    def select_default_account(self, user): return SmartOrderRouter().route(user, mode='priority')
+    async def reconnect(self, broker): await BrokerConnectionService().disconnect(broker); return await BrokerConnectionService().connect(broker)
+    async def monitor_health(self, broker): return await BrokerConnectionService().heartbeat(broker)
+    async def failover(self, order): return FailoverService().fallback_account(order)
+
+
 class BrokerConnectionService:
     async def connect(self, broker):
-        adapter=BrokerRegistry().adapter(broker); await adapter.connect(); latency=await adapter.ping()
+        adapter = BrokerRegistry().adapter(broker); await adapter.connect(); latency = await adapter.ping()
         return BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
     async def disconnect(self, broker):
         await BrokerRegistry().adapter(broker).disconnect(); conn,_=BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'disconnected'}); return conn
     async def heartbeat(self, broker):
-        adapter=BrokerRegistry().adapter(broker); data=await adapter.heartbeat(); latency=await adapter.ping(); conn,_=BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data}); return conn
+        adapter=BrokerRegistry().adapter(broker); data=await adapter.health_check(); latency=await adapter.ping(); conn,_=BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data}); return conn
 class AuthenticationService:
     async def authenticate(self, account): return await BrokerRegistry().adapter(account.broker, account).authenticate()
+    async def refresh_token(self, account): return await BrokerRegistry().adapter(account.broker, account).refresh_token()
 class LatencyService:
-    async def measure(self, broker):
-        latency=await BrokerRegistry().adapter(broker).ping(); BrokerConnection.objects.update_or_create(broker=broker, defaults={'latency':latency,'last_ping':timezone.now(),'status':'connected'}); return latency
+    async def measure(self, broker): latency=await BrokerRegistry().adapter(broker).ping(); BrokerConnection.objects.update_or_create(broker=broker, defaults={'latency':latency,'last_ping':timezone.now(),'status':'connected'}); return latency
 class SmartOrderRouter:
     def route(self, user, symbol=None, mode='latency_based', preferred_account=None):
         qs=BrokerAccount.objects.select_related('broker').filter(user=user,status='active',broker__status='active')
@@ -37,8 +72,7 @@ class SmartOrderRouter:
         if not candidates: raise BrokerRoutingError('No active broker accounts are available')
         if mode=='priority': return sorted(candidates, key=lambda a: (not a.is_preferred, a.broker.name))[0]
         def score(a):
-            conn=BrokerConnection.objects.filter(broker=a.broker).order_by('-updated_at').first()
-            return (conn.latency if conn else 999999, not a.is_preferred, a.broker.name)
+            conn=BrokerConnection.objects.filter(broker=a.broker).order_by('-updated_at').first(); return (conn.latency if conn else 999999, not a.is_preferred, a.broker.name)
         return sorted(candidates, key=score)[0]
 class OrderManagementSystem:
     def create(self, user, **data):
@@ -57,12 +91,10 @@ class ExecutionManagementSystem:
         order.status=status; order.broker_order_id=result.get('broker_order_id',''); order.executed_at=timezone.now(); order.save(update_fields=['status','broker_order_id','executed_at','updated_at'])
         return ExecutionReport.objects.create(order=order, execution_price=executed, requested_price=requested, slippage=slippage, latency=result.get('latency',latency), fees=Decimal(str(result.get('fees',0))), status=status, raw_report=result)
 class ExecutionEngine:
-    def submit(self, user, **data):
-        order=OrderManagementSystem().queue(OrderManagementSystem().approve(OrderManagementSystem().create(user, **data)))
-        return asyncio.run(ExecutionManagementSystem().execute(order))
+    def submit(self, user, **data): order=OrderManagementSystem().queue(OrderManagementSystem().approve(OrderManagementSystem().create(user, **data))); return asyncio.run(ExecutionManagementSystem().execute(order))
 class SynchronizationService:
     async def sync_account(self, account):
-        data=await BrokerRegistry().adapter(account.broker, account).get_balance();
+        data=await BrokerRegistry().adapter(account.broker, account).get_balance()
         for f in ['balance','equity','margin','free_margin']:
             if f in data: setattr(account, f, data[f])
         account.last_synced_at=timezone.now(); account.save(); return account

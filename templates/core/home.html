@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}AlgoBot | AI Trading Platform{% endblock %}
+{% block title %}AlgoBot | Institutional Trading Platform{% endblock %}
 {% block content %}
 <section class="hero-panel">
-  <p class="eyebrow">Institutional-grade automation</p>
-  <h1>AlgoBot AI trading platform</h1>
-  <p>Deploy Institutional-grade trading infrastructure with AI signals, Deriv connectivity, risk controls, and portfolio analytics from one secure workspace.</p>
-  <div class="actions"><a href="/dashboard/">Open dashboard</a><a href="/connect-deriv/">Connect with Deriv</a></div>
+  <p class="eyebrow">Broker-independent trading infrastructure</p>
+  <h1>AlgoBot institutional trading platform</h1>
+  <p>Run strategies, risk controls, portfolio analytics, and execution workflows across interchangeable broker connections from one AlgoBot workspace.</p>
+  <div class="actions"><a href="/dashboard/">Open dashboard</a><a href="/brokers/connect/">Connect Broker</a><a href="/brokers/">Create Broker Account</a></div>
 </section>
-<section class="card-grid" aria-label="Platform highlights">
-  <article><h2>AI trading platform</h2><p>Monitor predictions, execution quality, and strategy automation.</p></article>
-  <article><h2>Institutional-grade risk</h2><p>Track exposure, drawdown, and kill-switch posture before trades move.</p></article>
-  <article><h2>Unified operations</h2><p>Bring market data, backtesting, and performance reporting into one flow.</p></article>
+<section class="card-grid" aria-label="Supported brokers">
+  <article><h2>Connect Broker</h2><p>Select Deriv, Binance, OANDA, Interactive Brokers, Bybit, MetaTrader, cTrader, Alpaca, or another supported provider.</p></article>
+  <article><h2>Broker Marketplace</h2><p>Review supported and coming-soon brokers, status, documentation, health, latency, account support, and asset classes.</p></article>
+  <article><h2>Broker-neutral terminal</h2><p>Switch active broker and connected account instantly while the trading terminal remains platform-wide.</p></article>
 </section>
 {% endblock %}

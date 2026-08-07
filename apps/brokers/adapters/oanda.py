@@ -1,3 +1,10 @@
-from .paper import PaperTradingAdapter
-class Adapter(PaperTradingAdapter):
-    broker_type = __name__.rsplit('.', 1)[-1]
+from .scaffold import ScaffoldBrokerAdapter
+
+
+class OandaAdapter(ScaffoldBrokerAdapter):
+    broker_type = 'oanda'
+    authentication_type = 'api_token'
+    asset_classes = ('forex', 'cfd')
+
+
+Adapter = OandaAdapter

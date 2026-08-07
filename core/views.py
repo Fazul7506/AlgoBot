@@ -120,9 +120,21 @@ def billing_cancel_page(request):
     return render(request, 'core/billing_cancel.html')
 
 
+def broker_connect_page(request):
+    broker = request.GET.get('broker')
+    if broker == 'deriv':
+        return deriv_login(request)
+    supported = ['Deriv', 'Binance', 'OANDA', 'Interactive Brokers', 'Bybit', 'MetaTrader Gateway', 'cTrader', 'Alpaca']
+    return render(request, 'broker/connect_broker.html', {'supported_brokers': supported})
+
+
+def broker_marketplace_page(request):
+    return render(request, 'broker/brokers.html')
+
+
 def deriv_login(request):
     """
-    Initiate Deriv OAuth login flow.
+    Initiate broker-specific OAuth login flow for the Deriv adapter.
     
     Generates PKCE parameters and state, then redirects to Deriv authorization endpoint.
     """
@@ -158,7 +170,7 @@ def deriv_login(request):
 
 def callback(request):
     """
-    Handle Deriv OAuth callback.
+    Handle broker OAuth callback for the Deriv adapter.
     
     Validates state and PKCE, exchanges authorization code for tokens,
     creates or updates user account, and establishes broker session.

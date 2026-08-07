@@ -1,10 +1,10 @@
 from .scaffold import ScaffoldBrokerAdapter
 
 
-class Mt5Adapter(ScaffoldBrokerAdapter):
-    broker_type = 'mt5'
+class Mt4Adapter(ScaffoldBrokerAdapter):
+    broker_type = 'mt4'
     authentication_type = 'username_password'
     asset_classes = ('forex', 'cfd')
 
 
-Adapter = Mt5Adapter
+Adapter = Mt4Adapter

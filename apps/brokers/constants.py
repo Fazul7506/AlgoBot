@@ -1,7 +1,9 @@
 BROKER_DERIV = 'deriv'
 BROKER_PAPER = 'paper'
-BROKER_TYPES = [BROKER_DERIV, BROKER_PAPER, 'mt5', 'mt4', 'oanda', 'binance', 'bybit', 'kraken', 'interactive_brokers', 'alpaca', 'ctrader', 'dxtrade', 'tradingview']
-BROKER_STATUSES = ['active', 'disabled', 'maintenance', 'degraded', 'offline']
+PRODUCTION_BROKERS = [BROKER_DERIV, BROKER_PAPER]
+SCAFFOLD_BROKERS = ['binance', 'bybit', 'oanda', 'interactive_brokers', 'metatrader_gateway', 'dxtrade', 'ctrader', 'alpaca', 'forex_com', 'pepperstone', 'ic_markets', 'exness', 'mt5', 'mt4']
+BROKER_TYPES = PRODUCTION_BROKERS + SCAFFOLD_BROKERS
+BROKER_STATUSES = ['active', 'disabled', 'maintenance', 'degraded', 'offline', 'coming_soon']
 CONNECTION_STATUSES = ['disconnected', 'connecting', 'connected', 'degraded', 'failed', 'reconnecting']
 ACCOUNT_STATUSES = ['active', 'disabled', 'margin_call', 'suspended']
 ORDER_TYPES = ['market', 'limit', 'stop', 'stop_limit', 'trailing_stop', 'bracket', 'oco', 'ioc', 'fok', 'gtc', 'day', 'gtd']

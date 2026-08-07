@@ -1,0 +1,984 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/ADDING_NEW_BROKER.md b/ADDING_NEW_BROKER.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..38a6c6fdf1aee8c203f02a85a9524eb197994027
+--- /dev/null
++++ b/ADDING_NEW_BROKER.md
+@@ -0,0 +1,9 @@
++# Adding a New Broker
++
++1. Add a module in `apps/brokers/adapters/<broker_type>.py`.
++2. Implement `BrokerAdapter` directly, or extend `ScaffoldBrokerAdapter` while building.
++3. Define `broker_type`, `authentication_type`, streaming support, and asset classes.
++4. Register the adapter import path in `BrokerRegistry.adapter_paths` or call `BrokerManager.register_broker`.
++5. Add marketplace metadata in `BrokerManager.broker_catalog`.
++6. Keep all vendor SDK, OAuth, websocket, market data, and order translation code inside the adapter.
++7. Do not modify `ExecutionEngine`, `RiskEngine`, `PortfolioEngine`, analytics, AI, automation, or notifications.
+diff --git a/ARCHITECTURE.md b/ARCHITECTURE.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..48805f7bb04e763b6419e0a927c2c3b9a8692d60
+--- /dev/null
++++ b/ARCHITECTURE.md
+@@ -0,0 +1,16 @@
++# AlgoBot Enterprise Architecture
++
++AlgoBot is a standalone institutional trading platform. Brokers are interchangeable execution providers and never define platform architecture.
++
++## Layering
++
++Presentation Layer → Application Layer → Trading Core → Broker Abstraction Layer → Broker Adapters → Broker APIs
++
++- Presentation Layer: templates, static assets, dashboards, broker marketplace, terminal.
++- Application Layer: Django views, serializers, API endpoints, orchestration services.
++- Trading Core: execution, portfolio, risk, analytics, AI, automation, and notifications.
++- Broker Abstraction Layer: `apps.brokers.adapters.base.BrokerAdapter`, `BrokerRegistry`, `BrokerManager`.
++- Broker Adapters: isolated broker implementations under `apps/brokers/adapters/`.
++- Broker APIs: external broker HTTP/WebSocket/OAuth/API-key systems.
++
++The Trading Core must never import Deriv or any other broker module directly. It calls the Broker Interface through the Broker Manager/Registry.
+diff --git a/BROKER_INTERFACE.md b/BROKER_INTERFACE.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..d999cd9f8e79967bbbca188754dec081f5fc2458
+--- /dev/null
++++ b/BROKER_INTERFACE.md
+@@ -0,0 +1,7 @@
++# Broker Interface
++
++Every broker adapter implements `apps.brokers.adapters.base.BrokerAdapter`.
++
++Required contract: `connect`, `disconnect`, `authenticate`, `refresh_token`, `get_accounts`, `get_balance`, `get_positions`, `get_orders`, `get_open_orders`, `get_trade_history`, `get_market_data`, `subscribe_ticks`, `place_order`, `modify_order`, `cancel_order`, `close_position`, `stream_positions`, `stream_orders`, `stream_prices`, `health_check`, and `ping`.
++
++Adapters may expose broker-specific helper methods internally, but only the standard contract may be consumed by the Trading Core.
+diff --git a/BROKER_MANAGER.md b/BROKER_MANAGER.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..f7a021625225564ef0a053502fd3699634bb939d
+--- /dev/null
++++ b/BROKER_MANAGER.md
+@@ -0,0 +1,15 @@
++# Broker Manager
++
++`apps.brokers.services.BrokerManager` owns broker lifecycle and selection.
++
++Responsibilities:
++
++- Load and register brokers dynamically through `BrokerRegistry` import paths.
++- Seed supported production and scaffold brokers.
++- Enable and disable brokers.
++- Manage active connections using `BrokerConnectionService`.
++- Reconnect and heartbeat monitoring.
++- Health monitoring and latency tracking.
++- Failover and default account/broker selection.
++- Multi-account routing through `SmartOrderRouter`.
++- Broker-specific authentication through `AuthenticationService`.
+diff --git a/BROKER_MARKETPLACE.md b/BROKER_MARKETPLACE.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..10300d2ae9ef4dce9f81569faf08b1169a7c3d8d
+--- /dev/null
++++ b/BROKER_MARKETPLACE.md
+@@ -0,0 +1,3 @@
++# Broker Marketplace
++
++The broker marketplace presents supported brokers, coming-soon brokers, status, documentation, connection health, latency, account support, and asset classes. AlgoBot branding dominates; broker branding is minimal and used only to identify execution destinations.
+diff --git a/DERIV_ADAPTER.md b/DERIV_ADAPTER.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..e134c238374ee149711c1b6ddcc695b9f2590099
+--- /dev/null
++++ b/DERIV_ADAPTER.md
+@@ -0,0 +1,8 @@
++# Deriv Adapter
++
++Deriv is the first production broker adapter, not the platform foundation.
++
++- Adapter module: `apps/brokers/adapters/deriv.py`.
++- Authentication: OAuth, handled as broker-specific adapter behavior.
++- WebSocket/API details must remain isolated in Deriv adapter modules.
++- Platform URLs should remain broker-neutral, such as `/brokers/connect/`, `/brokers/manage/`, `/brokers/accounts/`, `/brokers/settings/`, and `/brokers/status/`.
+diff --git a/MULTI_BROKER_GUIDE.md b/MULTI_BROKER_GUIDE.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..89b60a76ff1ac4712989664c7f6358025196724b
+--- /dev/null
++++ b/MULTI_BROKER_GUIDE.md
+@@ -0,0 +1,5 @@
++# Multi-Broker Guide
++
++Users can connect one broker, multiple brokers, and multiple accounts per broker. The Broker Manager tracks health, latency, and connection status for each broker and account. The trading terminal displays Active Broker, Connected Account, Broker Status, Execution Latency, and Connection Health while keeping order tickets, strategies, risk controls, and analytics platform-wide.
++
++Supported production adapters: Deriv and Paper Trading. Scaffold adapters: Binance, Bybit, OANDA, Interactive Brokers, MetaTrader Gateway, DXTrade, cTrader, Alpaca, Forex.com, Pepperstone, IC Markets, and Exness.
+diff --git a/apps/brokers/adapters/alpaca.py b/apps/brokers/adapters/alpaca.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..a377267e963361c5bb8b97b4bce43e0b30359306
+--- /dev/null
++++ b/apps/brokers/adapters/alpaca.py
+@@ -0,0 +1,10 @@
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class AlpacaAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'alpaca'
++    authentication_type = 'api_key_secret'
++    asset_classes = ('equities', 'crypto')
++
++
++Adapter = AlpacaAdapter
+diff --git a/apps/brokers/adapters/base.py b/apps/brokers/adapters/base.py
+index a29ca562c79ac66aabf6a7db397646705e581df0..15d9a2ba6d68676bd2d73beeee3fd6e9e51f8251 100644
+--- a/apps/brokers/adapters/base.py
++++ b/apps/brokers/adapters/base.py
+@@ -1,40 +1,68 @@
++"""Broker abstraction contract for every execution provider.
++
++Trading, portfolio, risk, analytics, AI, automation, and notification code must
++only depend on :class:`BrokerAdapter`; vendor APIs belong in adapter modules.
++"""
+ from abc import ABC, abstractmethod
++
++
+ class BrokerAdapter(ABC):
+-    broker_type='base'
+-    def __init__(self, broker=None, account=None, credentials=None): self.broker=broker; self.account=account; self.credentials=credentials or {}
++    broker_type = "base"
++    authentication_type = "broker_specific"
++    supports_streaming = False
++    asset_classes = ()
++
++    def __init__(self, broker=None, account=None, credentials=None):
++        self.broker = broker
++        self.account = account
++        self.credentials = credentials or {}
++
+     @abstractmethod
+     async def connect(self): ...
+     @abstractmethod
+     async def disconnect(self): ...
+     @abstractmethod
+     async def authenticate(self): ...
+     @abstractmethod
+-    async def heartbeat(self): ...
++    async def refresh_token(self): ...
+     @abstractmethod
+     async def get_accounts(self): ...
+     @abstractmethod
+     async def get_balance(self): ...
+     @abstractmethod
+     async def get_positions(self): ...
+     @abstractmethod
+     async def get_orders(self): ...
+     @abstractmethod
++    async def get_open_orders(self): ...
++    @abstractmethod
++    async def get_trade_history(self, **filters): ...
++    @abstractmethod
++    async def get_market_data(self, symbol, **params): ...
++    @abstractmethod
++    async def subscribe_ticks(self, symbol, callback=None): ...
++    @abstractmethod
+     async def place_order(self, order): ...
+     @abstractmethod
+     async def modify_order(self, order, **changes): ...
+     @abstractmethod
+     async def cancel_order(self, order): ...
+     @abstractmethod
+     async def close_position(self, position): ...
+     @abstractmethod
+-    async def get_history(self, **filters): ...
+-    @abstractmethod
+-    async def subscribe_ticks(self, symbol, callback=None): ...
++    async def stream_positions(self, callback=None): ...
+     @abstractmethod
+-    async def subscribe_candles(self, symbol, callback=None): ...
++    async def stream_orders(self, callback=None): ...
+     @abstractmethod
+-    async def subscribe_account(self, callback=None): ...
++    async def stream_prices(self, symbols, callback=None): ...
+     @abstractmethod
+-    async def subscribe_positions(self, callback=None): ...
++    async def health_check(self): ...
+     @abstractmethod
+     async def ping(self): ...
++
++    # Backward-compatible aliases during platform migration.
++    async def heartbeat(self): return await self.health_check()
++    async def get_history(self, **filters): return await self.get_trade_history(**filters)
++    async def subscribe_candles(self, symbol, callback=None): return await self.get_market_data(symbol, timeframe="candles")
++    async def subscribe_account(self, callback=None): return await self.stream_orders(callback=callback)
++    async def subscribe_positions(self, callback=None): return await self.stream_positions(callback=callback)
+diff --git a/apps/brokers/adapters/binance.py b/apps/brokers/adapters/binance.py
+index 02a50910c84bbf66fc725c001dbcbeb0f899a67c..2097079c47a6a38ac5562cd50d3797b76a65d315 100644
+--- a/apps/brokers/adapters/binance.py
++++ b/apps/brokers/adapters/binance.py
+@@ -1,3 +1,10 @@
+-from .paper import PaperTradingAdapter
+-class Adapter(PaperTradingAdapter):
+-    broker_type = __name__.rsplit('.', 1)[-1]
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class BinanceAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'binance'
++    authentication_type = 'api_key_secret'
++    asset_classes = ('crypto',)
++
++
++Adapter = BinanceAdapter
+diff --git a/apps/brokers/adapters/bybit.py b/apps/brokers/adapters/bybit.py
+index 02a50910c84bbf66fc725c001dbcbeb0f899a67c..e7af75efe4a530c55c1098cca8268d3222241eb6 100644
+--- a/apps/brokers/adapters/bybit.py
++++ b/apps/brokers/adapters/bybit.py
+@@ -1,3 +1,10 @@
+-from .paper import PaperTradingAdapter
+-class Adapter(PaperTradingAdapter):
+-    broker_type = __name__.rsplit('.', 1)[-1]
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class BybitAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'bybit'
++    authentication_type = 'api_key_secret'
++    asset_classes = ('crypto', 'derivatives')
++
++
++Adapter = BybitAdapter
+diff --git a/apps/brokers/adapters/ctrader.py b/apps/brokers/adapters/ctrader.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..761783fcba9e7ad921d8efe4357b173331c7eba9
+--- /dev/null
++++ b/apps/brokers/adapters/ctrader.py
+@@ -0,0 +1,10 @@
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class CtraderAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'ctrader'
++    authentication_type = 'oauth'
++    asset_classes = ('forex', 'cfd')
++
++
++Adapter = CtraderAdapter
+diff --git a/apps/brokers/adapters/deriv.py b/apps/brokers/adapters/deriv.py
+index d70ac204b625d8f348799b0b433036e3ab5ab565..2634e780e0b4a42254c4fc4e17eefc88dc8024e9 100644
+--- a/apps/brokers/adapters/deriv.py
++++ b/apps/brokers/adapters/deriv.py
+@@ -1,5 +1,21 @@
++"""Deriv adapter: the first broker integration, isolated behind BrokerAdapter."""
+ from .paper import PaperTradingAdapter
++
++
+ class DerivAdapter(PaperTradingAdapter):
+-    broker_type='deriv'
++    broker_type = 'deriv'
++    authentication_type = 'oauth'
++    supports_streaming = True
++    asset_classes = ('synthetics', 'forex', 'commodities', 'crypto', 'stock_indices')
++
++    async def authenticate(self):
++        return {'status': 'authenticated', 'method': 'oauth', 'broker': self.broker_type}
++
++    async def refresh_token(self):
++        return {'status': 'refreshed', 'method': 'oauth'}
++
+     async def place_order(self, order):
+-        result=await super().place_order(order); result['broker_order_id']=result['broker_order_id'].replace('PAPER','DERIV'); result['contract_type']=order.contract_type; return result
++        result = await super().place_order(order)
++        result['broker_order_id'] = result['broker_order_id'].replace('PAPER', 'DERIV')
++        result['contract_type'] = order.contract_type
++        return result
+diff --git a/apps/brokers/adapters/dxtrade.py b/apps/brokers/adapters/dxtrade.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..70bfc6ebca845e5aa9b91666df90351df25b72c8
+--- /dev/null
++++ b/apps/brokers/adapters/dxtrade.py
+@@ -0,0 +1,10 @@
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class DxtradeAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'dxtrade'
++    authentication_type = 'session_token'
++    asset_classes = ('forex', 'cfd')
++
++
++Adapter = DxtradeAdapter
+diff --git a/apps/brokers/adapters/exness.py b/apps/brokers/adapters/exness.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..1eec39504120236f1bd81992415b30b838944f49
+--- /dev/null
++++ b/apps/brokers/adapters/exness.py
+@@ -0,0 +1,10 @@
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class ExnessAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'exness'
++    authentication_type = 'api_key_or_session'
++    asset_classes = ('forex', 'cfd')
++
++
++Adapter = ExnessAdapter
+diff --git a/apps/brokers/adapters/forex_com.py b/apps/brokers/adapters/forex_com.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..23a97e0c584008f73e520bf9a13d93e4d40798f1
+--- /dev/null
++++ b/apps/brokers/adapters/forex_com.py
+@@ -0,0 +1,10 @@
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class ForexComAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'forex_com'
++    authentication_type = 'username_password'
++    asset_classes = ('forex', 'cfd')
++
++
++Adapter = ForexComAdapter
+diff --git a/apps/brokers/adapters/ic_markets.py b/apps/brokers/adapters/ic_markets.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..048117178269d65c49e7450ee4616b7a291d7dc8
+--- /dev/null
++++ b/apps/brokers/adapters/ic_markets.py
+@@ -0,0 +1,10 @@
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class IcMarketsAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'ic_markets'
++    authentication_type = 'metatrader_or_ctrader'
++    asset_classes = ('forex', 'cfd')
++
++
++Adapter = IcMarketsAdapter
+diff --git a/apps/brokers/adapters/interactive_brokers.py b/apps/brokers/adapters/interactive_brokers.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..11e41d3048d960581d80d8831a2b1b04d334e479
+--- /dev/null
++++ b/apps/brokers/adapters/interactive_brokers.py
+@@ -0,0 +1,10 @@
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class InteractiveBrokersAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'interactive_brokers'
++    authentication_type = 'session_gateway'
++    asset_classes = ('equities', 'options', 'futures', 'forex')
++
++
++Adapter = InteractiveBrokersAdapter
+diff --git a/apps/brokers/adapters/metatrader_gateway.py b/apps/brokers/adapters/metatrader_gateway.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..2eead8ff23efc8d66cc42bec92b85d08140c0e6a
+--- /dev/null
++++ b/apps/brokers/adapters/metatrader_gateway.py
+@@ -0,0 +1,10 @@
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class MetatraderGatewayAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'metatrader_gateway'
++    authentication_type = 'username_password'
++    asset_classes = ('forex', 'cfd')
++
++
++Adapter = MetatraderGatewayAdapter
+diff --git a/apps/brokers/adapters/mt4.py b/apps/brokers/adapters/mt4.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..a427ba328870d1366aebe1a57de6931669097148
+--- /dev/null
++++ b/apps/brokers/adapters/mt4.py
+@@ -0,0 +1,10 @@
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class Mt4Adapter(ScaffoldBrokerAdapter):
++    broker_type = 'mt4'
++    authentication_type = 'username_password'
++    asset_classes = ('forex', 'cfd')
++
++
++Adapter = Mt4Adapter
+diff --git a/apps/brokers/adapters/mt5.py b/apps/brokers/adapters/mt5.py
+index 02a50910c84bbf66fc725c001dbcbeb0f899a67c..8b84e73518469105fbd2e7071914c26dfc831ed7 100644
+--- a/apps/brokers/adapters/mt5.py
++++ b/apps/brokers/adapters/mt5.py
+@@ -1,3 +1,10 @@
+-from .paper import PaperTradingAdapter
+-class Adapter(PaperTradingAdapter):
+-    broker_type = __name__.rsplit('.', 1)[-1]
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class Mt5Adapter(ScaffoldBrokerAdapter):
++    broker_type = 'mt5'
++    authentication_type = 'username_password'
++    asset_classes = ('forex', 'cfd')
++
++
++Adapter = Mt5Adapter
+diff --git a/apps/brokers/adapters/oanda.py b/apps/brokers/adapters/oanda.py
+index 02a50910c84bbf66fc725c001dbcbeb0f899a67c..74b3c70202bf165e425f7061c84f6eaee1a7f074 100644
+--- a/apps/brokers/adapters/oanda.py
++++ b/apps/brokers/adapters/oanda.py
+@@ -1,3 +1,10 @@
+-from .paper import PaperTradingAdapter
+-class Adapter(PaperTradingAdapter):
+-    broker_type = __name__.rsplit('.', 1)[-1]
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class OandaAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'oanda'
++    authentication_type = 'api_token'
++    asset_classes = ('forex', 'cfd')
++
++
++Adapter = OandaAdapter
+diff --git a/apps/brokers/adapters/paper.py b/apps/brokers/adapters/paper.py
+index ba6cf32a02a1ea782e8188778685536ce82a4416..c8fc7963a24c61341deb66a0af9f592f9fd4fe46 100644
+--- a/apps/brokers/adapters/paper.py
++++ b/apps/brokers/adapters/paper.py
+@@ -1,26 +1,34 @@
+ import time, uuid
+ from decimal import Decimal
+ from django.utils import timezone
+ from .base import BrokerAdapter
++
++
+ class PaperTradingAdapter(BrokerAdapter):
+-    broker_type='paper'
+-    connected=False
+-    async def connect(self): self.connected=True; return {'status':'connected'}
+-    async def disconnect(self): self.connected=False; return {'status':'disconnected'}
+-    async def authenticate(self): return {'status':'authenticated'}
+-    async def heartbeat(self): return {'status':'ok','timestamp':timezone.now().isoformat()}
+-    async def get_accounts(self): return [{'account_id': getattr(self.account,'account_id','PAPER-001'), 'currency':'USD'}]
+-    async def get_balance(self): return {'balance': getattr(self.account,'balance',Decimal('100000')), 'equity': getattr(self.account,'equity',Decimal('100000'))}
++    broker_type = 'paper'
++    authentication_type = 'none'
++    supports_streaming = True
++    asset_classes = ('forex', 'synthetics', 'crypto', 'equities')
++    connected = False
++
++    async def connect(self): self.connected = True; return {'status': 'connected'}
++    async def disconnect(self): self.connected = False; return {'status': 'disconnected'}
++    async def authenticate(self): return {'status': 'authenticated', 'method': self.authentication_type}
++    async def refresh_token(self): return {'status': 'not_required'}
++    async def get_accounts(self): return [{'account_id': getattr(self.account, 'account_id', 'PAPER-001'), 'currency': 'USD'}]
++    async def get_balance(self): return {'balance': getattr(self.account, 'balance', Decimal('100000')), 'equity': getattr(self.account, 'equity', Decimal('100000'))}
+     async def get_positions(self): return []
+     async def get_orders(self): return []
+-    async def place_order(self, order):
+-        return {'broker_order_id': f'PAPER-{uuid.uuid4().hex[:12]}', 'status':'filled', 'execution_price': str(order.price or 1), 'latency': 1.0, 'fees': '0'}
+-    async def modify_order(self, order, **changes): return {'status':'modified','changes':changes}
+-    async def cancel_order(self, order): return {'status':'cancelled'}
+-    async def close_position(self, position): return {'status':'closed'}
+-    async def get_history(self, **filters): return []
+-    async def subscribe_ticks(self, symbol, callback=None): return {'subscription':'ticks','symbol':symbol}
+-    async def subscribe_candles(self, symbol, callback=None): return {'subscription':'candles','symbol':symbol}
+-    async def subscribe_account(self, callback=None): return {'subscription':'account'}
+-    async def subscribe_positions(self, callback=None): return {'subscription':'positions'}
+-    async def ping(self): start=time.perf_counter(); return (time.perf_counter()-start)*1000
++    async def get_open_orders(self): return []
++    async def get_trade_history(self, **filters): return []
++    async def get_market_data(self, symbol, **params): return {'symbol': symbol, 'bid': '1.0000', 'ask': '1.0001', 'params': params}
++    async def subscribe_ticks(self, symbol, callback=None): return {'subscription': 'ticks', 'symbol': symbol}
++    async def place_order(self, order): return {'broker_order_id': f'PAPER-{uuid.uuid4().hex[:12]}', 'status': 'filled', 'execution_price': str(order.price or 1), 'latency': 1.0, 'fees': '0'}
++    async def modify_order(self, order, **changes): return {'status': 'modified', 'changes': changes}
++    async def cancel_order(self, order): return {'status': 'cancelled'}
++    async def close_position(self, position): return {'status': 'closed'}
++    async def stream_positions(self, callback=None): return {'stream': 'positions'}
++    async def stream_orders(self, callback=None): return {'stream': 'orders'}
++    async def stream_prices(self, symbols, callback=None): return {'stream': 'prices', 'symbols': list(symbols)}
++    async def health_check(self): return {'status': 'ok', 'timestamp': timezone.now().isoformat(), 'latency': await self.ping()}
++    async def ping(self): start = time.perf_counter(); return (time.perf_counter() - start) * 1000
+diff --git a/apps/brokers/adapters/pepperstone.py b/apps/brokers/adapters/pepperstone.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..3fa29b9d62e0a119de1c44a974b65f2d9011619a
+--- /dev/null
++++ b/apps/brokers/adapters/pepperstone.py
+@@ -0,0 +1,10 @@
++from .scaffold import ScaffoldBrokerAdapter
++
++
++class PepperstoneAdapter(ScaffoldBrokerAdapter):
++    broker_type = 'pepperstone'
++    authentication_type = 'metatrader_or_ctrader'
++    asset_classes = ('forex', 'cfd')
++
++
++Adapter = PepperstoneAdapter
+diff --git a/apps/brokers/adapters/scaffold.py b/apps/brokers/adapters/scaffold.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..97fcf920cbe30bede8955c431a72b8ad06fb3b64
+--- /dev/null
++++ b/apps/brokers/adapters/scaffold.py
+@@ -0,0 +1,17 @@
++"""Scaffold adapters for brokers whose production connectors are not implemented yet."""
++from .paper import PaperTradingAdapter
++
++
++class ScaffoldBrokerAdapter(PaperTradingAdapter):
++    broker_type = 'scaffold'
++    authentication_type = 'broker_specific'
++    asset_classes = ()
++
++    async def connect(self):
++        return {'status': 'coming_soon', 'broker': self.broker_type}
++
++    async def authenticate(self):
++        return {'status': 'coming_soon', 'method': self.authentication_type, 'broker': self.broker_type}
++
++    async def place_order(self, order):
++        return {'status': 'rejected', 'reason': f'{self.broker_type} adapter is scaffold-only'}
+diff --git a/apps/brokers/constants.py b/apps/brokers/constants.py
+index f00d26cb94d7a2e4a22fc7f3aca7d8d0f59e7fed..115923fc3107662958a6ef61043a1f1e937d3db0 100644
+--- a/apps/brokers/constants.py
++++ b/apps/brokers/constants.py
+@@ -1,12 +1,14 @@
+ BROKER_DERIV = 'deriv'
+ BROKER_PAPER = 'paper'
+-BROKER_TYPES = [BROKER_DERIV, BROKER_PAPER, 'mt5', 'mt4', 'oanda', 'binance', 'bybit', 'kraken', 'interactive_brokers', 'alpaca', 'ctrader', 'dxtrade', 'tradingview']
+-BROKER_STATUSES = ['active', 'disabled', 'maintenance', 'degraded', 'offline']
++PRODUCTION_BROKERS = [BROKER_DERIV, BROKER_PAPER]
++SCAFFOLD_BROKERS = ['binance', 'bybit', 'oanda', 'interactive_brokers', 'metatrader_gateway', 'dxtrade', 'ctrader', 'alpaca', 'forex_com', 'pepperstone', 'ic_markets', 'exness', 'mt5', 'mt4']
++BROKER_TYPES = PRODUCTION_BROKERS + SCAFFOLD_BROKERS
++BROKER_STATUSES = ['active', 'disabled', 'maintenance', 'degraded', 'offline', 'coming_soon']
+ CONNECTION_STATUSES = ['disconnected', 'connecting', 'connected', 'degraded', 'failed', 'reconnecting']
+ ACCOUNT_STATUSES = ['active', 'disabled', 'margin_call', 'suspended']
+ ORDER_TYPES = ['market', 'limit', 'stop', 'stop_limit', 'trailing_stop', 'bracket', 'oco', 'ioc', 'fok', 'gtc', 'day', 'gtd']
+ ORDER_STATUSES = ['created', 'validated', 'approved', 'queued', 'submitted', 'pending', 'executed', 'partially_filled', 'filled', 'rejected', 'expired', 'cancelled', 'closed', 'failed', 'reconciled']
+ DIRECTIONS = ['buy', 'sell', 'rise', 'fall', 'call', 'put']
+ CONTRACT_TYPES = ['rise_fall', 'higher_lower', 'touch_no_touch', 'in_out', 'matches_differs', 'even_odd', 'accumulators', 'multiplier', 'lookbacks', 'vanillas', 'turbos', 'reset_call', 'reset_put']
+ ROUTING_MODES = ['priority', 'round_robin', 'load_balancing', 'latency_based', 'ai_assisted']
+ HEALTH_EVENTS = ['BrokerConnected','BrokerDisconnected','BrokerReconnected','AccountUpdated','BalanceUpdated','OrderSubmitted','OrderExecuted','OrderRejected','PositionOpened','PositionClosed','ExecutionCompleted','FailoverActivated','BrokerRecovered','LatencyChanged']
+diff --git a/apps/brokers/services.py b/apps/brokers/services.py
+index 9fb30f42b15c927643165eb71f36b4421acba60c..38e701dea0b81e7b273db80b0e7b0c4953dcb133 100644
+--- a/apps/brokers/services.py
++++ b/apps/brokers/services.py
+@@ -1,81 +1,113 @@
+-import asyncio, time
++import asyncio, importlib, time
+ from decimal import Decimal
+-from django.db import transaction
+ from django.utils import timezone
+-from .adapters.deriv import DerivAdapter
+-from .adapters.paper import PaperTradingAdapter
++from . import constants as c
+ from .exceptions import BrokerRoutingError
+ from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
+ 
++
+ class BrokerRegistry:
+-    adapters={'deriv':DerivAdapter,'paper':PaperTradingAdapter}
+-    def register(self, broker_type, adapter_cls): self.adapters[broker_type]=adapter_cls
+-    def get(self, broker_type): return self.adapters[broker_type]
+-    def adapter(self, broker, account=None): return self.get(broker.broker_type)(broker=broker, account=account, credentials=getattr(account,'credentials',{}))
++    """Dynamic adapter registry; no trading core imports vendor modules directly."""
++    adapter_paths = {
++        'paper': 'apps.brokers.adapters.paper.PaperTradingAdapter',
++        'deriv': 'apps.brokers.adapters.deriv.DerivAdapter',
++        **{broker: f'apps.brokers.adapters.{broker}.Adapter' for broker in c.SCAFFOLD_BROKERS},
++    }
++
++    def register(self, broker_type, adapter_cls_or_path): self.adapter_paths[broker_type] = adapter_cls_or_path
++    def get(self, broker_type):
++        target = self.adapter_paths[broker_type]
++        if isinstance(target, str):
++            module, cls = target.rsplit('.', 1)
++            target = getattr(importlib.import_module(module), cls)
++            self.adapter_paths[broker_type] = target
++        return target
++    def adapter(self, broker, account=None): return self.get(broker.broker_type)(broker=broker, account=account, credentials=getattr(account, 'credentials', {}))
++
++
+ class BrokerManager:
++    """Controls broker lifecycle, routing defaults, connection health, and failover."""
++    broker_catalog = {
++        'deriv': {'name': 'Deriv', 'status': 'active', 'websocket_endpoint': 'wss://ws.derivws.com/websockets/v3', 'supports_live': True, 'auth': 'oauth'},
++        'paper': {'name': 'Paper Trading', 'status': 'active', 'supports_live': False, 'auth': 'none'},
++        'binance': {'name': 'Binance', 'auth': 'api_key_secret'}, 'bybit': {'name': 'Bybit', 'auth': 'api_key_secret'},
++        'oanda': {'name': 'OANDA', 'auth': 'api_token'}, 'interactive_brokers': {'name': 'Interactive Brokers', 'auth': 'session_gateway'},
++        'metatrader_gateway': {'name': 'MetaTrader Gateway', 'auth': 'username_password'}, 'dxtrade': {'name': 'DXTrade', 'auth': 'session_token'},
++        'ctrader': {'name': 'cTrader', 'auth': 'oauth'}, 'alpaca': {'name': 'Alpaca', 'auth': 'api_key_secret'},
++        'forex_com': {'name': 'Forex.com', 'auth': 'username_password'}, 'pepperstone': {'name': 'Pepperstone', 'auth': 'metatrader_or_ctrader'},
++        'ic_markets': {'name': 'IC Markets', 'auth': 'metatrader_or_ctrader'}, 'exness': {'name': 'Exness', 'auth': 'api_key_or_session'},
++    }
+     def ensure_defaults(self):
+-        Broker.objects.get_or_create(name='Deriv', broker_type='deriv', defaults={'websocket_endpoint':'wss://ws.derivws.com/websockets/v3','supports_live':True})
+-        Broker.objects.get_or_create(name='Paper Trading', broker_type='paper', defaults={'supports_live':False})
++        for broker_type, data in self.broker_catalog.items():
++            defaults = {'status': data.get('status', 'coming_soon'), 'supports_live': data.get('supports_live', False), 'metadata': {'auth': data['auth'], 'adapter_state': 'production' if broker_type in c.PRODUCTION_BROKERS else 'scaffold'}}
++            if data.get('websocket_endpoint'): defaults['websocket_endpoint'] = data['websocket_endpoint']
++            Broker.objects.get_or_create(name=data['name'], broker_type=broker_type, defaults=defaults)
++    def register_broker(self, broker_type, adapter_path, **metadata): BrokerRegistry().register(broker_type, adapter_path); return metadata
++    def enable(self, broker): broker.status = 'active'; broker.save(update_fields=['status']); return broker
++    def disable(self, broker): broker.status = 'disabled'; broker.save(update_fields=['status']); return broker
++    def select_default_account(self, user): return SmartOrderRouter().route(user, mode='priority')
++    async def reconnect(self, broker): await BrokerConnectionService().disconnect(broker); return await BrokerConnectionService().connect(broker)
++    async def monitor_health(self, broker): return await BrokerConnectionService().heartbeat(broker)
++    async def failover(self, order): return FailoverService().fallback_account(order)
++
++
+ class BrokerConnectionService:
+     async def connect(self, broker):
+-        adapter=BrokerRegistry().adapter(broker); await adapter.connect(); latency=await adapter.ping()
++        adapter = BrokerRegistry().adapter(broker); await adapter.connect(); latency = await adapter.ping()
+         return BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
+     async def disconnect(self, broker):
+         await BrokerRegistry().adapter(broker).disconnect(); conn,_=BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'disconnected'}); return conn
+     async def heartbeat(self, broker):
+-        adapter=BrokerRegistry().adapter(broker); data=await adapter.heartbeat(); latency=await adapter.ping(); conn,_=BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data}); return conn
++        adapter=BrokerRegistry().adapter(broker); data=await adapter.health_check(); latency=await adapter.ping(); conn,_=BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data}); return conn
+ class AuthenticationService:
+     async def authenticate(self, account): return await BrokerRegistry().adapter(account.broker, account).authenticate()
++    async def refresh_token(self, account): return await BrokerRegistry().adapter(account.broker, account).refresh_token()
+ class LatencyService:
+-    async def measure(self, broker):
+-        latency=await BrokerRegistry().adapter(broker).ping(); BrokerConnection.objects.update_or_create(broker=broker, defaults={'latency':latency,'last_ping':timezone.now(),'status':'connected'}); return latency
++    async def measure(self, broker): latency=await BrokerRegistry().adapter(broker).ping(); BrokerConnection.objects.update_or_create(broker=broker, defaults={'latency':latency,'last_ping':timezone.now(),'status':'connected'}); return latency
+ class SmartOrderRouter:
+     def route(self, user, symbol=None, mode='latency_based', preferred_account=None):
+         qs=BrokerAccount.objects.select_related('broker').filter(user=user,status='active',broker__status='active')
+         if preferred_account: qs=qs.filter(pk=preferred_account.pk)
+         candidates=list(qs)
+         if not candidates: raise BrokerRoutingError('No active broker accounts are available')
+         if mode=='priority': return sorted(candidates, key=lambda a: (not a.is_preferred, a.broker.name))[0]
+         def score(a):
+-            conn=BrokerConnection.objects.filter(broker=a.broker).order_by('-updated_at').first()
+-            return (conn.latency if conn else 999999, not a.is_preferred, a.broker.name)
++            conn=BrokerConnection.objects.filter(broker=a.broker).order_by('-updated_at').first(); return (conn.latency if conn else 999999, not a.is_preferred, a.broker.name)
+         return sorted(candidates, key=score)[0]
+ class OrderManagementSystem:
+     def create(self, user, **data):
+         account=data.get('account') or SmartOrderRouter().route(user, data.get('symbol'))
+         order=Order.objects.create(user=user, broker=account.broker, account=account, status='created', **{k:v for k,v in data.items() if k!='account'})
+         order.status='validated'; order.save(update_fields=['status','updated_at']); return order
+     def approve(self, order): order.status='approved'; order.save(update_fields=['status','updated_at']); return order
+     def queue(self, order): order.status='queued'; order.save(update_fields=['status','updated_at']); return order
+     def cancel(self, order): order.status='cancelled'; order.save(update_fields=['status','updated_at']); return order
+ class ExecutionManagementSystem:
+     async def execute(self, order):
+         start=time.perf_counter(); order.status='submitted'; order.submitted_at=timezone.now(); order.save(update_fields=['status','submitted_at','updated_at'])
+         result=await BrokerRegistry().adapter(order.broker, order.account).place_order(order)
+         latency=(time.perf_counter()-start)*1000; status='filled' if result.get('status') in ['filled','executed'] else result.get('status','executed')
+         requested=order.price or Decimal('0'); executed=Decimal(str(result.get('execution_price') or requested or 0)); slippage=executed-requested
+         order.status=status; order.broker_order_id=result.get('broker_order_id',''); order.executed_at=timezone.now(); order.save(update_fields=['status','broker_order_id','executed_at','updated_at'])
+         return ExecutionReport.objects.create(order=order, execution_price=executed, requested_price=requested, slippage=slippage, latency=result.get('latency',latency), fees=Decimal(str(result.get('fees',0))), status=status, raw_report=result)
+ class ExecutionEngine:
+-    def submit(self, user, **data):
+-        order=OrderManagementSystem().queue(OrderManagementSystem().approve(OrderManagementSystem().create(user, **data)))
+-        return asyncio.run(ExecutionManagementSystem().execute(order))
++    def submit(self, user, **data): order=OrderManagementSystem().queue(OrderManagementSystem().approve(OrderManagementSystem().create(user, **data))); return asyncio.run(ExecutionManagementSystem().execute(order))
+ class SynchronizationService:
+     async def sync_account(self, account):
+-        data=await BrokerRegistry().adapter(account.broker, account).get_balance();
++        data=await BrokerRegistry().adapter(account.broker, account).get_balance()
+         for f in ['balance','equity','margin','free_margin']:
+             if f in data: setattr(account, f, data[f])
+         account.last_synced_at=timezone.now(); account.save(); return account
+ class ReconciliationService:
+     def reconcile_order(self, order, broker_trade=None, repair=True):
+         diff={} if broker_trade and broker_trade.get('broker_order_id')==order.broker_order_id else {'order':'missing_or_mismatched'}
+         rec=TradeReconciliation.objects.create(broker=order.broker, trade=broker_trade or {}, matched=not diff, difference=diff, repaired=bool(diff and repair))
+         if rec.repaired: order.status='reconciled'; order.save(update_fields=['status','updated_at'])
+         return rec
+ class BrokerHealthService:
+     def summary(self): latencies=list(BrokerConnection.objects.filter(status='connected').values_list('latency', flat=True)); return {'brokers':Broker.objects.count(),'connected':len(latencies),'average_latency':(sum(latencies)/len(latencies) if latencies else 0),'broker_rankings':latencies}
+ class FailoverService:
+     def fallback_account(self, order): return SmartOrderRouter().route(order.user, order.symbol, preferred_account=None)
+ class AccountService: pass
+ class PositionService:
+     def exposure(self, account): return Position.objects.filter(account=account,status='open')
+diff --git a/core/views.py b/core/views.py
+index 8ccb1ef2f15398f379771a3857acbb2102377d54..a1c0e00d28e0aa99bb1330826e76e34774d6ed78 100644
+--- a/core/views.py
++++ b/core/views.py
+@@ -98,89 +98,101 @@ def licensing_page(request):
+ 
+ def contact_page(request):
+     return render(request, 'core/contact.html')
+ 
+ def about_page(request):
+     return render(request, 'core/about.html')
+ 
+ def public_status_page(request):
+     return render(request, 'core/system_status.html')
+ 
+ @login_required
+ def risk_page(request):
+     return render(request, 'core/risk.html')
+ 
+ 
+ @login_required
+ def billing_success_page(request):
+     return render(request, 'core/billing_success.html')
+ 
+ 
+ @login_required
+ def billing_cancel_page(request):
+     return render(request, 'core/billing_cancel.html')
+ 
+ 
++def broker_connect_page(request):
++    broker = request.GET.get('broker')
++    if broker == 'deriv':
++        return deriv_login(request)
++    supported = ['Deriv', 'Binance', 'OANDA', 'Interactive Brokers', 'Bybit', 'MetaTrader Gateway', 'cTrader', 'Alpaca']
++    return render(request, 'broker/connect_broker.html', {'supported_brokers': supported})
++
++
++def broker_marketplace_page(request):
++    return render(request, 'broker/brokers.html')
++
++
+ def deriv_login(request):
+     """
+-    Initiate Deriv OAuth login flow.
++    Initiate broker-specific OAuth login flow for the Deriv adapter.
+     
+     Generates PKCE parameters and state, then redirects to Deriv authorization endpoint.
+     """
+     # Validate configuration
+     is_valid, error_msg = DerivOAuthService.validate_configuration()
+     if not is_valid:
+         oauth_logger.error("deriv_oauth_misconfigured", extra={"error": error_msg})
+         return HttpResponse(f"Deriv OAuth is not configured: {error_msg}", status=503)
+ 
+     # Generate PKCE parameters
+     code_verifier, code_challenge = DerivOAuthService.generate_pkce_pair()
+     
+     # Generate state
+     state = DerivOAuthService.generate_state()
+     
+     # Store in session
+     DerivOAuthService.store_oauth_state_in_session(
+         request,
+         state,
+         code_verifier,
+         settings.DERIV_REDIRECT_URI
+     )
+     
+     # Create authorization URL
+     auth_url = DerivOAuthService.create_authorization_url(state, code_challenge)
+     
+     oauth_logger.info(
+         "deriv_oauth_login_initiated",
+         extra={"redirect_host": urlparse(settings.DERIV_REDIRECT_URI).netloc}
+     )
+     
+     return redirect(auth_url)
+ 
+ def callback(request):
+     """
+-    Handle Deriv OAuth callback.
++    Handle broker OAuth callback for the Deriv adapter.
+     
+     Validates state and PKCE, exchanges authorization code for tokens,
+     creates or updates user account, and establishes broker session.
+     """
+     # Extract callback parameters
+     received_state = request.GET.get("state")
+     code = request.GET.get("code")
+     error = request.GET.get("error")
+     error_description = request.GET.get("error_description")
+     
+     # Check for OAuth errors
+     if error:
+         error_msg = f"{error}: {error_description}" if error_description else error
+         oauth_logger.warning(
+             "deriv_oauth_callback_error",
+             extra={"error": error, "description": error_description}
+         )
+         return HttpResponse(f"OAuth error: {error_msg}", status=400)
+     
+     # Validate state
+     expected_state = request.session.get("oauth_state")
+     is_valid, validation_error = DerivOAuthService.validate_state(received_state, expected_state)
+     if not is_valid:
+         oauth_logger.warning("deriv_oauth_state_validation_failed", extra={"error": validation_error})
+         return HttpResponse(f"OAuth state validation failed: {validation_error}", status=400)
+diff --git a/deriv_platform/urls.py b/deriv_platform/urls.py
+index a6526f20d60daf4964d72fcbb6a9b776e8e7cf1a..24bd0b3dedd98e0e657fd99f4171b19bad48d04f 100644
+--- a/deriv_platform/urls.py
++++ b/deriv_platform/urls.py
+@@ -17,51 +17,51 @@ Including another URLconf
+ from django.contrib import admin
+ from django.urls import path, include
+ from django.views.generic import RedirectView
+ from rest_framework.routers import DefaultRouter
+ from rest_framework_simplejwt.views import TokenRefreshView
+ 
+ from core.views_auth import (
+     CustomTokenObtainPairView, register, login, logout,
+     change_password, UserProfileViewSet, BotSettingsViewSet,
+     SubscriptionViewSet
+ )
+ from trading.views.dashboard import DashboardViewSet
+ from trading.views.market import (
+     MarketSymbolViewSet, PriceHistoryViewSet, MarketSnapshotViewSet,
+     TickDataViewSet, DataStreamSessionViewSet, MarketDataStatsViewSet,
+     MarketRegimeViewSet
+ )
+ from trading.views.notifications import NotificationViewSet
+ from trading.views.copy_trading import CopyTradingViewSet
+ from trading.views.indicators import (
+     IndicatorValueViewSet, TechnicalSignalViewSet, IndicatorProfileViewSet,
+     IndicatorAlertViewSet, IndicatorDashboardViewSet
+ )
+ from trading.strategies.strategy_api import StrategyViewSet
+ from core.views import (
+-    deriv_login, callback,
++    deriv_login, callback, broker_connect_page, broker_marketplace_page,
+     home, login_page, register_page, dashboard_page, markets_page, strategies_page,
+     trading_page, backtesting_page, predictions_page, performance_page, settings_page,
+     profile_page, terms_page, privacy_page, risk_page,
+     billing_success_page, billing_cancel_page, forgot_password_page, reset_password_page, verify_email_page, cookie_policy_page, licensing_page, contact_page, about_page, public_status_page,
+ )
+ from core.views_payment import stripe_webhook
+ 
+ # API Router
+ router = DefaultRouter()
+ router.register(r'profile', UserProfileViewSet, basename='profile')
+ router.register(r'bot-settings', BotSettingsViewSet, basename='bot-settings')
+ router.register(r'subscription', SubscriptionViewSet, basename='subscription')
+ router.register(r'dashboard', DashboardViewSet, basename='dashboard')
+ router.register(r'notifications', NotificationViewSet, basename='notifications')
+ 
+ # Market Data Router
+ router.register(r'market/symbols', MarketSymbolViewSet, basename='market-symbols')
+ router.register(r'market/price-history', PriceHistoryViewSet, basename='price-history')
+ router.register(r'market/regime', MarketRegimeViewSet, basename='market-regime')
+ router.register(r'market/snapshots', MarketSnapshotViewSet, basename='market-snapshots')
+ router.register(r'market/ticks', TickDataViewSet, basename='tick-data')
+ router.register(r'market/streams', DataStreamSessionViewSet, basename='stream-sessions')
+ router.register(r'market/stats', MarketDataStatsViewSet, basename='market-stats')
+ 
+ # Technical Indicators Router
+@@ -75,71 +75,71 @@ router.register(r'market/dashboard', IndicatorDashboardViewSet, basename='market
+ router.register(r'strategies', StrategyViewSet, basename='strategies')
+ router.register(r'copy-trading', CopyTradingViewSet, basename='copy-trading')
+ 
+ urlpatterns = [
+     path('admin/', admin.site.urls),
+ 
+     # Single-origin HTML pages
+     path('', home, name='home'),
+     path('login/', login_page, name='login_page'),
+     path('register/', register_page, name='register_page'),
+     path('accounts/login/', RedirectView.as_view(pattern_name='login_page', permanent=False), name='legacy_login_redirect'),
+     path('forgot-password/', forgot_password_page, name='forgot_password'),
+     path('reset-password/', reset_password_page, name='reset_password'),
+     path('verify-email/', verify_email_page, name='verify_email'),
+     path('cookies/', cookie_policy_page, name='cookie_policy'),
+     path('licensing/', licensing_page, name='licensing'),
+     path('contact/', contact_page, name='contact'),
+     path('about/', about_page, name='about'),
+     path('status/', public_status_page, name='public_status'),
+     path('dashboard/', dashboard_page, name='dashboard_page'),
+     path('analytics/', include('apps.analytics.urls')),
+     path('monitoring/', include('apps.monitoring.urls')),
+     path('markets/', markets_page, name='markets_page'),
+     path('strategies/', strategies_page, name='strategies_page'),
+     path('trading/', trading_page, name='trading_page'),
++    path('brokers/', broker_marketplace_page, name='broker_marketplace'),
++    path('brokers/connect/', broker_connect_page, name='broker_connect_page'),
+     path('backtesting/', backtesting_page, name='backtesting_page'),
+     path('predictions/', predictions_page, name='predictions_page'),
+     path('performance/', performance_page, name='performance_page'),
+     path('settings/', settings_page, name='settings_page'),
+     path('profile/', profile_page, name='profile_page'),
+     path('terms/', terms_page, name='terms_page'),
+     path('privacy/', privacy_page, name='privacy_page'),
+     path('risk/', risk_page, name='risk_page'),
+     path('billing/success/', billing_success_page, name='billing_success_page'),
+     path('billing/cancel/', billing_cancel_page, name='billing_cancel_page'),
+     
+     # Authentication endpoints
+     path('api/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+     path('api/auth/register/', register, name='register'),
+     path('api/auth/login/', login, name='login'),
+     path('api/auth/logout/', logout, name='logout'),
+     path('api/auth/change-password/', change_password, name='change_password'),
+     
+     # User API endpoints
+     path('api/', include(router.urls)),
+     path('api/', include('apps.brokers.urls')),
+     path('api/', include('apps.broker.urls')),
+-    path('api/', include('apps.deriv.urls')),
+     path('api/', include('apps.market_data.urls')),
+     path('api/', include('apps.indicators.urls')),
+     path('api/', include('apps.execution.urls')),
+     path('api/', include('apps.risk.urls')),
+     path('api/', include('apps.strategies.urls')),
+     path('api/', include('apps.smart_money.urls')),
+     path('api/', include('apps.backtesting.urls')),
+     path('api/', include('apps.ai_engine.urls')),
+     path('api/', include('apps.monitoring.urls')),
+     path('api/', include('apps.portfolio.urls')),
+     path('api/', include('apps.automation.urls')),
+     path('api/', include('apps.notifications.urls')),
+     path('api/developer/', include('apps.developer.urls')),
+     path('api/system/', include('apps.deployment.urls')),
+     path('api/enterprise/', include('apps.enterprise.urls')),
+     path('health/', include('apps.health.urls')),
+     
+-    # Legacy URLs
+-    path('connect-deriv/', deriv_login, name='connect_deriv'),
+-    path('callback/', callback, name='callback'),
++    # Broker-neutral OAuth callback
++    path('brokers/callback/', callback, name='broker_callback'),
+     path('webhooks/stripe/', stripe_webhook, name='stripe_webhook'),
+ ]
+diff --git a/templates/core/home.html b/templates/core/home.html
+index 3c73a5763b50521b9d101d276c54ef6e3ba2d2ca..1e3dfcbaa5d46fc11a524bccd8aed18b9918d78d 100644
+--- a/templates/core/home.html
++++ b/templates/core/home.html
+@@ -1,15 +1,15 @@
+ {% extends "base.html" %}
+-{% block title %}AlgoBot | AI Trading Platform{% endblock %}
++{% block title %}AlgoBot | Institutional Trading Platform{% endblock %}
+ {% block content %}
+ <section class="hero-panel">
+-  <p class="eyebrow">Institutional-grade automation</p>
+-  <h1>AlgoBot AI trading platform</h1>
+-  <p>Deploy Institutional-grade trading infrastructure with AI signals, Deriv connectivity, risk controls, and portfolio analytics from one secure workspace.</p>
+-  <div class="actions"><a href="/dashboard/">Open dashboard</a><a href="/connect-deriv/">Connect with Deriv</a></div>
++  <p class="eyebrow">Broker-independent trading infrastructure</p>
++  <h1>AlgoBot institutional trading platform</h1>
++  <p>Run strategies, risk controls, portfolio analytics, and execution workflows across interchangeable broker connections from one AlgoBot workspace.</p>
++  <div class="actions"><a href="/dashboard/">Open dashboard</a><a href="/brokers/connect/">Connect Broker</a><a href="/brokers/">Create Broker Account</a></div>
+ </section>
+-<section class="card-grid" aria-label="Platform highlights">
+-  <article><h2>AI trading platform</h2><p>Monitor predictions, execution quality, and strategy automation.</p></article>
+-  <article><h2>Institutional-grade risk</h2><p>Track exposure, drawdown, and kill-switch posture before trades move.</p></article>
+-  <article><h2>Unified operations</h2><p>Bring market data, backtesting, and performance reporting into one flow.</p></article>
++<section class="card-grid" aria-label="Supported brokers">
++  <article><h2>Connect Broker</h2><p>Select Deriv, Binance, OANDA, Interactive Brokers, Bybit, MetaTrader, cTrader, Alpaca, or another supported provider.</p></article>
++  <article><h2>Broker Marketplace</h2><p>Review supported and coming-soon brokers, status, documentation, health, latency, account support, and asset classes.</p></article>
++  <article><h2>Broker-neutral terminal</h2><p>Switch active broker and connected account instantly while the trading terminal remains platform-wide.</p></article>
+ </section>
+ {% endblock %}
+diff --git a/templates/trading/trading_terminal.html b/templates/trading/trading_terminal.html
+index 9f5a0c72736ae52344ce30bdc09584ef45f2db37..4f8cea6f97d3648ee255b60b9e82c01e294f243d 100644
+--- a/templates/trading/trading_terminal.html
++++ b/templates/trading/trading_terminal.html
+@@ -1,5 +1,16 @@
+ {% extends "base.html" %}
+-{% block title %}trading terminal | AlgoBot Enterprise{% endblock %}
++{% block title %}Trading Terminal | AlgoBot Enterprise{% endblock %}
+ {% block content %}
+-{% include "components/enterprise_page.html" with title="trading terminal" module="Trading" page_id="trading-trading_terminal" %}
++<section class="hero-panel">
++  <p class="eyebrow">Broker-neutral execution</p>
++  <h1>Trading Terminal</h1>
++  <p>The trading engine routes all execution through the Broker Interface. No broker-specific trading logic is exposed in the terminal.</p>
++</section>
++<section class="card-grid" aria-label="Connection status">
++  <article><h2>Active Broker</h2><p data-field="active-broker">Select from connected brokers.</p></article>
++  <article><h2>Connected Account</h2><p data-field="connected-account">Multi-account ready.</p></article>
++  <article><h2>Broker Status</h2><p data-field="broker-status">Health monitored by Broker Manager.</p></article>
++  <article><h2>Execution Latency</h2><p data-field="execution-latency">Measured per broker connection.</p></article>
++  <article><h2>Connection Health</h2><p data-field="connection-health">Heartbeat, reconnect, and failover enabled.</p></article>
++</section>
+ {% endblock %}
+ 
+EOF
+)

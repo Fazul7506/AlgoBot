@@ -1,5 +1,16 @@
 {% extends "base.html" %}
-{% block title %}trading terminal | AlgoBot Enterprise{% endblock %}
+{% block title %}Trading Terminal | AlgoBot Enterprise{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="trading terminal" module="Trading" page_id="trading-trading_terminal" %}
+<section class="hero-panel">
+  <p class="eyebrow">Broker-neutral execution</p>
+  <h1>Trading Terminal</h1>
+  <p>The trading engine routes all execution through the Broker Interface. No broker-specific trading logic is exposed in the terminal.</p>
+</section>
+<section class="card-grid" aria-label="Connection status">
+  <article><h2>Active Broker</h2><p data-field="active-broker">Select from connected brokers.</p></article>
+  <article><h2>Connected Account</h2><p data-field="connected-account">Multi-account ready.</p></article>
+  <article><h2>Broker Status</h2><p data-field="broker-status">Health monitored by Broker Manager.</p></article>
+  <article><h2>Execution Latency</h2><p data-field="execution-latency">Measured per broker connection.</p></article>
+  <article><h2>Connection Health</h2><p data-field="connection-health">Heartbeat, reconnect, and failover enabled.</p></article>
+</section>
 {% endblock %}
