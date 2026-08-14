@@ -1,5 +1,13 @@
 {% extends "base.html" %}
-{% block title %}benchmark dashboard | AlgoBot Enterprise{% endblock %}
+{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="benchmark dashboard" module="Portfolio" page_id="portfolio-benchmark_dashboard" %}
+<section class="hero-panel">
+  <p class="eyebrow">AlgoBot Enterprise</p>
+  <h1>Benchmark Dashboard</h1>
+  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
+</section>
+<section class="card-grid" aria-label="Module status">
+  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
+  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
+</section>
 {% endblock %}

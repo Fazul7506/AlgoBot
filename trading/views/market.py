@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
 from django.db.models import Max, Min, Avg, Count, Q, Sum
@@ -19,6 +20,19 @@ from trading.services.indicator_service import IndicatorEngine
 from trading.strategies.strategy_manager import REGIME_STRATEGY_MAP
 
 logger = logging.getLogger(__name__)
+
+
+def _positive_int(value, default, *, name, minimum=1, maximum=None):
+    if value in (None, ""):
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise ValidationError({name: f"{name} must be an integer."})
+    if parsed < minimum or (maximum is not None and parsed > maximum):
+        bound = f" between {minimum} and {maximum}" if maximum is not None else f" >= {minimum}"
+        raise ValidationError({name: f"{name} must be an integer{bound}."})
+    return parsed
 
 # Initialize services
 def get_cache_manager():
@@ -67,6 +81,7 @@ class MarketSymbolViewSet(viewsets.ReadOnlyModelViewSet):
         symbol = self.get_object()
         
         # Try cache first
+        cache_manager = get_cache_manager()
         cached = cache_manager.get_snapshot(symbol.symbol)
         if cached:
             return Response(cached)
@@ -75,7 +90,6 @@ class MarketSymbolViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             snapshot = symbol.snapshot
             serializer = MarketSnapshotSerializer(snapshot)
-            cache_manager = get_cache_manager()
             return Response(serializer.data)
         except MarketSnapshot.DoesNotExist:
             return Response(
@@ -114,7 +128,7 @@ class MarketRegimeViewSet(viewsets.ViewSet):
     def list(self, request):
         symbol = request.query_params.get('symbol')
         timeframe = request.query_params.get('timeframe', 'M1')
-        lookback = int(request.query_params.get('lookback', 50))
+        lookback = _positive_int(request.query_params.get('lookback'), 50, name='lookback', maximum=5000)
 
         if not symbol:
             return Response(
@@ -202,7 +216,7 @@ class PriceHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(timeframe=timeframe)
         
         # Filter by date range
-        days = int(self.request.query_params.get('days', 7))
+        days = _positive_int(self.request.query_params.get('days'), 7, name='days', maximum=3650)
         start_date = timezone.now() - timedelta(days=days)
         queryset = queryset.filter(candle_time__gte=start_date)
         
@@ -213,7 +227,7 @@ class PriceHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         """Get complete chart data for symbol"""
         symbol_str = request.query_params.get('symbol')
         timeframe = request.query_params.get('timeframe', 'M5')
-        days = int(request.query_params.get('days', 7))
+        days = _positive_int(request.query_params.get('days'), 7, name='days', maximum=3650)
         
         if not symbol_str:
             return Response(
@@ -368,7 +382,7 @@ class TickDataViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(symbol__symbol=symbol)
         
         # Get recent ticks
-        hours = int(self.request.query_params.get('hours', 1))
+        hours = _positive_int(self.request.query_params.get('hours'), 1, name='hours', maximum=8760)
         start_time = timezone.now() - timedelta(hours=hours)
         queryset = queryset.filter(received_at__gte=start_time)
         
@@ -378,7 +392,7 @@ class TickDataViewSet(viewsets.ReadOnlyModelViewSet):
     def recent(self, request):
         """Get recent ticks"""
         symbol = request.query_params.get('symbol')
-        limit = int(request.query_params.get('limit', 100))
+        limit = _positive_int(request.query_params.get('limit'), 100, name='limit', maximum=1000)
         
         if not symbol:
             return Response(

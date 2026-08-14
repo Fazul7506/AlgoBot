@@ -48,25 +48,26 @@ class AlgoBotExperienceTests(TestCase):
 
 
 class AuthExperienceCleanupTests(TestCase):
-    def test_recovery_links_are_removed_from_auth_pages(self):
+    def test_auth_pages_redirect_to_broker_connect(self):
         login_response = self.client.get(reverse('login_page'))
         register_response = self.client.get(reverse('register_page'))
 
-        self.assertEqual(login_response.status_code, 200)
-        self.assertEqual(register_response.status_code, 200)
-        self.assertNotContains(login_response, 'Forgot password')
-        self.assertNotContains(login_response, 'forgot-password')
-        self.assertContains(login_response, 'Connect with Deriv')
-        self.assertNotContains(register_response, 'forgot-password')
+        self.assertEqual(login_response.status_code, 302)
+        self.assertEqual(register_response.status_code, 302)
+        self.assertIn('/brokers/connect/?broker=deriv', login_response['Location'])
+        self.assertIn('/brokers/connect/?broker=deriv', register_response['Location'])
 
-    def test_recovery_routes_are_not_available(self):
+    def test_public_auth_recovery_routes_redirect_to_broker_connect(self):
         forgot_response = self.client.get('/forgot-password/')
         reset_response = self.client.get('/reset-password/demo-token/')
         verify_response = self.client.get('/verify-email/')
 
-        self.assertEqual(forgot_response.status_code, 404)
-        self.assertEqual(reset_response.status_code, 404)
-        self.assertEqual(verify_response.status_code, 404)
+        self.assertEqual(forgot_response.status_code, 302)
+        self.assertEqual(reset_response.status_code, 302)
+        self.assertEqual(verify_response.status_code, 302)
+        self.assertIn('/brokers/connect/?broker=deriv', forgot_response['Location'])
+        self.assertIn('/brokers/connect/?broker=deriv', reset_response['Location'])
+        self.assertIn('/brokers/connect/?broker=deriv', verify_response['Location'])
 
 
 class BillingRedirectPagesTests(TestCase):

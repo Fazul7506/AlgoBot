@@ -6,7 +6,7 @@ from typing import Dict, Optional, List
 from django.utils import timezone
 from django.conf import settings
 from datetime import datetime, timedelta
-from django.conf import settings
+from time import monotonic
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ class DataCacheManager:
     def __init__(self, host='127.0.0.1', port=6379, db=0):
         # ALWAYS safe initialize fallback store
         self.memory_cache = {}
+        self.memory_expiry = {}
 
         # FEATURE TOGGLE (KEY FIX)
         if not getattr(settings, "USE_REDIS", False):
@@ -58,6 +59,7 @@ class DataCacheManager:
                 self.redis_client.setex(key, expiry, data)
             else:
                 self.memory_cache[key] = data
+                self.memory_expiry[key] = monotonic() + max(0, expiry)
             return True
         except Exception as e:
             logger.error(f"Cache set error: {e}")
@@ -71,6 +73,11 @@ class DataCacheManager:
                 data = self.redis_client.get(key)
             else:
                 data = self.memory_cache.get(key)
+                expires_at = self.memory_expiry.get(key)
+                if expires_at is not None and monotonic() >= expires_at:
+                    self.memory_cache.pop(key, None)
+                    self.memory_expiry.pop(key, None)
+                    data = None
             
             if data:
                 return json.loads(data)
@@ -89,6 +96,7 @@ class DataCacheManager:
                 self.redis_client.setex(key, expiry, data)
             else:
                 self.memory_cache[key] = data
+                self.memory_expiry[key] = monotonic() + max(0, expiry)
             return True
         except Exception as e:
             logger.error(f"Snapshot cache error: {e}")
@@ -102,6 +110,11 @@ class DataCacheManager:
                 data = self.redis_client.get(key)
             else:
                 data = self.memory_cache.get(key)
+                expires_at = self.memory_expiry.get(key)
+                if expires_at is not None and monotonic() >= expires_at:
+                    self.memory_cache.pop(key, None)
+                    self.memory_expiry.pop(key, None)
+                    data = None
             
             if data:
                 return json.loads(data)
@@ -120,6 +133,7 @@ class DataCacheManager:
                 self.redis_client.setex(key, expiry, data)
             else:
                 self.memory_cache[key] = data
+                self.memory_expiry[key] = monotonic() + max(0, expiry)
             return True
         except Exception as e:
             logger.error(f"Candle cache error: {e}")
@@ -133,6 +147,11 @@ class DataCacheManager:
                 data = self.redis_client.get(key)
             else:
                 data = self.memory_cache.get(key)
+                expires_at = self.memory_expiry.get(key)
+                if expires_at is not None and monotonic() >= expires_at:
+                    self.memory_cache.pop(key, None)
+                    self.memory_expiry.pop(key, None)
+                    data = None
             
             if data:
                 return json.loads(data)
@@ -151,7 +170,8 @@ class DataCacheManager:
             else:
                 keys_to_delete = [k for k in self.memory_cache.keys() if pattern in k]
                 for k in keys_to_delete:
-                    del self.memory_cache[k]
+                    self.memory_cache.pop(k, None)
+                    self.memory_expiry.pop(k, None)
             return True
         except Exception as e:
             logger.error(f"Cache invalidation error: {e}")

@@ -1,5 +1,81 @@
 {% extends "base.html" %}
-{% block title %}Trading command dashboard | AlgoBot Enterprise{% endblock %}
+{% load static %}
+{% block title %}Trading command center | AlgoBot{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="Trading command dashboard" module="Core" page_id="core-dashboard" %}
+<section class="command-center" data-dashboard-command>
+  <header class="command-hero">
+    <div>
+      <p class="eyebrow">Live trading workspace</p>
+      <h1>Start trading now.</h1>
+      <p>Market intelligence, strategy signals, risk controls and broker execution are connected in one workflow.</p>
+    </div>
+    <div class="hero-actions">
+      <a class="btn primary" href="/trading/">Open trading terminal</a>
+      <a class="btn ghost" href="/brokers/connect/">Connect broker</a>
+    </div>
+  </header>
+
+  <section class="dashboard-sections" aria-label="Core trading sections"><h2>Portfolio</h2><h2>Live signals</h2><h2>Risk posture</h2></section>
+<section class="kpi-grid" aria-label="Account overview">
+    <article class="kpi-card"><span>Balance</span><strong data-kpi="balance">—</strong><small>Selected broker account</small></article>
+    <article class="kpi-card"><span>Open positions</span><strong data-kpi="positions">—</strong><small>Current exposure</small></article>
+    <article class="kpi-card"><span>Win rate</span><strong data-kpi="winrate">—</strong><small>Closed trades</small></article>
+    <article class="kpi-card"><span>Net P/L</span><strong data-kpi="pnl">—</strong><small>Realised performance</small></article>
+  </section>
+
+  <section class="command-grid">
+    <article class="panel launch-panel">
+      <div class="panel-head"><div><p class="eyebrow">Execution</p><h2>Trade in three steps</h2></div></div>
+      <div class="launch-steps">
+        <a href="/markets/"><span>01</span><div><strong>Choose market</strong><small>Inspect live price, structure and volatility.</small></div><b>→</b></a>
+        <a href="/strategies/"><span>02</span><div><strong>Choose strategy</strong><small>Use a configured strategy or trade manually.</small></div><b>→</b></a>
+        <a href="/trading/"><span>03</span><div><strong>Execute order</strong><small>Risk validation happens before broker routing.</small></div><b>→</b></a>
+      </div>
+    </article>
+    <article class="panel signal-panel">
+      <div class="panel-head"><div><p class="eyebrow">Live intelligence</p><h2>Latest signals</h2></div><a href="/signals/">View all</a></div>
+      <div class="signal-feed" data-dashboard-signals><div class="empty-state">Loading signals…</div></div>
+    </article>
+  </section>
+
+  <section class="command-grid lower">
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Exposure</p><h2>Open positions</h2></div><a href="/positions/">Manage</a></div>
+      <div class="mini-table" data-dashboard-positions><div class="empty-state">Loading positions…</div></div>
+    </article>
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Execution</p><h2>Recent orders</h2></div><a href="/orders/">History</a></div>
+      <div class="mini-table" data-dashboard-orders><div class="empty-state">Loading orders…</div></div>
+    </article>
+    <article class="panel protection-panel">
+      <div class="panel-head"><div><p class="eyebrow">Protection</p><h2>Risk controls</h2></div><a href="/risk/">Open risk</a></div>
+      <div class="control-stack"><a class="btn ghost" href="/risk/">Review risk profile</a><button class="btn danger" data-dashboard-kill-switch>Activate kill switch</button></div>
+      <small>Use the kill switch when execution must stop immediately.</small>
+    </article>
+  </section>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script>
+(() => {
+  const $ = (s,r=document) => r.querySelector(s);
+  const normalise = d => Array.isArray(d) ? d : (d?.results || d?.data || []);
+  const escape = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const json = async (url,opts={}) => { const r=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json',...(opts.headers||{})},...opts}); const t=await r.text(); let d={}; try{d=t?JSON.parse(t):{}}catch{d={detail:t}} if(!r.ok)throw Error(d.detail||d.message||`Request failed (${r.status})`); return d; };
+  const csrf = () => (document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1] || '';
+  const loadAccount = async () => { try { const [o,a] = await Promise.all([json('/api/dashboard/account_overview/'),json('/api/brokers/accounts/')]); const d=o.data||{}, st=d.trading_stats||{}, list=normalise(a); const acc=list.find(x=>x.is_default)||list[0]; $('[data-kpi=\"balance\"]').textContent=acc ? `${acc.currency||''} ${Number(acc.balance||0).toFixed(2)}`.trim() : '—'; $('[data-kpi=\"positions\"]').textContent=st.open_trades??0; $('[data-kpi=\"winrate\"]').textContent=`${Number(st.win_rate||0).toFixed(1)}%`; $('[data-kpi=\"pnl\"]').textContent=Number(st.total_pnl||0).toFixed(2); } catch(e){ console.error(e); } };
+  const load = async () => {
+    try {
+      const [signals,positions,orders] = await Promise.all([json('/api/dashboard/signals/?limit=8'),json('/api/positions/open/'),json('/api/orders/')]);
+      const sig=normalise(signals).slice(0,8), pos=normalise(positions).slice(0,8), ord=normalise(orders).slice(0,8);
+      $('[data-dashboard-signals]').innerHTML=sig.length?sig.map(x=>`<div class="signal-row"><strong>${escape(x.symbol)} ${escape(x.direction||'HOLD')}</strong><span>${escape(x.strategy||'Strategy')}</span><b>${x.confidence!=null?Number(x.confidence).toFixed(0)+'%':'—'}</b></div>`).join(''):'<div class="empty-state">No signals yet.</div>';
+      $('[data-dashboard-positions]').innerHTML=pos.length?pos.map(x=>`<div class="mini-row"><strong>${escape(x.symbol)}</strong><span>${escape(x.direction||'')}</span><b>${escape(x.profit??x.pnl??'—')}</b></div>`).join(''):'<div class="empty-state">No open positions.</div>';
+      $('[data-dashboard-orders]').innerHTML=ord.length?ord.map(x=>`<div class="mini-row"><strong>${escape(x.symbol)}</strong><span>${escape(x.direction||'')}</span><b>${escape(x.status||'')}</b></div>`).join(''):'<div class="empty-state">No orders yet.</div>';
+    } catch(e) { console.error(e); }
+  };
+  $('[data-dashboard-kill-switch]')?.addEventListener('click',async()=>{ if(!confirm('Activate the trading kill switch?'))return; try{await json('/api/risk/kill-switch/activate/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({reason:'Dashboard emergency stop'})}); alert('Kill switch activated.');}catch(e){alert(e.message);} });
+  loadAccount(); load(); setInterval(loadAccount,15000); setInterval(load,15000);
+})();
+</script>
 {% endblock %}

@@ -1,5 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Brokers | AlgoBot Enterprise{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="Brokers" module="Broker" page_id="broker-brokers" %}
+<section class="hero-panel">
+  <p class="eyebrow">Broker marketplace</p>
+  <h1>Available broker integrations</h1>
+  <p>Choose a broker to connect and unlock trading, monitoring, and execution workflows in AlgoBot.</p>
+  <div class="actions">
+    <a class="btn primary" href="/brokers/connect/?broker=deriv">Connect Deriv</a>
+  </div>
+</section>
+
+<section class="broker-marketplace" aria-label="Supported brokers">
+  <h2>Supported brokers</h2>
+  <ul class="broker-list">
+    {% for broker in brokers %}
+      <li>
+        <strong>{{ broker.name }}</strong>
+        <span>{{ broker.slug }}</span>
+        {% if broker.website %}<a href="{{ broker.website }}" target="_blank" rel="noreferrer noopener">Visit</a>{% endif %}
+        <a class="btn small primary" href="/brokers/connect/?broker={{ broker.slug }}">Connect</a>
+      </li>
+    {% empty %}
+      <li>No supported brokers are configured yet. Contact support for access.</li>
+    {% endfor %}
+  </ul>
+</section>
 {% endblock %}

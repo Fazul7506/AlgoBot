@@ -27,7 +27,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user', 'email_verified', 'created_at', 'updated_at']
 
     def get_deriv_account_id(self, obj):
-        return getattr(obj.user, 'derivaccount', None) and obj.user.derivaccount.account_id or None
+        return getattr(obj.user, 'deriv_account', None) and obj.user.deriv_account.account_id or None
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):

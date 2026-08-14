@@ -8,6 +8,7 @@ class BrokerManager:
 
     adapter_paths = {
         "paper": "apps.broker.adapters.PaperBrokerAdapter",
+        "deriv": "apps.deriv.adapter.DerivAdapter",
     }
 
     def register_adapter(self, slug: str, dotted_path: str) -> None:
@@ -19,4 +20,7 @@ class BrokerManager:
             raise ValueError(f"Unsupported broker: {account.broker.slug}")
         module_path, class_name = dotted_path.rsplit(".", 1)
         adapter_cls = getattr(import_module(module_path), class_name)
-        return adapter_cls(broker=account.broker, account=account, credentials=getattr(account, "credentials", {}))
+        try:
+            return adapter_cls(broker_account=account)
+        except TypeError:
+            return adapter_cls(broker=account.broker, account=account, credentials=getattr(account, "credentials", {}))

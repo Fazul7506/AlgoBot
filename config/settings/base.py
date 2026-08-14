@@ -62,11 +62,13 @@ LOCAL_APPS = [
     "apps.notifications",
     "apps.developer",
     "apps.deployment",
+    "apps.observability",
     "apps.enterprise",
 ]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
+    "apps.developer.middleware.DeveloperAPIMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -135,7 +137,11 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 # Browser authentication routes are deliberately rooted at /login/ to avoid
 # Django's default /accounts/login/ redirects, which are not mounted in this app.
-LOGIN_URL = "/login/"
+LOGIN_URL = "/brokers/connect/?broker=deriv"
 LOGIN_REDIRECT_URL = "/dashboard/"
-LOGOUT_REDIRECT_URL = "/login/"
+LOGOUT_REDIRECT_URL = "/brokers/connect/?broker=deriv"
 
+
+# Developer platform API throttling
+DEVELOPER_API_RATE_LIMIT = 60
+DEVELOPER_API_RATE_WINDOW = 60

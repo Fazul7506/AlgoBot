@@ -2,14 +2,17 @@
 {% block title %}AlgoBot | Institutional Trading Platform{% endblock %}
 {% block content %}
 <section class="hero-panel">
-  <p class="eyebrow">Broker-independent trading infrastructure</p>
-  <h1>AlgoBot institutional trading platform</h1>
-  <p>Run strategies, risk controls, portfolio analytics, and execution workflows across interchangeable broker connections from one AlgoBot workspace.</p>
-  <div class="actions"><a href="/dashboard/">Open dashboard</a><a href="/brokers/connect/">Connect Broker</a><a href="/brokers/">Create Broker Account</a></div>
+  <p class="eyebrow">AI trading platform</p>
+  <h1>AlgoBot — Institutional-grade AI trading platform</h1>
+  <p>AlgoBot is an Institutional-grade AI trading platform for market intelligence, strategies, risk controls and broker execution. Connect your broker to begin.</p>
+  <div class="actions">
+    <a class="btn primary" href="/brokers/connect/?broker=deriv">Connect Deriv</a>
+    <a class="btn ghost" href="/brokers/connect/">Connect another broker</a>
+  </div>
 </section>
-<section class="card-grid" aria-label="Supported brokers">
-  <article><h2>Connect Broker</h2><p>Select Deriv, Binance, OANDA, Interactive Brokers, Bybit, MetaTrader, cTrader, Alpaca, or another supported provider.</p></article>
-  <article><h2>Broker Marketplace</h2><p>Review supported and coming-soon brokers, status, documentation, health, latency, account support, and asset classes.</p></article>
-  <article><h2>Broker-neutral terminal</h2><p>Switch active broker and connected account instantly while the trading terminal remains platform-wide.</p></article>
+<section class="card-grid" aria-label="Connection details">
+  <article><h2>Broker-first access</h2><p>Access the platform by connecting a supported broker. Trading, analytics, strategies, and monitoring activate once the broker session is live.</p></article>
+  <article><h2>Deriv OAuth</h2><p>Use Deriv OAuth as the authentication source. You will be redirected to Deriv and brought back to AlgoBot automatically.</p></article>
+  <article><h2>Continue after connect</h2><p>Once your broker is connected, you can continue directly to AlgoBot's dashboard without any local user/password flow.</p></article>
 </section>
 {% endblock %}

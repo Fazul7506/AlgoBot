@@ -16,7 +16,7 @@ urlpatterns = [
     ),
 
     path(
-        "callback",
+        "callback/",
         callback,
         name="callback"
     ),

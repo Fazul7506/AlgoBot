@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ module.title }} | AlgoBot{% endblock %}
+{% block extra_css %}
+<style>
+.module-workspace{display:grid;gap:20px}
+.module-header{display:flex;justify-content:space-between;gap:20px;align-items:flex-end}
+.module-header h1{margin:.2rem 0;font-size:clamp(2rem,4vw,3rem)}
+.module-header p{max-width:850px;color:var(--muted)}
+.module-actions{display:flex;gap:10px;flex-wrap:wrap}
+.module-actions a,.module-actions button{border:1px solid var(--border);background:var(--panel);color:inherit;border-radius:10px;padding:10px 14px;cursor:pointer;text-decoration:none}
+.module-actions .primary{background:var(--accent);color:#07110d;border-color:var(--accent);font-weight:700}
+.module-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.module-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;min-height:170px}
+.module-card h2{font-size:1rem;margin:0 0 10px}
+.module-card .status{font-size:.78rem;color:var(--muted);margin-bottom:10px}
+.module-data{max-height:210px;overflow:auto}
+.module-data pre{white-space:pre-wrap;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;margin:0;color:var(--text)}
+.module-toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.module-toolbar input{background:var(--panel);color:inherit;border:1px solid var(--border);border-radius:9px;padding:10px 12px;min-width:240px}
+.module-feed{display:grid;gap:8px}
+.module-feed button{border:1px solid var(--border);background:transparent;color:inherit;border-radius:8px;padding:8px 10px;cursor:pointer}
+@media(max-width:700px){.module-header{align-items:flex-start;flex-direction:column}.module-card{min-height:130px}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="module-workspace" data-module-workspace data-module="{{ module_key }}">
+  <section class="module-header">
+    <div>
+      <p class="eyebrow">{{ module.eyebrow }}</p>
+      <h1>{{ module.title }}</h1>
+      <p>{{ module.description }}</p>
+    </div>
+    <div class="module-actions">
+      {% for label,url,kind in module.actions %}
+        {% if kind == "link" %}
+          <a class="{% if forloop.first %}primary{% endif %}" href="{{ url }}">{{ label }}</a>
+        {% else %}
+          <button class="{% if forloop.first %}primary{% endif %}" type="button" data-module-action="{{ url }}" data-action-method="{{ kind }}">{{ label }}</button>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  <section class="module-toolbar">
+    <div><strong>Backend resources</strong> <span class="muted">Live API surface</span></div>
+    <input type="search" placeholder="Filter resources…" data-module-filter>
+  </section>
+  <section class="module-grid" data-module-grid>
+    {% for url,label,method in module.endpoints %}
+    <article class="module-card" data-resource-card data-label="{{ label|lower }}">
+      <h2>{{ label }}</h2>
+      <div class="status"><span data-resource-status>Loading…</span> · {{ method }}</div>
+      <div class="module-data"><pre data-resource-output>Waiting for backend…</pre></div>
+    </article>
+    {% endfor %}
+  </section>
+  <script id="module-endpoints" type="application/json">{{ module_endpoints_json|safe }}</script>
+  <section class="card-grid">
+    <article><h2>Execution principle</h2><p>Every trading action remains broker-neutral. The UI calls the platform API; broker adapters perform the actual routing.</p></article>
+    <article><h2>Safety</h2><p>Live execution should remain gated by account connection and risk controls. Use paper trading while validating a new strategy.</p></article>
+  </section>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'js/module_workspace.js' %}"></script>
+{% endblock %}

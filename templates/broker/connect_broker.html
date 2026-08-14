@@ -1,5 +1,40 @@
 {% extends "base.html" %}
-{% block title %}Connect Broker | AlgoBot Enterprise{% endblock %}
+{% block title %}Connect Deriv Broker | AlgoBot Enterprise{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="Connect Broker" module="Broker" page_id="broker-connect_broker" %}
+<section class="hero-panel">
+  <p class="eyebrow">Broker connection required</p>
+  <h1>{{ hero_title }}</h1>
+  <p>{{ hero_copy }}</p>
+  <div class="actions">
+    <a class="btn primary" href="{{ action_url }}">{{ action_label }}</a>
+    {% if connected and account_id %}
+      <a class="btn ghost" href="{{ continue_url }}">Continue to AlgoBot</a>
+    {% endif %}
+  </div>
+  <p class="helper-text">{{ support_text }}</p>
+  {% if connected %}
+    <div class="status-banner ok">
+      <strong>Broker connected:</strong> {{ account_id }}. You may continue to AlgoBot.</div>
+  {% endif %}
+</section>
+
+<section class="card-grid" aria-label="Connection details">
+  <article><h2>Only broker connection</h2><p>The workspace is unlocked by a single broker connection. No separate username/password page is required.</p></article>
+  <article><h2>Deriv OAuth</h2><p>Sign in with Deriv to activate AlgoBot trading, analytics, and strategy modules.</p></article>
+  <article><h2>Secure access</h2><p>Your broker session is stored securely and backed by OAuth PKCE. The dashboard is accessible once the connection is established.</p></article>
+</section>
+
+<section class="broker-marketplace" aria-label="Supported brokers">
+  <h2>Supported brokers</h2>
+  <ul class="broker-list">
+    {% for broker in brokers %}
+      <li>
+        <strong>{{ broker.name }}</strong> {% if broker.website %}<a href="{{ broker.website }}" target="_blank" rel="noreferrer noopener">Visit</a>{% endif %}
+        <a class="btn small primary" href="/brokers/connect/?broker={{ broker.slug }}">Connect</a>
+      </li>
+    {% empty %}
+      <li>No supported brokers are configured yet. Contact support for access.</li>
+    {% endfor %}
+  </ul>
+</section>
 {% endblock %}

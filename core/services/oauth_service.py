@@ -241,7 +241,8 @@ class DerivOAuthService:
     @staticmethod
     def exchange_code_for_token(
         code: str,
-        code_verifier: str
+        code_verifier: str,
+        http_client=None,
     ) -> tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
         """
         Exchange authorization code for access token.
@@ -264,7 +265,8 @@ class DerivOAuthService:
         try:
             logger.info("oauth_token_exchange_started", extra={"code_length": len(code)})
             
-            token_response = requests.post(
+            client = http_client or requests
+            token_response = client.post(
                 DERIV_TOKEN_URL,
                 data=token_payload,
                 timeout=OAUTH_TIMEOUT

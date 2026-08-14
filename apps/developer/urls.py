@@ -1,3 +1,19 @@
 from django.urls import path
 from . import views
-urlpatterns = [path("keys/", views.keys), path("plugins/", views.plugins), path("plugins/install/", views.install_plugin), path("webhooks/", views.webhooks), path("sdk/", views.sdk), path("docs/", views.docs), path("sandbox/", views.sandbox)]
+
+app_name = "developer"
+urlpatterns = [
+    path("", views.dashboard, name="dashboard"),
+    path("keys/", views.keys, name="keys"),
+    path("keys/<int:pk>/rotate/", views.key_rotate, name="key_rotate"),
+    path("keys/<int:pk>/revoke/", views.key_revoke, name="key_revoke"),
+    path("plugins/", views.plugins, name="plugins"),
+    path("plugins/install/", views.install_plugin, name="plugin_install"),
+    path("webhooks/", views.webhooks, name="webhooks"),
+    path("webhooks/<int:pk>/test/", views.webhook_test, name="webhook_test"),
+    path("sdk/", views.sdk, name="sdk"),
+    path("docs/", views.docs, name="docs"),
+    path("analytics/", views.analytics, name="analytics"),
+    path("integrations/", views.integrations, name="integrations"),
+    path("sandbox/", views.sandbox, name="sandbox"),
+]

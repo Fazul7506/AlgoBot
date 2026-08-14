@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}SaaS Control Center | AlgoBot{% endblock %}
+{% block content %}
+<div class="saas">
+<header class="hero"><div><span class="eyebrow">AlgoBot Platform</span><h1>SaaS Control Center</h1><p>Manage your trading workspace, subscription, quotas, organizations and team access without leaving AlgoBot.</p></div><div class="health"><i id="dot"></i><b id="state">Loading</b></div></header>
+<section class="cards">
+  <article><span>Workspace</span><strong id="tenant-name">—</strong><small id="tenant-status">—</small></article>
+  <article><span>Subscription</span><strong id="plan">—</strong><small id="renewal">—</small></article>
+  <article><span>License</span><strong id="license">—</strong><small id="limits">—</small></article>
+  <article><span>Organizations</span><strong id="org-count">0</strong><small>Active organizations</small></article>
+  <article><span>Workspaces</span><strong id="ws-count">0</strong><small>Trading environments</small></article>
+  <article><span>Currency</span><strong id="currency">—</strong><small id="timezone">—</small></article>
+</section>
+
+<div class="layout">
+<main>
+<section class="panel">
+<div class="panel-head"><h2>Platform workspace</h2><button id="create-tenant">Create tenant</button></div>
+<div id="tenant-empty" class="empty">No tenant is attached to this account. Create one to unlock SaaS workspace management.</div>
+<div id="tenant-content" hidden>
+  <div class="subhead"><h3>Organizations & workspaces</h3><button id="create-org">+ Organization</button></div>
+  <div id="orgs"></div>
+</div>
+</section>
+<section class="panel">
+<div class="panel-head"><h2>Usage & quotas</h2><span>Current period</span></div>
+<div id="usage" class="usage"></div>
+</section>
+<section class="panel">
+<div class="panel-head"><h2>Team access</h2><button id="invite">Invite member</button></div>
+<div id="team-list">Create an organization to manage teams.</div>
+</section>
+</main>
+<aside>
+<section class="panel">
+<div class="panel-head"><h2>Subscription</h2><span id="sub-status">—</span></div>
+<div id="plans" class="plans"></div>
+</section>
+<section class="panel">
+<div class="panel-head"><h2>Billing & providers</h2></div>
+<div class="providers"><span>Stripe</span><span>PayPal</span><span>Flutterwave</span><span>M-Pesa</span><span>Paddle</span><span>Lemon Squeezy</span></div>
+<p class="muted">Payment execution remains provider/backend controlled. This dashboard only changes the platform subscription state exposed by the backend.</p>
+</section>
+<section class="panel">
+<div class="panel-head"><h2>Platform modules</h2></div>
+<div class="modules"><a href="/trading/">Trading</a><a href="/backtesting/">Backtesting</a><a href="/workspace/automation/">Automation</a><a href="/workspace/notifications/">Notifications</a><a href="/portfolio/">Portfolio</a><a href="/workspace/developer/">Developer</a></div>
+</section>
+</aside>
+</div>
+
+<dialog id="dialog"><form id="form"><h2 id="dialog-title">Create</h2><div id="fields"></div><div class="dialog-actions"><button type="button" id="cancel">Cancel</button><button class="primary" type="submit">Save</button></div></form></dialog>
+</div>
+<style>
+.saas{max-width:1650px;margin:auto;padding:22px}.hero,.health,.panel-head,.subhead{display:flex;gap:12px}.hero,.panel-head,.subhead{justify-content:space-between;align-items:center}.eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.5}.hero h1{margin:4px 0}.hero p{margin:0;opacity:.6}.health{align-items:center}.health i{width:9px;height:9px;border-radius:50%;background:#777}.health.live i{background:#22c55e}.cards{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:16px 0}.cards article,.panel{background:var(--card-bg,#111827);border:1px solid rgba(255,255,255,.08);border-radius:14px}.cards article{padding:14px}.cards span,.cards small{display:block;font-size:9px;text-transform:uppercase;opacity:.5}.cards strong{display:block;font-size:19px;margin:5px 0}.layout{display:flex;gap:14px;align-items:flex-start}.layout main{min-width:0;flex:1}.layout aside{width:330px}.panel{padding:16px;margin-bottom:14px}.panel-head h2,.subhead h3{margin:0;font-size:16px}.panel-head span{font-size:11px;opacity:.5}.panel button,.hero button{padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:inherit;color:inherit;cursor:pointer}.primary{background:#2563eb!important;color:#fff!important}.empty,.muted{padding:20px 0;font-size:12px;opacity:.6}.org{padding:14px 0;border-bottom:1px solid rgba(255,255,255,.06)}.org-head{display:flex;justify-content:space-between;align-items:center}.org small{display:block;opacity:.5;margin-top:3px}.workspaces{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.workspace{padding:10px;border-radius:8px;background:rgba(255,255,255,.035);font-size:11px}.workspace b,.workspace small{display:block}.usage-row{display:grid;grid-template-columns:1.2fr 2fr 80px;gap:10px;align-items:center;padding:9px 0;font-size:11px}.bar{height:7px;background:rgba(255,255,255,.08);border-radius:8px;overflow:hidden}.bar i{display:block;height:100%;background:#2563eb}.plans{display:grid;gap:8px}.plan-card{padding:11px;border:1px solid rgba(255,255,255,.08);border-radius:9px}.plan-card.active{border-color:#2563eb}.plan-card b{display:block}.plan-card small{display:block;opacity:.55;margin:4px 0}.plan-card button{margin-top:7px;width:100%;padding:7px;border-radius:7px;border:1px solid rgba(255,255,255,.12);background:inherit;color:inherit}.providers,.modules{display:grid;grid-template-columns:1fr 1fr;gap:7px}.providers span,.modules a{padding:9px;border-radius:8px;background:rgba(255,255,255,.035);font-size:11px;color:inherit;text-decoration:none}.modules a:hover{background:rgba(255,255,255,.08)}.team{padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:11px}.team small{opacity:.5}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}dialog{border:1px solid rgba(255,255,255,.12);border-radius:14px;background:#111827;color:inherit;min-width:350px}dialog::backdrop{background:rgba(0,0,0,.65)}dialog label{display:block;font-size:11px;margin:10px 0}dialog input,dialog select{width:100%;box-sizing:border-box;padding:9px;margin-top:5px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:inherit;color:inherit}@media(max-width:1200px){.cards{grid-template-columns:repeat(3,1fr)}.layout{flex-direction:column}.layout aside{width:auto;display:grid;grid-template-columns:1fr 1fr;gap:14px}.layout aside .panel{margin:0}}@media(max-width:700px){.saas{padding:14px}.hero{flex-direction:column;align-items:flex-start}.cards{grid-template-columns:repeat(2,1fr)}.layout aside{display:block}.layout aside .panel{margin-bottom:14px}.workspaces{grid-template-columns:1fr}}
+</style>
+<script>
+(()=>{const $=id=>document.getElementById(id);let data=null;
+const get=async u=>{const r=await fetch(u,{credentials:'same-origin',headers:{Accept:'application/json'}});if(!r.ok)throw Error(`HTTP ${r.status}`);return r.json()};
+const post=async(u,b)=>{const r=await fetch(u,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(b)});if(!r.ok){let d={};try{d=await r.json()}catch{}throw Error(d.error||`HTTP ${r.status}`)}return r.json()};
+function csrf(){return document.cookie.split('; ').find(x=>x.startsWith('csrftoken='))?.split('=')[1]||''}
+function render(d){data=d;$('state').textContent='Connected';$('dot').parentElement.classList.add('live');const t=d.tenant;
+if(!t){$('tenant-empty').hidden=false;$('tenant-content').hidden=true;return}
+$('tenant-empty').hidden=true;$('tenant-content').hidden=false;$('tenant-name').textContent=t.name;$('tenant-status').textContent=t.status;$('currency').textContent=t.currency;$('timezone').textContent=t.timezone;
+const s=t.subscription;$('plan').textContent=s?.plan||'—';$('sub-status').textContent=s?.status||'—';$('renewal').textContent=s?.renewal_date?`Renewal ${s.renewal_date}`:'No renewal date';
+const l=t.license;$('license').textContent=l?.active?'Active':'Not issued';$('limits').textContent=l?`${l.max_users} users · ${l.max_brokers} brokers · ${l.max_strategies} strategies`:'—';
+const ws=t.organizations.flatMap(o=>o.workspaces);$('org-count').textContent=t.organizations.length;$('ws-count').textContent=ws.length;
+$('orgs').innerHTML=t.organizations.map(o=>`<div class="org"><div class="org-head"><div><b>${o.name}</b><small>${o.country||'—'} · ${o.industry||'Trading'}</small></div><span>${o.teams.length} teams</span></div><div class="workspaces">${o.workspaces.map(w=>`<div class="workspace"><b>${w.name}</b><small>${w.environment} · ${w.default_broker||'No broker'}</small></div>`).join('')||'<div class="workspace">No workspaces yet.</div>'}</div></div>`).join('')||'No organizations yet.';
+$('usage').innerHTML=t.usage.map(u=>{const pct=u.quota?Math.min(100,(u.usage/u.quota)*100):0;return `<div class="usage-row"><span>${u.metric.replaceAll('_',' ')}</span><div class="bar"><i style="width:${pct}%"></i></div><b>${u.usage}/${u.quota||'∞'}</b></div>`}).join('')||'<div class="muted">No usage metrics recorded.</div>';
+const plans=['free','starter','professional','business','enterprise','custom'];$('plans').innerHTML=plans.map(p=>`<div class="plan-card ${s?.plan===p?'active':''}"><b>${p[0].toUpperCase()+p.slice(1)}</b><small>${s?.plan===p?'Current plan':'Platform plan'}</small><button data-plan="${p}">${s?.plan===p?'Current':'Select'}</button></div>`).join('');
+$('team-list').innerHTML=t.organizations.flatMap(o=>o.teams.map(team=>`<div class="team"><b>${team.name}</b><small>${o.name} · ${team.members} members</small></div>`)).join('')||'No teams configured.'}
+async function refresh(){try{render(await get('/api/tenants/dashboard/'))}catch(e){$('state').textContent='API unavailable'}}
+function dialog(title,fields,submit){$('dialog-title').textContent=title;$('fields').innerHTML=fields;$('dialog').showModal();$('form').onsubmit=async e=>{e.preventDefault();try{await submit();$('dialog').close();refresh()}catch(x){alert(x.message)}}}
+$('cancel').onclick=()=>$('dialog').close();
+$('create-tenant').onclick=()=>dialog('Create tenant',`<label>Name<input id="f-name" required></label><label>Timezone<input id="f-timezone" value="Africa/Nairobi"></label><label>Currency<input id="f-currency" value="USD"></label>`,()=>post('/api/tenants/',{name:$('f-name').value,timezone:$('f-timezone').value,currency:$('f-currency').value}));
+$('create-org').onclick=()=>dialog('Create organization',`<label>Name<input id="f-name" required></label><label>Industry<input id="f-industry"></label><label>Country<input id="f-country"></label>`,()=>post('/api/tenants/organizations/',{name:$('f-name').value,industry:$('f-industry').value,country:$('f-country').value}));
+$('invite').onclick=()=>dialog('Invite team member',`<label>Email<input id="f-email" type="email" required></label><label>Role<select id="f-role">${['viewer','analyst','trader','manager','administrator','developer'].map(x=>`<option>${x}</option>`).join('')}</select></label>`,()=>post('/api/tenants/invitations/',{email:$('f-email').value,role:$('f-role').value}));
+$('plans').onclick=async e=>{const p=e.target.dataset.plan;if(!p)return;if(!confirm(`Switch subscription to ${p}?`))return;try{await post('/api/tenants/subscription/upgrade/',{plan:p,billing_cycle:'monthly',price:0});refresh()}catch(x){alert(x.message)}};
+refresh();setInterval(refresh,10000)})();
+</script>
+{% endblock %}

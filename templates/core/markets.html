@@ -1,5 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Market data terminal | AlgoBot Enterprise{% endblock %}
+{% block title %}Live markets | AlgoBot{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="Market data terminal" module="Markets" page_id="core-markets" %}
+<section class="markets-center"><h1 class="sr-only">Market overview</h1> data-markets-center>
+<header class="enterprise-hero"><div><p class="eyebrow">Market data engine</p><h1>Live markets</h1><p class="hero-copy">Scan the symbol universe, inspect live snapshots and jump directly into execution when a market is ready.</p></div><div class="hero-actions"><a class="btn primary" href="/trading/">Trade selected market</a></div></header>
+<section class="panel market-toolbar"><div class="field"><label>Search symbols</label><input data-market-search placeholder="R_75, Volatility…"></div><div class="field"><label>Timeframe</label><select data-market-timeframe><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option></select></div><button class="btn ghost" data-market-refresh>Refresh</button></section>
+<section class="market-grid" data-market-list><div class="empty-state">Loading market universe…</div></section>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script>
+(()=>{const $=(s,r=document)=>r.querySelector(s),json=async u=>{const r=await fetch(u,{credentials:'same-origin',headers:{Accept:'application/json'}}),t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch{d={detail:t}}if(!r.ok)throw Error(d.detail||d.message||`Request failed (${r.status})`);return d},arr=d=>Array.isArray(d)?d:(d?.results||d?.data||[]),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));let rows=[];
+async function load(){try{const [symbols,snaps]=await Promise.all([json('/api/market/symbols/'),json('/api/market/snapshots/all_snapshots/')]);const ss=arr(symbols),sp=arr(snaps);rows=ss.map(x=>{const name=x.symbol||x.code;const snap=sp.find(y=>(y.symbol?.symbol||y.symbol)===name)||{};return {...x,snapshot:snap}});render()}catch(e){$('[data-market-list]').innerHTML=`<div class="empty-state">${esc(e.message)}</div>`}}
+function render(){const q=$('[data-market-search]').value.toLowerCase();const list=rows.filter(x=>JSON.stringify(x).toLowerCase().includes(q));$('[data-market-list]').innerHTML=list.map(x=>{const s=x.snapshot||{};const symbol=x.symbol||x.code;return `<article class="market-card"><div><span class="eyebrow">${esc(x.market_type||x.category||'Market')}</span><h2>${esc(symbol)}</h2><p>${esc(x.display_name||x.name||'Live market')}</p></div><div class="market-quote"><strong>${esc(s.price??s.last_price??s.bid_price??'—')}</strong><span>Bid ${esc(s.bid_price??s.bid??'—')} · Ask ${esc(s.ask_price??s.ask??'—')}</span></div><div class="market-card-actions"><a class="btn primary small" href="/trading/?symbol=${encodeURIComponent(symbol)}">Trade</a><a class="btn ghost small" href="/api/market/symbols/${encodeURIComponent(x.id||symbol)}/">Details</a></div></article>`}).join('')||'<div class="empty-state">No markets match your search.</div>'}
+$('[data-market-search]')?.addEventListener('input',render);$('[data-market-refresh]')?.addEventListener('click',load);load();})();
+</script>
 {% endblock %}
