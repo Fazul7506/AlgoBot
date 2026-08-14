@@ -1,0 +1,16 @@
+[Unit]
+Description=AlgoBot Django/Gunicorn
+After=network.target
+
+[Service]
+User=algobot
+Group=www-data
+WorkingDirectory=/srv/algobot/deriv_platform
+EnvironmentFile=/srv/algobot/deriv_platform/.env.production
+Environment=DJANGO_ENV=production
+ExecStart=/srv/algobot/venv/bin/gunicorn deriv_platform.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 120
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

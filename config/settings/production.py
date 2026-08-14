@@ -1,26 +1,68 @@
-"""Production settings for AlgoBot."""
+"""Phase 20 production settings.
 
-from .development import *  # noqa: F403
-from .utils import validate_required_settings
+Nothing in this module contains live credentials. Production startup fails
+early when required deployment configuration is missing.
+"""
+from .base import *  # noqa: F403,F401
+from .broker import *  # noqa: F403,F401
+from .cache import *  # noqa: F403,F401
+from .celery import *  # noqa: F403,F401
+from .database import *  # noqa: F403,F401
+from .email import *  # noqa: F403,F401
+from .logging import *  # noqa: F403,F401
+from .security import *  # noqa: F403,F401
+from .utils import env, env_bool, env_list, validate_required_settings
 
 DEBUG = False
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", [])
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", [])
+BASE_URL = env("BASE_URL", "").rstrip("/")
+
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", True)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_HSTS_SECONDS = int(env("SECURE_HSTS_SECONDS", "31536000"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", True)
+SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", True)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+X_FRAME_OPTIONS = "DENY"
+
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
-SECURE_SSL_REDIRECT = True
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", "Lax")
+CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", "Lax")
 
+USE_POSTGRES = True
+USE_REDIS = True
+EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+
+# Production must use real infrastructure, not local fallbacks.
 validate_required_settings(
     production=True,
     values={
         "SECRET_KEY": SECRET_KEY,  # noqa: F405
-        "ALLOWED_HOSTS": ",".join(ALLOWED_HOSTS),  # noqa: F405
-        "DATABASE_URL or POSTGRES_*": DATABASE_URL or (POSTGRES_DB and POSTGRES_USER and POSTGRES_PASSWORD and POSTGRES_HOST),  # noqa: F405
+        "ALLOWED_HOSTS": ",".join(ALLOWED_HOSTS),
+        "CSRF_TRUSTED_ORIGINS": ",".join(CSRF_TRUSTED_ORIGINS),
+        "BASE_URL": BASE_URL,
         "REDIS_URL": REDIS_URL,  # noqa: F405
-        "BASE_URL": BASE_URL,  # noqa: F405
         "DERIV_APP_ID": DERIV_APP_ID,  # noqa: F405
         "DERIV_REDIRECT_URI": DERIV_REDIRECT_URI,  # noqa: F405
+        "DATABASE_URL or POSTGRES_*": DATABASE_URL or (
+            POSTGRES_DB and POSTGRES_USER and POSTGRES_PASSWORD and POSTGRES_HOST
+        ),  # noqa: F405
     },
 )
+if SECRET_KEY in {"django-insecure-local-development-only", "change-me"}:
+    raise RuntimeError("Production SECRET_KEY must be explicitly configured.")
+
+# Optional Sentry; absence is allowed until the real DSN is supplied.
+SENTRY_DSN = env("SENTRY_DSN", "")
+if SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=env("SENTRY_ENVIRONMENT", "production"),
+        traces_sample_rate=float(env("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        send_default_pii=False,
+    )

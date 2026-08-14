@@ -1,0 +1,16 @@
+[Unit]
+Description=AlgoBot Celery Worker
+After=network.target redis.service
+
+[Service]
+User=algobot
+Group=www-data
+WorkingDirectory=/srv/algobot/deriv_platform
+EnvironmentFile=/srv/algobot/deriv_platform/.env.production
+Environment=DJANGO_ENV=production
+ExecStart=/srv/algobot/venv/bin/celery -A deriv_platform worker --loglevel=INFO
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

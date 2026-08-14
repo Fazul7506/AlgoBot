@@ -1,0 +1,24 @@
+# Phase 20B/C: HTTPS reverse proxy example.
+# Terminate TLS at your managed load balancer or configure certificates here.
+server {
+    listen 80;
+    server_name YOUR_DOMAIN;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /static/ {
+        alias /srv/algobot/staticfiles/;
+        expires 7d;
+    }
+
+    location /media/ {
+        alias /srv/algobot/media/;
+        expires 1h;
+    }
+}
