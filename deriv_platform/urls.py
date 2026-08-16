@@ -45,7 +45,7 @@ from core.views import (
     profile_page, terms_page, operations_module_page, privacy_page, risk_page,
     billing_success_page, billing_cancel_page, forgot_password_page, reset_password_page, verify_email_page, cookie_policy_page, licensing_page, contact_page, about_page, public_status_page, orders_page, positions_page, signals_page, portfolio_page,
 )
-from core.views_payment import stripe_webhook
+from core.views_payment import intasend_webhook, pesapal_webhook, pesapal_callback
 from apps.tenants.views import dashboard as tenant_dashboard_api
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -159,5 +159,7 @@ urlpatterns = [
     
     # Broker-neutral OAuth callback
     path('brokers/callback/', callback, name='broker_callback'),
-    path('webhooks/stripe/', stripe_webhook, name='stripe_webhook'),
+    path('webhooks/intasend/', intasend_webhook, name='intasend_webhook'),
+    path('webhooks/pesapal/', pesapal_webhook, name='pesapal_webhook'),
+    path('payments/pesapal/callback/', pesapal_callback, name='pesapal_callback'),
 ]

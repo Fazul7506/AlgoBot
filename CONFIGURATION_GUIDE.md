@@ -6,14 +6,14 @@ This guide documents every owner-managed environment variable discovered in the 
 
 - `SECRET_KEY` / `DJANGO_SECRET_KEY`: long random Django signing key.
 - `CREDENTIALS_ENCRYPTION_KEY`: long random encryption passphrase/key for stored broker credentials.
-- `STRIPE_WEBHOOK_SECRET`: obtained from Stripe webhook endpoint configuration.
+- `INTASEND_WEBHOOK_CHALLENGE`: challenge configured for the IntaSend webhook endpoint. `PESAPAL_NOTIFICATION_ID`: IPN ID returned after registering the Pesapal IPN URL.
 - `EMAIL_PASSWORD`: SMTP or provider application password when SMTP is enabled.
 
 ## API keys to obtain manually
 
 - `DERIV_APP_ID` / `DERIV_OAUTH_CLIENT_ID`: Deriv OAuth application identifier.
 - `DERIV_API_TOKEN`: Deriv API token for broker operations that need direct token access.
-- `STRIPE_SECRET_KEY` / `STRIPE_API_KEY`: Stripe secret API key for billing.
+- `INTASEND_SECRET_KEY`: IntaSend private key for protected status/refund/disbursement APIs. `PESAPAL_CONSUMER_SECRET`: Pesapal merchant secret.
 - `BREVO_API_KEY`: Brevo transactional email API key if Brevo notifications are used.
 - `TELEGRAM_BOT_TOKEN`: Telegram bot token if Telegram alerts are enabled.
 - `OPENAI_API_KEY`: OpenAI API key if AI features require hosted model access.
@@ -25,7 +25,8 @@ This guide documents every owner-managed environment variable discovered in the 
 - PostgreSQL database service.
 - Redis service for cache, Celery, and channel-like realtime workloads.
 - SMTP or Brevo email provider account.
-- Stripe account, product prices, and webhook endpoint.
+- IntaSend merchant account/API keys and webhook challenge.
+- Pesapal merchant account/API credentials and registered IPN URL/notification ID.
 - Telegram bot and target chat, if Telegram alerts are enabled.
 - OpenAI account, if hosted AI inference is enabled.
 - Sentry project, if production error telemetry is enabled.
@@ -72,10 +73,13 @@ Production settings now fail fast when these critical values are missing: `SECRE
 | `BREVO_SENDER_EMAIL` | Brevo sender email. | If Brevo enabled | `DEFAULT_FROM_EMAIL` | `alerts@example.com` | Notification service | No | Optional | Optional | Required for Brevo |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token. | If Telegram enabled | Empty | *(secret)* | Notification service | Yes | Optional | Optional | Required for Telegram |
 | `TELEGRAM_CHAT_ID` | Telegram target chat ID. | If Telegram enabled | Empty | `-1001234567890` | Notification service | No | Optional | Optional | Required for Telegram |
-| `PAYMENT_PROVIDER` | Billing provider selector. | No | `stripe` | `stripe` | Payment service | No | Optional | Optional | Set intentionally |
-| `STRIPE_SECRET_KEY` | Stripe secret API key. | If billing enabled | Empty | *(secret)* | Payment service | Yes | Optional | Optional | Required for billing |
-| `STRIPE_API_KEY` | Legacy alias for `STRIPE_SECRET_KEY`. | No | Empty | *(secret)* | Payment service fallback | Yes | Optional | Optional | Optional |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret. | If billing enabled | Empty | *(secret)* | Payment webhook | Yes | Optional | Optional | Required for billing webhooks |
+| `PAYMENT_PROVIDER` | Default billing provider. | No | `intasend` | `intasend` / `pesapal` | Payment service | No | Optional | Optional | Set intentionally |
+| `INTASEND_PUBLIC_KEY` | IntaSend publishable key for checkout creation. | If IntaSend enabled | Empty | *(key)* | Payment service | Yes | Optional | Optional | Obtain from IntaSend dashboard API Keys |
+| `INTASEND_SECRET_KEY` | IntaSend private key for protected APIs. | If IntaSend status API used | Empty | *(secret)* | Payment service | Yes | Optional | Optional | Keep server-side only |
+| `INTASEND_WEBHOOK_CHALLENGE` | Challenge configured for the IntaSend webhook endpoint. | If IntaSend webhooks enabled | Empty | *(secret)* | Payment webhook | Yes | Optional | Optional | Must match dashboard webhook challenge |
+| `PESAPAL_CONSUMER_KEY` | Pesapal API 3.0 merchant consumer key. | If Pesapal enabled | Empty | *(key)* | Payment service | Yes | Optional | Optional | Sent by Pesapal for the merchant account |
+| `PESAPAL_CONSUMER_SECRET` | Pesapal API 3.0 merchant consumer secret. | If Pesapal enabled | Empty | *(secret)* | Payment service | Yes | Optional | Optional | Keep server-side only |
+| `PESAPAL_NOTIFICATION_ID` | Registered Pesapal IPN identifier. | If Pesapal checkout/webhooks enabled | Empty | *(GUID)* | Payment webhook | Yes | Optional | Optional | Register the public IPN URL first |
 | `OPENAI_API_KEY` | OpenAI API key for hosted AI features. | If hosted AI enabled | Empty | *(secret)* | AI settings | Yes | Optional | Optional | Required for hosted AI |
 | `SENTRY_DSN` | Sentry telemetry DSN. | No | Empty | `https://key@sentry.io/project` | Logging/monitoring settings | Maybe | Optional | Optional | Recommended |
 | `CREDENTIALS_ENCRYPTION_KEY` | Key material for encrypting stored broker credentials. | Production | Empty | *(secret)* | Credential encryption service | Yes | Optional for demo | Optional | Required before storing live credentials |
@@ -92,7 +96,7 @@ Production settings now fail fast when these critical values are missing: `SECRE
 - **Brevo email:** `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, plus `DEFAULT_FROM_EMAIL`.
 - **SMTP email:** `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `DEFAULT_FROM_EMAIL`.
 - **Telegram alerts:** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
-- **Stripe billing:** `PAYMENT_PROVIDER`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`.
+- **IntaSend/Pesapal billing:** `PAYMENT_PROVIDER`, IntaSend API keys/challenge, and Pesapal consumer credentials + notification ID.
 - **OpenAI-backed AI features:** `OPENAI_API_KEY`.
 - **Sentry monitoring:** `SENTRY_DSN`.
 - **Redis cache/Celery:** `REDIS_URL`, `USE_REDIS`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `USE_CELERY`.

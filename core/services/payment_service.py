@@ -1,182 +1,601 @@
+"""Provider-neutral payment integration for IntaSend and Pesapal.
+
+The billing models are intentionally left unchanged in this integration.
+The existing legacy provider-reference field remains in the schema for
+backwards compatibility, but it is not used by the payment providers below.
+"""
+
+from __future__ import annotations
+
 import logging
+import uuid
+from decimal import Decimal, InvalidOperation
 from typing import Optional
+
+import requests
 from django.conf import settings
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
 
 class PaymentService:
-    """Abstracted payment service. Currently provides Stripe placeholder methods.
+    """Create and reconcile checkout payments through IntaSend or Pesapal.
 
-    To enable real payments, set `PAYMENT_PROVIDER=stripe` and provide
-    `STRIPE_API_KEY` and `STRIPE_WEBHOOK_SECRET` in `settings.py` or env.
+    ``PAYMENT_PROVIDER`` selects the default provider.  Callers may pass a
+    provider explicitly to ``create_checkout_session`` so both gateways can be
+    exposed by the application without changing the database schema.
     """
 
+    INTASEND = "intasend"
+    PESAPAL = "pesapal"
+
     def __init__(self):
-        self.provider = getattr(settings, 'PAYMENT_PROVIDER', 'stripe')
-        self.stripe_api_key = getattr(settings, 'STRIPE_API_KEY', '')
-        self.stripe_webhook_secret = getattr(settings, 'STRIPE_WEBHOOK_SECRET', '')
+        self.provider = str(getattr(settings, "PAYMENT_PROVIDER", self.INTASEND)).lower()
+        self.intasend_public_key = getattr(settings, "INTASEND_PUBLIC_KEY", "")
+        self.intasend_secret_key = getattr(settings, "INTASEND_SECRET_KEY", "")
+        self.intasend_webhook_challenge = getattr(settings, "INTASEND_WEBHOOK_CHALLENGE", "")
+        self.intasend_base_url = getattr(
+            settings, "INTASEND_API_BASE_URL", "https://api.intasend.com"
+        ).rstrip("/")
 
-    def create_checkout_session(self, user, subscription_plan):
-        logger.info('Creating checkout session for %s plan=%s', getattr(user, 'username', None), subscription_plan)
+        self.pesapal_consumer_key = getattr(settings, "PESAPAL_CONSUMER_KEY", "")
+        self.pesapal_consumer_secret = getattr(settings, "PESAPAL_CONSUMER_SECRET", "")
+        self.pesapal_notification_id = getattr(settings, "PESAPAL_NOTIFICATION_ID", "")
+        self.pesapal_base_url = getattr(
+            settings, "PESAPAL_API_BASE_URL", "https://pay.pesapal.com/v3"
+        ).rstrip("/")
 
-        if self.provider != 'stripe':
-            logger.warning('Payment provider %s not supported; returning placeholder', self.provider)
-            return {'url': 'https://checkout.example.com/session/placeholder'}
+        self.timeout = int(getattr(settings, "PAYMENT_HTTP_TIMEOUT", 20))
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+    def create_checkout_session(self, user, subscription_plan, provider: str | None = None):
+        """Create a hosted checkout URL.
+
+        The existing method name is preserved so current callers do not need
+        to change.  ``provider`` is optional and may be ``intasend`` or
+        ``pesapal``.
+        """
+        selected = str(provider or self.provider).lower().strip()
+        logger.info(
+            "Creating %s checkout for %s plan=%s",
+            selected,
+            getattr(user, "username", None),
+            subscription_plan,
+        )
+
+        if selected == self.INTASEND:
+            return self.create_intasend_checkout(user, subscription_plan)
+        if selected == self.PESAPAL:
+            return self.create_pesapal_checkout(user, subscription_plan)
+
+        return {"url": "", "provider": selected, "error": "Unsupported payment provider"}
+
+    def create_intasend_checkout(self, user, subscription_plan):
+        """Create an IntaSend hosted checkout link.
+
+        IntaSend's Checkout API uses the publishable key and supports KES,
+        including M-Pesa and card payment methods.  The backend does not
+        expose the secret key to the customer.
+        """
+        if not self.intasend_public_key:
+            return self._configuration_error("INTASEND_PUBLIC_KEY")
+
+        amount, currency = self._amount_and_currency(subscription_plan)
+        api_ref = self._reference("IS", user, subscription_plan)
+        base_url = self._base_url()
+        redirect_url = f"{base_url}/billing/success/?provider=intasend&reference={api_ref}"
+
+        payload = {
+            "amount": self._decimal_string(amount),
+            "currency": currency.upper(),
+            "api_ref": api_ref,
+            "email": getattr(user, "email", "") or None,
+            "first_name": getattr(user, "first_name", "") or None,
+            "last_name": getattr(user, "last_name", "") or None,
+            "country": "KE" if currency.upper() == "KES" else None,
+            "channel": "WEBSITE",
+            "redirect_url": redirect_url,
+            "mobile_tarrif": "BUSINESS-PAYS",
+            "card_tarrif": "BUSINESS-PAYS",
+        }
+        self._drop_none(payload)
 
         try:
-            import stripe
-        except Exception:
-            logger.exception('stripe library not available')
-            return {'url': 'https://checkout.example.com/session/placeholder'}
+            response = requests.post(
+                f"{self.intasend_base_url}/api/v1/checkout/",
+                json=payload,
+                headers={
+                    "X-IntaSend-Public-API-Key": self.intasend_public_key,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                timeout=self.timeout,
+            )
+            data = self._json_or_error(response)
+            if not response.ok:
+                logger.error("IntaSend checkout failed: %s", data)
+                return {"url": "", "provider": self.INTASEND, "error": self._provider_error(data)}
 
-        stripe.api_key = self.stripe_api_key
+            url = data.get("url") or data.get("checkout_url") or data.get("link") or ""
+            invoice_id = data.get("invoice_id") or data.get("id") or data.get("checkout_id")
+            return {
+                "provider": self.INTASEND,
+                "session_id": invoice_id or api_ref,
+                "invoice_id": invoice_id,
+                "reference": api_ref,
+                "url": url,
+            }
+        except requests.RequestException as exc:
+            logger.exception("IntaSend checkout request failed")
+            return {"url": "", "provider": self.INTASEND, "error": str(exc)}
 
-        # Resolve price id and mode
-        price_id = None
-        mode = 'payment'
+    def create_pesapal_checkout(self, user, subscription_plan):
+        """Create a Pesapal API 3.0 payment order and return its redirect URL."""
+        if not self.pesapal_consumer_key:
+            return self._configuration_error("PESAPAL_CONSUMER_KEY")
+        if not self.pesapal_consumer_secret:
+            return self._configuration_error("PESAPAL_CONSUMER_SECRET")
+        if not self.pesapal_notification_id:
+            return self._configuration_error("PESAPAL_NOTIFICATION_ID")
 
-        # subscription_plan may be a Subscription instance or string key
-        if hasattr(subscription_plan, 'stripe_price_id') and subscription_plan.stripe_price_id:
-            price_id = subscription_plan.stripe_price_id
-            mode = 'subscription' if getattr(subscription_plan, 'recurring', False) else 'payment'
-        elif isinstance(subscription_plan, str):
-            # allow a mapping in settings: STRIPE_PRICE_MAP = {'PRO': 'price_...'}
-            price_map = getattr(settings, 'STRIPE_PRICE_MAP', {}) or {}
-            price_id = price_map.get(subscription_plan)
+        amount, currency = self._amount_and_currency(subscription_plan)
+        reference = self._reference("PP", user, subscription_plan)
+        base_url = self._base_url()
+        callback_url = f"{base_url}/payments/pesapal/callback/"
+        cancellation_url = f"{base_url}/billing/cancel/"
 
-        base_url = getattr(settings, 'BASE_URL', '').rstrip('/')
-        success_url = f'{base_url}/billing/success'
-        cancel_url = f'{base_url}/billing/cancel'
+        token = self._pesapal_access_token()
+        if not token:
+            return {"url": "", "provider": self.PESAPAL, "error": "Unable to authenticate with Pesapal"}
+
+        billing_address = {
+            "email_address": getattr(user, "email", "") or "",
+            "phone_number": getattr(getattr(user, "trading_profile", None), "phone", "") or "",
+            "country_code": "KE" if currency.upper() == "KES" else "",
+            "first_name": getattr(user, "first_name", "") or getattr(user, "username", "Customer"),
+            "middle_name": "",
+            "last_name": getattr(user, "last_name", "") or "",
+            "line_1": "",
+            "line_2": "",
+            "city": "",
+            "state": "",
+            "postal_code": "",
+            "zip_code": "",
+        }
+
+        payload = {
+            "id": reference,
+            "currency": currency.upper(),
+            "amount": float(amount),
+            "description": f"AlgoBot {getattr(subscription_plan, 'plan', subscription_plan)} subscription",
+            "callback_url": callback_url,
+            "cancellation_url": cancellation_url,
+            "notification_id": self.pesapal_notification_id,
+            "billing_address": billing_address,
+        }
+        if getattr(subscription_plan, "recurring", False):
+            payload["account_number"] = f"ALGOBOT-{user.id}"
 
         try:
-            if price_id:
-                session = stripe.checkout.Session.create(
-                    payment_method_types=['card'],
-                    mode=mode,
-                    line_items=[{
-                        'price': price_id,
-                        'quantity': 1,
-                    }],
-                    metadata={'user_id': str(user.id), 'plan': str(getattr(subscription_plan, 'plan', subscription_plan))},
-                    success_url=success_url,
-                    cancel_url=cancel_url,
-                )
-            else:
-                # Fallback: create a one-off payment using price data
-                amount = getattr(subscription_plan, 'price_cents', 0) or 0
-                currency = getattr(subscription_plan, 'currency', 'usd')
-                session = stripe.checkout.Session.create(
-                    payment_method_types=['card'],
-                    mode='payment',
-                    line_items=[{
-                        'price_data': {
-                            'currency': currency,
-                            'product_data': {'name': f"{getattr(subscription_plan, 'plan', 'Custom plan')}"},
-                            'unit_amount': int(amount),
-                        },
-                        'quantity': 1,
-                    }],
-                    metadata={'user_id': str(user.id), 'plan': str(getattr(subscription_plan, 'plan', subscription_plan))},
-                    success_url=success_url,
-                    cancel_url=cancel_url,
-                )
+            response = requests.post(
+                f"{self.pesapal_base_url}/api/Transactions/SubmitOrderRequest",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                timeout=self.timeout,
+            )
+            data = self._json_or_error(response)
+            if not response.ok:
+                logger.error("Pesapal order failed: %s", data)
+                return {"url": "", "provider": self.PESAPAL, "error": self._provider_error(data)}
 
-            return {'session_id': session.id, 'url': getattr(session, 'url', '')}
-        except Exception:
-            logger.exception('Failed to create Stripe checkout session')
-            return {'url': 'https://checkout.example.com/session/placeholder'}
+            url = data.get("redirect_url") or data.get("url") or ""
+            tracking_id = data.get("order_tracking_id") or data.get("tracking_id")
+            return {
+                "provider": self.PESAPAL,
+                "session_id": tracking_id or reference,
+                "order_tracking_id": tracking_id,
+                "reference": reference,
+                "url": url,
+            }
+        except requests.RequestException as exc:
+            logger.exception("Pesapal checkout request failed")
+            return {"url": "", "provider": self.PESAPAL, "error": str(exc)}
 
-    def handle_webhook(self, payload: bytes, sig_header: str) -> Optional[dict]:
-        if self.provider != 'stripe':
-            logger.warning('Received webhook but provider %s not supported', self.provider)
+    def handle_webhook(self, payload: bytes | dict, sig_header: str = "", provider: str | None = None) -> Optional[dict]:
+        """Process a provider webhook and reconcile a successful payment."""
+        selected = str(provider or self.provider).lower().strip()
+        data = self._parse_payload(payload)
+
+        if selected == self.INTASEND:
+            return self._handle_intasend_webhook(data)
+        if selected == self.PESAPAL:
+            return self._handle_pesapal_webhook(data)
+
+        logger.warning("Received webhook for unsupported provider %s", selected)
+        return None
+
+    def handle_pesapal_callback(self, order_tracking_id: str, merchant_reference: str = ""):
+        """Resolve a Pesapal browser callback to the authoritative status."""
+        status = self.get_pesapal_transaction_status(order_tracking_id)
+        if status:
+            return self._reconcile_status(
+                provider=self.PESAPAL,
+                external_id=order_tracking_id,
+                status=self._normalise_status(status.get("payment_status_description")),
+                amount=status.get("amount"),
+                currency=status.get("currency", "KES"),
+                metadata={"merchant_reference": merchant_reference, "pesapal": status},
+            )
+        return None
+
+    def get_pesapal_transaction_status(self, order_tracking_id: str) -> Optional[dict]:
+        token = self._pesapal_access_token()
+        if not token or not order_tracking_id:
+            return None
+        try:
+            response = requests.get(
+                f"{self.pesapal_base_url}/api/Transactions/GetTransactionStatus",
+                params={"orderTrackingId": order_tracking_id},
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+                timeout=self.timeout,
+            )
+            data = self._json_or_error(response)
+            if not response.ok:
+                logger.error("Pesapal status request failed: %s", data)
+                return None
+            return data
+        except requests.RequestException:
+            logger.exception("Pesapal status request failed")
             return None
 
+    def get_intasend_payment_status(self, invoice_id: str) -> Optional[dict]:
+        if not self.intasend_secret_key or not invoice_id:
+            return None
         try:
-            import stripe
-        except Exception:
-            logger.exception('stripe library not available')
+            response = requests.post(
+                f"{self.intasend_base_url}/api/v1/payment/status/",
+                json={"invoice_id": invoice_id},
+                headers={
+                    "Authorization": f"Bearer {self.intasend_secret_key}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                timeout=self.timeout,
+            )
+            data = self._json_or_error(response)
+            if not response.ok:
+                logger.error("IntaSend status request failed: %s", data)
+                return None
+            return data
+        except requests.RequestException:
+            logger.exception("IntaSend status request failed")
             return None
 
-        stripe.api_key = self.stripe_api_key
-
-        try:
-            event = stripe.Webhook.construct_event(payload, sig_header, self.stripe_webhook_secret)
-        except Exception as exc:
-            logger.exception('Webhook signature verification failed: %s', exc)
-            return None
-
-        # Process relevant events
-        try:
-            typ = event['type']
-            data = event['data']['object']
-
-            if typ == 'checkout.session.completed':
-                # Retrieve metadata
-                metadata = data.get('metadata', {}) or {}
-                user_id = metadata.get('user_id')
-                plan_key = metadata.get('plan')
-
-                from django.contrib.auth import get_user_model
-                from core.models import Invoice, Payment, Subscription, ReferralReward
-
-                User = get_user_model()
-                user = None
-                try:
-                    user = User.objects.filter(id=int(user_id)).first() if user_id else None
-                except Exception:
-                    user = None
-
-                amount_total = data.get('amount_total') or data.get('amount_subtotal') or 0
-                currency = data.get('currency', 'usd')
-                external_id = data.get('id')
-
-                if user:
-                    invoice = Invoice.objects.create(user=user, external_id=external_id, amount_cents=int(amount_total or 0), currency=currency, paid=True, metadata={'stripe_event': typ})
-                    Payment.objects.create(user=user, invoice=invoice, external_id=external_id, amount_cents=int(amount_total or 0), currency=currency, status='succeeded')
-
-                    # Update or create subscription
-                    try:
-                        sub, _ = Subscription.objects.get_or_create(user=user)
-                        # If checkout used a known price, attach it
-                        if 'subscription' in data.get('mode', '') or data.get('display_items'):
-                            # best-effort: set stripe_price_id if available in session
-                            price = None
-                            if data.get('line_items'):
-                                price = data['line_items'][0].get('price', {}).get('id')
-                            sub.stripe_price_id = plan_key or getattr(sub, 'stripe_price_id', '')
-                        sub.price_cents = int(amount_total or 0)
-                        sub.currency = currency
-                        sub.is_active = True
-                        sub.renewed_at = sub.renewed_at
-                        sub.save()
-                    except Exception:
-                        logger.exception('Failed to update subscription for user %s', getattr(user, 'username', None))
-
-                    # Award referral credits
-                    try:
-                        profile = getattr(user, 'trading_profile', None)
-                        if profile and getattr(profile, 'referred_by', None):
-                            # Default referral credit amount (dollars)
-                            credit_amount = getattr(settings, 'REFERRAL_CREDIT_AMOUNT', 0.0)
-                            if credit_amount <= 0:
-                                # Fallback: 5% of purchase
-                                credit_amount = (int(amount_total or 0) / 100.0) * 0.05
-
-                            profile.referral_credits = (profile.referral_credits or 0.0) + float(credit_amount)
-                            profile.save()
-                            ReferralReward.objects.create(referrer=profile.referred_by, referee=user, amount_credits=float(credit_amount))
-                    except Exception:
-                        logger.exception('Failed to award referral credit for user %s', getattr(user, 'username', None))
-
-            return {'received': True, 'type': typ}
-
-        except Exception:
-            logger.exception('Failed to process stripe webhook')
-            return None
-
-    def create_invoice_record(self, user, amount_cents: int, currency: str = 'usd'):
+    def create_invoice_record(self, user, amount_cents: int, currency: str = "KES"):
         from core.models import Invoice
-        invoice = Invoice.objects.create(user=user, amount_cents=amount_cents, currency=currency)
-        return invoice
- 
+        return Invoice.objects.create(user=user, amount_cents=amount_cents, currency=currency)
+
+    # ------------------------------------------------------------------
+    # IntaSend
+    # ------------------------------------------------------------------
+    def _handle_intasend_webhook(self, data: dict) -> Optional[dict]:
+        challenge = str(data.get("challenge", ""))
+        if self.intasend_webhook_challenge and challenge != self.intasend_webhook_challenge:
+            logger.warning("IntaSend webhook challenge mismatch")
+            return None
+
+        state = self._normalise_status(data.get("state"))
+        invoice_id = data.get("invoice_id")
+        api_ref = data.get("api_ref") or data.get("reference")
+        external_id = invoice_id or api_ref
+        if not external_id:
+            return None
+
+        amount = data.get("value") or data.get("amount") or data.get("net_amount")
+        currency = data.get("currency", "KES")
+        return self._reconcile_status(
+            provider=self.INTASEND,
+            external_id=str(external_id),
+            status=state,
+            amount=amount,
+            currency=currency,
+            metadata=data,
+        )
+
+    # ------------------------------------------------------------------
+    # Pesapal
+    # ------------------------------------------------------------------
+    def _handle_pesapal_webhook(self, data: dict) -> Optional[dict]:
+        # Pesapal IPNs intentionally do not contain the payment status.  The
+        # authoritative status must be fetched using OrderTrackingId.
+        tracking_id = data.get("OrderTrackingId") or data.get("orderTrackingId") or data.get("order_tracking_id")
+        merchant_reference = (
+            data.get("OrderMerchantReference")
+            or data.get("orderMerchantReference")
+            or data.get("merchant_reference")
+            or ""
+        )
+        if not tracking_id:
+            return None
+
+        status = self.get_pesapal_transaction_status(str(tracking_id))
+        if not status:
+            return None
+        result = self._reconcile_status(
+            provider=self.PESAPAL,
+            external_id=str(tracking_id),
+            status=self._normalise_status(status.get("payment_status_description")),
+            amount=status.get("amount"),
+            currency=status.get("currency", "KES"),
+            metadata={"merchant_reference": merchant_reference, "pesapal": status},
+        )
+        result = result or {}
+        result["ipn_ack"] = {
+            "orderNotificationType": data.get("OrderNotificationType") or data.get("orderNotificationType") or "IPNCHANGE",
+            "orderTrackingId": tracking_id,
+            "orderMerchantReference": merchant_reference,
+            "status": 200,
+        }
+        return result
+
+    # ------------------------------------------------------------------
+    # Pesapal auth / shared helpers
+    # ------------------------------------------------------------------
+    def _pesapal_access_token(self) -> Optional[str]:
+        cache_key = "algobot:pesapal:access_token"
+        try:
+            cached = cache.get(cache_key)
+            if cached:
+                return str(cached)
+        except Exception:
+            logger.warning("Pesapal token cache unavailable; requesting a fresh token")
+
+        try:
+            response = requests.post(
+                f"{self.pesapal_base_url}/api/Auth/RequestToken",
+                json={
+                    "consumer_key": self.pesapal_consumer_key,
+                    "consumer_secret": self.pesapal_consumer_secret,
+                },
+                headers={"Accept": "application/json", "Content-Type": "application/json"},
+                timeout=self.timeout,
+            )
+            data = self._json_or_error(response)
+            if not response.ok:
+                logger.error("Pesapal authentication failed: %s", data)
+                return None
+            token = data.get("token")
+            if token:
+                try:
+                    # Tokens are valid for a maximum of five minutes.  Keep a
+                    # safety margin so an expiring token is never reused.
+                    cache.set(cache_key, token, timeout=240)
+                except Exception:
+                    pass
+            return token
+        except requests.RequestException:
+            logger.exception("Pesapal authentication request failed")
+            return None
+
+    def _reconcile_status(self, *, provider, external_id, status, amount, currency, metadata):
+        """Persist a successful provider result without changing the schema."""
+        from django.contrib.auth import get_user_model
+        from core.models import Invoice, Payment, ReferralReward, Subscription
+
+        User = get_user_model()
+        user_id = self._user_id_from_metadata(metadata)
+        user = User.objects.filter(id=user_id).first() if user_id else None
+        if not user:
+            logger.warning("Payment %s has no resolvable AlgoBot user", external_id)
+            return {"received": True, "provider": provider, "status": status, "external_id": external_id}
+
+        amount_minor = self._to_minor_units(amount)
+        currency = str(currency or "KES").lower()
+        succeeded = status == "succeeded"
+        payment_status = "succeeded" if succeeded else ("failed" if status == "failed" else "pending")
+
+        invoice, _ = Invoice.objects.get_or_create(
+            user=user,
+            external_id=str(external_id),
+            defaults={
+                "amount_cents": amount_minor,
+                "currency": currency,
+                "paid": succeeded,
+                "metadata": {"provider": provider, "payment": metadata},
+            },
+        )
+        if succeeded and not invoice.paid:
+            invoice.paid = True
+            invoice.amount_cents = amount_minor
+            invoice.currency = currency
+            invoice.metadata = {"provider": provider, "payment": metadata}
+            invoice.save(update_fields=["paid", "amount_cents", "currency", "metadata"])
+
+        payment, created = Payment.objects.get_or_create(
+            user=user,
+            external_id=str(external_id),
+            defaults={
+                "invoice": invoice,
+                "amount_cents": amount_minor,
+                "currency": currency,
+                "status": payment_status,
+            },
+        )
+        was_succeeded = payment.status == "succeeded"
+        if payment.status != payment_status or payment.invoice_id != invoice.id:
+            payment.status = payment_status
+            payment.invoice = invoice
+            payment.amount_cents = amount_minor
+            payment.currency = currency
+            payment.save(update_fields=["status", "invoice", "amount_cents", "currency"])
+
+        if succeeded and (created or not was_succeeded):
+            self._activate_subscription_and_referral(user, metadata, amount_minor, currency, provider)
+
+        return {
+            "received": True,
+            "provider": provider,
+            "status": status,
+            "external_id": str(external_id),
+            "payment_id": payment.id,
+        }
+
+    def _activate_subscription_and_referral(self, user, metadata, amount_minor, currency, provider):
+        from core.models import ReferralReward, Subscription
+
+        plan_key = self._plan_from_metadata(metadata)
+        try:
+            sub, _ = Subscription.objects.get_or_create(user=user)
+            if plan_key:
+                valid_plans = {choice[0] for choice in Subscription.PLAN_CHOICES}
+                if plan_key in valid_plans:
+                    sub.plan = plan_key
+            sub.price_cents = int(amount_minor)
+            sub.currency = str(currency or "KES")
+            sub.is_active = True
+            sub.save(update_fields=["plan", "price_cents", "currency", "is_active", "renewed_at"])
+        except Exception:
+            logger.exception("Failed to update subscription for user %s", getattr(user, "username", None))
+
+        try:
+            profile = getattr(user, "trading_profile", None)
+            if profile and getattr(profile, "referred_by", None):
+                credit_amount = getattr(settings, "REFERRAL_CREDIT_AMOUNT", 0.0)
+                if credit_amount <= 0:
+                    credit_amount = (int(amount_minor) / 100.0) * 0.05
+                profile.referral_credits = (profile.referral_credits or 0.0) + float(credit_amount)
+                profile.save(update_fields=["referral_credits"])
+                ReferralReward.objects.get_or_create(
+                    referrer=profile.referred_by,
+                    referee=user,
+                    defaults={"amount_credits": float(credit_amount)},
+                )
+        except Exception:
+            logger.exception("Failed to award referral credit for user %s", getattr(user, "username", None))
+
+    # ------------------------------------------------------------------
+    # Utility methods
+    # ------------------------------------------------------------------
+    def _amount_and_currency(self, subscription_plan):
+        raw_amount = getattr(subscription_plan, "price_cents", 0) if not isinstance(subscription_plan, str) else 0
+        currency = getattr(subscription_plan, "currency", "KES") if not isinstance(subscription_plan, str) else "KES"
+        try:
+            amount = Decimal(str(raw_amount or 0)) / Decimal("100")
+        except (InvalidOperation, ValueError):
+            amount = Decimal("0")
+        return amount, str(currency or "KES")
+
+    def _base_url(self):
+        return str(getattr(settings, "BASE_URL", "") or "").split(",")[0].strip().rstrip("/")
+
+    @staticmethod
+    def _reference(prefix, user, subscription_plan):
+        plan = str(getattr(subscription_plan, "plan", subscription_plan or "PLAN")).upper()
+        plan = "".join(ch for ch in plan if ch.isalnum() or ch in "-_")[:20] or "PLAN"
+        return f"{prefix}-{int(getattr(user, 'id', 0) or 0)}-{plan}-{uuid.uuid4().hex[:16]}"
+
+    @staticmethod
+    def _decimal_string(value):
+        return format(Decimal(value).quantize(Decimal("0.01")), "f")
+
+    @staticmethod
+    def _drop_none(payload):
+        for key in list(payload):
+            if payload[key] is None:
+                payload.pop(key, None)
+
+    @staticmethod
+    def _json_or_error(response):
+        try:
+            return response.json()
+        except ValueError:
+            return {"error": response.text[:500]}
+
+    @staticmethod
+    def _provider_error(data):
+        error = data.get("error") if isinstance(data, dict) else None
+        if isinstance(error, dict):
+            return error.get("message") or error.get("code") or str(error)
+        return data.get("message") or data.get("detail") or str(data)
+
+    @staticmethod
+    def _configuration_error(variable):
+        logger.error("Payment configuration missing: %s", variable)
+        return {"url": "", "error": f"Missing payment configuration: {variable}"}
+
+    @staticmethod
+    def _parse_payload(payload):
+        if isinstance(payload, dict):
+            return payload
+        import json
+        try:
+            return json.loads(payload.decode("utf-8") if isinstance(payload, bytes) else payload)
+        except (TypeError, ValueError):
+            return {}
+
+    @staticmethod
+    def _normalise_status(value):
+        value = str(value or "").strip().upper()
+        if value in {"COMPLETE", "COMPLETED", "SUCCESS", "SUCCEEDED", "PAID"}:
+            return "succeeded"
+        if value in {"FAILED", "FAILURE", "INVALID", "REVERSED", "CANCELLED", "CANCELED"}:
+            return "failed"
+        return "pending"
+
+    @staticmethod
+    def _to_minor_units(value):
+        try:
+            return int((Decimal(str(value or 0)) * Decimal("100")).quantize(Decimal("1")))
+        except (InvalidOperation, ValueError, TypeError):
+            return 0
+
+    @staticmethod
+    def _user_id_from_metadata(metadata):
+        if not isinstance(metadata, dict):
+            return None
+        direct = metadata.get("user_id") or metadata.get("userId")
+        if direct:
+            try:
+                return int(direct)
+            except (TypeError, ValueError):
+                pass
+        nested = metadata.get("metadata")
+        if isinstance(nested, dict):
+            return PaymentService._user_id_from_metadata(nested)
+        api_ref = metadata.get("api_ref") or metadata.get("reference")
+        if api_ref:
+            parts = str(api_ref).split("-")
+            if len(parts) >= 3 and parts[0] in {"IS", "PP"}:
+                try:
+                    return int(parts[1])
+                except (TypeError, ValueError):
+                    pass
+        merchant_reference = metadata.get("merchant_reference") or metadata.get("OrderMerchantReference")
+        if merchant_reference:
+            parts = str(merchant_reference).split("-")
+            if len(parts) >= 3 and parts[0] in {"IS", "PP"}:
+                try:
+                    return int(parts[1])
+                except (TypeError, ValueError):
+                    pass
+        return None
+
+    @staticmethod
+    def _plan_from_metadata(metadata):
+        if not isinstance(metadata, dict):
+            return ""
+        direct = str(metadata.get("plan") or metadata.get("plan_key") or "").upper()
+        if direct:
+            return direct
+        api_ref = str(metadata.get("api_ref") or metadata.get("reference") or metadata.get("merchant_reference") or "")
+        parts = api_ref.split("-")
+        if len(parts) >= 3 and parts[0] in {"IS", "PP"}:
+            return parts[2].upper()
+        return ""

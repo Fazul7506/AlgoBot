@@ -54,10 +54,16 @@ class DerivOAuthService:
         if settings.DEBUG:
             return True, None
         
+        # The OAuth authorization flow only needs a client ID and an exact
+        # redirect URI. BASE_URL is useful elsewhere in the application, but
+        # it is not required to construct a valid Deriv OAuth request when
+        # DERIV_REDIRECT_URI is explicitly configured. Requiring BASE_URL
+        # here causes the login endpoint to return 503 in otherwise-valid
+        # deployments/tests that intentionally configure the redirect URI
+        # directly.
         required_config = {
             'DERIV_OAUTH_CLIENT_ID': settings.DERIV_OAUTH_CLIENT_ID,
             'DERIV_REDIRECT_URI': settings.DERIV_REDIRECT_URI,
-            'BASE_URL': settings.BASE_URL,
         }
         
         missing = [k for k, v in required_config.items() if not v]

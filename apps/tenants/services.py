@@ -13,7 +13,7 @@ class WorkspaceService:
 class SubscriptionService:
     def upgrade(self,tenant,plan,billing_cycle='monthly',price=0): return Subscription.objects.update_or_create(tenant=tenant,defaults={'plan':plan,'billing_cycle':billing_cycle,'price':price,'status':'active'})[0]
 class BillingService:
-    providers=('stripe','paypal','flutterwave','mpesa','paddle','lemon_squeezy')
+    providers=('intasend','pesapal')
     def create_invoice(self,subscription,amount): return {'tenant_id':subscription.tenant_id,'amount':str(amount),'status':'open'}
     def pay(self,provider,amount,metadata=None): return {'provider':provider,'amount':str(amount),'status':'succeeded','metadata':metadata or {}}
 class LicenseService:

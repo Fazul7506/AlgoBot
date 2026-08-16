@@ -3,7 +3,7 @@
 Phase 14 SaaS Validation Script
 
 Checks that payment/billing/referral pieces are present and wired:
-- required settings (STRIPE_* and PAYMENT_PROVIDER)
+- required payment provider settings
 - payment service methods
 - webhook URL registered
 - billing models & fields exist
@@ -59,18 +59,21 @@ class Phase14Validator:
             if not prov:
                 print('  - PAYMENT_PROVIDER missing')
                 ok = False
-            if prov == 'stripe':
-                # Keys may be empty in local dev but variables should exist
-                if not hasattr(settings, 'STRIPE_API_KEY'):
-                    print('  - STRIPE_API_KEY setting missing')
-                    ok = False
-                if not hasattr(settings, 'STRIPE_WEBHOOK_SECRET'):
-                    print('  - STRIPE_WEBHOOK_SECRET setting missing')
+            supported = {'intasend', 'pesapal'}
+            if str(prov).lower() not in supported:
+                print(f'  - unsupported payment provider: {prov}')
+                ok = False
+            for name in (
+                'INTASEND_PUBLIC_KEY', 'INTASEND_SECRET_KEY', 'INTASEND_WEBHOOK_CHALLENGE',
+                'PESAPAL_CONSUMER_KEY', 'PESAPAL_CONSUMER_SECRET', 'PESAPAL_NOTIFICATION_ID',
+            ):
+                if not hasattr(settings, name):
+                    print(f'  - {name} setting missing')
                     ok = False
             return ok
 
         print_section('Settings')
-        self.test('Stripe and payment settings present', check)
+        self.test('Payment provider settings present', check)
 
     def validate_models(self):
         def check():
@@ -84,7 +87,7 @@ class Phase14Validator:
             # Check subscription fields
             sub = getattr(core_models, 'Subscription', None)
             if sub:
-                for field in ('stripe_price_id', 'price_cents', 'currency', 'recurring', 'max_concurrent_trades'):
+                for field in ('price_cents', 'currency', 'recurring', 'max_concurrent_trades'):
                     if field not in [f.name for f in sub._meta.get_fields()]:
                         print(f'  - Subscription missing field {field}')
                         ok = False
@@ -114,13 +117,14 @@ class Phase14Validator:
             from django.urls import get_resolver
             resolver = get_resolver(None)
             patterns = [p.pattern._route if hasattr(p.pattern, '_route') else str(p.pattern) for p in resolver.url_patterns]
-            found = any('webhooks/stripe' in p or 'webhooks/stripe/' in p for p in patterns)
+            required = ('webhooks/intasend', 'webhooks/pesapal', 'payments/pesapal/callback')
+            found = all(any(route in p or route + '/' in p for p in patterns) for route in required)
             if not found:
-                print('  - Stripe webhook URL not registered (look for path webhooks/stripe/)')
+                print('  - IntaSend/Pesapal webhook or callback URL missing')
             return found
 
         print_section('URLs')
-        self.test('Stripe webhook URL registered', check)
+        self.test('IntaSend and Pesapal webhook URLs registered', check)
 
     def validate_trade_limits_enforcement(self):
         def check():
