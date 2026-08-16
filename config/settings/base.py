@@ -6,6 +6,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from .utils import env, env_bool, env_list
+import os
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
@@ -26,6 +27,7 @@ DJANGO_APPS = [
 ]
 THIRD_PARTY_APPS = ["rest_framework", "rest_framework_simplejwt"]
 LOCAL_APPS = [
+    "anymail"
     "core",
     "trading",
     "apps.broker",
@@ -109,7 +111,7 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-BASE_URL = env("BASE_URL", "http://127.0.0.1:8000")
+BASE_URL = env("BASE_URL", "")
 DERIV_APP_ID = env("DERIV_APP_ID", env("DERIV_OAUTH_CLIENT_ID", ""))
 DERIV_API_TOKEN = env("DERIV_API_TOKEN", "")
 DERIV_OAUTH_CLIENT_ID = DERIV_APP_ID
@@ -145,3 +147,19 @@ LOGOUT_REDIRECT_URL = "/brokers/connect/?broker=deriv"
 # Developer platform API throttling
 DEVELOPER_API_RATE_LIMIT = 60
 DEVELOPER_API_RATE_WINDOW = 60
+
+EMAIL_BACKEND = "anymail.backends.brevo.EmailBackend"
+
+ANYMAIL = {
+    "BREVO_API_KEY": os.environ.get("BREVO_API_KEY"),
+}
+
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    "noreply@algobot.dpdns.org",
+)
+
+SERVER_EMAIL = os.environ.get(
+    "SERVER_EMAIL",
+    "noreply@algobot.dpdns.org",
+)
