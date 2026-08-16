@@ -365,3 +365,31 @@ LOGGING_LEVEL=DEBUG python manage.py runserver
 See [OAUTH_SETUP.md](OAUTH_SETUP.md#troubleshooting) for comprehensive troubleshooting guide.
 
 ---
+
+
+## Managed Redis / Redis Cloud
+
+AlgoBot supports managed Redis endpoints through `REDIS_URL`. Use a TLS URL
+(`rediss://`) when the provider requires encrypted connections.
+
+Example:
+
+```env
+USE_REDIS=true
+REDIS_URL=rediss://default:REPLACE_REDIS_PASSWORD@YOUR_REDIS_HOST:YOUR_REDIS_PORT/0
+CELERY_BROKER_URL=rediss://default:REPLACE_REDIS_PASSWORD@YOUR_REDIS_HOST:YOUR_REDIS_PORT/0
+CELERY_RESULT_BACKEND=rediss://default:REPLACE_REDIS_PASSWORD@YOUR_REDIS_HOST:YOUR_REDIS_PORT/0
+```
+
+The market cache uses the complete `REDIS_URL`, including authentication and
+TLS settings, instead of assuming `127.0.0.1:6379`.
+
+For a local `.env`, cache/worker variables are read from dotenv without
+silently switching the Django database or environment used by management
+commands. Verify the connection with:
+
+```bat
+python manage.py shell -c "import redis; from django.conf import settings; r=redis.Redis.from_url(settings.REDIS_URL); print(r.ping())"
+```
+
+A successful connection prints `True`.

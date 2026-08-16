@@ -14,26 +14,37 @@ logger = logging.getLogger(__name__)
 class DataCacheManager:
     """Redis-based caching for market data"""
     
-    def __init__(self, host='127.0.0.1', port=6379, db=0):
+    def __init__(self, host=None, port=None, db=0, url=None):
         # ALWAYS safe initialize fallback store
         self.memory_cache = {}
         self.memory_expiry = {}
 
-        # FEATURE TOGGLE (KEY FIX)
         if not getattr(settings, "USE_REDIS", False):
             logger.info("Redis disabled via settings - using in-memory cache only")
             self.redis_client = None
             return
 
         try:
-            self.redis_client = redis.Redis(
-                host=host,
-                port=port,
-                db=db,
-                decode_responses=True,
-                socket_connect_timeout=2,
-                socket_timeout=2,
-            )
+            # Prefer the complete Redis URL so managed Redis/TLS endpoints
+            # (rediss://...) work without losing authentication parameters.
+            redis_url = url or getattr(settings, "REDIS_URL", "")
+            if redis_url:
+                self.redis_client = redis.Redis.from_url(
+                    redis_url,
+                    decode_responses=True,
+                    socket_connect_timeout=5,
+                    socket_timeout=5,
+                )
+            else:
+                self.redis_client = redis.Redis(
+                    host=host or "127.0.0.1",
+                    port=port or 6379,
+                    db=db,
+                    decode_responses=True,
+                    socket_connect_timeout=5,
+                    socket_timeout=5,
+                )
+
             self.redis_client.ping()
             logger.info("Redis connection established")
 

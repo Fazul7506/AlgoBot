@@ -26,3 +26,22 @@ class MemoryCacheExpiryTests(TestCase):
         self.assertIsNotNone(cache.get_price("R_10"))
         time.sleep(1.05)
         self.assertIsNone(cache.get_price("R_10"))
+
+
+class RedisURLConfigurationTests(TestCase):
+    @patch("trading.services.market_service.redis.Redis.from_url")
+    @patch("trading.services.market_service.settings.REDIS_URL", "rediss://default:secret@example.redis.io:6379/0")
+    @patch("trading.services.market_service.settings.USE_REDIS", True)
+    def test_managed_redis_url_is_used(self, mock_from_url):
+        mock_client = mock_from_url.return_value
+        mock_client.ping.return_value = True
+
+        cache = DataCacheManager()
+
+        mock_from_url.assert_called_once_with(
+            "rediss://default:secret@example.redis.io:6379/0",
+            decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+        )
+        self.assertIs(cache.redis_client, mock_client)

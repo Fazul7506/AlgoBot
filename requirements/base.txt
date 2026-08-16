@@ -3,3 +3,5 @@ celery
 redis
 djangorestframework
 djangorestframework-simplejwt
+python-dotenv
+django-redis
