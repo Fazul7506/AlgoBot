@@ -25,5 +25,5 @@ tensorflow
 
 reportlab
 websockets
-
+whitenoise
 sentry-sdk
