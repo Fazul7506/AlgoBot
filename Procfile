@@ -1,0 +1,1 @@
+gunicorn deriv_platform.wsgi
