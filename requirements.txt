@@ -1,6 +1,7 @@
 Django
 djangorestframework
 djangorestframework-simplejwt
+dj_database_url
 
 gunicorn
 psycopg2-binary
