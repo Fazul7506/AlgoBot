@@ -128,6 +128,7 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 100,
 }
@@ -150,7 +151,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Django's default /accounts/login/ redirects, which are not mounted in this app.
 LOGIN_URL = "/brokers/connect/?broker=deriv"
 LOGIN_REDIRECT_URL = "/dashboard/"
-LOGOUT_REDIRECT_URL = "/brokers/connect/?broker=deriv"
+LOGOUT_REDIRECT_URL = "/"
 
 
 # Developer platform API throttling
