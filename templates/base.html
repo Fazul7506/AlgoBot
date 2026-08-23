@@ -14,12 +14,10 @@
 <body data-authenticated="{% if request.user.is_authenticated %}true{% else %}false{% endif %}">
   <a class="skip-link" href="#main-content">Skip to content</a>
   {% if request.user.is_authenticated %}
+  <button class="mobile-menu-button" type="button" data-mobile-menu aria-controls="app-sidebar" aria-expanded="false"><span class="material-symbols-rounded" aria-hidden="true">menu</span><span>Menu</span></button>
   <div class="sidebar-backdrop" data-sidebar-backdrop hidden></div>
-  <aside class="app-sidebar" aria-label="Workspace navigation" data-app-sidebar>
-    <div class="sidebar-head">
-      <a class="brand" href="/dashboard/"><span class="material-symbols-rounded" aria-hidden="true">query_stats</span><strong>AlgoBot</strong></a>
-      <button class="sidebar-close" type="button" data-sidebar-close aria-label="Close navigation"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
-    </div>
+  <aside id="app-sidebar" class="app-sidebar" aria-label="Authenticated workspace navigation">
+    <a class="brand" href="/dashboard/"><span class="material-symbols-rounded" aria-hidden="true">query_stats</span><strong>AlgoBot</strong><span>Enterprise</span></a>
     <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Collapse navigation"><span class="material-symbols-rounded" aria-hidden="true">menu_open</span></button>
     <nav>
       <h2>Trade</h2>
@@ -35,26 +33,7 @@
   </aside>
   {% endif %}
   <div class="app-shell{% if not request.user.is_authenticated %} public-shell{% endif %}">
-    <header class="topbar">
-      <div class="topbar-title">{% if request.user.is_authenticated %}<button class="mobile-menu" type="button" data-sidebar-open aria-label="Open navigation"><span class="material-symbols-rounded" aria-hidden="true">menu</span></button><strong>AlgoBot</strong>{% else %}<a class="public-brand" href="/">AlgoBot</a>{% endif %}</div>
-      <nav class="topbar-actions" aria-label="{% if request.user.is_authenticated %}Account{% else %}Public{% endif %} navigation">
-        {% if request.user.is_authenticated %}
-        <div class="account-menu" data-account-menu>
-          <button class="account-trigger" type="button" data-account-trigger aria-haspopup="menu" aria-expanded="false">
-            <span class="avatar" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|first|upper }}</span>
-            <span class="account-copy"><strong>{{ request.user.get_full_name|default:request.user.username }}</strong><small>{{ request.user.email|default:request.user.username }}</small></span>
-            <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
-          </button>
-          <div class="account-dropdown" data-account-dropdown role="menu" hidden>
-            <div class="account-card"><span class="avatar large" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|first|upper }}</span><div><strong>{{ request.user.get_full_name|default:request.user.username }}</strong><small>{{ request.user.email|default:request.user.username }}</small></div></div>
-            <a role="menuitem" href="/settings/">Settings</a>
-            <form method="post" action="/logout/" data-logout-form>{% csrf_token %}<button role="menuitem" type="submit">Logout</button></form>
-          </div>
-        </div>
-        {% else %}<a href="/">Home</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a class="btn small primary" href="/login/">Sign in</a>{% endif %}
-        <button type="button" data-theme-toggle><span class="material-symbols-rounded" aria-hidden="true">contrast</span><span>Theme</span></button>
-      </nav>
-    </header>
+    <header class="topbar"><div>{% if request.user.is_authenticated %}Institutional Trading Operations{% else %}<a class="public-brand" href="/">AlgoBot Enterprise</a>{% endif %}</div><nav class="topbar-actions" aria-label="{% if request.user.is_authenticated %}Account{% else %}Public{% endif %} navigation">{% if request.user.is_authenticated %}<div class="account-menu"><button class="account-trigger" type="button" data-account-menu aria-haspopup="true" aria-expanded="false"><span class="avatar" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|slice:":1"|upper }}</span><span class="account-copy"><strong>{{ request.user.get_full_name|default:request.user.username }}</strong><small>{{ request.user.email|default:request.user.username }}</small></span><span class="material-symbols-rounded" aria-hidden="true">expand_more</span></button><div class="account-dropdown" data-account-dropdown hidden><a href="/settings/">Profile and settings</a><a href="/brokers/connect/">Broker connections</a><form method="post" action="/logout/">{% csrf_token %}<button type="submit">Logout</button></form></div></div>{% else %}<a href="/">Home</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a class="btn small primary" href="/brokers/connect/">Connect Broker</a>{% endif %}<kbd>⌘K</kbd><button type="button" data-theme-toggle><span class="material-symbols-rounded" aria-hidden="true">contrast</span><span>Theme</span></button></nav></header>
     <main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main>
   </div>
   <script src="{% static 'js/enterprise_templates.js' %}" defer></script>

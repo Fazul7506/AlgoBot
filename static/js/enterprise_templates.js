@@ -210,6 +210,7 @@
 
   function drawCandles(canvas, candles) {
     if (!canvas || !candles?.length) return;
+    canvas.__candles = candles;
     const box = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     const width = Math.max(box.width, 300);
@@ -408,43 +409,42 @@
     });
   }
   function shell() {
-    const sidebar = $('[data-app-sidebar]');
+    const sidebar = $('.app-sidebar');
+    const mobileButton = $('[data-mobile-menu]');
     const backdrop = $('[data-sidebar-backdrop]');
-    const open = () => { sidebar?.classList.add('is-open'); document.body.classList.add('sidebar-open'); if (backdrop) backdrop.hidden = false; };
-    const close = () => { sidebar?.classList.remove('is-open'); document.body.classList.remove('sidebar-open'); if (backdrop) backdrop.hidden = true; };
+    const accountButton = $('[data-account-menu]');
+    const accountDropdown = $('[data-account-dropdown]');
+    const setDrawer = open => {
+      if (!sidebar || !mobileButton || !backdrop) return;
+      sidebar.classList.toggle('is-open', open);
+      mobileButton.setAttribute('aria-expanded', String(open));
+      backdrop.hidden = !open;
+      document.body.classList.toggle('drawer-open', open);
+      if (open) sidebar.querySelector('a,button')?.focus();
+    };
     $('[data-sidebar-toggle]')?.addEventListener('click', () => document.body.classList.toggle('sidebar-collapsed'));
-    $('[data-sidebar-open]')?.addEventListener('click', open);
-    $('[data-sidebar-close]')?.addEventListener('click', close);
-    backdrop?.addEventListener('click', close);
-    document.addEventListener('keydown', event => { if (event.key === 'Escape') { close(); closeAccountMenu(); } });
-    $$('.app-sidebar nav a').forEach(link => link.addEventListener('click', close));
-  }
-
-  function closeAccountMenu() {
-    const trigger = $('[data-account-trigger]');
-    const dropdown = $('[data-account-dropdown]');
-    if (dropdown) dropdown.hidden = true;
-    trigger?.setAttribute('aria-expanded', 'false');
-  }
-
-  function accountMenu() {
-    const menu = $('[data-account-menu]');
-    const trigger = $('[data-account-trigger]');
-    const dropdown = $('[data-account-dropdown]');
-    trigger?.addEventListener('click', event => {
-      event.stopPropagation();
-      const isOpen = dropdown && !dropdown.hidden;
-      if (dropdown) dropdown.hidden = isOpen;
-      trigger.setAttribute('aria-expanded', String(!isOpen));
+    mobileButton?.addEventListener('click', () => setDrawer(!sidebar.classList.contains('is-open')));
+    backdrop?.addEventListener('click', () => setDrawer(false));
+    sidebar?.querySelectorAll('a').forEach(link => {
+      const linkPath = new URL(link.href, location.origin).pathname.replace(/\/+$/, '/') || '/';
+      const currentPath = location.pathname.replace(/\/+$/, '/') || '/';
+      if (linkPath === currentPath) link.setAttribute('aria-current', 'page');
+      link.addEventListener('click', () => setDrawer(false));
     });
-    document.addEventListener('click', event => { if (menu && !menu.contains(event.target)) closeAccountMenu(); });
-    $('[data-logout-form]')?.addEventListener('submit', async event => {
-      event.preventDefault();
-      try {
-        await json('/logout/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() }, body: '{}' });
-      } finally {
-        window.location.assign('/login/');
-      }
+    const setAccount = open => {
+      if (!accountButton || !accountDropdown) return;
+      accountButton.setAttribute('aria-expanded', String(open));
+      accountDropdown.hidden = !open;
+    };
+    accountButton?.addEventListener('click', event => {
+      event.stopPropagation();
+      setAccount(accountDropdown.hidden);
+    });
+    document.addEventListener('click', event => {
+      if (accountDropdown && !accountDropdown.hidden && !event.target.closest('.account-menu')) setAccount(false);
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { setDrawer(false); setAccount(false); }
     });
   }
 
@@ -475,5 +475,6 @@
     $$('.data-page').forEach(dataPage);
   }
 
+  window.addEventListener('resize', () => $$('[data-candle-chart]').forEach(canvas => canvas.__candles && drawCandles(canvas, canvas.__candles)));
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
 })();

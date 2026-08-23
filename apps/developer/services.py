@@ -176,7 +176,7 @@ class AnalyticsService:
 
 class SandboxService:
     def provision(self):
-        return {"api_key": f"sandbox_{secrets.token_urlsafe(16)}", "broker": "mock", "market_data": "fake"}
+        return {"api_key": f"sandbox_{secrets.token_urlsafe(16)}", "broker": "sandbox", "market_data": "simulated"}
 
 
 class DocumentationService:
