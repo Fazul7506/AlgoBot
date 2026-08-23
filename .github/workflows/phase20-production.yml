@@ -14,13 +14,14 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install dependencies
-        working-directory: deriv_platform
         run: pip install -r requirements/base.txt
       - name: Django checks
-        working-directory: deriv_platform
         env:
           DJANGO_ENV: development
+          SECRET_KEY: ci-test-secret-key
+          DEBUG: "True"
         run: |
           python manage.py check
           python manage.py makemigrations --check
+          python manage.py migrate --noinput
           python manage.py test
