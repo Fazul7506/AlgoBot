@@ -14,7 +14,9 @@
 <body>
   <a class="skip-link" href="#main-content">Skip to content</a>
   {% if request.user.is_authenticated %}
-  <aside class="app-sidebar" aria-label="Authenticated workspace navigation">
+  <button class="mobile-menu-button" type="button" data-mobile-menu aria-controls="app-sidebar" aria-expanded="false"><span class="material-symbols-rounded" aria-hidden="true">menu</span><span>Menu</span></button>
+  <div class="sidebar-backdrop" data-sidebar-backdrop hidden></div>
+  <aside id="app-sidebar" class="app-sidebar" aria-label="Authenticated workspace navigation">
     <a class="brand" href="/dashboard/"><span class="material-symbols-rounded" aria-hidden="true">query_stats</span><strong>AlgoBot</strong><span>Enterprise</span></a>
     <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Collapse navigation"><span class="material-symbols-rounded" aria-hidden="true">menu_open</span></button>
     <nav>
@@ -31,7 +33,7 @@
   </aside>
   {% endif %}
   <div class="app-shell{% if not request.user.is_authenticated %} public-shell{% endif %}">
-    <header class="topbar"><div>{% if request.user.is_authenticated %}Institutional Trading Operations{% else %}<a class="public-brand" href="/">AlgoBot Enterprise</a>{% endif %}</div><nav class="topbar-actions" aria-label="{% if request.user.is_authenticated %}Account{% else %}Public{% endif %} navigation">{% if request.user.is_authenticated %}<span>{{ request.user.username }}</span>{% else %}<a href="/">Home</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a class="btn small primary" href="/brokers/connect/">Connect Broker</a>{% endif %}<kbd>⌘K</kbd><button type="button" data-theme-toggle><span class="material-symbols-rounded" aria-hidden="true">contrast</span><span>Theme</span></button></nav></header>
+    <header class="topbar"><div>{% if request.user.is_authenticated %}Institutional Trading Operations{% else %}<a class="public-brand" href="/">AlgoBot Enterprise</a>{% endif %}</div><nav class="topbar-actions" aria-label="{% if request.user.is_authenticated %}Account{% else %}Public{% endif %} navigation">{% if request.user.is_authenticated %}<div class="account-menu"><button class="account-trigger" type="button" data-account-menu aria-haspopup="true" aria-expanded="false"><span class="avatar" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|slice:":1"|upper }}</span><span class="account-copy"><strong>{{ request.user.get_full_name|default:request.user.username }}</strong><small>{{ request.user.email|default:request.user.username }}</small></span><span class="material-symbols-rounded" aria-hidden="true">expand_more</span></button><div class="account-dropdown" data-account-dropdown hidden><a href="/settings/">Profile and settings</a><a href="/brokers/connect/">Broker connections</a><form method="post" action="/logout/">{% csrf_token %}<button type="submit">Logout</button></form></div></div>{% else %}<a href="/">Home</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a class="btn small primary" href="/brokers/connect/">Connect Broker</a>{% endif %}<kbd>⌘K</kbd><button type="button" data-theme-toggle><span class="material-symbols-rounded" aria-hidden="true">contrast</span><span>Theme</span></button></nav></header>
     <main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main>
     <footer class="app-footer">AlgoBot Enterprise • Secure trading infrastructure • Audit-ready operations</footer>
   </div>

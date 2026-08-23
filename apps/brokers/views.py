@@ -10,6 +10,15 @@ class BrokerAccountViewSet(viewsets.ModelViewSet):
     serializer_class=BrokerAccountSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return BrokerAccount.objects.filter(user=self.request.user)
     def perform_create(self, serializer): serializer.save(user=self.request.user)
+    @decorators.action(detail=True, methods=['post'])
+    def sync(self, request, pk=None):
+        account = self.get_object()
+        synced, broker_data = asyncio.run(SynchronizationService().sync_account(account))
+        return response.Response({
+            'source': f'{synced.broker.broker_type}_authorize',
+            'account': BrokerAccountSerializer(synced).data,
+            'broker_data': broker_data,
+        })
 class BrokerConnectionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=BrokerConnectionSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return BrokerConnection.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
