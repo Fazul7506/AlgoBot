@@ -1,6 +1,9 @@
 from unittest.mock import Mock, patch
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.contrib.auth.models import User
+
+from core.models import BotSettings, Subscription, UserProfile
 
 
 @override_settings(DERIV_OAUTH_CLIENT_ID="app", DERIV_REDIRECT_URI="http://testserver/callback")
@@ -36,3 +39,36 @@ class DerivOAuthTests(TestCase):
         post.return_value = response
         result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(result.status_code, 502)
+
+    @patch("core.views.requests.post")
+    def test_callback_repairs_partial_existing_user_defaults(self, post):
+        user = User.objects.create_user(username="deriv_CR123456")
+        Subscription.objects.filter(user=user).delete()
+        BotSettings.objects.filter(user=user).delete()
+        self.assertTrue(UserProfile.objects.filter(user=user).exists())
+        self.assertFalse(Subscription.objects.filter(user=user).exists())
+        self.assertFalse(BotSettings.objects.filter(user=user).exists())
+
+        session = self.client.session
+        session["oauth_state"] = "expected"
+        session["pkce_verifier"] = "verifier"
+        session["oauth_redirect_uri"] = "http://testserver/callback"
+        session.save()
+
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "access_token": "token",
+            "refresh_token": "refresh",
+            "account_id": "CR123456",
+            "expires_in": 3600,
+        }
+        post.return_value = response
+
+        result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+
+        self.assertEqual(result.status_code, 302)
+        self.assertEqual(result.url, "/dashboard/")
+        self.assertTrue(UserProfile.objects.filter(user=user).exists())
+        self.assertTrue(Subscription.objects.filter(user=user).exists())
+        self.assertTrue(BotSettings.objects.filter(user=user).exists())
