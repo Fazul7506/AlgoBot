@@ -1,18 +1,35 @@
 {% extends "base.html" %}
-{% block title %}AlgoBot | Institutional Trading Platform{% endblock %}
+{% block title %}AlgoBot | Trade smarter across connected brokers{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AI trading platform</p>
-  <h1>AlgoBot — Institutional-grade AI trading platform</h1>
-  <p>AlgoBot is an Institutional-grade AI trading platform for market intelligence, strategies, risk controls and broker execution. Connect your broker to begin.</p>
-  <div class="actions">
-    <a class="btn primary" href="/brokers/connect/?broker=deriv">Connect Deriv</a>
-    <a class="btn ghost" href="/brokers/connect/">Connect another broker</a>
-  </div>
-</section>
-<section class="card-grid" aria-label="Connection details">
-  <article><h2>Broker-first access</h2><p>Access the platform by connecting a supported broker. Trading, analytics, strategies, and monitoring activate once the broker session is live.</p></article>
-  <article><h2>Deriv OAuth</h2><p>Use Deriv OAuth as the authentication source. You will be redirected to Deriv and brought back to AlgoBot automatically.</p></article>
-  <article><h2>Continue after connect</h2><p>Once your broker is connected, you can continue directly to AlgoBot's dashboard without any local user/password flow.</p></article>
-</section>
+<div class="landing-page">
+  <section class="hero-panel landing-hero">
+    <div class="landing-hero-copy">
+      <p class="eyebrow">MULTI-BROKER TRADING WORKSPACE</p>
+      <h1>One serious workspace for your markets, strategies and execution.</h1>
+      <p class="landing-lead">Connect your broker, discover its real instruments, monitor live prices, build strategies and manage execution from one responsive trading platform.</p>
+      <div class="actions"><a class="btn primary" href="/brokers/connect/?broker=deriv">Connect broker &amp; start trading</a><a class="btn ghost" href="/brokers/">Explore brokers</a></div>
+      <div class="landing-trust"><span><b></b> Live broker data</span><span><b></b> Risk-aware execution</span><span><b></b> Mobile ready</span></div>
+    </div>
+    <div class="landing-terminal-preview" aria-label="AlgoBot trading workspace preview">
+      <div class="preview-top"><span class="preview-dot"></span><strong>AlgoBot Terminal</strong><span class="preview-status">BROKER CONNECTED</span></div>
+      <div class="preview-chart"><span>LIVE MARKET</span><strong data-home-price>—</strong><small data-home-symbol>Discovering broker instruments…</small></div>
+      <div class="preview-grid"><div><small>Balance</small><strong>—</strong></div><div><small>Equity</small><strong>—</strong></div><div><small>Positions</small><strong>—</strong></div></div>
+    </div>
+  </section>
+
+  <section class="card-grid landing-features">
+    <article><p class="eyebrow">01 · CONNECT</p><h2>Your broker is the source of truth</h2><p>AlgoBot reads the connected broker account, identity, currency, balance and available instruments instead of presenting invented market data.</p></article>
+    <article><p class="eyebrow">02 · ANALYSE</p><h2>From market data to decision</h2><p>Use live charts, indicators, strategies, AI analysis, backtesting and performance tools without jumping between separate products.</p></article>
+    <article><p class="eyebrow">03 · EXECUTE</p><h2>Execution stays broker-aware</h2><p>Orders flow through the broker abstraction layer, account routing and risk controls before they reach the connected broker.</p></article>
+  </section>
+
+  <section class="landing-section"><div><p class="eyebrow">THE WORKSPACE</p><h2>Everything has a job.</h2><p>Markets feed strategies. Strategies feed signals. Risk controls decide what may execute. Execution updates positions. Analytics closes the loop.</p></div><div class="landing-flow"><span>Markets</span><i>→</i><span>Strategies</span><i>→</i><span>Risk</span><i>→</i><span>Execution</span><i>→</i><span>Performance</span></div></section>
+
+  <section class="landing-cta"><p class="eyebrow">READY WHEN YOU ARE</p><h2>Connect a broker and enter the workspace.</h2><p>No separate AlgoBot password flow is required for broker authentication. Your broker connection determines the trading account context.</p><a class="btn primary" href="/brokers/connect/?broker=deriv">Connect Deriv</a></section>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(()=>{const price=document.querySelector('[data-home-price]');const symbol=document.querySelector('[data-home-symbol]');if(!price||!symbol)return;const run=async()=>{try{const r=await fetch('/api/markets/symbols/',{credentials:'same-origin',headers:{Accept:'application/json'}});const data=await r.json();const list=Array.isArray(data)?data:(data.results||[]);const item=list.find(x=>x?.symbol&&x.is_active!==false);if(!item){symbol.textContent='No active broker instrument';return}symbol.textContent=item.display_name||item.symbol;const q=await fetch('/api/market/ticks/broker/',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken:(document.cookie.match(/(?:^|;\\s*)csrftoken=([^;]+)/)||[])[1]||''},body:JSON.stringify({symbol:item.symbol})});if(q.ok){const tick=await q.json();price.textContent=Number(tick.quote??tick.price).toLocaleString(undefined,{maximumFractionDigits:8})}}catch(_){symbol.textContent='Connect a broker to load live market data'}};run()})();
+</script>
 {% endblock %}
