@@ -1,77 +1,14 @@
 {% load static %}
 <!doctype html>
 <html lang="en" data-theme="dark">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0d10">
-  <title>{% block title %}AlgoBot{% endblock %}</title>
-  <link rel="icon" type="image/x-icon" href="{% static 'icons/favicon.ico' %}">
-  <link rel="shortcut icon" href="{% static 'icons/favicon.ico' %}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..700,0..1,0&display=swap">
-  <link rel="stylesheet" href="{% static 'css/enterprise_templates.css' %}">
-  <link rel="stylesheet" href="{% static 'css/ui_upgrade.css' %}">
-  <link rel="stylesheet" href="{% static 'css/chatgpt_shell.css' %}">
-  {% block extra_css %}{% endblock %}
-</head>
-<body data-authenticated="{% if request.user.is_authenticated %}true{% else %}false{% endif %}">
-  <a class="skip-link" href="#main-content">Skip to content</a>
-  {% if messages %}
-  <div class="toast-stack" aria-live="polite" aria-atomic="true">
-    {% for message in messages %}<div class="toast {{ message.tags|default:'info' }}" role="status">{{ message }}</div>{% endfor %}
-  </div>
-  {% endif %}
-
-  {% if request.user.is_authenticated %}
-  <button class="mobile-menu-button" type="button" data-mobile-menu aria-controls="app-sidebar" aria-expanded="false" aria-label="Open navigation">
-    <span class="material-symbols-rounded" aria-hidden="true">menu</span>
-  </button>
-  <div class="sidebar-backdrop" data-sidebar-backdrop hidden></div>
-  <aside id="app-sidebar" class="app-sidebar" aria-label="AlgoBot workspace navigation">
-    <div class="sidebar-header">
-      <a class="brand" href="/dashboard/" aria-label="AlgoBot home">
-        <span class="brand-mark" aria-hidden="true"><span class="material-symbols-rounded">query_stats</span></span>
-        <span class="brand-name">AlgoBot</span>
-      </a>
-      <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Collapse navigation" aria-expanded="true"><span class="material-symbols-rounded" aria-hidden="true">left_panel_close</span></button>
-    </div>
-    <a class="sidebar-new-trade" href="/trading/"><span class="material-symbols-rounded" aria-hidden="true">add</span><span>New trade</span></a>
-    <nav>
-      <div class="sidebar-section"><h2>Trade</h2>
-        <a href="/dashboard/"><span class="material-symbols-rounded">space_dashboard</span><span>Dashboard</span></a><a href="/trading/"><span class="material-symbols-rounded">candlestick_chart</span><span>Terminal</span></a><a href="/markets/"><span class="material-symbols-rounded">monitoring</span><span>Markets</span></a><a href="/orders/"><span class="material-symbols-rounded">receipt_long</span><span>Orders</span></a><a href="/positions/"><span class="material-symbols-rounded">account_tree</span><span>Positions</span></a><a href="/signals/"><span class="material-symbols-rounded">bolt</span><span>Signals</span></a>
-      </div>
-      <div class="sidebar-section"><h2>Research</h2>
-        <a href="/strategies/"><span class="material-symbols-rounded">schema</span><span>Strategies</span></a><a href="/backtesting/"><span class="material-symbols-rounded">science</span><span>Backtesting</span></a><a href="/analytics/"><span class="material-symbols-rounded">analytics</span><span>Analytics</span></a><a href="/performance/"><span class="material-symbols-rounded">stacked_line_chart</span><span>Performance</span></a>
-      </div>
-      <div class="sidebar-section"><h2>Operations</h2>
-        <a href="/risk/"><span class="material-symbols-rounded">shield_lock</span><span>Risk</span></a><a href="/monitoring/"><span class="material-symbols-rounded">vital_signs</span><span>Monitoring</span></a><a href="/portfolio/"><span class="material-symbols-rounded">account_balance_wallet</span><span>Portfolio</span></a><a href="/workspace/notifications/"><span class="material-symbols-rounded">notifications</span><span>Notifications</span></a>
-      </div>
-      <div class="sidebar-section"><h2>Integrations</h2>
-        <a href="/workspace/brokers/"><span class="material-symbols-rounded">hub</span><span>Brokers</span></a><a href="/brokers/connect/"><span class="material-symbols-rounded">sync_alt</span><span>Connect Broker</span></a><a href="/settings/"><span class="material-symbols-rounded">settings</span><span>Settings</span></a>
-      </div>
-      {% if request.user.is_staff %}<div class="sidebar-section"><h2>Admin</h2><a href="/admin/"><span class="material-symbols-rounded">admin_panel_settings</span><span>Django admin</span></a></div>{% endif %}
-    </nav>
-    <div class="sidebar-user">
-      <div class="sidebar-user-main"><span class="sidebar-avatar" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|slice:":1"|upper }}</span><span class="sidebar-user-copy"><strong>{{ request.user.get_full_name|default:request.user.username }}</strong><small>{{ request.user.email|default:request.user.username }}</small></span></div>
-      <div class="sidebar-user-actions"><a href="/settings/" aria-label="Profile and settings" title="Profile and settings"><span class="material-symbols-rounded">settings</span></a><form method="post" action="/logout/">{% csrf_token %}<button type="submit" aria-label="Logout" title="Logout"><span class="material-symbols-rounded">logout</span></button></form></div>
-    </div>
-  </aside>
-  {% endif %}
-
-  <div class="app-shell{% if not request.user.is_authenticated %} public-shell{% endif %}">
-    <header class="topbar">
-      <div class="topbar-title">{% if request.user.is_authenticated %}<span class="mobile-page-title">{% block mobile_title %}AlgoBot{% endblock %}</span>{% else %}<a class="public-brand" href="/">AlgoBot Enterprise</a>{% endif %}</div>
-      <nav class="topbar-actions" aria-label="Workspace controls">
-        {% if request.user.is_authenticated %}<span class="connection-indicator" data-global-connection><i></i><span>Checking broker…</span></span>{% else %}<a href="/">Home</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a class="btn small primary" href="/brokers/connect/">Connect Broker</a>{% endif %}
-        <kbd>⌘K</kbd><button type="button" data-theme-toggle><span class="material-symbols-rounded" aria-hidden="true">contrast</span><span>Theme</span></button>
-      </nav>
-    </header>
-    <main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main>
-  </div>
-  <script src="{% static 'js/enterprise_templates.js' %}" defer></script><script src="{% static 'js/ui_guardrails.js' %}" defer></script><script src="{% static 'js/ui_upgrade.js' %}" defer></script><script src="{% static 'js/live_broker_ui.js' %}" defer></script>
-  <script>window.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('.toast-stack .toast').forEach(node=>window.setTimeout(()=>node.remove(),4500));});</script>
-  {% block extra_js %}{% endblock %}
-</body>
-</html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0b0d10"><title>{% block title %}AlgoBot{% endblock %}</title><link rel="icon" type="image/x-icon" href="{% static 'icons/favicon.ico' %}"><link rel="shortcut icon" href="{% static 'icons/favicon.ico' %}"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..700,0..1,0&display=swap"><link rel="stylesheet" href="{% static 'css/enterprise_templates.css' %}"><link rel="stylesheet" href="{% static 'css/ui_upgrade.css' %}"><link rel="stylesheet" href="{% static 'css/chatgpt_shell.css' %}">{% block extra_css %}{% endblock %}</head>
+<body data-authenticated="{% if request.user.is_authenticated %}true{% else %}false{% endif %}"><a class="skip-link" href="#main-content">Skip to content</a>
+{% if messages %}<div class="toast-stack" aria-live="polite" aria-atomic="true">{% for message in messages %}<div class="toast {{ message.tags|default:'info' }}" role="status">{{ message }}</div>{% endfor %}</div>{% endif %}
+{% if request.user.is_authenticated %}<button class="mobile-menu-button" type="button" data-mobile-menu aria-controls="app-sidebar" aria-expanded="false" aria-label="Open navigation"><span class="material-symbols-rounded" aria-hidden="true">menu</span></button><div class="sidebar-backdrop" data-sidebar-backdrop hidden></div><aside id="app-sidebar" class="app-sidebar" aria-label="AlgoBot workspace navigation"><div class="sidebar-header"><a class="brand" href="/dashboard/" aria-label="AlgoBot home"><span class="brand-mark" aria-hidden="true"><span class="material-symbols-rounded">query_stats</span></span><span class="brand-name">AlgoBot</span></a><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Collapse navigation" aria-expanded="true"><span class="material-symbols-rounded" aria-hidden="true">left_panel_close</span></button></div><a class="sidebar-new-trade" href="/trading/"><span class="material-symbols-rounded" aria-hidden="true">add</span><span>New trade</span></a><nav>
+<div class="sidebar-section"><h2>Trade</h2><a href="/dashboard/"><span class="material-symbols-rounded">space_dashboard</span><span>Dashboard</span></a><a href="/trading/"><span class="material-symbols-rounded">candlestick_chart</span><span>Terminal</span></a><a href="/markets/"><span class="material-symbols-rounded">monitoring</span><span>Markets</span></a><a href="/orders/"><span class="material-symbols-rounded">receipt_long</span><span>Orders</span></a><a href="/positions/"><span class="material-symbols-rounded">account_tree</span><span>Positions</span></a><a href="/signals/"><span class="material-symbols-rounded">bolt</span><span>Signals</span></a></div>
+<div class="sidebar-section"><h2>Research</h2><a href="/strategies/"><span class="material-symbols-rounded">schema</span><span>Strategies</span></a><a href="/backtesting/"><span class="material-symbols-rounded">science</span><span>Backtesting</span></a><a href="/analytics/"><span class="material-symbols-rounded">analytics</span><span>Analytics</span></a><a href="/performance/"><span class="material-symbols-rounded">stacked_line_chart</span><span>Performance</span></a></div>
+<div class="sidebar-section"><h2>Operations</h2><a href="/risk/"><span class="material-symbols-rounded">shield_lock</span><span>Risk</span></a><a href="/monitoring/"><span class="material-symbols-rounded">vital_signs</span><span>Monitoring</span></a><a href="/portfolio/"><span class="material-symbols-rounded">account_balance_wallet</span><span>Portfolio</span></a><a href="/workspace/notifications/"><span class="material-symbols-rounded">notifications</span><span>Notifications</span></a></div>
+<div class="sidebar-section"><h2>Integrations</h2><a href="/workspace/brokers/"><span class="material-symbols-rounded">hub</span><span>Brokers</span></a><a href="/brokers/connect/"><span class="material-symbols-rounded">sync_alt</span><span>Connect Broker</span></a><a href="/billing/"><span class="material-symbols-rounded">payments</span><span>Billing</span></a><a href="/settings/"><span class="material-symbols-rounded">settings</span><span>Settings</span></a></div>{% if request.user.is_staff %}<div class="sidebar-section"><h2>Admin</h2><a href="/admin/"><span class="material-symbols-rounded">admin_panel_settings</span><span>Django admin</span></a></div>{% endif %}</nav><div class="sidebar-user"><div class="sidebar-user-main"><span class="sidebar-avatar" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|slice:":1"|upper }}</span><span class="sidebar-user-copy"><strong>{{ request.user.get_full_name|default:request.user.username }}</strong><small>{{ request.user.email|default:request.user.username }}</small></span></div><div class="sidebar-user-actions"><a href="/settings/" aria-label="Profile and settings" title="Profile and settings"><span class="material-symbols-rounded">settings</span></a><form method="post" action="/logout/" data-logout-form>{% csrf_token %}<button type="submit" aria-label="Logout" title="Logout"><span class="material-symbols-rounded">logout</span></button></form></div></div></aside>{% endif %}
+<div class="app-shell{% if not request.user.is_authenticated %} public-shell{% endif %}"><header class="topbar"><div class="topbar-title">{% if request.user.is_authenticated %}<span class="mobile-page-title">{% block mobile_title %}AlgoBot{% endblock %}</span>{% else %}<a class="public-brand" href="/">AlgoBot Enterprise</a>{% endif %}</div><nav class="topbar-actions" aria-label="Workspace controls">{% if request.user.is_authenticated %}<span class="connection-indicator" data-global-connection><i class="is-bad"></i><span>Checking broker…</span></span>{% else %}<a href="/">Home</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a class="btn small primary" href="/brokers/connect/">Connect Broker</a>{% endif %}<kbd>⌘K</kbd><button type="button" data-theme-toggle><span class="material-symbols-rounded" aria-hidden="true">contrast</span><span>Theme</span></button></nav></header><main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main></div>
+{% if request.user.is_authenticated %}<div class="logout-modal" data-logout-modal hidden role="dialog" aria-modal="true" aria-labelledby="logout-title" aria-describedby="logout-description"><div class="logout-modal-backdrop" data-logout-cancel></div><div class="logout-modal-card"><div class="logout-modal-icon"><span class="material-symbols-rounded" aria-hidden="true">logout</span></div><h2 id="logout-title">Log out of AlgoBot?</h2><p id="logout-description">Your current AlgoBot browser session will end. Your connected broker account and trading data will not be deleted.</p><div class="logout-modal-actions"><button type="button" class="btn ghost" data-logout-cancel>Stay signed in</button><button type="button" class="btn danger" data-logout-confirm>Log out</button></div></div></div>{% endif %}
+<script src="{% static 'js/enterprise_templates.js' %}" defer></script><script src="{% static 'js/ui_guardrails.js' %}" defer></script><script src="{% static 'js/ui_upgrade.js' %}" defer></script><script src="{% static 'js/live_broker_ui.js' %}" defer></script><script>window.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('.toast-stack .toast').forEach(node=>window.setTimeout(()=>node.remove(),4500));const form=document.querySelector('[data-logout-form]');const modal=document.querySelector('[data-logout-modal]');if(form&&modal){const cancel=()=>{modal.hidden=true;document.body.classList.remove('modal-open')};form.addEventListener('submit',e=>{e.preventDefault();modal.hidden=false;document.body.classList.add('modal-open');modal.querySelector('[data-logout-confirm]')?.focus()});modal.querySelectorAll('[data-logout-cancel]').forEach(el=>el.addEventListener('click',cancel));modal.querySelector('[data-logout-confirm]')?.addEventListener('click',()=>form.submit());document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.hidden)cancel()})}});</script>{% block extra_js %}{% endblock %}</body></html>

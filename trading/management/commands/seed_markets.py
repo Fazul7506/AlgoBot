@@ -1,58 +1,30 @@
 from django.core.management.base import BaseCommand
-from trading.models.market import MarketSymbol
 
-MARKETS = [
-    {"symbol": "R_10", "display_name": "Volatility 10 Index", "market_type": "VOLATILITY", "pip_size": 0.01},
-    {"symbol": "R_25", "display_name": "Volatility 25 Index", "market_type": "VOLATILITY", "pip_size": 0.01},
-    {"symbol": "R_50", "display_name": "Volatility 50 Index", "market_type": "VOLATILITY", "pip_size": 0.01},
-    {"symbol": "R_75", "display_name": "Volatility 75 Index", "market_type": "VOLATILITY", "pip_size": 0.01},
-    {"symbol": "R_100", "display_name": "Volatility 100 Index", "market_type": "VOLATILITY", "pip_size": 0.01},
-    {"symbol": "BOOM", "display_name": "Boom Index", "market_type": "BOOM_CRASH", "pip_size": 0.01},
-    {"symbol": "CRASH", "display_name": "Crash Index", "market_type": "BOOM_CRASH", "pip_size": 0.01},
-    {"symbol": "EURUSD", "display_name": "Euro / US Dollar", "market_type": "FOREX", "pip_size": 0.0001},
-]
+from apps.market_data.constants import TIMEFRAMES
+from apps.market_data.deriv_sync import sync_active_symbols
+from apps.market_data.models import MarketSymbol as BrokerMarketSymbol
+from trading.models.market import MarketSymbol as TradingMarketSymbol
 
-DEFAULTS = {
-    "description": "AlgoBot supported market symbol",
-    "min_stake": 0.35,
-    "max_stake": 50000.0,
-    "is_active": True,
-    "is_tradeable": True,
-    "supported_timeframes": ["M1", "M5", "M15", "M30", "H1", "H4", "D1"],
-    "timezone": "UTC",
+
+MARKET_TYPE_MAP = {
+    "Volatility Indices": "VOLATILITY", "Boom": "BOOM_CRASH", "Crash": "BOOM_CRASH", "Forex": "FOREX",
+    "Crypto": "CRYPTO", "Derived Indices": "SYNTHETIC", "Jump Indices": "SYNTHETIC", "Commodities": "COMMODITY", "Stock Indices": "SYNTHETIC",
 }
 
 
 class Command(BaseCommand):
-    help = "Create/update the canonical AlgoBot market symbol catalogue. Safe to run repeatedly."
-
-    def add_arguments(self, parser):
-        parser.add_argument(
-            "--deactivate-missing",
-            action="store_true",
-            help="Deactivate active symbols not present in the canonical seed catalogue.",
-        )
-
+    help = "Synchronize the market catalogue from the broker instead of maintaining a hardcoded symbol list."
+    def add_arguments(self, parser): parser.add_argument("--deactivate-missing", action="store_true", help="Deactivate trading-model symbols that are no longer returned by the broker.")
     def handle(self, *args, **options):
-        seeded = set()
-        created = updated = 0
-
-        for market in MARKETS:
-            defaults = {**DEFAULTS, **market}
-            symbol = market["symbol"]
-            obj, was_created = MarketSymbol.objects.update_or_create(
-                symbol=symbol,
-                defaults=defaults,
+        synced = sync_active_symbols(); broker_symbols = list(BrokerMarketSymbol.objects.filter(is_active=True)); seen = set(); created = updated = 0
+        supported_timeframes = [key.upper() for key in TIMEFRAMES if key != "tick" and key in {"1m", "5m", "15m", "30m", "1h", "4h", "1d"}]
+        for source in broker_symbols:
+            market_type = MARKET_TYPE_MAP.get(source.market, "SYNTHETIC")
+            obj, was_created = TradingMarketSymbol.objects.update_or_create(
+                symbol=source.symbol,
+                defaults={"display_name": source.display_name, "market_type": market_type, "pip_size": float(source.tick_size or source.pip_size or 0), "is_active": source.is_active, "is_tradeable": source.is_tradable, "supported_timeframes": supported_timeframes},
             )
-            seeded.add(obj.pk)
-            created += int(was_created)
-            updated += int(not was_created)
-
+            seen.add(obj.pk); created += int(was_created); updated += int(not was_created)
         deactivated = 0
-        if options["deactivate_missing"]:
-            deactivated = MarketSymbol.objects.filter(is_active=True).exclude(pk__in=seeded).update(is_active=False)
-
-        self.stdout.write(self.style.SUCCESS(
-            f"Market seed complete: {created} created, {updated} updated, {deactivated} deactivated. "
-            f"Total active symbols: {MarketSymbol.objects.filter(is_active=True).count()}"
-        ))
+        if options["deactivate_missing"] and seen: deactivated = TradingMarketSymbol.objects.filter(is_active=True).exclude(pk__in=seen).update(is_active=False)
+        self.stdout.write(self.style.SUCCESS(f"Broker market sync complete: {synced} broker symbols synchronized; {created} trading records created, {updated} updated, {deactivated} deactivated."))
