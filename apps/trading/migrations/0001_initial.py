@@ -1,5 +1,0 @@
-from django.db import migrations, models
-import django.db.models.deletion
-class Migration(migrations.Migration):
-    initial=True; dependencies=[('execution','0001_initial')]
-    operations=[migrations.CreateModel(name='Position', fields=[('id',models.BigAutoField(auto_created=True,primary_key=True,serialize=False,verbose_name='ID')),('symbol',models.CharField(max_length=40)),('entry_price',models.DecimalField(decimal_places=8,max_digits=18)),('current_price',models.DecimalField(blank=True,decimal_places=8,max_digits=18,null=True)),('exit_price',models.DecimalField(blank=True,decimal_places=8,max_digits=18,null=True)),('profit_loss',models.DecimalField(decimal_places=8,default=0,max_digits=18)),('risk',models.DecimalField(decimal_places=8,default=0,max_digits=18)),('status',models.CharField(default='open',max_length=24)),('opened_at',models.DateTimeField(auto_now_add=True)),('closed_at',models.DateTimeField(blank=True,null=True)),('order',models.OneToOneField(on_delete=django.db.models.deletion.CASCADE,related_name='position',to='execution.order'))], options={'ordering':['-opened_at']})]
