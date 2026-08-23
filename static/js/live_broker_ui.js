@@ -115,11 +115,12 @@
       return `<line x1="${pad}" y1="${y}" x2="${width - pad}" y2="${y}" stroke="currentColor" opacity=".08"/>`;
     }).join('');
 
+    const last = points.split(' ').at(-1).split(',');
     chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="Live market price chart" style="width:100%;height:100%;display:block">
       ${grid}
       <polygon points="${area}" fill="${stroke}" opacity=".06"></polygon>
       <polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
-      <circle cx="${points.split(' ').at(-1).split(',')[0]}" cy="${points.split(' ').at(-1).split(',')[1]}" r="4" fill="${stroke}"></circle>
+      <circle cx="${last[0]}" cy="${last[1]}" r="4" fill="${stroke}"></circle>
       <text x="${width - pad}" y="${pad + 2}" text-anchor="end" fill="currentColor" opacity=".7" font-size="13">LIVE ${fmt(latest)}</text>
     </svg>`;
   }
@@ -173,7 +174,7 @@
     await syncAccounts();
     await syncLiveTick();
     window.setInterval(syncLiveTick, 1500);
-    window.setInterval(syncAccounts, 5000);
+    window.setInterval(syncAccounts, 15000);
   }
 
   window.addEventListener('DOMContentLoaded', boot, { once: true });
