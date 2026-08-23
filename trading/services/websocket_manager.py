@@ -9,12 +9,14 @@ import websockets
 
 logger = logging.getLogger(__name__)
 
+DERIV_PUBLIC_WS = "wss://api.derivws.com/trading/v1/options/ws/public"
+
 
 class WebSocketManager:
-    """Manages the Deriv market-data websocket with reconnects and subscriptions."""
+    """Manages Deriv's public market-data WebSocket with reconnects/subscriptions."""
 
-    def __init__(self, uri: str = "wss://ws.derivws.com/websockets/v3"):
-        self.uri = uri
+    def __init__(self, uri: str = DERIV_PUBLIC_WS):
+        self.uri = uri or DERIV_PUBLIC_WS
         self.ws = None
         self.session_id = str(uuid.uuid4())
         self.subscriptions: Dict[str, dict] = {}
@@ -27,17 +29,20 @@ class WebSocketManager:
         self._listener_task = None
         self._closing = False
 
-    async def connect(self, app_id: str):
+    async def connect(self, app_id: str | None = None):
+        """Connect to public market data.
+
+        The current public Deriv endpoint does not require authentication or an
+        app_id query parameter. Authenticated trading connections are created
+        separately through the account OTP flow in the broker adapter.
+        """
         if self.is_connected and self.ws:
             return
-        if not app_id:
-            raise ValueError("DERIV_APP_ID is required for the market-data websocket")
         self.app_id = app_id
         self._closing = False
         try:
-            separator = "&" if "?" in self.uri else "?"
             self.ws = await websockets.connect(
-                f"{self.uri}{separator}app_id={app_id}",
+                self.uri,
                 open_timeout=10,
                 ping_interval=20,
                 ping_timeout=10,
@@ -50,10 +55,10 @@ class WebSocketManager:
         except Exception:
             self.is_connected = False
             self.ws = None
-            logger.exception("WebSocket connection failed")
+            logger.exception("Deriv public market-data WebSocket connection failed")
             await self._reconnect(app_id)
 
-    async def _reconnect(self, app_id: str):
+    async def _reconnect(self, app_id: str | None = None):
         if self._closing or self.retry_count >= self.max_retries:
             return
         self.retry_count += 1
@@ -105,7 +110,7 @@ class WebSocketManager:
                         logger.exception("WebSocket handler error")
         except Exception:
             self.is_connected = False
-            if not self._closing and self.app_id:
+            if not self._closing:
                 logger.exception("WebSocket listener stopped; reconnecting")
                 await self._reconnect(self.app_id)
 
