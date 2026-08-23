@@ -1,3 +1,4 @@
+import asyncio
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -5,8 +6,11 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from .models import MarketSymbol, Tick, Candle, MarketSnapshot, MarketStatistics
 from .serializers import MarketSymbolSerializer, TickSerializer, CandleSerializer, MarketSnapshotSerializer, MarketStatisticsSerializer
-from .deriv_sync import sync_active_symbols, fetch_tick
+from .deriv_sync import sync_active_symbols
+from .services import MarketDataService
 from apps.brokers.models import BrokerAccount
+from apps.brokers.services import BrokerRegistry
+from apps.brokers.exceptions import BrokerConnectionError, BrokerAuthenticationError, BrokerOrderError
 
 
 def _limit(request, default=500, maximum=1000):
@@ -79,12 +83,18 @@ def sync_symbols(request):
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def broker_tick(request):
-    # Accept GET for legacy market clients and POST for the terminal. This removes the 405 seen in production.
+    """Fetch a live quote through the selected broker adapter and persist it."""
     symbol = str((request.data.get("symbol") if request.method == "POST" else request.query_params.get("symbol")) or "").strip()
     if not symbol: return Response({"detail":"symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
     account = _connected_account(request.user)
     if not account: return Response({"detail":"Connect a broker before requesting live broker quotes."}, status=status.HTTP_409_CONFLICT)
     if not MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists(): return Response({"detail":"The requested symbol is not in the current broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
-        data = fetch_tick(symbol); data.update({"broker":account.broker.name,"account_id":account.account_id}); return Response(data)
-    except Exception as exc: return Response({"status":"error","code":"BROKER_TICK_FAILED","detail":str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        data = asyncio.run(BrokerRegistry().adapter(account.broker, account).get_market_data(symbol))
+        tick = MarketDataService().tick_service.ingest({"symbol": symbol, "quote": data.get("price"), "bid": data.get("bid"), "ask": data.get("ask"), "epoch": data.get("epoch"), "volume": data.get("volume", 0)})
+        payload = TickSerializer(tick).data
+        payload.update({"broker":account.broker.name,"account_id":account.account_id})
+        return Response(payload)
+    except BrokerAuthenticationError as exc: return Response({"status":"error","code":"BROKER_AUTHENTICATION_FAILED","detail":str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+    except (BrokerConnectionError, BrokerOrderError) as exc: return Response({"status":"error","code":"BROKER_TICK_FAILED","detail":str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except Exception as exc: return Response({"status":"error","code":"BROKER_TICK_FAILED","detail":"Broker market data request failed."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
