@@ -1,7 +1,8 @@
 """Compatibility facade for the canonical broker-neutral Deriv adapter.
 
 New code must import ``apps.brokers.adapters.deriv.DerivAdapter``. This facade
-exists only for legacy callers and contains no vendor-specific implementation.
+contains only migration shims for older callers and does not implement another
+broker connection.
 """
 from apps.brokers.adapters.deriv import DerivAdapter as _CanonicalDerivAdapter
 
@@ -34,8 +35,11 @@ class DerivAdapter(_CanonicalDerivAdapter):
         return {"transactions": await self.get_trade_history(**filters)}
 
     async def ticks(self, symbol):
-        if self.engine is not None and hasattr(self.engine, "subscribe_ticks"):
-            return await self.engine.subscribe_ticks(symbol)
+        if self.engine is not None:
+            if hasattr(self.engine, "subscribe_ticks"):
+                return await self.engine.subscribe_ticks(symbol)
+            if hasattr(self.engine, "subscribe"):
+                return await self.engine.subscribe(symbol)
         return await self.get_market_data(symbol)
 
     async def candles(self, symbol, granularity=60):
@@ -45,9 +49,13 @@ class DerivAdapter(_CanonicalDerivAdapter):
         return await self.get_accounts()
 
     async def buy_contract(self, price, parameters):
-        if self.engine is None or not hasattr(self.engine, "buy_contract"):
-            raise RuntimeError("Legacy buy_contract() requires an execution engine")
-        return await self.engine.buy_contract(price=price, parameters=parameters)
+        if self.engine is not None and hasattr(self.engine, "request"):
+            payload = dict(parameters or {})
+            payload.update({"buy": price})
+            return await self.engine.request(payload)
+        if self.engine is not None and hasattr(self.engine, "buy_contract"):
+            return await self.engine.buy_contract(price=price, parameters=parameters)
+        raise RuntimeError("Legacy buy_contract() requires a broker execution engine")
 
     async def buy(self, **payload):
         raise RuntimeError("Legacy buy() is retired; route orders through the platform execution engine")
