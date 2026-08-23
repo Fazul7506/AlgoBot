@@ -15,6 +15,13 @@
 </head>
 <body data-authenticated="{% if request.user.is_authenticated %}true{% else %}false{% endif %}">
   <a class="skip-link" href="#main-content">Skip to content</a>
+  {% if messages %}
+  <div class="toast-stack" aria-live="polite" aria-atomic="true">
+    {% for message in messages %}
+      <div class="toast {{ message.tags|default:'info' }}" role="status">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
   {% if request.user.is_authenticated %}
   <button class="mobile-menu-button" type="button" data-mobile-menu aria-controls="app-sidebar" aria-expanded="false"><span class="material-symbols-rounded" aria-hidden="true">menu</span><span>Menu</span></button>
   <div class="sidebar-backdrop" data-sidebar-backdrop hidden></div>
@@ -39,6 +46,13 @@
     <main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main>
   </div>
   <script src="{% static 'js/enterprise_templates.js' %}" defer></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.toast-stack .toast').forEach((node) => {
+        window.setTimeout(() => node.remove(), 4500);
+      });
+    });
+  </script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>
