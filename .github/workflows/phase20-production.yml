@@ -23,4 +23,11 @@ jobs:
         run: |
           python manage.py check
           python manage.py makemigrations --check
+          python manage.py migrate --noinput
           python manage.py test
+      - name: Static asset validation
+        env:
+          DJANGO_ENV: development
+          SECRET_KEY: ci-test-secret-key
+          DEBUG: "True"
+        run: python manage.py collectstatic --noinput --clear
