@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.contrib.auth import login as auth_login
 from django.contrib.auth.models import User
 from django.shortcuts import redirect
+from django.utils import timezone
 
 from apps.brokers.models import Broker, BrokerAccount
 from apps.broker.models import Broker as LegacyBroker, BrokerAccount as LegacyBrokerAccount, BrokerToken
@@ -81,12 +82,7 @@ def _ensure_defaults(user):
 
 
 def _sync_legacy_broker_account(user, account_id: str, account: dict, balance: dict, access_token: str, refresh_token: str, expires_at) -> None:
-    """Keep the broker-neutral API's account table in sync with the OAuth source of truth.
-
-    The project historically had two broker model layers. The OAuth callback used the
-    multi-broker table while the live API used apps.broker.BrokerAccount. That left the
-    UI permanently showing "No broker connected" after a successful Deriv login.
-    """
+    """Keep the broker-neutral API account table synchronized with OAuth."""
     legacy_broker, _ = LegacyBroker.objects.get_or_create(
         slug="deriv",
         defaults={"name": "Deriv", "website": "https://deriv.com", "status": "active"},
@@ -110,6 +106,7 @@ def _sync_legacy_broker_account(user, account_id: str, account: dict, balance: d
     token.set_refresh_token(refresh_token or "")
     token.expires_at = expires_at
     token.status = "active"
+    token.last_refresh = timezone.now()
     token.save()
 
 
@@ -196,7 +193,6 @@ def callback(request):
     deriv_account.currency = currency
     deriv_account.save()
 
-    # Source-of-truth multi-broker account.
     broker, _ = Broker.objects.get_or_create(
         broker_type="deriv",
         defaults={"name": "Deriv", "status": "active", "supports_live": True, "websocket_endpoint": settings.DERIV_AUTH_WS_BASE_URL},
@@ -204,10 +200,9 @@ def callback(request):
     BrokerAccount.objects.update_or_create(
         broker=broker,
         account_id=account_id,
-        defaults={"user": user, "currency": currency, "balance": balance_value, "equity": balance_value, "status": "active", "is_preferred": True, "last_synced_at": __import__("django.utils.timezone", fromlist=["now"]).now(), "credentials": {"account_type": account.get("account_type") or "demo"}},
+        defaults={"user": user, "currency": currency, "balance": balance_value, "equity": balance_value, "status": "active", "is_preferred": True, "last_synced_at": timezone.now(), "credentials": {"account_type": account.get("account_type") or "demo"}},
     )
 
-    # Compatibility/source bridge for the authenticated broker API consumed by the UI.
     _sync_legacy_broker_account(user, account_id, account, balance, access_token, token_data.get("refresh_token", ""), expires_at)
 
     DerivOAuthService.clear_oauth_session(request)
