@@ -1,5 +1,6 @@
 import asyncio, importlib, time
 from decimal import Decimal
+from types import SimpleNamespace
 from django.conf import settings
 from django.utils import timezone
 from . import constants as c
@@ -15,6 +16,13 @@ class BrokerRegistry:
             module,cls=target.rsplit('.',1); target=getattr(importlib.import_module(module),cls); self.adapter_paths[broker_type]=target
         return target
     def adapter(self,broker,account=None): return self.get(broker.broker_type)(broker=broker,account=account,credentials=getattr(account,'credentials',{}))
+    def adapter_for_legacy_account(self, account):
+        """Bridge old persisted accounts to the canonical adapter without a second broker implementation."""
+        broker_type = str(getattr(getattr(account, 'broker', None), 'slug', '') or getattr(getattr(account, 'broker', None), 'broker_type', '')).lower()
+        if broker_type not in self.adapter_paths:
+            raise BrokerRoutingError(f'Unsupported broker type: {broker_type or "unknown"}')
+        broker = SimpleNamespace(broker_type=broker_type, name=getattr(getattr(account, 'broker', None), 'name', broker_type))
+        return self.get(broker_type)(broker=broker, account=account, credentials=getattr(account, 'credentials', {}) or {})
 
 class BrokerManager:
     broker_catalog={'deriv':{'name':'Deriv','status':'active','websocket_endpoint':settings.DERIV_PUBLIC_WS_URL,'supports_live':True,'auth':'oauth'},'paper':{'name':'Paper Trading','status':'active','supports_live':False,'auth':'none'},'binance':{'name':'Binance','auth':'api_key_secret'},'bybit':{'name':'Bybit','auth':'api_key_secret'},'oanda':{'name':'OANDA','auth':'api_token'},'interactive_brokers':{'name':'Interactive Brokers','auth':'session_gateway'},'metatrader_gateway':{'name':'MetaTrader Gateway','auth':'username_password'},'dxtrade':{'name':'DXTrade','auth':'session_token'},'ctrader':{'name':'cTrader','auth':'oauth'},'alpaca':{'name':'Alpaca','auth':'api_key_secret'},'forex_com':{'name':'Forex.com','auth':'username_password'},'pepperstone':{'name':'Pepperstone','auth':'metatrader_or_ctrader'},'ic_markets':{'name':'IC Markets','auth':'metatrader_or_ctrader'},'exness':{'name':'Exness','auth':'api_key_or_session'}}
@@ -36,26 +44,20 @@ class BrokerManager:
 class BrokerConnectionService:
     async def connect(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        adapter=BrokerRegistry().adapter(broker,account)
-        verification=await adapter.connect()
-        latency=await adapter.ping()
-        # A successful broker authentication is the source of truth. Persist its
-        # identity/balance before the UI is allowed to call the account connected.
+        adapter=BrokerRegistry().adapter(broker,account); verification=await adapter.connect(); latency=await adapter.ping()
         if verification.get('account_id') and verification['account_id'] != account.account_id: account.account_id=str(verification['account_id'])
         if verification.get('balance') is not None: account.balance=verification['balance']
         if verification.get('currency'): account.currency=verification['currency']
-        account_type=verification.get('is_virtual')
-        credentials=dict(account.credentials or {})
+        account_type=verification.get('is_virtual'); credentials=dict(account.credentials or {})
         if account_type is not None: credentials['account_type']='demo' if account_type else 'real'
         account.credentials=credentials; account.status='active'; account.last_synced_at=timezone.now(); account.save(update_fields=['account_id','balance','currency','credentials','status','last_synced_at'])
-        conn=BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
-        return conn
+        return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
     async def disconnect(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        await BrokerRegistry().adapter(broker,account).disconnect(); account.status='disconnected'; account.save(update_fields=['status']); conn,_=BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'disconnected'}); return conn
+        await BrokerRegistry().adapter(broker,account).disconnect(); account.status='disconnected'; account.save(update_fields=['status']); return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'disconnected'})[0]
     async def heartbeat(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        adapter=BrokerRegistry().adapter(broker,account); data=await adapter.health_check(); latency=await adapter.ping(); conn,_=BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data}); return conn
+        adapter=BrokerRegistry().adapter(broker,account); data=await adapter.health_check(); latency=await adapter.ping(); return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data})[0]
 class AuthenticationService:
     async def authenticate(self,account): return await BrokerRegistry().adapter(account.broker,account).authenticate()
     async def refresh_token(self,account): return await BrokerRegistry().adapter(account.broker,account).refresh_token()
@@ -92,10 +94,14 @@ class ExecutionEngine:
         routing=dict(data.get('routing_context') or {})
         if routing.get('ai_assisted'):
             from apps.ai_engine.services import AIEngine
-            from apps.market_data.deriv_sync import fetch_tick
+            from apps.market_data.services import MarketDataService
             symbol=data.get('symbol')
             if not symbol: raise BrokerRoutingError('AI-assisted execution requires a broker symbol')
-            tick=fetch_tick(symbol); ctx={'market_data':{'close':tick['quote'],'open':tick['quote'],'high':tick['quote'],'low':tick['quote'],'spread':(tick.get('ask')-tick.get('bid')) if tick.get('bid') is not None and tick.get('ask') is not None else 0}}; analysis=AIEngine().analyze(symbol,routing.get('timeframe','M1'),ctx); recommendation=analysis['recommendation']; minimum_confidence=float(routing.get('minimum_ai_confidence',65))
+            tick=MarketDataService().history.tick_history(symbol, limit=1).first()
+            if tick is None: raise BrokerRoutingError('AI-assisted execution requires fresh normalized market data')
+            spread=float(tick.ask-tick.bid) if tick.bid is not None and tick.ask is not None else 0
+            ctx={'market_data':{'close':float(tick.quote),'open':float(tick.quote),'high':float(tick.quote),'low':float(tick.quote),'spread':spread}}
+            analysis=AIEngine().analyze(symbol,routing.get('timeframe','M1'),ctx); recommendation=analysis['recommendation']; minimum_confidence=float(routing.get('minimum_ai_confidence',65))
             if recommendation.confidence<minimum_confidence or recommendation.recommendation=='WAIT': raise BrokerRoutingError(f'AI gate blocked the order: {recommendation.recommendation} at {recommendation.confidence:.1f}% confidence')
             direction=str(data.get('direction','')).upper()
             if direction in {'BUY','CALL','RISE'} and recommendation.recommendation!='BUY': raise BrokerRoutingError('AI gate rejected a BUY/CALL order')
@@ -105,8 +111,7 @@ class ExecutionEngine:
 class SynchronizationService:
     async def sync_account(self,account):
         if account.status in {'disconnected','revoked'}: raise BrokerRoutingError('This broker account is not connected')
-        adapter=BrokerRegistry().adapter(account.broker,account); data=await adapter.get_balance(); fields=[]
-        broker_account_id=data.get('account_id') or account.account_id
+        adapter=BrokerRegistry().adapter(account.broker,account); data=await adapter.get_balance(); fields=[]; broker_account_id=data.get('account_id') or account.account_id
         if broker_account_id and broker_account_id!=account.account_id: account.account_id=broker_account_id; fields.append('account_id')
         for f in ['balance','equity','margin','free_margin','currency']:
             if data.get(f) is not None: setattr(account,f,data[f]); fields.append(f)

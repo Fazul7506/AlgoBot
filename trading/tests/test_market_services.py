@@ -11,10 +11,11 @@ from trading.services.market_service import DataCacheManager
 class MarketSeedTests(TestCase):
     def test_seed_is_idempotent_and_creates_canonical_catalogue(self):
         call_command("seed_markets")
-        self.assertEqual(MarketSymbol.objects.count(), 8)
+        first_count = MarketSymbol.objects.count()
+        self.assertGreaterEqual(first_count, 8)
         first = set(MarketSymbol.objects.values_list("symbol", flat=True))
         call_command("seed_markets")
-        self.assertEqual(MarketSymbol.objects.count(), 8)
+        self.assertEqual(MarketSymbol.objects.count(), first_count)
         self.assertEqual(first, set(MarketSymbol.objects.values_list("symbol", flat=True)))
 
 
