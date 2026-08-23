@@ -145,6 +145,16 @@ def backwards(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [("brokers", "0001_initial")]
+
+    # PostgreSQL raises `cannot CREATE INDEX ... because it has pending
+    # trigger events` when schema/index DDL is mixed with row-level changes
+    # in the same transaction. This migration both creates canonical schema
+    # and copies production rows, so it must not wrap the whole migration in
+    # one transaction. Each schema operation and the data-copy operation are
+    # committed independently, which also makes a retry safe after a failed
+    # deployment without holding deferred trigger events open.
+    atomic = False
+
     operations = [
         migrations.AddField("brokeraccount", "access_token", models.TextField(blank=True)),
         migrations.AddField("brokeraccount", "refresh_token", models.TextField(blank=True)),
