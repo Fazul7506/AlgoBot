@@ -1,0 +1,36 @@
+name: Purge all Django migrations
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  purge:
+    if: ${{ !startsWith(github.event.head_commit.message, 'Purge all Django migrations') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Remove every migrations directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          find . -type d -name migrations -prune -print -exec rm -rf {} +
+      - name: Commit removals
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No migration directories remain.'
+            exit 0
+          fi
+          git commit -m 'Purge all Django migrations'
+          git push origin HEAD:main
