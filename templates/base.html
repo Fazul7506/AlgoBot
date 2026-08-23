@@ -46,6 +46,7 @@
     <main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main>
   </div>
   <script src="{% static 'js/enterprise_templates.js' %}" defer></script>
+  <script src="{% static 'js/ui_guardrails.js' %}" defer></script>
   <script>
     window.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.toast-stack .toast').forEach((node) => {
