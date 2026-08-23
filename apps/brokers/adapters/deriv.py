@@ -1,13 +1,18 @@
-"""Deriv broker adapter using the WebSocket trading API."""
+"""Deriv broker adapter using the current Options REST + WebSocket API."""
 import asyncio
 import json
 import os
 import time
 
+import requests
 import websockets
 
 from ..exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
 from .base import BrokerAdapter
+
+DERIV_API_BASE = "https://api.derivws.com"
+DERIV_PUBLIC_WS = "wss://api.derivws.com/trading/v1/options/ws/public"
+DERIV_ACCOUNTS_URL = f"{DERIV_API_BASE}/trading/v1/options/accounts"
 
 
 class DerivAdapter(BrokerAdapter):
@@ -19,28 +24,68 @@ class DerivAdapter(BrokerAdapter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.endpoint = getattr(self.broker, "websocket_endpoint", "") or os.getenv("DERIV_WS_URL", "wss://ws.derivws.com/websockets/v3")
+        self.endpoint = DERIV_PUBLIC_WS
 
     def _token(self):
-        """Read the encrypted token from the verified DerivAccount linked to the broker account."""
-        if self.account is not None:
-            try:
-                deriv_account = self.account.user.deriv_account
-            except Exception as exc:
-                raise BrokerAuthenticationError("A verified Deriv account is required") from exc
-            if deriv_account.token_status != "active" or deriv_account.is_token_expired:
-                raise BrokerAuthenticationError("Deriv credentials are expired or revoked")
-            return deriv_account.get_access_token()
-        raise BrokerAuthenticationError("A connected Deriv account is required")
+        """Read the encrypted token from the verified DerivAccount."""
+        if self.account is None:
+            raise BrokerAuthenticationError("A connected Deriv account is required")
+        try:
+            deriv_account = self.account.user.deriv_account
+        except Exception as exc:
+            raise BrokerAuthenticationError("A verified Deriv account is required") from exc
+        if deriv_account.token_status != "active" or deriv_account.is_token_expired:
+            raise BrokerAuthenticationError("Deriv credentials are expired or revoked")
+        token = deriv_account.get_access_token()
+        if not token:
+            raise BrokerAuthenticationError("Deriv access token is unavailable")
+        return token
+
+    def _app_id(self):
+        app_id = os.getenv("DERIV_APP_ID") or os.getenv("DERIV_OAUTH_CLIENT_ID")
+        if not app_id:
+            raise BrokerAuthenticationError("DERIV_APP_ID is not configured")
+        return app_id
+
+    def _account_id(self):
+        account_id = getattr(self.account, "account_id", None)
+        if not account_id:
+            raise BrokerAuthenticationError("A verified Deriv account id is required")
+        return account_id
+
+    def _authenticated_ws_url(self):
+        """Get Deriv's short-lived OTP WebSocket URL for the connected account."""
+        try:
+            response = requests.post(
+                f"{DERIV_ACCOUNTS_URL}/{self._account_id()}/otp",
+                headers={
+                    "Authorization": f"Bearer {self._token()}",
+                    "Deriv-App-ID": self._app_id(),
+                    "Accept": "application/json",
+                },
+                timeout=(3.05, self.timeout),
+            )
+            if response.status_code == 401:
+                raise BrokerAuthenticationError("Deriv rejected the stored OAuth credential")
+            if response.status_code == 403:
+                raise BrokerAuthenticationError("Deriv denied trading access for this account")
+            response.raise_for_status()
+            payload = response.json()
+        except BrokerAuthenticationError:
+            raise
+        except (requests.RequestException, ValueError) as exc:
+            raise BrokerConnectionError("Unable to obtain an authenticated Deriv WebSocket session") from exc
+
+        url = (payload.get("data") or {}).get("url")
+        if not url:
+            raise BrokerConnectionError("Deriv did not return an authenticated WebSocket URL")
+        return url
 
     async def _request(self, payload, authenticated=False):
+        """Send one command over the current Deriv public or OTP-authenticated WebSocket."""
         try:
-            async with websockets.connect(self.endpoint, open_timeout=self.timeout, close_timeout=self.timeout) as ws:
-                if authenticated:
-                    await ws.send(json.dumps({"authorize": self._token()}))
-                    authorization = json.loads(await asyncio.wait_for(ws.recv(), self.timeout))
-                    if authorization.get("error"):
-                        raise BrokerAuthenticationError(authorization["error"].get("message", "Deriv authorization failed"))
+            endpoint = await asyncio.to_thread(self._authenticated_ws_url) if authenticated else self.endpoint
+            async with websockets.connect(endpoint, open_timeout=self.timeout, close_timeout=self.timeout) as ws:
                 await ws.send(json.dumps(payload))
                 response = json.loads(await asyncio.wait_for(ws.recv(), self.timeout))
         except BrokerAuthenticationError:
@@ -48,30 +93,61 @@ class DerivAdapter(BrokerAdapter):
         except (asyncio.TimeoutError, OSError, websockets.WebSocketException, json.JSONDecodeError) as exc:
             raise BrokerConnectionError("Deriv is unavailable or returned an invalid response") from exc
         if response.get("error"):
-            raise BrokerOrderError(response["error"].get("message", "Deriv rejected the request"))
+            message = response["error"].get("message", "Deriv rejected the request")
+            code = response["error"].get("code", "")
+            if authenticated and code in {"AuthorizationRequired", "InvalidToken", "InvalidAppId", "Unauthorized"}:
+                raise BrokerAuthenticationError(message)
+            raise BrokerOrderError(message)
         return response
 
     async def connect(self):
-        """Verify the actual broker credential, not just public network reachability."""
         account = await self.authenticate()
-        return {"status": "connected", "account_id": account.get("loginid")}
+        return {"status": "connected", "account_id": account.get("loginid") or account.get("account_id")}
 
     async def disconnect(self):
         return {"status": "disconnected"}
 
     async def authenticate(self):
-        response = await self._request({"authorize": self._token()})
-        return response["authorize"]
+        """Use the OTP-authenticated channel for an account-scoped balance smoke test."""
+        response = await self._request({"balance": 1, "req_id": 1}, authenticated=True)
+        balance = response.get("balance") or {}
+        account_type = str((self.account.credentials or {}).get("account_type", "demo")).lower()
+        return {
+            "loginid": self._account_id(),
+            "account_id": self._account_id(),
+            "balance": balance.get("balance"),
+            "currency": balance.get("currency"),
+            "is_virtual": account_type == "demo",
+        }
 
     async def refresh_token(self):
         raise BrokerAuthenticationError("Deriv token refresh must be completed through the OAuth flow")
 
     async def get_accounts(self):
-        return (await self.authenticate()).get("account_list", [])
+        try:
+            response = await asyncio.to_thread(
+                requests.get,
+                DERIV_ACCOUNTS_URL,
+                headers={
+                    "Authorization": f"Bearer {self._token()}",
+                    "Deriv-App-ID": self._app_id(),
+                    "Accept": "application/json",
+                },
+                timeout=(3.05, self.timeout),
+            )
+            if response.status_code in {401, 403}:
+                raise BrokerAuthenticationError("Deriv rejected the stored OAuth credential")
+            response.raise_for_status()
+            data = response.json().get("data", [])
+            return data if isinstance(data, list) else [data]
+        except BrokerAuthenticationError:
+            raise
+        except (requests.RequestException, ValueError) as exc:
+            raise BrokerConnectionError("Unable to retrieve Deriv trading accounts") from exc
 
     async def get_balance(self):
         account = await self.authenticate()
-        return {"account_id": account.get("loginid"), "balance": account.get("balance"), "currency": account.get("currency"), "account_type": "demo" if account.get("is_virtual") else "real"}
+        return {"account_id": account.get("account_id"), "balance": account.get("balance"), "currency": account.get("currency"), "account_type": "demo" if account.get("is_virtual") else "real"}
 
     async def get_positions(self):
         return (await self._request({"portfolio": 1}, authenticated=True)).get("portfolio", {}).get("contracts", [])
@@ -84,8 +160,10 @@ class DerivAdapter(BrokerAdapter):
 
     async def get_trade_history(self, **filters):
         payload = {"statement": 1, "limit": min(int(filters.get("limit", 50)), 100)}
-        if filters.get("date_from") is not None: payload["date_from"] = filters["date_from"]
-        if filters.get("date_to") is not None: payload["date_to"] = filters["date_to"]
+        if filters.get("date_from") is not None:
+            payload["date_from"] = filters["date_from"]
+        if filters.get("date_to") is not None:
+            payload["date_to"] = filters["date_to"]
         return (await self._request(payload, authenticated=True)).get("statement", {}).get("transactions", [])
 
     async def get_market_data(self, symbol, **params):
@@ -164,11 +242,17 @@ class DerivAdapter(BrokerAdapter):
             raise BrokerOrderError("A Deriv contract id is required to sell a position")
         return await self._request({"sell": int(contract_id), "price": 0}, authenticated=True)
 
-    async def stream_positions(self, callback=None): return {"stream": "portfolio"}
-    async def stream_orders(self, callback=None): return {"stream": "transaction"}
-    async def stream_prices(self, symbols, callback=None): return {"stream": "ticks", "symbols": list(symbols)}
+    async def stream_positions(self, callback=None):
+        return {"stream": "portfolio"}
 
-    async def health_check(self): return {"status": "ok", "latency": await self.ping()}
+    async def stream_orders(self, callback=None):
+        return {"stream": "transaction"}
+
+    async def stream_prices(self, symbols, callback=None):
+        return {"stream": "ticks", "symbols": list(symbols)}
+
+    async def health_check(self):
+        return {"status": "ok", "latency": await self.ping()}
 
     async def ping(self):
         start = time.perf_counter()
