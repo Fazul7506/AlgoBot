@@ -4,42 +4,29 @@
 <section class="terminal-page" data-page="trading-terminal" data-api-root="/api/">
   <header class="terminal-header">
     <div><p class="eyebrow">Live execution</p><h1>Trading Terminal</h1><p>Choose a market, inspect live price structure, configure risk, and submit an order without leaving AlgoBot.</p></div>
-    <div class="terminal-status"><span class="status-pulse"></span><strong data-terminal-status>Connecting</strong><small data-terminal-account>Account: —</small></div>
+    <div class="terminal-status"><span class="status-pulse"></span><strong data-terminal-status>Checking broker</strong><small data-terminal-account>Account: checking…</small></div>
   </header>
-
   <section class="terminal-toolbar panel">
     <div class="field"><label>Symbol</label><select data-symbol><option value="R_75">R_75</option><option value="R_100">R_100</option><option value="R_50">R_50</option><option value="1HZ100V">1HZ100V</option><option value="1HZ75V">1HZ75V</option></select></div>
     <div class="field"><label>Timeframe</label><select data-timeframe><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option></select></div>
-    <div class="quote-box"><span>Bid</span><strong data-bid>—</strong></div><div class="quote-box"><span>Ask / Last</span><strong data-ask>—</strong></div>
-    <div class="quote-box"><span>Regime</span><strong data-regime>—</strong></div>
+    <div class="quote-box"><span>Bid</span><strong data-bid>Waiting…</strong></div><div class="quote-box"><span>Ask / Last</span><strong data-ask>Waiting…</strong></div><div class="quote-box"><span>Regime</span><strong data-regime>Live</strong></div>
     <button class="btn ghost" data-action="terminal-refresh">Refresh</button>
   </section>
-
   <div class="terminal-grid">
     <section class="panel terminal-chart-panel">
-      <div class="panel-head"><div><h2 data-chart-title>R_75 · M1</h2><p data-regime-copy>Market structure and live data.</p></div><div class="segmented"><button class="active">1D</button><button>1W</button><button>1M</button></div></div>
-      <div class="terminal-chart"><canvas data-candle-chart></canvas><div class="chart-overlay"><span data-chart-loading>Loading candles…</span></div></div>
-      <div class="market-insights">
-        <div><span>Trend</span><strong data-trend>—</strong></div><div><span>Volatility</span><strong data-volatility>—</strong></div><div><span>Recommended</span><strong data-recommended>—</strong></div><div><span>Structure</span><strong data-structure>—</strong></div>
-      </div>
+      <div class="panel-head"><div><h2 data-chart-title>R_75 · M1</h2><p data-regime-copy>Live market structure and broker data.</p></div><div class="segmented"><button class="active">1D</button><button>1W</button><button>1M</button></div></div>
+      <div class="terminal-chart"><canvas data-candle-chart></canvas><div class="chart-overlay"><span data-chart-loading>Connecting to live market data…</span></div></div>
+      <div class="market-insights"><div><span>Trend</span><strong data-trend>Waiting</strong></div><div><span>Volatility</span><strong data-volatility>Waiting</strong></div><div><span>Recommended</span><strong data-recommended>Waiting</strong></div><div><span>Structure</span><strong data-structure>Waiting</strong></div></div>
     </section>
-
     <aside class="panel order-ticket">
       <div class="panel-head"><div><h2>Order ticket</h2><p>Execution is routed through the configured broker account.</p></div><span class="badge live">LIVE</span></div>
       <form data-order-form>
         <div class="direction-grid"><button type="button" class="direction buy active" data-direction="BUY">BUY</button><button type="button" class="direction sell" data-direction="SELL">SELL</button></div>
-        <label>Order type<select name="order_type"><option value="market">Market</option><option value="limit">Limit</option></select></label>
-        <label>Stake / size<input name="stake" type="number" min="0.01" step="0.01" value="1" required></label>
-        <label>Limit price<input name="price" type="number" step="any" placeholder="Optional"></label>
-        <label>Strategy<select name="strategy"><option value="">Manual trade</option></select></label>
-        <div class="risk-preview"><span>Risk guard</span><strong data-risk-check>Checking…</strong></div>
-        <button class="btn primary execute-btn" type="submit">Place order</button>
-        <p class="form-note">Orders are validated by the backend before broker execution.</p>
-      </form>
-      <div class="order-result" data-order-result hidden></div>
+        <label>Order type<select name="order_type"><option value="market">Market</option><option value="limit">Limit</option></select></label><label>Stake / size<input name="stake" type="number" min="0.01" step="0.01" value="1" required></label><label>Limit price<input name="price" type="number" step="any" placeholder="Optional"></label><label>Strategy<select name="strategy"><option value="">Manual trade</option></select></label>
+        <div class="risk-preview"><span>Risk guard</span><strong data-risk-check>Checking…</strong></div><button class="btn primary execute-btn" type="submit">Place order</button><p class="form-note">Orders are validated by the backend before broker execution.</p>
+      </form><div class="order-result" data-order-result hidden></div>
     </aside>
   </div>
-
   <section class="workspace-grid three terminal-lower">
     <article class="panel"><div class="panel-head"><div><h2>Open positions</h2><p>Live exposure from the broker.</p></div><a href="/performance/">Analytics</a></div><div class="mini-table" data-positions></div></article>
     <article class="panel"><div class="panel-head"><div><h2>Strategy signals</h2><p>Latest machine-generated opportunities.</p></div><a href="/strategies/">Manage</a></div><div class="signal-feed" data-signals></div></article>
