@@ -17,12 +17,13 @@ class WorkflowViewSet(viewsets.ModelViewSet):
 
 
 class EventViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = AutomationEvent.objects.all().order_by("-created_at")
     serializer_class = AutomationEventSerializer
     permission_classes = [permissions.IsAuthenticated]
+    def get_queryset(self): return AutomationEvent.objects.filter(payload__user_id=self.request.user.id).order_by("-created_at")
 
 
 class RuleViewSet(viewsets.ModelViewSet):
+    http_method_names = ["get", "head", "options"]
     queryset = AutomationRule.objects.all().order_by("priority")
     serializer_class = AutomationRuleSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -37,18 +38,21 @@ class HistoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @decorators.api_view(["POST"])
+@decorators.permission_classes([permissions.IsAuthenticated])
 def execute(request):
     return response.Response(AutomationEngine().handle_event(request.data.get("event", "api"), request.data, "api").result)
 
 
 @decorators.api_view(["POST"])
+@decorators.permission_classes([permissions.IsAuthenticated])
 def schedule(request):
-    workflow = Workflow.objects.get(id=request.data["workflow"])
+    workflow = Workflow.objects.get(id=request.data["workflow"], user=request.user)
     task = SchedulerService().schedule(workflow, request.data.get("schedule_type", "one_time"), request.data.get("cron_expression", ""))
     return response.Response(ScheduledTaskSerializer(task).data)
 
 
 @decorators.api_view(["POST"])
+@decorators.permission_classes([permissions.IsAuthenticated])
 def approve(request):
-    approval = ApprovalRequest.objects.get(id=request.data["approval"])
+    approval = ApprovalRequest.objects.get(id=request.data["approval"], workflow__user=request.user)
     return response.Response(ApprovalRequestSerializer(ApprovalService().approve(approval, request.user)).data)

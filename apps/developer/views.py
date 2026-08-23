@@ -1,6 +1,7 @@
 import json
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -14,6 +15,7 @@ from .serializers import APIKeyCreateSerializer, APIKeySerializer, WebhookSerial
 from .services import APIKeyService, DeveloperPlatformService, SDKService, SandboxService, DocumentationService, WebhookService, AnalyticsService
 
 
+@login_required
 def dashboard(request):
     return render(request, "developer/dashboard.html", {"page_title": "Developer Platform", **DeveloperPlatformService().dashboard()})
 

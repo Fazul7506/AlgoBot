@@ -11,40 +11,26 @@ class AlgoBotExperienceTests(TestCase):
         self.assertContains(response, 'AI trading platform')
         self.assertContains(response, 'Institutional-grade')
 
-    def test_dashboard_page_renders_core_trading_sections(self):
+    def test_dashboard_page_requires_authentication(self):
         response = self.client.get(reverse('dashboard_page'))
+        self.assertEqual(response.status_code, 302)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Portfolio')
-        self.assertContains(response, 'Live signals')
-        self.assertContains(response, 'Risk posture')
-
-    def test_markets_and_strategies_pages_render(self):
+    def test_workspace_pages_require_authentication(self):
         markets_response = self.client.get(reverse('markets_page'))
         strategies_response = self.client.get(reverse('strategies_page'))
 
-        self.assertEqual(markets_response.status_code, 200)
-        self.assertContains(markets_response, 'Market overview')
-        self.assertEqual(strategies_response.status_code, 200)
-        self.assertContains(strategies_response, 'Strategy suite')
+        self.assertEqual(markets_response.status_code, 302)
+        self.assertEqual(strategies_response.status_code, 302)
 
-    def test_institutional_pages_render(self):
+    def test_institutional_pages_require_authentication(self):
         trading_response = self.client.get(reverse('trading_page'))
         backtesting_response = self.client.get(reverse('backtesting_page'))
         predictions_response = self.client.get(reverse('predictions_page'))
         performance_response = self.client.get(reverse('performance_page'))
         settings_response = self.client.get(reverse('settings_page'))
 
-        self.assertEqual(trading_response.status_code, 200)
-        self.assertContains(trading_response, 'Live execution workflow')
-        self.assertEqual(backtesting_response.status_code, 200)
-        self.assertContains(backtesting_response, 'Backtest engine')
-        self.assertEqual(predictions_response.status_code, 200)
-        self.assertContains(predictions_response, 'Prediction engine')
-        self.assertEqual(performance_response.status_code, 200)
-        self.assertContains(performance_response, 'Performance analytics')
-        self.assertEqual(settings_response.status_code, 200)
-        self.assertContains(settings_response, 'System preferences')
+        for response in (trading_response, backtesting_response, predictions_response, performance_response, settings_response):
+            self.assertEqual(response.status_code, 302)
 
 
 class AuthExperienceCleanupTests(TestCase):
@@ -78,9 +64,17 @@ class BillingRedirectPagesTests(TestCase):
         self.assertEqual(success_url, '/billing/success/')
         self.assertEqual(cancel_url, '/billing/cancel/')
 
-    def test_billing_result_pages_render(self):
+    def test_billing_result_pages_require_authentication(self):
         response = self.client.get(reverse('billing_success_page'))
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
 
         response = self.client.get(reverse('billing_cancel_page'))
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
+
+
+class URLSecurityTests(TestCase):
+    def test_protected_route_variants_never_render_for_anonymous_users(self):
+        for path in ("/dashboard", "/dashboard/", "/dashboard//", "/dashboard///", "/dashboard/?tab=overview"):
+            response = self.client.get(path)
+            self.assertIn(response.status_code, (301, 302, 400, 404), path)
+            self.assertNotEqual(response.status_code, 200, path)
