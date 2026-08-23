@@ -1,3 +1,4 @@
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import User
@@ -5,6 +6,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from core.models import BotSettings, Subscription, UserProfile
+from core.services.oauth_service import DerivOAuthService
 
 
 @override_settings(
@@ -19,6 +21,30 @@ class DerivOAuthTests(TestCase):
         session["pkce_verifier"] = "verifier"
         session["oauth_redirect_uri"] = "http://testserver/callback/"
         session.save()
+
+    def test_authorization_url_uses_only_current_oauth_parameters(self):
+        url = DerivOAuthService.create_authorization_url("state", "challenge")
+        query = parse_qs(urlparse(url).query)
+
+        self.assertEqual(urlparse(url).scheme, "https")
+        self.assertEqual(urlparse(url).netloc, "auth.deriv.com")
+        self.assertEqual(query["response_type"], ["code"])
+        self.assertEqual(query["client_id"], ["app"])
+        self.assertEqual(query["redirect_uri"], ["http://testserver/callback/"])
+        self.assertEqual(query["scope"], ["trade"])
+        self.assertEqual(query["state"], ["state"])
+        self.assertEqual(query["code_challenge"], ["challenge"])
+        self.assertEqual(query["code_challenge_method"], ["S256"])
+        self.assertNotIn("app_id", query)
+
+    @override_settings(
+        DERIV_LEGACY_APP_ID="legacy-app",
+        DERIV_ENABLE_LEGACY_APP_ROUTING=True,
+    )
+    def test_legacy_app_routing_is_explicitly_opt_in(self):
+        url = DerivOAuthService.create_authorization_url("state", "challenge")
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["app_id"], ["legacy-app"])
 
     def test_callback_rejects_state_mismatch(self):
         self._oauth_session()
