@@ -9,56 +9,32 @@ from rest_framework.response import Response
 
 
 def _check_readiness() -> tuple[dict[str, bool], int]:
-    """Run readiness checks without wrapping the helper as a DRF view."""
-    checks = {"database": False, "cache": False}
-    status = 200
-
+    checks = {"database": False, "cache": False}; response_status = 200
     try:
-        with connections["default"].cursor() as cursor:
-            cursor.execute("SELECT 1")
+        with connections["default"].cursor() as cursor: cursor.execute("SELECT 1")
         checks["database"] = True
-    except OperationalError:
-        status = 503
-
+    except OperationalError: response_status = 503
     try:
-        cache.set("healthcheck", "ok", 5)
-        checks["cache"] = cache.get("healthcheck") == "ok"
-    except Exception:
-        status = 503
-
-    return checks, status
+        cache.set("healthcheck", "ok", 5); checks["cache"] = cache.get("healthcheck") == "ok"
+    except Exception: response_status = 503
+    return checks, response_status
 
 
 @api_view(["GET", "HEAD"])
 @permission_classes([AllowAny])
-def liveness(request):
-    """Confirm that the application process is alive."""
-    return Response({"status": "ok"})
+def liveness(request): return Response({"status": "ok"})
 
 
 @api_view(["GET", "HEAD"])
 @permission_classes([AllowAny])
 def readiness(request):
-    """Confirm that required dependencies are available."""
-    checks, status = _check_readiness()
-    return Response(
-        {
-            "status": "ready" if all(checks.values()) else "degraded",
-            "checks": checks,
-        },
-        status=status,
-    )
+    checks, response_status = _check_readiness()
+    return Response({"status": "ready" if all(checks.values()) else "degraded", "checks": checks}, status=response_status)
 
 
 @api_view(["GET", "HEAD"])
 @permission_classes([AllowAny])
 def health(request):
-    """Combined health endpoint for Render and external uptime monitors."""
-    checks, status = _check_readiness()
-    return Response(
-        {
-            "status": "ready" if all(checks.values()) else "degraded",
-            "checks": checks,
-        },
-        status=status,
-    )
+    # Render's five-second probe must measure process liveness, not database/cache latency.
+    # Dependency readiness remains available at /health/ready/.
+    return Response({"status": "ok", "service": "algobot"})
