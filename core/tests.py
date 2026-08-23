@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
@@ -78,3 +79,26 @@ class URLSecurityTests(TestCase):
             response = self.client.get(path)
             self.assertIn(response.status_code, (301, 302, 400, 404), path)
             self.assertNotEqual(response.status_code, 200, path)
+
+
+class ProductionRoutingRegressionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='live-user', password='pass12345')
+
+    def test_browser_logout_redirects_to_home_without_drf_page(self):
+        self.client.force_login(self.user)
+        response = self.client.get('/logout/')
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], '/')
+
+    def test_dashboard_api_routes_are_not_shadowed_by_broker_routers(self):
+        self.client.force_login(self.user)
+
+        accounts_response = self.client.get('/api/brokers/accounts/')
+        positions_response = self.client.get('/api/positions/open/')
+
+        self.assertEqual(accounts_response.status_code, 200)
+        self.assertEqual(positions_response.status_code, 200)
+        self.assertNotContains(accounts_response, 'Django REST framework')
+        self.assertNotContains(positions_response, 'Django REST framework')

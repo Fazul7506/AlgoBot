@@ -10,6 +10,7 @@ from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.conf import settings
+from django.shortcuts import redirect
 from datetime import timedelta
 import secrets
 
@@ -101,6 +102,14 @@ def login(request):
             'status': 'error',
             'message': 'Login failed'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def browser_logout(request):
+    """End the Django browser session and return users to the public home page."""
+    username = request.user.username if request.user.is_authenticated else 'anonymous'
+    logger.info(f"Browser logout: {username}")
+    auth_logout(request)
+    return redirect('home')
 
 
 @api_view(['POST'])

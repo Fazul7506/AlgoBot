@@ -21,7 +21,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from core.views_auth import (
-    CustomTokenObtainPairView, register, login, logout,
+    CustomTokenObtainPairView, register, login, logout, browser_logout,
     change_password, UserProfileViewSet, BotSettingsViewSet,
     SubscriptionViewSet
 )
@@ -95,7 +95,7 @@ urlpatterns = [
     path('contact/', contact_page, name='contact'),
     path('about/', about_page, name='about'),
     path('status/', public_status_page, name='public_status'),
-    path('logout/', logout, name='logout'),
+    path('logout/', browser_logout, name='logout'),
     path('dashboard/', dashboard_page, name='dashboard_page'),
     path('saas/', login_required(lambda request: render(request, 'saas/control_center.html')), name='saas_control_center'),
     path('copy-trading/', login_required(lambda request: render(request, 'copy_trading/control_center.html')), name='copy_trading_control_center'),
@@ -137,11 +137,11 @@ urlpatterns = [
     path('api/tenants/', include('apps.tenants.urls')),
     path('api/copy-trading/', include('apps.copy_trading.urls')),
     path('api/observability/', include('apps.observability.urls')),
-    path('api/', include('apps.brokers.urls')),
     path('api/', include('apps.broker.urls')),
+    path('api/', include('apps.execution.urls')),
+    path('api/', include('apps.brokers.urls')),
     path('api/', include('apps.market_data.urls')),
     path('api/', include('apps.indicators.urls')),
-    path('api/', include('apps.execution.urls')),
     path('api/', include('apps.risk.urls')),
     path('api/', include('apps.strategies.urls')),
     path('api/', include('apps.smart_money.urls')),
