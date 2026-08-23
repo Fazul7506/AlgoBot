@@ -7,7 +7,6 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('broker', '0002_rename_broker_brok_user_id_3f87ad_idx_broker_brok_user_id_23914c_idx_and_more'),
         ('portfolio', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
