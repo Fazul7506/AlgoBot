@@ -11,9 +11,8 @@ from django.utils import timezone
 class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
     """Authenticated, broker-independent websocket endpoint.
 
-    The browser subscribes to a resource and receives only authoritative data
-    already persisted by backend services. No broker API is called from the
-    websocket layer.
+    The browser subscribes to resources and receives authoritative data already
+    persisted by backend services. No broker API is called from the websocket layer.
     """
 
     resource = ""
@@ -115,12 +114,13 @@ class PortfolioConsumer(AuthenticatedStateConsumer):
         portfolio = Portfolio.objects.filter(user=self.scope["user"], status="active").order_by("-updated_at").first()
         if not portfolio:
             return {"status": "empty", "balance": None, "equity": None, "margin": None, "unrealized_pnl": None}
+        metadata = portfolio.metadata or {}
         return {
             "status": "ready",
             "balance": str(portfolio.current_balance),
             "equity": str(portfolio.equity),
-            "margin": None,
-            "unrealized_pnl": str(Decimal("0")),
+            "margin": metadata.get("margin"),
+            "unrealized_pnl": metadata.get("unrealized_pnl"),
             "currency": portfolio.currency,
             "timestamp": portfolio.updated_at.timestamp(),
         }
