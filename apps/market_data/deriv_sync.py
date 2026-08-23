@@ -11,15 +11,7 @@ from django.db import transaction
 from .models import MarketSymbol, Tick
 
 
-MARKET_MAP = {
-    "forex": "Forex",
-    "cryptocurrency": "Crypto",
-    "cryptocurrency_market": "Crypto",
-    "indices": "Stock Indices",
-    "synthetic_index": "Derived Indices",
-    "synthetics": "Derived Indices",
-    "commodities": "Commodities",
-}
+MARKET_MAP = {"forex": "Forex", "cryptocurrency": "Crypto", "cryptocurrency_market": "Crypto", "indices": "Stock Indices", "synthetic_index": "Derived Indices", "synthetics": "Derived Indices", "commodities": "Commodities"}
 
 
 async def _request(payload: dict) -> dict:
@@ -36,7 +28,7 @@ async def _request(payload: dict) -> dict:
 
 
 def _market_name(item: dict) -> str:
-    raw = str(item.get("market") or item.get("market_display_name") or item.get("submarket") or "Derived Indices").lower()
+    raw = str(item.get("market") or item.get("underlying_symbol_type") or "synthetic_index").lower()
     for key, value in MARKET_MAP.items():
         if key in raw:
             return value
@@ -44,27 +36,25 @@ def _market_name(item: dict) -> str:
 
 
 def sync_active_symbols() -> int:
-    response = asyncio.run(_request({"active_symbols": "brief", "product_type": "basic"}))
+    response = asyncio.run(_request({"active_symbols": "brief"}))
     symbols = response.get("active_symbols", [])
-    created = 0
     with transaction.atomic():
         for item in symbols:
-            symbol = item.get("symbol")
+            symbol = item.get("underlying_symbol") or item.get("symbol")
             if not symbol:
                 continue
-            obj, was_created = MarketSymbol.objects.update_or_create(
+            MarketSymbol.objects.update_or_create(
                 symbol=symbol,
                 defaults={
                     "broker": "deriv",
-                    "display_name": item.get("display_name") or symbol,
+                    "display_name": item.get("underlying_symbol_name") or item.get("display_name") or symbol,
                     "market": _market_name(item),
-                    "sub_market": item.get("submarket_display_name") or item.get("submarket") or "",
-                    "pip_size": int(item.get("pip_size") or 2),
+                    "sub_market": item.get("submarket") or item.get("subgroup") or "",
+                    "pip_size": int(item.get("pip_size") or item.get("pip") or 2),
                     "is_active": True,
-                    "is_tradable": bool(item.get("exchange_is_open", True)),
+                    "is_tradable": bool(item.get("exchange_is_open", True)) and not bool(item.get("is_trading_suspended", False)),
                 },
             )
-            created += int(was_created)
     return len(symbols)
 
 
@@ -74,19 +64,8 @@ def fetch_tick(symbol: str) -> dict:
     quote = tick.get("quote")
     if quote is None:
         raise RuntimeError(f"Deriv returned no quote for {symbol}")
-    market_symbol, _ = MarketSymbol.objects.get_or_create(
-        symbol=symbol,
-        defaults={"broker": "deriv", "display_name": symbol, "market": "Derived Indices"},
-    )
-    obj, _ = Tick.objects.get_or_create(
-        symbol=market_symbol,
-        epoch=int(tick.get("epoch") or 0),
-        quote=quote,
-        defaults={
-            "bid": tick.get("bid"),
-            "ask": tick.get("ask"),
-            "spread": (float(tick.get("ask")) - float(tick.get("bid"))) if tick.get("ask") is not None and tick.get("bid") is not None else 0,
-            "volume": tick.get("volume") or 0,
-        },
-    )
+    market_symbol, _ = MarketSymbol.objects.get_or_create(symbol=symbol, defaults={"broker": "deriv", "display_name": symbol, "market": "Derived Indices"})
+    bid, ask = tick.get("bid"), tick.get("ask")
+    spread = (float(ask) - float(bid)) if bid is not None and ask is not None else 0
+    obj, _ = Tick.objects.get_or_create(symbol=market_symbol, epoch=int(tick.get("epoch") or 0), quote=quote, defaults={"bid": bid, "ask": ask, "spread": spread, "volume": tick.get("volume") or 0})
     return {"symbol": symbol, "quote": float(obj.quote), "bid": float(obj.bid) if obj.bid is not None else None, "ask": float(obj.ask) if obj.ask is not None else None, "epoch": obj.epoch}
