@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 
+from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.deriv_sync import sync_active_symbols
 from apps.market_data.models import MarketSymbol as BrokerMarketSymbol
 from trading.models.market import MarketSymbol as TradingMarketSymbol
@@ -22,17 +23,14 @@ class Command(BaseCommand):
     help = "Synchronize the market catalogue from the broker instead of maintaining a hardcoded symbol list."
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            "--deactivate-missing",
-            action="store_true",
-            help="Deactivate trading-model symbols that are no longer returned by the broker.",
-        )
+        parser.add_argument("--deactivate-missing", action="store_true", help="Deactivate trading-model symbols that are no longer returned by the broker.")
 
     def handle(self, *args, **options):
         synced = sync_active_symbols()
         broker_symbols = list(BrokerMarketSymbol.objects.filter(is_active=True))
         seen = set()
         created = updated = 0
+        supported_timeframes = [key.upper() for key in TIMEFRAMES if key != "tick" and key in {"1m", "5m", "15m", "30m", "1h", "4h", "1d"}]
 
         for source in broker_symbols:
             market_type = MARKET_TYPE_MAP.get(source.market, "SYNTHETIC")
@@ -44,7 +42,7 @@ class Command(BaseCommand):
                     "pip_size": float(source.pip_size or 0),
                     "is_active": source.is_active,
                     "is_tradeable": source.is_tradable,
-                    "supported_timeframes": ["M1", "M5", "M15", "M30", "H1", "H4", "D1"],
+                    "supported_timeframes": supported_timeframes,
                 },
             )
             seen.add(obj.pk)
@@ -55,7 +53,4 @@ class Command(BaseCommand):
         if options["deactivate_missing"] and seen:
             deactivated = TradingMarketSymbol.objects.filter(is_active=True).exclude(pk__in=seen).update(is_active=False)
 
-        self.stdout.write(self.style.SUCCESS(
-            f"Broker market sync complete: {synced} broker symbols synchronized; "
-            f"{created} trading records created, {updated} updated, {deactivated} deactivated."
-        ))
+        self.stdout.write(self.style.SUCCESS(f"Broker market sync complete: {synced} broker symbols synchronized; {created} trading records created, {updated} updated, {deactivated} deactivated."))
