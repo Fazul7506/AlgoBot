@@ -2,7 +2,7 @@ import asyncio, time
 from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
-from apps.broker.services import BrokerService
+from apps.brokers.services import BrokerRegistry
 from .exceptions import OrderValidationError, NonRetryableExecutionError
 from .models import Order, ExecutionQueue, ExecutionLog
 from .repositories import OrderRepository, ExecutionLogRepository, ExecutionQueueRepository
@@ -50,7 +50,9 @@ class TradeLifecycleService:
     def archive(self, order): order.status=c.ORDER_STATUS_ARCHIVED; order.save(update_fields=['status','updated_at']); ExecutionLogRepository().log(order,'OrderArchived','success','Trade archived'); return order
 
 class TradeSynchronizationService:
-    async def synchronize(self, broker_account): return {'positions': await BrokerService().positions(broker_account), 'orders': await BrokerService().orders(broker_account), 'balance': await BrokerService().balance(broker_account)}
+    async def synchronize(self, broker_account):
+        adapter=BrokerRegistry().adapter_for_legacy_account(broker_account)
+        return {'positions': await adapter.get_positions(), 'orders': await adapter.get_orders(), 'balance': await adapter.get_balance()}
 
 class ExecutionMonitoringService:
     def dashboard(self): return {'queue_size': ExecutionQueue.objects.exclude(status__in=[c.QUEUE_STATUS_DONE,c.QUEUE_STATUS_CANCELLED]).count(), 'pending_orders': Order.objects.filter(status__in=[c.ORDER_STATUS_DRAFT,c.ORDER_STATUS_VALIDATED,c.ORDER_STATUS_QUEUED]).count(), 'average_latency': 0}
