@@ -6,9 +6,9 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from core.views_auth import (
-    CustomTokenObtainPairView, register, login, logout,
+    CustomTokenObtainPairView, register, login,
     change_password, UserProfileViewSet, BotSettingsViewSet,
-    SubscriptionViewSet
+    SubscriptionViewSet,
 )
 from core.browser_views import browser_logout
 from trading.views.dashboard import DashboardViewSet
@@ -30,7 +30,7 @@ router.register(r'subscription', SubscriptionViewSet, basename='subscription')
 router.register(r'dashboard', DashboardViewSet, basename='dashboard')
 router.register(r'notifications', NotificationViewSet, basename='notifications')
 router.register(r'market/symbols', MarketSymbolViewSet, basename='market-symbols')
-router.register(r'market/price-history', PriceHistoryViewSet, basename='price-history')
+router.register(r'market/price-history', PriceHistoryViewSet, basename='market-price-history')
 router.register(r'market/regime', MarketRegimeViewSet, basename='market-regime')
 router.register(r'market/snapshots', MarketSnapshotViewSet, basename='market-snapshots')
 router.register(r'market/ticks', TickDataViewSet, basename='tick-data')
@@ -39,7 +39,7 @@ router.register(r'market/stats', MarketDataStatsViewSet, basename='market-stats'
 router.register(r'market/indicators', IndicatorValueViewSet, basename='indicators')
 router.register(r'market/signals', TechnicalSignalViewSet, basename='signals')
 router.register(r'market/profiles', IndicatorProfileViewSet, basename='profiles')
-router.register(r'market/alerts', IndicatorAlertViewSet, basename='alerts')
+router.register(r'market/alerts', IndicatorAlertViewSet, basename='indicator-alerts')
 router.register(r'market/dashboard', IndicatorDashboardViewSet, basename='market-dashboard')
 router.register(r'strategies', StrategyViewSet, basename='strategies')
 router.register(r'copy-trading', CopyTradingViewSet, basename='copy-trading')
@@ -71,7 +71,10 @@ urlpatterns = [
     path('brokers/', broker_marketplace_page, name='broker_marketplace'),
     path('brokers/connect/', broker_connect_page, name='broker_connect_page'),
     path('connect-deriv/', deriv_login, name='connect_deriv'),
+
+    # Canonical Deriv OAuth callback. Keep exactly one callback URL in the project.
     path('callback/', callback, name='callback'),
+
     path('backtesting/', backtesting_page, name='backtesting_page'),
     path('predictions/', predictions_page, name='predictions_page'),
     path('performance/', performance_page, name='performance_page'),
@@ -92,7 +95,6 @@ urlpatterns = [
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/register/', register, name='register'),
     path('api/auth/login/', login, name='login'),
-    path('api/auth/logout/', logout, name='logout'),
     path('api/auth/change-password/', change_password, name='change_password'),
 
     path('api/', include(router.urls)),
@@ -119,7 +121,6 @@ urlpatterns = [
     path('api/enterprise/', include('apps.enterprise.urls')),
     path('health/', include('apps.health.urls')),
 
-    path('brokers/callback/', callback, name='broker_callback'),
     path('webhooks/intasend/', intasend_webhook, name='intasend_webhook'),
     path('webhooks/pesapal/', pesapal_webhook, name='pesapal_webhook'),
     path('payments/pesapal/callback/', pesapal_callback, name='pesapal_callback'),
