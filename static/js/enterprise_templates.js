@@ -8,6 +8,7 @@
     const text = await res.text();
     let data = {};
     try { data = text ? JSON.parse(text) : {}; } catch { data = { detail: text }; }
+    if (res.status === 401 || res.status === 403) { document.body.classList.add('auth-expired'); window.location.assign('/login/?next=' + encodeURIComponent(window.location.pathname)); throw new Error('Authentication required'); }
     if (!res.ok) throw new Error(data.detail || data.message || `Request failed (${res.status})`);
     return data;
   };
@@ -450,6 +451,7 @@
   async function init() {
     theme();
     shell();
+    accountMenu();
     $$('.enterprise-page').forEach(page => {
       genericWorkspace(page);
       $('[data-action="refresh"]', page)?.addEventListener('click', () => genericWorkspace(page));
