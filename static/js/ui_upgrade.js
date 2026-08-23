@@ -4,6 +4,7 @@
   const backdrop = document.querySelector('[data-sidebar-backdrop]');
   const sidebar = document.querySelector('.app-sidebar');
   const collapse = document.querySelector('[data-sidebar-toggle]');
+  if (!sidebar) return;
 
   const closeMobile = () => {
     body.classList.remove('mobile-nav-open');
@@ -20,21 +21,18 @@
 
   const storageKey = 'algobot.sidebar.collapsed';
   const setCollapsed = collapsed => {
-    if (!sidebar) return;
+    if (window.innerWidth <= 800) return;
     sidebar.classList.toggle('is-collapsed', collapsed);
     collapse?.setAttribute('aria-expanded', String(!collapsed));
     collapse?.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
     const icon = collapse?.querySelector('.material-symbols-rounded');
-    if (icon) icon.textContent = collapsed ? 'menu' : 'menu_open';
-    localStorage.setItem(storageKey, collapsed ? '1' : '0');
+    if (icon) icon.textContent = collapsed ? 'left_panel_open' : 'left_panel_close';
+    try { localStorage.setItem(storageKey, collapsed ? '1' : '0'); } catch (_) {}
   };
-  if (window.innerWidth > 800 && localStorage.getItem(storageKey) === '1') setCollapsed(true);
-  collapse?.addEventListener('click', () => {
-    if (window.innerWidth <= 800) return;
-    setCollapsed(!sidebar?.classList.contains('is-collapsed'));
-  });
+  try { if (window.innerWidth > 800 && localStorage.getItem(storageKey) === '1') setCollapsed(true); } catch (_) {}
+  collapse?.addEventListener('click', () => setCollapsed(!sidebar.classList.contains('is-collapsed')));
 
-  document.querySelectorAll('.app-sidebar nav a').forEach(link => {
+  document.querySelectorAll('.app-sidebar nav a, .sidebar-new-trade').forEach(link => {
     const href = link.getAttribute('href');
     if (href && href !== '/' && window.location.pathname.startsWith(href)) link.classList.add('active');
     link.addEventListener('click', () => { if (window.innerWidth <= 800) closeMobile(); });
@@ -49,23 +47,7 @@
     }
   });
 
-  const accountButton = document.querySelector('[data-account-menu]');
-  const accountDropdown = document.querySelector('[data-account-dropdown]');
-  accountButton?.addEventListener('click', () => {
-    const open = accountDropdown?.hidden === false;
-    if (accountDropdown) accountDropdown.hidden = open;
-    accountButton.setAttribute('aria-expanded', String(!open));
-  });
-  document.addEventListener('click', event => {
-    if (accountDropdown && accountButton && !accountButton.contains(event.target) && !accountDropdown.contains(event.target)) {
-      accountDropdown.hidden = true;
-      accountButton.setAttribute('aria-expanded', 'false');
-    }
-  });
   window.addEventListener('resize', () => {
-    if (window.innerWidth > 800) {
-      closeMobile();
-      if (localStorage.getItem(storageKey) === '1') setCollapsed(true);
-    }
+    if (window.innerWidth > 800) closeMobile();
   });
 })();
