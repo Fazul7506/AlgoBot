@@ -1,15 +1,12 @@
-"""Strict broker OAuth callback used by the browser connection flow.
-
-The callback never invents a broker account. A successful OAuth exchange must be
-followed by a real Deriv authorization response so the local session is tied to
-the broker identity that actually authenticated.
-"""
+"""Strict broker OAuth callback used by the browser connection flow."""
 
 import asyncio
 import json
 import logging
 
+import requests
 import websockets
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login as auth_login
 from django.contrib.auth.models import User
@@ -60,8 +57,7 @@ def callback(request):
     code_verifier = request.session.get("pkce_verifier")
     redirect_uri = request.session.get("oauth_redirect_uri")
     valid, reason = DerivOAuthService.validate_pkce(
-        code_verifier, redirect_uri, request.build_absolute_uri("/callback/").split("?", 1)[0]
-        if False else __import__("django.conf").conf.settings.DERIV_REDIRECT_URI
+        code_verifier, redirect_uri, settings.DERIV_REDIRECT_URI
     )
     if not valid or not code:
         logger.warning("deriv_oauth_pkce_or_code_validation_failed", extra={"error": reason})
@@ -70,7 +66,7 @@ def callback(request):
         return redirect("broker_connect_page")
 
     success, token_data, token_error = DerivOAuthService.exchange_code_for_token(
-        code, code_verifier, http_client=__import__("requests")
+        code, code_verifier, http_client=requests
     )
     if not success or not token_data:
         logger.error("deriv_oauth_token_exchange_failed", extra={"error": token_error})
@@ -101,7 +97,6 @@ def callback(request):
         DerivOAuthService.clear_oauth_session(request)
         return redirect("broker_connect_page")
 
-    # Never attach a broker identity to a different local user.
     existing_account = DerivAccount.objects.filter(account_id=account_id).select_related("user").first()
     if request.user.is_authenticated:
         user = request.user
@@ -113,9 +108,9 @@ def callback(request):
     elif existing_account:
         user = existing_account.user
     else:
-        # Deriv OAuth is the product's identity provider. This is a broker-backed
-        # shadow identity, not a generated/fake account: it is created only after
-        # Deriv returns a verified account id and the token has been authorized.
+        # This local identity is created only after Deriv has authenticated the
+        # broker account and returned its verified account id. No random/fake
+        # fallback user is ever created.
         username = f"deriv_{account_id}"
         user = User.objects.create(username=username, first_name="Deriv")
         user.set_unusable_password()
