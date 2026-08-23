@@ -4,5 +4,6 @@ from .indicators import *
 from .logging import *
 from .notifications import *
 from .copy import *
+from .compat import DerivAccount
 
 __all__ = [name for name in dir() if not name.startswith('_')]
