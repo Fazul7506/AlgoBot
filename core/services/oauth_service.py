@@ -20,7 +20,9 @@ DERIV_AUTHORIZE_URL = "https://auth.deriv.com/oauth2/auth"
 DERIV_TOKEN_URL = "https://auth.deriv.com/oauth2/token"
 DERIV_REFRESH_URL = DERIV_TOKEN_URL
 OAUTH_TIMEOUT = (3.05, 15)
-DEFAULT_SCOPE = "trade account_manage"
+# AlgoBot's current browser connection only needs trading and account lookup.
+# Account creation/management is not performed by this OAuth callback.
+DEFAULT_SCOPE = "trade"
 
 
 class DerivOAuthService:
@@ -62,7 +64,13 @@ class DerivOAuthService:
         code_challenge: str,
         scope: Optional[str] = None,
     ) -> str:
-        """Build only the documented Deriv OAuth parameters."""
+        """Build the documented Deriv OAuth parameters.
+
+        Legacy V1 app routing is deliberately opt-in. Accidentally sending a
+        legacy app_id alongside a new OAuth client can route the consent flow
+        through the wrong Deriv application surface, so production defaults to
+        the new OAuth client only.
+        """
         configured_scope = scope or getattr(settings, "DERIV_OAUTH_SCOPE", DEFAULT_SCOPE)
         query_params = {
             "response_type": "code",
@@ -73,9 +81,12 @@ class DerivOAuthService:
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
+
         legacy_app_id = getattr(settings, "DERIV_LEGACY_APP_ID", "")
-        if legacy_app_id:
+        legacy_enabled = getattr(settings, "DERIV_ENABLE_LEGACY_APP_ROUTING", False)
+        if legacy_enabled and legacy_app_id:
             query_params["app_id"] = legacy_app_id
+
         return f"{DERIV_AUTHORIZE_URL}?{urlencode(query_params)}"
 
     @staticmethod
