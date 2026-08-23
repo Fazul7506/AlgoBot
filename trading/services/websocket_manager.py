@@ -24,25 +24,28 @@ class WebSocketManager:
         self.reconnect_delay = 3
         self.max_retries = 5
         self.retry_count = 0
+        self.app_id = None
+        self._listener_task = None
+        self._closing = False
     
     async def connect(self, app_id: str):
         """Connect to websocket"""
+        if self.is_connected and self.ws and not self.ws.closed:
+            return
+        self.app_id = app_id
+        self._closing = False
         try:
-            self.ws = await websockets.connect(self.uri)
-            
-            # Authorize with app_id
-            await self.ws.send(json.dumps({"authorize": app_id}))
-            response = json.loads(await self.ws.recv())
-            
-            if "error" in response:
-                raise Exception(f"Authorization failed: {response['error']}")
+            separator = '&' if '?' in self.uri else '?'
+            self.ws = await websockets.connect(f"{self.uri}{separator}app_id={app_id}", open_timeout=10)
             
             self.is_connected = True
             self.retry_count = 0
             logger.info(f"WebSocket connected: {self.session_id}")
             
             # Start listening for messages
-            asyncio.create_task(self._listen())
+            self._listener_task = asyncio.create_task(self._listen())
+            for subscription in list(self.subscriptions.values()):
+                await self._subscribe(subscription)
             
         except Exception as e:
             logger.error(f"WebSocket connection failed: {e}")
@@ -57,57 +60,34 @@ class WebSocketManager:
         self.retry_count += 1
         await asyncio.sleep(self.reconnect_delay)
         await self.connect(app_id)
+
+    async def _subscribe(self, subscription):
+        if subscription['type'] == 'ticks':
+            await self.ws.send(json.dumps({'ticks': subscription['symbol'], 'subscribe': 1, 'req_id': subscription['id']}))
     
     async def subscribe_ticks(self, symbol: str):
         """Subscribe to tick stream"""
         try:
             subscription_id = f"tick_{symbol}"
-            
-            await self.ws.send(json.dumps({
-                "ticks": symbol,
-                "subscribe": 1,
-                "req_id": subscription_id
-            }))
-            
+            if subscription_id in self.subscriptions:
+                return self.subscriptions[subscription_id]
+            if not self.is_connected or not self.ws:
+                raise ConnectionError("WebSocket is not connected")
             self.subscriptions[subscription_id] = {
+                'id': subscription_id,
                 'type': 'ticks',
                 'symbol': symbol,
                 'subscribed_at': datetime.now().isoformat()
             }
+            await self._subscribe(self.subscriptions[subscription_id])
             
             logger.info(f"Subscribed to ticks: {symbol}")
         except Exception as e:
             logger.error(f"Tick subscription error: {e}")
     
     async def subscribe_candles(self, symbol: str, granularity: int = 60):
-        """Subscribe to candle stream"""
-        try:
-            subscription_id = f"candle_{symbol}_{granularity}"
-            
-            await self.ws.send(json.dumps({
-                "proposal": 1,
-                "subscribe": 1,
-                "symbol": symbol,
-                "parameters": {
-                    "contract_type": "CALL",
-                    "currency": "USD",
-                    "amount": 1,
-                    "duration_unit": "m",
-                    "duration": 1
-                },
-                "req_id": subscription_id
-            }))
-            
-            self.subscriptions[subscription_id] = {
-                'type': 'candles',
-                'symbol': symbol,
-                'granularity': granularity,
-                'subscribed_at': datetime.now().isoformat()
-            }
-            
-            logger.info(f"Subscribed to candles: {symbol} {granularity}s")
-        except Exception as e:
-            logger.error(f"Candle subscription error: {e}")
+        """Candles are requested via REST/history; live ticks build candles."""
+        return await self.subscribe_ticks(symbol)
     
     async def unsubscribe(self, symbol: str):
         """Unsubscribe from symbol"""
@@ -115,9 +95,8 @@ class WebSocketManager:
             subscription_ids = [k for k, v in self.subscriptions.items() if v['symbol'] == symbol]
             
             for sub_id in subscription_ids:
-                await self.ws.send(json.dumps({
-                    "forget": sub_id
-                }))
+                if self.is_connected and self.ws:
+                    await self.ws.send(json.dumps({"forget": sub_id}))
                 del self.subscriptions[sub_id]
             
             logger.info(f"Unsubscribed from: {symbol}")
@@ -144,6 +123,8 @@ class WebSocketManager:
         except websockets.exceptions.ConnectionClosed:
             logger.warning("WebSocket connection closed")
             self.is_connected = False
+            if not self._closing and self.app_id:
+                await self._reconnect(self.app_id)
         except Exception as e:
             logger.error(f"Listen error: {e}")
             self.is_connected = False
@@ -151,9 +132,13 @@ class WebSocketManager:
     async def disconnect(self):
         """Disconnect from websocket"""
         try:
+            self._closing = True
+            if self._listener_task and self._listener_task is not asyncio.current_task():
+                self._listener_task.cancel()
             if self.ws:
                 await self.ws.close()
             self.is_connected = False
+            self.ws = None
             logger.info("WebSocket disconnected")
         except Exception as e:
             logger.error(f"Disconnect error: {e}")

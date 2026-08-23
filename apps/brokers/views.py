@@ -1,14 +1,28 @@
 import asyncio
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, permissions, decorators, response, status
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
 from .serializers import *
-from .services import BrokerConnectionService, ExecutionEngine, BrokerHealthService
+from .services import BrokerConnectionService, ExecutionEngine, BrokerHealthService, SynchronizationService
+from .exceptions import BrokerAuthenticationError, BrokerConnectionError
 class BrokerViewSet(viewsets.ReadOnlyModelViewSet): queryset=Broker.objects.all(); serializer_class=BrokerSerializer; permission_classes=[permissions.IsAuthenticated]
 class BrokerAccountViewSet(viewsets.ModelViewSet):
     serializer_class=BrokerAccountSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return BrokerAccount.objects.filter(user=self.request.user)
     def perform_create(self, serializer): serializer.save(user=self.request.user)
-class BrokerConnectionViewSet(viewsets.ReadOnlyModelViewSet): queryset=BrokerConnection.objects.select_related('broker').all(); serializer_class=BrokerConnectionSerializer; permission_classes=[permissions.IsAuthenticated]
+    @decorators.action(detail=True, methods=['post'], url_path='sync')
+    def sync(self, request, pk=None):
+        account = self.get_object()
+        try:
+            account, _ = asyncio.run(SynchronizationService().sync_account(account))
+        except BrokerAuthenticationError as exc:
+            return response.Response({'detail': str(exc), 'broker_status': 'credentials_expired'}, status=status.HTTP_401_UNAUTHORIZED)
+        except BrokerConnectionError as exc:
+            return response.Response({'detail': str(exc), 'broker_status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return response.Response({'account': BrokerAccountSerializer(account).data, 'source': 'deriv_authorize'})
+class BrokerConnectionViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class=BrokerConnectionSerializer; permission_classes=[permissions.IsAuthenticated]
+    def get_queryset(self): return BrokerConnection.objects.select_related('broker').filter(broker__broker_accounts__user=self.request.user).distinct()
 class BrokerOrderViewSet(viewsets.ModelViewSet):
     serializer_class=OrderSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return Order.objects.filter(user=self.request.user)
@@ -21,18 +35,32 @@ class ExecutionReportViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self): return ExecutionReport.objects.filter(order__user=self.request.user)
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=PositionSerializer; permission_classes=[permissions.IsAuthenticated]
-    def get_queryset(self): return Position.objects.filter(account__user=self.request.user)
-class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet): queryset=TradeReconciliation.objects.all(); serializer_class=TradeReconciliationSerializer; permission_classes=[permissions.IsAuthenticated]
+    def get_queryset(self): return Position.objects.select_related('account', 'broker').filter(account__user=self.request.user)
+class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class=TradeReconciliationSerializer; permission_classes=[permissions.IsAuthenticated]
+    def get_queryset(self): return TradeReconciliation.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
 class BrokerHealthViewSet(viewsets.ViewSet):
     permission_classes=[permissions.IsAuthenticated]
-    def list(self, request): return response.Response(BrokerHealthService().summary())
+    def list(self, request):
+        return response.Response(BrokerHealthService().summary())
+
 @decorators.api_view(['POST'])
+@decorators.permission_classes([permissions.IsAuthenticated])
 def connect_broker(request):
-    broker=Broker.objects.get(pk=request.data.get('broker'))
-    conn=asyncio.run(BrokerConnectionService().connect(broker))
+    account = get_object_or_404(BrokerAccount, pk=request.data.get('account_id'), user=request.user)
+    try:
+        conn=asyncio.run(BrokerConnectionService().connect(account.broker, account))
+    except BrokerAuthenticationError as exc:
+        return response.Response({'detail': str(exc), 'broker_status': 'credentials_expired'}, status=status.HTTP_401_UNAUTHORIZED)
+    except BrokerConnectionError as exc:
+        return response.Response({'detail': str(exc), 'broker_status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return response.Response(BrokerConnectionSerializer(conn).data)
 @decorators.api_view(['POST'])
+@decorators.permission_classes([permissions.IsAuthenticated])
 def disconnect_broker(request):
-    broker=Broker.objects.get(pk=request.data.get('broker'))
-    conn=asyncio.run(BrokerConnectionService().disconnect(broker))
+    account = get_object_or_404(BrokerAccount, pk=request.data.get('account_id'), user=request.user)
+    try:
+        conn=asyncio.run(BrokerConnectionService().disconnect(account.broker, account))
+    except BrokerConnectionError as exc:
+        return response.Response({'detail': str(exc), 'broker_status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return response.Response(BrokerConnectionSerializer(conn).data)

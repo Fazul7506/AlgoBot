@@ -52,11 +52,11 @@ class BrokerManager:
 
 
 class BrokerConnectionService:
-    async def connect(self, broker):
-        adapter = BrokerRegistry().adapter(broker); await adapter.connect(); latency = await adapter.ping()
+    async def connect(self, broker, account=None):
+        adapter = BrokerRegistry().adapter(broker, account); await adapter.connect(); latency = await adapter.ping()
         return BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
-    async def disconnect(self, broker):
-        await BrokerRegistry().adapter(broker).disconnect(); conn,_=BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'disconnected'}); return conn
+    async def disconnect(self, broker, account=None):
+        await BrokerRegistry().adapter(broker, account).disconnect(); conn,_=BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'disconnected'}); return conn
     async def heartbeat(self, broker):
         adapter=BrokerRegistry().adapter(broker); data=await adapter.health_check(); latency=await adapter.ping(); conn,_=BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data}); return conn
 class AuthenticationService:
@@ -95,9 +95,15 @@ class ExecutionEngine:
 class SynchronizationService:
     async def sync_account(self, account):
         data=await BrokerRegistry().adapter(account.broker, account).get_balance()
-        for f in ['balance','equity','margin','free_margin']:
-            if f in data: setattr(account, f, data[f])
-        account.last_synced_at=timezone.now(); account.save(); return account
+        # Only persist values the broker actually supplied.  In particular,
+        # equity and margin are not fabricated when Deriv omits them.
+        fields=[]
+        for f in ['balance','equity','margin','free_margin','currency']:
+            if data.get(f) is not None:
+                setattr(account, f, data[f]); fields.append(f)
+        account.last_synced_at=timezone.now(); fields.append('last_synced_at')
+        account.save(update_fields=fields)
+        return account, data
 class ReconciliationService:
     def reconcile_order(self, order, broker_trade=None, repair=True):
         diff={} if broker_trade and broker_trade.get('broker_order_id')==order.broker_order_id else {'order':'missing_or_mismatched'}
