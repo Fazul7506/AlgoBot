@@ -1,58 +1,72 @@
 (() => {
   const root = document.querySelector("[data-module-workspace]");
   if (!root) return;
+
   const csrf = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || "";
   const cards = [...root.querySelectorAll("[data-resource-card]")];
+  const endpoints = JSON.parse(document.getElementById("module-endpoints")?.textContent || "[]");
 
-  const pretty = value => JSON.stringify(value, null, 2);
+  const notify = (message, type = "info") => {
+    let stack = document.querySelector(".toast-stack");
+    if (!stack) {
+      stack = document.createElement("div");
+      stack.className = "toast-stack";
+      stack.setAttribute("aria-live", "polite");
+      document.body.appendChild(stack);
+    }
+    const node = document.createElement("div");
+    node.className = `toast ${type}`;
+    node.setAttribute("role", "status");
+    node.textContent = message;
+    stack.appendChild(node);
+    window.setTimeout(() => node.remove(), 4500);
+  };
+
+  const csrfHeaders = () => ({ Accept: "application/json", "X-CSRFToken": csrf });
 
   async function request(url, options = {}) {
     const response = await fetch(url, {
       credentials: "same-origin",
-      headers: {"Accept": "application/json", ...(options.body ? {"Content-Type":"application/json"} : {})},
       ...options,
+      headers: { ...csrfHeaders(), ...(options.headers || {}) },
     });
     const text = await response.text();
-    let data;
-    try { data = JSON.parse(text); } catch { data = text; }
-    if (!response.ok) throw new Error(typeof data === "string" ? data : (data.detail || `HTTP ${response.status}`));
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
+    if (response.status === 401 || response.status === 403) {
+      window.location.assign(`/login/?next=${encodeURIComponent(window.location.pathname)}`);
+      throw new Error("Authentication required");
+    }
+    if (!response.ok) throw new Error(data.detail || data.message || `Service unavailable (${response.status})`);
     return data;
   }
 
-  async function loadCard(card) {
-    const url = card.querySelector("[data-resource-status]")?.closest(".module-card")
-      ? card.querySelector("[data-resource-status]").closest(".module-card").dataset.url
-      : null;
-    return url;
+  const recordCount = value => {
+    if (Array.isArray(value)) return value.length;
+    if (Array.isArray(value?.results)) return value.results.length;
+    if (Array.isArray(value?.data)) return value.data.length;
+    if (value && typeof value === "object") return Object.keys(value).length;
+    return 0;
+  };
+
+  async function loadCard(card, endpoint) {
+    const status = card.querySelector("[data-resource-status]");
+    const output = card.querySelector("[data-resource-output]");
+    if (!status || !output || !endpoint) return;
+    status.textContent = "Checking…";
+    output.textContent = "Connecting to the service…";
+    try {
+      const data = await request(endpoint[0]);
+      const count = recordCount(data);
+      status.textContent = "Healthy";
+      output.textContent = count ? `${count} live record${count === 1 ? "" : "s"} available.` : "Service responded successfully. No records are currently available.";
+    } catch (error) {
+      status.textContent = "Unavailable";
+      output.textContent = "This service is temporarily unavailable. The rest of the workspace remains usable.";
+    }
   }
 
-  // URLs are injected from the server as data attributes without trusting client input.
-  const endpointData = [...cards].map((card, index) => {
-    const endpoints = root.querySelectorAll("[data-resource-card]");
-    const url = JSON.parse(document.getElementById("module-endpoints")?.textContent || "[]")[index]?.[0];
-    return {card, url};
-  });
-
-  // Fallback: derive endpoint order from server-rendered script JSON.
-  endpointData.forEach(({card,url}) => {
-    if (!url) {
-      const status = card.querySelector("[data-resource-status]");
-      if (status) status.textContent = "Endpoint unavailable";
-      return;
-    }
-    fetch(url, {credentials:"same-origin", headers:{Accept:"application/json"}})
-      .then(async r => {
-        const text = await r.text();
-        let data; try { data = JSON.parse(text); } catch { data = text; }
-        if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
-        card.querySelector("[data-resource-status]").textContent = "Connected";
-        card.querySelector("[data-resource-output]").textContent = pretty(data);
-      })
-      .catch(err => {
-        card.querySelector("[data-resource-status]").textContent = "Unavailable";
-        card.querySelector("[data-resource-output]").textContent = err.message;
-      });
-  });
+  endpoints.forEach((endpoint, index) => loadCard(cards[index], endpoint));
 
   const filter = root.querySelector("[data-module-filter]");
   filter?.addEventListener("input", () => {
@@ -65,24 +79,18 @@
       const url = button.dataset.moduleAction;
       const method = (button.dataset.actionMethod || "post").toUpperCase();
       let body = {};
-      if (root.dataset.module === "ai" && url.endsWith("/predict/")) {
-        body = {symbol:"R_100", timeframe:"M1", context:{}};
-      } else if (root.dataset.module === "notifications") {
-        body = {channel:"in_app", subject:"AlgoBot test alert", message:"Test notification from the operations center."};
-      } else if (root.dataset.module === "automation") {
-        body = {event:"manual", source:"operations-center"};
-      }
+      if (root.dataset.module === "ai" && url.endsWith("/predict/")) body = { symbol: "R_100", timeframe: "M1", context: {} };
+      else if (root.dataset.module === "notifications") body = { channel: "in_app", subject: "AlgoBot test alert", message: "Test notification from the operations center." };
+      else if (root.dataset.module === "automation") body = { event: "manual", source: "operations-center" };
       button.disabled = true;
       try {
-        const result = await request(url, {
-          method,
-          body: method === "GET" ? undefined : JSON.stringify(body),
-          headers: {"X-CSRFToken": csrf},
-        });
-        alert(`Action completed:\n${pretty(result).slice(0, 1500)}`);
+        await request(url, { method, body: method === "GET" ? undefined : JSON.stringify(body), headers: method === "GET" ? {} : { "Content-Type": "application/json" } });
+        notify("Action completed successfully.", "success");
       } catch (error) {
-        alert(`Action failed: ${error.message}`);
-      } finally { button.disabled = false; }
+        notify(error.message || "Action could not be completed.", "error");
+      } finally {
+        button.disabled = false;
+      }
     });
   });
 })();
