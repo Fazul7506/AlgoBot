@@ -3,7 +3,11 @@ from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionRep
 class BrokerSerializer(serializers.ModelSerializer):
     class Meta: model=Broker; fields='__all__'
 class BrokerAccountSerializer(serializers.ModelSerializer):
-    class Meta: model=BrokerAccount; fields='__all__'; read_only_fields=['user']
+    class Meta:
+        model=BrokerAccount
+        fields='__all__'
+        read_only_fields=['user', 'balance', 'equity', 'margin', 'free_margin', 'last_synced_at']
+        extra_kwargs={'credentials': {'write_only': True}}
 class BrokerConnectionSerializer(serializers.ModelSerializer):
     class Meta: model=BrokerConnection; fields='__all__'
 class OrderSerializer(serializers.ModelSerializer):
