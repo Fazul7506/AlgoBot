@@ -26,8 +26,8 @@ class Portfolio(models.Model):
 
 class PortfolioAccount(models.Model):
     portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name="accounts")
-    broker = models.ForeignKey("broker.Broker", on_delete=models.PROTECT, related_name="portfolio_accounts")
-    broker_account = models.ForeignKey("broker.BrokerAccount", on_delete=models.PROTECT, related_name="portfolio_links")
+    broker = models.ForeignKey("brokers.Broker", on_delete=models.PROTECT, related_name="portfolio_accounts")
+    broker_account = models.ForeignKey("brokers.BrokerAccount", on_delete=models.PROTECT, related_name="portfolio_links")
     balance = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     equity = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     currency = models.CharField(max_length=12, default="USD")
