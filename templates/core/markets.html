@@ -12,29 +12,15 @@
 (()=>{
  const $=(s,r=document)=>r.querySelector(s);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
- const json=async (url,options={})=>{const r=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json',...(options.headers||{})},...options});const t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch{d={detail:t}}if(!r.ok)throw Error(d.detail||d.message||`Request failed (${r.status})`);return d};
+ const notify=(message,type='info')=>{let stack=$('.toast-stack');if(!stack){stack=document.createElement('div');stack.className='toast-stack';stack.setAttribute('aria-live','polite');document.body.appendChild(stack)}const node=document.createElement('div');node.className=`toast ${type}`;node.textContent=message;stack.appendChild(node);setTimeout(()=>node.remove(),4500)};
+ const json=async (url,options={})=>{const r=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json',...(options.headers||{})},...options});const t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch{d={detail:t}}if(r.status===401||r.status===403){location.assign('/login/?next='+encodeURIComponent(location.pathname));throw Error('Authentication required')}if(!r.ok)throw Error(d.detail||d.message||`Request failed (${r.status})`);return d};
  let rows=[];
  const csrf=()=>document.cookie.split('; ').find(x=>x.startsWith('csrftoken='))?.split('=')[1]||'';
- async function sync(){try{await json('/api/markets/symbols/sync/',{method:'POST',headers:{'X-CSRFToken':csrf()}})}catch(e){console.warn('Market sync:',e.message)}}
- async function load(){
-   try{
-     await sync();
-     const symbols=await json('/api/markets/symbols/');
-     rows=Array.isArray(symbols)?symbols:(symbols.results||[]);
-     render();
-   }catch(e){$('[data-market-list]').innerHTML=`<div class="empty-state">${esc(e.message)}. Connect your broker and refresh.</div>`}
- }
+ async function sync(){try{await json('/api/markets/symbols/sync/',{method:'POST',headers:{'X-CSRFToken':csrf()}})}catch(e){notify(e.message,'warning')}}
+ async function load(){try{await sync();const symbols=await json('/api/markets/symbols/');rows=Array.isArray(symbols)?symbols:(symbols.results||[]);render()}catch(e){notify(e.message||'Broker market data is unavailable.','error');$('[data-market-list]').innerHTML='<div class="empty-state">Broker market data is unavailable. Connect your broker and try again.</div>'}}
  async function quote(symbol){try{return await json('/api/markets/ticks/broker/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({symbol})})}catch{return null}}
- async function render(){
-   const q=$('[data-market-search]').value.toLowerCase();
-   const list=rows.filter(x=>JSON.stringify(x).toLowerCase().includes(q)).slice(0,60);
-   $('[data-market-list]').innerHTML=list.map(x=>`<article class="market-card" data-symbol="${esc(x.symbol)}"><div><span class="eyebrow">${esc(x.market)}</span><h2>${esc(x.symbol)}</h2><p>${esc(x.display_name)}</p></div><div class="market-quote"><strong data-quote>—</strong><span data-bidask>Broker quote pending</span></div><div class="market-card-actions"><a class="btn primary small" href="/trading/?symbol=${encodeURIComponent(x.symbol)}">Trade</a><a class="btn ghost small" href="/api/markets/symbol/${encodeURIComponent(x.symbol)}/">Details</a></div></article>`).join('')||'<div class="empty-state">No markets match your search.</div>';
-   for(const card of document.querySelectorAll('[data-symbol]')){const d=await quote(card.dataset.symbol);if(!d)continue;card.querySelector('[data-quote]').textContent=d.quote??'—';card.querySelector('[data-bidask]').textContent=`Bid ${d.bid??'—'} · Ask ${d.ask??'—'}`}
- }
- $('[data-market-search]')?.addEventListener('input',render);
- $('[data-market-refresh]')?.addEventListener('click',load);
- load();
- setInterval(()=>{if(document.visibilityState==='visible')render()},5000);
+ async function render(){const q=$('[data-market-search]').value.toLowerCase();const list=rows.filter(x=>JSON.stringify(x).toLowerCase().includes(q)).slice(0,60);$('[data-market-list]').innerHTML=list.map(x=>`<article class="market-card" data-symbol="${esc(x.symbol)}"><div><span class="eyebrow">${esc(x.market)}</span><h2>${esc(x.symbol)}</h2><p>${esc(x.display_name)}</p></div><div class="market-quote"><strong data-quote>—</strong><span data-bidask>Broker quote pending</span></div><div class="market-card-actions"><a class="btn primary small" href="/trading/?symbol=${encodeURIComponent(x.symbol)}">Trade</a></div></article>`).join('')||'<div class="empty-state">No markets match your search.</div>';for(const card of document.querySelectorAll('[data-symbol]')){const d=await quote(card.dataset.symbol);if(!d)continue;card.querySelector('[data-quote]').textContent=d.quote??'—';card.querySelector('[data-bidask]').textContent=`Bid ${d.bid??'—'} · Ask ${d.ask??'—'}`}}
+ $('[data-market-search]')?.addEventListener('input',render);$('[data-market-refresh]')?.addEventListener('click',load);load();setInterval(()=>{if(document.visibilityState==='visible')render()},5000);
 })();
 </script>
 {% endblock %}
