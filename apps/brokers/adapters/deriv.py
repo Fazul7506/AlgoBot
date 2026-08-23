@@ -22,15 +22,16 @@ class DerivAdapter(BrokerAdapter):
         self.endpoint = getattr(self.broker, "websocket_endpoint", "") or os.getenv("DERIV_WS_URL", "wss://ws.derivws.com/websockets/v3")
 
     def _token(self):
-        if self.account and hasattr(self.account, "token"):
-            token = self.account.token
-            if token.status != "active" or token.is_expired:
+        """Read the encrypted token from the verified DerivAccount linked to the broker account."""
+        if self.account is not None:
+            try:
+                deriv_account = self.account.user.deriv_account
+            except Exception as exc:
+                raise BrokerAuthenticationError("A verified Deriv account is required") from exc
+            if deriv_account.token_status != "active" or deriv_account.is_token_expired:
                 raise BrokerAuthenticationError("Deriv credentials are expired or revoked")
-            return token.get_access_token()
-        token = self.credentials.get("access_token")
-        if not token:
-            raise BrokerAuthenticationError("A connected Deriv account is required")
-        return token
+            return deriv_account.get_access_token()
+        raise BrokerAuthenticationError("A connected Deriv account is required")
 
     async def _request(self, payload, authenticated=False):
         try:
