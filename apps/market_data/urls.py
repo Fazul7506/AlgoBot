@@ -10,6 +10,8 @@ urlpatterns = [
     path("ticks/latest/", api.latest_tick, name="latest_tick"),
     path("ticks/history/", api.tick_history, name="tick_history_api"),
     path("ticks/broker/", api.broker_tick, name="broker_tick"),
+    # Compatibility route for the terminal's canonical /api/market/* namespace.
+    path("market/ticks/broker/", api.broker_tick, name="market_broker_tick"),
     path("candles/", api.candles, name="candles_api"),
     path("candles/history/", api.candle_history, name="candle_history_api"),
     path("market/statistics/", api.statistics, name="statistics_api"),
