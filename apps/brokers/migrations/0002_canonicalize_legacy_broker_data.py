@@ -8,6 +8,8 @@ LEGACY_LOG_TABLE = "broker_brokerconnectionlog"
 LEGACY_PERMISSION_TABLE = "broker_brokerpermission"
 LEGACY_DERIV_TABLE = "trading_derivaccount"
 
+INVALID_ACCOUNT_IDS = {"", "unknown", "none", "null", "undefined", "n/a", "na"}
+
 
 def _rows(cursor, table):
     cursor.execute(f'SELECT * FROM "{table}"')
@@ -18,6 +20,11 @@ def _rows(cursor, table):
 def _canonical_status(value):
     value = str(value or "active").lower()
     return value if value in {"active", "disabled", "maintenance", "degraded", "offline", "coming_soon"} else "active"
+
+
+def _valid_account_id(value):
+    account_id = str(value or "").strip()
+    return account_id if account_id.lower() not in INVALID_ACCOUNT_IDS else ""
 
 
 def forwards(apps, schema_editor):
@@ -49,12 +56,14 @@ def forwards(apps, schema_editor):
             token_rows = {row.get("broker_account_id"): row for row in _rows(cursor, LEGACY_TOKEN_TABLE)} if LEGACY_TOKEN_TABLE in tables else {}
             for row in _rows(cursor, LEGACY_ACCOUNT_TABLE):
                 broker = broker_map.get(row.get("broker_id"))
-                account_id = str(row.get("broker_account_id") or "")
+                account_id = _valid_account_id(row.get("broker_account_id"))
                 if broker is None or not account_id:
                     continue
                 account = BrokerAccount.objects.filter(broker=broker, account_id=account_id).first()
+                # Preserve the already-canonical account when ownership is
+                # ambiguous. Never overwrite another user's credentials.
                 if account is not None and account.user_id != row.get("user_id"):
-                    raise RuntimeError(f"Canonical broker account conflict for {broker.broker_type}:{account_id}; migration stopped without deleting legacy data.")
+                    continue
                 if account is None:
                     account = BrokerAccount(broker=broker, account_id=account_id, user_id=row.get("user_id"))
                 account.currency = row.get("currency") or "USD"
@@ -77,15 +86,17 @@ def forwards(apps, schema_editor):
     if LEGACY_DERIV_TABLE in tables:
         with db.cursor() as cursor:
             for row in _rows(cursor, LEGACY_DERIV_TABLE):
-                account_id = str(row.get("account_id") or "")
+                account_id = _valid_account_id(row.get("account_id"))
                 if not account_id:
                     continue
                 broker = Broker.objects.filter(broker_type="deriv").first()
                 if broker is None:
                     broker = Broker.objects.create(name="Deriv", broker_type="deriv", status="active", supports_live=True)
                 account = BrokerAccount.objects.filter(broker=broker, account_id=account_id).first()
+                # A conflicting legacy owner is retained untouched. The
+                # canonical row remains authoritative and deployment-safe.
                 if account is not None and account.user_id != row.get("user_id"):
-                    raise RuntimeError(f"Canonical Deriv account conflict for {account_id}; migration stopped without deleting legacy data.")
+                    continue
                 if account is None:
                     account = BrokerAccount(broker=broker, account_id=account_id, user_id=row.get("user_id"))
                 account.currency = row.get("currency") or account.currency or "USD"
@@ -113,7 +124,10 @@ def forwards(apps, schema_editor):
                 broker = broker_map.get(row.get("broker_id"))
                 if broker is None:
                     continue
-                account = BrokerAccount.objects.filter(broker=broker, account_id=str(row.get("broker_account_id") or "")).first()
+                account_id = _valid_account_id(row.get("broker_account_id"))
+                if not account_id:
+                    continue
+                account = BrokerAccount.objects.filter(broker=broker, account_id=account_id).first()
                 if account is None:
                     continue
                 BrokerConnectionLog.objects.get_or_create(
