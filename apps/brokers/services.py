@@ -1,5 +1,6 @@
 import asyncio, importlib, time
 from decimal import Decimal
+from django.conf import settings
 from django.utils import timezone
 from . import constants as c
 from .exceptions import BrokerRoutingError
@@ -18,7 +19,7 @@ class BrokerRegistry:
 
 
 class BrokerManager:
-    broker_catalog = {'deriv': {'name': 'Deriv', 'status': 'active', 'websocket_endpoint': 'wss://ws.derivws.com/websockets/v3', 'supports_live': True, 'auth': 'oauth'}, 'paper': {'name': 'Paper Trading', 'status': 'active', 'supports_live': False, 'auth': 'none'}, 'binance': {'name': 'Binance', 'auth': 'api_key_secret'}, 'bybit': {'name': 'Bybit', 'auth': 'api_key_secret'}, 'oanda': {'name': 'OANDA', 'auth': 'api_token'}, 'interactive_brokers': {'name': 'Interactive Brokers', 'auth': 'session_gateway'}, 'metatrader_gateway': {'name': 'MetaTrader Gateway', 'auth': 'username_password'}, 'dxtrade': {'name': 'DXTrade', 'auth': 'session_token'}, 'ctrader': {'name': 'cTrader', 'auth': 'oauth'}, 'alpaca': {'name': 'Alpaca', 'auth': 'api_key_secret'}, 'forex_com': {'name': 'Forex.com', 'auth': 'username_password'}, 'pepperstone': {'name': 'Pepperstone', 'auth': 'metatrader_or_ctrader'}, 'ic_markets': {'name': 'IC Markets', 'auth': 'metatrader_or_ctrader'}, 'exness': {'name': 'Exness', 'auth': 'api_key_or_session'}}
+    broker_catalog = {'deriv': {'name': 'Deriv', 'status': 'active', 'websocket_endpoint': settings.DERIV_PUBLIC_WS_URL, 'supports_live': True, 'auth': 'oauth'}, 'paper': {'name': 'Paper Trading', 'status': 'active', 'supports_live': False, 'auth': 'none'}, 'binance': {'name': 'Binance', 'auth': 'api_key_secret'}, 'bybit': {'name': 'Bybit', 'auth': 'api_key_secret'}, 'oanda': {'name': 'OANDA', 'auth': 'api_token'}, 'interactive_brokers': {'name': 'Interactive Brokers', 'auth': 'session_gateway'}, 'metatrader_gateway': {'name': 'MetaTrader Gateway', 'auth': 'username_password'}, 'dxtrade': {'name': 'DXTrade', 'auth': 'session_token'}, 'ctrader': {'name': 'cTrader', 'auth': 'oauth'}, 'alpaca': {'name': 'Alpaca', 'auth': 'api_key_secret'}, 'forex_com': {'name': 'Forex.com', 'auth': 'username_password'}, 'pepperstone': {'name': 'Pepperstone', 'auth': 'metatrader_or_ctrader'}, 'ic_markets': {'name': 'IC Markets', 'auth': 'metatrader_or_ctrader'}, 'exness': {'name': 'Exness', 'auth': 'api_key_or_session'}}
     def ensure_defaults(self):
         for broker_type, data in self.broker_catalog.items():
             defaults = {'status': data.get('status', 'coming_soon'), 'supports_live': data.get('supports_live', False), 'metadata': {'auth': data['auth'], 'adapter_state': 'production' if broker_type in c.PRODUCTION_BROKERS else 'scaffold'}}
