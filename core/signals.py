@@ -13,3 +13,20 @@ def ensure_user_related_models(sender, instance, created, **kwargs):
     UserProfile.objects.get_or_create(user=instance)
     Subscription.objects.get_or_create(user=instance)
     BotSettings.objects.get_or_create(user=instance)
+
+
+def canonical_deriv_account(user):
+    from apps.brokers.models import BrokerAccount
+    account = BrokerAccount.objects.filter(
+        user=user,
+        broker__broker_type="deriv",
+        is_preferred=True,
+    ).select_related("broker").first()
+    if account is None:
+        raise BrokerAccount.DoesNotExist
+    return account
+
+
+User = get_user_model()
+if not hasattr(User, "deriv_account"):
+    User.add_to_class("deriv_account", property(canonical_deriv_account))
