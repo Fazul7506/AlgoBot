@@ -71,10 +71,7 @@ urlpatterns = [
     path('brokers/', broker_marketplace_page, name='broker_marketplace'),
     path('brokers/connect/', broker_connect_page, name='broker_connect_page'),
     path('connect-deriv/', deriv_login, name='connect_deriv'),
-
-    # Canonical Deriv OAuth callback. Keep exactly one callback URL in the project.
     path('callback/', callback, name='callback'),
-
     path('backtesting/', backtesting_page, name='backtesting_page'),
     path('predictions/', predictions_page, name='predictions_page'),
     path('performance/', performance_page, name='performance_page'),
@@ -90,17 +87,15 @@ urlpatterns = [
     path('workspace/<str:module>/', operations_module_page, name='operations_module_page'),
     path('billing/success/', billing_success_page, name='billing_success_page'),
     path('billing/cancel/', billing_cancel_page, name='billing_cancel_page'),
-
     path('api/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/register/', register, name='register'),
     path('api/auth/login/', login, name='login'),
     path('api/auth/change-password/', change_password, name='change_password'),
 
-    path('api/', include(router.urls)),
-    path('api/tenants/', include('apps.tenants.urls')),
-    path('api/copy-trading/', include('apps.copy_trading.urls')),
-    path('api/observability/', include('apps.observability.urls')),
+    # Explicit app endpoints must precede the DRF router. Otherwise
+    # /api/market/ticks/broker/ is consumed as the router's {pk} detail route
+    # and POST correctly returns 405 from the wrong view.
     path('api/', include('apps.broker.urls')),
     path('api/', include('apps.execution.urls')),
     path('api/', include('apps.brokers.urls')),
@@ -115,12 +110,15 @@ urlpatterns = [
     path('api/', include('apps.portfolio.urls')),
     path('api/', include('apps.automation.urls')),
     path('api/', include('apps.notifications.urls')),
+    path('api/', include('apps.tenants.urls')),
+    path('api/copy-trading/', include('apps.copy_trading.urls')),
+    path('api/observability/', include('apps.observability.urls')),
+    path('api/', include(router.urls)),
     path('developer/', include(('apps.developer.urls', 'developer_ui'), namespace='developer_ui')),
     path('api/developer/', include('apps.developer.urls')),
     path('api/system/', include('apps.deployment.urls')),
     path('api/enterprise/', include('apps.enterprise.urls')),
     path('health/', include('apps.health.urls')),
-
     path('webhooks/intasend/', intasend_webhook, name='intasend_webhook'),
     path('webhooks/pesapal/', pesapal_webhook, name='pesapal_webhook'),
     path('payments/pesapal/callback/', pesapal_callback, name='pesapal_callback'),
