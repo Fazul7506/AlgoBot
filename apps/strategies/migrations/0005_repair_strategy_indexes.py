@@ -11,9 +11,9 @@ DROP INDEX IF EXISTS strategies_s_enabled_51dc7f_idx;
 DROP INDEX IF EXISTS strategies_s_slug_4f00a6_idx;
 
 CREATE INDEX IF NOT EXISTS strategies__enabled_aaadb9_idx
-    ON strategies_strategy (enabled);
+    ON strategies_strategy (enabled, category);
 CREATE INDEX IF NOT EXISTS strategies__slug_e97c02_idx
-    ON strategies_strategy (slug);
+    ON strategies_strategy (slug, version);
 CREATE INDEX IF NOT EXISTS strategies__user_id_90ced2_idx
     ON strategies_strategyconfiguration (user_id, enabled);
 CREATE INDEX IF NOT EXISTS strategies__symbol_48d2fd_idx
