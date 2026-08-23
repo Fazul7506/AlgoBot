@@ -70,8 +70,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 BASE_URL = env("BASE_URL", "").rstrip("/")
-DERIV_APP_ID = env("DERIV_APP_ID", env("DERIV_OAUTH_CLIENT_ID", ""))
-DERIV_OAUTH_CLIENT_ID = DERIV_APP_ID
+# Keep the current OAuth client ID distinct from any legacy V1 app ID.
+DERIV_OAUTH_CLIENT_ID = env("DERIV_OAUTH_CLIENT_ID", "")
+DERIV_APP_ID = env("DERIV_APP_ID", DERIV_OAUTH_CLIENT_ID)
+DERIV_LEGACY_APP_ID = env("DERIV_LEGACY_APP_ID", "")
+DERIV_OAUTH_CLIENT_SECRET = env("DERIV_OAUTH_CLIENT_SECRET", "")
+DERIV_OAUTH_SCOPE = env("DERIV_OAUTH_SCOPE", "trade account_manage")
 DERIV_REDIRECT_URI = env("DERIV_REDIRECT_URI", f"{BASE_URL}/callback/" if BASE_URL else "")
 DERIV_API_BASE_URL = env("DERIV_API_BASE_URL", "https://api.derivws.com")
 DERIV_PUBLIC_WS_URL = env("DERIV_PUBLIC_WS_URL", "wss://api.derivws.com/trading/v1/options/ws/public")
