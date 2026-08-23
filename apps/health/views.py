@@ -29,14 +29,14 @@ def _check_readiness() -> tuple[dict[str, bool], int]:
     return checks, status
 
 
-@api_view(["GET"])
+@api_view(["GET", "HEAD"])
 @permission_classes([AllowAny])
 def liveness(request):
     """Confirm that the application process is alive."""
     return Response({"status": "ok"})
 
 
-@api_view(["GET"])
+@api_view(["GET", "HEAD"])
 @permission_classes([AllowAny])
 def readiness(request):
     """Confirm that required dependencies are available."""
@@ -50,7 +50,7 @@ def readiness(request):
     )
 
 
-@api_view(["GET"])
+@api_view(["GET", "HEAD"])
 @permission_classes([AllowAny])
 def health(request):
     """Combined health endpoint for Render and external uptime monitors."""
