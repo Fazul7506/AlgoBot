@@ -34,6 +34,8 @@ class DerivAdapter(_CanonicalDerivAdapter):
         return {"transactions": await self.get_trade_history(**filters)}
 
     async def ticks(self, symbol):
+        if self.engine is not None and hasattr(self.engine, "subscribe_ticks"):
+            return await self.engine.subscribe_ticks(symbol)
         return await self.get_market_data(symbol)
 
     async def candles(self, symbol, granularity=60):
@@ -41,6 +43,11 @@ class DerivAdapter(_CanonicalDerivAdapter):
 
     async def active_symbols(self):
         return await self.get_accounts()
+
+    async def buy_contract(self, price, parameters):
+        if self.engine is None or not hasattr(self.engine, "buy_contract"):
+            raise RuntimeError("Legacy buy_contract() requires an execution engine")
+        return await self.engine.buy_contract(price=price, parameters=parameters)
 
     async def buy(self, **payload):
         raise RuntimeError("Legacy buy() is retired; route orders through the platform execution engine")
