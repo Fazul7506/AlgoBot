@@ -8,6 +8,7 @@
     const text = await res.text();
     let data = {};
     try { data = text ? JSON.parse(text) : {}; } catch { data = { detail: text }; }
+    if (res.status === 401 || res.status === 403) { document.body.classList.add('auth-expired'); window.location.assign('/login/?next=' + encodeURIComponent(window.location.pathname)); throw new Error('Authentication required'); }
     if (!res.ok) throw new Error(data.detail || data.message || `Request failed (${res.status})`);
     return data;
   };
@@ -407,12 +408,50 @@
     });
   }
   function shell() {
+    const sidebar = $('[data-app-sidebar]');
+    const backdrop = $('[data-sidebar-backdrop]');
+    const open = () => { sidebar?.classList.add('is-open'); document.body.classList.add('sidebar-open'); if (backdrop) backdrop.hidden = false; };
+    const close = () => { sidebar?.classList.remove('is-open'); document.body.classList.remove('sidebar-open'); if (backdrop) backdrop.hidden = true; };
     $('[data-sidebar-toggle]')?.addEventListener('click', () => document.body.classList.toggle('sidebar-collapsed'));
+    $('[data-sidebar-open]')?.addEventListener('click', open);
+    $('[data-sidebar-close]')?.addEventListener('click', close);
+    backdrop?.addEventListener('click', close);
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') { close(); closeAccountMenu(); } });
+    $$('.app-sidebar nav a').forEach(link => link.addEventListener('click', close));
+  }
+
+  function closeAccountMenu() {
+    const trigger = $('[data-account-trigger]');
+    const dropdown = $('[data-account-dropdown]');
+    if (dropdown) dropdown.hidden = true;
+    trigger?.setAttribute('aria-expanded', 'false');
+  }
+
+  function accountMenu() {
+    const menu = $('[data-account-menu]');
+    const trigger = $('[data-account-trigger]');
+    const dropdown = $('[data-account-dropdown]');
+    trigger?.addEventListener('click', event => {
+      event.stopPropagation();
+      const isOpen = dropdown && !dropdown.hidden;
+      if (dropdown) dropdown.hidden = isOpen;
+      trigger.setAttribute('aria-expanded', String(!isOpen));
+    });
+    document.addEventListener('click', event => { if (menu && !menu.contains(event.target)) closeAccountMenu(); });
+    $('[data-logout-form]')?.addEventListener('submit', async event => {
+      event.preventDefault();
+      try {
+        await json('/logout/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() }, body: '{}' });
+      } finally {
+        window.location.assign('/login/');
+      }
+    });
   }
 
   async function init() {
     theme();
     shell();
+    accountMenu();
     $$('.enterprise-page').forEach(page => {
       genericWorkspace(page);
       $('[data-action="refresh"]', page)?.addEventListener('click', () => genericWorkspace(page));
