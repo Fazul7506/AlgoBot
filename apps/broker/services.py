@@ -23,9 +23,21 @@ class BrokerHealthService:
 
 class BrokerConnectionService:
     async def connect(self, account: BrokerAccount):
-        await BrokerManager().get_adapter(account).connect(); account.is_connected = True; account.save(update_fields=["is_connected"]); return account
+        """Connect the broker and immediately hydrate the account with live broker state."""
+        adapter = BrokerManager().get_adapter(account)
+        await adapter.connect()
+        account.is_connected = True
+        account.save(update_fields=["is_connected"])
+        await BrokerSynchronizationService().sync_balance(account)
+        BrokerHealthService().record(account, "connected", "live account authorised")
+        return account
+
     async def disconnect(self, account: BrokerAccount):
-        await BrokerManager().get_adapter(account).disconnect(); account.is_connected = False; account.save(update_fields=["is_connected"]); return account
+        await BrokerManager().get_adapter(account).disconnect()
+        account.is_connected = False
+        account.save(update_fields=["is_connected"])
+        BrokerHealthService().record(account, "disconnected", "broker disconnected")
+        return account
 
 
 class BrokerAuthenticationService:
@@ -37,7 +49,14 @@ class BrokerAuthenticationService:
 
 class BrokerSynchronizationService:
     async def sync_balance(self, account: BrokerAccount):
-        data = await BrokerService().balance(account); account.balance = data.get("balance", account.balance); account.currency = data.get("currency", account.currency); account.save(update_fields=["balance", "currency"]); return data
+        data = await BrokerService().balance(account)
+        if isinstance(data, dict) and isinstance(data.get("balance"), dict):
+            data = data["balance"]
+        account.balance = data.get("balance", account.balance)
+        account.currency = data.get("currency", account.currency)
+        account.equity = data.get("equity", account.balance)
+        account.save(update_fields=["balance", "currency", "equity"])
+        return data
 
 
 class BrokerMonitoringService:
