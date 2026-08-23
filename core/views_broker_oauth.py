@@ -12,6 +12,7 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth.models import User
 from django.shortcuts import redirect
 
+from apps.brokers.models import Broker, BrokerAccount
 from core.models import BotSettings, Subscription, UserProfile
 from core.services.oauth_service import DerivOAuthService
 from trading.models import DerivAccount
@@ -56,9 +57,7 @@ def callback(request):
 
     code_verifier = request.session.get("pkce_verifier")
     redirect_uri = request.session.get("oauth_redirect_uri")
-    valid, reason = DerivOAuthService.validate_pkce(
-        code_verifier, redirect_uri, settings.DERIV_REDIRECT_URI
-    )
+    valid, reason = DerivOAuthService.validate_pkce(code_verifier, redirect_uri, settings.DERIV_REDIRECT_URI)
     if not valid or not code:
         logger.warning("deriv_oauth_pkce_or_code_validation_failed", extra={"error": reason})
         messages.error(request, "The broker connection could not be validated. Please try again.")
@@ -130,6 +129,27 @@ def callback(request):
     deriv_account.account_type = "demo" if account.get("is_virtual") else "real"
     deriv_account.currency = account.get("currency") or ""
     deriv_account.save()
+
+    broker, _ = Broker.objects.get_or_create(
+        broker_type="deriv",
+        defaults={
+            "name": "Deriv",
+            "status": "active",
+            "supports_live": True,
+            "websocket_endpoint": "wss://ws.derivws.com/websockets/v3",
+        },
+    )
+    BrokerAccount.objects.update_or_create(
+        broker=broker,
+        account_id=account_id,
+        defaults={
+            "user": user,
+            "currency": account.get("currency") or "USD",
+            "status": "active",
+            "is_preferred": True,
+            "credentials": {"account_type": "demo" if account.get("is_virtual") else "real"},
+        },
+    )
 
     DerivOAuthService.clear_oauth_session(request)
     messages.success(request, f"Deriv account {account_id} connected successfully.")
