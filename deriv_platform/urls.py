@@ -16,7 +16,8 @@ from trading.views.notifications import NotificationViewSet
 from trading.views.copy_trading import CopyTradingViewSet
 from trading.views.indicators import IndicatorValueViewSet, TechnicalSignalViewSet, IndicatorProfileViewSet, IndicatorAlertViewSet, IndicatorDashboardViewSet
 from trading.strategies.strategy_api import StrategyViewSet
-from core.views import deriv_login, callback, broker_connect_page, broker_marketplace_page, home, login_page, register_page, dashboard_page, markets_page, strategies_page, trading_page, backtesting_page, predictions_page, performance_page, settings_page, profile_page, terms_page, operations_module_page, privacy_page, risk_page, billing_success_page, billing_cancel_page, forgot_password_page, reset_password_page, verify_email_page, cookie_policy_page, licensing_page, contact_page, about_page, public_status_page, orders_page, positions_page, signals_page, portfolio_page
+from core.views import deriv_login, broker_connect_page, broker_marketplace_page, home, login_page, register_page, dashboard_page, markets_page, strategies_page, trading_page, backtesting_page, predictions_page, performance_page, settings_page, profile_page, terms_page, operations_module_page, privacy_page, risk_page, billing_success_page, billing_cancel_page, forgot_password_page, reset_password_page, verify_email_page, cookie_policy_page, licensing_page, contact_page, about_page, public_status_page, orders_page, positions_page, signals_page, portfolio_page
+from core.views_broker_oauth import callback
 from core.views_payment import intasend_webhook, pesapal_webhook, pesapal_callback
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -44,8 +45,6 @@ router.register(r'copy-trading', CopyTradingViewSet, basename='copy-trading')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-
-    # Single-origin HTML pages
     path('', home, name='home'),
     path('login/', login_page, name='login_page'),
     path('register/', register_page, name='register_page'),
@@ -87,16 +86,14 @@ urlpatterns = [
     path('workspace/<str:module>/', operations_module_page, name='operations_module_page'),
     path('billing/success/', billing_success_page, name='billing_success_page'),
     path('billing/cancel/', billing_cancel_page, name='billing_cancel_page'),
-    
-    # Authentication endpoints
+
     path('api/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/register/', register, name='register'),
     path('api/auth/login/', login, name='login'),
     path('api/auth/logout/', logout, name='logout'),
     path('api/auth/change-password/', change_password, name='change_password'),
-    
-    # User API endpoints
+
     path('api/', include(router.urls)),
     path('api/tenants/', include('apps.tenants.urls')),
     path('api/copy-trading/', include('apps.copy_trading.urls')),
@@ -120,8 +117,7 @@ urlpatterns = [
     path('api/system/', include('apps.deployment.urls')),
     path('api/enterprise/', include('apps.enterprise.urls')),
     path('health/', include('apps.health.urls')),
-    
-    # Broker-neutral OAuth callback
+
     path('brokers/callback/', callback, name='broker_callback'),
     path('webhooks/intasend/', intasend_webhook, name='intasend_webhook'),
     path('webhooks/pesapal/', pesapal_webhook, name='pesapal_webhook'),
