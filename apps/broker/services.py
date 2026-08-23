@@ -1,65 +1,73 @@
-from django.utils import timezone
-from .managers import BrokerManager
-from .models import BrokerAccount, BrokerConnectionLog, BrokerToken
-from .repositories import BrokerRepository
+"""Compatibility facade for the retired broker service layer.
+
+All broker state and execution now live in apps.brokers.
+"""
+from apps.brokers.models import BrokerAccount, BrokerConnectionLog
+from apps.brokers.services import BrokerManager, BrokerRegistry, BrokerConnectionService as CanonicalConnectionService, AuthenticationService, SynchronizationService
 
 
 class BrokerService:
-    def __init__(self, manager: BrokerManager | None = None): self.manager = manager or BrokerManager()
-    async def buy(self, account: BrokerAccount, **payload): return await self.manager.get_adapter(account).buy(**payload)
-    async def sell(self, account: BrokerAccount, **payload): return await self.manager.get_adapter(account).sell(**payload)
-    async def balance(self, account: BrokerAccount): return await self.manager.get_adapter(account).balance()
-    async def history(self, account: BrokerAccount, **filters): return await self.manager.get_adapter(account).history(**filters)
-    async def positions(self, account: BrokerAccount): return await self.manager.get_adapter(account).positions()
-    async def orders(self, account: BrokerAccount): return await self.manager.get_adapter(account).orders()
-    async def subscribe_ticks(self, account: BrokerAccount, symbol: str): return await self.manager.get_adapter(account).subscribe_ticks(symbol)
+    def __init__(self, manager=None):
+        self.manager = manager or BrokerManager()
+
+    def _adapter(self, account):
+        return BrokerRegistry().adapter(account.broker, account)
+
+    async def buy(self, account, **payload):
+        return await self._adapter(account).place_order(payload)
+
+    async def sell(self, account, **payload):
+        return await self._adapter(account).place_order(payload)
+
+    async def balance(self, account):
+        return await self._adapter(account).get_balance()
+
+    async def history(self, account, **filters):
+        return await self._adapter(account).get_trade_history(**filters)
+
+    async def positions(self, account):
+        return await self._adapter(account).get_positions()
+
+    async def orders(self, account):
+        return await self._adapter(account).get_orders()
+
+    async def subscribe_ticks(self, account, symbol):
+        return await self._adapter(account).subscribe_ticks(symbol)
 
 
 class BrokerHealthService:
-    def record(self, account: BrokerAccount, status: str, event: str, latency: float | None = None):
+    def record(self, account, status, event, latency=None):
         return BrokerConnectionLog.objects.create(broker_account=account, status=status, event=event, latency=latency)
-    def latest(self, account: BrokerAccount): return account.connection_logs.first()
+
+    def latest(self, account):
+        return account.connection_logs.first()
 
 
-class BrokerConnectionService:
-    async def connect(self, account: BrokerAccount):
-        """Connect the broker and immediately hydrate the account with live broker state."""
-        adapter = BrokerManager().get_adapter(account)
-        await adapter.connect()
-        account.is_connected = True
-        account.save(update_fields=["is_connected"])
-        await BrokerSynchronizationService().sync_balance(account)
-        BrokerHealthService().record(account, "connected", "live account authorised")
-        return account
+class BrokerConnectionService(CanonicalConnectionService):
+    pass
 
-    async def disconnect(self, account: BrokerAccount):
-        await BrokerManager().get_adapter(account).disconnect()
-        account.is_connected = False
-        account.save(update_fields=["is_connected"])
-        BrokerHealthService().record(account, "disconnected", "broker disconnected")
+
+class BrokerAuthenticationService(AuthenticationService):
+    def store_token(self, account, access_token, refresh_token="", expires_at=None):
+        account.set_access_token(access_token)
+        account.set_refresh_token(refresh_token)
+        account.expires_at = expires_at
+        account.token_status = "active"
+        account.save(update_fields=["access_token", "refresh_token", "expires_at", "token_status"])
         return account
 
 
-class BrokerAuthenticationService:
-    def store_token(self, account: BrokerAccount, access_token: str, refresh_token: str = "", expires_at=None):
-        token, _ = BrokerToken.objects.get_or_create(broker_account=account)
-        token.set_access_token(access_token); token.set_refresh_token(refresh_token); token.expires_at = expires_at; token.status = "active"; token.last_refresh = timezone.now(); token.save(); return token
-    async def refresh(self, account: BrokerAccount): return await BrokerManager().get_adapter(account).refresh_token()
-
-
-class BrokerSynchronizationService:
-    async def sync_balance(self, account: BrokerAccount):
-        data = await BrokerService().balance(account)
-        if isinstance(data, dict) and isinstance(data.get("balance"), dict):
-            data = data["balance"]
-        account.balance = data.get("balance", account.balance)
-        account.currency = data.get("currency", account.currency)
-        account.equity = data.get("equity", account.balance)
-        account.save(update_fields=["balance", "currency", "equity"])
-        return data
+class BrokerSynchronizationService(SynchronizationService):
+    pass
 
 
 class BrokerMonitoringService:
-    def unhealthy_accounts(self): return BrokerAccount.objects.filter(is_connected=False)
+    def unhealthy_accounts(self):
+        return BrokerAccount.objects.exclude(status="active")
 
-BrokerRepository = BrokerRepository
+
+__all__ = [
+    "BrokerService", "BrokerHealthService", "BrokerConnectionService",
+    "BrokerAuthenticationService", "BrokerSynchronizationService", "BrokerMonitoringService",
+    "BrokerRegistry", "BrokerManager",
+]

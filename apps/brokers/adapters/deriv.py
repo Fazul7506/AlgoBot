@@ -23,22 +23,11 @@ class DerivAdapter(BrokerAdapter):
         return settings.DERIV_PUBLIC_WS_URL
 
     def _token(self):
-        if self.account is None:
+        if self.account is None or self.account.broker.broker_type != self.broker_type:
             raise BrokerAuthenticationError("A connected Deriv account is required")
-        # Canonical multi-broker accounts use user.deriv_account; the temporary
-        # legacy bridge uses account.token. Both paths remain encrypted at rest.
-        try:
-            deriv_account = self.account.user.deriv_account
-            if deriv_account.token_status != "active" or deriv_account.is_token_expired:
-                raise BrokerAuthenticationError("Deriv credentials are expired or revoked")
-            token = deriv_account.get_access_token()
-        except BrokerAuthenticationError:
-            raise
-        except Exception:
-            token_record = getattr(self.account, "token", None)
-            if token_record is None or token_record.status != "active" or token_record.is_expired:
-                raise BrokerAuthenticationError("A verified Deriv OAuth account is required")
-            token = token_record.get_access_token()
+        if self.account.token_status != "active" or self.account.is_token_expired:
+            raise BrokerAuthenticationError("Deriv credentials are expired or revoked")
+        token = self.account.get_access_token()
         if not token:
             raise BrokerAuthenticationError("Deriv access token is unavailable")
         return token
@@ -50,7 +39,7 @@ class DerivAdapter(BrokerAdapter):
         return app_id
 
     def _account_id(self):
-        account_id = getattr(self.account, "account_id", None) or getattr(self.account, "broker_account_id", None)
+        account_id = getattr(self.account, "account_id", None)
         if not account_id:
             raise BrokerAuthenticationError("A verified Deriv account id is required")
         return str(account_id)
@@ -105,7 +94,7 @@ class DerivAdapter(BrokerAdapter):
     async def authenticate(self):
         response = await self._request({"balance": 1, "req_id": 1}, authenticated=True)
         balance = response.get("balance") or {}
-        account_type = str((self.credentials or {}).get("account_type") or getattr(self.account, "account_type", "demo")).lower()
+        account_type = str((self.credentials or {}).get("account_type") or "demo").lower()
         return {"loginid": self._account_id(), "account_id": self._account_id(), "balance": balance.get("balance"), "currency": balance.get("currency"), "is_virtual": account_type == "demo"}
 
     async def refresh_token(self):
@@ -155,7 +144,7 @@ class DerivAdapter(BrokerAdapter):
 
     async def place_order(self, order):
         routing = order.routing_context or {}
-        account_type = str(routing.get("account_type") or self.credentials.get("account_type") or getattr(self.account, "account_type", "demo")).lower()
+        account_type = str(routing.get("account_type") or self.credentials.get("account_type") or "demo").lower()
         if account_type == "real" and not settings.ALLOW_LIVE_TRADING:
             raise BrokerOrderError("Live-money trading is disabled by platform configuration")
         contract_type = (getattr(order, "contract_type", None) or getattr(order, "direction", None) or "CALL").upper()

@@ -19,7 +19,7 @@ DJANGO_APPS = [
 ]
 THIRD_PARTY_APPS = ["rest_framework", "rest_framework_simplejwt", "rest_framework_simplejwt.token_blacklist"]
 LOCAL_APPS = [
-    "anymail", "core", "trading", "apps.broker", "apps.deriv", "apps.market_data", "apps.indicators",
+    "anymail", "core", "trading", "apps.deriv", "apps.market_data", "apps.indicators",
     "apps.analysis", "apps.execution", "apps.trading", "apps.contracts", "apps.strategies", "apps.smart_money",
     "apps.risk", "apps.ai_engine", "apps.ml_models", "apps.feature_store", "apps.training", "apps.monitoring",
     "apps.analytics", "apps.logging_system", "apps.alerts", "apps.audit", "apps.health", "apps.metrics",
@@ -70,8 +70,6 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 BASE_URL = env("BASE_URL", "").rstrip("/")
-# The OAuth client ID is the new application ID issued by developers.deriv.com.
-# DERIV_APP_ID is kept as the API header alias and defaults to the same value.
 DERIV_OAUTH_CLIENT_ID = env("DERIV_OAUTH_CLIENT_ID", "")
 DERIV_APP_ID = env("DERIV_APP_ID", DERIV_OAUTH_CLIENT_ID)
 DERIV_OAUTH_CLIENT_SECRET = env("DERIV_OAUTH_CLIENT_SECRET", "")

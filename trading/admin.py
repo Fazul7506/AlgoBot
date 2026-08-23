@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Tick, DerivAccount, Trade, BacktestResult, Candle, Signal, PerformanceSnapshot, Strategy
+from .models import Tick, Trade, BacktestResult, Candle, Signal, PerformanceSnapshot, Strategy
 from .models.logging import SystemLog, TradeLog, ErrorLog
 from .models.market import MarketSymbol, PriceHistory, MarketSnapshot, TickData, DataStreamSession
 from .models.indicators import IndicatorValue, TechnicalSignal, IndicatorProfile, IndicatorAlert
@@ -56,14 +56,6 @@ class PerformanceSnapshotAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at']
 
 
-@admin.register(DerivAccount)
-class DerivAccountAdmin(admin.ModelAdmin):
-    list_display = ['user', 'account_id', 'created_at']
-    list_filter = ['created_at']
-    search_fields = ['user__username', 'account_id']
-    readonly_fields = ['created_at']
-
-
 @admin.register(SystemLog)
 class SystemLogAdmin(admin.ModelAdmin):
     list_display = ['level', 'module', 'message', 'created_at']
@@ -88,7 +80,6 @@ class ErrorLogAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at']
 
 
-# Market Data Models
 @admin.register(MarketSymbol)
 class MarketSymbolAdmin(admin.ModelAdmin):
     list_display = ['symbol', 'display_name', 'market_type', 'is_active', 'is_tradeable', 'last_tick_time']
@@ -129,26 +120,12 @@ class DataStreamSessionAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at']
 
 
-# Technical Indicators Models
 @admin.register(IndicatorValue)
 class IndicatorValueAdmin(admin.ModelAdmin):
     list_display = ['symbol', 'indicator_type', 'value', 'timeframe', 'candle_time', 'calculated_at']
     list_filter = ['indicator_type', 'timeframe', 'candle_time']
     search_fields = ['symbol__symbol']
     readonly_fields = ['calculated_at']
-    
-    fieldsets = (
-        ('Symbol & Type', {
-            'fields': ('symbol', 'indicator_type', 'timeframe')
-        }),
-        ('Value', {
-            'fields': ('value', 'period')
-        }),
-        ('Timestamps', {
-            'fields': ('candle_time', 'calculated_at'),
-            'classes': ('collapse',)
-        }),
-    )
 
 
 @admin.register(TechnicalSignal)
@@ -157,22 +134,6 @@ class TechnicalSignalAdmin(admin.ModelAdmin):
     list_filter = ['signal_type', 'signal_source', 'candle_time', 'was_executed']
     search_fields = ['symbol__symbol']
     readonly_fields = ['created_at', 'contributing_indicators']
-    
-    fieldsets = (
-        ('Signal Information', {
-            'fields': ('symbol', 'timeframe', 'signal_type', 'signal_source')
-        }),
-        ('Scoring', {
-            'fields': ('confidence', 'strength', 'contributing_indicators')
-        }),
-        ('Execution', {
-            'fields': ('was_executed', 'execution_trade')
-        }),
-        ('Timestamps', {
-            'fields': ('candle_time', 'created_at'),
-            'classes': ('collapse',)
-        }),
-    )
 
 
 @admin.register(IndicatorProfile)
@@ -181,35 +142,6 @@ class IndicatorProfileAdmin(admin.ModelAdmin):
     list_filter = ['profile_type', 'require_multiple_indicators', 'created_at']
     search_fields = ['user__username', 'user__email']
     readonly_fields = ['created_at', 'updated_at']
-    
-    fieldsets = (
-        ('User', {
-            'fields': ('user', 'profile_type')
-        }),
-        ('Moving Averages', {
-            'fields': ('sma_periods', 'ema_periods', 'wma_periods', 'hma_period'),
-            'classes': ('collapse',)
-        }),
-        ('Momentum Indicators', {
-            'fields': ('rsi_period', 'rsi_overbought', 'rsi_oversold', 'macd_fast', 'macd_slow', 'macd_signal'),
-            'classes': ('collapse',)
-        }),
-        ('Volatility Indicators', {
-            'fields': ('stochastic_period', 'stochastic_k_period', 'stochastic_d_period', 'atr_period', 'bb_period', 'bb_std_dev'),
-            'classes': ('collapse',)
-        }),
-        ('Trend Strength', {
-            'fields': ('adx_period', 'adx_threshold'),
-            'classes': ('collapse',)
-        }),
-        ('Signal Settings', {
-            'fields': ('require_multiple_indicators', 'min_confidence')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
 
 
 @admin.register(IndicatorAlert)
@@ -218,19 +150,3 @@ class IndicatorAlertAdmin(admin.ModelAdmin):
     list_filter = ['alert_type', 'indicator_type', 'is_active', 'created_at']
     search_fields = ['user__username', 'symbol__symbol']
     readonly_fields = ['created_at', 'updated_at', 'last_triggered']
-    
-    fieldsets = (
-        ('Alert Details', {
-            'fields': ('user', 'symbol', 'alert_type', 'indicator_type')
-        }),
-        ('Condition', {
-            'fields': ('condition_value', 'comparison')
-        }),
-        ('Status', {
-            'fields': ('is_active', 'times_triggered', 'last_triggered')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
