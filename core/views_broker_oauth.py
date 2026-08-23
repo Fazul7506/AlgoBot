@@ -19,18 +19,14 @@ from trading.models import DerivAccount
 
 logger = logging.getLogger("oauth")
 
-DERIV_API_BASE = "https://api.derivws.com"
-DERIV_ACCOUNTS_URL = f"{DERIV_API_BASE}/trading/v1/options/accounts"
+DERIV_ACCOUNTS_URL = settings.DERIV_OPTIONS_ACCOUNTS_URL
 
 
 def _account_records(payload: dict) -> list[dict]:
-    """Normalize the current Deriv Options accounts response."""
     data = payload.get("data", []) if isinstance(payload, dict) else []
     if isinstance(data, dict):
         data = [data]
-    if not isinstance(data, list):
-        return []
-    return [item for item in data if isinstance(item, dict)]
+    return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
 
 
 def _select_account(payload: dict) -> dict | None:
@@ -39,13 +35,7 @@ def _select_account(payload: dict) -> dict | None:
 
 
 async def _verify_authenticated_websocket(access_token: str, account_id: str) -> dict:
-    """Verify the OAuth token and authenticated WebSocket using Deriv's current API.
-
-    Deriv's current API no longer accepts a raw OAuth token in the legacy
-    ``wss://ws.derivws.com/websockets/v3`` handshake.  The token must first be
-    used with the Options REST API to obtain a short-lived, one-time WebSocket
-    URL (OTP).  The returned URL is then connected to directly.
-    """
+    """Obtain a one-time authenticated Deriv socket URL and verify the account."""
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Deriv-App-ID": settings.DERIV_APP_ID,
@@ -62,9 +52,9 @@ async def _verify_authenticated_websocket(access_token: str, account_id: str) ->
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else None
         if status == 401:
-            raise ValueError("Deriv rejected the OAuth credential while creating the authenticated WebSocket session") from exc
+            raise ValueError("Deriv rejected the OAuth credential") from exc
         if status == 403:
-            raise ValueError("Deriv denied trading access for this OAuth credential") from exc
+            raise ValueError("Deriv denied trading access for this account") from exc
         raise ValueError("Deriv could not create an authenticated WebSocket session") from exc
     except (requests.RequestException, ValueError) as exc:
         raise ValueError("Deriv authentication service is temporarily unavailable") from exc
@@ -74,8 +64,6 @@ async def _verify_authenticated_websocket(access_token: str, account_id: str) ->
         raise ValueError("Deriv did not return an authenticated WebSocket URL")
 
     async with websockets.connect(ws_url, open_timeout=10, close_timeout=10) as ws:
-        # The OTP authenticates the connection.  A balance request is a small,
-        # account-scoped smoke test that proves the session is usable.
         await ws.send(json.dumps({"balance": 1, "req_id": 1}))
         response = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
 
@@ -85,18 +73,13 @@ async def _verify_authenticated_websocket(access_token: str, account_id: str) ->
 
 
 def _verify_account(access_token: str) -> tuple[dict | None, list[dict]]:
-    """Resolve a real Deriv Options account through the authenticated REST API."""
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Deriv-App-ID": settings.DERIV_APP_ID,
         "Accept": "application/json",
     }
     try:
-        response = requests.get(
-            DERIV_ACCOUNTS_URL,
-            headers=headers,
-            timeout=(3.05, 10),
-        )
+        response = requests.get(DERIV_ACCOUNTS_URL, headers=headers, timeout=(3.05, 10))
         response.raise_for_status()
         payload = response.json()
     except requests.HTTPError as exc:
@@ -108,10 +91,8 @@ def _verify_account(access_token: str) -> tuple[dict | None, list[dict]]:
         raise ValueError("Deriv account verification failed") from exc
     except (requests.RequestException, ValueError) as exc:
         raise ValueError("Deriv account verification is temporarily unavailable") from exc
-
     accounts = _account_records(payload)
-    account = _select_account(payload)
-    return account, accounts
+    return _select_account(payload), accounts
 
 
 def _ensure_defaults(user):
@@ -121,17 +102,15 @@ def _ensure_defaults(user):
 
 
 def callback(request):
-    """Complete Deriv OAuth without synthetic/fallback broker identities."""
-    error = request.GET.get("error")
-    if error:
+    """Complete Deriv OAuth only after a verified broker account/session exists."""
+    if request.GET.get("error"):
         messages.error(request, "Deriv sign-in was cancelled or rejected. Please try again.")
         DerivOAuthService.clear_oauth_session(request)
         return redirect("broker_connect_page")
 
     received_state = request.GET.get("state")
     code = request.GET.get("code")
-    expected_state = request.session.get("oauth_state")
-    valid, reason = DerivOAuthService.validate_state(received_state, expected_state)
+    valid, reason = DerivOAuthService.validate_state(received_state, request.session.get("oauth_state"))
     if not valid:
         logger.warning("deriv_oauth_state_validation_failed", extra={"error": reason})
         messages.error(request, "Broker security validation failed. Please restart the connection.")
@@ -147,9 +126,7 @@ def callback(request):
         DerivOAuthService.clear_oauth_session(request)
         return redirect("broker_connect_page")
 
-    success, token_data, token_error = DerivOAuthService.exchange_code_for_token(
-        code, code_verifier, http_client=requests
-    )
+    success, token_data, token_error = DerivOAuthService.exchange_code_for_token(code, code_verifier, http_client=requests)
     if not success or not token_data:
         logger.error("deriv_oauth_token_exchange_failed", extra={"error": token_error})
         messages.error(request, "Deriv could not complete the secure connection. Please try again.")
@@ -165,15 +142,12 @@ def callback(request):
 
     access_token = token_data["access_token"]
     try:
-        account, accounts = _verify_account(access_token)
+        account, _accounts = _verify_account(access_token)
         if not account:
-            raise ValueError("Deriv returned no Options trading account for this user")
+            raise ValueError("Deriv returned no Options trading account")
         account_id = account.get("account_id") or account.get("loginid")
         if not account_id:
             raise ValueError("Deriv did not return a broker account identity")
-
-        # Prove that the same credential can establish an authenticated
-        # real-time trading session before persisting it locally.
         balance = asyncio.run(_verify_authenticated_websocket(access_token, account_id))
     except Exception as exc:
         logger.exception("deriv_oauth_broker_verification_failed", extra={"error": str(exc)})
@@ -185,25 +159,18 @@ def callback(request):
     if request.user.is_authenticated:
         user = request.user
         if existing_account and existing_account.user_id != user.id:
-            logger.error("deriv_account_already_linked", extra={"account_id": account_id})
             messages.error(request, "That Deriv account is already connected to another AlgoBot user.")
             DerivOAuthService.clear_oauth_session(request)
             return redirect("broker_connect_page")
     elif existing_account:
         user = existing_account.user
     else:
-        # This local identity is created only after Deriv has authenticated the
-        # user, returned a real account id, and passed an authenticated
-        # WebSocket smoke test. There is no random/synthetic fallback identity.
-        username = f"deriv_{account_id}"
-        user = User.objects.create(username=username, first_name="Deriv")
+        user = User.objects.create(username=f"deriv_{account_id}", first_name="Deriv")
         user.set_unusable_password()
         user.save(update_fields=["password"])
-        logger.info("deriv_oauth_broker_identity_created", extra={"user_id": user.id, "account_id": account_id})
 
     auth_login(request, user)
     _ensure_defaults(user)
-
     expires_in = int(token_data.get("expires_in", 3600))
     deriv_account, _ = DerivAccount.objects.get_or_create(user=user)
     deriv_account.account_id = account_id
@@ -217,23 +184,12 @@ def callback(request):
 
     broker, _ = Broker.objects.get_or_create(
         broker_type="deriv",
-        defaults={
-            "name": "Deriv",
-            "status": "active",
-            "supports_live": True,
-            "websocket_endpoint": "wss://api.derivws.com/trading/v1/options/ws/",
-        },
+        defaults={"name": "Deriv", "status": "active", "supports_live": True, "websocket_endpoint": settings.DERIV_AUTH_WS_BASE_URL},
     )
     BrokerAccount.objects.update_or_create(
         broker=broker,
         account_id=account_id,
-        defaults={
-            "user": user,
-            "currency": account.get("currency") or balance.get("currency") or "USD",
-            "status": "active",
-            "is_preferred": True,
-            "credentials": {"account_type": account.get("account_type") or "demo"},
-        },
+        defaults={"user": user, "currency": account.get("currency") or balance.get("currency") or "USD", "status": "active", "is_preferred": True, "credentials": {"account_type": account.get("account_type") or "demo"}},
     )
 
     DerivOAuthService.clear_oauth_session(request)
