@@ -1,18 +1,14 @@
-"""Deriv broker adapter using the current Options REST + WebSocket API."""
+"""Deriv broker adapter; all vendor-specific behavior stays at the broker edge."""
 import asyncio
 import json
-import os
 import time
 
 import requests
 import websockets
+from django.conf import settings
 
 from ..exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
 from .base import BrokerAdapter
-
-DERIV_API_BASE = "https://api.derivws.com"
-DERIV_PUBLIC_WS = "wss://api.derivws.com/trading/v1/options/ws/public"
-DERIV_ACCOUNTS_URL = f"{DERIV_API_BASE}/trading/v1/options/accounts"
 
 
 class DerivAdapter(BrokerAdapter):
@@ -22,12 +18,12 @@ class DerivAdapter(BrokerAdapter):
     asset_classes = ("synthetics", "forex", "commodities", "crypto", "stock_indices")
     timeout = 10
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.endpoint = DERIV_PUBLIC_WS
+    @property
+    def endpoint(self):
+        return settings.DERIV_PUBLIC_WS_URL
 
     def _token(self):
-        """Read the encrypted token from the verified DerivAccount."""
+        """Read the encrypted token from the verified Deriv account."""
         if self.account is None:
             raise BrokerAuthenticationError("A connected Deriv account is required")
         try:
@@ -42,7 +38,7 @@ class DerivAdapter(BrokerAdapter):
         return token
 
     def _app_id(self):
-        app_id = os.getenv("DERIV_APP_ID") or os.getenv("DERIV_OAUTH_CLIENT_ID")
+        app_id = settings.DERIV_APP_ID or settings.DERIV_OAUTH_CLIENT_ID
         if not app_id:
             raise BrokerAuthenticationError("DERIV_APP_ID is not configured")
         return app_id
@@ -54,10 +50,9 @@ class DerivAdapter(BrokerAdapter):
         return account_id
 
     def _authenticated_ws_url(self):
-        """Get Deriv's short-lived OTP WebSocket URL for the connected account."""
         try:
             response = requests.post(
-                f"{DERIV_ACCOUNTS_URL}/{self._account_id()}/otp",
+                f"{settings.DERIV_OPTIONS_ACCOUNTS_URL}/{self._account_id()}/otp",
                 headers={
                     "Authorization": f"Bearer {self._token()}",
                     "Deriv-App-ID": self._app_id(),
@@ -75,14 +70,12 @@ class DerivAdapter(BrokerAdapter):
             raise
         except (requests.RequestException, ValueError) as exc:
             raise BrokerConnectionError("Unable to obtain an authenticated Deriv WebSocket session") from exc
-
         url = (payload.get("data") or {}).get("url")
         if not url:
             raise BrokerConnectionError("Deriv did not return an authenticated WebSocket URL")
         return url
 
     async def _request(self, payload, authenticated=False):
-        """Send one command over the current Deriv public or OTP-authenticated WebSocket."""
         try:
             endpoint = await asyncio.to_thread(self._authenticated_ws_url) if authenticated else self.endpoint
             async with websockets.connect(endpoint, open_timeout=self.timeout, close_timeout=self.timeout) as ws:
@@ -108,10 +101,9 @@ class DerivAdapter(BrokerAdapter):
         return {"status": "disconnected"}
 
     async def authenticate(self):
-        """Use the OTP-authenticated channel for an account-scoped balance smoke test."""
         response = await self._request({"balance": 1, "req_id": 1}, authenticated=True)
         balance = response.get("balance") or {}
-        account_type = str((self.account.credentials or {}).get("account_type", "demo")).lower()
+        account_type = str((self.credentials or {}).get("account_type", "demo")).lower()
         return {
             "loginid": self._account_id(),
             "account_id": self._account_id(),
@@ -127,7 +119,7 @@ class DerivAdapter(BrokerAdapter):
         try:
             response = await asyncio.to_thread(
                 requests.get,
-                DERIV_ACCOUNTS_URL,
+                settings.DERIV_OPTIONS_ACCOUNTS_URL,
                 headers={
                     "Authorization": f"Bearer {self._token()}",
                     "Deriv-App-ID": self._app_id(),
@@ -177,61 +169,44 @@ class DerivAdapter(BrokerAdapter):
         return {"symbol": symbol, "stream": "ticks", "endpoint": self.endpoint}
 
     async def place_order(self, order):
-        """Get a live proposal and buy it; no simulated fills are returned."""
         routing = order.routing_context or {}
         account_type = str(routing.get("account_type") or self.credentials.get("account_type") or "demo").lower()
-        if account_type == "real" and os.getenv("ALLOW_LIVE_TRADING", "false").lower() not in {"1", "true", "yes"}:
-            raise BrokerOrderError("Live-money trading is disabled. Set ALLOW_LIVE_TRADING=true only after production risk validation.")
-
+        if account_type == "real" and not settings.ALLOW_LIVE_TRADING:
+            raise BrokerOrderError("Live-money trading is disabled by platform configuration")
         contract_type = (order.contract_type or order.direction or "CALL").upper()
         if contract_type in {"BUY", "SELL"}:
             contract_type = routing.get("contract_type", "CALL").upper()
         if contract_type not in {"CALL", "PUT", "MULTUP", "MULTDOWN", "DIGITOVER", "DIGITUNDER", "RISE", "FALL"}:
             raise BrokerOrderError(f"Unsupported Deriv contract type: {contract_type}")
-
-        duration = int(routing.get("duration", 60))
-        duration_unit = routing.get("duration_unit", "s")
-        currency = routing.get("currency") or getattr(self.account, "currency", None) or "USD"
         proposal_payload = {
             "proposal": 1,
             "amount": float(order.stake or order.quantity),
             "basis": "stake",
             "contract_type": contract_type,
-            "currency": currency,
-            "duration": duration,
-            "duration_unit": duration_unit,
+            "currency": routing.get("currency") or getattr(self.account, "currency", None) or "USD",
+            "duration": int(routing.get("duration", 60)),
+            "duration_unit": routing.get("duration_unit", "s"),
             "underlying_symbol": order.symbol,
         }
         if routing.get("barrier") is not None:
             proposal_payload["barrier"] = str(routing["barrier"])
         if routing.get("multiplier") is not None:
             proposal_payload["multiplier"] = float(routing["multiplier"])
-
         proposal_response = await self._request(proposal_payload, authenticated=True)
         proposal = proposal_response.get("proposal") or {}
         proposal_id = proposal.get("id")
         ask_price = proposal.get("ask_price") or proposal.get("display_value")
         if not proposal_id or ask_price is None:
             raise BrokerOrderError("Deriv returned an unusable proposal")
-
         buy_response = await self._request({"buy": proposal_id, "price": float(ask_price)}, authenticated=True)
         buy = buy_response.get("buy") or {}
         contract_id = buy.get("contract_id")
         if not contract_id:
             raise BrokerOrderError("Deriv accepted the request without returning a contract ID")
-        return {
-            "status": "filled",
-            "broker_order_id": str(contract_id),
-            "execution_price": buy.get("buy_price") or ask_price,
-            "fees": 0,
-            "payout": buy.get("payout"),
-            "proposal_id": proposal_id,
-            "contract_type": contract_type,
-            "raw": {"proposal": proposal_response, "buy": buy_response},
-        }
+        return {"status": "filled", "broker_order_id": str(contract_id), "execution_price": buy.get("buy_price") or ask_price, "fees": 0, "payout": buy.get("payout"), "proposal_id": proposal_id, "contract_type": contract_type, "raw": {"proposal": proposal_response, "buy": buy_response}}
 
     async def modify_order(self, order, **changes):
-        raise BrokerOrderError("Deriv contract modification requires a contract_update operation and explicit contract id")
+        raise BrokerOrderError("Deriv contract modification is not exposed by the generic order API")
 
     async def cancel_order(self, order):
         raise BrokerOrderError("Deriv contracts cannot be cancelled through the generic order API")
