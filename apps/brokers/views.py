@@ -26,7 +26,12 @@ class BrokerOrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self): return Order.objects.filter(user=self.request.user)
     def create(self, request,*args,**kwargs):
         serializer=self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
-        try: report=ExecutionEngine().submit(request.user, **serializer.validated_data)
+        data=dict(serializer.validated_data)
+        account=data.get('account')
+        if account is not None:
+            account=get_object_or_404(BrokerAccount, pk=account.pk, user=request.user)
+            data['account']=account
+        try: report=ExecutionEngine().submit(request.user, **data)
         except BrokerRoutingError as exc: return response.Response({'detail':str(exc),'status':'blocked'}, status=status.HTTP_409_CONFLICT)
         except (BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError) as exc: return response.Response({'detail':str(exc),'status':'broker_error'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return response.Response(ExecutionReportSerializer(report).data, status=status.HTTP_201_CREATED)
