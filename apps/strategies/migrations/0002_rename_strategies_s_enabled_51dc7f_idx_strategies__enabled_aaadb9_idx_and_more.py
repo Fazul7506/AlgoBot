@@ -7,7 +7,6 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('broker', '0002_rename_broker_brok_user_id_3f87ad_idx_broker_brok_user_id_23914c_idx_and_more'),
         ('strategies', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
@@ -68,7 +67,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='strategyexecution',
-            index=models.Index(fields=['strategy', 'status'], name='strategies__strateg_47d6d1_idx'),
+            index=models.Index(fields=['strategy', 'status'], name='strategies__strateg_47d2d1_idx'),
         ),
         migrations.AddIndex(
             model_name='strategyexecution',
