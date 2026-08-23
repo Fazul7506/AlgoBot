@@ -1,12 +1,14 @@
-"""Centralized Deriv OAuth service for handling authentication flow."""
+"""Centralized Deriv OAuth 2.0 Authorization Code + PKCE service."""
 
-import secrets
-import hashlib
+from __future__ import annotations
+
 import base64
+import hashlib
 import logging
+import secrets
 from datetime import timedelta
-from typing import Optional, Dict, Any
-from urllib.parse import urlencode
+from typing import Any, Dict, Optional
+from urllib.parse import urlencode, urlparse
 
 import requests
 from django.conf import settings
@@ -14,41 +16,40 @@ from django.utils import timezone
 
 logger = logging.getLogger("oauth")
 
-# Current Deriv OAuth endpoints
 DERIV_AUTHORIZE_URL = "https://auth.deriv.com/oauth2/auth"
 DERIV_TOKEN_URL = "https://auth.deriv.com/oauth2/token"
-DERIV_REFRESH_URL = "https://auth.deriv.com/oauth2/token"
-OAUTH_TIMEOUT = (3.05, 10)
-
-# Current Deriv OAuth scopes. Request only the permissions the product needs.
-DEFAULT_SCOPE = "trade"
-AVAILABLE_SCOPES = ["trade", "account_manage", "application_read", "payment"]
+DERIV_REFRESH_URL = DERIV_TOKEN_URL
+OAUTH_TIMEOUT = (3.05, 15)
+DEFAULT_SCOPE = "trade account_manage"
 
 
 class DerivOAuthService:
-    """Unified OAuth service for Deriv authentication."""
+    """Single source of truth for AlgoBot's Deriv browser OAuth flow."""
 
     @staticmethod
     def validate_configuration() -> tuple[bool, Optional[str]]:
-        """Validate OAuth configuration."""
-        if settings.DEBUG:
-            return True, None
-
         required_config = {
             "DERIV_OAUTH_CLIENT_ID": settings.DERIV_OAUTH_CLIENT_ID,
             "DERIV_REDIRECT_URI": settings.DERIV_REDIRECT_URI,
         }
-        missing = [k for k, v in required_config.items() if not v]
+        missing = [key for key, value in required_config.items() if not value]
         if missing:
-            error_msg = f"Missing OAuth configuration: {', '.join(missing)}"
-            logger.error("OAuth configuration validation failed", extra={"missing": missing})
-            return False, error_msg
+            message = f"Missing OAuth configuration: {', '.join(missing)}"
+            logger.error("deriv_oauth_configuration_invalid", extra={"missing": missing})
+            return False, message
+
+        parsed = urlparse(settings.DERIV_REDIRECT_URI)
+        if not parsed.scheme or not parsed.netloc:
+            return False, "DERIV_REDIRECT_URI must be an absolute URL"
+        if not settings.DEBUG and parsed.scheme != "https":
+            return False, "DERIV_REDIRECT_URI must use HTTPS in production"
         return True, None
 
     @staticmethod
     def generate_pkce_pair() -> tuple[str, str]:
         verifier = secrets.token_urlsafe(64)
-        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+        digest = hashlib.sha256(verifier.encode("ascii")).digest()
+        challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
         return verifier, challenge
 
     @staticmethod
@@ -56,17 +57,25 @@ class DerivOAuthService:
         return secrets.token_urlsafe(32)
 
     @staticmethod
-    def create_authorization_url(state: str, code_challenge: str, scope: str = DEFAULT_SCOPE, language: str = "EN") -> str:
+    def create_authorization_url(
+        state: str,
+        code_challenge: str,
+        scope: Optional[str] = None,
+    ) -> str:
+        """Build only the documented Deriv OAuth parameters."""
+        configured_scope = scope or getattr(settings, "DERIV_OAUTH_SCOPE", DEFAULT_SCOPE)
         query_params = {
             "response_type": "code",
             "client_id": settings.DERIV_OAUTH_CLIENT_ID,
             "redirect_uri": settings.DERIV_REDIRECT_URI,
-            "scope": scope,
+            "scope": configured_scope,
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
-            "l": language,
         }
+        legacy_app_id = getattr(settings, "DERIV_LEGACY_APP_ID", "")
+        if legacy_app_id:
+            query_params["app_id"] = legacy_app_id
         return f"{DERIV_AUTHORIZE_URL}?{urlencode(query_params)}"
 
     @staticmethod
@@ -75,6 +84,7 @@ class DerivOAuthService:
         request.session["pkce_verifier"] = code_verifier
         request.session["oauth_redirect_uri"] = redirect_uri
         request.session.modified = True
+        request.session.save()
 
     @staticmethod
     def validate_state(received_state: Optional[str], expected_state: Optional[str]) -> tuple[bool, Optional[str]]:
@@ -85,7 +95,11 @@ class DerivOAuthService:
         return True, None
 
     @staticmethod
-    def validate_pkce(code_verifier: Optional[str], redirect_uri: Optional[str], expected_redirect_uri: str) -> tuple[bool, Optional[str]]:
+    def validate_pkce(
+        code_verifier: Optional[str],
+        redirect_uri: Optional[str],
+        expected_redirect_uri: str,
+    ) -> tuple[bool, Optional[str]]:
         if not code_verifier:
             return False, "PKCE verifier missing"
         if redirect_uri != expected_redirect_uri:
@@ -93,17 +107,30 @@ class DerivOAuthService:
         return True, None
 
     @staticmethod
-    def exchange_code_for_token(code: str, code_verifier: str, http_client=None) -> tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
-        token_payload = {
+    def exchange_code_for_token(
+        code: str,
+        code_verifier: str,
+        http_client=None,
+    ) -> tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        payload = {
             "grant_type": "authorization_code",
-            "code": code,
             "client_id": settings.DERIV_OAUTH_CLIENT_ID,
-            "redirect_uri": settings.DERIV_REDIRECT_URI,
+            "code": code,
             "code_verifier": code_verifier,
+            "redirect_uri": settings.DERIV_REDIRECT_URI,
         }
+        client_secret = getattr(settings, "DERIV_OAUTH_CLIENT_SECRET", "")
+        if client_secret:
+            payload["client_secret"] = client_secret
+
         try:
             client = http_client or requests
-            response = client.post(DERIV_TOKEN_URL, data=token_payload, timeout=OAUTH_TIMEOUT)
+            response = client.post(
+                DERIV_TOKEN_URL,
+                data=payload,
+                headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
+                timeout=OAUTH_TIMEOUT,
+            )
             response.raise_for_status()
             return True, response.json(), None
         except requests.Timeout:
@@ -111,7 +138,9 @@ class DerivOAuthService:
         except requests.ConnectionError:
             return False, None, "Network error during token exchange"
         except requests.RequestException as exc:
-            return False, None, f"Token exchange request failed: {exc}"
+            status = exc.response.status_code if exc.response is not None else "unknown"
+            logger.error("deriv_oauth_token_exchange_failed", extra={"status": status})
+            return False, None, f"Token exchange request failed (HTTP {status})"
         except ValueError:
             return False, None, "Deriv returned invalid JSON"
 
@@ -127,15 +156,29 @@ class DerivOAuthService:
     def refresh_access_token(refresh_token: str) -> tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
         if not refresh_token:
             return False, None, "Refresh token not available"
-        payload = {"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": settings.DERIV_OAUTH_CLIENT_ID}
+        payload = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": settings.DERIV_OAUTH_CLIENT_ID,
+        }
+        client_secret = getattr(settings, "DERIV_OAUTH_CLIENT_SECRET", "")
+        if client_secret:
+            payload["client_secret"] = client_secret
         try:
-            response = requests.post(DERIV_REFRESH_URL, data=payload, timeout=OAUTH_TIMEOUT)
+            response = requests.post(
+                DERIV_REFRESH_URL,
+                data=payload,
+                headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
+                timeout=OAUTH_TIMEOUT,
+            )
             response.raise_for_status()
             return True, response.json(), None
         except requests.Timeout:
             return False, None, "Token refresh timed out"
-        except requests.RequestException as exc:
-            return False, None, f"Token refresh failed: {exc}"
+        except requests.RequestException:
+            return False, None, "Token refresh failed"
+        except ValueError:
+            return False, None, "Deriv returned invalid JSON"
 
     @staticmethod
     def clear_oauth_session(request) -> None:
@@ -145,7 +188,7 @@ class DerivOAuthService:
 
     @staticmethod
     def parse_token_expiry(expires_in: int) -> timezone.datetime:
-        return timezone.now() + timedelta(seconds=expires_in)
+        return timezone.now() + timedelta(seconds=max(0, int(expires_in)))
 
     @staticmethod
     def is_token_expired(expires_at) -> bool:
