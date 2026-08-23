@@ -36,8 +36,20 @@ class BrokerManager:
 class BrokerConnectionService:
     async def connect(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        adapter=BrokerRegistry().adapter(broker,account); await adapter.connect(); latency=await adapter.ping(); conn=BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
-        account.status='active'; account.last_synced_at=timezone.now(); account.save(update_fields=['status','last_synced_at']); return conn
+        adapter=BrokerRegistry().adapter(broker,account)
+        verification=await adapter.connect()
+        latency=await adapter.ping()
+        # A successful broker authentication is the source of truth. Persist its
+        # identity/balance before the UI is allowed to call the account connected.
+        if verification.get('account_id') and verification['account_id'] != account.account_id: account.account_id=str(verification['account_id'])
+        if verification.get('balance') is not None: account.balance=verification['balance']
+        if verification.get('currency'): account.currency=verification['currency']
+        account_type=verification.get('is_virtual')
+        credentials=dict(account.credentials or {})
+        if account_type is not None: credentials['account_type']='demo' if account_type else 'real'
+        account.credentials=credentials; account.status='active'; account.last_synced_at=timezone.now(); account.save(update_fields=['account_id','balance','currency','credentials','status','last_synced_at'])
+        conn=BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
+        return conn
     async def disconnect(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
         await BrokerRegistry().adapter(broker,account).disconnect(); account.status='disconnected'; account.save(update_fields=['status']); conn,_=BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'disconnected'}); return conn
@@ -81,7 +93,9 @@ class ExecutionEngine:
         if routing.get('ai_assisted'):
             from apps.ai_engine.services import AIEngine
             from apps.market_data.deriv_sync import fetch_tick
-            symbol=data.get('symbol'); tick=fetch_tick(symbol); ctx={'market_data':{'close':tick['quote'],'open':tick['quote'],'high':tick['quote'],'low':tick['quote'],'spread':(tick.get('ask')-tick.get('bid')) if tick.get('bid') is not None and tick.get('ask') is not None else 0}}; analysis=AIEngine().analyze(symbol,routing.get('timeframe','M1'),ctx); recommendation=analysis['recommendation']; minimum_confidence=float(routing.get('minimum_ai_confidence',65))
+            symbol=data.get('symbol')
+            if not symbol: raise BrokerRoutingError('AI-assisted execution requires a broker symbol')
+            tick=fetch_tick(symbol); ctx={'market_data':{'close':tick['quote'],'open':tick['quote'],'high':tick['quote'],'low':tick['quote'],'spread':(tick.get('ask')-tick.get('bid')) if tick.get('bid') is not None and tick.get('ask') is not None else 0}}; analysis=AIEngine().analyze(symbol,routing.get('timeframe','M1'),ctx); recommendation=analysis['recommendation']; minimum_confidence=float(routing.get('minimum_ai_confidence',65))
             if recommendation.confidence<minimum_confidence or recommendation.recommendation=='WAIT': raise BrokerRoutingError(f'AI gate blocked the order: {recommendation.recommendation} at {recommendation.confidence:.1f}% confidence')
             direction=str(data.get('direction','')).upper()
             if direction in {'BUY','CALL','RISE'} and recommendation.recommendation!='BUY': raise BrokerRoutingError('AI gate rejected a BUY/CALL order')
@@ -102,7 +116,7 @@ class SynchronizationService:
         BrokerConnection.objects.update_or_create(broker=account.broker,defaults={'status':'connected','last_ping':timezone.now(),'connected_at':timezone.now()}); return account,data
 class ReconciliationService:
     def reconcile_order(self,order,broker_trade=None,repair=True):
-        diff={} if broker_trade and broker_trade.get('broker_order_id')==order.broker_order_id else {'order':'missing_or_mismatched'}; rec=TradeReconciliation.objects.create(broker=order.broker,trade=broker_trade or {},matched=not diff,difference=diff,repaired=bool(diff and repair))
+        diff={} if broker_trade and broker_trade.get('broker_order_id')==order.broker_order_id else {'order':'missing_or_mismatched'}; rec=TradeReconciliation.objects.create(broker=order.broker,trade=broker_trade or {},matched=not diff,difference=diff,repaired=bool(diff and repair));
         if rec.repaired: order.status='reconciled'; order.save(update_fields=['status','updated_at'])
         return rec
 class BrokerHealthService:
