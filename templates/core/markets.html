@@ -2,9 +2,16 @@
 {% block title %}Live markets | AlgoBot{% endblock %}
 {% block content %}
 <section class="markets-center" data-markets-center>
-<header class="enterprise-hero"><div><p class="eyebrow">Broker market-data engine</p><h1>Live markets</h1><p class="hero-copy">Markets are sourced from Deriv's active-symbol catalogue and refreshed from broker quotes.</p></div><div class="hero-actions"><a class="btn primary" href="/trading/">Trade selected market</a></div></header>
-<section class="panel market-toolbar"><div class="field"><label for="market-search">Search symbols</label><input id="market-search" data-market-search placeholder="R_75, Volatility…"></div><div class="field"><label for="market-timeframe">Timeframe</label><select id="market-timeframe" data-market-timeframe><option value="1m">M1</option><option value="5m">M5</option><option value="15m">M15</option><option value="30m">M30</option><option value="1h">H1</option></select></div><button class="btn ghost" data-market-refresh type="button">Sync broker markets</button></section>
-<section class="market-grid" data-market-list><div class="empty-state">Loading broker market universe…</div></section>
+  <header class="enterprise-hero">
+    <div><p class="eyebrow">Broker market-data engine</p><h1>Live markets</h1><p class="hero-copy">Markets are sourced from the connected broker's current instrument catalogue and refreshed from live quotes.</p></div>
+    <div class="hero-actions"><a class="btn primary" href="/trading/">Trade selected market</a></div>
+  </header>
+  <section class="panel market-toolbar">
+    <div class="field"><label for="market-search">Search symbols</label><input id="market-search" data-market-search placeholder="Search broker symbols…" autocomplete="off"></div>
+    <div class="field"><label for="market-timeframe">Timeframe</label><select id="market-timeframe" data-market-timeframe><option value="1m">M1</option><option value="5m">M5</option><option value="15m">M15</option><option value="30m">M30</option><option value="1h">H1</option></select></div>
+    <button class="btn ghost" data-market-refresh type="button">Sync broker markets</button>
+  </section>
+  <section class="market-grid" data-market-list><div class="empty-state">Loading broker market universe…</div></section>
 </section>
 {% endblock %}
 {% block extra_js %}
@@ -13,14 +20,18 @@
  const $=(s,r=document)=>r.querySelector(s);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
  const notify=(message,type='info')=>{let stack=$('.toast-stack');if(!stack){stack=document.createElement('div');stack.className='toast-stack';stack.setAttribute('aria-live','polite');document.body.appendChild(stack)}const node=document.createElement('div');node.className=`toast ${type}`;node.textContent=message;stack.appendChild(node);setTimeout(()=>node.remove(),4500)};
- const json=async (url,options={})=>{const r=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json',...(options.headers||{})},...options});const t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch{d={detail:t}}if(r.status===401||r.status===403){location.assign('/login/?next='+encodeURIComponent(location.pathname));throw Error('Authentication required')}if(!r.ok)throw Error(d.detail||d.message||`Request failed (${r.status})`);return d};
- let rows=[];
  const csrf=()=>document.cookie.split('; ').find(x=>x.startsWith('csrftoken='))?.split('=')[1]||'';
- async function sync(){try{await json('/api/markets/symbols/sync/',{method:'POST',headers:{'X-CSRFToken':csrf()}})}catch(e){notify(e.message,'warning')}}
- async function load(){try{await sync();const symbols=await json('/api/markets/symbols/');rows=Array.isArray(symbols)?symbols:(symbols.results||[]);render()}catch(e){notify(e.message||'Broker market data is unavailable.','error');$('[data-market-list]').innerHTML='<div class="empty-state">Broker market data is unavailable. Connect your broker and try again.</div>'}}
- async function quote(symbol){try{return await json('/api/markets/ticks/broker/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({symbol})})}catch{return null}}
- async function render(){const q=$('[data-market-search]').value.toLowerCase();const list=rows.filter(x=>JSON.stringify(x).toLowerCase().includes(q)).slice(0,60);$('[data-market-list]').innerHTML=list.map(x=>`<article class="market-card" data-symbol="${esc(x.symbol)}"><div><span class="eyebrow">${esc(x.market)}</span><h2>${esc(x.symbol)}</h2><p>${esc(x.display_name)}</p></div><div class="market-quote"><strong data-quote>—</strong><span data-bidask>Broker quote pending</span></div><div class="market-card-actions"><a class="btn primary small" href="/trading/?symbol=${encodeURIComponent(x.symbol)}">Trade</a></div></article>`).join('')||'<div class="empty-state">No markets match your search.</div>';for(const card of document.querySelectorAll('[data-symbol]')){const d=await quote(card.dataset.symbol);if(!d)continue;card.querySelector('[data-quote]').textContent=d.quote??'—';card.querySelector('[data-bidask]').textContent=`Bid ${d.bid??'—'} · Ask ${d.ask??'—'}`}}
- $('[data-market-search]')?.addEventListener('input',render);$('[data-market-refresh]')?.addEventListener('click',load);load();setInterval(()=>{if(document.visibilityState==='visible')render()},5000);
+ const json=async(url,options={},timeout=8000)=>{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeout);try{const r=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json',...(options.headers||{})},signal:controller.signal,...options});const t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch{d={detail:t}}if(r.status===401||r.status===403){location.assign('/login/?next='+encodeURIComponent(location.pathname));throw Error('Authentication required')}if(!r.ok)throw Error(d.detail||d.message||`Request failed (${r.status})`);return d}catch(e){if(e.name==='AbortError')throw Error('Broker request timed out');throw e}finally{clearTimeout(timer)}};
+ const normalise=v=>Array.isArray(v)?v:(Array.isArray(v?.results)?v.results:(Array.isArray(v?.data)?v.data:[]));
+ let rows=[]; let quoteTimer=null;
+ async function sync(){try{const result=await json('/api/markets/symbols/sync/',{method:'POST',headers:{'X-CSRFToken':csrf()}},10000);if(result?.symbols===0)notify('The connected broker returned no active markets.','warning');}catch(e){notify(`Broker market sync failed: ${e.message}`,'warning')}}
+ async function load(){try{await sync();const symbols=await json('/api/markets/symbols/',{},6000);rows=normalise(symbols);render();if(!rows.length)notify('No active instruments were returned by the connected broker.','warning')}catch(e){notify(e.message||'Broker market data is unavailable.','error');$('[data-market-list]').innerHTML='<div class="empty-state">Broker market data is unavailable. Reconnect the broker and try again.</div>'}}
+ async function quote(symbol){try{return await json('/api/markets/ticks/broker/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({symbol})},6500)}catch{return null}}
+ async function refreshQuotes(){const cards=[...document.querySelectorAll('[data-symbol]')].slice(0,20);const results=await Promise.all(cards.map(async card=>[card,await quote(card.dataset.symbol)]));for(const [card,d] of results){if(!d)continue;const q=card.querySelector('[data-quote]');const ba=card.querySelector('[data-bidask]');if(q)q.textContent=d.quote??'—';if(ba)ba.textContent=`Bid ${d.bid??'—'} · Ask ${d.ask??'—'}`}}
+ function render(){const q=String($('[data-market-search]').value||'').toLowerCase();const list=rows.filter(x=>JSON.stringify(x).toLowerCase().includes(q)).slice(0,60);$('[data-market-list]').innerHTML=list.map(x=>`<article class="market-card" data-symbol="${esc(x.symbol)}"><div><span class="eyebrow">${esc(x.market)}</span><h2>${esc(x.symbol)}</h2><p>${esc(x.display_name)}</p></div><div class="market-quote"><strong data-quote>—</strong><span data-bidask>Live quote pending</span></div><div class="market-card-actions"><a class="btn primary small" href="/trading/?symbol=${encodeURIComponent(x.symbol)}">Trade</a></div></article>`).join('')||'<div class="empty-state">No broker instruments match your search.</div>';refreshQuotes()}
+ $('[data-market-search]')?.addEventListener('input',()=>render());
+ $('[data-market-refresh]')?.addEventListener('click',async()=>{const b=$('[data-market-refresh]');b.disabled=true;try{await load()}finally{b.disabled=false}});
+ load(); quoteTimer=setInterval(()=>{if(document.visibilityState==='visible')refreshQuotes()},10000);window.addEventListener('beforeunload',()=>clearInterval(quoteTimer));
 })();
 </script>
 {% endblock %}
