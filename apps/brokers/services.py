@@ -44,24 +44,20 @@ class BrokerManager:
 class BrokerConnectionService:
     async def connect(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        adapter=BrokerRegistry().adapter(broker,account)
-        verification=await adapter.connect()
-        latency=await adapter.ping()
+        adapter=BrokerRegistry().adapter(broker,account); verification=await adapter.connect(); latency=await adapter.ping()
         if verification.get('account_id') and verification['account_id'] != account.account_id: account.account_id=str(verification['account_id'])
         if verification.get('balance') is not None: account.balance=verification['balance']
         if verification.get('currency'): account.currency=verification['currency']
-        account_type=verification.get('is_virtual')
-        credentials=dict(account.credentials or {})
+        account_type=verification.get('is_virtual'); credentials=dict(account.credentials or {})
         if account_type is not None: credentials['account_type']='demo' if account_type else 'real'
         account.credentials=credentials; account.status='active'; account.last_synced_at=timezone.now(); account.save(update_fields=['account_id','balance','currency','credentials','status','last_synced_at'])
-        conn=BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
-        return conn
+        return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
     async def disconnect(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        await BrokerRegistry().adapter(broker,account).disconnect(); account.status='disconnected'; account.save(update_fields=['status']); conn,_=BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'disconnected'}); return conn
+        await BrokerRegistry().adapter(broker,account).disconnect(); account.status='disconnected'; account.save(update_fields=['status']); return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'disconnected'})[0]
     async def heartbeat(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        adapter=BrokerRegistry().adapter(broker,account); data=await adapter.health_check(); latency=await adapter.ping(); conn,_=BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data}); return conn
+        adapter=BrokerRegistry().adapter(broker,account); data=await adapter.health_check(); latency=await adapter.ping(); return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data})[0]
 class AuthenticationService:
     async def authenticate(self,account): return await BrokerRegistry().adapter(account.broker,account).authenticate()
     async def refresh_token(self,account): return await BrokerRegistry().adapter(account.broker,account).refresh_token()
@@ -101,7 +97,7 @@ class ExecutionEngine:
             from apps.market_data.services import MarketDataService
             symbol=data.get('symbol')
             if not symbol: raise BrokerRoutingError('AI-assisted execution requires a broker symbol')
-            tick=MarketDataService().latest_tick(symbol)
+            tick=MarketDataService().history.tick_history(symbol, limit=1).first()
             if tick is None: raise BrokerRoutingError('AI-assisted execution requires fresh normalized market data')
             spread=float(tick.ask-tick.bid) if tick.bid is not None and tick.ask is not None else 0
             ctx={'market_data':{'close':float(tick.quote),'open':float(tick.quote),'high':float(tick.quote),'low':float(tick.quote),'spread':spread}}
@@ -115,8 +111,7 @@ class ExecutionEngine:
 class SynchronizationService:
     async def sync_account(self,account):
         if account.status in {'disconnected','revoked'}: raise BrokerRoutingError('This broker account is not connected')
-        adapter=BrokerRegistry().adapter(account.broker,account); data=await adapter.get_balance(); fields=[]
-        broker_account_id=data.get('account_id') or account.account_id
+        adapter=BrokerRegistry().adapter(account.broker,account); data=await adapter.get_balance(); fields=[]; broker_account_id=data.get('account_id') or account.account_id
         if broker_account_id and broker_account_id!=account.account_id: account.account_id=broker_account_id; fields.append('account_id')
         for f in ['balance','equity','margin','free_margin','currency']:
             if data.get(f) is not None: setattr(account,f,data[f]); fields.append(f)
