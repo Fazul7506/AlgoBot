@@ -99,6 +99,27 @@ class BrokerConnection(models.Model):
         indexes = [models.Index(fields=['broker', 'status']), models.Index(fields=['last_ping'])]
 
 
+class BrokerConnectionLog(models.Model):
+    broker_account = models.ForeignKey(BrokerAccount, on_delete=models.CASCADE, related_name='connection_logs')
+    status = models.CharField(max_length=50)
+    latency = models.FloatField(null=True, blank=True)
+    event = models.CharField(max_length=120)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['broker_account', '-created_at']), models.Index(fields=['event'])]
+
+
+class BrokerPermission(models.Model):
+    broker = models.ForeignKey(Broker, on_delete=models.CASCADE, related_name='permissions')
+    permission = models.CharField(max_length=80)
+    enabled = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = [('broker', 'permission')]
+
+
 class Order(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='broker_orders')
     broker = models.ForeignKey(Broker, on_delete=models.PROTECT, related_name='orders')
