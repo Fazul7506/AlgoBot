@@ -10,26 +10,29 @@ class BrokerService:
     def __init__(self, manager=None):
         self.manager = manager or BrokerManager()
 
+    def _adapter(self, account):
+        return BrokerRegistry().adapter(account.broker, account)
+
     async def buy(self, account, **payload):
-        return await self.manager.get_adapter(account).place_order(payload)
+        return await self._adapter(account).place_order(payload)
 
     async def sell(self, account, **payload):
-        return await self.manager.get_adapter(account).place_order(payload)
+        return await self._adapter(account).place_order(payload)
 
     async def balance(self, account):
-        return await self.manager.get_adapter(account.broker, account).get_balance()
+        return await self._adapter(account).get_balance()
 
     async def history(self, account, **filters):
-        return await self.manager.get_adapter(account.broker, account).get_trade_history(**filters)
+        return await self._adapter(account).get_trade_history(**filters)
 
     async def positions(self, account):
-        return await self.manager.get_adapter(account.broker, account).get_positions()
+        return await self._adapter(account).get_positions()
 
     async def orders(self, account):
-        return await self.manager.get_adapter(account.broker, account).get_orders()
+        return await self._adapter(account).get_orders()
 
     async def subscribe_ticks(self, account, symbol):
-        return await self.manager.get_adapter(account.broker, account).subscribe_ticks(symbol)
+        return await self._adapter(account).subscribe_ticks(symbol)
 
 
 class BrokerHealthService:
