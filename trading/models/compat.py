@@ -5,6 +5,12 @@ from django.utils import timezone
 from apps.brokers.models import BrokerAccount
 
 
+def _kwargs(kwargs):
+    values = dict(kwargs)
+    values["broker__broker_type"] = "deriv"
+    return values
+
+
 class _DerivAccountProxy:
     def __init__(self, account):
         self._account = account
@@ -26,32 +32,22 @@ class _DerivAccountProxy:
         else:
             setattr(self._account, name, value)
 
-    def set_access_token(self, token):
-        return self._account.set_access_token(token)
-
-    def get_access_token(self):
-        return self._account.get_access_token()
-
-    def set_refresh_token(self, token):
-        return self._account.set_refresh_token(token)
-
-    def get_refresh_token(self):
-        return self._account.get_refresh_token()
-
-    def save(self, *args, **kwargs):
-        return self._account.save(*args, **kwargs)
+    def set_access_token(self, token): return self._account.set_access_token(token)
+    def get_access_token(self): return self._account.get_access_token()
+    def set_refresh_token(self, token): return self._account.set_refresh_token(token)
+    def get_refresh_token(self): return self._account.get_refresh_token()
+    def save(self, *args, **kwargs): return self._account.save(*args, **kwargs)
 
 
 class _DerivAccountManager:
     def get(self, *args, **kwargs):
-        account = BrokerAccount.objects.get(broker__broker_type="deriv", *args, **kwargs)
-        return _DerivAccountProxy(account)
+        return _DerivAccountProxy(BrokerAccount.objects.get(*args, **_kwargs(kwargs)))
 
     def filter(self, *args, **kwargs):
-        return BrokerAccount.objects.filter(broker__broker_type="deriv", *args, **kwargs)
+        return BrokerAccount.objects.filter(*args, **_kwargs(kwargs))
 
     def get_or_create(self, *args, **kwargs):
-        account, created = BrokerAccount.objects.get_or_create(broker__broker_type="deriv", *args, **kwargs)
+        account, created = BrokerAccount.objects.get_or_create(*args, **_kwargs(kwargs))
         return _DerivAccountProxy(account), created
 
 
