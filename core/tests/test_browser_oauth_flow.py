@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
@@ -18,13 +18,14 @@ class BrowserOAuthFlowTests(TestCase):
         follow = self.client.get("/")
         self.assertContains(follow, "You have been logged out securely.")
 
-    @patch("core.views_broker_oauth._authorize", new_callable=AsyncMock, return_value={})
+    @patch("core.views_broker_oauth._verify_authenticated_websocket")
+    @patch("core.views_broker_oauth._verify_account", return_value=(None, []))
     @patch("core.views_broker_oauth.DerivOAuthService.exchange_code_for_token")
     @patch("core.views_broker_oauth.DerivOAuthService.validate_token_response", return_value=(True, None))
     @patch("core.views_broker_oauth.DerivOAuthService.validate_pkce", return_value=(True, None))
     @patch("core.views_broker_oauth.DerivOAuthService.validate_state", return_value=(True, None))
     def test_oauth_never_creates_user_when_deriv_does_not_return_account_identity(
-        self, validate_state, validate_pkce, validate_token, exchange, authorize
+        self, validate_state, validate_pkce, validate_token, exchange, verify_account, websocket
     ):
         exchange.return_value = (True, {"access_token": "verified-token", "expires_in": 3600}, None)
         session = self.client.session
@@ -38,4 +39,10 @@ class BrowserOAuthFlowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/brokers/connect/")
         self.assertEqual(User.objects.count(), 0)
-        self.assertTrue(any("No local user was created" in str(message) for message in response.wsgi_request._messages))
+        self.assertTrue(
+            any(
+                "could not verify the trading connection" in str(message)
+                for message in response.wsgi_request._messages
+            )
+        )
+        websocket.assert_not_called()
