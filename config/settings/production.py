@@ -37,6 +37,12 @@ USE_POSTGRES = True
 USE_REDIS = True
 EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 
+# Production must use the new OAuth application ID consistently for both the
+# OAuth client and the Deriv-App-ID API header. A legacy V1 ID must not silently
+# replace the current OAuth application ID.
+if DERIV_OAUTH_CLIENT_ID and DERIV_APP_ID and DERIV_APP_ID != DERIV_OAUTH_CLIENT_ID:  # noqa: F405
+    raise RuntimeError("DERIV_APP_ID must match DERIV_OAUTH_CLIENT_ID in production.")
+
 # Production must use real infrastructure, not local fallbacks.
 validate_required_settings(
     production=True,
@@ -46,6 +52,7 @@ validate_required_settings(
         "CSRF_TRUSTED_ORIGINS": ",".join(CSRF_TRUSTED_ORIGINS),
         "BASE_URL": BASE_URL,
         "REDIS_URL": REDIS_URL,  # noqa: F405
+        "DERIV_OAUTH_CLIENT_ID": DERIV_OAUTH_CLIENT_ID,  # noqa: F405
         "DERIV_APP_ID": DERIV_APP_ID,  # noqa: F405
         "DERIV_REDIRECT_URI": DERIV_REDIRECT_URI,  # noqa: F405
         "DATABASE_URL or POSTGRES_*": DATABASE_URL or (
