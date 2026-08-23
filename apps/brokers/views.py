@@ -10,19 +10,9 @@ class BrokerAccountViewSet(viewsets.ModelViewSet):
     serializer_class=BrokerAccountSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return BrokerAccount.objects.filter(user=self.request.user)
     def perform_create(self, serializer): serializer.save(user=self.request.user)
-    @decorators.action(detail=True, methods=['post'], url_path='sync')
-    def sync(self, request, pk=None):
-        account = self.get_object()
-        try:
-            account, _ = asyncio.run(SynchronizationService().sync_account(account))
-        except BrokerAuthenticationError as exc:
-            return response.Response({'detail': str(exc), 'broker_status': 'credentials_expired'}, status=status.HTTP_401_UNAUTHORIZED)
-        except BrokerConnectionError as exc:
-            return response.Response({'detail': str(exc), 'broker_status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        return response.Response({'account': BrokerAccountSerializer(account).data, 'source': 'deriv_authorize'})
 class BrokerConnectionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=BrokerConnectionSerializer; permission_classes=[permissions.IsAuthenticated]
-    def get_queryset(self): return BrokerConnection.objects.select_related('broker').filter(broker__broker_accounts__user=self.request.user).distinct()
+    def get_queryset(self): return BrokerConnection.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
 class BrokerOrderViewSet(viewsets.ModelViewSet):
     serializer_class=OrderSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return Order.objects.filter(user=self.request.user)
@@ -35,7 +25,7 @@ class ExecutionReportViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self): return ExecutionReport.objects.filter(order__user=self.request.user)
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=PositionSerializer; permission_classes=[permissions.IsAuthenticated]
-    def get_queryset(self): return Position.objects.select_related('account', 'broker').filter(account__user=self.request.user)
+    def get_queryset(self): return Position.objects.filter(account__user=self.request.user)
 class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=TradeReconciliationSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return TradeReconciliation.objects.filter(broker__broker_accounts__user=self.request.user).distinct()

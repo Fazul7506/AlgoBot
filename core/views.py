@@ -74,34 +74,42 @@ def register_page(request):
     return redirect('/brokers/connect/?broker=deriv')
 
 
+@login_required
 def dashboard_page(request):
     return render(request, 'core/dashboard.html')
 
 
+@login_required
 def markets_page(request):
     return render(request, 'core/markets.html')
 
 
+@login_required
 def strategies_page(request):
     return render(request, 'core/strategies.html')
 
 
+@login_required
 def trading_page(request):
     return render(request, 'core/trading.html')
 
 
+@login_required
 def backtesting_page(request):
     return render(request, 'core/backtesting.html')
 
 
+@login_required
 def predictions_page(request):
     return render(request, 'core/predictions.html')
 
 
+@login_required
 def performance_page(request):
     return render(request, 'core/performance.html')
 
 
+@login_required
 def settings_page(request):
     return render(request, 'core/settings.html')
 
@@ -148,10 +156,12 @@ def risk_page(request):
     return render(request, 'core/risk.html')
 
 
+@login_required
 def billing_success_page(request):
     return render(request, 'core/billing_success.html')
 
 
+@login_required
 def billing_cancel_page(request):
     return render(request, 'core/billing_cancel.html')
 
@@ -348,13 +358,9 @@ def callback(request):
         # Clear OAuth session
         DerivOAuthService.clear_oauth_session(request)
         
-        # Generate JWT tokens
-        refresh = RefreshToken.for_user(user)
-        access = str(refresh.access_token)
-        refresh_token_jwt = str(refresh)
-        
-        # Redirect to dashboard
-        dashboard_redirect = f'/dashboard/?access={access}&refresh={refresh_token_jwt}'
+        # The Django session is the browser credential.  Never put bearer
+        # tokens in a URL, where history, logs, and referrers expose them.
+        dashboard_redirect = '/dashboard/'
         
         oauth_logger.info(
             "deriv_oauth_completed",

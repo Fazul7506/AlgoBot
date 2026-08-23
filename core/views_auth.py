@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.conf import settings
@@ -104,8 +106,18 @@ def login(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def logout(request):
-    """Logout endpoint (token invalidation handled client-side in JWT)"""
+    """End the browser session and revoke a supplied refresh token."""
     logger.info(f"User logout: {request.user.username}")
+    refresh_token = request.data.get("refresh")
+    if refresh_token:
+        try:
+            refresh = RefreshToken(refresh_token)
+            if str(refresh.get("user_id")) != str(request.user.id):
+                return Response({"detail": "Refresh token does not belong to this user."}, status=status.HTTP_403_FORBIDDEN)
+            refresh.blacklist()
+        except TokenError:
+            return Response({"detail": "Invalid refresh token."}, status=status.HTTP_400_BAD_REQUEST)
+    auth_logout(request)
     return Response({
         'status': 'success',
         'message': 'Logged out successfully'
