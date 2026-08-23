@@ -52,8 +52,9 @@ class DerivAdapter(BrokerAdapter):
         return response
 
     async def connect(self):
-        await self._request({"ping": 1})
-        return {"status": "connected"}
+        """Verify the actual broker credential, not just public network reachability."""
+        account = await self.authenticate()
+        return {"status": "connected", "account_id": account.get("loginid")}
 
     async def disconnect(self):
         return {"status": "disconnected"}
