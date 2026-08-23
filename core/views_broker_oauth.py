@@ -14,10 +14,8 @@ from django.shortcuts import redirect
 from django.utils import timezone
 
 from apps.brokers.models import Broker, BrokerAccount
-from apps.broker.models import Broker as LegacyBroker, BrokerAccount as LegacyBrokerAccount, BrokerToken
 from core.models import BotSettings, Subscription, UserProfile
 from core.services.oauth_service import DerivOAuthService
-from trading.models import DerivAccount
 
 logger = logging.getLogger("oauth")
 DERIV_ACCOUNTS_URL = settings.DERIV_OPTIONS_ACCOUNTS_URL
@@ -25,7 +23,8 @@ DERIV_ACCOUNTS_URL = settings.DERIV_OPTIONS_ACCOUNTS_URL
 
 def _account_records(payload: dict) -> list[dict]:
     data = payload.get("data", []) if isinstance(payload, dict) else []
-    if isinstance(data, dict): data = [data]
+    if isinstance(data, dict):
+        data = [data]
     return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
 
 
@@ -42,14 +41,17 @@ async def _verify_authenticated_websocket(access_token: str, account_id: str) ->
         otp_payload = otp_response.json()
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else None
-        if status == 401: raise ValueError("Deriv rejected the OAuth credential") from exc
-        if status == 403: raise ValueError("Deriv denied trading access for this account") from exc
+        if status == 401:
+            raise ValueError("Deriv rejected the OAuth credential") from exc
+        if status == 403:
+            raise ValueError("Deriv denied trading access for this account") from exc
         raise ValueError("Deriv could not create an authenticated WebSocket session") from exc
     except (requests.RequestException, ValueError) as exc:
         raise ValueError("Deriv authentication service is temporarily unavailable") from exc
 
     ws_url = (otp_payload.get("data") or {}).get("url")
-    if not ws_url: raise ValueError("Deriv did not return an authenticated WebSocket URL")
+    if not ws_url:
+        raise ValueError("Deriv did not return an authenticated WebSocket URL")
     async with websockets.connect(ws_url, open_timeout=10, close_timeout=10) as ws:
         await ws.send(json.dumps({"balance": 1, "req_id": 1}))
         response = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
@@ -66,8 +68,10 @@ def _verify_account(access_token: str) -> tuple[dict | None, list[dict]]:
         payload = response.json()
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else None
-        if status == 401: raise ValueError("Deriv rejected the OAuth access token") from exc
-        if status == 403: raise ValueError("Deriv denied access to the trading account") from exc
+        if status == 401:
+            raise ValueError("Deriv rejected the OAuth access token") from exc
+        if status == 403:
+            raise ValueError("Deriv denied access to the trading account") from exc
         raise ValueError("Deriv account verification failed") from exc
     except (requests.RequestException, ValueError) as exc:
         raise ValueError("Deriv account verification is temporarily unavailable") from exc
@@ -79,35 +83,6 @@ def _ensure_defaults(user):
     UserProfile.objects.get_or_create(user=user)
     Subscription.objects.get_or_create(user=user)
     BotSettings.objects.get_or_create(user=user)
-
-
-def _sync_legacy_broker_account(user, account_id: str, account: dict, balance: dict, access_token: str, refresh_token: str, expires_at) -> None:
-    """Keep the broker-neutral API account table synchronized with OAuth."""
-    legacy_broker, _ = LegacyBroker.objects.get_or_create(
-        slug="deriv",
-        defaults={"name": "Deriv", "website": "https://deriv.com", "status": "active"},
-    )
-    legacy_account, _ = LegacyBrokerAccount.objects.update_or_create(
-        broker=legacy_broker,
-        broker_account_id=account_id,
-        defaults={
-            "user": user,
-            "account_type": account.get("account_type") or "demo",
-            "currency": account.get("currency") or balance.get("currency") or "USD",
-            "balance": balance.get("balance") or account.get("balance") or 0,
-            "equity": balance.get("balance") or account.get("balance") or 0,
-            "is_default": True,
-            "is_connected": True,
-        },
-    )
-    LegacyBrokerAccount.objects.filter(user=user).exclude(pk=legacy_account.pk).update(is_default=False)
-    token, _ = BrokerToken.objects.get_or_create(broker_account=legacy_account)
-    token.set_access_token(access_token)
-    token.set_refresh_token(refresh_token or "")
-    token.expires_at = expires_at
-    token.status = "active"
-    token.last_refresh = timezone.now()
-    token.save()
 
 
 def callback(request):
@@ -152,9 +127,11 @@ def callback(request):
     access_token = token_data["access_token"]
     try:
         account, _accounts = _verify_account(access_token)
-        if not account: raise ValueError("Deriv returned no Options trading account")
+        if not account:
+            raise ValueError("Deriv returned no Options trading account")
         account_id = account.get("account_id") or account.get("loginid")
-        if not account_id: raise ValueError("Deriv did not return a broker account identity")
+        if not account_id:
+            raise ValueError("Deriv did not return a broker account identity")
         balance = asyncio.run(_verify_authenticated_websocket(access_token, account_id))
     except Exception as exc:
         logger.exception("deriv_oauth_broker_verification_failed", extra={"error": str(exc)})
@@ -162,7 +139,11 @@ def callback(request):
         DerivOAuthService.clear_oauth_session(request)
         return redirect("broker_connect_page")
 
-    existing_account = DerivAccount.objects.filter(account_id=account_id).select_related("user").first()
+    broker, _ = Broker.objects.get_or_create(
+        broker_type="deriv",
+        defaults={"name": "Deriv", "status": "active", "supports_live": True, "websocket_endpoint": settings.DERIV_AUTH_WS_BASE_URL},
+    )
+    existing_account = BrokerAccount.objects.filter(broker=broker, account_id=account_id).select_related("user").first()
     if request.user.is_authenticated:
         user = request.user
         if existing_account and existing_account.user_id != user.id:
@@ -182,28 +163,24 @@ def callback(request):
     expires_at = DerivOAuthService.parse_token_expiry(expires_in)
     currency = account.get("currency") or balance.get("currency") or "USD"
     balance_value = balance.get("balance") or account.get("balance") or 0
+    account_type = account.get("account_type") or "demo"
 
-    deriv_account, _ = DerivAccount.objects.get_or_create(user=user)
-    deriv_account.account_id = account_id
-    deriv_account.set_access_token(access_token)
-    deriv_account.set_refresh_token(token_data.get("refresh_token"))
-    deriv_account.expires_at = expires_at
-    deriv_account.token_status = "active"
-    deriv_account.account_type = account.get("account_type") or "demo"
-    deriv_account.currency = currency
-    deriv_account.save()
-
-    broker, _ = Broker.objects.get_or_create(
-        broker_type="deriv",
-        defaults={"name": "Deriv", "status": "active", "supports_live": True, "websocket_endpoint": settings.DERIV_AUTH_WS_BASE_URL},
-    )
-    BrokerAccount.objects.update_or_create(
-        broker=broker,
-        account_id=account_id,
-        defaults={"user": user, "currency": currency, "balance": balance_value, "equity": balance_value, "status": "active", "is_preferred": True, "last_synced_at": timezone.now(), "credentials": {"account_type": account.get("account_type") or "demo"}},
-    )
-
-    _sync_legacy_broker_account(user, account_id, account, balance, access_token, token_data.get("refresh_token", ""), expires_at)
+    broker_account, _ = BrokerAccount.objects.get_or_create(broker=broker, account_id=account_id, defaults={"user": user})
+    broker_account.user = user
+    broker_account.currency = currency
+    broker_account.balance = balance_value
+    broker_account.equity = balance_value
+    broker_account.status = "active"
+    broker_account.is_preferred = True
+    broker_account.credentials = {**(broker_account.credentials or {}), "account_type": account_type}
+    broker_account.set_access_token(access_token)
+    broker_account.set_refresh_token(token_data.get("refresh_token", ""))
+    broker_account.expires_at = expires_at
+    broker_account.token_status = "active"
+    broker_account.last_refresh = timezone.now()
+    broker_account.last_synced_at = timezone.now()
+    broker_account.save()
+    BrokerAccount.objects.filter(user=user).exclude(pk=broker_account.pk).update(is_preferred=False)
 
     DerivOAuthService.clear_oauth_session(request)
     messages.success(request, f"Deriv account {account_id} connected successfully.")
