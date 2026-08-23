@@ -20,6 +20,15 @@ from core.services.oauth_service import DerivOAuthService
 oauth_logger = logging.getLogger("oauth")
 
 
+def _ensure_user_defaults(user):
+    """Create OAuth-created users' required related records idempotently."""
+    from core.models import UserProfile, Subscription, BotSettings
+
+    UserProfile.objects.get_or_create(user=user)
+    Subscription.objects.get_or_create(user=user)
+    BotSettings.objects.get_or_create(user=user)
+
+
 def _connect_page_context(request):
     """Backend-provided page content for the broker connect experience."""
     connected = False
@@ -326,13 +335,12 @@ def callback(request):
         # Login the user in the Django session so the front-end can render authenticated pages
         auth_login(request, user)
         
-        # Create user profile if needed
-        if not hasattr(user, 'trading_profile'):
-            from core.models import UserProfile, Subscription, BotSettings
-            UserProfile.objects.create(user=user)
-            Subscription.objects.create(user=user)
-            BotSettings.objects.create(user=user)
-            oauth_logger.info("deriv_oauth_user_profile_created", extra={"user_id": user.id})
+        # Create the records the authenticated dashboard expects.  This must
+        # be idempotent because post-save signals normally create them for new
+        # users, while existing users may have only a subset after legacy data
+        # imports or interrupted registration/OAuth callbacks.
+        _ensure_user_defaults(user)
+        oauth_logger.info("deriv_oauth_user_defaults_ensured", extra={"user_id": user.id})
         
         # Store Deriv OAuth tokens
         deriv_account, created = DerivAccount.objects.get_or_create(
@@ -344,6 +352,7 @@ def callback(request):
         )
         
         # Encrypt and store tokens
+        deriv_account.account_id = account_id or deriv_account.account_id or 'unknown'
         deriv_account.set_access_token(access_token or '')
         deriv_account.set_refresh_token(refresh_token)
         deriv_account.expires_at = expires_at
