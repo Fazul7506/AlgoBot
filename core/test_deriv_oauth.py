@@ -66,18 +66,24 @@ class DerivOAuthTests(TestCase):
         self.assertTrue(BotSettings.objects.filter(user=user).exists())
         websocket.assert_called_once_with("token", "DOT90004580")
 
+    @patch("core.views_broker_oauth.requests.get")
     @patch("core.views_broker_oauth.requests.post")
-    def test_callback_never_creates_user_without_verified_account(self, post):
+    def test_callback_never_creates_user_without_verified_account(self, post, get):
         self._oauth_session()
 
-        response = Mock()
-        response.raise_for_status.return_value = None
-        response.json.return_value = {
+        token_response = Mock()
+        token_response.raise_for_status.return_value = None
+        token_response.json.return_value = {
             "access_token": "token",
             "refresh_token": "refresh",
             "expires_in": 3600,
         }
-        post.return_value = response
+        post.return_value = token_response
+
+        accounts_response = Mock()
+        accounts_response.raise_for_status.return_value = None
+        accounts_response.json.return_value = {"data": []}
+        get.return_value = accounts_response
 
         result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
 
