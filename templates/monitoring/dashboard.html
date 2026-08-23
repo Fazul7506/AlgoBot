@@ -1,13 +1,18 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
+{% block title %}System Monitoring | AlgoBot{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Dashboard</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
+<section class="hero-panel"><p class="eyebrow">Operations</p><h1>System Monitoring</h1><p>Live application, broker, trading, risk and AI telemetry.</p></section>
+<section class="metrics-grid" aria-label="System status">
+  <article><h3>System</h3><p>{{ dashboard.overall_system_health|title }}</p></article><article><h3>Broker</h3><p>{{ dashboard.broker_status|title }}</p></article><article><h3>Open positions</h3><p>{{ dashboard.current_trades }}</p></article><article><h3>Active alerts</h3><p>{{ dashboard.active_alerts }}</p></article><article><h3>Incidents</h3><p>{{ dashboard.open_incidents }}</p></article><article><h3>AI predictions</h3><p>{{ dashboard.current_predictions }}</p></article>
 </section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
+<section class="card-grid" aria-label="Engine health">
+  <article><h2>Trading engine</h2><p>{{ dashboard.trading_engine_status|title }}</p><small>Pending orders: {{ dashboard.trading.pending_orders }}</small></article>
+  <article><h2>Strategy engine</h2><p>{{ dashboard.strategy_engine_status|title }}</p><small>Success rate: {{ dashboard.trading.success_rate|floatformat:1 }}%</small></article>
+  <article><h2>AI engine</h2><p>{{ dashboard.ai_engine_status|title }}</p><small>Latest inference: {{ dashboard.ai.prediction_latency|floatformat:1 }} ms</small></article>
+  <article><h2>Risk engine</h2><p>{{ dashboard.risk_engine_status|title }}</p><small>Exposure: {{ dashboard.risk.exposure|floatformat:2 }}</small></article>
+</section>
+<section class="card-grid" aria-label="Monitoring actions">
+  <article><h2>Health checks</h2><p>Refresh database, cache and storage telemetry.</p><a class="btn primary" href="/api/monitoring/dashboard/">Refresh telemetry</a></article>
+  <article><h2>Broker health</h2><p>Connection state and latency are sourced from broker connection records.</p><a class="btn" href="/api/brokers/health/">Open broker health</a></article>
 </section>
 {% endblock %}

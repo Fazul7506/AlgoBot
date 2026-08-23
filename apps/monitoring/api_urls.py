@@ -1,8 +1,7 @@
 from django.urls import path
-from . import api, views
+from . import api
 
 urlpatterns = [
-    path("", views.dashboard, name="monitoring-dashboard-page"),
     path("dashboard/", api.dashboard, name="monitoring-dashboard"),
     path("health/", api.health, name="monitoring-health"),
     path("broker/", api.broker, name="monitoring-broker"),
@@ -18,5 +17,4 @@ urlpatterns = [
     path("audit/", api.audit, name="audit"),
     path("logs/", api.logs, name="logs"),
     path("traces/", api.traces, name="traces"),
-    path("ui/", views.dashboard, name="monitoring-ui"),
 ]

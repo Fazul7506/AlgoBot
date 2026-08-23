@@ -7,36 +7,18 @@ from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionRep
 
 
 class BrokerRegistry:
-    """Dynamic adapter registry; no trading core imports vendor modules directly."""
-    adapter_paths = {
-        'paper': 'apps.brokers.adapters.paper.PaperTradingAdapter',
-        'deriv': 'apps.brokers.adapters.deriv.DerivAdapter',
-        **{broker: f'apps.brokers.adapters.{broker}.Adapter' for broker in c.SCAFFOLD_BROKERS},
-    }
-
+    adapter_paths = {'paper': 'apps.brokers.adapters.paper.PaperTradingAdapter', 'deriv': 'apps.brokers.adapters.deriv.DerivAdapter', **{broker: f'apps.brokers.adapters.{broker}.Adapter' for broker in c.SCAFFOLD_BROKERS}}
     def register(self, broker_type, adapter_cls_or_path): self.adapter_paths[broker_type] = adapter_cls_or_path
     def get(self, broker_type):
         target = self.adapter_paths[broker_type]
         if isinstance(target, str):
-            module, cls = target.rsplit('.', 1)
-            target = getattr(importlib.import_module(module), cls)
-            self.adapter_paths[broker_type] = target
+            module, cls = target.rsplit('.', 1); target = getattr(importlib.import_module(module), cls); self.adapter_paths[broker_type] = target
         return target
     def adapter(self, broker, account=None): return self.get(broker.broker_type)(broker=broker, account=account, credentials=getattr(account, 'credentials', {}))
 
 
 class BrokerManager:
-    """Controls broker lifecycle, routing defaults, connection health, and failover."""
-    broker_catalog = {
-        'deriv': {'name': 'Deriv', 'status': 'active', 'websocket_endpoint': 'wss://ws.derivws.com/websockets/v3', 'supports_live': True, 'auth': 'oauth'},
-        'paper': {'name': 'Paper Trading', 'status': 'active', 'supports_live': False, 'auth': 'none'},
-        'binance': {'name': 'Binance', 'auth': 'api_key_secret'}, 'bybit': {'name': 'Bybit', 'auth': 'api_key_secret'},
-        'oanda': {'name': 'OANDA', 'auth': 'api_token'}, 'interactive_brokers': {'name': 'Interactive Brokers', 'auth': 'session_gateway'},
-        'metatrader_gateway': {'name': 'MetaTrader Gateway', 'auth': 'username_password'}, 'dxtrade': {'name': 'DXTrade', 'auth': 'session_token'},
-        'ctrader': {'name': 'cTrader', 'auth': 'oauth'}, 'alpaca': {'name': 'Alpaca', 'auth': 'api_key_secret'},
-        'forex_com': {'name': 'Forex.com', 'auth': 'username_password'}, 'pepperstone': {'name': 'Pepperstone', 'auth': 'metatrader_or_ctrader'},
-        'ic_markets': {'name': 'IC Markets', 'auth': 'metatrader_or_ctrader'}, 'exness': {'name': 'Exness', 'auth': 'api_key_or_session'},
-    }
+    broker_catalog = {'deriv': {'name': 'Deriv', 'status': 'active', 'websocket_endpoint': 'wss://ws.derivws.com/websockets/v3', 'supports_live': True, 'auth': 'oauth'}, 'paper': {'name': 'Paper Trading', 'status': 'active', 'supports_live': False, 'auth': 'none'}, 'binance': {'name': 'Binance', 'auth': 'api_key_secret'}, 'bybit': {'name': 'Bybit', 'auth': 'api_key_secret'}, 'oanda': {'name': 'OANDA', 'auth': 'api_token'}, 'interactive_brokers': {'name': 'Interactive Brokers', 'auth': 'session_gateway'}, 'metatrader_gateway': {'name': 'MetaTrader Gateway', 'auth': 'username_password'}, 'dxtrade': {'name': 'DXTrade', 'auth': 'session_token'}, 'ctrader': {'name': 'cTrader', 'auth': 'oauth'}, 'alpaca': {'name': 'Alpaca', 'auth': 'api_key_secret'}, 'forex_com': {'name': 'Forex.com', 'auth': 'username_password'}, 'pepperstone': {'name': 'Pepperstone', 'auth': 'metatrader_or_ctrader'}, 'ic_markets': {'name': 'IC Markets', 'auth': 'metatrader_or_ctrader'}, 'exness': {'name': 'Exness', 'auth': 'api_key_or_session'}}
     def ensure_defaults(self):
         for broker_type, data in self.broker_catalog.items():
             defaults = {'status': data.get('status', 'coming_soon'), 'supports_live': data.get('supports_live', False), 'metadata': {'auth': data['auth'], 'adapter_state': 'production' if broker_type in c.PRODUCTION_BROKERS else 'scaffold'}}
@@ -53,8 +35,7 @@ class BrokerManager:
 
 class BrokerConnectionService:
     async def connect(self, broker, account=None):
-        adapter = BrokerRegistry().adapter(broker, account); await adapter.connect(); latency = await adapter.ping()
-        return BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
+        adapter = BrokerRegistry().adapter(broker, account); await adapter.connect(); latency = await adapter.ping(); return BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
     async def disconnect(self, broker, account=None):
         await BrokerRegistry().adapter(broker, account).disconnect(); conn,_=BrokerConnection.objects.update_or_create(broker=broker, defaults={'status':'disconnected'}); return conn
     async def heartbeat(self, broker):
@@ -85,25 +66,43 @@ class OrderManagementSystem:
 class ExecutionManagementSystem:
     async def execute(self, order):
         start=time.perf_counter(); order.status='submitted'; order.submitted_at=timezone.now(); order.save(update_fields=['status','submitted_at','updated_at'])
-        result=await BrokerRegistry().adapter(order.broker, order.account).place_order(order)
+        try:
+            result=await BrokerRegistry().adapter(order.broker, order.account).place_order(order)
+        except Exception:
+            order.status='rejected'; order.save(update_fields=['status','updated_at']); raise
         latency=(time.perf_counter()-start)*1000; status='filled' if result.get('status') in ['filled','executed'] else result.get('status','executed')
         requested=order.price or Decimal('0'); executed=Decimal(str(result.get('execution_price') or requested or 0)); slippage=executed-requested
         order.status=status; order.broker_order_id=result.get('broker_order_id',''); order.executed_at=timezone.now(); order.save(update_fields=['status','broker_order_id','executed_at','updated_at'])
         return ExecutionReport.objects.create(order=order, execution_price=executed, requested_price=requested, slippage=slippage, latency=result.get('latency',latency), fees=Decimal(str(result.get('fees',0))), status=status, raw_report=result)
 class ExecutionEngine:
-    def submit(self, user, **data): order=OrderManagementSystem().queue(OrderManagementSystem().approve(OrderManagementSystem().create(user, **data))); return asyncio.run(ExecutionManagementSystem().execute(order))
+    def submit(self, user, **data):
+        routing = dict(data.get('routing_context') or {})
+        if routing.get('ai_assisted'):
+            from apps.ai_engine.services import AIEngine
+            from apps.market_data.deriv_sync import fetch_tick
+            symbol = data.get('symbol')
+            tick = fetch_tick(symbol)
+            ctx = {'market_data': {'close': tick['quote'], 'open': tick['quote'], 'high': tick['quote'], 'low': tick['quote'], 'spread': (tick.get('ask') - tick.get('bid')) if tick.get('bid') is not None and tick.get('ask') is not None else 0}}
+            analysis = AIEngine().analyze(symbol, routing.get('timeframe', 'M1'), ctx)
+            recommendation = analysis['recommendation']
+            minimum_confidence = float(routing.get('minimum_ai_confidence', 65))
+            if recommendation.confidence < minimum_confidence or recommendation.recommendation == 'WAIT':
+                raise BrokerRoutingError(f'AI gate blocked the order: {recommendation.recommendation} at {recommendation.confidence:.1f}% confidence')
+            direction = str(data.get('direction', '')).upper()
+            if direction in {'BUY', 'CALL', 'RISE'} and recommendation.recommendation != 'BUY':
+                raise BrokerRoutingError('AI gate rejected a BUY/CALL order')
+            if direction in {'SELL', 'PUT', 'FALL'} and recommendation.recommendation != 'SELL':
+                raise BrokerRoutingError('AI gate rejected a SELL/PUT order')
+            routing['ai_decision'] = {'recommendation': recommendation.recommendation, 'confidence': recommendation.confidence, 'prediction': analysis['prediction'].prediction}
+            data['routing_context'] = routing
+        order=OrderManagementSystem().queue(OrderManagementSystem().approve(OrderManagementSystem().create(user, **data)))
+        return asyncio.run(ExecutionManagementSystem().execute(order))
 class SynchronizationService:
     async def sync_account(self, account):
-        data=await BrokerRegistry().adapter(account.broker, account).get_balance()
-        # Only persist values the broker actually supplied.  In particular,
-        # equity and margin are not fabricated when Deriv omits them.
-        fields=[]
+        data=await BrokerRegistry().adapter(account.broker, account).get_balance(); fields=[]
         for f in ['balance','equity','margin','free_margin','currency']:
-            if data.get(f) is not None:
-                setattr(account, f, data[f]); fields.append(f)
-        account.last_synced_at=timezone.now(); fields.append('last_synced_at')
-        account.save(update_fields=fields)
-        return account, data
+            if data.get(f) is not None: setattr(account, f, data[f]); fields.append(f)
+        account.last_synced_at=timezone.now(); fields.append('last_synced_at'); account.save(update_fields=fields); return account, data
 class ReconciliationService:
     def reconcile_order(self, order, broker_trade=None, repair=True):
         diff={} if broker_trade and broker_trade.get('broker_order_id')==order.broker_order_id else {'order':'missing_or_mismatched'}
@@ -111,7 +110,8 @@ class ReconciliationService:
         if rec.repaired: order.status='reconciled'; order.save(update_fields=['status','updated_at'])
         return rec
 class BrokerHealthService:
-    def summary(self): latencies=list(BrokerConnection.objects.filter(status='connected').values_list('latency', flat=True)); return {'brokers':Broker.objects.count(),'connected':len(latencies),'average_latency':(sum(latencies)/len(latencies) if latencies else 0),'broker_rankings':latencies}
+    def summary(self):
+        latencies=list(BrokerConnection.objects.filter(status='connected').values_list('latency', flat=True)); return {'brokers':Broker.objects.count(),'connected':len(latencies),'average_latency':(sum(latencies)/len(latencies) if latencies else 0),'broker_rankings':latencies}
 class FailoverService:
     def fallback_account(self, order): return SmartOrderRouter().route(order.user, order.symbol, preferred_account=None)
 class AccountService: pass

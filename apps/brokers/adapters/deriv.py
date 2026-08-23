@@ -1,9 +1,4 @@
-"""Deriv WebSocket adapter.
-
-Deriv's trading API is WebSocket based.  This adapter deliberately does not
-inherit from the paper adapter: a broker outage or an unsupported response
-must be visible to callers, never converted into a plausible looking value.
-"""
+"""Deriv broker adapter using the WebSocket trading API."""
 import asyncio
 import json
 import os
@@ -24,9 +19,7 @@ class DerivAdapter(BrokerAdapter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.endpoint = getattr(self.broker, "websocket_endpoint", "") or os.getenv(
-            "DERIV_WS_URL", "wss://ws.derivws.com/websockets/v3"
-        )
+        self.endpoint = getattr(self.broker, "websocket_endpoint", "") or os.getenv("DERIV_WS_URL", "wss://ws.derivws.com/websockets/v3")
 
     def _token(self):
         if self.account and hasattr(self.account, "token"):
@@ -40,7 +33,6 @@ class DerivAdapter(BrokerAdapter):
         return token
 
     async def _request(self, payload, authenticated=False):
-        """Perform one bounded RPC and validate both protocol and broker errors."""
         try:
             async with websockets.connect(self.endpoint, open_timeout=self.timeout, close_timeout=self.timeout) as ws:
                 if authenticated:
@@ -59,15 +51,14 @@ class DerivAdapter(BrokerAdapter):
         return response
 
     async def connect(self):
-        await self._request({"ping": 1}, authenticated=False)
+        await self._request({"ping": 1})
         return {"status": "connected"}
 
     async def disconnect(self):
-        # RPC connections are request scoped, so there is no shared socket to leak.
         return {"status": "disconnected"}
 
     async def authenticate(self):
-        response = await self._request({"authorize": self._token()}, authenticated=False)
+        response = await self._request({"authorize": self._token()})
         return response["authorize"]
 
     async def refresh_token(self):
@@ -78,13 +69,7 @@ class DerivAdapter(BrokerAdapter):
 
     async def get_balance(self):
         account = await self.authenticate()
-        result = {
-            "account_id": account.get("loginid"), "balance": account.get("balance"),
-            "currency": account.get("currency"),
-        }
-        if "is_virtual" in account:
-            result["account_type"] = "demo" if account["is_virtual"] else "real"
-        return result
+        return {"account_id": account.get("loginid"), "balance": account.get("balance"), "currency": account.get("currency"), "account_type": "demo" if account.get("is_virtual") else "real"}
 
     async def get_positions(self):
         return (await self._request({"portfolio": 1}, authenticated=True)).get("portfolio", {}).get("contracts", [])
@@ -102,23 +87,71 @@ class DerivAdapter(BrokerAdapter):
         return (await self._request(payload, authenticated=True)).get("statement", {}).get("transactions", [])
 
     async def get_market_data(self, symbol, **params):
-        response = await self._request({"ticks": symbol}, authenticated=False)
+        response = await self._request({"ticks": symbol})
         tick = response.get("tick")
         if not tick:
             raise BrokerConnectionError("Deriv did not return a tick")
-        quote = tick.get("quote")
-        return {"symbol": symbol, "price": quote, "bid": tick.get("bid"), "ask": tick.get("ask"), "epoch": tick.get("epoch")}
+        return {"symbol": symbol, "price": tick.get("quote"), "bid": tick.get("bid"), "ask": tick.get("ask"), "epoch": tick.get("epoch")}
 
     async def subscribe_ticks(self, symbol, callback=None):
-        # Long-lived subscriptions belong to the ASGI market-data consumer; do
-        # not create hidden background sockets in a REST request.
         return {"symbol": symbol, "stream": "ticks", "endpoint": self.endpoint}
 
     async def place_order(self, order):
-        raise BrokerOrderError("Deriv contract execution requires a proposal id and is not available through generic orders")
+        """Get a live proposal and buy it; no simulated fills are returned."""
+        routing = order.routing_context or {}
+        account_type = str(routing.get("account_type") or self.credentials.get("account_type") or "demo").lower()
+        if account_type == "real" and os.getenv("ALLOW_LIVE_TRADING", "false").lower() not in {"1", "true", "yes"}:
+            raise BrokerOrderError("Live-money trading is disabled. Set ALLOW_LIVE_TRADING=true only after production risk validation.")
+
+        contract_type = (order.contract_type or order.direction or "CALL").upper()
+        if contract_type in {"BUY", "SELL"}:
+            contract_type = routing.get("contract_type", "CALL").upper()
+        if contract_type not in {"CALL", "PUT", "MULTUP", "MULTDOWN", "DIGITOVER", "DIGITUNDER", "RISE", "FALL"}:
+            raise BrokerOrderError(f"Unsupported Deriv contract type: {contract_type}")
+
+        duration = int(routing.get("duration", 60))
+        duration_unit = routing.get("duration_unit", "s")
+        currency = routing.get("currency") or getattr(self.account, "currency", None) or "USD"
+        proposal_payload = {
+            "proposal": 1,
+            "amount": float(order.stake or order.quantity),
+            "basis": "stake",
+            "contract_type": contract_type,
+            "currency": currency,
+            "duration": duration,
+            "duration_unit": duration_unit,
+            "underlying_symbol": order.symbol,
+        }
+        if routing.get("barrier") is not None:
+            proposal_payload["barrier"] = str(routing["barrier"])
+        if routing.get("multiplier") is not None:
+            proposal_payload["multiplier"] = float(routing["multiplier"])
+
+        proposal_response = await self._request(proposal_payload, authenticated=True)
+        proposal = proposal_response.get("proposal") or {}
+        proposal_id = proposal.get("id")
+        ask_price = proposal.get("ask_price") or proposal.get("display_value")
+        if not proposal_id or ask_price is None:
+            raise BrokerOrderError("Deriv returned an unusable proposal")
+
+        buy_response = await self._request({"buy": proposal_id, "price": float(ask_price)}, authenticated=True)
+        buy = buy_response.get("buy") or {}
+        contract_id = buy.get("contract_id")
+        if not contract_id:
+            raise BrokerOrderError("Deriv accepted the request without returning a contract ID")
+        return {
+            "status": "filled",
+            "broker_order_id": str(contract_id),
+            "execution_price": buy.get("buy_price") or ask_price,
+            "fees": 0,
+            "payout": buy.get("payout"),
+            "proposal_id": proposal_id,
+            "contract_type": contract_type,
+            "raw": {"proposal": proposal_response, "buy": buy_response},
+        }
 
     async def modify_order(self, order, **changes):
-        raise BrokerOrderError("Deriv does not support modifying an executed contract")
+        raise BrokerOrderError("Deriv contract modification requires a contract_update operation and explicit contract id")
 
     async def cancel_order(self, order):
         raise BrokerOrderError("Deriv contracts cannot be cancelled through the generic order API")
@@ -127,14 +160,13 @@ class DerivAdapter(BrokerAdapter):
         contract_id = getattr(position, "broker_order_id", None)
         if not contract_id:
             raise BrokerOrderError("A Deriv contract id is required to sell a position")
-        return await self._request({"sell": contract_id, "price": 0}, authenticated=True)
+        return await self._request({"sell": int(contract_id), "price": 0}, authenticated=True)
 
     async def stream_positions(self, callback=None): return {"stream": "portfolio"}
     async def stream_orders(self, callback=None): return {"stream": "transaction"}
     async def stream_prices(self, symbols, callback=None): return {"stream": "ticks", "symbols": list(symbols)}
 
-    async def health_check(self):
-        return {"status": "ok", "latency": await self.ping()}
+    async def health_check(self): return {"status": "ok", "latency": await self.ping()}
 
     async def ping(self):
         start = time.perf_counter()
