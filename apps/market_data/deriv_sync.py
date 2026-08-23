@@ -2,29 +2,28 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 
 import websockets
-from django.conf import settings
 from django.db import transaction
 
 from .models import MarketSymbol, Tick
 
 
+DERIV_PUBLIC_WS = "wss://api.derivws.com/trading/v1/options/ws/public"
 MARKET_MAP = {"forex": "Forex", "cryptocurrency": "Crypto", "cryptocurrency_market": "Crypto", "indices": "Stock Indices", "synthetic_index": "Derived Indices", "synthetics": "Derived Indices", "commodities": "Commodities"}
 
 
 async def _request(payload: dict) -> dict:
-    app_id = getattr(settings, "DERIV_APP_ID", "") or os.getenv("DERIV_APP_ID", "")
-    uri = getattr(settings, "DERIV_WS_URL", "wss://ws.derivws.com/websockets/v3")
-    if app_id:
-        uri = f"{uri}?app_id={app_id}"
-    async with websockets.connect(uri, open_timeout=10, close_timeout=10) as ws:
-        await ws.send(json.dumps(payload))
-        response = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
-        if response.get("error"):
-            raise RuntimeError(response["error"].get("message", "Deriv request failed"))
-        return response
+    """Request public market data from Deriv's current public WebSocket."""
+    try:
+        async with websockets.connect(DERIV_PUBLIC_WS, open_timeout=10, close_timeout=10) as ws:
+            await ws.send(json.dumps(payload))
+            response = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+    except (asyncio.TimeoutError, OSError, websockets.WebSocketException, json.JSONDecodeError) as exc:
+        raise RuntimeError("Deriv public market data is temporarily unavailable") from exc
+    if response.get("error"):
+        raise RuntimeError(response["error"].get("message", "Deriv market-data request failed"))
+    return response
 
 
 def _market_name(item: dict) -> str:
