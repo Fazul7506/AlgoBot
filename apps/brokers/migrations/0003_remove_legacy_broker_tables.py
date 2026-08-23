@@ -4,16 +4,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
     dependencies = [("brokers", "0002_canonicalize_legacy_broker_data")]
 
-    operations = [
-        migrations.RunSQL(
-            sql=[
-                "DROP TABLE IF EXISTS broker_brokerconnectionlog",
-                "DROP TABLE IF EXISTS broker_brokerpermission",
-                "DROP TABLE IF EXISTS broker_brokentoken",
-                "DROP TABLE IF EXISTS broker_brokeraccount",
-                "DROP TABLE IF EXISTS broker_broker",
-                "DROP TABLE IF EXISTS trading_derivaccount",
-            ],
-            reverse_sql=migrations.RunSQL.noop,
-        )
-    ]
+    # Legacy tables must remain available until execution, portfolio, and
+    # strategy foreign keys have been remapped to canonical brokers models.
+    # The actual removal is performed by brokers.0005 after those migrations.
+    operations = []
