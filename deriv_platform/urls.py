@@ -6,10 +6,11 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from core.views_auth import (
-    CustomTokenObtainPairView, register, login, logout, browser_logout,
+    CustomTokenObtainPairView, register, login, logout,
     change_password, UserProfileViewSet, BotSettingsViewSet,
     SubscriptionViewSet
 )
+from core.browser_views import browser_logout
 from trading.views.dashboard import DashboardViewSet
 from trading.views.market import MarketSymbolViewSet, PriceHistoryViewSet, MarketSnapshotViewSet, TickDataViewSet, DataStreamSessionViewSet, MarketDataStatsViewSet, MarketRegimeViewSet
 from trading.views.notifications import NotificationViewSet
