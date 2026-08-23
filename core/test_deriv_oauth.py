@@ -72,3 +72,31 @@ class DerivOAuthTests(TestCase):
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
         self.assertTrue(Subscription.objects.filter(user=user).exists())
         self.assertTrue(BotSettings.objects.filter(user=user).exists())
+
+    @patch("core.views.requests.post")
+    def test_callback_creates_fallback_user_without_account_id(self, post):
+        session = self.client.session
+        session["oauth_state"] = "expected"
+        session["pkce_verifier"] = "verifier"
+        session["oauth_redirect_uri"] = "http://testserver/callback"
+        session.save()
+
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "access_token": "token",
+            "refresh_token": "refresh",
+            "expires_in": 3600,
+        }
+        post.return_value = response
+
+        result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+
+        self.assertEqual(result.status_code, 302)
+        self.assertEqual(result.url, "/dashboard/")
+        user = User.objects.get(username__startswith="deriv_")
+        self.assertTrue(user.has_usable_password())
+        self.assertTrue(UserProfile.objects.filter(user=user).exists())
+        self.assertTrue(Subscription.objects.filter(user=user).exists())
+        self.assertTrue(BotSettings.objects.filter(user=user).exists())
+        self.assertEqual(user.deriv_account.account_id, "unknown")

@@ -11,6 +11,7 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.broker.models import Broker
@@ -325,7 +326,7 @@ def callback(request):
                 user = User.objects.create_user(
                     username=username,
                     email=f'{username}@deriv.local',
-                    password=User.objects.make_random_password()
+                    password=get_random_string(32)
                 )
                 oauth_logger.warning(
                     "deriv_oauth_anonymous_user_created",
