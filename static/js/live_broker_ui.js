@@ -61,7 +61,7 @@
     const label=opposite?`Switch to ${typeOf(opposite).toUpperCase()}`:'Demo / Real';
     const button=(extra='')=>`<button class="algobot-account-switch" data-account-switch ${enabled&&opposite?'':'disabled'} ${extra}>${safe(label)}</button>`;
     if(top) top.innerHTML=a?`<div class="algobot-account-summary">${avatar(a)}<div class="algobot-account-copy"><strong>${safe(a.broker?.name||a.broker_name||'Broker')} · ${safe(a.broker_account_id)}</strong><span>${safe(t.toUpperCase())} · ${safe(a.currency||'')} ${money(a.balance)}</span></div><div class="algobot-account-actions">${button('title="Switch preferred account"')}</div></div>`:'<span class="algobot-account-error">No canonical broker account</span>';
-    if(side) side.innerHTML=a?`<div class="algobot-account-summary">${avatar(a,true)}<div class="algobot-account-copy"><strong>${safe(a.broker?.name||a.broker_name||'Broker')}</strong><span>${safe(a.broker_account_id)} · ${safe(t.toUpperCase())}</span></div></div><div class="algobot-account-fresh">${safe(a.is_connected?`Balance ${a.currency||''} ${money(a.balance)} · ${a.last_synced_at?'Synced '+new Date(a.last_synced_at).toLocaleTimeString():'Not synced'}`:`Account ${a.status||'disconnected'}`)}</div>${button()}`:'<div class="algobot-account-error">No canonical broker account</div>';
+    if(side) side.innerHTML=a?`<div class="algobot-account-summary">${avatar(a,true)}<div class="algobot-account-copy"><strong>${safe(a.broker?.name||a.broker_name||'Broker')}</strong><span>${safe(a.broker_account_id)} · ${safe(t.toUpperCase())}</span></div></div><div class="algobot-account-fresh">${safe(a.is_connected?`Balance ${a.currency||''} ${money(a.balance)} · ${a.last_synced_at?'Synced '+new Date(a.last_synced_at).toLocaleTimeString():'Last known broker data'}`:`Account ${a.status||'disconnected'}`)}</div>${button()}`:'<div class="algobot-account-error">No canonical broker account</div>';
     const global=$('[data-global-connection]');
     if(global){const text=a?`${a.broker?.name||a.broker_name||'Broker'} · ${a.broker_account_id} · ${t.toUpperCase()}`:'No broker account';global.classList.toggle('connected',!!a?.is_connected);global.classList.toggle('error',!a?.is_connected);global.innerHTML=`<i></i><span>${safe(text)}</span>`;}
     document.querySelectorAll('[data-account-switch]').forEach(b=>b.onclick=()=>selectAccount(opposite?.id));
@@ -78,6 +78,7 @@
     if(!a)return; const t=typeOf(a).toUpperCase(), label=`${a.broker?.name||a.broker_name||'Broker'} · ${a.broker_account_id} · ${t}`, c=a.currency||'';
     const s=$('#terminal-status'); if(s&&!quoteBusy)s.innerHTML=`<span class="status-dot"></span>${safe(label)}`;
     $('#balance')?.replaceChildren(document.createTextNode(`${c} ${money(a.balance)}`.trim())); $('#equity')?.replaceChildren(document.createTextNode(`${c} ${money(a.equity??a.balance)}`.trim())); $('#margin')?.replaceChildren(document.createTextNode(`${c} ${money(a.margin)}`.trim())); $('[data-kpi="balance"]')?.replaceChildren(document.createTextNode(`${c} ${money(a.balance)}`.trim())); $('[data-terminal-account]')?.replaceChildren(document.createTextNode(`Account: ${a.broker_account_id}`));
+    $('[data-risk-check]')?.replaceChildren(document.createTextNode(a.is_connected ? `Account connected · ${t}` : `Account ${a.status || 'unavailable'}`));
   }
 
   async function syncAccounts() {
@@ -97,17 +98,42 @@
     if(selectedSymbol)return selectedSymbol; try{const symbols=list(await request('/api/markets/symbols/',{},5000)),available=symbols.filter(x=>x?.symbol&&x.is_active!==false&&x.is_tradable!==false);selectedSymbol=available[0]?.symbol||'';const s=$('[data-symbol]');if(s){s.innerHTML=available.map(x=>`<option value="${safe(x.symbol)}">${safe(x.display_name||x.symbol)}</option>`).join('');if(selectedSymbol)s.value=selectedSymbol;}return selectedSymbol;}catch(_){return '';}
   }
 
+  async function loadHistory(symbol){
+    try {
+      const data=await request(`/api/market/ticks/history/?symbol=${encodeURIComponent(symbol)}&limit=120`,{},5000);
+      const history=list(data).map(t=>({price:Number(t.quote),epoch:Number(t.epoch)})).filter(x=>Number.isFinite(x.price)).reverse();
+      if(history.length){points=history;renderMarketState();chart();}
+    } catch(_) { /* live polling remains authoritative */ }
+  }
+
+  function renderMarketState(){
+    if(!points.length)return;
+    const values=points.map(x=>x.price); const first=values[0], last=values[values.length-1];
+    const delta=last-first; const trend=delta>0?'Bullish':delta<0?'Bearish':'Flat';
+    const mean=values.reduce((a,b)=>a+b,0)/values.length; const variance=values.reduce((a,b)=>a+(b-mean)**2,0)/values.length; const volatility=Math.sqrt(variance);
+    $('[data-q="price"]')?.replaceChildren(document.createTextNode(money(last)));
+    $('[data-trend]')?.replaceChildren(document.createTextNode(trend));
+    $('[data-volatility]')?.replaceChildren(document.createTextNode(money(volatility)));
+    $('[data-structure]')?.replaceChildren(document.createTextNode(points.length>=3?(delta>=0?'Higher-price structure':'Lower-price structure'):'Live quote'));
+    $('[data-chart-loading]')?.replaceChildren(document.createTextNode(`Live broker feed · ${points.length} quotes`));
+  }
+
   function chart(){const el=$('#chart');if(!el||points.length<2)return;const w=1000,h=330,p=18,v=points.map(x=>x.price),min=Math.min(...v),max=Math.max(...v),span=max-min||Math.max(Math.abs(max)*.0001,1),pts=points.map((x,i)=>`${(p+i/Math.max(1,points.length-1)*(w-p*2)).toFixed(1)},${(h-p-(x.price-min)/span*(h-p*2)).toFixed(1)}`).join(' '),latest=v.at(-1),stroke=latest>=v[0]?'#43d19a':'#ff6b7d',last=pts.split(' ').at(-1).split(',');el.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:100%;display:block"><polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="2.5"></polyline><circle cx="${last[0]}" cy="${last[1]}" r="4" fill="${stroke}"></circle><text x="${w-p}" y="${p+2}" text-anchor="end" fill="currentColor" opacity=".7" font-size="13">LIVE ${money(latest)}</text></svg>`;}
 
-  async function tick(){const symbol=$('[data-symbol]')?.value||selectedSymbol||await discoverSymbol();if(!symbol||quoteBusy)return;quoteBusy=true;try{const d=await request('/api/market/ticks/broker/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol})},5000),price=Number(d.quote??d.last??d.price);if(!Number.isFinite(price))throw new Error('No usable quote');points.push({price});points=points.slice(-120);chart();$('[data-q="price"]')?.replaceChildren(document.createTextNode(money(price)));$('[data-q="bid"]')?.replaceChildren(document.createTextNode(money(d.bid??price)));$('[data-q="ask"]')?.replaceChildren(document.createTextNode(money(d.ask??price)));}catch(_){ }finally{quoteBusy=false;}}
+  async function tick(){const symbol=$('[data-symbol]')?.value||selectedSymbol||await discoverSymbol();if(!symbol||quoteBusy)return;quoteBusy=true;try{const d=await request('/api/market/ticks/broker/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol})},7000),price=Number(d.quote??d.last??d.price);if(!Number.isFinite(price))throw new Error('No usable quote');points.push({price,epoch:Number(d.epoch)||Date.now()});points=points.slice(-120);renderMarketState();chart();$('[data-q="bid"]')?.replaceChildren(document.createTextNode(money(d.bid??price)));$('[data-q="ask"]')?.replaceChildren(document.createTextNode(money(d.ask??price)));}catch(e){const s=$('#terminal-status');if(s&&accounts.length&&!quoteBusy)s.title=e.message;}finally{quoteBusy=false;}}
 
   function boot(){
     if(document.body.dataset.authenticated!=='true')return;
     syncAccounts().then(async()=>{
       if(!$('#chart'))return;
       $('#account')?.addEventListener('change',()=>{updateTerminalAccount(accounts.find(a=>String(a.id)===String($('#account').value)));syncSelectedAccount();});
-      $('[data-symbol]')?.addEventListener('change',()=>{selectedSymbol=$('[data-symbol]').value;points=[];tick();});
-      await discoverSymbol(); await syncSelectedAccount(); await tick();
+      $('[data-symbol]')?.addEventListener('change',()=>{selectedSymbol=$('[data-symbol]').value;points=[];loadHistory(selectedSymbol);tick();});
+      await discoverSymbol();
+      await loadHistory(selectedSymbol);
+      await tick();
+      // Account balance refresh is deliberately background-only so a slow
+      // vendor API can never block the live market chart or page controls.
+      syncSelectedAccount();
       setInterval(()=>{if(document.visibilityState==='visible')tick();},5000);
       setInterval(()=>{if(document.visibilityState==='visible')syncSelectedAccount();},60000);
     });
