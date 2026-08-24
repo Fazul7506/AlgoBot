@@ -1,6 +1,6 @@
 # AlgoBot Frontend Production Refactor Master Contract
 
-Status: **PHASE 2 COMPLETE AND WORKING**
+Status: **PHASE 3 COMPLETE AND WORKING**
 
 Branch: `refactor/frontend-production-foundation`
 Long-lived PR: `#17`
@@ -41,8 +41,8 @@ Target: **L5 Production**. Foundational surfaces may reach **L6 Reference**.
 0. Repository/template inventory — **COMPLETE**
 1. Frontend state/data architecture — **COMPLETE AND WORKING**
 2. Credential and hardcoded-data elimination — **COMPLETE AND WORKING**
-3. Shared design system — NEXT
-4. `templates/base.html`
+3. Shared design system — **COMPLETE AND WORKING**
+4. `templates/base.html` — NEXT
 5. Broker connection
 6. Dashboard
 7. Portfolio/Positions
@@ -68,33 +68,48 @@ Implemented globally:
 - broker/account/balance/position/order/trade/market/strategy/automation/notification state
 - subscriptions and `algobot:state-changed`
 - `window.AlgoBotFrontendData`
-- shared backend request wrapper
-- broker account retrieval/synchronization
-- connected-broker guard
-- broker event normalization
-- bridge from existing `live_broker_ui.js` to the canonical state
+- shared backend request wrapper, broker account retrieval/synchronization, connected-broker guard and broker-event normalization
+- bridge from `live_broker_ui.js` to canonical state
 
 ## Phase 2 — credential/hardcoded-data elimination
 
 Implemented:
 
-- repository credential-pattern audit
-- frontend broker payload sanitization
-- removal of credential-bearing fields before browser consumers receive account JSON
-- explicit `unknown` account type when broker data does not provide one, preventing the legacy silent `demo` default from becoming UI truth
-- disabled account-switcher messaging changed to a real connection action
+- credential-pattern audit
+- broker payload sanitization before browser consumers
+- removal of access/refresh tokens, API keys/secrets, passwords and client secrets from browser-visible account JSON
+- explicit `unknown` account type instead of a silent demo fallback
+- connection-first account-switcher messaging
 - payload guard loaded before `live_broker_ui.js`
 
-The complete Phase 2 audit and controls are recorded in `docs/Architecture/phase-2-credential-and-hardcoded-data.md`.
+See `docs/Architecture/phase-2-credential-and-hardcoded-data.md`.
+
+## Phase 3 — shared design system
+
+Implemented globally:
+
+- `static/css/design_system.css`
+- spacing, radius, semantic surface/text/border tokens
+- semantic broker/status states
+- shared cards, buttons, form fields, empty/error/success states and skeleton loading primitives
+- visible keyboard focus
+- disabled/loading semantics
+- mobile touch sizing
+- reduced-motion support
+- global base-template inclusion before page styles
+
+See `docs/Architecture/frontend-design-system.md`.
+
+The design system is now the required visual vocabulary for all subsequent page/template migrations. Phase 3 does not claim every existing page has already been migrated; that is done page-by-page in later phases.
 
 ## Inventory
 
-The complete Phase 0 template/domain migration registry is maintained in `docs/Architecture/frontend-template-inventory.md`.
+The complete Phase 0 migration registry is maintained in `docs/Architecture/frontend-template-inventory.md`.
 
 ## Merge policy
 
-All phases remain in this single long-lived PR. No merge to `main` occurs until every phase is explicitly marked complete and the final production E2E gate passes.
+All phases remain in the single long-lived PR #17. No merge to `main` occurs until every phase is explicitly marked complete and the final production E2E gate passes.
 
 ## Phase declaration rule
 
-A phase is not considered complete merely because code was written. It must have its implementation, repository verification, documented exit criteria and explicit completion declaration. Then, and only then, the next phase begins.
+A phase is not complete merely because code was written. It must have implementation, repository verification, documented exit criteria and an explicit completion declaration. Only then does the next phase begin.
