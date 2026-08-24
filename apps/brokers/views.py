@@ -46,6 +46,10 @@ class ExecutionReportViewSet(viewsets.ReadOnlyModelViewSet):
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=PositionSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return Position.objects.filter(account__user=self.request.user)
+    @decorators.action(detail=False,methods=['get'])
+    def open(self,request):
+        queryset=self.get_queryset().filter(status='open')
+        return response.Response(self.get_serializer(queryset,many=True).data)
 class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=TradeReconciliationSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return TradeReconciliation.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
