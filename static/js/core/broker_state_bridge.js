@@ -31,7 +31,7 @@
         lastConnection = false;
         return;
       }
-      const connected = account.is_connected === true || account.status === 'active';
+      const connected = account.is_connected === true;
       const id = String(account.id ?? account.broker_account_id ?? account.account_id ?? '');
       if (id !== lastAccountId || connected !== lastConnection || store.get().account?.balance !== account.balance) {
         store.setAccount(account, 'backend-broker-account-sync');
@@ -51,12 +51,12 @@
   window.addEventListener('algobot:account-changed', event => {
     if (window.AlgoBotBrokerState && event.detail) window.AlgoBotBrokerState.setAccount(event.detail, 'account-changed');
     lastAccountId = String(event.detail?.id ?? event.detail?.broker_account_id ?? '');
-    lastConnection = event.detail?.is_connected === true || event.detail?.status === 'active';
+    lastConnection = event.detail?.is_connected === true;
   });
   window.addEventListener('algobot:account-synced', event => {
     if (window.AlgoBotBrokerState && event.detail) window.AlgoBotBrokerState.setAccount(event.detail, 'account-synced');
     lastAccountId = String(event.detail?.id ?? event.detail?.broker_account_id ?? '');
-    lastConnection = event.detail?.is_connected === true || event.detail?.status === 'active';
+    lastConnection = event.detail?.is_connected === true;
   });
   window.addEventListener('algobot:account-sync-error', event => {
     if (window.AlgoBotBrokerState && !window.AlgoBotBrokerState.get().account) {
