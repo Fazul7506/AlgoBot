@@ -5,6 +5,14 @@ Run only after .env.production has been populated:
 """
 import os
 import sys
+from pathlib import Path
+
+# ``python scripts/phase20_preflight.py`` sets sys.path[0] to scripts/.
+# Explicitly expose the repository root so the current Django package layout
+# (deriv_platform/ + config/) is resolved consistently in CI and deployment.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 os.environ.setdefault("DJANGO_ENV", "production")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deriv_platform.settings")
