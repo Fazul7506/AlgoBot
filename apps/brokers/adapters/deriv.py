@@ -159,13 +159,23 @@ class DerivAdapter(BrokerAdapter):
         account_type = str(routing.get("account_type") or self.credentials.get("account_type") or "demo").lower()
         if account_type == "real" and not settings.ALLOW_LIVE_TRADING:
             raise BrokerOrderError("Live-money trading is disabled by platform configuration")
-        contract_type = (getattr(order, "contract_type", None) or getattr(order, "direction", None) or "CALL").upper()
-        if contract_type in {"BUY", "SELL"}:
-            contract_type = str(routing.get("contract_type", "CALL")).upper()
+        if str(getattr(order, "order_type", "market") or "market").lower() != "market":
+            raise BrokerOrderError("Deriv execution currently supports market contract purchases only")
+
+        requested_contract = str(routing.get("contract_type") or getattr(order, "contract_type", None) or "").upper()
+        direction = str(getattr(order, "direction", "") or "").upper()
+        if not requested_contract:
+            requested_contract = {"BUY": "CALL", "SELL": "PUT", "CALL": "CALL", "PUT": "PUT", "RISE": "RISE", "FALL": "FALL"}.get(direction, "")
+        elif requested_contract in {"BUY", "SELL"}:
+            requested_contract = {"BUY": "CALL", "SELL": "PUT"}[requested_contract]
         allowed = {"CALL", "PUT", "MULTUP", "MULTDOWN", "DIGITOVER", "DIGITUNDER", "RISE", "FALL"}
-        if contract_type not in allowed:
-            raise BrokerOrderError(f"Unsupported Deriv contract type: {contract_type}")
-        proposal_payload = {"proposal": 1, "amount": float(order.stake or getattr(order, "quantity", 0)), "basis": "stake", "contract_type": contract_type, "currency": routing.get("currency") or getattr(self.account, "currency", None) or "USD", "duration": int(routing.get("duration", 60)), "duration_unit": routing.get("duration_unit", "s"), "underlying_symbol": order.symbol}
+        if requested_contract not in allowed:
+            raise BrokerOrderError(f"Unsupported Deriv contract type: {requested_contract or 'missing'}")
+
+        amount = float(order.stake or getattr(order, "quantity", 0) or 0)
+        if amount <= 0:
+            raise BrokerOrderError("A positive stake is required to place a Deriv order")
+        proposal_payload = {"proposal": 1, "amount": amount, "basis": "stake", "contract_type": requested_contract, "currency": routing.get("currency") or getattr(self.account, "currency", None) or "USD", "duration": int(routing.get("duration", 60)), "duration_unit": routing.get("duration_unit", "s"), "underlying_symbol": order.symbol}
         if routing.get("barrier") is not None: proposal_payload["barrier"] = str(routing["barrier"])
         if routing.get("multiplier") is not None: proposal_payload["multiplier"] = float(routing["multiplier"])
         proposal_response = await self._request(proposal_payload, authenticated=True)
@@ -178,7 +188,7 @@ class DerivAdapter(BrokerAdapter):
         contract_id = buy.get("contract_id")
         if not contract_id:
             raise BrokerOrderError("Deriv accepted the request without returning a contract ID")
-        return {"status": "filled", "broker_order_id": str(contract_id), "execution_price": buy.get("buy_price") or ask_price, "fees": 0, "payout": buy.get("payout"), "proposal_id": proposal_id, "contract_type": contract_type}
+        return {"status": "filled", "broker_order_id": str(contract_id), "execution_price": buy.get("buy_price") or ask_price, "fees": 0, "payout": buy.get("payout"), "proposal_id": proposal_id, "contract_type": requested_contract}
 
     async def modify_order(self, order, **changes):
         raise BrokerOrderError("Deriv contract modification is not exposed by the generic order API")
