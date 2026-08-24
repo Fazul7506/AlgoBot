@@ -1,6 +1,6 @@
 # AlgoBot Frontend Production Refactor Master Contract
 
-Status: **PHASE 11 COMPLETE AND WORKING**
+Status: **PHASE 12 COMPLETE AND WORKING**
 
 Branch: `refactor/frontend-production-foundation`
 Long-lived PR: `#17`
@@ -50,8 +50,8 @@ Target: **L5 Production**. Foundational surfaces may reach **L6 Reference**.
 9. Trade history — **COMPLETE AND WORKING**
 10. Market/watchlist — **COMPLETE AND WORKING**
 11. Charts — **COMPLETE AND WORKING**
-12. Strategies — NEXT
-13. Automation
+12. Strategies — **COMPLETE AND WORKING**
+13. Automation — NEXT
 14. Workflow templates/builder
 15. Notifications
 16. Settings
@@ -92,9 +92,12 @@ Authenticated execution history page using broker-backed execution reports with 
 Broker-gated market catalogue/quotes, search, catalogue sync and quote polling with no fabricated prices.
 
 ### Phase 11 — charts
-Live trading chart history and authenticated WebSocket stream are now gated by canonical broker state; disconnect closes the stream and broker-selected symbols drive subscriptions.
+Broker-state-gated chart history and authenticated WebSocket market stream with disconnect/reconnect handling.
 
-See `docs/Architecture/phase-11-charts.md`.
+### Phase 12 — strategies
+`static/js/strategy_center.js` now gates strategy registry/signals/performance and run/pause/stop actions on broker state, uses the centralized request contract and reports only backend-confirmed lifecycle state.
+
+See `docs/Architecture/phase-12-strategies.md`.
 
 ## Inventory
 
