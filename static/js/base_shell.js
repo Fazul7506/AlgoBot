@@ -52,6 +52,9 @@
       mobile?.setAttribute('aria-expanded', 'true');
     };
 
+    // Recover from stale CSS/DOM state left by an interrupted navigation.
+    if (!sidebar.classList.contains('is-open')) closeMobile();
+
     mobile?.addEventListener('click', () => sidebar.classList.contains('is-open') ? closeMobile() : openMobile());
     backdrop?.addEventListener('click', closeMobile);
     sidebar.querySelectorAll('nav a, .sidebar-new-trade').forEach(link => link.addEventListener('click', closeMobile));
@@ -64,7 +67,11 @@
         document.body.classList.toggle('sidebar-collapsed', collapsed);
         toggle.setAttribute('aria-expanded', String(!collapsed));
         toggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
-        toggle.querySelector('.material-symbols-rounded')?.replaceChildren(document.createTextNode(collapsed ? 'left_panel_open' : 'left_panel_close'));
+        const icon = toggle.querySelector('.material-symbols-rounded');
+        if (icon) {
+          icon.textContent = collapsed ? 'left_panel_open' : 'left_panel_close';
+          icon.setAttribute('data-icon-name', collapsed ? 'left_panel_open' : 'left_panel_close');
+        }
         try { localStorage.setItem(storageKey, collapsed ? '1' : '0'); } catch (_) {}
       };
 
@@ -78,6 +85,7 @@
 
     window.addEventListener('resize', () => {
       if (window.innerWidth > 800) closeMobile();
+      if (!sidebar.classList.contains('is-open')) closeMobile();
     });
   }
 
