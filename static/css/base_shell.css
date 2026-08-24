@@ -19,34 +19,16 @@
 .connection-indicator i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .connection-indicator.connected { color: var(--green); }
 .connection-indicator.error { color: var(--red); }
-
-.material-symbols-rounded {
-  font-family: 'Material Symbols Rounded', sans-serif;
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-feature-settings: 'liga';
-  -webkit-font-smoothing: antialiased;
-  font-feature-settings: 'liga';
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-  width: 1em;
-  min-width: 1em;
-  height: 1em;
-  overflow: hidden;
-  vertical-align: middle;
-}
-
+.material-symbols-rounded { font-family: 'Material Symbols Rounded', sans-serif; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr; -webkit-font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased; font-feature-settings: 'liga'; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; width: 1em; min-width: 1em; height: 1em; overflow: hidden; vertical-align: middle; }
 [data-icons-fallback] .material-symbols-rounded { font-size: 0; }
 [data-icons-fallback] .material-symbols-rounded::before { content: '\00a0'; font-size: 24px; }
-
 @media (max-width: 800px) {
-  .app-sidebar.is-collapsed + .app-shell,
-  .app-shell.sidebar-collapsed { margin-left: 0; }
+  .mobile-menu-button { display: grid; place-items: center; }
+  .app-sidebar { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); transform: translateX(-105%); transition: transform .22s ease; overflow-y: auto; }
+  .app-sidebar.is-open { transform: translateX(0); }
+  .app-sidebar.is-collapsed + .app-shell, .app-shell.sidebar-collapsed { margin-left: 0; }
+  .app-shell { margin-left: 0 !important; }
+  .topbar { padding-left: 68px; }
+  .sidebar-toggle { display: none; }
+  body.mobile-nav-open { overflow: hidden; }
 }
