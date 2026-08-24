@@ -46,7 +46,7 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
         }
 
     def get_account_type(self, obj):
-        return str((obj.credentials or {}).get("account_type") or "demo").lower()
+        return str((obj.credentials or {}).get("account_type") or "unknown").lower()
 
     def get_avatar_url(self, obj):
         credentials = obj.credentials or {}
