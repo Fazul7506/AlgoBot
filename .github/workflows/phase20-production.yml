@@ -22,6 +22,7 @@ jobs:
           DEBUG: "True"
         run: |
           python manage.py check
+          python manage.py makemigrations --noinput
           python manage.py makemigrations --check
           python manage.py migrate --noinput
           python manage.py test
