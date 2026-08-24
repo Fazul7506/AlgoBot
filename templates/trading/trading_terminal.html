@@ -10,6 +10,7 @@
 .order-ticket{position:sticky;top:14px}.side-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.buy{background:#1b8d67!important;color:white!important}.sell{background:#b83e55!important;color:white!important}.wide{width:100%}
 .metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.metric strong{display:block;font-size:1.2rem}.muted{opacity:.65}.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#43d19a;margin-right:6px}
 .data-list{max-height:210px;overflow:auto}.row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border,rgba(255,255,255,.08));font-size:.9rem}
+button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:1050px){.terminal{grid-template-columns:1fr}.order-ticket{position:static}.quote,.metric-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 {% endblock %}
@@ -18,18 +19,18 @@
   <div class="term-toolbar">
     <select id="symbol"></select><select id="timeframe"><option>M1</option><option>M5</option><option>M15</option><option>H1</option><option>H4</option><option>D1</option></select>
     <button class="btn" id="refresh">Refresh market</button><a class="btn" href="/brokers/connect/">Connect broker</a>
-    <span class="muted" id="terminal-status">Initializing terminal…</span>
+    <span class="muted" id="terminal-status">Loading connected broker…</span>
   </div>
   <h1>Trading Terminal</h1>
   <p>One workspace from market discovery to broker execution. Every order passes through AlgoBot's execution and risk layers.</p>
 </section>
 
 <div class="quote" id="quote">
-  <article class="card"><span class="muted">Last price</span><strong data-q="price">—</strong></article>
-  <article class="card"><span class="muted">Bid</span><strong data-q="bid">—</strong></article>
-  <article class="card"><span class="muted">Ask</span><strong data-q="ask">—</strong></article>
-  <article class="card"><span class="muted">Trend</span><strong data-q="trend">—</strong></article>
-  <article class="card"><span class="muted">Volatility</span><strong data-q="vol">—</strong></article>
+  <article class="card"><span class="muted">Last price</span><strong data-q="price">Loading…</strong></article>
+  <article class="card"><span class="muted">Bid</span><strong data-q="bid">Loading…</strong></article>
+  <article class="card"><span class="muted">Ask</span><strong data-q="ask">Loading…</strong></article>
+  <article class="card"><span class="muted">Trend</span><strong data-q="trend">Loading…</strong></article>
+  <article class="card"><span class="muted">Volatility</span><strong data-q="vol">Loading…</strong></article>
 </div>
 
 <div class="terminal">
@@ -38,10 +39,10 @@
       <div class="section-heading"><div><span class="eyebrow">Market structure</span><h2 id="chart-title">Price action</h2></div><span id="signal-badge" class="badge">WAIT</span></div>
       <div id="chart" class="chart" aria-label="Candlestick chart"></div>
       <div class="metric-grid">
-        <div class="metric"><span class="muted">Strategy</span><strong id="strategy">—</strong></div>
-        <div class="metric"><span class="muted">AI confidence</span><strong id="confidence">—</strong></div>
-        <div class="metric"><span class="muted">Support</span><strong id="support">—</strong></div>
-        <div class="metric"><span class="muted">Resistance</span><strong id="resistance">—</strong></div>
+        <div class="metric"><span class="muted">Strategy</span><strong id="strategy">Waiting for signal</strong></div>
+        <div class="metric"><span class="muted">AI confidence</span><strong id="confidence">No trained model</strong></div>
+        <div class="metric"><span class="muted">Support</span><strong id="support">Not available</strong></div>
+        <div class="metric"><span class="muted">Resistance</span><strong id="resistance">Not available</strong></div>
       </div>
     </section>
     <div class="card-grid">
@@ -54,14 +55,13 @@
     <span class="eyebrow">Execution ticket</span><h2>Trade now</h2>
     <label>Broker account<select id="account"></select></label>
     <label>Strategy<select id="strategy-select"><option value="">Manual execution</option></select></label>
-    <label>Order type<select id="order-type"><option value="market">Market</option><option value="limit">Limit</option></select></label>
+    <label>Order type<select id="order-type"><option value="market">Market</option></select></label>
     <label>Stake<input id="stake" type="number" min="0.01" step="0.01" value="1"></label>
-    <label>Limit price<input id="limit-price" type="number" step="any" placeholder="Optional"></label>
     <div class="side-actions"><button class="btn buy" id="buy">BUY</button><button class="btn sell" id="sell">SELL</button></div>
-    <p id="risk-note" class="muted">Risk engine will validate the order before broker routing.</p>
+    <p id="risk-note" class="muted">Waiting for a connected broker account.</p>
     <hr>
     <div class="section-heading"><h3>Account</h3><a href="/workspace/brokers/">Manage</a></div>
-    <div class="row"><span>Balance</span><strong id="balance">—</strong></div><div class="row"><span>Equity</span><strong id="equity">—</strong></div><div class="row"><span>Margin</span><strong id="margin">—</strong></div>
+    <div class="row"><span>Balance</span><strong id="balance">Loading…</strong></div><div class="row"><span>Equity</span><strong id="equity">Loading…</strong></div><div class="row"><span>Margin</span><strong id="margin">Loading…</strong></div>
     <hr><button class="btn wide" id="kill">Emergency kill switch</button>
     <p id="order-result" class="muted"></p>
   </aside>
@@ -71,26 +71,36 @@
 <script>
 (() => {
 const $=s=>document.querySelector(s), api=async (u,o={})=>{const r=await fetch(u,{headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':document.cookie.match(/csrftoken=([^;]+)/)?.[1]||''},credentials:'same-origin',...o});let d={};try{d=await r.json()}catch{};if(!r.ok)throw new Error(d.detail||d.error||`HTTP ${r.status}`);return d};
-let symbols=[], accounts=[], strategies=[], candles=[];
-const fmt=v=>v==null||v===''?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:8});
+let symbols=[], accounts=[], strategies=[], candles=[], placing=false;
+const fmt=v=>v==null||v===''?'Not available':Number(v).toLocaleString(undefined,{maximumFractionDigits:8});
 function setStatus(t,bad=false){$('#terminal-status').innerHTML=`<span class="status-dot" style="${bad?'background:#ff6b7d':''}"></span>${t}`}
+function setTradeEnabled(enabled){$('#buy').disabled=!enabled||placing;$('#sell').disabled=!enabled||placing;$('#account').disabled=placing;}
 async function loadAll(){
  try{
   [symbols,accounts,strategies]=await Promise.all([api('/api/markets/symbols/'),api('/api/brokers/accounts/'),api('/api/strategies/')]);
   symbols=Array.isArray(symbols)?symbols:(Array.isArray(symbols.results)?symbols.results:[]); accounts=Array.isArray(accounts.results)?accounts.results:(Array.isArray(accounts)?accounts:[]);
   strategies=Array.isArray(strategies.results)?strategies.results:(Array.isArray(strategies)?strategies:[]);
-  $('#symbol').innerHTML=symbols.map(x=>`<option value="${x.symbol}">${x.symbol}</option>`).join('')||'<option value="R_100">R_100</option>';
-  $('#account').innerHTML=accounts.map(x=>`<option value="${x.id}">${x.broker?.name||'Broker'} · ${x.broker_account_id||x.account_id} · ${x.currency||''} ${fmt(x.balance)}</option>`).join('')||'<option value="">No connected broker account</option>';
+  const activeSymbols=symbols.filter(x=>x?.is_active!==false&&x?.is_tradable!==false);
+  $('#symbol').innerHTML=activeSymbols.map(x=>`<option value="${x.symbol}">${x.symbol}</option>`).join('');
+  $('#account').innerHTML=accounts.map(x=>`<option value="${x.id}">${x.broker?.name||'Broker'} · ${x.broker_account_id||x.account_id} · ${(x.account_type||'demo').toUpperCase()} · ${x.currency||''} ${fmt(x.balance)}</option>`).join('')||'<option value="">No connected broker account</option>';
   $('#strategy-select').innerHTML='<option value="">Manual execution</option>'+strategies.filter(x=>x.enabled!==false&&x.is_active!==false).map(x=>`<option value="${x.name}">${x.name}</option>`).join('');
-  if(accounts[0]) selectAccount(accounts[0]);
-  await refresh();
- }catch(e){setStatus(e.message,true)}
+  if(accounts[0]) selectAccount(accounts[0]); else {setTradeEnabled(false);$('#risk-note').textContent='No connected broker account is available.';}
+  if(activeSymbols[0]) await refresh(); else {setStatus('No broker market symbols available',true);setTradeEnabled(false);}
+ }catch(e){setStatus(e.message,true);setTradeEnabled(false)}
 }
-function selectAccount(a){$('#balance').textContent=`${a.currency||''} ${fmt(a.balance)}`.trim();$('#equity').textContent=`${a.currency||''} ${fmt(a.equity??a.balance)}`.trim();$('#margin').textContent=`${a.currency||''} ${fmt(a.margin)}`.trim()}
+function selectAccount(a){
+ const active=!!a&&a.status==='active'&&a.is_connected!==false;
+ const type=String(a?.account_type||'demo').toUpperCase();
+ $('#balance').textContent=`${a?.currency||''} ${fmt(a?.balance)}`.trim();$('#equity').textContent=`${a?.currency||''} ${fmt(a?.equity??a?.balance)}`.trim();$('#margin').textContent=`${a?.currency||''} ${fmt(a?.margin)}`.trim();
+ $('#risk-note').textContent=active?`Connected ${type} account · trades route through ${a.broker_name||a.broker?.name||'the selected broker'}.`:`Account ${a?.status||'unavailable'} · trading disabled.`;
+ setTradeEnabled(active);
+}
 async function refresh(){
- const s=$('#symbol').value||'R_100', tf=$('#timeframe').value;
+ const s=$('#symbol').value, tf=$('#timeframe').value;
+ if(!s)return;
  try{
-  const [ticks,cs,snap,pos,sigs]=await Promise.all([
+  const [live,ticks,cs,snap,pos,sigs]=await Promise.all([
+   api('/api/market/ticks/broker/',{method:'POST',body:JSON.stringify({symbol:s})}),
    api('/api/ticks/latest/?symbol='+encodeURIComponent(s)),
    api('/api/candles/history/?symbol='+encodeURIComponent(s)+'&timeframe='+encodeURIComponent(tf)+'&limit=60'),
    api('/api/market/snapshot/?symbol='+encodeURIComponent(s)),
@@ -98,30 +108,33 @@ async function refresh(){
    api('/api/market/signals/?symbol='+encodeURIComponent(s))
   ]);
   candles=Array.isArray(cs)?cs.reverse():(Array.isArray(cs.results)?cs.results.reverse():[]); draw(candles);
-  const sn=Array.isArray(snap)?snap[0]:snap; const price=ticks.price??ticks.close??sn?.price??sn?.last_price;
-  $('[data-q=price]').textContent=fmt(price); $('[data-q=bid]').textContent=fmt(sn?.bid); $('[data-q=ask]').textContent=fmt(sn?.ask);
-  $('[data-q=trend]').textContent=sn?.trend||sn?.market_regime||'—'; $('[data-q=vol]').textContent=sn?.volatility||'—';
+  const sn=Array.isArray(snap)?snap[0]:snap; const price=live.quote??ticks.quote??ticks.price??sn?.last_price;
+  $('[data-q=price]').textContent=fmt(price); $('[data-q=bid]').textContent=fmt(live.bid??sn?.bid); $('[data-q=ask]').textContent=fmt(live.ask??sn?.ask);
+  $('[data-q=trend]').textContent=sn?.trend||sn?.market_regime||'Live quote'; $('[data-q=vol]').textContent=sn?.volatility||'Live feed';
   $('#chart-title').textContent=`${s} · ${tf}`; renderPositions(pos); renderSignals(sigs);
-  setStatus(`Live market · ${new Date().toLocaleTimeString()}`);
+  setStatus(`${live.broker||'Broker'} · ${live.account_id||'connected account'} · ${live.stale?'last known quote':'live quote'} · ${new Date().toLocaleTimeString()}`);
  }catch(e){setStatus(e.message,true)}
 }
 function draw(cs){
- const c=$('#chart'); c.innerHTML=''; if(!cs.length){c.innerHTML='<p class="muted">No candle history available for this symbol/timeframe.</p>';return}
+ const c=$('#chart'); c.innerHTML=''; if(!cs.length){c.innerHTML='<p class="muted">Waiting for broker candle data…</p>';return}
  const lo=Math.min(...cs.map(x=>+x.low)), hi=Math.max(...cs.map(x=>+x.high)), span=hi-lo||1;
  cs.slice(-55).forEach(x=>{const up=+x.close>=+x.open, top=100-(Math.max(+x.open,+x.close)-lo)/span*92-4, bottom=100-(Math.min(+x.open,+x.close)-lo)/span*92-4;const el=document.createElement('div');el.className='candle '+(up?'up':'down');el.innerHTML=`<i class="wick"></i><i class="body" style="top:${Math.min(top,bottom)}%;height:${Math.max(2,Math.abs(bottom-top))}%"></i>`;c.appendChild(el)})
 }
 function renderPositions(d){d=Array.isArray(d.results)?d.results:(Array.isArray(d)?d:[]);$('#positions').innerHTML=d.length?d.slice(0,8).map(x=>`<div class="row"><span>${x.symbol}<br><small class="muted">${x.direction||''}</small></span><strong>${fmt(x.profit??x.pnl??x.roi)}</strong></div>`).join(''):'<p class="muted">No open positions.</p>'}
-function renderSignals(d){d=Array.isArray(d.results)?d.results:(Array.isArray(d)?d:[]);const x=d[0];$('#signals').innerHTML=d.length?d.slice(0,8).map(x=>`<div class="row"><span>${x.symbol||'—'} · ${x.signal||x.direction||'WAIT'}</span><strong>${x.confidence!=null?fmt(x.confidence)+'%':'—'}</strong></div>`).join(''):'<p class="muted">No signals yet.</p>';if(x){$('#signal-badge').textContent=x.signal||x.direction||'WAIT';$('#strategy').textContent=x.strategy?.name||x.strategy||'—';$('#confidence').textContent=x.confidence!=null?fmt(x.confidence)+'%':'—';}}
+function renderSignals(d){d=Array.isArray(d.results)?d.results:(Array.isArray(d)?d:[]);const x=d[0];$('#signals').innerHTML=d.length?d.slice(0,8).map(x=>`<div class="row"><span>${x.symbol||'Market'} · ${x.signal||x.direction||'WAIT'}</span><strong>${x.confidence!=null?fmt(x.confidence)+'%':'Not available'}</strong></div>`).join(''):'<p class="muted">No signals yet.</p>';if(x){$('#signal-badge').textContent=x.signal||x.direction||'WAIT';$('#strategy').textContent=x.strategy?.name||x.strategy||'Waiting for signal';$('#confidence').textContent=x.confidence!=null?fmt(x.confidence)+'%':'No trained model';}}
 async function place(direction){
- const account=$('#account').value;if(!account)return $('#order-result').textContent='Connect/select a broker account first.';
- const payload={account:account,symbol:$('#symbol').value,strategy:$('#strategy-select').value,direction,order_type:$('#order-type').value,stake:$('#stake').value,price:$('#limit-price').value||null,client_order_id:'web-'+Date.now()};
- $('#order-result').textContent='Submitting through risk + execution engine…';
- try{const d=await api('/api/orders/',{method:'POST',body:JSON.stringify(payload)});$('#order-result').textContent=`Order ${d.id||d.order_id||''} accepted: ${d.status||'submitted'}`;await refresh()}catch(e){$('#order-result').textContent='Order rejected: '+e.message}}
+ if(placing)return;
+ const accountId=$('#account').value, selected=accounts.find(x=>String(x.id)===String(accountId));
+ if(!selected||selected.status!=='active'||selected.is_connected===false)return $('#order-result').textContent='Select a currently connected broker account first.';
+ const stake=Number($('#stake').value);if(!Number.isFinite(stake)||stake<=0)return $('#order-result').textContent='Enter a positive stake before placing the trade.';
+ const clientOrderId=`web-${typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(16).slice(2)}`;
+ const payload={account:accountId,symbol:$('#symbol').value,strategy:$('#strategy-select').value,direction,order_type:'market',stake,price:null,client_order_id:clientOrderId};
+ placing=true;setTradeEnabled(false);$('#order-result').textContent=`Submitting ${direction.toUpperCase()} through risk + broker execution…`;
+ try{const d=await api('/api/orders/',{method:'POST',body:JSON.stringify(payload)});const ref=d.raw_report?.broker_order_id||d.broker_order_id||'';$('#order-result').textContent=`${direction.toUpperCase()} ${d.status||'submitted'}${ref?` · broker reference ${ref}`:''}`;await refresh()}catch(e){$('#order-result').textContent='Order not placed: '+e.message}finally{placing=false;selectAccount(accounts.find(x=>String(x.id)===String($('#account').value))||selected)}}
 $('#buy').onclick=()=>place('buy');$('#sell').onclick=()=>place('sell');$('#refresh').onclick=refresh;$('#symbol').onchange=refresh;$('#timeframe').onchange=refresh;
 $('#account').onchange=()=>selectAccount(accounts.find(x=>String(x.id)===$('#account').value)||{});
-$('#order-type').onchange=()=>$('#limit-price').disabled=$('#order-type').value==='market';
-$('#kill').onclick=async()=>{if(!confirm('Activate the emergency kill switch? New trading activity will be blocked.'))return;try{await api('/api/risk/kill-switch/activate/',{method:'POST',body:JSON.stringify({reason:'Manual activation from Trading Terminal'})});$('#risk-note').textContent='KILL SWITCH ACTIVE — new orders should be blocked.'}catch(e){$('#risk-note').textContent=e.message}};
-$('#order-type').dispatchEvent(new Event('change'));loadAll();setInterval(refresh,15000);
+$('#kill').onclick=async()=>{if(!confirm('Activate the emergency kill switch? New trading activity will be blocked.'))return;try{await api('/api/risk/kill-switch/activate/',{method:'POST',body:JSON.stringify({reason:'Manual activation from Trading Terminal'})});$('#risk-note').textContent='KILL SWITCH ACTIVE — new orders should be blocked.';setTradeEnabled(false)}catch(e){$('#risk-note').textContent=e.message}};
+loadAll();setInterval(()=>{if(document.visibilityState==='visible'&&!placing)refresh()},5000);
 })();
 </script>
 {% endblock %}
