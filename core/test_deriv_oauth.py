@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from apps.brokers.models import BrokerAccount
 from core.models import BotSettings, Subscription, UserProfile
 from core.services.oauth_service import DerivOAuthService
 
@@ -25,7 +26,6 @@ class DerivOAuthTests(TestCase):
     def test_authorization_url_uses_only_current_oauth_parameters(self):
         url = DerivOAuthService.create_authorization_url("state", "challenge")
         query = parse_qs(urlparse(url).query)
-
         self.assertEqual(urlparse(url).scheme, "https")
         self.assertEqual(urlparse(url).netloc, "auth.deriv.com")
         self.assertEqual(query["response_type"], ["code"])
@@ -52,12 +52,7 @@ class DerivOAuthTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, "/brokers/connect/")
 
-    @patch("core.views_broker_oauth._verify_authenticated_websocket")
-    @patch("core.views_broker_oauth.requests.get")
-    @patch("core.views_broker_oauth.requests.post")
-    def test_callback_links_verified_deriv_account(self, post, get, websocket):
-        self._oauth_session()
-
+    def _mock_token_exchange(self, post):
         token_response = Mock()
         token_response.raise_for_status.return_value = None
         token_response.json.return_value = {
@@ -67,6 +62,7 @@ class DerivOAuthTests(TestCase):
         }
         post.return_value = token_response
 
+    def _mock_account_response(self, get):
         accounts_response = Mock()
         accounts_response.raise_for_status.return_value = None
         accounts_response.json.return_value = {
@@ -79,6 +75,14 @@ class DerivOAuthTests(TestCase):
             }]
         }
         get.return_value = accounts_response
+
+    @patch("core.views_broker_oauth._verify_authenticated_websocket")
+    @patch("core.views_broker_oauth.requests.get")
+    @patch("core.views_broker_oauth.requests.post")
+    def test_callback_links_verified_deriv_account(self, post, get, websocket):
+        self._oauth_session()
+        self._mock_token_exchange(post)
+        self._mock_account_response(get)
         websocket.return_value = {"balance": 10000, "currency": "USD"}
 
         result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
@@ -86,26 +90,38 @@ class DerivOAuthTests(TestCase):
         self.assertEqual(result.status_code, 302)
         self.assertEqual(result.url, "/dashboard/")
         user = User.objects.get(username="deriv_DOT90004580")
-        self.assertEqual(user.deriv_account.account_id, "DOT90004580")
+        account = BrokerAccount.objects.get(user=user, account_id="DOT90004580")
+        self.assertTrue(account.is_preferred)
+        self.assertEqual(account.status, "active")
+        self.assertEqual(account.credentials.get("connection_health"), "verified")
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
         self.assertTrue(Subscription.objects.filter(user=user).exists())
         self.assertTrue(BotSettings.objects.filter(user=user).exists())
+        websocket.assert_called_once_with("token", "DOT90004580")
+
+    @patch("core.views_broker_oauth._verify_authenticated_websocket", side_effect=TimeoutError("websocket unavailable"))
+    @patch("core.views_broker_oauth.requests.get")
+    @patch("core.views_broker_oauth.requests.post")
+    def test_callback_connects_account_when_websocket_health_is_degraded(self, post, get, websocket):
+        self._oauth_session()
+        self._mock_token_exchange(post)
+        self._mock_account_response(get)
+
+        result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+
+        self.assertEqual(result.status_code, 302)
+        self.assertEqual(result.url, "/dashboard/")
+        account = BrokerAccount.objects.get(account_id="DOT90004580")
+        self.assertEqual(account.status, "active")
+        self.assertTrue(account.is_preferred)
+        self.assertEqual(account.credentials.get("connection_health"), "degraded")
         websocket.assert_called_once_with("token", "DOT90004580")
 
     @patch("core.views_broker_oauth.requests.get")
     @patch("core.views_broker_oauth.requests.post")
     def test_callback_never_creates_user_without_verified_account(self, post, get):
         self._oauth_session()
-
-        token_response = Mock()
-        token_response.raise_for_status.return_value = None
-        token_response.json.return_value = {
-            "access_token": "token",
-            "refresh_token": "refresh",
-            "expires_in": 3600,
-        }
-        post.return_value = token_response
-
+        self._mock_token_exchange(post)
         accounts_response = Mock()
         accounts_response.raise_for_status.return_value = None
         accounts_response.json.return_value = {"data": []}

@@ -13,14 +13,13 @@
 .app-sidebar.is-collapsed .sidebar-new-trade span:not(.material-symbols-rounded),
 .app-sidebar.is-collapsed .sidebar-section h2,
 .app-sidebar.is-collapsed .sidebar-user { display: none; }
-.app-sidebar.is-collapsed + .app-shell { margin-left: 78px; }
+.app-sidebar.is-collapsed + .app-shell,
+.app-shell.sidebar-collapsed { margin-left: 78px; }
 .connection-indicator { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; }
 .connection-indicator i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .connection-indicator.connected { color: var(--green); }
 .connection-indicator.error { color: var(--red); }
 
-/* Material Symbols are ligatures: reserve the icon box and never expose the
-   ligature as UI copy while the webfont is loading. */
 .material-symbols-rounded {
   font-family: 'Material Symbols Rounded', sans-serif;
   font-weight: normal;
@@ -44,7 +43,10 @@
   vertical-align: middle;
 }
 
-/* If the font cannot be loaded, hide the raw ligature rather than displaying
-   words such as "menu" or "dashboard" where an icon belongs. */
 [data-icons-fallback] .material-symbols-rounded { font-size: 0; }
 [data-icons-fallback] .material-symbols-rounded::before { content: '\00a0'; font-size: 24px; }
+
+@media (max-width: 800px) {
+  .app-sidebar.is-collapsed + .app-shell,
+  .app-shell.sidebar-collapsed { margin-left: 0; }
+}

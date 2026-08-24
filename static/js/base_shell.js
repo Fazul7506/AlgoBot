@@ -1,4 +1,4 @@
-/* Shared application-shell behavior. Idempotent so existing page scripts remain safe. */
+/* Shared application-shell behavior. Idempotent so page scripts remain safe. */
 (() => {
   'use strict';
   if (window.__algoBotBaseShell) return;
@@ -12,15 +12,9 @@
     const indicator = $('[data-global-connection]');
     if (!indicator) return;
     const labels = {
-      NO_BROKER: 'No connected broker account',
-      CONNECTING: 'Connecting broker…',
-      CONNECTED: 'Broker connected',
-      SYNCING: 'Synchronizing broker…',
-      READY: 'Broker ready',
-      DEGRADED: 'Broker connection degraded',
-      DISCONNECTED: 'Broker disconnected',
-      RECONNECTING: 'Reconnecting broker…',
-      ERROR: 'Broker connection error'
+      NO_BROKER: 'No connected broker account', CONNECTING: 'Connecting broker…', CONNECTED: 'Broker connected',
+      SYNCING: 'Synchronizing broker…', READY: 'Broker ready', DEGRADED: 'Broker connection degraded',
+      DISCONNECTED: 'Broker disconnected', RECONNECTING: 'Reconnecting broker…', ERROR: 'Broker connection error'
     };
     const account = event?.detail?.state?.account;
     const label = account?.broker?.name && account?.broker_account_id
@@ -32,16 +26,17 @@
   }
 
   function bindBrokerState() {
-    if (!window.AlgoBotBrokerState) return;
-    window.AlgoBotBrokerState.subscribe(setBrokerStateAttribute);
+    window.AlgoBotBrokerState?.subscribe(setBrokerStateAttribute);
   }
 
   function bindNavigation() {
     const sidebar = $('#app-sidebar');
+    if (!sidebar || sidebar.dataset.navigationBound === 'true') return;
+    sidebar.dataset.navigationBound = 'true';
     const backdrop = $('[data-sidebar-backdrop]');
     const mobile = $('[data-mobile-menu]');
     const toggle = $('[data-sidebar-toggle]');
-    if (!sidebar) return;
+    const shell = $('.app-shell');
 
     const closeMobile = () => {
       sidebar.classList.remove('is-open');
@@ -58,16 +53,27 @@
     backdrop?.addEventListener('click', closeMobile);
     sidebar.querySelectorAll('nav a, .sidebar-new-trade').forEach(link => link.addEventListener('click', closeMobile));
 
-    toggle?.addEventListener('click', () => {
-      const collapsed = sidebar.classList.toggle('is-collapsed');
-      toggle.setAttribute('aria-expanded', String(!collapsed));
-      toggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
-    });
+    if (toggle) {
+      const setCollapsed = collapsed => {
+        sidebar.classList.toggle('is-collapsed', collapsed);
+        shell?.classList.toggle('sidebar-collapsed', collapsed);
+        document.body.classList.toggle('sidebar-collapsed', collapsed);
+        toggle.setAttribute('aria-expanded', String(!collapsed));
+        toggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
+        toggle.querySelector('.material-symbols-rounded')?.replaceChildren(document.createTextNode(collapsed ? 'left_panel_open' : 'left_panel_close'));
+      };
+      toggle.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        setCollapsed(!sidebar.classList.contains('is-collapsed'));
+      });
+    }
   }
 
   function bindTheme() {
     const button = $('[data-theme-toggle]');
-    if (!button) return;
+    if (!button || button.dataset.themeBound === 'true') return;
+    button.dataset.themeBound = 'true';
     const storageKey = 'algobot-theme';
     const apply = theme => {
       document.documentElement.dataset.theme = theme;
