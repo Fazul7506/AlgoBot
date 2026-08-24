@@ -13,12 +13,14 @@ class ValidationService:
         symbol = self.validate_symbol(data["symbol"])
         try:
             quote = Decimal(str(data.get("quote")))
-            bid = Decimal(str(data.get("bid", quote)))
-            ask = Decimal(str(data.get("ask", quote)))
-        except (InvalidOperation, TypeError) as exc: raise ValidationError("Corrupted tick") from exc
-        if quote < 0 or bid < 0 or ask < 0: raise ValidationError("Negative prices are rejected")
+            bid = Decimal(str(data.get("bid", quote) if data.get("bid") is not None else quote))
+            ask = Decimal(str(data.get("ask", quote) if data.get("ask") is not None else quote))
+            volume = Decimal(str(data.get("volume", 0) or 0))
+        except (InvalidOperation, TypeError, ValueError) as exc: raise ValidationError("Corrupted tick") from exc
+        if quote < 0 or bid < 0 or ask < 0 or volume < 0: raise ValidationError("Negative market values are rejected")
         epoch = int(data["epoch"])
         latest = Tick.objects.filter(symbol=symbol).order_by("-epoch").first()
         if latest and epoch < latest.epoch: raise ValidationError("Out-of-order tick")
-        if Tick.objects.filter(symbol=symbol, epoch=epoch, quote=quote).exists(): raise ValidationError("Duplicate tick")
-        return {"symbol": symbol, "quote": quote, "bid": bid, "ask": ask, "epoch": epoch, "volume": Decimal(str(data.get("volume", 0)))}
+        # Duplicate broker quotes are normal. TickService.ingest owns the
+        # idempotent write and the database unique constraint arbitrates races.
+        return {"symbol": symbol, "quote": quote, "bid": bid, "ask": ask, "epoch": epoch, "volume": volume}
