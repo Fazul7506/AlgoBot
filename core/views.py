@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.brokers.models import Broker
+from apps.brokers.models import Broker, BrokerAccount
 from trading.models import DerivAccount
 from core.services.oauth_service import DerivOAuthService
 
@@ -28,30 +28,33 @@ def _ensure_user_defaults(user):
     BotSettings.objects.get_or_create(user=user)
 
 
+def _preferred_deriv_account(user):
+    return (
+        BrokerAccount.objects.filter(user=user, broker__broker_type='deriv')
+        .select_related('broker')
+        .order_by('-is_preferred', '-last_synced_at', '-id')
+        .first()
+    )
+
+
+def _deriv_connected(account):
+    return bool(account and account.status == 'active' and account.broker.status == 'active' and account.token_status == 'active' and not account.is_token_expired)
+
+
 def _connect_page_context(request):
     connected = False
     account_id = None
     brokers = Broker.objects.filter(status='active').order_by('name')
     if request.user.is_authenticated:
-        try:
-            deriv_account = request.user.deriv_account
-            connected = deriv_account.token_status == 'active' and not deriv_account.is_token_expired
-            account_id = deriv_account.account_id
-        except (DerivAccount.DoesNotExist, Exception):
-            connected = False
+        account = _preferred_deriv_account(request.user)
+        connected = _deriv_connected(account)
+        account_id = account.account_id if account else None
     return {'hero_title':'Connect your Deriv broker to AlgoBot','hero_copy':'Access AlgoBot trading workflows, analytics, strategies and execution after your broker connection is established.','action_label':'Connect Deriv','action_url':'/brokers/connect/?broker=deriv','connected':connected,'account_id':account_id,'continue_url':'/dashboard/','support_text':'Only the broker connection flow is required. Once connected, AlgoBot will continue to the trading workspace automatically.','brokers':brokers}
 
 
 def home(request):
-    if request.user.is_authenticated:
-        try:
-            deriv_account = request.user.deriv_account
-            if deriv_account.token_status == 'active' and not deriv_account.is_token_expired:
-                return redirect('/dashboard/')
-        except DerivAccount.DoesNotExist:
-            pass
-        except Exception:
-            pass
+    if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)):
+        return redirect('/dashboard/')
     return render(request, 'core/home.html', {'hero_title':'AlgoBot AI trading platform','hero_copy':'Institutional-grade AI trading infrastructure for market intelligence, strategies, risk controls and broker execution.'})
 
 
@@ -95,15 +98,8 @@ def billing_cancel_page(request): return render(request, 'core/billing_cancel.ht
 
 def broker_connect_page(request):
     broker = request.GET.get('broker')
-    if request.user.is_authenticated:
-        try:
-            deriv_account = request.user.deriv_account
-            if deriv_account.token_status == 'active' and not deriv_account.is_token_expired:
-                return redirect('/dashboard/')
-        except DerivAccount.DoesNotExist:
-            pass
-        except Exception:
-            pass
+    if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)):
+        return redirect('/dashboard/')
     if broker == 'deriv': return deriv_login(request)
     return render(request, 'broker/connect_broker.html', _connect_page_context(request))
 
@@ -138,7 +134,7 @@ def callback(request):
     is_valid, validation_error = DerivOAuthService.validate_token_response(token_data)
     if not is_valid: return HttpResponse(f'Invalid token response: {validation_error}', status=502)
     try:
-        account_id = token_data.get('account_id') or token_data.get('client_id')
+        account_id = str(token_data.get('account_id') or token_data.get('client_id') or '').strip()
         user = request.user if request.user.is_authenticated else None
         if not user:
             username = f'deriv_{account_id}' if account_id else f'deriv_{secrets.token_hex(8)}'
@@ -146,12 +142,25 @@ def callback(request):
             if created: user.set_unusable_password(); user.save(update_fields=['password'])
         auth_login(request, user)
         _ensure_user_defaults(user)
-        deriv_account, _ = DerivAccount.objects.get_or_create(user=user, defaults={'account_id':account_id or 'unknown','token_status':'active'})
-        deriv_account.account_id = account_id or deriv_account.account_id or 'unknown'
-        deriv_account.set_access_token(token_data.get('access_token') or '')
-        deriv_account.set_refresh_token(token_data.get('refresh_token'))
-        deriv_account.expires_at = DerivOAuthService.parse_token_expiry(int(token_data.get('expires_in',3600)))
-        deriv_account.token_status = 'active'; deriv_account.save()
+        broker, _ = Broker.objects.get_or_create(name='Deriv', defaults={'broker_type':'deriv','status':'active','supports_demo':True,'supports_live':True})
+        existing = BrokerAccount.objects.filter(broker=broker, account_id=account_id).first() if account_id else None
+        if existing and existing.user_id != user.id:
+            oauth_logger.warning('deriv_account_already_bound', extra={'account_id':account_id})
+            return HttpResponse('This Deriv account is already connected to another AlgoBot user.', status=409)
+        account = existing or BrokerAccount(user=user, broker=broker, account_id=account_id or 'unknown')
+        if account.user_id != user.id: account.user=user
+        account.status='active'; account.token_status='active'
+        account.set_access_token(token_data.get('access_token') or '')
+        account.set_refresh_token(token_data.get('refresh_token'))
+        account.expires_at = DerivOAuthService.parse_token_expiry(int(token_data.get('expires_in',3600)))
+        credentials=dict(account.credentials or {})
+        credentials['account_type']=str(token_data.get('account_type') or credentials.get('account_type') or 'demo').lower()
+        if token_data.get('avatar_url'): credentials['avatar_url']=str(token_data['avatar_url'])
+        account.credentials=credentials
+        account.is_preferred=True
+        account.last_refresh=timezone.now()
+        account.save()
+        BrokerAccount.objects.filter(user=user).exclude(pk=account.pk).update(is_preferred=False)
         DerivOAuthService.clear_oauth_session(request)
         return redirect('/dashboard/')
     except Exception:
