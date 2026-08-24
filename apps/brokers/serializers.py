@@ -90,9 +90,9 @@ class ExecutionReportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ExecutionReport
-        fields = "__all__" + ["symbol", "direction", "broker_order_id"] if isinstance("__all__", list) else [
-            "id", "order", "execution_price", "requested_price", "slippage", "latency", "fees", "status", "raw_report", "created_at",
-            "symbol", "direction", "broker_order_id",
+        fields = [
+            "id", "order", "execution_price", "requested_price", "slippage", "latency", "fees",
+            "status", "raw_report", "created_at", "symbol", "direction", "broker_order_id",
         ]
 
 
