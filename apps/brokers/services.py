@@ -48,8 +48,9 @@ class BrokerConnectionService:
         if verification.get('account_id') and verification['account_id'] != account.account_id: account.account_id=str(verification['account_id'])
         if verification.get('balance') is not None: account.balance=verification['balance']
         if verification.get('currency'): account.currency=verification['currency']
-        account_type=verification.get('is_virtual'); credentials=dict(account.credentials or {})
+        account_type=verification.get('is_virtual'); avatar_url=verification.get('avatar_url'); credentials=dict(account.credentials or {})
         if account_type is not None: credentials['account_type']='demo' if account_type else 'real'
+        if avatar_url: credentials['avatar_url']=str(avatar_url)
         account.credentials=credentials; account.status='active'; account.last_synced_at=timezone.now(); account.save(update_fields=['account_id','balance','currency','credentials','status','last_synced_at'])
         return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
     async def disconnect(self,broker,account=None):
@@ -115,8 +116,11 @@ class SynchronizationService:
         if broker_account_id and broker_account_id!=account.account_id: account.account_id=broker_account_id; fields.append('account_id')
         for f in ['balance','equity','margin','free_margin','currency']:
             if data.get(f) is not None: setattr(account,f,data[f]); fields.append(f)
-        if data.get('account_type'):
-            credentials=dict(account.credentials or {}); credentials['account_type']=data['account_type']; account.credentials=credentials; fields.append('credentials')
+        credentials=dict(account.credentials or {})
+        if data.get('account_type'): credentials['account_type']=data['account_type']; fields.append('credentials')
+        if data.get('avatar_url'): credentials['avatar_url']=str(data['avatar_url']); fields.append('credentials')
+        if credentials != (account.credentials or {}) and 'credentials' not in fields: fields.append('credentials')
+        account.credentials=credentials
         account.status='active'; account.last_synced_at=timezone.now(); fields.extend(['status','last_synced_at']); account.save(update_fields=list(dict.fromkeys(fields)))
         BrokerConnection.objects.update_or_create(broker=account.broker,defaults={'status':'connected','last_ping':timezone.now(),'connected_at':timezone.now()}); return account,data
 class ReconciliationService:
