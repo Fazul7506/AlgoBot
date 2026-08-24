@@ -109,7 +109,11 @@
   }
 
   function boot() {
-    window.AlgoBotBrokerState?.subscribe(event => { renderAccount(event.detail.state); if (!connected()) renderDisconnected(event.detail.state); });
+    window.AlgoBotBrokerState?.subscribe(event => {
+      renderAccount(event.detail.state);
+      if (connected()) load();
+      else renderDisconnected(event.detail.state);
+    });
     $('[data-dashboard-refresh]')?.addEventListener('click', load);
     $('[data-dashboard-kill-switch]')?.addEventListener('click', activateKillSwitch);
     window.addEventListener('beforeunload', () => clearTimeout(refreshTimer), { once: true });
