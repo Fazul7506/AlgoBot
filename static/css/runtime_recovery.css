@@ -63,13 +63,16 @@ body {
   touch-action: manipulation;
 }
 
+/* Never freeze the dashboard document. The fixed sidebar and backdrop are the
+   only elements whose interaction state changes when navigation opens. */
 body.mobile-nav-open {
-  overflow: hidden !important;
-  touch-action: none;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  touch-action: pan-y !important;
 }
 
 @media (max-width: 800px) {
-  body.mobile-nav-open { overflow: hidden !important; }
+  body.mobile-nav-open { overflow-y: auto !important; touch-action: pan-y !important; }
 
   .mobile-menu-button { display: grid !important; }
 
@@ -79,12 +82,12 @@ body.mobile-nav-open {
     width: min(300px, 88vw) !important;
     height: 100dvh !important;
     max-height: 100dvh !important;
-    transform: translateX(-105%);
+    transform: translate3d(-105%,0,0);
     transition: transform .2s ease;
     z-index: 200 !important;
   }
 
-  .app-sidebar.is-open { transform: translateX(0); }
+  .app-sidebar.is-open { transform: translate3d(0,0,0); }
 
   .app-shell,
   .app-shell.sidebar-collapsed,
