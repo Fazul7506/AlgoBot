@@ -16,6 +16,11 @@ class BrokerAccountApiTests(APITestCase):
         self.other_account = BrokerAccount.objects.create(user=self.other, broker=self.broker, account_id="VRTC456")
         self.client.force_authenticate(self.user)
 
+    def test_accounts_require_authentication(self):
+        self.client.force_authenticate(user=None)
+        response = self.client.get(reverse("broker-accounts-list"))
+        self.assertEqual(response.status_code, 401)
+
     def test_accounts_are_owned_and_credentials_are_not_serialized(self):
         response = self.client.get(reverse("broker-accounts-detail", args=[self.other_account.pk]))
         self.assertEqual(response.status_code, 404)
