@@ -86,7 +86,7 @@ def _ensure_defaults(user):
 
 
 def callback(request):
-    """Complete Deriv OAuth only after a verified broker account/session exists."""
+    """Complete Deriv OAuth after the broker account itself is verified."""
     if request.GET.get("error"):
         messages.error(request, "Deriv sign-in was cancelled or rejected. Please try again.")
         DerivOAuthService.clear_oauth_session(request)
@@ -129,15 +129,28 @@ def callback(request):
         account, _accounts = _verify_account(access_token)
         if not account:
             raise ValueError("Deriv returned no Options trading account")
-        account_id = account.get("account_id") or account.get("loginid")
+        account_id = str(account.get("account_id") or account.get("loginid") or "").strip()
         if not account_id:
             raise ValueError("Deriv did not return a broker account identity")
-        balance = asyncio.run(_verify_authenticated_websocket(access_token, account_id))
     except Exception as exc:
-        logger.exception("deriv_oauth_broker_verification_failed", extra={"error": str(exc)})
-        messages.error(request, "Deriv authentication succeeded, but AlgoBot could not verify the trading connection.")
+        logger.exception("deriv_oauth_broker_account_verification_failed", extra={"error": str(exc)})
+        messages.error(request, "Deriv authentication succeeded, but AlgoBot could not verify the trading account.")
         DerivOAuthService.clear_oauth_session(request)
         return redirect("broker_connect_page")
+
+    # WebSocket health is useful, but it must not turn a valid OAuth/account
+    # verification into a false connection failure. Network restrictions,
+    # transient websocket outages, or OTP endpoint changes should leave the
+    # authenticated account connected and let normal broker sync/reconnect
+    # logic restore live health.
+    websocket_balance = {}
+    websocket_health = "not_checked"
+    try:
+        websocket_balance = asyncio.run(_verify_authenticated_websocket(access_token, account_id))
+        websocket_health = "verified"
+    except Exception as exc:
+        websocket_health = "degraded"
+        logger.warning("deriv_oauth_websocket_health_degraded", extra={"account_id": account_id, "error": str(exc)})
 
     broker, _ = Broker.objects.get_or_create(
         broker_type="deriv",
@@ -161,21 +174,22 @@ def callback(request):
     _ensure_defaults(user)
     expires_in = int(token_data.get("expires_in", 3600))
     expires_at = DerivOAuthService.parse_token_expiry(expires_in)
-    currency = account.get("currency") or balance.get("currency") or "USD"
-    balance_value = balance.get("balance") if balance.get("balance") is not None else account.get("balance") or 0
-    account_type = str(account.get("account_type") or ("demo" if account.get("is_virtual") is True or balance.get("is_virtual") is True else "real")).lower()
-    avatar_url = str(account.get("avatar_url") or balance.get("avatar_url") or "").strip()
+    currency = account.get("currency") or websocket_balance.get("currency") or "USD"
+    balance_value = account.get("balance") if account.get("balance") is not None else websocket_balance.get("balance") or 0
+    account_type = str(account.get("account_type") or ("demo" if account.get("is_virtual") is True or websocket_balance.get("is_virtual") is True else "real")).lower()
+    avatar_url = str(account.get("avatar_url") or websocket_balance.get("avatar_url") or "").strip()
 
     broker_account, _ = BrokerAccount.objects.get_or_create(broker=broker, account_id=account_id, defaults={"user": user})
     broker_account.user = user
     broker_account.currency = currency
     broker_account.balance = balance_value
-    broker_account.equity = balance.get("equity") if balance.get("equity") is not None else balance_value
+    broker_account.equity = websocket_balance.get("equity") if websocket_balance.get("equity") is not None else balance_value
     broker_account.status = "active"
     broker_account.is_preferred = True
     broker_account.credentials = {
         **(broker_account.credentials or {}),
         "account_type": account_type,
+        "connection_health": websocket_health,
         **({"avatar_url": avatar_url} if avatar_url else {}),
     }
     broker_account.set_access_token(access_token)
@@ -188,5 +202,8 @@ def callback(request):
     BrokerAccount.objects.filter(user=user).exclude(pk=broker_account.pk).update(is_preferred=False)
 
     DerivOAuthService.clear_oauth_session(request)
-    messages.success(request, f"Deriv account {account_id} connected successfully.")
+    if websocket_health == "degraded":
+        messages.warning(request, f"Deriv account {account_id} connected. Live broker health is temporarily degraded; AlgoBot will retry automatically.")
+    else:
+        messages.success(request, f"Deriv account {account_id} connected successfully.")
     return redirect("dashboard_page")
