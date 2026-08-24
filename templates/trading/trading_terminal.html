@@ -70,23 +70,23 @@
 {% block extra_js %}
 <script>
 (() => {
-const $=s=>document.querySelector(s), api=async (u,o={})=>{const r=await fetch(u,{headers:{'Content-Type':'application/json','X-CSRFToken':document.cookie.match(/csrftoken=([^;]+)/)?.[1]||''},credentials:'same-origin',...o});let d={};try{d=await r.json()}catch{};if(!r.ok)throw new Error(d.detail||d.error||`HTTP ${r.status}`);return d};
+const $=s=>document.querySelector(s), api=async (u,o={})=>{const r=await fetch(u,{headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':document.cookie.match(/csrftoken=([^;]+)/)?.[1]||''},credentials:'same-origin',...o});let d={};try{d=await r.json()}catch{};if(!r.ok)throw new Error(d.detail||d.error||`HTTP ${r.status}`);return d};
 let symbols=[], accounts=[], strategies=[], candles=[];
 const fmt=v=>v==null||v===''?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:8});
 function setStatus(t,bad=false){$('#terminal-status').innerHTML=`<span class="status-dot" style="${bad?'background:#ff6b7d':''}"></span>${t}`}
 async function loadAll(){
  try{
-  [symbols,accounts,strategies]=await Promise.all([api('/api/markets/symbols/'),api('/api/broker/accounts/'),api('/api/strategies/')]);
-  symbols=Array.isArray(symbols)?symbols:[]; accounts=Array.isArray(accounts.results)?accounts.results:(Array.isArray(accounts)?accounts:[]);
+  [symbols,accounts,strategies]=await Promise.all([api('/api/markets/symbols/'),api('/api/brokers/accounts/'),api('/api/strategies/')]);
+  symbols=Array.isArray(symbols)?symbols:(Array.isArray(symbols.results)?symbols.results:[]); accounts=Array.isArray(accounts.results)?accounts.results:(Array.isArray(accounts)?accounts:[]);
   strategies=Array.isArray(strategies.results)?strategies.results:(Array.isArray(strategies)?strategies:[]);
   $('#symbol').innerHTML=symbols.map(x=>`<option value="${x.symbol}">${x.symbol}</option>`).join('')||'<option value="R_100">R_100</option>';
-  $('#account').innerHTML=accounts.map(x=>`<option value="${x.id}">${x.broker?.name||'Broker'} · ${x.broker_account_id} · ${x.currency||''} ${fmt(x.balance)}</option>`).join('');
-  $('#strategy-select').innerHTML='<option value="">Manual execution</option>'+strategies.filter(x=>x.enabled!==false).map(x=>`<option value="${x.name}">${x.name}</option>`).join('');
+  $('#account').innerHTML=accounts.map(x=>`<option value="${x.id}">${x.broker?.name||'Broker'} · ${x.broker_account_id||x.account_id} · ${x.currency||''} ${fmt(x.balance)}</option>`).join('')||'<option value="">No connected broker account</option>';
+  $('#strategy-select').innerHTML='<option value="">Manual execution</option>'+strategies.filter(x=>x.enabled!==false&&x.is_active!==false).map(x=>`<option value="${x.name}">${x.name}</option>`).join('');
   if(accounts[0]) selectAccount(accounts[0]);
   await refresh();
  }catch(e){setStatus(e.message,true)}
 }
-function selectAccount(a){$('#balance').textContent=fmt(a.balance);$('#equity').textContent=fmt(a.equity);$('#margin').textContent=fmt(a.margin)}
+function selectAccount(a){$('#balance').textContent=`${a.currency||''} ${fmt(a.balance)}`.trim();$('#equity').textContent=`${a.currency||''} ${fmt(a.equity??a.balance)}`.trim();$('#margin').textContent=`${a.currency||''} ${fmt(a.margin)}`.trim()}
 async function refresh(){
  const s=$('#symbol').value||'R_100', tf=$('#timeframe').value;
  try{
@@ -94,10 +94,10 @@ async function refresh(){
    api('/api/ticks/latest/?symbol='+encodeURIComponent(s)),
    api('/api/candles/history/?symbol='+encodeURIComponent(s)+'&timeframe='+encodeURIComponent(tf)+'&limit=60'),
    api('/api/market/snapshot/?symbol='+encodeURIComponent(s)),
-   api('/api/orders/positions/open/'),
+   api('/api/positions/'),
    api('/api/market/signals/?symbol='+encodeURIComponent(s))
   ]);
-  candles=Array.isArray(cs)?cs.reverse():[]; draw(candles);
+  candles=Array.isArray(cs)?cs.reverse():(Array.isArray(cs.results)?cs.results.reverse():[]); draw(candles);
   const sn=Array.isArray(snap)?snap[0]:snap; const price=ticks.price??ticks.close??sn?.price??sn?.last_price;
   $('[data-q=price]').textContent=fmt(price); $('[data-q=bid]').textContent=fmt(sn?.bid); $('[data-q=ask]').textContent=fmt(sn?.ask);
   $('[data-q=trend]').textContent=sn?.trend||sn?.market_regime||'—'; $('[data-q=vol]').textContent=sn?.volatility||'—';
@@ -111,12 +111,12 @@ function draw(cs){
  cs.slice(-55).forEach(x=>{const up=+x.close>=+x.open, top=100-(Math.max(+x.open,+x.close)-lo)/span*92-4, bottom=100-(Math.min(+x.open,+x.close)-lo)/span*92-4;const el=document.createElement('div');el.className='candle '+(up?'up':'down');el.innerHTML=`<i class="wick"></i><i class="body" style="top:${Math.min(top,bottom)}%;height:${Math.max(2,Math.abs(bottom-top))}%"></i>`;c.appendChild(el)})
 }
 function renderPositions(d){d=Array.isArray(d.results)?d.results:(Array.isArray(d)?d:[]);$('#positions').innerHTML=d.length?d.slice(0,8).map(x=>`<div class="row"><span>${x.symbol}<br><small class="muted">${x.direction||''}</small></span><strong>${fmt(x.profit??x.pnl??x.roi)}</strong></div>`).join(''):'<p class="muted">No open positions.</p>'}
-function renderSignals(d){d=Array.isArray(d.results)?d.results:(Array.isArray(d)?d:[]);const x=d[0];$('#signals').innerHTML=d.length?d.slice(0,8).map(x=>`<div class="row"><span>${x.symbol||'—'} · ${x.signal||'WAIT'}</span><strong>${x.confidence!=null?fmt(x.confidence)+'%':'—'}</strong></div>`).join(''):'<p class="muted">No signals yet.</p>';if(x){$('#signal-badge').textContent=x.signal||'WAIT';$('#strategy').textContent=x.strategy?.name||x.strategy||'—';$('#confidence').textContent=x.confidence!=null?fmt(x.confidence)+'%':'—';}}
+function renderSignals(d){d=Array.isArray(d.results)?d.results:(Array.isArray(d)?d:[]);const x=d[0];$('#signals').innerHTML=d.length?d.slice(0,8).map(x=>`<div class="row"><span>${x.symbol||'—'} · ${x.signal||x.direction||'WAIT'}</span><strong>${x.confidence!=null?fmt(x.confidence)+'%':'—'}</strong></div>`).join(''):'<p class="muted">No signals yet.</p>';if(x){$('#signal-badge').textContent=x.signal||x.direction||'WAIT';$('#strategy').textContent=x.strategy?.name||x.strategy||'—';$('#confidence').textContent=x.confidence!=null?fmt(x.confidence)+'%':'—';}}
 async function place(direction){
  const account=$('#account').value;if(!account)return $('#order-result').textContent='Connect/select a broker account first.';
- const payload={broker_account:account,symbol:$('#symbol').value,strategy:$('#strategy-select').value,direction,order_type:$('#order-type').value,stake:$('#stake').value,price:$('#limit-price').value||null,client_request_id:'web-'+Date.now()};
+ const payload={account:account,symbol:$('#symbol').value,strategy:$('#strategy-select').value,direction,order_type:$('#order-type').value,stake:$('#stake').value,price:$('#limit-price').value||null,client_order_id:'web-'+Date.now()};
  $('#order-result').textContent='Submitting through risk + execution engine…';
- try{const d=await api('/api/orders/',{method:'POST',body:JSON.stringify(payload)});$('#order-result').textContent=`Order ${d.id||''} accepted: ${d.status||'submitted'}`;await refresh()}catch(e){$('#order-result').textContent='Order rejected: '+e.message}}
+ try{const d=await api('/api/orders/',{method:'POST',body:JSON.stringify(payload)});$('#order-result').textContent=`Order ${d.id||d.order_id||''} accepted: ${d.status||'submitted'}`;await refresh()}catch(e){$('#order-result').textContent='Order rejected: '+e.message}}
 $('#buy').onclick=()=>place('buy');$('#sell').onclick=()=>place('sell');$('#refresh').onclick=refresh;$('#symbol').onchange=refresh;$('#timeframe').onchange=refresh;
 $('#account').onchange=()=>selectAccount(accounts.find(x=>String(x.id)===$('#account').value)||{});
 $('#order-type').onchange=()=>$('#limit-price').disabled=$('#order-type').value==='market';

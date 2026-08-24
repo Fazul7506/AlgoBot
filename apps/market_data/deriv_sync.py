@@ -6,12 +6,15 @@ import math
 from decimal import Decimal, InvalidOperation
 
 import websockets
+from django.conf import settings
+from django.core.cache import cache
 from django.db import IntegrityError, transaction
 
 from .models import MarketSymbol, Tick
 
 
-DERIV_PUBLIC_WS = "wss://api.derivws.com/trading/v1/options/ws/public"
+DERIV_PUBLIC_WS = getattr(settings, "DERIV_PUBLIC_WS_URL", "wss://api.derivws.com/trading/v1/options/ws/public")
+MARKET_SYNC_LOCK = "algobot:deriv:market-sync"
 MARKET_MAP = {
     "forex": "Forex", "cryptocurrency": "Crypto", "cryptocurrency_market": "Crypto",
     "indices": "Stock Indices", "stock_indices": "Stock Indices", "synthetic_index": "Derived Indices",
@@ -88,11 +91,20 @@ def _sync_one_symbol(item: dict) -> bool:
 
 
 def sync_active_symbols() -> int:
-    response = asyncio.run(_request({"active_symbols": "brief"}))
-    symbols = response.get("active_symbols", [])
-    if not isinstance(symbols, list):
-        raise RuntimeError("Deriv returned an invalid active_symbols payload")
-    return sum(_sync_one_symbol(item) for item in symbols if isinstance(item, dict))
+    """Refresh the cached broker catalogue without allowing concurrent bursts."""
+    if not cache.add(MARKET_SYNC_LOCK, "1", timeout=15):
+        raise RuntimeError("Deriv market catalogue refresh is already in progress")
+    try:
+        response = asyncio.run(_request({"active_symbols": "brief"}))
+        symbols = response.get("active_symbols", [])
+        if not isinstance(symbols, list):
+            raise RuntimeError("Deriv returned an invalid active_symbols payload")
+        return sum(_sync_one_symbol(item) for item in symbols if isinstance(item, dict))
+    finally:
+        try:
+            cache.delete(MARKET_SYNC_LOCK)
+        except Exception:
+            pass
 
 
 def fetch_tick(symbol: str) -> dict:

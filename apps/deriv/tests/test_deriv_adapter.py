@@ -3,7 +3,7 @@ from apps.deriv.adapter import DerivAdapter
 
 class FakeEngine:
     def __init__(self): self.payloads=[]
-    async def request(self, payload): self.payloads.append(payload); return "1"
+    async def request(self, payload): self.payloads.append(payload); return {"req_id": "1"}
     async def subscribe(self, symbol): return f"tick-{symbol}"
 
 class DerivAdapterTests(SimpleTestCase):
