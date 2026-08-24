@@ -162,17 +162,22 @@ def callback(request):
     expires_in = int(token_data.get("expires_in", 3600))
     expires_at = DerivOAuthService.parse_token_expiry(expires_in)
     currency = account.get("currency") or balance.get("currency") or "USD"
-    balance_value = balance.get("balance") or account.get("balance") or 0
-    account_type = account.get("account_type") or "demo"
+    balance_value = balance.get("balance") if balance.get("balance") is not None else account.get("balance") or 0
+    account_type = str(account.get("account_type") or ("demo" if account.get("is_virtual") is True or balance.get("is_virtual") is True else "real")).lower()
+    avatar_url = str(account.get("avatar_url") or balance.get("avatar_url") or "").strip()
 
     broker_account, _ = BrokerAccount.objects.get_or_create(broker=broker, account_id=account_id, defaults={"user": user})
     broker_account.user = user
     broker_account.currency = currency
     broker_account.balance = balance_value
-    broker_account.equity = balance_value
+    broker_account.equity = balance.get("equity") if balance.get("equity") is not None else balance_value
     broker_account.status = "active"
     broker_account.is_preferred = True
-    broker_account.credentials = {**(broker_account.credentials or {}), "account_type": account_type}
+    broker_account.credentials = {
+        **(broker_account.credentials or {}),
+        "account_type": account_type,
+        **({"avatar_url": avatar_url} if avatar_url else {}),
+    }
     broker_account.set_access_token(access_token)
     broker_account.set_refresh_token(token_data.get("refresh_token", ""))
     broker_account.expires_at = expires_at
