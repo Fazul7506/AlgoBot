@@ -2,21 +2,10 @@
 <!doctype html>
 <html lang="en" data-theme="dark">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0d10">
-  <title>{% block title %}AlgoBot{% endblock %}</title>
-  <link rel="icon" href="{% static 'icons/favicon.ico' %}">
-  <link rel="stylesheet" href="{% static 'css/design_system.css' %}">
-  <link rel="stylesheet" href="{% static 'css/base_shell.css' %}">
-  <link rel="stylesheet" href="{% static 'css/enterprise_templates.css' %}">
-  <link rel="stylesheet" href="{% static 'css/ui_upgrade.css' %}">
-  <link rel="stylesheet" href="{% static 'css/chatgpt_shell.css' %}">
-  <link rel="stylesheet" href="{% static 'css/landing_upgrade.css' %}">
-  <!-- Material Symbols must load before the app shell renders so icon glyphs never fall back to their text ligatures. -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL,GRAD@0..1,100..700&amp;display=swap">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0b0d10">
+  <title>{% block title %}AlgoBot{% endblock %}</title><link rel="icon" href="{% static 'icons/favicon.ico' %}">
+  <link rel="stylesheet" href="{% static 'css/design_system.css' %}"><link rel="stylesheet" href="{% static 'css/base_shell.css' %}"><link rel="stylesheet" href="{% static 'css/enterprise_templates.css' %}"><link rel="stylesheet" href="{% static 'css/ui_upgrade.css' %}"><link rel="stylesheet" href="{% static 'css/chatgpt_shell.css' %}"><link rel="stylesheet" href="{% static 'css/landing_upgrade.css' %}">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL,GRAD@0..1,100..700&amp;display=swap">
   {% block extra_css %}{% endblock %}
 </head>
 <body data-authenticated="{% if request.user.is_authenticated %}true{% else %}false{% endif %}">
@@ -24,49 +13,14 @@
 {% if messages %}<div class="toast-stack" aria-live="polite">{% for message in messages %}<div class="toast {{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}</div>{% endif %}
 {% if request.user.is_authenticated %}
 <button class="mobile-menu-button" type="button" data-mobile-menu aria-controls="app-sidebar" aria-expanded="false" aria-label="Open navigation"><span class="material-symbols-rounded" aria-hidden="true">menu</span></button>
-<div class="sidebar-backdrop" data-sidebar-backdrop hidden></div>
-<aside id="app-sidebar" class="app-sidebar" aria-label="AlgoBot workspace navigation">
-  <div class="sidebar-header">
-    <a class="brand" href="/dashboard/"><span class="brand-mark"><span class="material-symbols-rounded" aria-hidden="true">query_stats</span></span><span class="brand-name">AlgoBot</span></a>
-    <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Collapse navigation" aria-expanded="true"><span class="material-symbols-rounded" aria-hidden="true">left_panel_close</span></button>
-  </div>
-  <a class="sidebar-new-trade" href="/trading/"><span class="material-symbols-rounded" aria-hidden="true">add</span><span>New trade</span></a>
-  <nav>
-    <div class="sidebar-section"><h2>Trade</h2>
-      <a href="/dashboard/"><span class="material-symbols-rounded" aria-hidden="true">space_dashboard</span><span>Dashboard</span></a>
-      <a href="/trading/"><span class="material-symbols-rounded" aria-hidden="true">candlestick_chart</span><span>Terminal</span></a>
-      <a href="/markets/"><span class="material-symbols-rounded" aria-hidden="true">monitoring</span><span>Markets</span></a>
-      <a href="/orders/"><span class="material-symbols-rounded" aria-hidden="true">receipt_long</span><span>Orders</span></a>
-      <a href="/trade-history/"><span class="material-symbols-rounded" aria-hidden="true">history</span><span>Trade History</span></a>
-      <a href="/positions/"><span class="material-symbols-rounded" aria-hidden="true">account_tree</span><span>Positions</span></a>
-      <a href="/signals/"><span class="material-symbols-rounded" aria-hidden="true">bolt</span><span>Signals</span></a>
-    </div>
-    <div class="sidebar-section"><h2>Research</h2>
-      <a href="/strategies/"><span class="material-symbols-rounded" aria-hidden="true">schema</span><span>Strategies</span></a>
-      <a href="/backtesting/"><span class="material-symbols-rounded" aria-hidden="true">science</span><span>Backtesting</span></a>
-      <a href="/analytics/"><span class="material-symbols-rounded" aria-hidden="true">analytics</span><span>Analytics</span></a>
-      <a href="/performance/"><span class="material-symbols-rounded" aria-hidden="true">stacked_line_chart</span><span>Performance</span></a>
-      <a href="/predictions/"><span class="material-symbols-rounded" aria-hidden="true">psychology</span><span>AI Predictions</span></a>
-    </div>
-    <div class="sidebar-section"><h2>Operations</h2>
-      <a href="/risk/"><span class="material-symbols-rounded" aria-hidden="true">shield_lock</span><span>Risk</span></a>
-      <a href="/monitoring/"><span class="material-symbols-rounded" aria-hidden="true">vital_signs</span><span>Monitoring</span></a>
-      <a href="/portfolio/"><span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span><span>Portfolio</span></a>
-      <a href="/workspace/notifications/"><span class="material-symbols-rounded" aria-hidden="true">notifications</span><span>Notifications</span></a>
-    </div>
-    <div class="sidebar-section"><h2>Integrations</h2>
-      <a href="/workspace/brokers/"><span class="material-symbols-rounded" aria-hidden="true">hub</span><span>Brokers</span></a>
-      <a href="/brokers/connect/"><span class="material-symbols-rounded" aria-hidden="true">sync_alt</span><span>Connect Broker</span></a>
-      <a href="/billing/"><span class="material-symbols-rounded" aria-hidden="true">payments</span><span>Billing</span></a>
-    </div>
-    {% if request.user.is_staff %}<div class="sidebar-section"><h2>Admin</h2><a href="/admin/"><span class="material-symbols-rounded" aria-hidden="true">admin_panel_settings</span><span>Admin</span></a></div>{% endif %}
-  </nav>
-  <div class="sidebar-user"><div class="algobot-sidebar-account" data-sidebar-account><span class="algobot-account-error">Loading connected broker account…</span></div><div class="sidebar-user-actions"><form method="post" action="/logout/" data-logout-form>{% csrf_token %}<button type="submit" aria-label="Log out" title="Log out"><span class="material-symbols-rounded" aria-hidden="true">logout</span></button></form></div></div>
-</aside>
-{% endif %}
-<div class="app-shell{% if not request.user.is_authenticated %} public-shell{% endif %}">
-  <header class="topbar"><div class="topbar-title">{% if request.user.is_authenticated %}<span class="mobile-page-title">{% block mobile_title %}AlgoBot{% endblock %}</span>{% else %}<a class="public-brand" href="/">AlgoBot Enterprise</a>{% endif %}</div><nav class="topbar-actions" aria-label="Workspace controls">{% if request.user.is_authenticated %}<span class="connection-indicator" data-global-connection><i></i><span>Checking broker account…</span></span>{% else %}<a href="/">Home</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a class="btn small primary" href="/brokers/connect/">Connect Broker</a>{% endif %}<kbd>⌘K</kbd><button type="button" data-theme-toggle aria-pressed="false"><span class="material-symbols-rounded" aria-hidden="true">contrast</span><span>Theme</span></button></nav></header>
-  <main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main>
-</div>
-<script src="{% static 'js/api_timeout_guard.js' %}" defer></script><script src="{% static 'js/enterprise_templates.js' %}" defer></script><script src="{% static 'js/ui_guardrails.js' %}" defer></script><script src="{% static 'js/ui_upgrade.js' %}" defer></script><script src="{% static 'js/core/broker_state.js' %}" defer></script><script src="{% static 'js/core/frontend_data_contract.js' %}" defer></script><script src="{% static 'js/core/broker_payload_guard.js' %}" defer></script><script src="{% static 'js/core/api_execution_guard.js' %}" defer></script><script src="{% static 'js/live_broker_ui.js' %}" defer></script><script src="{% static 'js/core/broker_state_bridge.js' %}" defer></script><script src="{% static 'js/base_shell.js' %}" defer></script><script src="{% static 'js/ai_trading_ui.js' %}" defer></script>{% block extra_js %}{% endblock %}
+<div class="sidebar-backdrop" data-sidebar-backdrop hidden></div><aside id="app-sidebar" class="app-sidebar" aria-label="AlgoBot workspace navigation">
+<div class="sidebar-header"><a class="brand" href="/dashboard/"><span class="brand-mark"><span class="material-symbols-rounded" aria-hidden="true">query_stats</span></span><span class="brand-name">AlgoBot</span></a><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Collapse navigation" aria-expanded="true"><span class="material-symbols-rounded" aria-hidden="true">left_panel_close</span></button></div>
+<a class="sidebar-new-trade" href="/trading/"><span class="material-symbols-rounded" aria-hidden="true">add</span><span>New trade</span></a>
+<nav><div class="sidebar-section"><h2>Trade</h2><a href="/dashboard/"><span class="material-symbols-rounded" aria-hidden="true">space_dashboard</span><span>Dashboard</span></a><a href="/trading/"><span class="material-symbols-rounded" aria-hidden="true">candlestick_chart</span><span>Terminal</span></a><a href="/markets/"><span class="material-symbols-rounded" aria-hidden="true">monitoring</span><span>Markets</span></a><a href="/orders/"><span class="material-symbols-rounded" aria-hidden="true">receipt_long</span><span>Orders</span></a><a href="/trade-history/"><span class="material-symbols-rounded" aria-hidden="true">history</span><span>Trade History</span></a><a href="/positions/"><span class="material-symbols-rounded" aria-hidden="true">account_tree</span><span>Positions</span></a><a href="/signals/"><span class="material-symbols-rounded" aria-hidden="true">bolt</span><span>Signals</span></a></div>
+<div class="sidebar-section"><h2>Research</h2><a href="/strategies/"><span class="material-symbols-rounded" aria-hidden="true">schema</span><span>Strategies</span></a><a href="/backtesting/"><span class="material-symbols-rounded" aria-hidden="true">science</span><span>Backtesting</span></a><a href="/analytics/"><span class="material-symbols-rounded" aria-hidden="true">analytics</span><span>Analytics</span></a><a href="/performance/"><span class="material-symbols-rounded" aria-hidden="true">stacked_line_chart</span><span>Performance</span></a><a href="/predictions/"><span class="material-symbols-rounded" aria-hidden="true">psychology</span><span>AI Predictions</span></a></div>
+<div class="sidebar-section"><h2>Operations</h2><a href="/risk/"><span class="material-symbols-rounded" aria-hidden="true">shield_lock</span><span>Risk</span></a><a href="/monitoring/"><span class="material-symbols-rounded" aria-hidden="true">vital_signs</span><span>Monitoring</span></a><a href="/portfolio/"><span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span><span>Portfolio</span></a><a href="/workspace/notifications/"><span class="material-symbols-rounded" aria-hidden="true">notifications</span><span>Notifications</span></a></div>
+<div class="sidebar-section"><h2>Integrations</h2><a href="/workspace/brokers/"><span class="material-symbols-rounded" aria-hidden="true">hub</span><span>Brokers</span></a><a href="/brokers/connect/"><span class="material-symbols-rounded" aria-hidden="true">sync_alt</span><span>Connect Broker</span></a><a href="/billing/"><span class="material-symbols-rounded" aria-hidden="true">payments</span><span>Billing</span></a></div>{% if request.user.is_staff %}<div class="sidebar-section"><h2>Admin</h2><a href="/admin/"><span class="material-symbols-rounded" aria-hidden="true">admin_panel_settings</span><span>Admin</span></a></div>{% endif %}</nav>
+<div class="sidebar-user"><div class="algobot-sidebar-account" data-sidebar-account><span class="algobot-account-error">Loading connected broker account…</span></div><div class="sidebar-user-actions"><form method="post" action="/logout/" data-logout-form>{% csrf_token %}<button type="submit" aria-label="Log out" title="Log out"><span class="material-symbols-rounded" aria-hidden="true">logout</span></button></form></div></div></aside>{% endif %}
+<div class="app-shell{% if not request.user.is_authenticated %} public-shell{% endif %}"><header class="topbar"><div class="topbar-title">{% if request.user.is_authenticated %}<span class="mobile-page-title">{% block mobile_title %}AlgoBot{% endblock %}</span>{% else %}<a class="public-brand" href="/">AlgoBot Enterprise</a>{% endif %}</div><nav class="topbar-actions" aria-label="Workspace controls">{% if request.user.is_authenticated %}<span class="connection-indicator" data-global-connection><i></i><span>Checking broker account…</span></span>{% else %}<a href="/">Home</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a class="btn small primary" href="/brokers/connect/">Connect Broker</a>{% endif %}<kbd>⌘K</kbd><button type="button" data-theme-toggle aria-pressed="false"><span class="material-symbols-rounded" aria-hidden="true">contrast</span><span>Theme</span></button></nav></header><main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main></div>
+<script src="{% static 'js/icon_runtime_guard.js' %}" defer></script><script src="{% static 'js/api_timeout_guard.js' %}" defer></script><script src="{% static 'js/enterprise_templates.js' %}" defer></script><script src="{% static 'js/ui_guardrails.js' %}" defer></script><script src="{% static 'js/ui_upgrade.js' %}" defer></script><script src="{% static 'js/core/broker_state.js' %}" defer></script><script src="{% static 'js/core/frontend_data_contract.js' %}" defer></script><script src="{% static 'js/core/broker_payload_guard.js' %}" defer></script><script src="{% static 'js/core/api_execution_guard.js' %}" defer></script><script src="{% static 'js/live_broker_ui.js' %}" defer></script><script src="{% static 'js/core/broker_state_bridge.js' %}" defer></script><script src="{% static 'js/base_shell.js' %}" defer></script><script src="{% static 'js/ai_trading_ui.js' %}" defer></script>{% block extra_js %}{% endblock %}
 </body></html>
