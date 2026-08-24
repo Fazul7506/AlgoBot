@@ -77,8 +77,22 @@ def sync_symbols(request):
     account = _connected_account(request.user)
     if not account: return Response({"status":"error","code":"NO_CONNECTED_BROKER","detail":"Connect a broker before synchronizing its market universe."}, status=status.HTTP_409_CONFLICT)
     if account.broker.broker_type != "deriv": return Response({"status":"error","code":"BROKER_MARKET_SYNC_UNSUPPORTED","detail":f"Market synchronization is not implemented for {account.broker.name} yet."}, status=status.HTTP_409_CONFLICT)
-    try: return Response({"status":"ok","symbols":sync_active_symbols(),"broker":account.broker.name,"account_id":account.account_id,"source":"deriv_active_symbols"})
-    except Exception as exc: return Response({"status":"error","code":"BROKER_MARKET_SYNC_FAILED","detail":str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    try:
+        count = sync_active_symbols()
+        return Response({"status":"ok","symbols":count,"broker":account.broker.name,"account_id":account.account_id,"source":"deriv_active_symbols","stale":False})
+    except Exception:
+        cached_count = MarketSymbol.objects.filter(broker="deriv", is_active=True).count()
+        if cached_count:
+            return Response({
+                "status":"stale",
+                "symbols":cached_count,
+                "broker":account.broker.name,
+                "account_id":account.account_id,
+                "source":"cached_deriv_active_symbols",
+                "stale":True,
+                "detail":"Live broker market catalogue refresh is temporarily unavailable; serving the last known broker catalogue."
+            })
+        return Response({"status":"error","code":"BROKER_MARKET_SYNC_FAILED","detail":"Live broker market catalogue is temporarily unavailable and no cached catalogue exists."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
@@ -97,4 +111,4 @@ def broker_tick(request):
         return Response(payload)
     except BrokerAuthenticationError as exc: return Response({"status":"error","code":"BROKER_AUTHENTICATION_FAILED","detail":str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
     except (BrokerConnectionError, BrokerOrderError) as exc: return Response({"status":"error","code":"BROKER_TICK_FAILED","detail":str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    except Exception as exc: return Response({"status":"error","code":"BROKER_TICK_FAILED","detail":"Broker market data request failed."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except Exception: return Response({"status":"error","code":"BROKER_TICK_FAILED","detail":"Broker market data request failed."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
