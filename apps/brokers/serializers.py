@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import serializers
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
 
@@ -18,6 +19,7 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
     is_default = serializers.BooleanField(source="is_preferred", read_only=True)
     is_connected = serializers.SerializerMethodField()
     data_freshness = serializers.SerializerMethodField()
+    switch_enabled = serializers.SerializerMethodField()
 
     class Meta:
         model = BrokerAccount
@@ -25,12 +27,12 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
             "id", "user", "broker", "broker_name", "broker_account_id", "account_id",
             "account_type", "avatar_url", "display_name", "currency", "balance", "equity",
             "margin", "free_margin", "status", "is_preferred", "is_default", "is_connected",
-            "last_synced_at", "data_freshness", "created_at",
+            "last_synced_at", "data_freshness", "switch_enabled", "created_at",
         ]
         read_only_fields = [
             "user", "balance", "equity", "margin", "free_margin", "last_synced_at",
             "broker_account_id", "account_type", "avatar_url", "display_name", "is_default",
-            "is_connected", "data_freshness",
+            "is_connected", "data_freshness", "switch_enabled",
         ]
 
     def get_broker(self, obj):
@@ -63,6 +65,9 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         seconds = max(0, int((timezone.now() - obj.last_synced_at).total_seconds()))
         return {"state": "fresh" if seconds <= 60 else "stale", "seconds": seconds}
+
+    def get_switch_enabled(self, obj):
+        return bool(settings.ENABLE_BROKER_ACCOUNT_SWITCH)
 
 
 class BrokerConnectionSerializer(serializers.ModelSerializer):
