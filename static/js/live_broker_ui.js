@@ -120,7 +120,7 @@
 
   function chart(){const el=$('#chart');if(!el||points.length<2)return;const w=1000,h=330,p=18,v=points.map(x=>x.price),min=Math.min(...v),max=Math.max(...v),span=max-min||Math.max(Math.abs(max)*.0001,1),pts=points.map((x,i)=>`${(p+i/Math.max(1,points.length-1)*(w-p*2)).toFixed(1)},${(h-p-(x.price-min)/span*(h-p*2)).toFixed(1)}`).join(' '),latest=v.at(-1),stroke=latest>=v[0]?'#43d19a':'#ff6b7d',last=pts.split(' ').at(-1).split(',');el.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:100%;display:block"><polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="2.5"></polyline><circle cx="${last[0]}" cy="${last[1]}" r="4" fill="${stroke}"></circle><text x="${w-p}" y="${p+2}" text-anchor="end" fill="currentColor" opacity=".7" font-size="13">LIVE ${money(latest)}</text></svg>`;}
 
-  async function tick(){const symbol=$('[data-symbol]')?.value||selectedSymbol||await discoverSymbol();if(!symbol||quoteBusy)return;quoteBusy=true;try{const d=await request('/api/market/ticks/broker/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol})},7000),price=Number(d.quote??d.last??d.price);if(!Number.isFinite(price))throw new Error('No usable quote');points.push({price,epoch:Number(d.epoch)||Date.now()});points=points.slice(-120);renderMarketState();chart();$('[data-q="bid"]')?.replaceChildren(document.createTextNode(money(d.bid??price)));$('[data-q="ask"]')?.replaceChildren(document.createTextNode(money(d.ask??price)));}catch(e){const s=$('#terminal-status');if(s&&accounts.length&&!quoteBusy)s.title=e.message;}finally{quoteBusy=false;}}
+  async function tick(){const symbol=$('[data-symbol]')?.value||selectedSymbol||await discoverSymbol();if(!symbol||quoteBusy)return;quoteBusy=true;try{const d=await request('/api/market/ticks/broker/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol})},7000),price=Number(d.quote??d.last??d.price);if(!Number.isFinite(price))throw new Error('No usable quote');points.push({price,epoch:Number(d.epoch)||Date.now()});points=points.slice(-120);renderMarketState();chart();$('[data-q="bid"]')?.replaceChildren(document.createTextNode(money(d.bid??price)));$('[data-q="ask"]')?.replaceChildren(document.createTextNode(money(d.ask??price)));if(d.stale){$('[data-chart-loading]')?.replaceChildren(document.createTextNode('Last known broker quote · live feed temporarily unavailable'));}else{$('[data-chart-loading]')?.replaceChildren(document.createTextNode('Live broker feed'));}}catch(e){const s=$('#terminal-status');if(s&&accounts.length&&!quoteBusy)s.title=e.message;}finally{quoteBusy=false;}}
 
   function boot(){
     if(document.body.dataset.authenticated!=='true')return;
@@ -131,8 +131,6 @@
       await discoverSymbol();
       await loadHistory(selectedSymbol);
       await tick();
-      // Account balance refresh is deliberately background-only so a slow
-      // vendor API can never block the live market chart or page controls.
       syncSelectedAccount();
       setInterval(()=>{if(document.visibilityState==='visible')tick();},5000);
       setInterval(()=>{if(document.visibilityState==='visible')syncSelectedAccount();},60000);
