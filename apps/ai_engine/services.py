@@ -52,14 +52,11 @@ class InferenceService:
             log.warning('AI ensemble unavailable', extra={'symbol':symbol,'error':str(exc)}); return None
 
     def infer(self, features, model=None, symbol=None, timeframe='M1'):
-        # Use the actual trained RF/XGBoost/LightGBM/LSTM ensemble when model
-        # artefacts exist. Never fabricate a high-confidence AI signal merely
-        # because the UI requested a prediction.
         ensemble=self._trained_ensemble(symbol, timeframe) if symbol else None
         if ensemble and ensemble.models:
             try:
                 import numpy as np
-                vector=np.array([[ _num(features.get('close')), _num(features.get('sma5', features.get('sma'))), _num(features.get('sma20', features.get('sma'))), _num(features.get('ema10', features.get('ema'))), _num(features.get('ret1', features.get('price_velocity'))), _num(features.get('range', features.get('candle_range'))) ]], dtype=float)
+                vector=np.array([[_num(features.get('close')), _num(features.get('sma5', features.get('sma'))), _num(features.get('sma20', features.get('sma'))), _num(features.get('ema10', features.get('ema'))), _num(features.get('ret1', features.get('price_velocity'))), _num(features.get('range', features.get('candle_range'))) ]], dtype=float)
                 result=ensemble.predict(vector); prob=float(result.get('probability',0)); return {'direction':result.get('direction','NO_MODELS'),'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':result.get('models_used',0),'model_types':result.get('model_types',[]),'source':'trained_ensemble'}
             except Exception as exc:
                 log.exception('AI ensemble inference failed', extra={'symbol':symbol}); return {'direction':'AI_ERROR','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'error':str(exc),'source':'trained_ensemble'}
@@ -90,8 +87,20 @@ class AnomalyDetectionService:
 class HyperparameterOptimizationService:
     def optimize(self, algorithm, search='random_search'): return {'algorithm':algorithm,'search':search,'best_params':{'n_estimators':100,'max_depth':5},'score':0.0}
 class TrainingService:
-    def train(self, model=None, mode='manual'):
-        job=TrainingJob.objects.create(model=model,status='running',started_at=timezone.now()); job.status='completed'; job.completed_at=timezone.now(); job.duration=(job.completed_at-job.started_at).total_seconds(); job.metrics={'mode':mode,'accuracy': model.accuracy if model else 0}; job.save(); return job
+    def train(self, model=None, mode='manual', symbol=None, timeframe='M1', min_accuracy=0.52):
+        """Run real supervised training from persisted broker market candles.
+
+        The old implementation only marked a TrainingJob completed and never
+        produced an artifact. This delegates to the same validated trainer used
+        by the scheduled task, so inference can only use genuinely trained models.
+        """
+        from .training import MarketModelTrainer
+        if symbol:
+            metrics=MarketModelTrainer().train_symbol(symbol,timeframe,min_accuracy)
+            return TrainingJob.objects.filter(metrics__symbol=symbol).order_by('-started_at').first()
+        results=MarketModelTrainer().train_active_symbols(timeframe,min_accuracy)
+        job=TrainingJob.objects.create(status='completed',started_at=timezone.now(),completed_at=timezone.now(),metrics={'mode':mode,'results':results})
+        return job
 class AIRiskAdvisor:
     def advise(self,prediction): return {'risk_score':prediction.risk_score,'action':'REDUCE RISK' if prediction.risk_score>.6 else 'MAINTAIN'}
 class AIStrategyAdvisor:
