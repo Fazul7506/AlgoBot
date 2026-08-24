@@ -21,4 +21,4 @@ class NotificationCenterContractTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Notification Center")
         self.assertContains(response, "No fabricated client-side events")
-        self.assertContains(response, "Broker connected")
+        self.assertContains(response, "Checking broker")
