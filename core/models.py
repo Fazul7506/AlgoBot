@@ -1,4 +1,4 @@
-"""Core models for AlgoBot platform."""
+"""Core models for user profiles, subscriptions, and bot settings."""
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -49,7 +49,7 @@ class UserProfile(models.Model):
 
 
 class Subscription(models.Model):
-    """Subscription plans placeholder for future monetization"""
+    """Subscription plans for monetization"""
     
     PLAN_CHOICES = [
         ('FREE', 'Free'),
@@ -84,48 +84,6 @@ class Subscription(models.Model):
         return f"{self.user.username} - {self.plan}"
 
 
-class BotSettings(models.Model):
-    """User bot configuration and trading preferences"""
-    
-    STATUS_CHOICES = [
-        ('ACTIVE', 'Active'),
-        ('PAUSED', 'Paused'),
-        ('STOPPED', 'Stopped'),
-        ('ERROR', 'Error'),
-    ]
-    
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='bot_settings')
-    is_enabled = models.BooleanField(default=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='STOPPED')
-    default_strategy = models.CharField(max_length=100, default='trend')
-    
-    # Risk management
-    max_daily_loss_pct = models.FloatField(default=5.0)
-    risk_per_trade_pct = models.FloatField(default=2.0)
-    max_concurrent_trades = models.IntegerField(default=5)
-    min_win_rate = models.FloatField(default=0.5)
-    
-    # Trading mode
-    is_paper_trading = models.BooleanField(default=True)
-    paper_balance = models.FloatField(default=10000.0)
-    
-    # Notifications
-    email_notifications_enabled = models.BooleanField(default=True)
-    telegram_notifications_enabled = models.BooleanField(default=False)
-    telegram_chat_id = models.CharField(max_length=50, blank=True)
-    telegram_username = models.CharField(max_length=100, blank=True)
-    brevo_sender_email = models.EmailField(blank=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-    
-    def __str__(self):
-        return f"{self.user.username} Bot Settings"
-
-
 class PasswordResetToken(models.Model):
     """Secure password reset tokens"""
     
@@ -139,19 +97,70 @@ class PasswordResetToken(models.Model):
     class Meta:
         ordering = ['-created_at']
     
+    def is_valid(self):
+        """Check if token is still valid"""
+        return not self.used and timezone.now() < self.expires_at
+    
     def __str__(self):
-        return f"{self.user.username} - {'Used' if self.used else 'Pending'}"
+        return f"Reset token for {self.user.username}"
+
+
+class BotSettings(models.Model):
+    """Per-user bot configuration and settings"""
+    
+    STATUS_CHOICES = [
+        ('IDLE', 'Idle'),
+        ('RUNNING', 'Running'),
+        ('PAUSED', 'Paused'),
+        ('ERROR', 'Error'),
+    ]
+    
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='bot_settings')
+    
+    # Bot status
+    is_enabled = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='IDLE')
+    
+    # Trading parameters
+    default_strategy = models.CharField(max_length=100, default='trend')
+    max_daily_loss_pct = models.FloatField(default=0.05)
+    risk_per_trade_pct = models.FloatField(default=0.01)
+    
+    # Risk controls
+    max_concurrent_trades = models.IntegerField(default=5)
+    min_win_rate = models.FloatField(default=0.50)
+    
+    # Paper trading
+    is_paper_trading = models.BooleanField(default=True)
+    paper_balance = models.FloatField(default=10000.0)
+
+    # Notification preferences
+    email_notifications_enabled = models.BooleanField(default=True)
+    telegram_notifications_enabled = models.BooleanField(default=False)
+    telegram_chat_id = models.CharField(max_length=50, blank=True)
+    telegram_username = models.CharField(max_length=100, blank=True)
+    brevo_api_key = models.CharField(max_length=255, blank=True)
+    brevo_sender_email = models.EmailField(blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user.username} Bot Settings"
 
 
 class AuditLog(models.Model):
-    """Audit trail for all user actions"""
+    """Audit trail for API requests"""
     
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
-    path = models.CharField(max_length=255, db_index=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='audit_logs')
+    path = models.CharField(max_length=500)
     method = models.CharField(max_length=10)
     status_code = models.IntegerField()
-    ip_address = models.GenericIPAddressField()
-    user_agent = models.CharField(max_length=255, blank=True)
+    ip_address = models.CharField(max_length=45, blank=True)
+    user_agent = models.TextField(blank=True)
     request_body = models.TextField(blank=True)
     response_body = models.TextField(blank=True)
     error = models.TextField(blank=True)
@@ -159,17 +168,14 @@ class AuditLog(models.Model):
     
     class Meta:
         ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['user', '-created_at']),
-            models.Index(fields=['method', 'status_code', '-created_at']),
-        ]
+        indexes = [models.Index(fields=['user', '-created_at'])]
     
     def __str__(self):
-        return f"{self.user} - {self.method} {self.path} ({self.status_code})"
+        return f"{self.method} {self.path} - {self.status_code}"
 
 
 class Invoice(models.Model):
-    """Payment invoices"""
+    """Invoice records"""
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invoices')
     external_id = models.CharField(max_length=255, unique=True, db_index=True)
@@ -180,9 +186,10 @@ class Invoice(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', '-created_at'])]
     
     def __str__(self):
-        return f"{self.user} - Invoice {self.external_id}"
+        return f"Invoice {self.external_id} - ${self.amount_cents/100:.2f}"
 
 
 class Payment(models.Model):
@@ -199,18 +206,19 @@ class Payment(models.Model):
     external_id = models.CharField(max_length=255, unique=True, db_index=True)
     amount_cents = models.IntegerField()
     currency = models.CharField(max_length=10, default='usd')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', '-created_at'])]
     
     def __str__(self):
-        return f"{self.user} - Payment {self.external_id} ({self.status})"
+        return f"Payment {self.external_id} - {self.status}"
 
 
 class ReferralReward(models.Model):
-    """Referral rewards"""
+    """Referral reward records"""
     
     referrer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='referral_rewards_given')
     referee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='referral_rewards_received')
@@ -219,30 +227,33 @@ class ReferralReward(models.Model):
     
     class Meta:
         ordering = ['-awarded_at']
+        unique_together = ('referrer', 'referee')
     
     def __str__(self):
-        return f"{self.referrer} referred {self.referee}"
+        return f"{self.referrer.username} -> {self.referee.username}: {self.amount_credits}"
 
 
 class EncryptedCredential(models.Model):
-    """Encrypted credentials storage"""
+    """Store encrypted credentials for external services"""
     
     CREDENTIAL_TYPES = [
         ('API_KEY', 'API Key'),
-        ('ACCESS_TOKEN', 'Access Token'),
-        ('SECRET', 'Secret'),
+        ('OAUTH', 'OAuth Token'),
+        ('USERNAME_PASSWORD', 'Username/Password'),
+        ('CERTIFICATE', 'Certificate'),
     ]
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='encrypted_credentials')
     service_name = models.CharField(max_length=100, db_index=True)
-    credential_type = models.CharField(max_length=20, choices=CREDENTIAL_TYPES)
+    credential_type = models.CharField(max_length=50, choices=CREDENTIAL_TYPES)
     encrypted_value = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        ordering = ['-updated_at']
-        unique_together = ['user', 'service_name', 'credential_type']
+        ordering = ['-created_at']
+        unique_together = ('user', 'service_name')
+        indexes = [models.Index(fields=['user', 'service_name'])]
     
     def __str__(self):
-        return f"{self.user} - {self.service_name}"
+        return f"{self.user.username} - {self.service_name}"

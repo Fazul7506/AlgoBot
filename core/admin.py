@@ -1,3 +1,4 @@
+"""Django admin configuration for core models."""
 from django.contrib import admin
 from django.contrib.auth.models import User
 from core.models import (
@@ -8,6 +9,7 @@ from core.models import (
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
+    """Admin for user profiles"""
     list_display = ['user', 'email_verified', 'timezone', 'created_at']
     list_filter = ['email_verified', 'two_factor_enabled', 'created_at']
     search_fields = ['user__username', 'user__email']
@@ -16,6 +18,7 @@ class UserProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
+    """Admin for subscriptions"""
     list_display = ['user', 'plan', 'is_active', 'created_at']
     list_filter = ['plan', 'is_active', 'created_at']
     search_fields = ['user__username']
@@ -24,6 +27,7 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
 @admin.register(PasswordResetToken)
 class PasswordResetTokenAdmin(admin.ModelAdmin):
+    """Admin for password reset tokens"""
     list_display = ['user', 'used', 'created_at', 'expires_at']
     list_filter = ['used', 'created_at']
     search_fields = ['user__username']
@@ -32,6 +36,7 @@ class PasswordResetTokenAdmin(admin.ModelAdmin):
 
 @admin.register(BotSettings)
 class BotSettingsAdmin(admin.ModelAdmin):
+    """Admin for bot settings"""
     list_display = ['user', 'is_enabled', 'status', 'default_strategy', 'is_paper_trading']
     list_filter = ['is_enabled', 'status', 'is_paper_trading']
     search_fields = ['user__username']
@@ -40,6 +45,7 @@ class BotSettingsAdmin(admin.ModelAdmin):
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
+    """Admin for invoices"""
     list_display = ['user', 'external_id', 'amount_cents', 'currency', 'paid', 'created_at']
     list_filter = ['paid', 'currency', 'created_at']
     search_fields = ['user__username', 'external_id']
@@ -48,6 +54,7 @@ class InvoiceAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
+    """Admin for payments"""
     list_display = ['user', 'external_id', 'amount_cents', 'currency', 'status', 'created_at']
     list_filter = ['status', 'currency', 'created_at']
     search_fields = ['user__username', 'external_id']
@@ -56,6 +63,7 @@ class PaymentAdmin(admin.ModelAdmin):
 
 @admin.register(ReferralReward)
 class ReferralRewardAdmin(admin.ModelAdmin):
+    """Admin for referral rewards"""
     list_display = ['referrer', 'referee', 'amount_credits', 'awarded_at']
     list_filter = ['awarded_at']
     search_fields = ['referrer__username', 'referee__username']
@@ -64,6 +72,7 @@ class ReferralRewardAdmin(admin.ModelAdmin):
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
+    """Admin for audit logs"""
     list_display = ['user', 'path', 'method', 'status_code', 'created_at']
     list_filter = ['method', 'status_code', 'created_at']
     search_fields = ['user__username', 'path']
@@ -72,8 +81,8 @@ class AuditLogAdmin(admin.ModelAdmin):
 
 @admin.register(EncryptedCredential)
 class EncryptedCredentialAdmin(admin.ModelAdmin):
+    """Admin for encrypted credentials"""
     list_display = ['user', 'service_name', 'credential_type', 'updated_at']
     list_filter = ['service_name', 'credential_type', 'updated_at']
     search_fields = ['user__username', 'service_name']
     readonly_fields = ['created_at', 'updated_at']
-
