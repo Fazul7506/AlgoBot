@@ -20,9 +20,15 @@
 
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '1em');
+    svg.setAttribute('height', '1em');
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
-    svg.setAttribute('class', 'algobot-icon-fallback');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    svg.style.display = 'block';
+    svg.style.width = '1em';
+    svg.style.height = '1em';
+    svg.style.flex = '0 0 1em';
     svg.dataset.iconName = name;
 
     var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -35,36 +41,20 @@
     node.dataset.iconFallback = 'true';
   }
 
-  function restoreMaterialIcons() {
-    iconNodes().forEach(function (node) {
-      if (node.dataset.iconFallback === 'true') return;
-      node.style.removeProperty('display');
-    });
-  }
-
   function verify() {
     if (!document.fonts || !document.fonts.check) return;
     var ready = document.fonts.check('24px "Material Symbols Rounded"');
     document.documentElement.toggleAttribute('data-icons-ready', ready);
     document.documentElement.toggleAttribute('data-icons-fallback', !ready);
-
-    if (!ready) {
-      iconNodes().forEach(replaceWithSvg);
-    }
+    if (!ready) iconNodes().forEach(replaceWithSvg);
   }
 
   function boot() {
     verify();
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(function () {
-        verify();
-        restoreMaterialIcons();
-      });
-    }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(verify);
     setTimeout(verify, 250);
     setTimeout(verify, 1000);
     setTimeout(verify, 2000);
-
     if (window.MutationObserver) {
       new MutationObserver(function (mutations) {
         mutations.forEach(function (mutation) {
