@@ -24,11 +24,12 @@
 [data-icons-fallback] .material-symbols-rounded::before { content: '\00a0'; font-size: 24px; }
 @media (max-width: 800px) {
   .mobile-menu-button { display: grid; place-items: center; }
-  .app-sidebar { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); transform: translateX(-105%); transition: transform .22s ease; overflow-y: auto; }
-  .app-sidebar.is-open { transform: translateX(0); }
+  .app-sidebar { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); transform: translate3d(-105%,0,0); transition: transform .22s ease; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .app-sidebar.is-open { transform: translate3d(0,0,0); }
   .app-sidebar.is-collapsed + .app-shell, .app-shell.sidebar-collapsed { margin-left: 0; }
   .app-shell { margin-left: 0 !important; }
   .topbar { padding-left: 68px; }
   .sidebar-toggle { display: none; }
-  body.mobile-nav-open { overflow: hidden; }
+  /* Do not lock the entire dashboard/document. The sidebar is fixed and scrolls independently. */
+  body.mobile-nav-open { overflow: auto !important; }
 }
