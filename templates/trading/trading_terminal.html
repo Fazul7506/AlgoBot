@@ -102,7 +102,7 @@ async function refresh(){
   $('[data-q=price]').textContent=fmt(price); $('[data-q=bid]').textContent=fmt(sn?.bid); $('[data-q=ask]').textContent=fmt(sn?.ask);
   $('[data-q=trend]').textContent=sn?.trend||sn?.market_regime||'—'; $('[data-q=vol]').textContent=sn?.volatility||'—';
   $('#chart-title').textContent=`${s} · ${tf}`; renderPositions(pos); renderSignals(sigs);
-  setStatus(`Live market · ${new Date().toLocaleTimeString()`);
+  setStatus(`Live market · ${new Date().toLocaleTimeString()}`);
  }catch(e){setStatus(e.message,true)}
 }
 function draw(cs){
