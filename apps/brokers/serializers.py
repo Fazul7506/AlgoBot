@@ -84,9 +84,16 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class ExecutionReportSerializer(serializers.ModelSerializer):
+    symbol = serializers.CharField(source="order.symbol", read_only=True)
+    direction = serializers.CharField(source="order.direction", read_only=True)
+    broker_order_id = serializers.CharField(source="order.broker_order_id", read_only=True)
+
     class Meta:
         model = ExecutionReport
-        fields = "__all__"
+        fields = "__all__" + ["symbol", "direction", "broker_order_id"] if isinstance("__all__", list) else [
+            "id", "order", "execution_price", "requested_price", "slippage", "latency", "fees", "status", "raw_report", "created_at",
+            "symbol", "direction", "broker_order_id",
+        ]
 
 
 class PositionSerializer(serializers.ModelSerializer):
