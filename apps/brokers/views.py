@@ -35,20 +35,23 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
     def list(self, request, *args, **kwargs):
-        # This endpoint is deliberately database-only. Never make a page wait on a
-        # vendor network request just to render the already-known connected account.
         return response.Response(self.get_serializer(self.get_queryset(), many=True).data)
 
     @decorators.action(detail=True, methods=['post'])
     def select(self, request, pk=None):
         if not settings.ENABLE_BROKER_ACCOUNT_SWITCH:
             return response.Response(
-                {'detail': 'Broker demo/real account switching is disabled by platform configuration.'},
+                {'detail': 'Broker account switching is disabled by platform configuration.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         account = self.get_object()
         requested_type = str(request.data.get('account_type') or '').lower().strip()
-        actual_type = str((account.credentials or {}).get('account_type') or 'demo').lower()
+        actual_type = str((account.credentials or {}).get('account_type') or 'unknown').lower()
+        if actual_type == 'unknown':
+            return response.Response(
+                {'detail': 'The broker has not confirmed this account type yet. Synchronize the account first.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         if requested_type and requested_type != actual_type:
             return response.Response(
                 {'detail': f'Selected account is {actual_type}, not {requested_type}.'},
