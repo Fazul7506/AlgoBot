@@ -1,57 +1,27 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Dashboard | AlgoBot{% endblock %}
+{% block mobile_title %}Dashboard{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">{% endblock %}
 {% block content %}
 <section class="command-center" data-dashboard-command>
-  <header class="command-hero compact-hero"><div><p class="eyebrow">Live dashboard</p><h1>Trading status</h1></div><div class="hero-actions"><button class="btn ghost" data-dashboard-refresh>Refresh</button><a class="btn primary" href="/trading/">Trade</a></div></header>
+  <header class="command-hero compact-hero"><div><p class="eyebrow">Broker-backed dashboard</p><h1>Trading status</h1><p>Live account, market and execution state is displayed only after the backend confirms an active broker connection.</p></div><div class="hero-actions"><button class="btn ghost" data-dashboard-refresh type="button">Refresh</button><a class="btn primary" href="/trading/">Trade</a></div></header>
   <section class="kpi-grid" aria-label="Account overview">
     <article class="kpi-card"><span>Balance</span><strong data-kpi="balance">Unavailable</strong><small data-kpi-state="balance">Waiting for canonical broker account</small></article>
-    <article class="kpi-card"><span>Equity</span><strong data-kpi="equity">Unavailable</strong><small>Canonical broker account</small></article>
-    <article class="kpi-card"><span>Available</span><strong data-kpi="available">Unavailable</strong><small>Available balance</small></article>
-    <article class="kpi-card"><span>Net P/L</span><strong data-kpi="pnl">Unavailable</strong><small>Persisted trading result</small></article>
+    <article class="kpi-card"><span>Equity</span><strong data-kpi="equity">Unavailable</strong><small data-kpi-state="equity">Waiting for broker confirmation</small></article>
+    <article class="kpi-card"><span>Available</span><strong data-kpi="available">Unavailable</strong><small>Broker-confirmed available margin</small></article>
+    <article class="kpi-card"><span>Net P/L</span><strong data-kpi="pnl">Unavailable</strong><small>Shown only when a broker-backed P/L field is available</small></article>
   </section>
   <section class="command-grid">
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Market watch</p><h2>Live markets</h2></div><a href="/markets/">Open</a></div><div class="mini-table" data-dashboard-markets><div class="empty-state">Loading market data…</div></div></article>
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Broker</p><h2>Connection</h2></div><a href="/brokers/connect/">Manage</a></div><div class="health-stack" data-dashboard-brokers><span><b></b>Loading broker status</span></div></article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Market watch</p><h2>Live markets</h2></div><a href="/markets/">Open</a></div><div class="mini-table" data-dashboard-markets><div class="empty-state">Waiting for broker connection…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Broker</p><h2>Connection</h2></div><a href="/brokers/connect/">Manage</a></div><div class="health-stack" data-dashboard-brokers><span><b></b>Waiting for broker connection</span></div></article>
   </section>
   <section class="command-grid lower">
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Exposure</p><h2>Open positions</h2></div><a href="/positions/">Manage</a></div><div class="mini-table" data-dashboard-positions><div class="empty-state">Loading positions…</div></div></article>
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Execution</p><h2>Recent orders</h2></div><a href="/orders/">History</a></div><div class="mini-table" data-dashboard-orders><div class="empty-state">Loading orders…</div></div></article>
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Signals</p><h2>Recent signals</h2></div><a href="/signals/">View</a></div><div class="signal-feed" data-dashboard-signals><div class="empty-state">Loading signals…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Exposure</p><h2>Open positions</h2></div><a href="/positions/">Manage</a></div><div class="mini-table" data-dashboard-positions><div class="empty-state">Waiting for broker connection…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Execution</p><h2>Recent orders</h2></div><a href="/orders/">History</a></div><div class="mini-table" data-dashboard-orders><div class="empty-state">Waiting for broker connection…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Signals</p><h2>Recent signals</h2></div><a href="/signals/">View</a></div><div class="signal-feed" data-dashboard-signals><div class="empty-state">Waiting for broker connection…</div></div></article>
   </section>
-  <section class="panel"><div class="panel-head"><div><p class="eyebrow">Activity</p><h2>Recent activity</h2></div><button class="btn danger" data-dashboard-kill-switch>Kill switch</button></div><div class="mini-table" data-dashboard-activity><div class="empty-state">Loading activity…</div></div></section>
+  <section class="panel"><div class="panel-head"><div><p class="eyebrow">Activity</p><h2>Recent activity</h2></div><button class="btn danger" data-dashboard-kill-switch type="button">Kill switch</button></div><div class="mini-table" data-dashboard-activity><div class="empty-state">Waiting for broker connection…</div></div></section>
 </section>
 {% endblock %}
-{% block extra_js %}
-<script>
-(() => {
-  const $=(s,r=document)=>r.querySelector(s), list=d=>Array.isArray(d)?d:(Array.isArray(d?.results)?d.results:(Array.isArray(d?.data)?d.data:[])), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])), money=v=>v==null||v===''||Number.isNaN(Number(v))?'Unavailable':Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}), csrf=()=>document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1]||'';
-  const json=async(url,options={},timeout=4500)=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);try{const r=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json',...(options.headers||{})},signal:controller.signal,...options}),t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch{d={detail:t}}if(r.status===401||r.status===403){location.assign('/login/?next='+encodeURIComponent(location.pathname));throw Error('Authentication required')}if(!r.ok)throw Error(d.detail||d.message||`Request failed (${r.status})`);return d}catch(e){if(e.name==='AbortError')throw Error('Request timed out');throw e}finally{clearTimeout(timer)}};
-  let timer;
-  function set(el,html){const n=$(el);if(n)n.innerHTML=html;}
-  async function load(){
-    clearTimeout(timer);
-    const [accounts,positions,orders,signals,markets]=await Promise.allSettled([
-      json('/api/brokers/accounts/'),json('/api/positions/open/'),json('/api/orders/'),json('/api/dashboard/signals/?limit=8'),json('/api/market/snapshots/all_snapshots/')
-    ]);
-    const rows=accounts.status==='fulfilled'?list(accounts.value):[], account=rows.find(x=>x.is_default||x.is_preferred)||rows[0];
-    if(account){
-      const c=account.currency||''; $('[data-kpi="balance"]').textContent=`${c} ${money(account.balance)}`.trim(); $('[data-kpi="equity"]').textContent=`${c} ${money(account.equity??account.balance)}`.trim(); $('[data-kpi="available"]').textContent=`${c} ${money(account.available_balance??account.cash_balance??account.balance)}`.trim(); $('[data-kpi-state="balance"]').textContent=account.is_connected?'Connected':'Account found';
-    } else {$('[data-kpi="balance"]').textContent='Unavailable'; $('[data-kpi="equity"]').textContent='Unavailable'; $('[data-kpi="available"]').textContent='Unavailable'; $('[data-kpi-state="balance"]').textContent='Connect a broker account';}
-    const pos=positions.status==='fulfilled'?list(positions.value).slice(0,8):[], ord=orders.status==='fulfilled'?list(orders.value).slice(0,8):[], sig=signals.status==='fulfilled'?list(signals.value).slice(0,8):[], mkt=markets.status==='fulfilled'?list(markets.value).slice(0,8):[];
-    set('[data-dashboard-positions]',pos.length?pos.map(x=>`<div class="mini-row"><strong>${esc(x.symbol)}</strong><span>${esc(x.direction||x.side||'')}</span><b>${esc(x.profit??x.pnl??x.profit_loss??'Unavailable')}</b></div>`).join(''):'<div class="empty-state">No open positions</div>');
-    set('[data-dashboard-orders]',ord.length?ord.map(x=>`<div class="mini-row"><strong>${esc(x.symbol)}</strong><span>${esc(x.direction||x.side||'')}</span><b>${esc(x.status||'')}</b></div>`).join(''):'<div class="empty-state">No orders yet</div>');
-    set('[data-dashboard-signals]',sig.length?sig.map(x=>`<div class="signal-row"><strong>${esc(x.symbol)} ${esc(x.direction||x.signal||'HOLD')}</strong><span>${esc(x.strategy||'')}</span><b>${x.confidence!=null?Number(x.confidence).toFixed(0)+'%':'Unavailable'}</b></div>`).join(''):'<div class="empty-state">No recent signals</div>');
-    set('[data-dashboard-markets]',mkt.length?mkt.map(x=>`<div class="mini-row"><strong>${esc(x.symbol?.symbol||x.symbol||'Market')}</strong><span>Bid ${esc(x.bid_price??x.bid??'Unavailable')} · Ask ${esc(x.ask_price??x.ask??'Unavailable')}</span><b>${esc(x.price??x.last_price??'Unavailable')}</b></div>`).join(''):'<div class="empty-state">No market data available</div>');
-    set('[data-dashboard-brokers]',rows.length?rows.slice(0,4).map(x=>`<span><b class="${x.is_connected?'':'danger'}"></b>${esc(x.broker_name||x.broker?.name||'Broker')} · ${esc(x.broker_account_id||x.account_id||'Account')} · ${x.is_connected?'Connected':'Disconnected'}</span>`).join(''):'<span><b class="danger"></b>No canonical broker account</span>');
-    const activity=[...ord.map(x=>({label:x.symbol,meta:x.status,time:x.updated_at||x.created_at})),...sig.map(x=>({label:x.symbol,meta:x.direction||x.signal,time:x.created_at||x.timestamp}))].slice(0,8);
-    set('[data-dashboard-activity]',activity.length?activity.map(x=>`<div class="mini-row"><strong>${esc(x.label)}</strong><span>${esc(x.meta||'')}</span><b>${esc(x.time?new Date(x.time).toLocaleString():'')}</b></div>`).join(''):'<div class="empty-state">No recent activity</div>');
-    timer=setTimeout(load,30000);
-  }
-  $('[data-dashboard-refresh]')?.addEventListener('click',load);
-  $('[data-dashboard-kill-switch]')?.addEventListener('click',async()=>{if(!confirm('Activate the trading kill switch?'))return;try{await json('/api/risk/kill-switch/activate/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({reason:'Dashboard emergency stop'})});alert('Kill switch activated.');await load()}catch(e){alert(e.message)}});
-  addEventListener('beforeunload',()=>clearTimeout(timer)); load();
-})();
-</script>
-{% endblock %}
+{% block extra_js %}<script src="{% static 'js/dashboard.js' %}" defer></script>{% endblock %}
