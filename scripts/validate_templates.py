@@ -1,6 +1,15 @@
 """Compile every Django template so deployment cannot ship a broken template."""
 import os
+import sys
 from pathlib import Path
+
+# When a script is executed as ``python scripts/<name>.py``, Python puts the
+# scripts directory first on sys.path.  The Django project package lives at
+# the repository root, so make the project root explicit instead of relying
+# on the runner's working-directory implementation details.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deriv_platform.settings")
 
