@@ -28,6 +28,37 @@
 button, input, select, textarea { font: inherit; }
 :where(button, a, input, select, textarea):focus-visible { outline: none; box-shadow: var(--ds-focus-ring); }
 
+/* Icon reliability: never expose Material Symbols ligature names as UI text.
+ * The CSS fallback renders even before JavaScript/font loading completes; the
+ * runtime guard upgrades to the real font glyph or an inline SVG when needed. */
+.material-symbols-rounded {
+  display: inline-grid;
+  place-items: center;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 1em;
+  line-height: 1;
+  overflow: hidden;
+  vertical-align: middle;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='currentColor' d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 5v4h4v2h-4v4h-2v-4H7v-2h4V7h2Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  font-size: 0;
+}
+html[data-icons-ready=""] .material-symbols-rounded,
+html[data-icons-ready] .material-symbols-rounded {
+  background-image: none;
+  font-size: inherit;
+  overflow: visible;
+}
+.material-symbols-rounded[data-icon-fallback="true"] {
+  background-image: none;
+  font-size: inherit;
+  overflow: visible;
+}
+.material-symbols-rounded svg { display: block; width: 1em; height: 1em; }
+
 [data-ui-state="loading"], [aria-busy="true"] { cursor: progress; }
 [data-ui-state="disabled"], :where(button, input, select, textarea):disabled { cursor: not-allowed; opacity: .58; }
 
