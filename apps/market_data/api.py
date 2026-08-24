@@ -6,7 +6,7 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from .models import MarketSymbol, Tick, Candle, MarketSnapshot, MarketStatistics
 from .serializers import MarketSymbolSerializer, TickSerializer, CandleSerializer, MarketSnapshotSerializer, MarketStatisticsSerializer
-from .deriv_sync import sync_active_symbols
+from .deriv_sync import fetch_tick, sync_active_symbols
 from .services import MarketDataService
 from apps.brokers.models import BrokerAccount
 from apps.brokers.services import BrokerRegistry
@@ -97,15 +97,18 @@ def sync_symbols(request):
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def broker_tick(request):
-    """Fetch a live quote through the selected broker adapter and persist it."""
+    """Fetch a live quote through the selected broker path and persist it."""
     symbol = str((request.data.get("symbol") if request.method == "POST" else request.query_params.get("symbol")) or "").strip()
     if not symbol: return Response({"detail":"symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
     account = _connected_account(request.user)
     if not account: return Response({"detail":"Connect a broker before requesting live broker quotes."}, status=status.HTTP_409_CONFLICT)
     if not MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists(): return Response({"detail":"The requested symbol is not in the current broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
-        data = asyncio.run(BrokerRegistry().adapter(account.broker, account).get_market_data(symbol))
-        tick = MarketDataService().tick_service.ingest({"symbol": symbol, "quote": data.get("price"), "bid": data.get("bid"), "ask": data.get("ask"), "epoch": data.get("epoch"), "volume": data.get("volume", 0)})
+        if account.broker.broker_type == "deriv":
+            data = fetch_tick(symbol)
+        else:
+            data = asyncio.run(BrokerRegistry().adapter(account.broker, account).get_market_data(symbol))
+        tick = MarketDataService().tick_service.ingest({"symbol": symbol, "quote": data.get("price", data.get("quote")), "bid": data.get("bid"), "ask": data.get("ask"), "epoch": data.get("epoch"), "volume": data.get("volume", 0)})
         payload = TickSerializer(tick).data
         payload.update({"broker":account.broker.name,"account_id":account.account_id})
         return Response(payload)
