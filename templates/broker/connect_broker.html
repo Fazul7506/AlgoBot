@@ -1,40 +1,49 @@
 {% extends "base.html" %}
-{% block title %}Connect Deriv Broker | AlgoBot Enterprise{% endblock %}
+{% block title %}Connect Broker | AlgoBot Enterprise{% endblock %}
+{% block mobile_title %}Connect Broker{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">Broker connection required</p>
-  <h1>{{ hero_title }}</h1>
-  <p>{{ hero_copy }}</p>
-  <div class="actions">
-    <a class="btn primary" href="{{ action_url }}">{{ action_label }}</a>
-    {% if connected and account_id %}
-      <a class="btn ghost" href="{{ continue_url }}">Continue to AlgoBot</a>
-    {% endif %}
-  </div>
-  <p class="helper-text">{{ support_text }}</p>
-  {% if connected %}
-    <div class="status-banner ok">
-      <strong>Broker connected:</strong> {{ account_id }}. You may continue to AlgoBot.</div>
-  {% endif %}
-</section>
+<div class="algobot-shared-page broker-connect-page" data-connection-page>
+  <section class="enterprise-hero">
+    <div>
+      <p class="eyebrow">Broker connection</p>
+      <h1>Connect your broker to AlgoBot</h1>
+      <p class="hero-copy">AlgoBot does not invent account, balance, market or trading data. Connect an approved broker and the workspace will use only broker-confirmed state.</p>
+      <div class="hero-actions">
+        <a class="btn primary" href="{{ action_url }}">{{ action_label|default:'Connect broker' }}</a>
+        {% if connected and account_id %}<a class="btn" href="{{ continue_url|default:'/dashboard/' }}">Continue to workspace</a>{% endif %}
+      </div>
+    </div>
+    <div class="ds-card broker-connect-status" data-connection-status aria-live="polite">
+      <span class="ds-status ds-status--unknown" data-connection-badge>Checking connection</span>
+      <strong data-connection-account>{% if connected and account_id %}{{ account_id }}{% else %}No broker account connected{% endif %}</strong>
+      <span data-connection-message>{% if connected %}Broker connection confirmed.{% else %}Connect a broker to unlock broker-backed workspace data.{% endif %}</span>
+    </div>
+  </section>
 
-<section class="card-grid" aria-label="Connection details">
-  <article><h2>Only broker connection</h2><p>The workspace is unlocked by a single broker connection. No separate username/password page is required.</p></article>
-  <article><h2>Deriv OAuth</h2><p>Sign in with Deriv to activate AlgoBot trading, analytics, and strategy modules.</p></article>
-  <article><h2>Secure access</h2><p>Your broker session is stored securely and backed by OAuth PKCE. The dashboard is accessible once the connection is established.</p></article>
-</section>
+  <section class="workspace-grid three" aria-label="Connection principles">
+    <article class="ds-card"><h2 class="ds-card__title">Broker is the source of truth</h2><p class="ds-card__description">Balances, positions, orders, prices and P/L become visible only from backend/broker-confirmed data.</p></article>
+    <article class="ds-card"><h2 class="ds-card__title">Secure authentication</h2><p class="ds-card__description">Broker credentials and tokens remain on the server-side connection boundary. The browser receives sanitized account metadata.</p></article>
+    <article class="ds-card"><h2 class="ds-card__title">Connection-aware UI</h2><p class="ds-card__description">Disconnected, connecting, syncing, ready and error states are explicit instead of silently showing stale or fabricated values.</p></article>
+  </section>
 
-<section class="broker-marketplace" aria-label="Supported brokers">
-  <h2>Supported brokers</h2>
-  <ul class="broker-list">
-    {% for broker in brokers %}
-      <li>
-        <strong>{{ broker.name }}</strong> {% if broker.website %}<a href="{{ broker.website }}" target="_blank" rel="noreferrer noopener">Visit</a>{% endif %}
-        <a class="btn small primary" href="/brokers/connect/?broker={{ broker.slug }}">Connect</a>
-      </li>
-    {% empty %}
-      <li>No supported brokers are configured yet. Contact support for access.</li>
-    {% endfor %}
-  </ul>
-</section>
+  <section class="panel" aria-labelledby="supported-brokers-title">
+    <div class="panel-head"><div><p class="eyebrow">Broker catalog</p><h2 id="supported-brokers-title">Available broker connections</h2><p>Choose a broker supported by the current backend adapter catalog.</p></div></div>
+    <div class="broker-list" data-broker-list>
+      {% for broker in brokers %}
+        <article class="ds-card broker-option">
+          <div><h3 class="ds-card__title">{{ broker.name }}</h3><p class="ds-card__description">{{ broker.broker_type|default:'Broker adapter'|title }}</p></div>
+          <a class="ds-btn ds-btn--primary" href="/brokers/connect/?broker={{ broker.slug }}">Connect</a>
+        </article>
+      {% empty %}
+        <div class="ds-state"><strong>No broker connections are currently configured</strong><p>The backend broker catalog has no active connection targets. No account data is fabricated on this page.</p></div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
 {% endblock %}
+{% block extra_css %}
+<style>
+.broker-connect-page{display:grid;gap:18px}.broker-connect-status{display:grid;gap:8px;min-width:min(360px,100%);align-content:start}.broker-connect-status strong{font-size:20px}.broker-connect-status span:last-child{color:var(--muted)}.broker-list{display:grid;gap:12px}.broker-option{display:flex;align-items:center;justify-content:space-between;gap:16px}.broker-option h3{margin:0}.broker-option p{margin:4px 0 0}.broker-option .ds-btn{white-space:nowrap}@media(max-width:800px){.enterprise-hero{display:grid}.broker-connect-status{min-width:0}.broker-option{align-items:stretch;flex-direction:column}}
+</style>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/broker_connection_page.js' %}" defer></script>{% endblock %}
