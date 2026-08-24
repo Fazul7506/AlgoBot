@@ -1,5 +1,8 @@
 """Compile every Django template so deployment cannot ship a broken template."""
+import os
 from pathlib import Path
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deriv_platform.settings")
 
 import django
 from django.conf import settings
@@ -12,7 +15,8 @@ def main() -> int:
     root = Path(settings.BASE_DIR) / "templates"
     templates = sorted(root.rglob("*.html"))
     if not templates:
-        raise SystemExit("No templates found under templates/")
+        print("No templates found under templates/")
+        return 1
 
     engine = engines["django"]
     failures: list[str] = []
@@ -20,7 +24,9 @@ def main() -> int:
         name = path.relative_to(root).as_posix()
         try:
             engine.get_template(name)
-        except (TemplateDoesNotExist, TemplateSyntaxError, Exception) as exc:
+        except (TemplateDoesNotExist, TemplateSyntaxError) as exc:
+            failures.append(f"{name}: {type(exc).__name__}: {exc}")
+        except Exception as exc:  # pragma: no cover - deployment guard
             failures.append(f"{name}: {type(exc).__name__}: {exc}")
 
     if failures:
@@ -33,4 +39,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
