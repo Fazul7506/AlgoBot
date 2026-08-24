@@ -1,5 +1,101 @@
 {% extends "base.html" %}
-{% block title %}Account and platform settings | AlgoBot Enterprise{% endblock %}
-{% block content %}<h1 class="sr-only">System preferences</h1>
-{% include "components/enterprise_page.html" with title="Account and platform settings" module="Settings" page_id="core-settings" %}
+{% block title %}Settings | AlgoBot Enterprise{% endblock %}
+{% block content %}
+<section class="page-shell" data-settings-page>
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">ACCOUNT CONTROL</p>
+      <h1>Settings</h1>
+      <p>Manage your account and trading preferences. Broker credentials and connection state remain controlled by the broker connection service.</p>
+    </div>
+    <div class="status-badge" data-settings-status>Loading…</div>
+  </header>
+
+  <div class="settings-grid">
+    <form class="panel" data-settings-form>
+      {% csrf_token %}
+      <h2>Profile & preferences</h2>
+      <div class="form-grid">
+        <label>First name<input name="first_name" autocomplete="given-name" readonly></label>
+        <label>Last name<input name="last_name" autocomplete="family-name" readonly></label>
+        <label>Email<input name="email" type="email" autocomplete="email" readonly></label>
+        <label>Country<input name="country" autocomplete="country-name"></label>
+        <label>Timezone<input name="timezone" autocomplete="off"></label>
+        <label>Phone<input name="phone" autocomplete="tel"></label>
+      </div>
+      <label>Bio<textarea name="bio" rows="3"></textarea></label>
+      <label><input type="checkbox" name="notifications_enabled"> Enable notifications</label>
+      <label><input type="checkbox" name="email_notifications_enabled"> Email notifications</label>
+      <label><input type="checkbox" name="telegram_notifications_enabled"> Telegram notifications</label>
+
+      <h2>Trading controls</h2>
+      <div class="form-grid">
+        <label>Default strategy<input name="default_strategy"></label>
+        <label>Max daily loss %<input name="max_daily_loss_pct" type="number" min="0" max="1" step="0.001"></label>
+        <label>Risk per trade %<input name="risk_per_trade_pct" type="number" min="0" max="1" step="0.001"></label>
+        <label>Max concurrent trades<input name="max_concurrent_trades" type="number" min="1" step="1"></label>
+        <label>Minimum win rate<input name="min_win_rate" type="number" min="0" max="1" step="0.01"></label>
+      </div>
+      <label><input type="checkbox" name="is_paper_trading"> Paper trading mode</label>
+
+      <div class="form-actions">
+        <button type="submit" class="button button-primary" data-save-settings>Save settings</button>
+        <span role="status" aria-live="polite" data-settings-message></span>
+      </div>
+    </form>
+
+    <aside class="panel">
+      <h2>Broker connection</h2>
+      <p data-broker-copy>Checking the active broker connection…</p>
+      <a class="button" href="/brokers/connect/">Manage broker connection</a>
+      <p class="muted">Broker credentials, tokens and account secrets are never rendered by this settings endpoint.</p>
+    </aside>
+  </div>
+</section>
+<script>
+(() => {
+  const root = document.querySelector('[data-settings-page]');
+  if (!root) return;
+  const form = root.querySelector('[data-settings-form]');
+  const status = root.querySelector('[data-settings-status]');
+  const message = root.querySelector('[data-settings-message]');
+  const brokerCopy = root.querySelector('[data-broker-copy]');
+  const csrf = root.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+  const field = name => form.elements[name];
+  const set = (name, value) => { if (field(name)) field(name).value = value ?? ''; };
+  const check = (name, value) => { if (field(name)) field(name).checked = Boolean(value); };
+
+  async function load() {
+    status.textContent = 'Loading…';
+    const response = await fetch('/api/settings/', {credentials: 'same-origin', headers: {'Accept': 'application/json'}});
+    if (!response.ok) throw new Error(`Settings request failed (${response.status})`);
+    const data = await response.json();
+    set('first_name', data.user.first_name); set('last_name', data.user.last_name); set('email', data.user.email);
+    Object.entries(data.profile).forEach(([key, value]) => key.includes('notifications') ? check(key, value) : set(key, value));
+    Object.entries(data.trading).forEach(([key, value]) => key === 'is_paper_trading' ? check(key, value) : set(key, value));
+    status.textContent = 'Ready';
+    brokerCopy.textContent = 'Broker connection is managed separately and is required before live trading data or execution controls become active.';
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    message.textContent = 'Saving…';
+    const profile = {};
+    const trading = {};
+    ['country','timezone','phone','bio'].forEach(k => profile[k] = field(k).value);
+    ['notifications_enabled','email_notifications_enabled','telegram_notifications_enabled'].forEach(k => profile[k] = field(k).checked);
+    ['default_strategy','max_daily_loss_pct','risk_per_trade_pct','max_concurrent_trades','min_win_rate'].forEach(k => {
+      const value = field(k).value;
+      trading[k] = ['max_daily_loss_pct','risk_per_trade_pct','min_win_rate'].includes(k) ? Number(value) : (k === 'max_concurrent_trades' ? Number(value) : value);
+    });
+    trading.is_paper_trading = field('is_paper_trading').checked;
+    const response = await fetch('/api/settings/', {method:'PATCH', credentials:'same-origin', headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'}, body:JSON.stringify({profile,trading})});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { message.textContent = data.detail || 'Unable to save settings.'; return; }
+    message.textContent = data.message || 'Settings saved.';
+  });
+
+  load().catch(error => { status.textContent = 'Unavailable'; message.textContent = error.message; });
+})();
+</script>
 {% endblock %}
