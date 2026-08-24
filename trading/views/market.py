@@ -36,7 +36,11 @@ def _positive_int(value, default, *, name, minimum=1, maximum=None):
 
 # Initialize services
 def get_cache_manager():
-    return DataCacheManager()
+    try:
+        return DataCacheManager()
+    except Exception as e:
+        logger.warning(f"Cache manager initialization failed: {e}")
+        return None
 
 symbol_manager = SymbolManager()
 
@@ -82,9 +86,13 @@ class MarketSymbolViewSet(viewsets.ReadOnlyModelViewSet):
         
         # Try cache first
         cache_manager = get_cache_manager()
-        cached = cache_manager.get_snapshot(symbol.symbol)
-        if cached:
-            return Response(cached)
+        if cache_manager:
+            try:
+                cached = cache_manager.get_snapshot(symbol.symbol)
+                if cached:
+                    return Response(cached)
+            except Exception as e:
+                logger.warning(f"Cache retrieval failed for {symbol.symbol}: {e}")
         
         # Get from DB
         try:
@@ -109,7 +117,7 @@ class MarketSymbolViewSet(viewsets.ReadOnlyModelViewSet):
             symbols = MarketSymbol.objects.filter(
                 market_type=market_type, is_active=True
             ).values('symbol', 'display_name', 'is_tradeable')
-            result[market_type] = symbols
+            result[market_type] = list(symbols)
         
         return Response(result)
     

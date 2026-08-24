@@ -1,72 +1,65 @@
+"""Audit middleware for logging all requests and responses."""
 import logging
-from django.conf import settings
 from django.utils.deprecation import MiddlewareMixin
-from django.utils import timezone
-
+from django.db import connection
 from core.models import AuditLog
 
-logger = logging.getLogger(__name__)
+audit_logger = logging.getLogger('audit')
 
 
 class AuditMiddleware(MiddlewareMixin):
-    def process_request(self, request):
-        request.audit_start_time = timezone.now()
-        request.audit_meta = {
-            'path': request.path,
-            'method': request.method,
-            'query_params': request.GET.dict(),
-            'ip_address': request.META.get('REMOTE_ADDR', ''),
-            'body': '',
-        }
-
-        if request.method in ('POST', 'PUT', 'PATCH'):
-            try:
-                request.audit_meta['body'] = request.body.decode('utf-8')[:1024]
-            except Exception:
-                request.audit_meta['body'] = ''
-
+    """Log all HTTP requests and responses for audit trail."""
+    
+    EXCLUDED_PATHS = [
+        '/static/',
+        '/media/',
+        '/health/',
+        '/favicon.ico',
+    ]
+    
+    def should_audit(self, request):
+        """Check if request should be audited."""
+        for excluded in self.EXCLUDED_PATHS:
+            if request.path.startswith(excluded):
+                return False
+        return True
+    
     def process_response(self, request, response):
-        if getattr(settings, 'AUDIT_LOG_ENABLED', False):
-            try:
-                meta = getattr(request, 'audit_meta', {})
-                AuditLog.objects.create(
-                    user=getattr(request, 'user', None) if getattr(request, 'user', None) and request.user.is_authenticated else None,
-                    path=meta.get('path', ''),
-                    method=meta.get('method', ''),
-                    status_code=response.status_code,
-                    ip_address=meta.get('ip_address', ''),
-                    query_params=meta.get('query_params', {}),
-                    request_body=meta.get('body', ''),
-                    response_body=self._truncate_text(getattr(response, 'content', b'').decode('utf-8', errors='ignore'), 1024),
-                    error='',
-                )
-            except Exception:
-                logger.exception('AuditMiddleware failed to persist audit log')
+        """Log response after it's been created."""
+        if not self.should_audit(request):
+            return response
+        
+        try:
+            # Skip audit logging if database is locked
+            if not connection.connection or connection.connection.closed:
+                return response
+            
+            user = getattr(request, 'user', None)
+            if user and user.is_authenticated:
+                try:
+                    AuditLog.objects.create(
+                        user=user,
+                        path=request.path,
+                        method=request.method,
+                        status_code=response.status_code,
+                        ip_address=self._get_client_ip(request),
+                        user_agent=request.META.get('HTTP_USER_AGENT', '')[:255],
+                        error='',
+                    )
+                except Exception as e:
+                    # Log but don't fail the request if audit logging fails
+                    audit_logger.warning(f"Failed to create audit log: {e}")
+        except Exception as e:
+            audit_logger.error(f"AuditMiddleware error: {e}")
+        
         return response
-
-    def process_exception(self, request, exception):
-        if getattr(settings, 'AUDIT_LOG_ENABLED', False):
-            try:
-                meta = getattr(request, 'audit_meta', {})
-                AuditLog.objects.create(
-                    user=getattr(request, 'user', None) if getattr(request, 'user', None) and request.user.is_authenticated else None,
-                    path=meta.get('path', ''),
-                    method=meta.get('method', ''),
-                    status_code=getattr(exception, 'status_code', 500),
-                    ip_address=meta.get('ip_address', ''),
-                    query_params=meta.get('query_params', {}),
-                    request_body=meta.get('body', ''),
-                    response_body='',
-                    error=str(exception),
-                )
-            except Exception:
-                logger.exception('AuditMiddleware failed to persist exception audit log')
-        return None
-
+    
     @staticmethod
-    def _truncate_text(value, max_length):
-        if not value:
-            return ''
-        if len(value) <= max_length:
-            return value
-        return value[:max_length] + '...'
+    def _get_client_ip(request):
+        """Get client IP address from request."""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
