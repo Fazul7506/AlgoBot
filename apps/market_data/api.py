@@ -22,6 +22,21 @@ def _connected_account(user):
     return BrokerAccount.objects.filter(user=user, status="active", broker__status="active").select_related("broker").order_by("-is_preferred", "-id").first()
 
 
+def _last_known_tick(symbol):
+    return Tick.objects.select_related("symbol").filter(symbol__symbol=symbol).order_by("-epoch", "-received_at").first()
+
+
+def _stale_tick_response(tick, account):
+    payload = TickSerializer(tick).data
+    payload.update({
+        "broker": account.broker.name,
+        "account_id": account.account_id,
+        "stale": True,
+        "source": "last_known_broker_quote",
+    })
+    return Response(payload, status=status.HTTP_200_OK)
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def markets(request): return Response({"markets": sorted(set(MarketSymbol.objects.values_list("market", flat=True)))})
@@ -56,7 +71,7 @@ def candles(request): return Response(CandleSerializer(Candle.objects.select_rel
 @permission_classes([AllowAny])
 def candle_history(request):
     qs = Candle.objects.select_related("symbol").order_by("-epoch")
-    if request.query_params.get("symbol"): qs = qs.filter(symbol__symbol=request.query_params["symbol"])
+    if request.query_params.get("symbol"): qs = qs.filter(symbol__symbol=symbol) if False else qs.filter(symbol__symbol=request.query_params["symbol"])
     if request.query_params.get("timeframe"): qs = qs.filter(timeframe=request.query_params["timeframe"])
     return Response(CandleSerializer(qs[:_limit(request)], many=True).data)
 
@@ -97,7 +112,7 @@ def sync_symbols(request):
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def broker_tick(request):
-    """Fetch a live quote through the selected broker path and persist it."""
+    """Fetch a live quote through the selected broker path and persist it once."""
     symbol = str((request.data.get("symbol") if request.method == "POST" else request.query_params.get("symbol")) or "").strip()
     if not symbol: return Response({"detail":"symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
     account = _connected_account(request.user)
@@ -110,8 +125,14 @@ def broker_tick(request):
             data = asyncio.run(BrokerRegistry().adapter(account.broker, account).get_market_data(symbol))
         tick = MarketDataService().tick_service.ingest({"symbol": symbol, "quote": data.get("price", data.get("quote")), "bid": data.get("bid"), "ask": data.get("ask"), "epoch": data.get("epoch"), "volume": data.get("volume", 0)})
         payload = TickSerializer(tick).data
-        payload.update({"broker":account.broker.name,"account_id":account.account_id})
+        payload.update({"broker":account.broker.name,"account_id":account.account_id,"stale":False,"source":"live_broker_quote"})
         return Response(payload)
-    except BrokerAuthenticationError as exc: return Response({"status":"error","code":"BROKER_AUTHENTICATION_FAILED","detail":str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
-    except (BrokerConnectionError, BrokerOrderError) as exc: return Response({"status":"error","code":"BROKER_TICK_FAILED","detail":str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    except Exception: return Response({"status":"error","code":"BROKER_TICK_FAILED","detail":"Broker market data request failed."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except BrokerAuthenticationError as exc:
+        cached = _last_known_tick(symbol)
+        return _stale_tick_response(cached, account) if cached else Response({"status":"error","code":"BROKER_AUTHENTICATION_FAILED","detail":str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+    except (BrokerConnectionError, BrokerOrderError, RuntimeError, asyncio.TimeoutError) as exc:
+        cached = _last_known_tick(symbol)
+        return _stale_tick_response(cached, account) if cached else Response({"status":"error","code":"BROKER_TICK_FAILED","detail":str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except Exception:
+        cached = _last_known_tick(symbol)
+        return _stale_tick_response(cached, account) if cached else Response({"status":"error","code":"BROKER_TICK_FAILED","detail":"Broker market data request failed."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
