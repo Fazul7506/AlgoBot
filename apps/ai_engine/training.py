@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+import json
+import logging
+import os
+import tempfile
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+from django.db import transaction
+from django.utils import timezone
+
+from .models import AIModel, ModelVersion, TrainingJob
+
+logger = logging.getLogger(__name__)
+
+FEATURES = ("close", "sma5", "sma20", "ema10", "ret1", "range")
+DEFAULT_MIN_ROWS = 250
+
+
+def _model_dir() -> Path:
+    path = Path(os.environ.get("AI_MODEL_DIR", Path(__file__).resolve().parents[2] / "trading" / "ai" / "models"))
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _atomic_dump(model: Any, path: Path) -> None:
+    import joblib
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as handle:
+        tmp = Path(handle.name)
+    try:
+        joblib.dump(model, tmp)
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+def _build_dataset(symbol: str, timeframe: str, limit: int = 5000) -> tuple[np.ndarray, np.ndarray]:
+    from apps.market_data.models import Candle, MarketSymbol
+
+    market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
+    if not market_symbol:
+        raise ValueError(f"Unknown active market symbol: {symbol}")
+    candles = list(
+        Candle.objects.filter(symbol=market_symbol, timeframe=timeframe)
+        .order_by("epoch")
+        .values_list("open", "high", "low", "close")[:limit]
+    )
+    if len(candles) < DEFAULT_MIN_ROWS:
+        raise ValueError(f"Insufficient candles for {symbol}/{timeframe}: {len(candles)}; need at least {DEFAULT_MIN_ROWS}")
+
+    close = np.asarray([float(row[3]) for row in candles], dtype=np.float64)
+    high = np.asarray([float(row[1]) for row in candles], dtype=np.float64)
+    low = np.asarray([float(row[2]) for row in candles], dtype=np.float64)
+    rows: list[list[float]] = []
+    labels: list[int] = []
+    for i in range(20, len(close) - 1):
+        window5 = close[i - 4:i + 1]
+        window20 = close[i - 19:i + 1]
+        ema10 = float(np.mean(close[i - 9:i + 1]))
+        ret1 = (close[i] / close[i - 1]) - 1.0 if close[i - 1] else 0.0
+        candle_range = high[i] - low[i]
+        rows.append([close[i], float(window5.mean()), float(window20.mean()), ema10, ret1, candle_range])
+        labels.append(int(close[i + 1] > close[i]))
+    return np.asarray(rows, dtype=np.float64), np.asarray(labels, dtype=np.int8)
+
+
+class MarketModelTrainer:
+    """Train broker-independent directional models from persisted market candles.
+
+    Labels are generated only from future candle movement; no broker credentials or
+    live account data are included in the training set. A model is published only
+    after an out-of-sample validation gate succeeds.
+    """
+
+    def train_symbol(self, symbol: str, timeframe: str = "M1", min_accuracy: float = 0.52) -> dict[str, Any]:
+        X, y = _build_dataset(symbol, timeframe)
+        split = int(len(X) * 0.8)
+        X_train, X_test, y_train, y_test = X[:split], X[split:], y[:split], y[split:]
+        if len(np.unique(y_train)) < 2 or len(np.unique(y_test)) < 2:
+            raise ValueError(f"Training data for {symbol}/{timeframe} does not contain both classes")
+
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+
+        candidates: list[tuple[str, Any]] = [
+            ("rf", RandomForestClassifier(n_estimators=250, max_depth=10, min_samples_leaf=3, random_state=42, n_jobs=-1, class_weight="balanced")),
+        ]
+        try:
+            from xgboost import XGBClassifier
+            candidates.append(("xgb", XGBClassifier(n_estimators=250, max_depth=5, learning_rate=0.05, subsample=0.9, colsample_bytree=0.9, eval_metric="logloss", random_state=42, n_jobs=2)))
+        except Exception:
+            logger.info("XGBoost unavailable; continuing with RF")
+        try:
+            from lightgbm import LGBMClassifier
+            candidates.append(("lgb", LGBMClassifier(n_estimators=250, max_depth=7, learning_rate=0.05, subsample=0.9, colsample_bytree=0.9, random_state=42, verbosity=-1)))
+        except Exception:
+            logger.info("LightGBM unavailable; continuing with RF/XGB")
+
+        results = []
+        model_dir = _model_dir()
+        for algorithm, model in candidates:
+            model.fit(X_train, y_train)
+            pred = model.predict(X_test)
+            probability = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else pred
+            accuracy = float(accuracy_score(y_test, pred))
+            metrics = {
+                "accuracy": accuracy,
+                "precision": float(precision_score(y_test, pred, zero_division=0)),
+                "recall": float(recall_score(y_test, pred, zero_division=0)),
+                "f1": float(f1_score(y_test, pred, zero_division=0)),
+                "auc": float(roc_auc_score(y_test, probability)),
+                "samples": int(len(X)),
+                "train_samples": int(len(X_train)),
+                "test_samples": int(len(X_test)),
+            }
+            results.append((algorithm, model, metrics))
+
+        eligible = [item for item in results if item[2]["accuracy"] >= min_accuracy]
+        if not eligible:
+            raise ValueError(f"No model passed validation gate for {symbol}/{timeframe}; best accuracy={max(x[2]['accuracy'] for x in results):.4f}")
+
+        with transaction.atomic():
+            job = TrainingJob.objects.create(status="running", started_at=timezone.now())
+            published = []
+            for algorithm, model, metrics in eligible:
+                path = model_dir / f"{symbol}_{timeframe}_{algorithm}.pkl"
+                _atomic_dump(model, path)
+                name = f"{symbol}-{timeframe}-{algorithm}"
+                version = timezone.now().strftime("%Y%m%d%H%M%S")
+                ai_model = AIModel.objects.create(
+                    name=name, version=version, algorithm=algorithm, framework="sklearn",
+                    status="active", accuracy=metrics["accuracy"], precision=metrics["precision"],
+                    recall=metrics["recall"], f1_score=metrics["f1"], auc=metrics["auc"],
+                    metadata={"features": list(FEATURES), "artifact": str(path), "validation": metrics},
+                )
+                ModelVersion.objects.create(model=ai_model, version=version, training_dataset=f"market_data:{symbol}:{timeframe}", feature_set={"features": list(FEATURES)}, hyperparameters={"algorithm": algorithm})
+                published.append({"algorithm": algorithm, "accuracy": metrics["accuracy"], "path": str(path)})
+
+            best = max(published, key=lambda item: item["accuracy"])
+            AIModel.objects.filter(name__startswith=f"{symbol}-{timeframe}-", status="champion").update(status="active")
+            AIModel.objects.filter(name=f"{symbol}-{timeframe}-{best['algorithm']}", status="active").order_by("-created_at").first().status = "champion"
+            champion = AIModel.objects.filter(name=f"{symbol}-{timeframe}-{best['algorithm']}").order_by("-created_at").first()
+            champion.save(update_fields=["status"])
+
+            job.model = champion
+            job.status = "completed"
+            job.completed_at = timezone.now()
+            job.duration = (job.completed_at - job.started_at).total_seconds()
+            job.metrics = {"symbol": symbol, "timeframe": timeframe, "published": published, "champion": best}
+            job.save(update_fields=["model", "status", "completed_at", "duration", "metrics"])
+        return job.metrics
+
+    def train_active_symbols(self, timeframe: str = "M1", min_accuracy: float = 0.52) -> dict[str, Any]:
+        from apps.market_data.models import MarketSymbol
+        results = {}
+        for symbol in MarketSymbol.objects.filter(is_active=True, is_tradable=True).values_list("symbol", flat=True):
+            try:
+                results[symbol] = self.train_symbol(symbol, timeframe, min_accuracy)
+            except Exception as exc:
+                logger.warning("AI training skipped", extra={"symbol": symbol, "timeframe": timeframe, "error": str(exc)})
+                results[symbol] = {"status": "skipped", "error": str(exc)}
+        return results
