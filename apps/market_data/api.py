@@ -37,6 +37,10 @@ def _stale_tick_response(tick, account):
     return Response(payload, status=status.HTTP_200_OK)
 
 
+async def _bounded_market_data(adapter, symbol, timeout=7.0):
+    return await asyncio.wait_for(adapter.get_market_data(symbol), timeout=timeout)
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def markets(request): return Response({"markets": sorted(set(MarketSymbol.objects.values_list("market", flat=True)))})
@@ -98,15 +102,7 @@ def sync_symbols(request):
     except Exception:
         cached_count = MarketSymbol.objects.filter(broker="deriv", is_active=True).count()
         if cached_count:
-            return Response({
-                "status":"stale",
-                "symbols":cached_count,
-                "broker":account.broker.name,
-                "account_id":account.account_id,
-                "source":"cached_deriv_active_symbols",
-                "stale":True,
-                "detail":"Live broker market catalogue refresh is temporarily unavailable; serving the last known broker catalogue."
-            })
+            return Response({"status":"stale","symbols":cached_count,"broker":account.broker.name,"account_id":account.account_id,"source":"cached_deriv_active_symbols","stale":True,"detail":"Live broker market catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
         return Response({"status":"error","code":"BROKER_MARKET_SYNC_FAILED","detail":"Live broker market catalogue is temporarily unavailable and no cached catalogue exists."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 @api_view(["GET", "POST"])
@@ -122,7 +118,8 @@ def broker_tick(request):
         if account.broker.broker_type == "deriv":
             data = fetch_tick(symbol)
         else:
-            data = asyncio.run(BrokerRegistry().adapter(account.broker, account).get_market_data(symbol))
+            adapter = BrokerRegistry().adapter(account.broker, account)
+            data = asyncio.run(_bounded_market_data(adapter, symbol))
         tick = MarketDataService().tick_service.ingest({"symbol": symbol, "quote": data.get("price", data.get("quote")), "bid": data.get("bid"), "ask": data.get("ask"), "epoch": data.get("epoch"), "volume": data.get("volume", 0)})
         payload = TickSerializer(tick).data
         payload.update({"broker":account.broker.name,"account_id":account.account_id,"stale":False,"source":"live_broker_quote"})
