@@ -1,20 +1,21 @@
-/* Shared application-shell behavior. Navigation owns sidebar state. */
+/* Canonical application-shell navigation. Exactly one mobile toggle path. */
 (() => {
   'use strict';
   if (window.__algoBotBaseShell) return;
   window.__algoBotBaseShell = true;
-
   const $ = (selector, root = document) => root.querySelector(selector);
 
   function setBrokerStateAttribute(event) {
-    const status = event?.detail?.state?.status || window.AlgoBotBrokerState?.get()?.status || 'NO_BROKER';
+    const state = event?.detail?.state || window.AlgoBotBrokerState?.get() || {};
+    const status = state.status || 'NO_BROKER';
     document.body.dataset.brokerState = status;
     const indicator = $('[data-global-connection]');
     if (!indicator) return;
     const labels = {NO_BROKER:'No connected broker account',CONNECTING:'Connecting broker…',CONNECTED:'Broker connected',SYNCING:'Synchronizing broker…',READY:'Broker ready',DEGRADED:'Broker connection degraded',DISCONNECTED:'Broker disconnected',RECONNECTING:'Reconnecting broker…',ERROR:'Broker connection error'};
-    const account = event?.detail?.state?.account || window.AlgoBotBrokerState?.get()?.account;
+    const account = state.account;
     const label = account?.broker?.name && account?.broker_account_id ? `${account.broker.name} · ${account.broker_account_id}` : labels[status] || 'Broker status unavailable';
-    indicator.querySelector('span')?.replaceChildren(document.createTextNode(label));
+    const span = indicator.querySelector('span');
+    if (span) span.textContent = label;
     indicator.classList.toggle('connected', status === 'CONNECTED' || status === 'READY');
     indicator.classList.toggle('error', status === 'ERROR' || status === 'DISCONNECTED');
   }
@@ -30,37 +31,38 @@
     const storageKey = 'algobot.sidebar.collapsed';
 
     const setMobileOpen = open => {
-      sidebar.classList.toggle('is-open', !!open);
-      if (backdrop) backdrop.hidden = !open;
-      mobile?.setAttribute('aria-expanded', String(!!open));
-      mobile?.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+      const next = !!open;
+      sidebar.classList.toggle('is-open', next);
+      if (backdrop) backdrop.hidden = !next;
+      if (mobile) {
+        mobile.setAttribute('aria-expanded', String(next));
+        mobile.setAttribute('aria-label', next ? 'Close navigation' : 'Open navigation');
+      }
+      // Never lock html/body scrolling. The fixed sidebar scrolls independently.
       document.body.classList.remove('mobile-nav-open');
       document.documentElement.classList.remove('mobile-nav-open');
-      // Never lock the document. The fixed sidebar has its own scroll container.
     };
-
     setMobileOpen(false);
 
-    // Capture-phase pointer handling is deliberately the single source of truth.
-    // It runs before page widgets can stop propagation and does not wait for click.
-    const handlePointer = event => {
+    // A previous implementation listened to BOTH pointerup and click and toggled
+    // twice on touch devices. That made the menu appear dead and could leave the
+    // overlay intercepting the page. pointerup is now the sole mobile toggle path.
+    const handlePointerUp = event => {
       const target = event.target?.closest?.('[data-mobile-menu]');
       if (target) {
         event.preventDefault();
+        event.stopPropagation();
         setMobileOpen(!sidebar.classList.contains('is-open'));
         return;
       }
-      if (backdrop && event.target === backdrop) {
+      if (backdrop && (event.target === backdrop || event.target?.closest?.('[data-sidebar-backdrop]'))) {
         event.preventDefault();
         setMobileOpen(false);
         return;
       }
-      if (sidebar.classList.contains('is-open') && event.target?.closest?.('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')) {
-        setMobileOpen(false);
-      }
+      if (sidebar.classList.contains('is-open') && event.target?.closest?.('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')) setMobileOpen(false);
     };
-    document.addEventListener('pointerup', handlePointer, true);
-    document.addEventListener('click', handlePointer, true);
+    document.addEventListener('pointerup', handlePointerUp, true);
 
     if (toggle) {
       const setCollapsed = collapsed => {
@@ -81,7 +83,6 @@
         setCollapsed(!sidebar.classList.contains('is-collapsed'));
       });
     }
-
     document.addEventListener('keydown', event => { if (event.key === 'Escape') setMobileOpen(false); });
     window.addEventListener('resize', () => { if (window.innerWidth > 800) setMobileOpen(false); });
   }
@@ -97,6 +98,11 @@
     button.addEventListener('click', () => { const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem(storageKey, next); } catch (_) {} apply(next); });
   }
 
-  function boot() { bindNavigation(); bindTheme(); window.AlgoBotBrokerState?.subscribe(setBrokerStateAttribute); document.querySelectorAll('.toast-stack .toast').forEach(node => setTimeout(() => node.remove(), 4500)); }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true }); else boot();
+  function boot() {
+    bindNavigation();
+    bindTheme();
+    if (window.AlgoBotBrokerState) window.AlgoBotBrokerState.subscribe(setBrokerStateAttribute);
+    document.querySelectorAll('.toast-stack .toast').forEach(node => setTimeout(() => node.remove(), 4500));
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true}); else boot();
 })();
