@@ -1,4 +1,4 @@
-/* Canonical browser bridge for backend broker account state. */
+/* Canonical browser bridge: backend account + verified live broker data are authoritative. */
 (() => {
   'use strict';
   if (window.__algoBotBrokerStateBridge) return;
@@ -17,7 +17,7 @@
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(url, { credentials:'same-origin', headers:{Accept:'application/json',...(options.headers||{})}, cache:'no-store', signal:controller.signal, ...options });
+      const response = await fetch(url, {credentials:'same-origin',headers:{Accept:'application/json',...(options.headers||{})},cache:'no-store',signal:controller.signal,...options});
       let payload = null;
       try { payload = await response.json(); } catch (_) {}
       if (!response.ok) {
@@ -31,12 +31,19 @@
   async function refreshAccounts(store) {
     const accounts = list(await requestJson('/api/brokers/accounts/')).filter(a => a?.id);
     const account = accounts.find(a => a.is_preferred || a.is_default) || accounts[0] || null;
-    if (!account) { store.reset('backend-no-broker-account'); lastAccountId=null; lastConnection=false; lastBalance=null; return null; }
-    const id=String(account.id);
-    const connected=account.status === 'active' && account.is_connected === true;
-    const balance=String(account.balance ?? '');
-    if (id!==lastAccountId || connected!==lastConnection || balance!==lastBalance) store.setAccount(account,'backend-broker-account');
+    if (!account) {
+      // Never destroy a known-good account because one polling request returned
+      // an empty response during deployment/session startup.
+      if (!store.get().account) store.reset('backend-no-broker-account');
+      return store.get().account || null;
+    }
+    const id = String(account.id);
+    const connected = account.status === 'active' && account.is_connected === true;
+    const balance = String(account.balance ?? '');
+    const current = store.get();
+    if (!current.account || id !== lastAccountId || connected !== lastConnection || balance !== lastBalance) store.setAccount(account,'backend-broker-account');
     lastAccountId=id; lastConnection=connected; lastBalance=balance;
+    window.dispatchEvent(new CustomEvent('algobot:backend-account-loaded',{detail:account}));
     return account;
   }
 
@@ -51,9 +58,12 @@
       window.dispatchEvent(new CustomEvent('algobot:account-synced',{detail:verified}));
     } catch(error) {
       const brokerStatus=error.payload?.broker_status;
+      const current=store.get();
       const state=(error.status===401 || brokerStatus==='credentials_expired') ? store.STATES.ERROR : (error.status===409 ? store.STATES.DISCONNECTED : (error.status===503 || error.status===504 || brokerStatus==='unavailable' || brokerStatus==='sync_timeout' ? store.STATES.DEGRADED : store.STATES.ERROR));
-      store.transition(state,{account,lastError:error.name==='AbortError'?'Broker synchronization timed out.':error.message},'broker-live-verification-failed');
-      window.dispatchEvent(new CustomEvent('algobot:account-sync-error',{detail:{error,account}}));
+      // Preserve the account so the UI can report the actual broker failure
+      // instead of pretending that no account exists.
+      store.transition(state,{account:current.account || account,lastError:error.name==='AbortError'?'Broker synchronization timed out.':error.message},'broker-live-verification-failed');
+      window.dispatchEvent(new CustomEvent('algobot:account-sync-error',{detail:{error,account:current.account || account}}));
     }
   }
 
@@ -61,16 +71,26 @@
     const store=window.AlgoBotBrokerState;
     if (!store || document.body.dataset.authenticated!=='true' || busy) return;
     busy=true;
-    try { const account=await refreshAccounts(store); if(account) await verifyWithBroker(store,account); }
-    catch(error) { store.transition(store.STATES.ERROR,{lastError:error.message},'backend-broker-account-error'); }
-    finally { busy=false; }
+    try {
+      const account=await refreshAccounts(store);
+      if(account) await verifyWithBroker(store,account);
+    } catch(error) {
+      const current=store.get();
+      store.transition(current.account ? store.STATES.DEGRADED : store.STATES.ERROR,{account:current.account,lastError:error.message},'backend-broker-account-error');
+    } finally { busy=false; }
   }
 
-  function schedule() { if(timer) clearInterval(timer); syncFromBackend(); setTimeout(syncFromBackend,1500); timer=setInterval(syncFromBackend,30000); }
+  function schedule() {
+    if(timer) clearInterval(timer);
+    syncFromBackend();
+    setTimeout(syncFromBackend,750);
+    setTimeout(syncFromBackend,2000);
+    timer=setInterval(syncFromBackend,15000);
+  }
 
   window.addEventListener('algobot:account-changed',event=>{ if(window.AlgoBotBrokerState&&event.detail) window.AlgoBotBrokerState.setAccount(event.detail,'account-changed'); lastAccountId=String(event.detail?.id||''); lastConnection=event.detail?.status==='active'&&event.detail?.is_connected===true; lastBalance=String(event.detail?.balance??''); });
   window.addEventListener('algobot:account-synced',event=>{ if(window.AlgoBotBrokerState&&event.detail) window.AlgoBotBrokerState.setAccount(event.detail,'account-synced'); lastAccountId=String(event.detail?.id||''); lastConnection=event.detail?.status==='active'&&event.detail?.is_connected===true; lastBalance=String(event.detail?.balance??''); });
-  window.addEventListener('algobot:account-sync-error',event=>{ if(window.AlgoBotBrokerState) window.AlgoBotBrokerState.transition(window.AlgoBotBrokerState.STATES.ERROR,{lastError:event.detail?.error?.message||'Broker synchronization failed'},'account-sync-error'); });
+  window.addEventListener('algobot:account-sync-error',event=>{ if(window.AlgoBotBrokerState) { const s=window.AlgoBotBrokerState.get(); window.AlgoBotBrokerState.transition(window.AlgoBotBrokerState.STATES.DEGRADED,{account:s.account,lastError:event.detail?.error?.message||'Broker synchronization failed'},'account-sync-error'); } });
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',schedule,{once:true}); else schedule();
 })();
