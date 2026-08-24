@@ -1,6 +1,6 @@
 # AlgoBot Frontend Production Refactor Master Contract
 
-Status: **PHASE 9 COMPLETE AND WORKING**
+Status: **PHASE 10 COMPLETE AND WORKING**
 
 Branch: `refactor/frontend-production-foundation`
 Long-lived PR: `#17`
@@ -48,8 +48,8 @@ Target: **L5 Production**. Foundational surfaces may reach **L6 Reference**.
 7. Portfolio/Positions — **COMPLETE AND WORKING**
 8. Orders — **COMPLETE AND WORKING**
 9. Trade history — **COMPLETE AND WORKING**
-10. Market/watchlist — NEXT
-11. Charts
+10. Market/watchlist — **COMPLETE AND WORKING**
+11. Charts — NEXT
 12. Strategies
 13. Automation
 14. Workflow templates/builder
@@ -68,10 +68,10 @@ Canonical broker lifecycle/state contract, centralized frontend data contract, c
 Credential-pattern audit, browser payload sanitization, no silent demo fallback and credential-bearing field removal before browser consumption.
 
 ### Phase 3 — shared design system
-Global semantic tokens and reusable production primitives for status, cards, buttons, fields, states, skeletons, focus, mobile sizing and reduced motion.
+Global semantic tokens and reusable production primitives.
 
 ### Phase 4 — base template
-Production shell CSS/JS and runtime guards extracted from `base.html`; centralized navigation/theme/global broker status.
+Production shell CSS/JS and runtime guards extracted; centralized navigation/theme/global broker status.
 
 ### Phase 5 — broker connection
 Generic broker-backed connection surface, canonical connection state, broker catalog, broker-confirmed account type and targeted tests.
@@ -80,15 +80,18 @@ Generic broker-backed connection surface, canonical connection state, broker cat
 Broker-state KPIs, broker-gated positions/orders/markets, symbol-scoped signals, backend-confirmed kill switch and dashboard contract test.
 
 ### Phase 7 — portfolio/positions
-Broker-gated positions controller and portfolio dashboard. Portfolio exposure/P/L/allocation derive only from broker account and position data.
+Broker-gated positions controller and portfolio dashboard; exposure/P/L/allocation derive only from broker account and positions.
 
 ### Phase 8 — orders
-Broker-gated execution order controller and order page. Order status is inspected from backend execution records; no frontend mutation pretends an order was cancelled/filled.
+Broker-gated execution order controller and execution table; no frontend mutation pretends a terminal broker state.
 
 ### Phase 9 — trade history
-Added authenticated `/trade-history/`, broker-backed execution history controller, navigation entry and enriched execution report serializer with symbol/direction/broker order context. Targeted template test added.
+Authenticated execution history page using broker-backed execution reports with broker order context.
 
-See `docs/Architecture/phase-9-trade-history.md`.
+### Phase 10 — market/watchlist
+`static/js/market_watch.js` now gates market catalogue and quotes on broker connection, uses broker-backed endpoints, retains search/refresh/polling and removes inline market logic and fabricated quote defaults.
+
+See `docs/Architecture/phase-10-market-watch.md`.
 
 ## Inventory
 
