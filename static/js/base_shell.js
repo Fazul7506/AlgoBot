@@ -12,7 +12,7 @@
     const indicator = $('[data-global-connection]');
     if (!indicator) return;
     const labels = {NO_BROKER:'No connected broker account',CONNECTING:'Connecting broker…',CONNECTED:'Broker connected',SYNCING:'Synchronizing broker…',READY:'Broker ready',DEGRADED:'Broker connection degraded',DISCONNECTED:'Broker disconnected',RECONNECTING:'Reconnecting broker…',ERROR:'Broker connection error'};
-    const account = event?.detail?.state?.account;
+    const account = event?.detail?.state?.account || window.AlgoBotBrokerState?.get()?.account;
     const label = account?.broker?.name && account?.broker_account_id ? `${account.broker.name} · ${account.broker_account_id}` : labels[status] || 'Broker status unavailable';
     indicator.querySelector('span')?.replaceChildren(document.createTextNode(label));
     indicator.classList.toggle('connected', status === 'CONNECTED' || status === 'READY');
@@ -30,27 +30,27 @@
     const storageKey = 'algobot.sidebar.collapsed';
 
     const setMobileOpen = open => {
-      sidebar.classList.toggle('is-open', open);
+      sidebar.classList.toggle('is-open', !!open);
       if (backdrop) backdrop.hidden = !open;
-      mobile?.setAttribute('aria-expanded', String(open));
+      mobile?.setAttribute('aria-expanded', String(!!open));
       mobile?.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
-      // Deliberately do not alter document scrolling. The sidebar is fixed and
-      // has its own scroll container, so opening it can never freeze the page.
+      document.body.classList.remove('mobile-nav-open');
+      document.documentElement.classList.remove('mobile-nav-open');
+      // Never lock the document. The fixed sidebar has its own scroll container.
     };
 
     setMobileOpen(false);
 
-    // Use one delegated document handler instead of multiple competing listeners.
-    // This also survives page-level scripts that replace the button node.
-    document.addEventListener('click', event => {
-      const menuButton = event.target?.closest?.('[data-mobile-menu]');
-      if (menuButton) {
+    // Capture-phase pointer handling is deliberately the single source of truth.
+    // It runs before page widgets can stop propagation and does not wait for click.
+    const handlePointer = event => {
+      const target = event.target?.closest?.('[data-mobile-menu]');
+      if (target) {
         event.preventDefault();
-        event.stopPropagation();
         setMobileOpen(!sidebar.classList.contains('is-open'));
         return;
       }
-      if (event.target?.closest?.('[data-sidebar-backdrop]')) {
+      if (backdrop && event.target === backdrop) {
         event.preventDefault();
         setMobileOpen(false);
         return;
@@ -58,14 +58,16 @@
       if (sidebar.classList.contains('is-open') && event.target?.closest?.('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')) {
         setMobileOpen(false);
       }
-    }, false);
+    };
+    document.addEventListener('pointerup', handlePointer, true);
+    document.addEventListener('click', handlePointer, true);
 
     if (toggle) {
       const setCollapsed = collapsed => {
         if (window.innerWidth <= 800) return;
-        sidebar.classList.toggle('is-collapsed', collapsed);
-        shell?.classList.toggle('sidebar-collapsed', collapsed);
-        document.body.classList.toggle('sidebar-collapsed', collapsed);
+        sidebar.classList.toggle('is-collapsed', !!collapsed);
+        shell?.classList.toggle('sidebar-collapsed', !!collapsed);
+        document.body.classList.toggle('sidebar-collapsed', !!collapsed);
         toggle.setAttribute('aria-expanded', String(!collapsed));
         toggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
         const icon = toggle.querySelector('.material-symbols-rounded');
