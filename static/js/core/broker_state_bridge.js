@@ -9,9 +9,9 @@
   let lastBalance = null;
   let busy = false;
   let timer = null;
-  let syncTimer = null;
 
   const list = value => Array.isArray(value) ? value : (Array.isArray(value?.results) ? value.results : (Array.isArray(value?.data) ? value.data : []));
+  const csrfToken = () => document.cookie.split(';').map(v => v.trim()).find(v => v.startsWith('csrftoken='))?.split('=').slice(1).join('=') || '';
 
   async function requestJson(url, options = {}, timeoutMs = 10000) {
     const controller = new AbortController();
@@ -53,14 +53,14 @@
     return account;
   }
 
-  // A BrokerAccount row is not treated as proof that the remote broker session
-  // works. Explicitly synchronize the preferred account through the backend,
-  // which calls the real broker adapter and returns broker-authoritative data.
   async function verifyWithBroker(store, account) {
     if (!account?.id) return;
     store.transition(store.STATES.SYNCING, { account }, 'broker-verification-started');
     try {
-      const payload = await requestJson(`/api/brokers/accounts/${encodeURIComponent(account.id)}/sync/`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, 10000);
+      const payload = await requestJson(`/api/brokers/accounts/${encodeURIComponent(account.id)}/sync/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() }
+      }, 10000);
       const verified = payload?.account || account;
       store.setAccount(verified, 'broker-verified-by-backend');
       window.dispatchEvent(new CustomEvent('algobot:account-synced', { detail: verified }));
@@ -81,13 +81,7 @@
     busy = true;
     try {
       const account = await refreshAccounts(store);
-      if (account && (account.is_connected !== true || !store.accountIsConnected?.(account))) {
-        await verifyWithBroker(store, account);
-      } else if (account) {
-        // Even an apparently connected local row is periodically verified so
-        // frontend state cannot silently drift from the actual broker session.
-        await verifyWithBroker(store, account);
-      }
+      if (account) await verifyWithBroker(store, account);
     } catch (error) {
       if (!store.get().account) store.transition(store.STATES.ERROR, { lastError: error.message }, 'backend-broker-account-error');
     } finally { busy = false; }
@@ -95,7 +89,6 @@
 
   function schedule() {
     if (timer) clearInterval(timer);
-    if (syncTimer) clearInterval(syncTimer);
     syncFromBackend();
     setTimeout(syncFromBackend, 1000);
     timer = setInterval(syncFromBackend, 30000);
