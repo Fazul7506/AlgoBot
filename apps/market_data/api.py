@@ -71,7 +71,7 @@ def candles(request): return Response(CandleSerializer(Candle.objects.select_rel
 @permission_classes([AllowAny])
 def candle_history(request):
     qs = Candle.objects.select_related("symbol").order_by("-epoch")
-    if request.query_params.get("symbol"): qs = qs.filter(symbol__symbol=symbol) if False else qs.filter(symbol__symbol=request.query_params["symbol"])
+    if request.query_params.get("symbol"): qs = qs.filter(symbol__symbol=request.query_params["symbol"])
     if request.query_params.get("timeframe"): qs = qs.filter(timeframe=request.query_params["timeframe"])
     return Response(CandleSerializer(qs[:_limit(request)], many=True).data)
 
