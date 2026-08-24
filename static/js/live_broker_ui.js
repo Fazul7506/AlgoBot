@@ -36,8 +36,15 @@
   function styles(){
     if($('#algobot-account-style')) return;
     const s=document.createElement('style'); s.id='algobot-account-style'; s.textContent=`
-      .algobot-account-summary{display:flex;align-items:center;gap:9px;min-width:0;font-size:12px}.algobot-account-avatar{width:34px;height:34px;flex:0 0 34px;border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;justify-content:center;background:#132a49;border:1px solid var(--line);font-weight:800}.algobot-account-avatar.small{width:32px;height:32px;flex-basis:32px}.algobot-account-copy{display:grid;min-width:0;line-height:1.25}.algobot-account-copy strong,.algobot-account-copy span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.algobot-account-copy span{color:var(--muted);font-size:11px}.algobot-account-switch{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:#132a49;color:var(--text);border-radius:9px;padding:7px 9px;font-size:11px;cursor:pointer;white-space:nowrap}.algobot-account-switch:disabled{opacity:.5;cursor:not-allowed}.algobot-switch-avatar{width:18px;height:18px;border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;justify-content:center;background:#07111f;border:1px solid var(--line);font-size:9px;font-weight:800}.algobot-sidebar-account{display:grid;gap:8px;width:100%;background:linear-gradient(180deg,#10233dcc,#0b1728ee);border:1px solid var(--line);border-radius:16px;padding:10px 58px 10px 10px;position:relative}.algobot-account-fresh{color:var(--muted);font-size:10px}.algobot-account-error{color:var(--muted);font-size:11px}.algobot-sidebar-account .algobot-account-switch{width:100%}.algobot-sidebar-account .algobot-account-summary{padding:0}.sidebar-user{position:relative}.sidebar-user-actions{position:absolute;top:9px;right:9px;z-index:3;display:flex;align-items:center;justify-content:center}.sidebar-user-actions form{margin:0}.sidebar-user-actions button{width:36px;height:36px;border:1px solid var(--line);background:#132a49;color:var(--text);border-radius:10px;cursor:pointer;display:grid;place-items:center}.sidebar-user-actions button:hover{border-color:var(--accent);filter:brightness(1.12)}.sidebar-user-actions .material-symbols-rounded{font-size:19px;line-height:1}
+      .algobot-account-summary{display:flex;align-items:center;gap:9px;min-width:0;font-size:12px}.algobot-account-avatar{width:34px;height:34px;flex:0 0 34px;border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;justify-content:center;background:#132a49;border:1px solid var(--line);font-weight:800}.algobot-account-avatar.small{width:32px;height:32px;flex-basis:32px}.algobot-account-copy{display:grid;min-width:0;line-height:1.25}.algobot-account-copy strong,.algobot-account-copy span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.algobot-account-copy span{color:var(--muted);font-size:11px}.algobot-account-switch{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:#132a49;color:var(--text);border-radius:9px;padding:7px 9px;font-size:11px;cursor:pointer;white-space:nowrap}.algobot-account-switch:disabled{opacity:.5;cursor:not-allowed}.algobot-switch-avatar{width:18px;height:18px;border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;justify-content:center;background:#07111f;border:1px solid var(--line);font-size:9px;font-weight:800}.sidebar-user{position:relative!important;display:block!important;width:100%!important;padding:14px 0 0!important;margin-top:14px!important}.algobot-sidebar-account{display:grid;width:100%;min-width:0;box-sizing:border-box;background:linear-gradient(180deg,#10233dcc,#0b1728ee);border:1px solid var(--line);border-radius:16px;padding:14px 58px 14px 14px;position:relative;overflow:visible}.algobot-account-fresh{color:var(--muted);font-size:10px}.algobot-account-error{color:var(--muted);font-size:11px}.algobot-sidebar-account .algobot-account-switch{width:100%}.algobot-sidebar-account .algobot-account-summary{padding:0}.sidebar-user-actions{position:absolute!important;top:25px!important;right:12px!important;z-index:20!important;display:flex!important;align-items:center!important;justify-content:center!important;width:36px!important;height:36px!important;padding:0!important;margin:0!important}.sidebar-user-actions form{margin:0!important;width:100%;height:100%}.sidebar-user-actions button{width:36px!important;height:36px!important;box-sizing:border-box;border:1px solid var(--line);background:#132a49;color:var(--text);border-radius:10px;cursor:pointer;display:grid;place-items:center;padding:0!important}.sidebar-user-actions button:hover{border-color:var(--accent);filter:brightness(1.12)}.sidebar-user-actions .material-symbols-rounded{font-size:19px;line-height:1}.algobot-logout-backdrop{position:fixed;inset:0;z-index:9998;background:rgba(2,8,18,.68);backdrop-filter:blur(5px);display:grid;place-items:center;padding:20px}.algobot-logout-dialog{width:min(420px,calc(100vw - 40px));box-sizing:border-box;background:#0d1a2b;border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.45);padding:24px;color:var(--text)}.algobot-logout-dialog h2{margin:0 0 8px;font-size:18px}.algobot-logout-dialog p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}.algobot-logout-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}.algobot-logout-actions button{min-width:90px;padding:9px 14px;border-radius:10px;border:1px solid var(--line);background:#132a49;color:var(--text);cursor:pointer}.algobot-logout-actions .confirm{background:var(--accent);color:#07111f;border-color:var(--accent);font-weight:700}
+      @media(max-width:800px){.sidebar-user-actions{top:25px!important;right:10px!important}.algobot-sidebar-account{padding-right:56px}.algobot-logout-backdrop{padding:16px}}
     `; document.head.appendChild(s);
+  }
+  function placeLogout(){
+    const side=$('.sidebar-user'); const account=$('[data-sidebar-account]',side); const actions=$('.sidebar-user-actions',side);
+    if(!side||!account||!actions)return;
+    if(actions.parentElement!==account) account.appendChild(actions);
+    actions.style.top='14px'; actions.style.right='12px';
   }
   function mount(){
     ensureMaterialSymbols();
@@ -48,6 +55,7 @@
     let accountNode=$('[data-sidebar-account]',side);
     if(!accountNode){accountNode=document.createElement('div');accountNode.className='algobot-sidebar-account';accountNode.dataset.sidebarAccount='';side.insertBefore(accountNode,side.firstChild)}
     side.querySelectorAll('.sidebar-user > .algobot-sidebar-account').forEach((n,i)=>{if(i>0)n.remove()});
+    placeLogout();
   }
   async function selectAccount(id){
     const target=accounts.find(a=>String(a.id)===String(id)); if(!target||target.switch_enabled!==true)return;
@@ -68,6 +76,7 @@
     }else side.innerHTML='<div class="algobot-account-error">No connected broker account</div>';
     const global=$('[data-global-connection]'); if(global){const ok=!!a?.is_connected;global.classList.toggle('connected',ok);global.classList.toggle('error',!ok);global.innerHTML=`<i></i><span>${safe(a?`${a.broker?.name||a.broker_name||'Broker'} · ${a.broker_account_id||a.account_id} · ${t.toUpperCase()}`:'No connected broker account')}</span>`}
     document.querySelectorAll('[data-account-switch]').forEach(b=>b.onclick=()=>selectAccount(opposite?.id));
+    placeLogout();
   }
   async function syncAccounts(){
     if(accountBusy)return accounts; accountBusy=true;
@@ -95,4 +104,37 @@
     setInterval(()=>{if(document.visibilityState==='visible')syncAccounts()},30000);
   }
   window.addEventListener('DOMContentLoaded',boot,{once:true});
+})();
+
+(() => {
+  const initLogoutConfirmation = () => {
+    const forms = [...document.querySelectorAll('[data-logout-form]')];
+    if (!forms.length || document.body.dataset.logoutConfirmationReady === 'true') return;
+    document.body.dataset.logoutConfirmationReady = 'true';
+    const close = () => { const modal = document.querySelector('.algobot-logout-backdrop'); if (modal) modal.remove(); };
+    const open = form => {
+      if (document.querySelector('.algobot-logout-backdrop')) return;
+      const backdrop = document.createElement('div');
+      backdrop.className = 'algobot-logout-backdrop';
+      backdrop.innerHTML = `<div class="algobot-logout-dialog" role="dialog" aria-modal="true" aria-labelledby="algobot-logout-title"><h2 id="algobot-logout-title">Log out of AlgoBot?</h2><p>Your current workspace session will be ended. You can sign back in at any time.</p><div class="algobot-logout-actions"><button type="button" class="cancel">Cancel</button><button type="button" class="confirm">Log out</button></div></div>`;
+      document.body.appendChild(backdrop);
+      const cancel = backdrop.querySelector('.cancel');
+      const confirm = backdrop.querySelector('.confirm');
+      cancel.addEventListener('click', close);
+      backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+      confirm.addEventListener('click', () => {
+        close();
+        form.dataset.logoutConfirmed = 'true';
+        if (typeof form.requestSubmit === 'function') form.requestSubmit(); else form.submit();
+      });
+      document.addEventListener('keydown', function esc(e){ if(e.key==='Escape'){close();document.removeEventListener('keydown',esc);} }, {once:true});
+      cancel.focus();
+    };
+    forms.forEach(form => form.addEventListener('submit', e => {
+      if (form.dataset.logoutConfirmed === 'true') { delete form.dataset.logoutConfirmed; return; }
+      e.preventDefault();
+      open(form);
+    }));
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initLogoutConfirmation, {once:true}); else initLogoutConfirmation();
 })();
