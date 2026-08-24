@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, permissions, decorators, response, status
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
 from .serializers import *
@@ -26,6 +27,7 @@ class BrokerViewSet(viewsets.ReadOnlyModelViewSet):
 class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BrokerAccountSerializer
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
         return (
