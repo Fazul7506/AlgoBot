@@ -2,33 +2,59 @@ name: Production Validation
 
 on:
   push:
-    branches: [main, refactor/frontend-production-foundation]
+    branches: [main, hotfix/broker-auth-icons-ci-sync]
   pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DJANGO_ENV: development
+      SECRET_KEY: ci-test-secret-key
+      DEBUG: "True"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout current project tree
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install dependencies
-        run: pip install -r requirements/base.txt
-      - name: Django checks and tests
-        env:
-          DJANGO_ENV: development
-          SECRET_KEY: ci-test-secret-key
-          DEBUG: "True"
-        run: |
-          python manage.py check
-          python manage.py makemigrations --noinput
-          python manage.py makemigrations --check
-          python manage.py migrate --noinput
-          python manage.py test
-      - name: Static asset validation
-        env:
-          DJANGO_ENV: development
-          SECRET_KEY: ci-test-secret-key
-          DEBUG: "True"
+          cache: pip
+          cache-dependency-path: requirements/base.txt
+
+      - name: Install project dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements/base.txt
+
+      - name: Compile Python sources
+        run: python -m compileall -q .
+
+      - name: Django system checks
+        run: python manage.py check
+
+      - name: Verify migrations are committed
+        run: python manage.py makemigrations --check --dry-run --noinput
+
+      - name: Apply migrations
+        run: python manage.py migrate --noinput
+
+      - name: Run Django test suite
+        run: python manage.py test --noinput --parallel 1
+
+      - name: Validate static assets
         run: python manage.py collectstatic --noinput --clear
+
+      - name: Verify icon runtime asset is tracked
+        run: test -f static/js/icon_runtime_guard.js
