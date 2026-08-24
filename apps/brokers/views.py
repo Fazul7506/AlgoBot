@@ -20,16 +20,12 @@ def _run_bounded(coro, timeout=8.0):
 
 
 class JWTAuthenticationRequired(APIException):
-    """Return an explicit 401 for anonymous broker API requests."""
-
     status_code = status.HTTP_401_UNAUTHORIZED
     default_detail = 'Authentication credentials were not provided.'
     default_code = 'not_authenticated'
 
 
 class JWTAuthenticatedPermission(permissions.IsAuthenticated):
-    """Require authentication while preserving a deterministic 401 response."""
-
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             raise JWTAuthenticationRequired()
@@ -81,10 +77,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
             BrokerAccount.objects.filter(user=request.user).update(is_preferred=False)
             account.is_preferred = True
             account.save(update_fields=['is_preferred'])
-        return response.Response({
-            'switch_enabled': True,
-            'account': BrokerAccountSerializer(account).data,
-        })
+        return response.Response({'switch_enabled': True, 'account': BrokerAccountSerializer(account).data})
 
     @decorators.action(detail=True, methods=['post'])
     def sync(self, request, pk=None):
@@ -107,11 +100,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
                 {'detail': 'Broker synchronization failed; the last known account data was preserved.', 'broker_status': 'error', 'error_code': exc.__class__.__name__},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
-        return response.Response({
-            'source': f'{synced.broker.broker_type}_authorize',
-            'account': BrokerAccountSerializer(synced).data,
-            'broker_data': broker_data,
-        })
+        return response.Response({'source': f'{synced.broker.broker_type}_authorize', 'account': BrokerAccountSerializer(synced).data, 'broker_data': broker_data})
 
 
 class BrokerConnectionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -186,3 +175,50 @@ class BrokerHealthViewSet(viewsets.ViewSet):
             'preferred_account_id': preferred.id if preferred else None,
             'switch_enabled': settings.ENABLE_BROKER_ACCOUNT_SWITCH,
             'source': 'broker_accounts',
+        })
+
+
+@decorators.api_view(['POST'])
+@decorators.permission_classes([JWTAuthenticatedPermission])
+@decorators.authentication_classes([JWTAuthentication])
+def connect_broker(request):
+    broker_id = request.data.get('broker_id') or request.data.get('broker')
+    account_id = request.data.get('account_id')
+    if not broker_id or not account_id:
+        return response.Response({'detail': 'broker_id and account_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
+    broker = get_object_or_404(Broker, pk=broker_id)
+    account = get_object_or_404(BrokerAccount, pk=account_id, user=request.user, broker=broker)
+    try:
+        connection = _run_bounded(BrokerConnectionService().connect(broker, account), timeout=8.0)
+    except BrokerAuthenticationError as exc:
+        return response.Response({'detail': str(exc), 'status': 'credentials_expired'}, status=status.HTTP_401_UNAUTHORIZED)
+    except BrokerConnectionError as exc:
+        return response.Response({'detail': str(exc), 'status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except BrokerRoutingError as exc:
+        return response.Response({'detail': str(exc), 'status': 'blocked'}, status=status.HTTP_409_CONFLICT)
+    except asyncio.TimeoutError:
+        return response.Response({'detail': 'Broker connection timed out.', 'status': 'timeout'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
+    return response.Response({'connection': BrokerConnectionSerializer(connection).data, 'account': BrokerAccountSerializer(account).data})
+
+
+@decorators.api_view(['POST'])
+@decorators.permission_classes([JWTAuthenticatedPermission])
+@decorators.authentication_classes([JWTAuthentication])
+def disconnect_broker(request):
+    broker_id = request.data.get('broker_id') or request.data.get('broker')
+    account_id = request.data.get('account_id')
+    if not broker_id or not account_id:
+        return response.Response({'detail': 'broker_id and account_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
+    broker = get_object_or_404(Broker, pk=broker_id)
+    account = get_object_or_404(BrokerAccount, pk=account_id, user=request.user, broker=broker)
+    try:
+        connection = _run_bounded(BrokerConnectionService().disconnect(broker, account), timeout=8.0)
+    except BrokerAuthenticationError as exc:
+        return response.Response({'detail': str(exc), 'status': 'credentials_expired'}, status=status.HTTP_401_UNAUTHORIZED)
+    except BrokerConnectionError as exc:
+        return response.Response({'detail': str(exc), 'status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except BrokerRoutingError as exc:
+        return response.Response({'detail': str(exc), 'status': 'blocked'}, status=status.HTTP_409_CONFLICT)
+    except asyncio.TimeoutError:
+        return response.Response({'detail': 'Broker disconnection timed out.', 'status': 'timeout'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
+    return response.Response({'connection': BrokerConnectionSerializer(connection).data, 'account': BrokerAccountSerializer(account).data})
