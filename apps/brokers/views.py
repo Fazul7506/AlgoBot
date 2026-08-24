@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, permissions, decorators, response, status
+from rest_framework.exceptions import NotAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
@@ -18,6 +19,15 @@ def _run_bounded(coro, timeout=8.0):
     return asyncio.run(runner())
 
 
+class JWTAuthenticatedPermission(permissions.IsAuthenticated):
+    """Return a deterministic 401 for anonymous API requests."""
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            raise NotAuthenticated()
+        return True
+
+
 class BrokerViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Broker.objects.all()
     serializer_class = BrokerSerializer
@@ -26,7 +36,7 @@ class BrokerViewSet(viewsets.ReadOnlyModelViewSet):
 
 class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BrokerAccountSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [JWTAuthenticatedPermission]
     authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
