@@ -1,6 +1,6 @@
 # AlgoBot Frontend Production Refactor Master Contract
 
-Status: **PHASE 6 COMPLETE AND WORKING**
+Status: **PHASE 7 COMPLETE AND WORKING**
 
 Branch: `refactor/frontend-production-foundation`
 Long-lived PR: `#17`
@@ -45,8 +45,8 @@ Target: **L5 Production**. Foundational surfaces may reach **L6 Reference**.
 4. `templates/base.html` — **COMPLETE AND WORKING**
 5. Broker connection — **COMPLETE AND WORKING**
 6. Dashboard — **COMPLETE AND WORKING**
-7. Portfolio/Positions — NEXT
-8. Orders
+7. Portfolio/Positions — **COMPLETE AND WORKING**
+8. Orders — NEXT
 9. Trade history
 10. Market/watchlist
 11. Charts
@@ -59,41 +59,37 @@ Target: **L5 Production**. Foundational surfaces may reach **L6 Reference**.
 18. Global consistency pass
 19. Production E2E validation
 
-## Phase 1 — state/data architecture
+## Completed phases
 
-Implemented globally:
+### Phase 1 — state/data architecture
 
-- `window.AlgoBotBrokerState`
-- lifecycle states: `NO_BROKER`, `CONNECTING`, `CONNECTED`, `SYNCING`, `READY`, `DEGRADED`, `DISCONNECTED`, `RECONNECTING`, `ERROR`
-- broker/account/balance/position/order/trade/market/strategy/automation/notification state
-- subscriptions and `algobot:state-changed`
-- `window.AlgoBotFrontendData`
-- shared backend request wrapper, broker account retrieval/synchronization, connected-broker guard and broker-event normalization
-- bridge from `live_broker_ui.js` to canonical state
+Canonical broker lifecycle/state contract, centralized frontend data contract, connected-broker guard, broker event normalization and bridge from the existing live broker UI.
 
-## Phase 2 — credential/hardcoded-data elimination
+### Phase 2 — credential/hardcoded-data elimination
 
-Implemented credential-pattern audit, browser payload sanitization, removal of credential-bearing fields from browser account JSON, explicit `unknown` account type, connection-first account switching and payload guard ordering.
+Credential-pattern audit, browser payload sanitization, no silent demo fallback, connection-first switching and credential-bearing field removal before browser consumption.
 
-## Phase 3 — shared design system
+### Phase 3 — shared design system
 
-Implemented `static/css/design_system.css` with shared spacing/radius/surface/text/border tokens, semantic broker/status states, cards, buttons, fields, state panels, skeletons, focus, mobile sizing and reduced-motion behavior.
+`static/css/design_system.css` establishes semantic tokens, status states, cards, buttons, fields, state panels, skeletons, focus, mobile sizing and reduced-motion behavior.
 
-## Phase 4 — base template production shell
+### Phase 4 — base template production shell
 
-Implemented `static/css/base_shell.css`, `static/js/base_shell.js`, `static/js/core/api_execution_guard.js`, dependency-ordered global bootstrap, extracted inline shell styles/runtime guards, centralized navigation/theme/global broker indicator, and preserved page extension points.
+`static/css/base_shell.css`, `static/js/base_shell.js`, `static/js/core/api_execution_guard.js`, dependency-ordered bootstrap, extracted inline shell styles/runtime guards and centralized navigation/theme/global broker indicator.
 
-## Phase 5 — broker connection
+### Phase 5 — broker connection
 
-Implemented generic broker-backed connection page, canonical connection status UI, backend broker catalog, broker-confirmed account type enforcement, and targeted connection contract tests.
+Generic broker-backed connection template, canonical connection status UI, backend broker catalog, broker-confirmed account-type enforcement and targeted API tests.
 
-## Phase 6 — dashboard
+### Phase 6 — dashboard
 
-Implemented `static/js/dashboard.js` and refactored `templates/core/dashboard.html` so account KPIs come from canonical broker state, broker-backed positions/orders/market data use the centralized frontend contract, no-broker/disconnected states are explicit, signals use a backend-selected broker symbol, and kill-switch success is shown only after backend confirmation.
+Broker-state KPIs, broker-gated positions/orders/markets, symbol-scoped signals, backend-confirmed kill switch, external dashboard controller and template contract test. P/L remains unavailable until the canonical backend exposes broker-confirmed P/L.
 
-Net P/L remains unavailable until the canonical backend account contract exposes a broker-confirmed P/L field; no unrelated local trade statistic is substituted.
+### Phase 7 — portfolio/positions
 
-See `docs/Architecture/phase-6-dashboard.md`.
+`static/js/positions.js` and `static/js/portfolio_dashboard.js` now gate live positions/portfolio data on broker connectivity. Positions are sourced from `/api/positions/open/`. Portfolio exposure/P/L/allocation are derived only from broker-backed account and position data. Targeted template tests were added.
+
+See `docs/Architecture/phase-7-portfolio-positions.md`.
 
 ## Inventory
 
