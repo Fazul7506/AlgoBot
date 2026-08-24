@@ -1,5 +1,52 @@
 {% extends "base.html" %}
-{% block title %}Notifications Templates | AlgoBot Enterprise{% endblock %}
+{% load static %}
+{% block title %}Notifications | AlgoBot Enterprise{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="Notifications Templates" module="Notifications" page_id="notifications-templates" %}
+<section class="page-shell" data-page-id="notifications-center" aria-labelledby="notifications-title">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Notifications</p>
+      <h1 id="notifications-title">Notification Center</h1>
+      <p class="page-subtitle">Backend-confirmed events, delivery status and notification preferences.</p>
+    </div>
+    <span id="notification-connection-status" class="status-badge" data-state="disconnected">Checking broker…</span>
+  </header>
+
+  <div class="notification-layout">
+    <section class="surface-card" aria-labelledby="notification-list-title">
+      <div class="surface-card__header">
+        <h2 id="notification-list-title">Recent notifications</h2>
+        <span class="muted">No fabricated client-side events</span>
+      </div>
+      <div id="notification-list" class="notification-list" aria-live="polite"></div>
+      <div id="notification-empty" class="empty-state" hidden>
+        <h3>No notifications yet</h3>
+        <p>Notifications appear here after the backend records a real event.</p>
+      </div>
+    </section>
+
+    <aside class="surface-card" aria-labelledby="notification-preferences-title">
+      <div class="surface-card__header">
+        <h2 id="notification-preferences-title">Preferences</h2>
+      </div>
+      <form id="notification-preference-form">
+        <label class="form-field">
+          <span>Channel</span>
+          <select name="channel" required>
+            <option value="in_app">In-app</option>
+            <option value="email">Email</option>
+            <option value="webhook">Webhook</option>
+          </select>
+        </label>
+        <label class="form-field form-field--checkbox">
+          <input type="checkbox" name="enabled" checked>
+          <span>Enabled</span>
+        </label>
+        <button type="submit" class="button button--primary">Save preference</button>
+        <p id="notification-feedback" class="form-feedback" role="status"></p>
+      </form>
+    </aside>
+  </div>
+</section>
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/notifications_center.js' %}" defer></script>{% endblock %}
