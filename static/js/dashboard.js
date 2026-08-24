@@ -60,20 +60,23 @@
     }
 
     try {
-      const [positions, orders, signals, markets] = await Promise.allSettled([
+      const [positions, orders, markets] = await Promise.allSettled([
         window.AlgoBotFrontendData.request('/api/positions/open/'),
         window.AlgoBotFrontendData.request('/api/orders/'),
-        window.AlgoBotFrontendData.request('/api/dashboard/signals/?limit=8'),
         window.AlgoBotFrontendData.request('/api/market/snapshots/all_snapshots/')
       ]);
       const pos = positions.status === 'fulfilled' ? list(positions.value).slice(0, 8) : [];
       const ord = orders.status === 'fulfilled' ? list(orders.value).slice(0, 8) : [];
-      const sig = signals.status === 'fulfilled' ? list(signals.value).slice(0, 8) : [];
       const mkt = markets.status === 'fulfilled' ? list(markets.value).slice(0, 8) : [];
+      const selectedSymbol = mkt[0]?.symbol?.symbol || mkt[0]?.symbol || mkt[0]?.display_symbol || '';
+      const signals = selectedSymbol
+        ? await window.AlgoBotFrontendData.request(`/api/dashboard/signals/?limit=8&symbol=${encodeURIComponent(selectedSymbol)}`).catch(() => null)
+        : null;
+      const sig = signals ? list(signals).slice(0, 8) : [];
 
       setHtml('[data-dashboard-positions]', pos.length ? pos.map(x => `<div class="mini-row"><strong>${esc(x.symbol)}</strong><span>${esc(x.direction || x.side || '')}</span><b>${esc(x.profit ?? x.pnl ?? x.profit_loss ?? 'Unavailable')}</b></div>`).join('') : empty('No open positions reported by the backend.'));
       setHtml('[data-dashboard-orders]', ord.length ? ord.map(x => `<div class="mini-row"><strong>${esc(x.symbol)}</strong><span>${esc(x.direction || x.side || '')}</span><b>${esc(x.status || 'Unknown')}</b></div>`).join('') : empty('No orders reported by the backend.'));
-      setHtml('[data-dashboard-signals]', sig.length ? sig.map(x => `<div class="signal-row"><strong>${esc(x.symbol)} ${esc(x.direction || x.signal || 'HOLD')}</strong><span>${esc(x.strategy || '')}</span><b>${x.confidence != null ? Number(x.confidence).toFixed(0) + '%' : 'Unavailable'}</b></div>`).join('') : empty('No recent backend signals.'));
+      setHtml('[data-dashboard-signals]', sig.length ? sig.map(x => `<div class="signal-row"><strong>${esc(x.symbol)} ${esc(x.direction || x.signal || 'HOLD')}</strong><span>${esc(x.strategy || '')}</span><b>${x.confidence != null ? Number(x.confidence).toFixed(0) + '%' : 'Unavailable'}</b></div>`).join('') : empty(selectedSymbol ? 'No recent backend signals for the selected broker symbol.' : 'No broker symbol is available yet.'));
       setHtml('[data-dashboard-markets]', mkt.length ? mkt.map(x => `<div class="mini-row"><strong>${esc(x.symbol?.symbol || x.symbol || 'Market')}</strong><span>Bid ${esc(x.bid_price ?? x.bid ?? 'Unavailable')} · Ask ${esc(x.ask_price ?? x.ask ?? 'Unavailable')}</span><b>${esc(x.price ?? x.last_price ?? 'Unavailable')}</b></div>`).join('') : empty('No market data reported by the backend.'));
       const account = state?.account;
       setHtml('[data-dashboard-brokers]', account ? `<span><b></b>${esc(account.broker?.name || account.broker_name || 'Broker')} · ${esc(account.broker_account_id || account.account_id)} · ${state.status}</span>` : empty('No connected broker account'));
