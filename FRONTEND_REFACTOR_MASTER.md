@@ -1,6 +1,6 @@
 # AlgoBot Frontend Production Refactor Master Contract
 
-Status: **PHASE 4 COMPLETE AND WORKING**
+Status: **PHASE 5 COMPLETE AND WORKING**
 
 Branch: `refactor/frontend-production-foundation`
 Long-lived PR: `#17`
@@ -43,8 +43,8 @@ Target: **L5 Production**. Foundational surfaces may reach **L6 Reference**.
 2. Credential and hardcoded-data elimination — **COMPLETE AND WORKING**
 3. Shared design system — **COMPLETE AND WORKING**
 4. `templates/base.html` — **COMPLETE AND WORKING**
-5. Broker connection — NEXT
-6. Dashboard
+5. Broker connection — **COMPLETE AND WORKING**
+6. Dashboard — NEXT
 7. Portfolio/Positions
 8. Orders
 9. Trade history
@@ -106,9 +106,23 @@ Implemented:
 - dependency-ordered global broker/state/security/bootstrap scripts
 - extracted inline shell styles and runtime guards
 - centralized mobile navigation, sidebar collapse, theme control and global broker indicator
-- retained `extra_css` and `extra_js` extension points for page-specific needs
+- retained `extra_css` and `extra_js` extension points
 
 See `docs/Architecture/phase-4-base-template.md`.
+
+## Phase 5 — broker connection
+
+Implemented:
+
+- rebuilt `templates/broker/connect_broker.html` around generic broker-backed connection state
+- broker catalog rendered from backend context
+- canonical state-driven connection status UI
+- `static/js/broker_connection_page.js`
+- backend account type hardening: unconfirmed is `unknown`, never `demo`
+- switching requires broker-confirmed account type
+- targeted API tests for the connection contract
+
+See `docs/Architecture/phase-5-broker-connection.md`.
 
 ## Inventory
 
