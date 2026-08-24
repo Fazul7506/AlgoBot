@@ -7,7 +7,7 @@ class DashboardTemplateContractTests(TestCase):
     def test_authenticated_dashboard_does_not_embed_trading_values(self):
         user = get_user_model().objects.create_user("dashboard-owner", "dashboard@example.com", "pass")
         self.client.force_login(user)
-        response = self.client.get(reverse("dashboard"))
+        response = self.client.get(reverse("dashboard_page"))
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn("Broker-backed dashboard", content)
