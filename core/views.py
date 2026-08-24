@@ -112,19 +112,40 @@ def deriv_login(request):
     if not is_valid:
         oauth_logger.error('deriv_oauth_misconfigured', extra={'error': error_msg})
         return HttpResponse(f'Deriv OAuth is not configured: {error_msg}', status=503)
+
+    # The OAuth state is stored in the browser session and must survive the
+    # round-trip through Deriv. If the user entered through a different host
+    # or scheme (for example HTTP, www, or an alternate deployment hostname),
+    # the Secure session cookie can be absent at the callback and every state
+    # check will fail. Canonicalize BEFORE creating any OAuth state so the
+    # session that stores state is guaranteed to belong to the callback host.
+    redirect_uri = settings.DERIV_REDIRECT_URI
+    configured = urlparse(redirect_uri)
+    request_scheme = request.scheme
+    request_host = request.get_host()
+    if configured.scheme and configured.netloc and (request_scheme != configured.scheme or request_host != configured.netloc):
+        canonical_url = f'{configured.scheme}://{configured.netloc}{request.path}'
+        if request.GET:
+            canonical_url = f'{canonical_url}?{request.GET.urlencode()}'
+        oauth_logger.info('deriv_oauth_canonicalized', extra={'from_host': request_host, 'from_scheme': request_scheme, 'to_host': configured.netloc, 'to_scheme': configured.scheme})
+        return redirect(canonical_url)
+
     code_verifier, code_challenge = DerivOAuthService.generate_pkce_pair()
     state = DerivOAuthService.generate_state()
-    DerivOAuthService.store_oauth_state_in_session(request, state, code_verifier, settings.DERIV_REDIRECT_URI)
+    DerivOAuthService.store_oauth_state_in_session(request, state, code_verifier, redirect_uri)
     auth_url = DerivOAuthService.create_authorization_url(state, code_challenge)
-    oauth_logger.info('deriv_oauth_login_initiated', extra={'redirect_host': urlparse(settings.DERIV_REDIRECT_URI).netloc})
+    oauth_logger.info('deriv_oauth_login_initiated', extra={'redirect_host': configured.netloc})
     return redirect(auth_url)
 
 
 def callback(request):
     received_state = request.GET.get('state'); code = request.GET.get('code'); error = request.GET.get('error'); error_description = request.GET.get('error_description')
     if error: return HttpResponse(f'OAuth error: {error}: {error_description}' if error_description else f'OAuth error: {error}', status=400)
-    is_valid, validation_error = DerivOAuthService.validate_state(received_state, request.session.get('oauth_state'))
-    if not is_valid: return HttpResponse(f'OAuth state validation failed: {validation_error}', status=400)
+    expected_state = request.session.get('oauth_state')
+    is_valid, validation_error = DerivOAuthService.validate_state(received_state, expected_state)
+    if not is_valid:
+        oauth_logger.warning('deriv_oauth_state_validation_failed', extra={'reason': validation_error, 'callback_host': request.get_host(), 'has_received_state': bool(received_state), 'has_expected_state': bool(expected_state)})
+        return HttpResponse('The secure broker connection session expired or was interrupted. Please restart the connection.', status=400)
     if not code: return HttpResponse('No authorization code received.', status=400)
     is_valid, validation_error = DerivOAuthService.validate_pkce(request.session.get('pkce_verifier'), request.session.get('oauth_redirect_uri'), settings.DERIV_REDIRECT_URI)
     if not is_valid: return HttpResponse(f'OAuth PKCE validation failed: {validation_error}', status=400)
