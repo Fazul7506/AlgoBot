@@ -59,7 +59,7 @@
       ws.addEventListener('open', () => {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
         ws.send(JSON.stringify({ticks: symbol, subscribe: 1}));
-        $('#terminal-status')?.setAttribute('title', `Connecting live broker stream for ${symbol}`);
+        $('#terminal-status')?.setAttribute('title', `Live broker stream · ${symbol}`);
       });
       ws.addEventListener('message', event => {
         try {
@@ -90,9 +90,7 @@
     }
   }
 
-  function start() {
-    if (document.body.dataset.authenticated !== 'true' || !$('#chart') || !$('#symbol')) return;
-    const select = $('#symbol');
+  function bind(select) {
     const startSymbol = select.value;
     if (startSymbol) { loadHistory(startSymbol); connect(startSymbol); }
     select.addEventListener('change', () => {
@@ -106,6 +104,18 @@
       if (document.visibilityState === 'visible' && select.value) connect(select.value);
       if (document.visibilityState !== 'visible') { intentionallyClosed = true; closeSocket(); }
     });
+  }
+
+  function start() {
+    if (document.body.dataset.authenticated !== 'true' || !$('#chart')) return;
+    let attempts = 0;
+    const waitForSymbol = () => {
+      const select = $('#symbol');
+      if (select?.value) return bind(select);
+      attempts += 1;
+      if (attempts < 40) setTimeout(waitForSymbol, 250);
+    };
+    waitForSymbol();
   }
 
   window.addEventListener('DOMContentLoaded', start, {once: true});
