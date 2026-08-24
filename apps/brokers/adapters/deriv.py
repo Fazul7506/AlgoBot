@@ -86,7 +86,7 @@ class DerivAdapter(BrokerAdapter):
 
     async def connect(self):
         account = await self.authenticate()
-        return {"status": "connected", "account_id": account.get("loginid") or account.get("account_id")}
+        return {"status": "connected", "account_id": account.get("loginid") or account.get("account_id"), "is_virtual": account.get("is_virtual"), "avatar_url": account.get("avatar_url")}
 
     async def disconnect(self):
         return {"status": "disconnected"}
@@ -94,8 +94,20 @@ class DerivAdapter(BrokerAdapter):
     async def authenticate(self):
         response = await self._request({"balance": 1, "req_id": 1}, authenticated=True)
         balance = response.get("balance") or {}
-        account_type = str((self.credentials or {}).get("account_type") or "demo").lower()
-        return {"loginid": self._account_id(), "account_id": self._account_id(), "balance": balance.get("balance"), "currency": balance.get("currency"), "is_virtual": account_type == "demo"}
+        loginid = str(balance.get("loginid") or self._account_id())
+        broker_virtual = balance.get("is_virtual")
+        if broker_virtual is None:
+            broker_virtual = response.get("is_virtual")
+        configured_type = str((self.credentials or {}).get("account_type") or "demo").lower()
+        is_virtual = bool(broker_virtual) if broker_virtual is not None else configured_type == "demo"
+        return {
+            "loginid": loginid,
+            "account_id": loginid,
+            "balance": balance.get("balance"),
+            "currency": balance.get("currency"),
+            "is_virtual": is_virtual,
+            "avatar_url": balance.get("avatar_url") or response.get("avatar_url"),
+        }
 
     async def refresh_token(self):
         raise BrokerAuthenticationError("Deriv token refresh must be completed through the OAuth flow")
@@ -115,7 +127,7 @@ class DerivAdapter(BrokerAdapter):
 
     async def get_balance(self):
         account = await self.authenticate()
-        return {"account_id": account["account_id"], "balance": account.get("balance"), "currency": account.get("currency"), "account_type": "demo" if account.get("is_virtual") else "real"}
+        return {"account_id": account["account_id"], "balance": account.get("balance"), "currency": account.get("currency"), "account_type": "demo" if account.get("is_virtual") else "real", "avatar_url": account.get("avatar_url")}
 
     async def get_positions(self):
         return (await self._request({"portfolio": 1}, authenticated=True)).get("portfolio", {}).get("contracts", [])
