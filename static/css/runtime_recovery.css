@@ -1,0 +1,75 @@
+/* Final shell invariants. This file is loaded last so page-specific legacy CSS
+   cannot accidentally disable the document viewport or block core navigation. */
+html {
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-shell main {
+  min-width: 0;
+  min-height: calc(100vh - 64px);
+  overflow: visible;
+}
+
+.app-sidebar {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.sidebar-backdrop[hidden] {
+  display: none !important;
+}
+
+body.mobile-nav-open {
+  overflow: hidden;
+}
+
+@media (max-width: 800px) {
+  body.mobile-nav-open {
+    overflow: hidden;
+  }
+
+  .mobile-menu-button {
+    display: grid !important;
+  }
+
+  .app-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: min(300px, 88vw) !important;
+    transform: translateX(-105%);
+    transition: transform .2s ease;
+    z-index: 1000;
+  }
+
+  .app-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .app-shell,
+  .app-shell.sidebar-collapsed,
+  .app-sidebar.is-collapsed + .app-shell {
+    margin-left: 0 !important;
+  }
+
+  .app-shell main {
+    min-height: calc(100vh - 58px);
+  }
+}
+
+@media (min-width: 801px) {
+  .app-sidebar.is-open {
+    transform: none;
+  }
+}
