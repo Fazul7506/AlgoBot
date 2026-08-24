@@ -1,9 +1,12 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Open positions | AlgoBot{% endblock %}
+{% block mobile_title %}Positions{% endblock %}
 {% block content %}
 <section class="data-page panel" data-data-page="positions-page" data-api-root="/api/">
-<header class="page-heading"><div><p class="eyebrow">Trading</p><h1>Open positions</h1><p>Live records from the AlgoBot backend.</p></div><div><a class="btn primary" href="/trading/">Open trading terminal</a></div></header>
-<div class="kpi-grid compact"><article class="kpi-card"><span>Total records</span><strong data-record-count>—</strong></article><article class="kpi-card"><span>Status</span><strong data-page-status>Loading</strong></article><article class="kpi-card"><span>Last update</span><strong data-page-updated>—</strong></article><article class="kpi-card"><span>Risk</span><strong data-page-risk>—</strong></article></div>
-<section class="panel"><div class="panel-head"><div><h2>Live data</h2><p>Search, inspect and refresh backend records.</p></div><input type="search" data-page-search placeholder="Search"></div><div class="table-wrap"><table class="enterprise-table" data-page-table><thead></thead><tbody><tr><td>Loading…</td></tr></tbody></table></div></section>
+<header class="page-heading"><div><p class="eyebrow">Broker portfolio</p><h1>Open positions</h1><p>Live positions are shown only from the authenticated broker-backed API.</p></div><div><a class="btn primary" href="/trading/">Open trading terminal</a></div></header>
+<div class="kpi-grid compact"><article class="kpi-card"><span>Total positions</span><strong data-record-count>—</strong></article><article class="kpi-card"><span>Status</span><strong data-page-status>Waiting</strong></article><article class="kpi-card"><span>Last update</span><strong data-page-updated>—</strong></article><article class="kpi-card"><span>Gross P/L magnitude</span><strong data-page-risk>—</strong></article></div>
+<section class="panel"><div class="panel-head"><div><h2>Broker positions</h2><p>Search and inspect the current broker-backed position set.</p></div><input type="search" data-page-search placeholder="Search positions" aria-label="Search positions"></div><div class="table-wrap"><table class="enterprise-table" data-page-table><thead></thead><tbody><tr><td>Connect a broker to load positions.</td></tr></tbody></table></div></section>
 </section>
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/positions.js' %}" defer></script>{% endblock %}
