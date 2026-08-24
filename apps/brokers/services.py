@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from django.conf import settings
 from django.utils import timezone
 from . import constants as c
-from .exceptions import BrokerRoutingError
+from .exceptions import BrokerRoutingError, BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
 
 class BrokerRegistry:
@@ -55,7 +55,7 @@ class BrokerConnectionService:
         return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
     async def disconnect(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        await BrokerRegistry().adapter(broker,account).disconnect(); account.status='disconnected'; account.save(update_fields=['status']); return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'disconnected'})[0]
+        await BrokerRegistry().adapter(broker,account).disconnect(); account.status='disabled'; account.save(update_fields=['status']); return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'disconnected'})[0]
     async def heartbeat(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
         adapter=BrokerRegistry().adapter(broker,account); data=await adapter.health_check(); latency=await adapter.ping(); return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data})[0]
@@ -77,9 +77,11 @@ class SmartOrderRouter:
             conn=BrokerConnection.objects.filter(broker=a.broker).order_by('-updated_at').first(); return (conn.latency if conn else 999999,not a.is_preferred,a.broker.name)
         return sorted(candidates,key=score)[0]
 class OrderManagementSystem:
+    TERMINAL_STATUSES={'filled','executed','partially_filled','rejected','cancelled','expired','closed','failed','reconciled'}
     def create(self,user,**data):
         account=data.get('account') or SmartOrderRouter().route(user,data.get('symbol'))
         if account.user_id!=user.id: raise BrokerRoutingError('The selected broker account does not belong to this user')
+        if account.status!='active' or account.broker.status!='active': raise BrokerRoutingError('The selected broker account is not currently connected')
         order=Order.objects.create(user=user,broker=account.broker,account=account,status='created',**{k:v for k,v in data.items() if k!='account'}); order.status='validated'; order.save(update_fields=['status','updated_at']); return order
     def approve(self,order): order.status='approved'; order.save(update_fields=['status','updated_at']); return order
     def queue(self,order): order.status='queued'; order.save(update_fields=['status','updated_at']); return order
@@ -87,12 +89,35 @@ class OrderManagementSystem:
 class ExecutionManagementSystem:
     async def execute(self,order):
         start=time.perf_counter(); order.status='submitted'; order.submitted_at=timezone.now(); order.save(update_fields=['status','submitted_at','updated_at'])
-        try: result=await BrokerRegistry().adapter(order.broker,order.account).place_order(order)
-        except Exception: order.status='rejected'; order.save(update_fields=['status','updated_at']); raise
-        latency=(time.perf_counter()-start)*1000; status='filled' if result.get('status') in ['filled','executed'] else result.get('status','executed'); requested=order.price or Decimal('0'); executed=Decimal(str(result.get('execution_price') or requested or 0)); slippage=executed-requested; order.status=status; order.broker_order_id=result.get('broker_order_id',''); order.executed_at=timezone.now(); order.save(update_fields=['status','broker_order_id','executed_at','updated_at']); return ExecutionReport.objects.create(order=order,execution_price=executed,requested_price=requested,slippage=slippage,latency=result.get('latency',latency),fees=Decimal(str(result.get('fees',0))),status=status,raw_report=result)
+        adapter=BrokerRegistry().adapter(order.broker,order.account)
+        timeout=float(getattr(settings,'BROKER_ORDER_TIMEOUT_SECONDS',20))
+        try:
+            result=await asyncio.wait_for(adapter.place_order(order),timeout=timeout)
+        except asyncio.TimeoutError as exc:
+            order.status='failed'; order.save(update_fields=['status','updated_at'])
+            raise BrokerConnectionError('Broker order placement timed out; no completed execution was confirmed.') from exc
+        except BrokerAuthenticationError:
+            order.status='rejected'; order.save(update_fields=['status','updated_at']); raise
+        except BrokerConnectionError:
+            order.status='failed'; order.save(update_fields=['status','updated_at']); raise
+        except BrokerOrderError:
+            order.status='rejected'; order.save(update_fields=['status','updated_at']); raise
+        except Exception:
+            order.status='failed'; order.save(update_fields=['status','updated_at']); raise
+        latency=(time.perf_counter()-start)*1000; status_value='filled' if result.get('status') in ['filled','executed'] else result.get('status','executed'); requested=order.price or Decimal('0'); executed_value=result.get('execution_price'); executed=Decimal(str(executed_value if executed_value is not None else requested or 0)); slippage=executed-requested; order.status=status_value; order.broker_order_id=str(result.get('broker_order_id','')); update_fields=['status','broker_order_id','updated_at']
+        if status_value in {'filled','executed','partially_filled'}: order.executed_at=timezone.now(); update_fields.append('executed_at')
+        order.save(update_fields=update_fields); return ExecutionReport.objects.create(order=order,execution_price=executed,requested_price=requested,slippage=slippage,latency=result.get('latency',latency),fees=Decimal(str(result.get('fees',0))),status=status_value,raw_report=result)
 class ExecutionEngine:
     def submit(self,user,**data):
         routing=dict(data.get('routing_context') or {})
+        account=data.get('account') or SmartOrderRouter().route(user,data.get('symbol'))
+        client_order_id=str(data.get('client_order_id') or '').strip()
+        if client_order_id:
+            existing=Order.objects.filter(user=user,account=account,client_order_id=client_order_id).order_by('-id').first()
+            if existing:
+                report=existing.execution_reports.order_by('-id').first()
+                if report and existing.status in OrderManagementSystem.TERMINAL_STATUSES: return report
+                raise BrokerRoutingError(f'Duplicate client order id {client_order_id}; the existing order is already being processed.')
         if routing.get('ai_assisted'):
             from apps.ai_engine.services import AIEngine
             from apps.market_data.services import MarketDataService
@@ -108,10 +133,11 @@ class ExecutionEngine:
             if direction in {'BUY','CALL','RISE'} and recommendation.recommendation!='BUY': raise BrokerRoutingError('AI gate rejected a BUY/CALL order')
             if direction in {'SELL','PUT','FALL'} and recommendation.recommendation!='SELL': raise BrokerRoutingError('AI gate rejected a SELL/PUT order')
             routing['ai_decision']={'recommendation':recommendation.recommendation,'confidence':recommendation.confidence,'prediction':analysis['prediction'].prediction}; data['routing_context']=routing
+        data['account']=account
         order=OrderManagementSystem().queue(OrderManagementSystem().approve(OrderManagementSystem().create(user,**data))); return asyncio.run(ExecutionManagementSystem().execute(order))
 class SynchronizationService:
     async def sync_account(self,account):
-        if account.status in {'disconnected','revoked'}: raise BrokerRoutingError('This broker account is not connected')
+        if account.status in {'disabled','suspended'}: raise BrokerRoutingError('This broker account is not connected')
         adapter=BrokerRegistry().adapter(account.broker,account); data=await adapter.get_balance(); fields=[]; broker_account_id=data.get('account_id') or account.account_id
         if broker_account_id and broker_account_id!=account.account_id: account.account_id=broker_account_id; fields.append('account_id')
         for f in ['balance','equity','margin','free_margin','currency']:
@@ -120,8 +146,7 @@ class SynchronizationService:
         if data.get('account_type'): credentials['account_type']=data['account_type']; fields.append('credentials')
         if data.get('avatar_url'): credentials['avatar_url']=str(data['avatar_url']); fields.append('credentials')
         if credentials != (account.credentials or {}) and 'credentials' not in fields: fields.append('credentials')
-        account.credentials=credentials
-        account.status='active'; account.last_synced_at=timezone.now(); fields.extend(['status','last_synced_at']); account.save(update_fields=list(dict.fromkeys(fields)))
+        account.credentials=credentials; account.status='active'; account.last_synced_at=timezone.now(); fields.extend(['status','last_synced_at']); account.save(update_fields=list(dict.fromkeys(fields)))
         BrokerConnection.objects.update_or_create(broker=account.broker,defaults={'status':'connected','last_ping':timezone.now(),'connected_at':timezone.now()}); return account,data
 class ReconciliationService:
     def reconcile_order(self,order,broker_trade=None,repair=True):
