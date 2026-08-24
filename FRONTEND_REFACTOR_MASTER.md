@@ -1,6 +1,6 @@
 # AlgoBot Frontend Production Refactor Master Contract
 
-Status: **PHASE 8 COMPLETE AND WORKING**
+Status: **PHASE 9 COMPLETE AND WORKING**
 
 Branch: `refactor/frontend-production-foundation`
 Long-lived PR: `#17`
@@ -47,8 +47,8 @@ Target: **L5 Production**. Foundational surfaces may reach **L6 Reference**.
 6. Dashboard — **COMPLETE AND WORKING**
 7. Portfolio/Positions — **COMPLETE AND WORKING**
 8. Orders — **COMPLETE AND WORKING**
-9. Trade history — NEXT
-10. Market/watchlist
+9. Trade history — **COMPLETE AND WORKING**
+10. Market/watchlist — NEXT
 11. Charts
 12. Strategies
 13. Automation
@@ -62,19 +62,19 @@ Target: **L5 Production**. Foundational surfaces may reach **L6 Reference**.
 ## Completed phase summaries
 
 ### Phase 1 — state/data architecture
-Canonical broker lifecycle/state contract, centralized frontend data contract, connected-broker guard, broker event normalization and bridge from the existing live broker UI.
+Canonical broker lifecycle/state contract, centralized frontend data contract, connected-broker guard, broker event normalization and live broker UI bridge.
 
 ### Phase 2 — credential/hardcoded-data elimination
-Credential-pattern audit, browser payload sanitization, no silent demo fallback, connection-first switching and credential-bearing field removal before browser consumption.
+Credential-pattern audit, browser payload sanitization, no silent demo fallback and credential-bearing field removal before browser consumption.
 
 ### Phase 3 — shared design system
-`static/css/design_system.css` establishes semantic tokens and shared production primitives.
+Global semantic tokens and reusable production primitives for status, cards, buttons, fields, states, skeletons, focus, mobile sizing and reduced motion.
 
 ### Phase 4 — base template
-Extracted production shell CSS/JS and runtime guards; centralized navigation, theme, global broker indicator and dependency ordering.
+Production shell CSS/JS and runtime guards extracted from `base.html`; centralized navigation/theme/global broker status.
 
 ### Phase 5 — broker connection
-Generic broker-backed connection surface, canonical connection state, backend broker catalog, broker-confirmed account type and targeted tests.
+Generic broker-backed connection surface, canonical connection state, broker catalog, broker-confirmed account type and targeted tests.
 
 ### Phase 6 — dashboard
 Broker-state KPIs, broker-gated positions/orders/markets, symbol-scoped signals, backend-confirmed kill switch and dashboard contract test.
@@ -83,9 +83,12 @@ Broker-state KPIs, broker-gated positions/orders/markets, symbol-scoped signals,
 Broker-gated positions controller and portfolio dashboard. Portfolio exposure/P/L/allocation derive only from broker account and position data.
 
 ### Phase 8 — orders
-Broker-gated execution order controller and order page. Order status is inspected from backend execution records; no frontend mutation can pretend an order was cancelled/filled.
+Broker-gated execution order controller and order page. Order status is inspected from backend execution records; no frontend mutation pretends an order was cancelled/filled.
 
-See `docs/Architecture/phase-8-orders.md`.
+### Phase 9 — trade history
+Added authenticated `/trade-history/`, broker-backed execution history controller, navigation entry and enriched execution report serializer with symbol/direction/broker order context. Targeted template test added.
+
+See `docs/Architecture/phase-9-trade-history.md`.
 
 ## Inventory
 
