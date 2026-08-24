@@ -10,36 +10,59 @@ class BrokerSerializer(serializers.ModelSerializer):
 
 class BrokerAccountSerializer(serializers.ModelSerializer):
     broker = serializers.SerializerMethodField()
+    broker_name = serializers.CharField(source="broker.name", read_only=True)
     broker_account_id = serializers.CharField(source="account_id", read_only=True)
     account_type = serializers.SerializerMethodField()
+    avatar_url = serializers.SerializerMethodField()
+    display_name = serializers.SerializerMethodField()
     is_default = serializers.BooleanField(source="is_preferred", read_only=True)
     is_connected = serializers.SerializerMethodField()
+    data_freshness = serializers.SerializerMethodField()
 
     class Meta:
         model = BrokerAccount
         fields = [
-            "id", "user", "broker", "broker_account_id", "account_id", "account_type",
-            "currency", "balance", "equity", "margin", "free_margin", "status",
-            "is_preferred", "is_default", "is_connected", "last_synced_at", "created_at",
+            "id", "user", "broker", "broker_name", "broker_account_id", "account_id",
+            "account_type", "avatar_url", "display_name", "currency", "balance", "equity",
+            "margin", "free_margin", "status", "is_preferred", "is_default", "is_connected",
+            "last_synced_at", "data_freshness", "created_at",
         ]
         read_only_fields = [
             "user", "balance", "equity", "margin", "free_margin", "last_synced_at",
-            "broker_account_id", "account_type", "is_default", "is_connected",
+            "broker_account_id", "account_type", "avatar_url", "display_name", "is_default",
+            "is_connected", "data_freshness",
         ]
 
     def get_broker(self, obj):
+        metadata = obj.broker.metadata or {}
         return {
             "id": obj.broker_id,
             "name": obj.broker.name,
             "type": obj.broker.broker_type,
             "status": obj.broker.status,
+            "avatar_url": metadata.get("avatar_url") or "",
         }
 
     def get_account_type(self, obj):
         return str((obj.credentials or {}).get("account_type") or "demo").lower()
 
+    def get_avatar_url(self, obj):
+        credentials = obj.credentials or {}
+        metadata = obj.broker.metadata or {}
+        return str(credentials.get("avatar_url") or metadata.get("avatar_url") or "")
+
+    def get_display_name(self, obj):
+        return f"{obj.broker.name} · {obj.account_id}"
+
     def get_is_connected(self, obj):
         return obj.status == "active" and obj.broker.status == "active"
+
+    def get_data_freshness(self, obj):
+        if not obj.last_synced_at:
+            return {"state": "never_synced", "seconds": None}
+        from django.utils import timezone
+        seconds = max(0, int((timezone.now() - obj.last_synced_at).total_seconds()))
+        return {"state": "fresh" if seconds <= 60 else "stale", "seconds": seconds}
 
 
 class BrokerConnectionSerializer(serializers.ModelSerializer):
