@@ -1,13 +1,11 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
+{% load static %}
+{% block title %}Workflow Templates | AlgoBot{% endblock %}
+{% block mobile_title %}Workflow Builder{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Workflow Templates</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
-</section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
+<section class="algobot-shared-page">
+  <header class="enterprise-hero"><div><p class="eyebrow">Automation builder</p><h1>Workflow Templates & Builder</h1><p class="hero-copy">Start from a safe workflow template or define a custom workflow. Broker credentials and secrets never belong in the browser workflow definition.</p></div><div class="hero-actions"><a class="btn" href="/workspace/automation/">Automation</a><a class="btn primary" href="/trading/">Trading terminal</a></div></header>
+  <section data-workflow-root aria-live="polite"><div class="ds-state"><strong>Waiting for broker connection</strong><p>Connect a broker to load and create executable workflows.</p><a class="ds-btn ds-btn--primary" href="/brokers/connect/">Connect broker</a></div></section>
 </section>
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/workflow_templates.js' %}" defer></script>{% endblock %}

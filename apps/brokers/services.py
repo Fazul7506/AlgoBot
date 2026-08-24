@@ -1,6 +1,7 @@
 import asyncio, importlib, time
 from decimal import Decimal
 from types import SimpleNamespace
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.utils import timezone
 from . import constants as c
@@ -88,25 +89,25 @@ class OrderManagementSystem:
     def cancel(self,order): order.status='cancelled'; order.save(update_fields=['status','updated_at']); return order
 class ExecutionManagementSystem:
     async def execute(self,order):
-        start=time.perf_counter(); order.status='submitted'; order.submitted_at=timezone.now(); order.save(update_fields=['status','submitted_at','updated_at'])
+        start=time.perf_counter(); order.status='submitted'; order.submitted_at=timezone.now(); await sync_to_async(order.save)(update_fields=['status','submitted_at','updated_at'])
         adapter=BrokerRegistry().adapter(order.broker,order.account)
         timeout=float(getattr(settings,'BROKER_ORDER_TIMEOUT_SECONDS',20))
         try:
             result=await asyncio.wait_for(adapter.place_order(order),timeout=timeout)
         except asyncio.TimeoutError as exc:
-            order.status='failed'; order.save(update_fields=['status','updated_at'])
+            order.status='failed'; await sync_to_async(order.save)(update_fields=['status','updated_at'])
             raise BrokerConnectionError('Broker order placement timed out; no completed execution was confirmed.') from exc
         except BrokerAuthenticationError:
-            order.status='rejected'; order.save(update_fields=['status','updated_at']); raise
+            order.status='rejected'; await sync_to_async(order.save)(update_fields=['status','updated_at']); raise
         except BrokerConnectionError:
-            order.status='failed'; order.save(update_fields=['status','updated_at']); raise
+            order.status='failed'; await sync_to_async(order.save)(update_fields=['status','updated_at']); raise
         except BrokerOrderError:
-            order.status='rejected'; order.save(update_fields=['status','updated_at']); raise
+            order.status='rejected'; await sync_to_async(order.save)(update_fields=['status','updated_at']); raise
         except Exception:
-            order.status='failed'; order.save(update_fields=['status','updated_at']); raise
+            order.status='failed'; await sync_to_async(order.save)(update_fields=['status','updated_at']); raise
         latency=(time.perf_counter()-start)*1000; status_value='filled' if result.get('status') in ['filled','executed'] else result.get('status','executed'); requested=order.price or Decimal('0'); executed_value=result.get('execution_price'); executed=Decimal(str(executed_value if executed_value is not None else requested or 0)); slippage=executed-requested; order.status=status_value; order.broker_order_id=str(result.get('broker_order_id','')); update_fields=['status','broker_order_id','updated_at']
         if status_value in {'filled','executed','partially_filled'}: order.executed_at=timezone.now(); update_fields.append('executed_at')
-        order.save(update_fields=update_fields); return ExecutionReport.objects.create(order=order,execution_price=executed,requested_price=requested,slippage=slippage,latency=result.get('latency',latency),fees=Decimal(str(result.get('fees',0))),status=status_value,raw_report=result)
+        await sync_to_async(order.save)(update_fields=update_fields); return await sync_to_async(ExecutionReport.objects.create)(order=order,execution_price=executed,requested_price=requested,slippage=slippage,latency=result.get('latency',latency),fees=Decimal(str(result.get('fees',0))),status=status_value,raw_report=result)
 class ExecutionEngine:
     def submit(self,user,**data):
         routing=dict(data.get('routing_context') or {})

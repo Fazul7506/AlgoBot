@@ -3,14 +3,14 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import TransactionTestCase, override_settings
 
 from apps.brokers.adapters.deriv import DerivAdapter
 from apps.brokers.models import Broker, BrokerAccount, ExecutionReport, Order
 from apps.brokers.services import ExecutionEngine
 
 
-class CanonicalTradeExecutionTests(TestCase):
+class CanonicalTradeExecutionTests(TransactionTestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="trade-test", password="test-pass")
         self.broker = Broker.objects.create(name="Deriv", broker_type="deriv", status="active", supports_live=True)

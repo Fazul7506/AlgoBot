@@ -1,0 +1,38 @@
+.app-sidebar { z-index: 1000; }
+.sidebar-header, .topbar-actions, .sidebar-user { min-width: 0; }
+.sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sidebar-header .brand { min-width: 0; display: inline-flex; align-items: center; gap: 10px; }
+.sidebar-toggle, .mobile-menu-button { border: 1px solid var(--line); background: var(--panel2); color: var(--text); border-radius: var(--ds-radius-md); cursor: pointer; }
+.sidebar-toggle { width: 38px; height: 38px; display: grid; place-items: center; }
+.mobile-menu-button { position: fixed; top: 12px; left: 12px; z-index: 1100; width: 44px; height: 44px; display: none; }
+.sidebar-backdrop { position: fixed; inset: 0; z-index: 999; background: rgba(2, 8, 18, .68); backdrop-filter: blur(3px); }
+.sidebar-backdrop[hidden] { display: none; }
+.app-sidebar.is-collapsed { width: 78px; padding-left: 14px; padding-right: 14px; }
+.app-sidebar.is-collapsed .brand-name,
+.app-sidebar.is-collapsed nav span:not(.material-symbols-rounded),
+.app-sidebar.is-collapsed .sidebar-new-trade span:not(.material-symbols-rounded),
+.app-sidebar.is-collapsed .sidebar-section h2,
+.app-sidebar.is-collapsed .sidebar-user { display: none; }
+.app-sidebar.is-collapsed + .app-shell { margin-left: 78px; }
+.connection-indicator { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; }
+.connection-indicator i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.connection-indicator.connected { color: var(--green); }
+.connection-indicator.error { color: var(--red); }
+body[data-broker-state="NO_BROKER"] .connection-indicator,
+body[data-broker-state="DISCONNECTED"] .connection-indicator { color: var(--muted); }
+body[data-broker-state="CONNECTING"] .connection-indicator,
+body[data-broker-state="SYNCING"] .connection-indicator,
+body[data-broker-state="RECONNECTING"] .connection-indicator { color: var(--gold); }
+body[data-broker-state="ERROR"] .connection-indicator { color: var(--red); }
+
+@media (max-width: 900px) {
+  .mobile-menu-button { display: grid; place-items: center; }
+  .app-sidebar { transform: translateX(-102%); transition: transform .18s ease; }
+  .app-sidebar.is-open { transform: translateX(0); }
+  .app-shell, .app-sidebar.is-collapsed + .app-shell { margin-left: 0; }
+  .topbar { padding-left: 68px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar { transition: none; }
+}

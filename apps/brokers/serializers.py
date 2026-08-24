@@ -46,7 +46,7 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
         }
 
     def get_account_type(self, obj):
-        return str((obj.credentials or {}).get("account_type") or "demo").lower()
+        return str((obj.credentials or {}).get("account_type") or "unknown").lower()
 
     def get_avatar_url(self, obj):
         credentials = obj.credentials or {}
@@ -84,9 +84,16 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class ExecutionReportSerializer(serializers.ModelSerializer):
+    symbol = serializers.CharField(source="order.symbol", read_only=True)
+    direction = serializers.CharField(source="order.direction", read_only=True)
+    broker_order_id = serializers.CharField(source="order.broker_order_id", read_only=True)
+
     class Meta:
         model = ExecutionReport
-        fields = "__all__"
+        fields = [
+            "id", "order", "execution_price", "requested_price", "slippage", "latency", "fees",
+            "status", "raw_report", "created_at", "symbol", "direction", "broker_order_id",
+        ]
 
 
 class PositionSerializer(serializers.ModelSerializer):

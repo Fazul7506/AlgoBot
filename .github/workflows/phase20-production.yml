@@ -2,7 +2,7 @@ name: Production Validation
 
 on:
   push:
-    branches: [main]
+    branches: [main, refactor/frontend-production-foundation]
   pull_request:
 
 jobs:

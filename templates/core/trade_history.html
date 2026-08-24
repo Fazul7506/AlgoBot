@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Trade history | AlgoBot{% endblock %}
+{% block mobile_title %}Trade history{% endblock %}
+{% block content %}
+<section class="data-page panel" data-trade-history-page>
+  <header class="page-heading"><div><p class="eyebrow">Broker execution</p><h1>Trade history</h1><p>Confirmed execution reports from the broker-backed execution API.</p></div><div><a class="btn" href="/orders/">Orders</a><a class="btn primary" href="/trading/">Trade</a></div></header>
+  <div class="kpi-grid compact"><article class="kpi-card"><span>Executions</span><strong data-history-count>—</strong></article><article class="kpi-card"><span>Status</span><strong data-history-status>Waiting</strong></article><article class="kpi-card"><span>Last update</span><strong data-history-updated>—</strong></article><article class="kpi-card"><span>Source</span><strong>Broker</strong></article></div>
+  <section class="panel"><div class="panel-head"><div><h2>Execution reports</h2><p>Only backend execution records are displayed; the browser never fabricates fills.</p></div><input type="search" data-history-search placeholder="Search executions" aria-label="Search executions"></div><div class="table-wrap"><table class="enterprise-table" data-history-table><thead></thead><tbody><tr><td>Connect a broker to load execution history.</td></tr></tbody></table></div></section>
+</section>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/trade_history.js' %}" defer></script>{% endblock %}
