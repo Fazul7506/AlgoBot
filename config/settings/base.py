@@ -83,6 +83,9 @@ DERIV_AUTH_WS_BASE_URL = env("DERIV_AUTH_WS_BASE_URL", "wss://api.derivws.com/tr
 DERIV_OPTIONS_ACCOUNTS_URL = env("DERIV_OPTIONS_ACCOUNTS_URL", f"{DERIV_API_BASE_URL}/trading/v1/options/accounts")
 DERIV_API_TOKEN = env("DERIV_API_TOKEN", "")
 ALLOW_LIVE_TRADING = env_bool("ALLOW_LIVE_TRADING", False)
+# Account selection is deliberately feature-gated. It changes only the preferred
+# persisted account; it never copies, rotates, or exposes broker credentials.
+ENABLE_BROKER_ACCOUNT_SWITCH = env_bool("ENABLE_BROKER_ACCOUNT_SWITCH", False)
 OPENAI_API_KEY = env("OPENAI_API_KEY", "")
 
 REST_FRAMEWORK = {
