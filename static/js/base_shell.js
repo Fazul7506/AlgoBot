@@ -29,30 +29,36 @@
     const shell = $('.app-shell');
     const storageKey = 'algobot.sidebar.collapsed';
 
-    const closeMobile = () => {
-      sidebar.classList.remove('is-open');
-      document.body.classList.remove('mobile-nav-open');
-      if (backdrop) backdrop.hidden = true;
-      mobile?.setAttribute('aria-expanded', 'false');
-      mobile?.setAttribute('aria-label', 'Open navigation');
-    };
-    const openMobile = () => {
-      sidebar.classList.add('is-open');
-      document.body.classList.add('mobile-nav-open');
-      if (backdrop) backdrop.hidden = false;
-      mobile?.setAttribute('aria-expanded', 'true');
-      mobile?.setAttribute('aria-label', 'Close navigation');
-    };
-    const toggleMobile = event => {
-      event?.preventDefault();
-      event?.stopImmediatePropagation?.();
-      if (sidebar.classList.contains('is-open')) closeMobile(); else openMobile();
+    const setMobileOpen = open => {
+      sidebar.classList.toggle('is-open', open);
+      if (backdrop) backdrop.hidden = !open;
+      mobile?.setAttribute('aria-expanded', String(open));
+      mobile?.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+      // Deliberately do not alter document scrolling. The sidebar is fixed and
+      // has its own scroll container, so opening it can never freeze the page.
     };
 
-    closeMobile();
-    if (mobile) mobile.addEventListener('click', toggleMobile, true);
-    backdrop?.addEventListener('click', closeMobile, true);
-    sidebar.querySelectorAll('nav a, .sidebar-new-trade').forEach(link => link.addEventListener('click', closeMobile, true));
+    setMobileOpen(false);
+
+    // Use one delegated document handler instead of multiple competing listeners.
+    // This also survives page-level scripts that replace the button node.
+    document.addEventListener('click', event => {
+      const menuButton = event.target?.closest?.('[data-mobile-menu]');
+      if (menuButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        setMobileOpen(!sidebar.classList.contains('is-open'));
+        return;
+      }
+      if (event.target?.closest?.('[data-sidebar-backdrop]')) {
+        event.preventDefault();
+        setMobileOpen(false);
+        return;
+      }
+      if (sidebar.classList.contains('is-open') && event.target?.closest?.('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')) {
+        setMobileOpen(false);
+      }
+    }, false);
 
     if (toggle) {
       const setCollapsed = collapsed => {
@@ -67,11 +73,15 @@
         try { localStorage.setItem(storageKey, collapsed ? '1' : '0'); } catch (_) {}
       };
       try { if (window.innerWidth > 800 && localStorage.getItem(storageKey) === '1') setCollapsed(true); } catch (_) {}
-      toggle.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); setCollapsed(!sidebar.classList.contains('is-collapsed')); }, true);
+      toggle.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        setCollapsed(!sidebar.classList.contains('is-collapsed'));
+      });
     }
 
-    document.addEventListener('keydown', event => { if (event.key === 'Escape' && sidebar.classList.contains('is-open')) closeMobile(); });
-    window.addEventListener('resize', () => { if (window.innerWidth > 800) closeMobile(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') setMobileOpen(false); });
+    window.addEventListener('resize', () => { if (window.innerWidth > 800) setMobileOpen(false); });
   }
 
   function bindTheme() {
