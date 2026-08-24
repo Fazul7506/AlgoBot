@@ -1,13 +1,50 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
+{% load static %}
+{% block title %}Broker Accounts | AlgoBot{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Broker Accounts</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
+<section class="algobot-shared-page page-section">
+  <header class="hero-panel">
+    <p class="eyebrow">BROKER ACCOUNTS</p>
+    <h1>Connected broker accounts</h1>
+    <p>One canonical account state is used across the workspace. Account balances, type, avatar and connection state come from the connected broker record.</p>
+  </header>
+
+  <section class="workspace-grid two" aria-label="Broker account state">
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">ACTIVE ACCOUNT</p><h2>Current broker</h2></div><span class="badge live" data-account-health>Checking</span></div>
+      <div data-broker-account-center class="account-center-state">Loading connected broker accounts…</div>
+    </article>
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">ACCOUNT MODE</p><h2>Demo / Real</h2></div></div>
+      <p class="form-note">Switching is controlled by the backend feature flag and never changes credentials in the browser. The selected broker account remains the source of truth for execution.</p>
+      <div data-account-mode-actions></div>
+    </article>
+  </section>
 </section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
-</section>
+<script>
+(() => {
+  const root=document.querySelector('[data-broker-account-center]');
+  const mode=document.querySelector('[data-account-mode-actions]');
+  const health=document.querySelector('[data-account-health]');
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const money=v=>v==null||v===''?'Unavailable':Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:8});
+  const avatar=a=>{const u=String(a?.avatar_url||a?.broker?.avatar_url||a?.credentials?.avatar_url||'').trim();const n=a?.broker?.name||a?.broker_name||'Broker';return u?`<img class="algobot-account-avatar" src="${esc(u)}" alt="${esc(n)} avatar">`:`<span class="algobot-account-avatar">${esc(n[0]?.toUpperCase()||'B')}</span>`};
+  async function load(){
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);
+    try{
+      const r=await fetch('/api/brokers/accounts/',{credentials:'same-origin',headers:{Accept:'application/json'},signal:controller.signal});
+      const data=await r.json();if(!r.ok)throw new Error(data.detail||`Request failed (${r.status})`);
+      const accounts=Array.isArray(data)?data:(data.results||[]),active=accounts.find(a=>a.is_preferred)||accounts[0],type=a=>String(a?.account_type||a?.credentials?.account_type||'demo').toLowerCase();
+      if(!active){root.innerHTML='<div class="empty-state"><strong>No connected broker account</strong><p>Connect a supported broker to populate this workspace.</p><a class="btn primary" href="/brokers/connect/">Connect broker</a></div>';health.textContent='Offline';return;}
+      health.textContent=active.is_connected?'Connected':'Unavailable';
+      root.innerHTML=`<div class="algobot-account-summary">${avatar(active)}<div class="algobot-account-copy"><strong>${esc(active.broker?.name||active.broker_name||'Broker')} · ${esc(active.broker_account_id||active.account_id)}</strong><span>${esc(type(active).toUpperCase())} · ${esc(active.currency||'')} ${money(active.balance)}</span></div></div><p class="form-note">${active.is_connected?'Live broker account data':'Last known broker data; broker connection is unavailable.'}${active.last_synced_at?' · Last sync '+new Date(active.last_synced_at).toLocaleString():''}</p>`;
+      const opposite=accounts.find(a=>String(a.broker?.id)===String(active.broker?.id)&&type(a)!==type(active))||accounts.find(a=>type(a)!==type(active));
+      if(opposite&&active.switch_enabled){mode.innerHTML=`<button class="btn primary" type="button" data-switch-account>Switch to ${esc(type(opposite).toUpperCase())}</button><p class="form-note">${esc(type(active).toUpperCase())} is active now.</p>`;mode.querySelector('button').onclick=async()=>{mode.querySelector('button').disabled=true;try{const r=await fetch('/api/brokers/accounts/'+opposite.id+'/select/',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':document.cookie.match(/(?:^|;\\s*)csrftoken=([^;]+)/)?.[1]||''},body:JSON.stringify({account_type:type(opposite)})});if(!r.ok)throw new Error((await r.json()).detail||'Account switch failed');await load();window.dispatchEvent(new CustomEvent('algobot:account-changed'));}catch(e){mode.querySelector('button').disabled=false;mode.querySelector('.form-note').textContent=e.message;}};}
+      else mode.innerHTML='<p class="form-note">Demo / real switching is disabled until ENABLE_BROKER_ACCOUNT_SWITCH is enabled in the deployment environment.</p>';
+    }catch(e){root.innerHTML=`<div class="empty-state"><strong>Broker account unavailable</strong><p>${esc(e.name==='AbortError'?'Account request timed out.':'Unable to read the canonical broker account state.')}</p></div>`;health.textContent='Unavailable';}
+    finally{clearTimeout(timer);}
+  }
+  load();
+})();
+</script>
 {% endblock %}
