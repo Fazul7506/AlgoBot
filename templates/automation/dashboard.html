@@ -1,13 +1,11 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
+{% load static %}
+{% block title %}Automation | AlgoBot{% endblock %}
+{% block mobile_title %}Automation{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Dashboard</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
-</section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
+<section class="algobot-shared-page">
+  <header class="enterprise-hero"><div><p class="eyebrow">Broker-aware automation</p><h1>Automation control center</h1><p class="hero-copy">Trading-impacting workflows are visible and executable only in an authenticated broker context. Execution state is reported from the backend, never simulated in the browser.</p></div><div class="hero-actions"><a class="btn" href="/workspace/automation/">Manage workflows</a><a class="btn primary" href="/trading/">Trading terminal</a></div></header>
+  <section data-automation-dashboard aria-live="polite"><div class="ds-state"><strong>Waiting for broker connection</strong><p>Connect a broker to load trading-impacting automation state.</p><a class="ds-btn ds-btn--primary" href="/brokers/connect/">Connect broker</a></div></section>
 </section>
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/automation_dashboard.js' %}" defer></script>{% endblock %}
