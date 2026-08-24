@@ -1,35 +1,23 @@
-/* AlgoBot icon runtime guard
- * Material Symbols are ligatures. If the font is unavailable, the raw ligature
- * becomes visible text. Keep the icon node visually reserved and retry font
- * readiness rather than replacing the semantic label with fallback text.
- */
+/* AlgoBot icon runtime guard. Material Symbols are ligatures; never expose their raw names as fallback UI. */
 (function () {
   'use strict';
 
-  function iconNodes() {
-    return document.querySelectorAll('.material-symbols-rounded');
-  }
-
   function verify() {
-    if (!document.fonts || !document.fonts.check) return;
-    var ready = document.fonts.check('24px "Material Symbols Rounded"');
-    document.documentElement.toggleAttribute('data-icons-ready', ready);
-    document.documentElement.toggleAttribute('data-icons-fallback', !ready);
+    var root = document.documentElement;
+    var ready = false;
+    if (document.fonts && document.fonts.check) {
+      ready = document.fonts.check('24px "Material Symbols Rounded"');
+    }
+    root.toggleAttribute('data-icons-ready', ready);
+    root.toggleAttribute('data-icons-fallback', !ready);
   }
 
   function boot() {
     verify();
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(verify);
-    }
-    setTimeout(verify, 500);
-    setTimeout(verify, 1500);
-    void iconNodes();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(verify);
+    [250, 750, 1500, 3000].forEach(function (delay) { setTimeout(verify, delay); });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot, { once: true });
-  } else {
-    boot();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
+  else boot();
 })();

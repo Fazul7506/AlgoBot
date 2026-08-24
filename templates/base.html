@@ -5,7 +5,12 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0b0d10">
   <title>{% block title %}AlgoBot{% endblock %}</title><link rel="icon" href="{% static 'icons/favicon.ico' %}">
   <link rel="stylesheet" href="{% static 'css/design_system.css' %}"><link rel="stylesheet" href="{% static 'css/base_shell.css' %}"><link rel="stylesheet" href="{% static 'css/enterprise_templates.css' %}"><link rel="stylesheet" href="{% static 'css/ui_upgrade.css' %}"><link rel="stylesheet" href="{% static 'css/chatgpt_shell.css' %}"><link rel="stylesheet" href="{% static 'css/landing_upgrade.css' %}"><link rel="stylesheet" href="{% static 'css/runtime_recovery.css' %}">
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL,GRAD@0..1,100..700&amp;display=swap">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL,GRAD@0..1,100..700&display=block">
+  <style>
+    /* Material Symbols are ligatures: never expose the ligature as UI text while the font is loading. */
+    .material-symbols-rounded{font-family:'Material Symbols Rounded';font-weight:normal;font-style:normal;font-size:24px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-feature-settings:'liga';-webkit-font-smoothing:antialiased;font-feature-settings:'liga';font-variation-settings:'FILL' 0,'GRAD' 0,'opsz' 24}
+    html[data-icons-fallback] .material-symbols-rounded{font-size:0;line-height:1;min-width:1em;min-height:1em;overflow:hidden}
+  </style>
   {% block extra_css %}{% endblock %}
 </head>
 <body data-authenticated="{% if request.user.is_authenticated %}true{% else %}false{% endif %}">
