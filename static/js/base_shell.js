@@ -11,22 +11,12 @@
     document.body.dataset.brokerState = status;
     const indicator = $('[data-global-connection]');
     if (!indicator) return;
-    const labels = {
-      NO_BROKER: 'No connected broker account', CONNECTING: 'Connecting broker…', CONNECTED: 'Broker connected',
-      SYNCING: 'Synchronizing broker…', READY: 'Broker ready', DEGRADED: 'Broker connection degraded',
-      DISCONNECTED: 'Broker disconnected', RECONNECTING: 'Reconnecting broker…', ERROR: 'Broker connection error'
-    };
+    const labels = {NO_BROKER:'No connected broker account',CONNECTING:'Connecting broker…',CONNECTED:'Broker connected',SYNCING:'Synchronizing broker…',READY:'Broker ready',DEGRADED:'Broker connection degraded',DISCONNECTED:'Broker disconnected',RECONNECTING:'Reconnecting broker…',ERROR:'Broker connection error'};
     const account = event?.detail?.state?.account;
-    const label = account?.broker?.name && account?.broker_account_id
-      ? `${account.broker.name} · ${account.broker_account_id}`
-      : labels[status] || 'Broker status unavailable';
+    const label = account?.broker?.name && account?.broker_account_id ? `${account.broker.name} · ${account.broker_account_id}` : labels[status] || 'Broker status unavailable';
     indicator.querySelector('span')?.replaceChildren(document.createTextNode(label));
     indicator.classList.toggle('connected', status === 'CONNECTED' || status === 'READY');
-    indicator.classList.toggle('error', status === 'ERROR');
-  }
-
-  function bindBrokerState() {
-    window.AlgoBotBrokerState?.subscribe(setBrokerStateAttribute);
+    indicator.classList.toggle('error', status === 'ERROR' || status === 'DISCONNECTED');
   }
 
   function bindNavigation() {
@@ -44,20 +34,25 @@
       document.body.classList.remove('mobile-nav-open');
       if (backdrop) backdrop.hidden = true;
       mobile?.setAttribute('aria-expanded', 'false');
+      mobile?.setAttribute('aria-label', 'Open navigation');
     };
     const openMobile = () => {
       sidebar.classList.add('is-open');
       document.body.classList.add('mobile-nav-open');
       if (backdrop) backdrop.hidden = false;
       mobile?.setAttribute('aria-expanded', 'true');
+      mobile?.setAttribute('aria-label', 'Close navigation');
+    };
+    const toggleMobile = event => {
+      event?.preventDefault();
+      event?.stopImmediatePropagation?.();
+      if (sidebar.classList.contains('is-open')) closeMobile(); else openMobile();
     };
 
-    // Recover from stale CSS/DOM state left by an interrupted navigation.
-    if (!sidebar.classList.contains('is-open')) closeMobile();
-
-    mobile?.addEventListener('click', () => sidebar.classList.contains('is-open') ? closeMobile() : openMobile());
-    backdrop?.addEventListener('click', closeMobile);
-    sidebar.querySelectorAll('nav a, .sidebar-new-trade').forEach(link => link.addEventListener('click', closeMobile));
+    closeMobile();
+    if (mobile) mobile.addEventListener('click', toggleMobile, true);
+    backdrop?.addEventListener('click', closeMobile, true);
+    sidebar.querySelectorAll('nav a, .sidebar-new-trade').forEach(link => link.addEventListener('click', closeMobile, true));
 
     if (toggle) {
       const setCollapsed = collapsed => {
@@ -68,25 +63,15 @@
         toggle.setAttribute('aria-expanded', String(!collapsed));
         toggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
         const icon = toggle.querySelector('.material-symbols-rounded');
-        if (icon) {
-          icon.textContent = collapsed ? 'left_panel_open' : 'left_panel_close';
-          icon.setAttribute('data-icon-name', collapsed ? 'left_panel_open' : 'left_panel_close');
-        }
+        if (icon) icon.textContent = collapsed ? 'left_panel_open' : 'left_panel_close';
         try { localStorage.setItem(storageKey, collapsed ? '1' : '0'); } catch (_) {}
       };
-
       try { if (window.innerWidth > 800 && localStorage.getItem(storageKey) === '1') setCollapsed(true); } catch (_) {}
-      toggle.addEventListener('click', event => {
-        event.preventDefault();
-        event.stopPropagation();
-        setCollapsed(!sidebar.classList.contains('is-collapsed'));
-      });
+      toggle.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); setCollapsed(!sidebar.classList.contains('is-collapsed')); }, true);
     }
 
-    window.addEventListener('resize', () => {
-      if (window.innerWidth > 800) closeMobile();
-      if (!sidebar.classList.contains('is-open')) closeMobile();
-    });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && sidebar.classList.contains('is-open')) closeMobile(); });
+    window.addEventListener('resize', () => { if (window.innerWidth > 800) closeMobile(); });
   }
 
   function bindTheme() {
@@ -94,27 +79,12 @@
     if (!button || button.dataset.themeBound === 'true') return;
     button.dataset.themeBound = 'true';
     const storageKey = 'algobot-theme';
-    const apply = theme => {
-      document.documentElement.dataset.theme = theme;
-      button.setAttribute('aria-pressed', String(theme === 'light'));
-    };
-    let stored = null;
-    try { stored = localStorage.getItem(storageKey); } catch (_) {}
+    const apply = theme => { document.documentElement.dataset.theme = theme; button.setAttribute('aria-pressed', String(theme === 'light')); };
+    let stored = null; try { stored = localStorage.getItem(storageKey); } catch (_) {}
     if (stored === 'light' || stored === 'dark') apply(stored);
-    button.addEventListener('click', () => {
-      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-      try { localStorage.setItem(storageKey, next); } catch (_) {}
-      apply(next);
-    });
+    button.addEventListener('click', () => { const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem(storageKey, next); } catch (_) {} apply(next); });
   }
 
-  function boot() {
-    bindNavigation();
-    bindTheme();
-    bindBrokerState();
-    document.querySelectorAll('.toast-stack .toast').forEach(node => setTimeout(() => node.remove(), 4500));
-  }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
-  else boot();
+  function boot() { bindNavigation(); bindTheme(); window.AlgoBotBrokerState?.subscribe(setBrokerStateAttribute); document.querySelectorAll('.toast-stack .toast').forEach(node => setTimeout(() => node.remove(), 4500)); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true }); else boot();
 })();
