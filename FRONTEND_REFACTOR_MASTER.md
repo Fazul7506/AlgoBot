@@ -1,6 +1,6 @@
 # AlgoBot Frontend Production Refactor Master Contract
 
-Status: **PHASE 14 COMPLETE AND WORKING**
+Status: **PHASE 18 IN PROGRESS**
 
 Branch: `refactor/frontend-production-foundation`
 Long-lived PR: `#17`
@@ -53,57 +53,28 @@ Target: **L5 Production**. Foundational surfaces may reach **L6 Reference**.
 12. Strategies — **COMPLETE AND WORKING**
 13. Automation — **COMPLETE AND WORKING**
 14. Workflow templates/builder — **COMPLETE AND WORKING**
-15. Notifications — NEXT
-16. Settings
-17. Remaining operational/admin pages
-18. Global consistency pass
+15. Notifications — **COMPLETE AND WORKING**
+16. Settings — **COMPLETE AND WORKING**
+17. Remaining operational/admin pages — **COMPLETE AND WORKING**
+18. Global consistency pass — **IN PROGRESS**
 19. Production E2E validation
 
 ## Completed phase summaries
 
-### Phase 1 — state/data architecture
-Canonical broker lifecycle/state contract, centralized frontend data contract, connected-broker guard, broker event normalization and live broker UI bridge.
+### Phase 15 — notifications
+Authenticated notification center, persisted preferences, broker-aware state, loading/empty/error handling and notification contract coverage.
 
-### Phase 2 — credential/hardcoded-data elimination
-Credential-pattern audit, browser payload sanitization, no silent demo fallback and credential-bearing field removal before browser consumption.
+### Phase 16 — settings
+Authenticated server-backed profile/trading/risk/notification preferences with validation and secret-safe broker separation.
 
-### Phase 3 — shared design system
-Global semantic tokens and reusable production primitives.
+### Phase 17 — remaining operational/admin pages
+Remaining identified operational surfaces classified and routed through authenticated application surfaces; pages without genuine broker contracts remain informational or explicitly gated rather than presenting fabricated live trading state.
 
-### Phase 4 — base template
-Production shell CSS/JS and runtime guards extracted; centralized navigation/theme/global broker status.
+## Phase 18 — global consistency pass
+Audit the accumulated PR for duplicate broker implementations, inconsistent connection states, hardcoded trading/account data, credential exposure, broken routes/navigation, template inheritance defects, REST/WebSocket contract drift, stale/disconnected UI, missing state handling, duplicate CSS/JS, responsive/accessibility regressions, unsafe mutations and test gaps. Phase 18 cannot be declared complete until findings are fixed or explicitly documented as non-blocking with evidence.
 
-### Phase 5 — broker connection
-Generic broker-backed connection surface, canonical connection state, broker catalog, broker-confirmed account type and targeted tests.
-
-### Phase 6 — dashboard
-Broker-state KPIs, broker-gated positions/orders/markets, symbol-scoped signals, backend-confirmed kill switch and dashboard contract test.
-
-### Phase 7 — portfolio/positions
-Broker-gated positions controller and portfolio dashboard; exposure/P/L/allocation derive only from broker account and positions.
-
-### Phase 8 — orders
-Broker-gated execution order controller and execution table.
-
-### Phase 9 — trade history
-Authenticated execution history page using broker-backed execution reports with broker order context.
-
-### Phase 10 — market/watchlist
-Broker-gated market catalogue/quotes, search, catalogue sync and quote polling with no fabricated prices.
-
-### Phase 11 — charts
-Broker-state-gated chart history and authenticated WebSocket market stream with disconnect/reconnect handling.
-
-### Phase 12 — strategies
-Broker-gated strategy registry/signals/performance and run/pause/stop lifecycle actions through the centralized backend contract.
-
-### Phase 13 — automation
-Broker-aware automation dashboard with workflow/execution state gated on broker connection.
-
-### Phase 14 — workflow templates/builder
-Dedicated broker-gated workflow template/builder route, safe starter definitions, backend workflow creation and server-side exclusion of workflow secrets from browser serialization.
-
-See `docs/Architecture/phase-14-workflow-builder.md`.
+## Phase 19 — production E2E validation
+Final release gate covering authentication, broker connection/synchronization, account/dashboard, market data, charts/WebSocket lifecycle, positions, orders/execution, history, strategies, automation, notifications, settings, disconnect/reconnect/resynchronization, security and regression coverage. No merge to `main` until this gate passes.
 
 ## Inventory
 
