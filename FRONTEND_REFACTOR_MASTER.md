@@ -1,8 +1,9 @@
 # AlgoBot Frontend Production Refactor Master Contract
 
-Status: PHASE 0 COMPLETE
+Status: PHASE 1 COMPLETE AND WORKING
 Branch: `refactor/frontend-production-foundation`
 Base: `main` at `0061efc6dcf166cb5b13e52ac3c3e3e3bae94750`
+Long-lived PR: `#17`
 
 ## Non-negotiable product invariant
 
@@ -37,7 +38,7 @@ Target: L5 Production. Foundational templates may reach L6 Reference before depe
 ## Refactor sequence
 
 0. Repository/template inventory — COMPLETE
-1. Frontend state/data architecture
+1. Frontend state/data architecture — COMPLETE AND WORKING
 2. Credential and hardcoded-data elimination
 3. Shared design system
 4. `templates/base.html`
@@ -56,6 +57,37 @@ Target: L5 Production. Foundational templates may reach L6 Reference before depe
 17. Remaining operational/admin pages
 18. Global consistency pass
 19. Production E2E validation
+
+## Phase 1 implementation
+
+The canonical browser state contract is now available globally through `window.AlgoBotBrokerState` and is loaded from `templates/base.html`.
+
+Supported lifecycle states:
+
+`NO_BROKER`, `CONNECTING`, `CONNECTED`, `SYNCING`, `READY`, `DEGRADED`, `DISCONNECTED`, `RECONNECTING`, `ERROR`.
+
+The state model owns broker/account, balances, positions, orders, trades, market, strategies, automation, notifications, timestamps and errors. It exposes subscription and transition APIs and emits `algobot:state-changed` events for page consumers.
+
+The centralized frontend data contract is available through `window.AlgoBotFrontendData`. It provides the shared backend request wrapper, broker account retrieval, broker account synchronization, connected-broker guardrails, and broker-event normalization. It does not store or expose broker credentials.
+
+`broker_state_bridge.js` connects the existing `live_broker_ui.js` account integration to the canonical state contract so the existing broker/account implementation remains the integration source while pages receive one consistent state surface.
+
+No page is allowed to create a second competing global broker state model.
+
+## Phase 1 exit criteria
+
+- canonical broker lifecycle states implemented
+- canonical broker-backed state container implemented
+- centralized frontend data request contract implemented
+- connected-broker guard implemented
+- existing live broker account UI bridged into canonical state
+- global base template loads the state contract in dependency order
+- state contract contains no credentials or hardcoded trading values
+- no second broker implementation introduced
+- Phase 1 changes committed to the long-lived refactor branch
+- Phase 1 recorded in PR #17
+
+Phase 1 is complete and working at the repository-contract level. Runtime/CI verification remains a required gate wherever repository automation is available; no production page is considered complete until its own browser/backend/broker integration tests pass.
 
 ## Phase 0 inventory findings
 
@@ -193,16 +225,3 @@ The inventory is intentionally treated as a migration registry rather than a pro
 The current base also contains several inline/global behaviors and multiple global styles/scripts. Phase 4 will consolidate these carefully without breaking existing routes.
 
 `static/js/live_broker_ui.js` already calls broker-account endpoints and renders connected account information. It must be treated as existing integration code to validate and harden, not as permission to create a second broker state architecture.
-
-## Phase 0 exit criteria
-
-- repository default branch confirmed
-- isolated refactor branch created
-- template surface inventoried by domain
-- foundational `base.html` identified
-- broker/account integration entry points identified
-- hardcoded credential/data search performed with no search hit requiring immediate emergency removal
-- production migration order recorded
-- per-template production gate recorded
-
-Phase 0 is complete. No Phase 1 implementation is considered started until explicitly declared below by the engineering log.
