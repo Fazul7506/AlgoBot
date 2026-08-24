@@ -10,7 +10,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 
-from .models import MarketSymbol, Tick
+from .models import MarketSymbol
 
 
 DERIV_PUBLIC_WS = getattr(settings, "DERIV_PUBLIC_WS_URL", "wss://api.derivws.com/trading/v1/options/ws/public")
@@ -108,16 +108,24 @@ def sync_active_symbols() -> int:
 
 
 def fetch_tick(symbol: str) -> dict:
+    """Fetch one authoritative broker quote without writing to the database.
+
+    Persistence belongs to TickService.ingest so every caller uses the same
+    idempotent ingestion path. This prevents the broker endpoint from writing
+    the same tick once during fetch and again during normalization.
+    """
     response = asyncio.run(_request({"ticks": symbol}))
     tick = response.get("tick") or {}
     quote = tick.get("quote")
     if quote is None:
         raise RuntimeError(f"Deriv returned no quote for {symbol}")
-    market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
-    if not market_symbol:
+    if not MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists():
         raise RuntimeError(f"Symbol {symbol} is not present in the broker market catalogue")
-    bid, ask = tick.get("bid"), tick.get("ask")
-    spread = _safe_decimal(ask) - _safe_decimal(bid) if bid is not None and ask is not None else Decimal("0")
-    epoch = int(tick.get("epoch") or 0)
-    obj, _ = Tick.objects.get_or_create(symbol=market_symbol, epoch=epoch, quote=quote, defaults={"bid": bid, "ask": ask, "spread": spread, "volume": tick.get("volume") or 0})
-    return {"symbol": symbol, "quote": float(obj.quote), "bid": float(obj.bid) if obj.bid is not None else None, "ask": float(obj.ask) if obj.ask is not None else None, "epoch": obj.epoch}
+    return {
+        "symbol": symbol,
+        "quote": float(quote),
+        "bid": float(tick["bid"]) if tick.get("bid") is not None else None,
+        "ask": float(tick["ask"]) if tick.get("ask") is not None else None,
+        "epoch": int(tick.get("epoch") or 0),
+        "volume": float(tick.get("volume") or 0),
+    }
