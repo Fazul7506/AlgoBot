@@ -1,6 +1,6 @@
 # AlgoBot Frontend Production Refactor Master Contract
 
-Status: **PHASE 3 COMPLETE AND WORKING**
+Status: **PHASE 4 COMPLETE AND WORKING**
 
 Branch: `refactor/frontend-production-foundation`
 Long-lived PR: `#17`
@@ -42,8 +42,8 @@ Target: **L5 Production**. Foundational surfaces may reach **L6 Reference**.
 1. Frontend state/data architecture — **COMPLETE AND WORKING**
 2. Credential and hardcoded-data elimination — **COMPLETE AND WORKING**
 3. Shared design system — **COMPLETE AND WORKING**
-4. `templates/base.html` — NEXT
-5. Broker connection
+4. `templates/base.html` — **COMPLETE AND WORKING**
+5. Broker connection — NEXT
 6. Dashboard
 7. Portfolio/Positions
 8. Orders
@@ -86,21 +86,29 @@ See `docs/Architecture/phase-2-credential-and-hardcoded-data.md`.
 
 ## Phase 3 — shared design system
 
-Implemented globally:
+Implemented:
 
 - `static/css/design_system.css`
-- spacing, radius, semantic surface/text/border tokens
+- spacing/radius/surface/text/border semantic tokens
 - semantic broker/status states
-- shared cards, buttons, form fields, empty/error/success states and skeleton loading primitives
-- visible keyboard focus
-- disabled/loading semantics
-- mobile touch sizing
-- reduced-motion support
-- global base-template inclusion before page styles
+- shared cards, buttons, fields, state panels and skeleton loading primitives
+- keyboard focus, disabled/loading semantics, mobile touch sizing and reduced-motion support
 
 See `docs/Architecture/frontend-design-system.md`.
 
-The design system is now the required visual vocabulary for all subsequent page/template migrations. Phase 3 does not claim every existing page has already been migrated; that is done page-by-page in later phases.
+## Phase 4 — base template production shell
+
+Implemented:
+
+- `static/css/base_shell.css`
+- `static/js/base_shell.js`
+- `static/js/core/api_execution_guard.js`
+- dependency-ordered global broker/state/security/bootstrap scripts
+- extracted inline shell styles and runtime guards
+- centralized mobile navigation, sidebar collapse, theme control and global broker indicator
+- retained `extra_css` and `extra_js` extension points for page-specific needs
+
+See `docs/Architecture/phase-4-base-template.md`.
 
 ## Inventory
 
