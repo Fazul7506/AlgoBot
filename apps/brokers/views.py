@@ -4,7 +4,7 @@ from django.conf import settings
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, permissions, decorators, response, status
-from rest_framework.exceptions import NotAuthenticated
+from rest_framework.exceptions import APIException
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
@@ -19,12 +19,20 @@ def _run_bounded(coro, timeout=8.0):
     return asyncio.run(runner())
 
 
+class JWTAuthenticationRequired(APIException):
+    """Return an explicit 401 for anonymous broker API requests."""
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    default_detail = 'Authentication credentials were not provided.'
+    default_code = 'not_authenticated'
+
+
 class JWTAuthenticatedPermission(permissions.IsAuthenticated):
-    """Return a deterministic 401 for anonymous API requests."""
+    """Require authentication while preserving a deterministic 401 response."""
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
-            raise NotAuthenticated()
+            raise JWTAuthenticationRequired()
         return True
 
 
@@ -178,36 +186,3 @@ class BrokerHealthViewSet(viewsets.ViewSet):
             'preferred_account_id': preferred.id if preferred else None,
             'switch_enabled': settings.ENABLE_BROKER_ACCOUNT_SWITCH,
             'source': 'broker_accounts',
-        })
-
-
-@decorators.api_view(['POST'])
-@decorators.permission_classes([permissions.IsAuthenticated])
-def connect_broker(request):
-    account = get_object_or_404(BrokerAccount, pk=request.data.get('account_id'), user=request.user)
-    try:
-        conn = _run_bounded(BrokerConnectionService().connect(account.broker, account), timeout=8.0)
-    except asyncio.TimeoutError:
-        return response.Response({'detail': 'Broker connection timed out.', 'broker_status': 'sync_timeout'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
-    except BrokerRoutingError as exc:
-        return response.Response({'detail': str(exc), 'broker_status': 'not_connected'}, status=status.HTTP_409_CONFLICT)
-    except BrokerAuthenticationError as exc:
-        return response.Response({'detail': str(exc), 'broker_status': 'credentials_expired'}, status=status.HTTP_401_UNAUTHORIZED)
-    except BrokerConnectionError as exc:
-        return response.Response({'detail': str(exc), 'broker_status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    return response.Response(BrokerConnectionSerializer(conn).data)
-
-
-@decorators.api_view(['POST'])
-@decorators.permission_classes([permissions.IsAuthenticated])
-def disconnect_broker(request):
-    account = get_object_or_404(BrokerAccount, pk=request.data.get('account_id'), user=request.user)
-    try:
-        conn = _run_bounded(BrokerConnectionService().disconnect(account.broker, account), timeout=8.0)
-    except asyncio.TimeoutError:
-        return response.Response({'detail': 'Broker disconnect timed out.'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
-    except BrokerRoutingError as exc:
-        return response.Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
-    except BrokerConnectionError as exc:
-        return response.Response({'detail': str(exc), 'broker_status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    return response.Response(BrokerConnectionSerializer(conn).data)
