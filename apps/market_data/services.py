@@ -1,5 +1,5 @@
 from decimal import Decimal
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Avg, Max, Min, Count
 from django.utils import timezone
 from .cache import MarketCacheService
@@ -45,27 +45,41 @@ class CandleService:
 
 class TickService:
     def ingest(self, data):
-        # Fast idempotency path for browser polling, websocket retries and
-        # multiple workers receiving the same broker quote.
+        # Broker feeds commonly repeat the same quote. Treat an identical
+        # (symbol, epoch, quote) as an idempotent event, including races between
+        # multiple workers. The database unique constraint remains authoritative.
         symbol_value = data.get("symbol")
         epoch = data.get("epoch")
         quote = data.get("quote")
         if symbol_value and epoch is not None and quote is not None:
-            existing = Tick.objects.filter(symbol__symbol=symbol_value, epoch=int(epoch), quote=Decimal(str(quote))).select_related("symbol").first()
+            existing = Tick.objects.filter(
+                symbol__symbol=symbol_value,
+                epoch=int(epoch),
+                quote=Decimal(str(quote)),
+            ).select_related("symbol").first()
             if existing:
                 return existing
 
         clean = ValidationService().validate_tick(data)
-        spread = clean["ask"] - clean["bid"]
+        spread = max(Decimal("0"), clean["ask"] - clean["bid"])
         try:
-            tick = Tick.objects.create(**clean, spread=spread, received_at=timezone.now())
+            # Use an inner savepoint so a uniqueness race does not poison the
+            # request transaction before we read the winning row.
+            with transaction.atomic():
+                tick = Tick.objects.create(**clean, spread=spread, received_at=timezone.now())
         except IntegrityError:
-            # A second worker can pass the pre-check at the same time. The
-            # unique constraint arbitrates the race; return the canonical row.
-            tick = Tick.objects.get(symbol=clean["symbol"], epoch=clean["epoch"], quote=clean["quote"])
+            tick = Tick.objects.get(
+                symbol=clean["symbol"],
+                epoch=clean["epoch"],
+                quote=clean["quote"],
+            )
             return tick
-        payload = self.serialize(tick); MarketCacheService().set_latest_tick(tick.symbol.symbol, payload)
-        self.update_snapshot(tick); event_bus.publish(EVENT_TICK_RECEIVED, payload); CandleService().update_from_tick(tick)
+
+        payload = self.serialize(tick)
+        MarketCacheService().set_latest_tick(tick.symbol.symbol, payload)
+        self.update_snapshot(tick)
+        event_bus.publish(EVENT_TICK_RECEIVED, payload)
+        CandleService().update_from_tick(tick)
         return tick
 
     def update_snapshot(self,tick):
