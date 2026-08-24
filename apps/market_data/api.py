@@ -28,17 +28,11 @@ def _last_known_tick(symbol):
 
 def _stale_tick_response(tick, account):
     payload = TickSerializer(tick).data
-    payload.update({
-        "broker": account.broker.name,
-        "account_id": account.account_id,
-        "stale": True,
-        "source": "last_known_broker_quote",
-    })
+    payload.update({"broker": account.broker.name, "account_id": account.account_id, "stale": True, "source": "last_known_broker_quote"})
     return Response(payload, status=status.HTTP_200_OK)
 
 
-async def _bounded_market_data(adapter, symbol, timeout=7.0):
-    return await asyncio.wait_for(adapter.get_market_data(symbol), timeout=timeout)
+async def _bounded_market_data(adapter, symbol, timeout=7.0): return await asyncio.wait_for(adapter.get_market_data(symbol), timeout=timeout)
 
 
 @api_view(["GET"])
@@ -97,39 +91,64 @@ def sync_symbols(request):
     if not account: return Response({"status":"error","code":"NO_CONNECTED_BROKER","detail":"Connect a broker before synchronizing its market universe."}, status=status.HTTP_409_CONFLICT)
     if account.broker.broker_type != "deriv": return Response({"status":"error","code":"BROKER_MARKET_SYNC_UNSUPPORTED","detail":f"Market synchronization is not implemented for {account.broker.name} yet."}, status=status.HTTP_409_CONFLICT)
     try:
-        count = sync_active_symbols()
-        return Response({"status":"ok","symbols":count,"broker":account.broker.name,"account_id":account.account_id,"source":"deriv_active_symbols","stale":False})
+        count = sync_active_symbols(); return Response({"status":"ok","symbols":count,"broker":account.broker.name,"account_id":account.account_id,"source":"deriv_active_symbols","stale":False})
     except Exception:
         cached_count = MarketSymbol.objects.filter(broker="deriv", is_active=True).count()
-        if cached_count:
-            return Response({"status":"stale","symbols":cached_count,"broker":account.broker.name,"account_id":account.account_id,"source":"cached_deriv_active_symbols","stale":True,"detail":"Live broker market catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
+        if cached_count: return Response({"status":"stale","symbols":cached_count,"broker":account.broker.name,"account_id":account.account_id,"source":"cached_deriv_active_symbols","stale":True,"detail":"Live broker market catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
         return Response({"status":"error","code":"BROKER_MARKET_SYNC_FAILED","detail":"Live broker market catalogue is temporarily unavailable and no cached catalogue exists."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def broker_tick(request):
-    """Fetch a live quote through the selected broker path and persist it once."""
     symbol = str((request.data.get("symbol") if request.method == "POST" else request.query_params.get("symbol")) or "").strip()
     if not symbol: return Response({"detail":"symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
     account = _connected_account(request.user)
     if not account: return Response({"detail":"Connect a broker before requesting live broker quotes."}, status=status.HTTP_409_CONFLICT)
     if not MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists(): return Response({"detail":"The requested symbol is not in the current broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
-        if account.broker.broker_type == "deriv":
-            data = fetch_tick(symbol)
-        else:
-            adapter = BrokerRegistry().adapter(account.broker, account)
-            data = asyncio.run(_bounded_market_data(adapter, symbol))
+        if account.broker.broker_type == "deriv": data = fetch_tick(symbol)
+        else: data = asyncio.run(_bounded_market_data(BrokerRegistry().adapter(account.broker, account), symbol))
         tick = MarketDataService().tick_service.ingest({"symbol": symbol, "quote": data.get("price", data.get("quote")), "bid": data.get("bid"), "ask": data.get("ask"), "epoch": data.get("epoch"), "volume": data.get("volume", 0)})
-        payload = TickSerializer(tick).data
-        payload.update({"broker":account.broker.name,"account_id":account.account_id,"stale":False,"source":"live_broker_quote"})
-        return Response(payload)
+        payload = TickSerializer(tick).data; payload.update({"broker":account.broker.name,"account_id":account.account_id,"stale":False,"source":"live_broker_quote"}); return Response(payload)
     except BrokerAuthenticationError as exc:
-        cached = _last_known_tick(symbol)
-        return _stale_tick_response(cached, account) if cached else Response({"status":"error","code":"BROKER_AUTHENTICATION_FAILED","detail":str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+        cached = _last_known_tick(symbol); return _stale_tick_response(cached, account) if cached else Response({"status":"error","code":"BROKER_AUTHENTICATION_FAILED","detail":str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
     except (BrokerConnectionError, BrokerOrderError, RuntimeError, asyncio.TimeoutError) as exc:
-        cached = _last_known_tick(symbol)
-        return _stale_tick_response(cached, account) if cached else Response({"status":"error","code":"BROKER_TICK_FAILED","detail":str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        cached = _last_known_tick(symbol); return _stale_tick_response(cached, account) if cached else Response({"status":"error","code":"BROKER_TICK_FAILED","detail":str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except Exception:
-        cached = _last_known_tick(symbol)
-        return _stale_tick_response(cached, account) if cached else Response({"status":"error","code":"BROKER_TICK_FAILED","detail":"Broker market data request failed."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        cached = _last_known_tick(symbol); return _stale_tick_response(cached, account) if cached else Response({"status":"error","code":"BROKER_TICK_FAILED","detail":"Broker market data request failed."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def broker_chart_capabilities(request):
+    account = _connected_account(request.user)
+    if not account: return Response({"detail":"Connect a broker before loading chart capabilities."}, status=status.HTTP_409_CONFLICT)
+    adapter = BrokerRegistry().adapter(account.broker, account)
+    if not hasattr(adapter, "get_chart_capabilities"):
+        return Response({"broker": account.broker.name, "modes": [], "timeframes": []})
+    return Response(awaitable_to_sync(adapter.get_chart_capabilities()))
+
+
+def awaitable_to_sync(awaitable):
+    return asyncio.run(asyncio.wait_for(awaitable, timeout=7.0))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def broker_chart_history(request):
+    symbol = str(request.query_params.get("symbol") or "").strip()
+    mode = str(request.query_params.get("mode") or "ticks").lower().strip()
+    granularity = request.query_params.get("granularity")
+    if not symbol: return Response({"detail":"symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
+    if mode not in {"ticks", "candles"}: return Response({"detail":"mode must be ticks or candles"}, status=status.HTTP_400_BAD_REQUEST)
+    account = _connected_account(request.user)
+    if not account: return Response({"detail":"Connect a broker before loading live chart history."}, status=status.HTTP_409_CONFLICT)
+    try:
+        adapter = BrokerRegistry().adapter(account.broker, account)
+        if not hasattr(adapter, "get_chart_history"):
+            return Response({"detail":"The connected broker does not expose chart history through its adapter."}, status=status.HTTP_409_CONFLICT)
+        data = awaitable_to_sync(adapter.get_chart_history(symbol, mode=mode, count=_limit(request, 120, 1000), granularity=granularity))
+        data.update({"broker": account.broker.name, "account_id": account.account_id, "source": "live_broker"})
+        return Response(data)
+    except (BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, asyncio.TimeoutError) as exc:
+        return Response({"detail":str(exc),"source":"broker","stale":False}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
