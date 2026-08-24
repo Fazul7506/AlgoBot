@@ -31,7 +31,7 @@
     if(!actionable){box.innerHTML=`<div class="ai-wait">AI trade gate: ${esc(source==='no_trained_model'?'No trained model available':`${rec} at ${confidence.toFixed(1)}% confidence — waiting for ≥65% actionable confidence.`)}</div>`;return}
     const label=rec==='BUY'?'BUY with AI signal':'SELL with AI signal';
     box.innerHTML=`<button type="button" class="ai-action ${rec==='BUY'?'ai-buy':'ai-sell'}" data-ai-direction="${rec}">${esc(label)}</button><small>Trained-model confidence ${confidence.toFixed(1)}%. Final broker/risk validation still applies.</small>`;
-    $('[data-ai-direction]',box)?.addEventListener('click',()=>{const direction=rec;const target=document.querySelector(`[data-direction="${direction}"]`);target?.click();const form=$('[data-order-form]');if(form){form.requestSubmit()}});
+    $('[data-ai-direction]',box)?.addEventListener('click',()=>{const direction=rec;const target=document.querySelector(`[data-direction="${direction}"]`);target?.click();window.__algobotAiOrderContext={ai_assisted:true,timeframe:$('#timeframe')?.value||'M1',minimum_ai_confidence:65,ai_decision:{recommendation:rec,confidence}};const form=$('[data-order-form]');if(form){form.requestSubmit()}});
   }
   const render = result => {
     const prediction = result.prediction || {}, recommendation = result.recommendation || {}, regime = result.regime || {}, explanation = result.explainability || {};
@@ -59,6 +59,6 @@
   window.addEventListener('DOMContentLoaded', () => {
     if (!$('[data-ai-panel]')) return;
     $('[data-ai-analyze]')?.addEventListener('click', analyze);
-    $('#symbol')?.addEventListener('change', () => { $('[data-ai-explanation]')?.replaceChildren(document.createTextNode('Market changed. Run AI analysis for the selected broker instrument.')); const box=$('[data-ai-trade-actions]');if(box)box.innerHTML='<div class="ai-wait">Run AI analysis for the selected broker market.</div>'; });
+    $('#symbol')?.addEventListener('change', () => { $('[data-ai-explanation]')?.replaceChildren(document.createTextNode('Market changed. Run AI analysis for the selected broker market.')); const box=$('[data-ai-trade-actions]');if(box)box.innerHTML='<div class="ai-wait">Run AI analysis for the selected broker market.</div>'; window.__algobotAiOrderContext=null; });
   }, { once: true });
 })();
