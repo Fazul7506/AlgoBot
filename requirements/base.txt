@@ -1,9 +1,12 @@
 Django>=5.2,<6.1
 channels>=4.2,<5
+daphne>=4.2,<5
 celery>=5.4,<6
 redis>=5,<7
 djangorestframework>=3.15,<4
 djangorestframework-simplejwt>=5.4,<6
+django-cors-headers>=4.7,<5
+django-filter>=25,<26
 python-dotenv>=1,<2
 django-redis>=5,<6
 dj-database-url>=2.3,<3
