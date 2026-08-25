@@ -58,8 +58,15 @@
   function sanitizeDisabledAccountSwitcher() {
     document.querySelectorAll('[data-account-switch]:disabled').forEach(button => {
       const span = button.querySelector('span:not(.algobot-switch-avatar)');
-      if (span) span.textContent = 'Connect another account';
-      button.title = 'Connect another broker account before switching.';
+      // This function is also called by the document MutationObserver below.
+      // Assigning textContent unconditionally creates another childList
+      // mutation, which schedules this callback again and can starve the
+      // browser event loop.  Only write when the DOM is actually stale.
+      if (span && span.textContent !== 'Connect another account') {
+        span.textContent = 'Connect another account';
+      }
+      const title = 'Connect another broker account before switching.';
+      if (button.title !== title) button.title = title;
     });
   }
 
