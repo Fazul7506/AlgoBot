@@ -18,6 +18,7 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
     display_name = serializers.SerializerMethodField()
     is_default = serializers.BooleanField(source="is_preferred", read_only=True)
     is_connected = serializers.SerializerMethodField()
+    credential_status = serializers.CharField(read_only=True)
     data_freshness = serializers.SerializerMethodField()
     switch_enabled = serializers.SerializerMethodField()
 
@@ -27,7 +28,7 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
             "id", "user", "broker", "broker_name", "broker_account_id", "account_id",
             "account_type", "avatar_url", "display_name", "currency", "balance", "equity",
             "margin", "free_margin", "status", "is_preferred", "is_default", "is_connected",
-            "last_synced_at", "data_freshness", "switch_enabled", "created_at",
+            "credential_status", "last_synced_at", "data_freshness", "switch_enabled", "created_at",
         ]
         read_only_fields = [
             "user", "balance", "equity", "margin", "free_margin", "last_synced_at",
@@ -57,7 +58,7 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
         return f"{obj.broker.name} · {obj.account_id}"
 
     def get_is_connected(self, obj):
-        return obj.status == "active" and obj.broker.status == "active"
+        return obj.is_connection_eligible
 
     def get_data_freshness(self, obj):
         if not obj.last_synced_at:

@@ -55,6 +55,13 @@
 
   async function verifyWithBroker(store, account) {
     if (!account?.id || !account?.broker) return;
+    if (account.credential_status === 'credentials_unavailable' || account.credential_status === 'credentials_expired') {
+      const message = account.credential_status === 'credentials_expired'
+        ? 'Broker credentials have expired. Reconnect your broker account.'
+        : 'Broker credentials are unavailable. Reconnect your broker account.';
+      store.transition(store.STATES.ERROR, {account, lastError: message}, 'broker-credentials-unavailable');
+      return;
+    }
     store.transition(store.STATES.SYNCING,{account},'broker-live-verification-started');
     try {
       const payload=await requestJson(`/api/brokers/accounts/${encodeURIComponent(account.id)}/sync/`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken()}},10000);

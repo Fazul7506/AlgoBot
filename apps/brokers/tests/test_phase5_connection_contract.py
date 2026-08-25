@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from datetime import timedelta
+from django.utils import timezone
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
@@ -24,6 +26,26 @@ class BrokerConnectionContractTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["account_type"], "unknown")
         self.assertNotIn("credentials", response.data)
+
+    def test_active_deriv_account_without_a_token_is_not_reported_as_connected(self):
+        response = self.client.get(reverse("broker-accounts-detail", args=[self.account.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["is_connected"])
+        self.assertEqual(response.data["credential_status"], "credentials_unavailable")
+        self.assertNotIn("access_token", response.data)
+        self.assertNotIn("refresh_token", response.data)
+
+    def test_active_deriv_account_with_an_expired_token_is_not_reported_as_connected(self):
+        self.account.set_access_token("token")
+        self.account.expires_at = timezone.now() - timedelta(minutes=1)
+        self.account.save(update_fields=["access_token", "expires_at"])
+
+        response = self.client.get(reverse("broker-accounts-detail", args=[self.account.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["is_connected"])
+        self.assertEqual(response.data["credential_status"], "credentials_expired")
 
     @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
     def test_switch_rejects_unconfirmed_account_type(self):

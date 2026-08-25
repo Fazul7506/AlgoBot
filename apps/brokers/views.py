@@ -164,7 +164,7 @@ class BrokerHealthViewSet(viewsets.ViewSet):
     def list(self, request):
         accounts = BrokerAccount.objects.filter(user=request.user).select_related('broker').order_by('-is_preferred')
         preferred = next((account for account in accounts if account.is_preferred), accounts[0] if accounts else None)
-        return response.Response({'accounts': BrokerAccountSerializer(accounts, many=True).data, 'connected': bool(preferred and preferred.status == 'active' and preferred.broker.status == 'active'), 'preferred_account_id': preferred.id if preferred else None, 'switch_enabled': settings.ENABLE_BROKER_ACCOUNT_SWITCH, 'source': 'broker_accounts'})
+        return response.Response({'accounts': BrokerAccountSerializer(accounts, many=True).data, 'connected': bool(preferred and preferred.is_connection_eligible), 'preferred_account_id': preferred.id if preferred else None, 'switch_enabled': settings.ENABLE_BROKER_ACCOUNT_SWITCH, 'source': 'broker_accounts'})
 
 
 @decorators.api_view(['POST'])
