@@ -5,7 +5,7 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from trading.models.market import MarketSymbol
-from trading.services.market_service import DataCacheManager
+from trading.services.market_service import DataCacheManager, SymbolManager
 
 
 class MarketSeedTests(TestCase):
@@ -17,6 +17,26 @@ class MarketSeedTests(TestCase):
         call_command("seed_markets")
         self.assertEqual(MarketSymbol.objects.count(), first_count)
         self.assertEqual(first, set(MarketSymbol.objects.values_list("symbol", flat=True)))
+
+
+class SymbolManagerStartupTests(TestCase):
+    def test_initialization_defers_database_access_until_symbols_are_requested(self):
+        with patch.object(MarketSymbol.objects, "filter") as mock_filter:
+            manager = SymbolManager()
+
+        mock_filter.assert_not_called()
+        self.assertFalse(manager._loaded)
+
+    def test_symbol_request_loads_the_cache_lazily(self):
+        symbol = MarketSymbol.objects.create(
+            symbol="LAZY_LOAD_TEST",
+            display_name="Lazy Load Test",
+            market_type="FOREX",
+        )
+        manager = SymbolManager()
+
+        self.assertEqual(manager.get_symbol(symbol.symbol), symbol)
+        self.assertTrue(manager._loaded)
 
 
 class MemoryCacheExpiryTests(TestCase):
