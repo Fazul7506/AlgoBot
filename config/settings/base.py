@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'django_filters',
     
     'core',
     'apps.accounts',
@@ -208,6 +209,17 @@ from config.settings.logging import *  # noqa: F403, F401
 
 # Celery - imported from celery.py
 from config.settings.celery import *  # noqa: F403, F401
+
+ROOT_URLCONF = 'deriv_platform.urls'
+WSGI_APPLICATION = 'deriv_platform.wsgi.application'
+ASGI_APPLICATION = 'deriv_platform.asgi.application'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer' if USE_REDIS else 'channels.layers.InMemoryChannelLayer',
+        **({'CONFIG': {'hosts': [REDIS_URL]}} if USE_REDIS else {}),
+    }
+}
 
 # Auth
 AUTH_PASSWORD_VALIDATORS = [

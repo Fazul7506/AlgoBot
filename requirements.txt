@@ -1,6 +1,10 @@
 Django
+daphne
+channels
+django-cors-headers
 djangorestframework
 djangorestframework-simplejwt
+django-filter
 dj-database-url
 
 gunicorn
@@ -9,6 +13,7 @@ psycopg2-binary
 celery
 redis
 django-redis
+channels-redis
 
 django-anymail[brevo]
 python-dotenv
