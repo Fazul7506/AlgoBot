@@ -2,6 +2,8 @@ Django
 daphne
 djangorestframework
 djangorestframework-simplejwt
+django-cors-headers
+django-filter
 dj-database-url
 
 gunicorn
@@ -10,7 +12,6 @@ psycopg2-binary
 celery
 redis
 django-redis
-
 django-anymail[brevo]
 python-dotenv
 
