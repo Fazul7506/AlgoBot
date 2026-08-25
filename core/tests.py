@@ -10,7 +10,7 @@ class AlgoBotExperienceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'AlgoBot')
         self.assertContains(response, 'AI trading platform')
-        self.assertContains(response, 'Institutional-grade')
+        self.assertContains(response, 'Connect broker')
 
     def test_dashboard_page_requires_authentication(self):
         response = self.client.get(reverse('dashboard_page'))

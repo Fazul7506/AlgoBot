@@ -44,10 +44,9 @@
     };
     setMobileOpen(false);
 
-    // A previous implementation listened to BOTH pointerup and click and toggled
-    // twice on touch devices. That made the menu appear dead and could leave the
-    // overlay intercepting the page. pointerup is now the sole mobile toggle path.
-    const handlePointerUp = event => {
+    // Use one click path for touch, mouse, and keyboard activation. Multiple
+    // pointer/click handlers used to toggle the drawer twice on mobile.
+    const handleNavigationClick = event => {
       const target = event.target?.closest?.('[data-mobile-menu]');
       if (target) {
         event.preventDefault();
@@ -62,7 +61,7 @@
       }
       if (sidebar.classList.contains('is-open') && event.target?.closest?.('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')) setMobileOpen(false);
     };
-    document.addEventListener('pointerup', handlePointerUp, true);
+    document.addEventListener('click', handleNavigationClick, true);
 
     if (toggle) {
       const setCollapsed = collapsed => {

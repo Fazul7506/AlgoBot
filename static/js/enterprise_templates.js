@@ -404,32 +404,17 @@
   }
 
   function theme() {
-    $('[data-theme-toggle]')?.addEventListener('click', () => {
-      document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    });
+    // Theme state is owned by base_shell.js. Keeping a second handler here
+    // caused every click to toggle twice and appear to do nothing.
   }
   function shell() {
     const sidebar = $('.app-sidebar');
-    const mobileButton = $('[data-mobile-menu]');
-    const backdrop = $('[data-sidebar-backdrop]');
     const accountButton = $('[data-account-menu]');
     const accountDropdown = $('[data-account-dropdown]');
-    const setDrawer = open => {
-      if (!sidebar || !mobileButton || !backdrop) return;
-      sidebar.classList.toggle('is-open', open);
-      mobileButton.setAttribute('aria-expanded', String(open));
-      backdrop.hidden = !open;
-      document.body.classList.toggle('drawer-open', open);
-      if (open) sidebar.querySelector('a,button')?.focus();
-    };
-    $('[data-sidebar-toggle]')?.addEventListener('click', () => document.body.classList.toggle('sidebar-collapsed'));
-    mobileButton?.addEventListener('click', () => setDrawer(!sidebar.classList.contains('is-open')));
-    backdrop?.addEventListener('click', () => setDrawer(false));
     sidebar?.querySelectorAll('a').forEach(link => {
       const linkPath = new URL(link.href, location.origin).pathname.replace(/\/+$/, '/') || '/';
       const currentPath = location.pathname.replace(/\/+$/, '/') || '/';
       if (linkPath === currentPath) link.setAttribute('aria-current', 'page');
-      link.addEventListener('click', () => setDrawer(false));
     });
     const setAccount = open => {
       if (!accountButton || !accountDropdown) return;
@@ -444,7 +429,7 @@
       if (accountDropdown && !accountDropdown.hidden && !event.target.closest('.account-menu')) setAccount(false);
     });
     document.addEventListener('keydown', event => {
-      if (event.key === 'Escape') { setDrawer(false); setAccount(false); }
+      if (event.key === 'Escape') setAccount(false);
     });
   }
 
