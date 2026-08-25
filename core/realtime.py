@@ -69,7 +69,11 @@ class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
         while True:
             if not self.symbol:
                 return
-            tick = await self.latest_tick(self.symbol)
+            # Fetch through the selected broker account before broadcasting.
+            # The WebSocket is therefore a real-time view of broker data rather
+            # than a passive stream of whichever historical tick happened to be
+            # in the database.
+            tick = await self.live_tick(self.symbol)
             if tick and tick["epoch"] != last_epoch:
                 last_epoch = tick["epoch"]
                 await self.send_json({"type": "market.tick", **tick})
@@ -81,9 +85,35 @@ class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
         return MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists()
 
     @database_sync_to_async
-    def latest_tick(self, symbol):
+    def live_tick(self, symbol):
+        from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
+        from apps.brokers.models import BrokerAccount
+        from apps.brokers.services import BrokerRegistry
+        from apps.market_data.deriv_sync import fetch_tick
+        from apps.market_data.services import MarketDataService
         from apps.market_data.models import Tick
-        tick = Tick.objects.filter(symbol__symbol=symbol).select_related("symbol").order_by("-epoch", "-id").first()
+
+        account = (
+            BrokerAccount.objects.filter(user=self.scope["user"], status="active", broker__status="active")
+            .select_related("broker").order_by("-is_preferred", "-id").first()
+        )
+        try:
+            if not account:
+                return None
+            if account.broker.broker_type == "deriv":
+                data = fetch_tick(symbol)
+            else:
+                data = asyncio.run(asyncio.wait_for(BrokerRegistry().adapter(account.broker, account).get_market_data(symbol), timeout=7))
+            tick = MarketDataService().tick_service.ingest({
+                "symbol": symbol,
+                "quote": data.get("price", data.get("quote")),
+                "bid": data.get("bid"), "ask": data.get("ask"),
+                "epoch": data.get("epoch"), "volume": data.get("volume", 0),
+            })
+        except (BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, RuntimeError, OSError, ValueError, TimeoutError):
+            # Preserve the last known quote during a temporary broker outage;
+            # clients can keep their chart visible while reconnecting.
+            tick = Tick.objects.filter(symbol__symbol=symbol).select_related("symbol").order_by("-epoch", "-id").first()
         if not tick:
             return None
         return {
