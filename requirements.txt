@@ -4,12 +4,12 @@ djangorestframework-simplejwt
 dj-database-url
 
 gunicorn
+daphne
 psycopg2-binary
 
 celery
 redis
 django-redis
-
 django-anymail[brevo]
 python-dotenv
 
