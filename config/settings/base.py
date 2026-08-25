@@ -13,6 +13,7 @@ USE_I18N = True
 USE_TZ = True
 
 SECURE_SSL_REDIRECT = get_bool_env('SECURE_SSL_REDIRECT', False)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE = get_bool_env('SESSION_COOKIE_SECURE', False)
 CSRF_COOKIE_SECURE = get_bool_env('CSRF_COOKIE_SECURE', False)
 SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
@@ -41,6 +42,9 @@ INSTALLED_APPS = [
     'apps.simulation', 'apps.smart_money', 'apps.strategies',
     'apps.subscriptions', 'apps.support', 'apps.tenants', 'apps.trading',
     'apps.training', 'apps.usage', 'apps.workspace',
+    # Legacy compatibility package: its AppConfig uses the unique
+    # ``legacy_trading`` label because apps.trading owns ``engine_trading``.
+    'trading.apps.TradingConfig',
 ]
 
 MIDDLEWARE = [
