@@ -194,7 +194,17 @@ class SymbolManager:
     
     def __init__(self):
         self.symbols_cache = {}
-        self._load_symbols()
+        self._loaded = False
+
+        # This class is instantiated while Django imports the URL configuration.
+        # Do not access the database here: commands such as ``check`` and
+        # ``migrate`` import URLs before application tables have been created.
+        # Symbols are loaded on first use instead.
+
+    def _ensure_symbols_loaded(self):
+        """Populate the cache when a caller actually needs symbol data."""
+        if not self._loaded:
+            self._load_symbols()
     
     def _load_symbols(self):
         """Load symbols from database"""
@@ -202,22 +212,31 @@ class SymbolManager:
             from trading.models.market import MarketSymbol
             symbols = MarketSymbol.objects.filter(is_active=True)
             self.symbols_cache = {s.symbol: s for s in symbols}
+            self._loaded = True
             logger.info(f"Loaded {len(self.symbols_cache)} market symbols")
         except Exception as e:
-            logger.error(f"Symbol load error: {e}")
+            # The database schema may not exist yet while migrations are
+            # running. Leave the cache retryable so a later request can load
+            # it after the schema is available.
+            self._loaded = False
+            logger.warning("Market symbols are unavailable; deferring cache load: %s", e)
     
     def get_symbol(self, symbol: str):
         """Get symbol object"""
-        if symbol not in self.symbols_cache:
+        was_loaded = self._loaded
+        self._ensure_symbols_loaded()
+        if was_loaded and symbol not in self.symbols_cache:
             self._load_symbols()
         return self.symbols_cache.get(symbol)
     
     def get_symbols_by_type(self, market_type: str) -> List:
         """Get all symbols of a market type"""
+        self._ensure_symbols_loaded()
         return [s for s in self.symbols_cache.values() if s.market_type == market_type]
     
     def get_all_tradeable_symbols(self) -> List:
         """Get all tradeable symbols"""
+        self._ensure_symbols_loaded()
         return [s for s in self.symbols_cache.values() if s.is_tradeable]
     
     def refresh(self):
