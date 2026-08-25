@@ -97,6 +97,11 @@ INSTALLED_APPS = [
     'apps.training',
     'apps.usage',
     'apps.workspace',
+
+    # Legacy trading package is still imported by deriv_platform.urls and
+    # trading.views. Register it explicitly so Django can construct the
+    # models in trading.models.* during URL/system-check initialization.
+    'trading.apps.TradingConfig',
 ]
 
 # Middleware
@@ -218,7 +223,7 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer' if USE_REDIS else 'channels.layers.InMemoryChannelLayer',
         **({'CONFIG': {'hosts': [REDIS_URL]}} if USE_REDIS else {}),
-    }
+    },
 }
 
 # Auth
