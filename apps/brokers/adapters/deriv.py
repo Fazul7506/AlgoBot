@@ -113,8 +113,46 @@ class DerivAdapter(BrokerAdapter):
         except (requests.RequestException, ValueError) as exc: raise BrokerConnectionError("Unable to retrieve Deriv trading accounts") from exc
 
     async def get_balance(self):
-        account = await self.authenticate()
-        return {"account_id": account["account_id"], "balance": account.get("balance"), "currency": account.get("currency"), "account_type": "demo" if account.get("is_virtual") else "real", "avatar_url": account.get("avatar_url")}
+        """Return the selected account's balance without requiring a WebSocket.
+
+        The Options accounts endpoint is already used to verify an OAuth
+        connection and includes the current account balance.  Prefer it here
+        because a deployment can reach HTTPS while an outbound authenticated
+        WebSocket (or its short-lived OTP URL) is temporarily unavailable.
+        Fall back to the WebSocket only when Deriv omits the balance from the
+        account record.
+        """
+        account_id = self._account_id()
+        accounts = await self.get_accounts()
+        record = next(
+            (
+                item for item in accounts
+                if str(item.get("account_id") or item.get("loginid") or "") == account_id
+            ),
+            None,
+        )
+        if record is None:
+            raise BrokerAuthenticationError("The selected Deriv account is no longer available to this OAuth credential")
+
+        if record.get("balance") is None:
+            account = await self.authenticate()
+            return {
+                "account_id": account["account_id"],
+                "balance": account.get("balance"),
+                "currency": account.get("currency"),
+                "account_type": "demo" if account.get("is_virtual") else "real",
+                "avatar_url": account.get("avatar_url"),
+            }
+
+        is_virtual = record.get("is_virtual")
+        account_type = str(record.get("account_type") or "").lower()
+        return {
+            "account_id": str(record.get("account_id") or record.get("loginid") or account_id),
+            "balance": record.get("balance"),
+            "currency": record.get("currency"),
+            "account_type": "demo" if is_virtual is True or account_type == "demo" else "real",
+            "avatar_url": record.get("avatar_url"),
+        }
 
     async def get_positions(self): return (await self._request({"portfolio": 1}, authenticated=True)).get("portfolio", {}).get("contracts", [])
     async def get_orders(self): return (await self._request({"statement": 1, "limit": 50}, authenticated=True)).get("statement", {}).get("transactions", [])
