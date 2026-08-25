@@ -4,7 +4,34 @@ body { min-height:100vh; margin:0; overflow-x:hidden; overflow-y:auto !important
 .app-shell { min-height:100vh; position:relative; z-index:1; pointer-events:auto; }
 .app-shell main { min-width:0; min-height:calc(100vh - 64px); overflow:visible !important; position:relative; z-index:1; pointer-events:auto; }
 .app-shell main a,.app-shell main button,.app-shell main input,.app-shell main select,.app-shell main textarea { pointer-events:auto; touch-action:manipulation; }
-.app-sidebar { overflow-x:hidden; overflow-y:auto; pointer-events:auto; -webkit-overflow-scrolling:touch; }
+/*
+ * The shell has a fixed header and account area.  Scrolling the whole aside
+ * moves neither reliably on iOS nor in Chromium when one of the page styles
+ * establishes a nested scroll container.  Keep the shell itself clipped and
+ * make the navigation list the one, explicit scroll container instead.
+ */
+.app-sidebar {
+  display:flex;
+  flex-direction:column;
+  height:100dvh;
+  max-height:100dvh;
+  overflow:hidden !important;
+  pointer-events:auto;
+}
+.app-sidebar nav {
+  display:block !important;
+  flex:1 1 auto;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto !important;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  scrollbar-gutter:stable;
+}
+.app-sidebar .sidebar-header,
+.app-sidebar .sidebar-new-trade,
+.app-sidebar .sidebar-user { flex:0 0 auto; }
 .sidebar-backdrop[hidden] { display:none !important; pointer-events:none !important; }
 .sidebar-backdrop:not([hidden]) { pointer-events:auto; }
 .mobile-menu-button { pointer-events:auto !important; touch-action:manipulation; }
