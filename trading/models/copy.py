@@ -49,7 +49,16 @@ class CopyTrade(models.Model):
 
     leader_trade_id = models.CharField(max_length=64, help_text='Original leader trade identifier')
     follower = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='copied_trades')
-    follower_trade = models.ForeignKey('trading.Trade', on_delete=models.SET_NULL, null=True, blank=True, related_name='as_copied_trade')
+    # This model lives in the legacy_trading Django app. Keep the lazy relation
+    # explicit so Django resolves it against the app's unique label rather than
+    # the old/default "trading" label.
+    follower_trade = models.ForeignKey(
+        'legacy_trading.Trade',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='as_copied_trade',
+    )
     amount = models.FloatField()
     status = models.CharField(max_length=20, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)
