@@ -103,6 +103,8 @@ urlpatterns = [
     path('positions/', login_required(positions_page), name='positions_page'),
     path('signals/', login_required(signals_page), name='signals_page'),
     path('portfolio/', login_required(portfolio_page), name='portfolio_page'),
+    path('analytics/', include('apps.analytics.urls')),
+    path('monitoring/', include('apps.monitoring.urls')),
     path('risk/', login_required(risk_page), name='risk_page'),
     path('trade-history/', login_required(trade_history_page), name='trade_history_page'),
     path('automation/', login_required(workflow_templates_page), name='automation_page'),
@@ -157,7 +159,6 @@ urlpatterns = [
     path('api/', include('apps.automation.urls')),
     path('api/', include('apps.notifications.urls')),
     path('api/', include('apps.deployment.urls')),
-    path('api/', include('apps.monitoring.urls')),
     
     # Webhooks
     path('webhooks/intasend/', intasend_webhook, name='intasend_webhook'),

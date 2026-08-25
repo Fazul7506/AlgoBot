@@ -1,5 +1,7 @@
 """Browser-based views for AlgoBot."""
 import logging
+import json
+from django.http import Http404
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
@@ -194,4 +196,42 @@ def broker_marketplace_page(request):
     """Broker marketplace page"""
     return render(request, 'core/broker_marketplace.html', {
         'brokers': Broker.objects.filter(status='active').order_by('name')
+    })
+
+
+@login_required
+def operations_module_page(request, module):
+    """Render a bounded, backend-backed workspace for operational modules."""
+    modules = {
+        'automation': {
+            'title': 'Automation', 'eyebrow': 'WORKFLOW OPERATIONS',
+            'description': 'Review workflows, execution history and approval controls from the API.',
+            'actions': [('Open workflows', '/automation/', 'link')],
+            'endpoints': [('/api/automation/workflows/', 'Workflows', 'GET'), ('/api/automation/history/', 'Execution history', 'GET')],
+        },
+        'notifications': {
+            'title': 'Notifications', 'eyebrow': 'DELIVERY OPERATIONS',
+            'description': 'Inspect notification preferences, templates and recent delivery records.',
+            'actions': [('Refresh', '/operations/notifications/', 'link')],
+            'endpoints': [('/api/notifications/', 'Notifications', 'GET'), ('/api/notifications/delivery/', 'Delivery records', 'GET')],
+        },
+        'brokers': {
+            'title': 'Broker accounts', 'eyebrow': 'BROKER OPERATIONS',
+            'description': 'Manage the connected broker accounts that supply the workspace with trading data.',
+            'actions': [('Connect broker', '/brokers/connect/', 'link'), ('Browse brokers', '/brokers/marketplace/', 'link')],
+            'endpoints': [('/api/brokers/accounts/', 'Connected accounts', 'GET'), ('/api/broker-health/', 'Broker health', 'GET')],
+        },
+    }
+    try:
+        module_config = modules[module]
+    except KeyError as exc:
+        raise Http404('Unknown operations module.') from exc
+
+    return render(request, 'operations/module_workspace.html', {
+        'module_key': module,
+        'module': module_config,
+        'module_endpoints_json': json.dumps([
+            {'url': url, 'label': label, 'method': method}
+            for url, label, method in module_config['endpoints']
+        ]),
     })
