@@ -1,11 +1,15 @@
 """Browser-based views for AlgoBot."""
 import logging
 import json
+from urllib.parse import urlparse
+
+from django.conf import settings
 from django.http import Http404
+from django.http import HttpResponse
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_http_methods
 from apps.brokers.models import Broker, BrokerAccount
+from core.services.oauth_service import DerivOAuthService
 
 logger = logging.getLogger(__name__)
 
@@ -31,30 +35,6 @@ def _deriv_connected(account):
     )
 
 
-def _connect_page_context(request):
-    """Build context for broker connection page"""
-    connected = False
-    account_id = None
-    brokers = Broker.objects.filter(status='active').order_by('name')
-    
-    if request.user.is_authenticated:
-        account = _preferred_deriv_account(request.user)
-        connected = _deriv_connected(account)
-        account_id = account.account_id if account else None
-    
-    return {
-        'hero_title': 'Connect your Deriv broker to AlgoBot',
-        'hero_copy': 'Access AlgoBot trading workflows, analytics, strategies and execution after your broker connection is established.',
-        'action_label': 'Connect Deriv',
-        'action_url': '/brokers/connect/?broker=deriv',
-        'connected': connected,
-        'account_id': account_id,
-        'continue_url': '/dashboard/',
-        'support_text': 'Only the broker connection flow is required. Once connected, AlgoBot will continue to the trading workspace automatically.',
-        'brokers': brokers
-    }
-
-
 def home(request):
     """Home page - redirect to dashboard if connected"""
     if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)):
@@ -66,13 +46,13 @@ def home(request):
 
 
 def login_page(request):
-    """Login redirects to broker connection"""
-    return redirect('/brokers/connect/?broker=deriv')
+    """Start the only supported browser sign-in flow: Deriv OAuth."""
+    return broker_connect_page(request)
 
 
 def register_page(request):
-    """Registration redirects to broker connection"""
-    return redirect('/brokers/connect/?broker=deriv')
+    """Registration is performed by Deriv during the OAuth sign-in flow."""
+    return broker_connect_page(request)
 
 
 @login_required
@@ -182,18 +162,18 @@ def privacy_page(request):
 
 
 def forgot_password_page(request):
-    """Forgot password redirects to broker connection"""
-    return redirect('/brokers/connect/?broker=deriv')
+    """Password recovery is owned by Deriv, the identity provider."""
+    return broker_connect_page(request)
 
 
 def reset_password_page(request, token=None):
-    """Reset password redirects to broker connection"""
-    return redirect('/brokers/connect/?broker=deriv')
+    """Password recovery is owned by Deriv, the identity provider."""
+    return broker_connect_page(request)
 
 
 def verify_email_page(request):
-    """Verify email redirects to broker connection"""
-    return redirect('/brokers/connect/?broker=deriv')
+    """Email verification is completed by Deriv during its OAuth flow."""
+    return broker_connect_page(request)
 
 
 def cookie_policy_page(request):
@@ -221,16 +201,47 @@ def public_status_page(request):
     return render(request, 'core/system_status.html')
 
 
-@login_required
 def deriv_login(request):
-    """Deriv login page"""
-    return render(request, 'core/deriv_login.html', _connect_page_context(request))
+    """Initiate a secure Deriv OAuth + PKCE browser session.
+
+    This endpoint must remain public.  Deriv is AlgoBot's sole browser
+    identity provider, so requiring an existing Django session here sends an
+    anonymous visitor back to ``/login/`` and creates a redirect loop.
+    """
+    is_valid, error_message = DerivOAuthService.validate_configuration()
+    if not is_valid:
+        logger.error("deriv_oauth_misconfigured", extra={"error": error_message})
+        return HttpResponse("Deriv OAuth is unavailable. Please try again later.", status=503)
+
+    if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)):
+        return redirect("dashboard_page")
+
+    redirect_uri = settings.DERIV_REDIRECT_URI
+    configured_uri = urlparse(redirect_uri)
+    if (
+        configured_uri.scheme
+        and configured_uri.netloc
+        and (request.scheme != configured_uri.scheme or request.get_host() != configured_uri.netloc)
+    ):
+        canonical_url = f"{configured_uri.scheme}://{configured_uri.netloc}{request.path}"
+        if request.GET:
+            canonical_url = f"{canonical_url}?{request.GET.urlencode()}"
+        logger.info(
+            "deriv_oauth_canonicalized",
+            extra={"from_host": request.get_host(), "to_host": configured_uri.netloc},
+        )
+        return redirect(canonical_url)
+
+    code_verifier, code_challenge = DerivOAuthService.generate_pkce_pair()
+    state = DerivOAuthService.generate_state()
+    DerivOAuthService.store_oauth_state_in_session(request, state, code_verifier, redirect_uri)
+    logger.info("deriv_oauth_login_initiated", extra={"redirect_host": configured_uri.netloc})
+    return redirect(DerivOAuthService.create_authorization_url(state, code_challenge))
 
 
-@login_required
 def broker_connect_page(request):
-    """Broker connection page"""
-    return render(request, 'core/broker_connect.html', _connect_page_context(request))
+    """Enter the single supported broker connection and sign-in flow."""
+    return deriv_login(request)
 
 
 @login_required
