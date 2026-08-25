@@ -3,10 +3,7 @@ import os
 from pathlib import Path
 from config.settings.utils import get_bool_env, get_list_env
 
-# Project root
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
-# Core Django
 SECRET_KEY = os.getenv('SECRET_KEY', os.getenv('DJANGO_SECRET_KEY', 'dev-insecure-key-change-in-production'))
 DEBUG = get_bool_env('DEBUG', get_bool_env('DJANGO_DEBUG', True))
 ALLOWED_HOSTS = get_list_env('ALLOWED_HOSTS', ['127.0.0.1', 'localhost', 'testserver'])
@@ -15,7 +12,6 @@ LANGUAGE_CODE = 'en-us'
 USE_I18N = True
 USE_TZ = True
 
-# Security
 SECURE_SSL_REDIRECT = get_bool_env('SECURE_SSL_REDIRECT', False)
 SESSION_COOKIE_SECURE = get_bool_env('SESSION_COOKIE_SECURE', False)
 CSRF_COOKIE_SECURE = get_bool_env('CSRF_COOKIE_SECURE', False)
@@ -23,85 +19,30 @@ SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
 CSRF_COOKIE_SAMESITE = os.getenv('CSRF_COOKIE_SAMESITE', 'Lax')
 CSRF_TRUSTED_ORIGINS = get_list_env('CSRF_TRUSTED_ORIGINS', [])
 
-# Installed apps
 INSTALLED_APPS = [
-    'daphne',
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'rest_framework',
-    'rest_framework_simplejwt',
-    'corsheaders',
-    'django_filters',
-    'core',
-    # The legacy API package still owns the models imported by the top-level
-    # REST router.  Register it explicitly so Django can build those model
-    # classes while the browser and broker APIs are loaded.
-    'trading.apps.TradingConfig',
-    'apps.accounts',
-    'apps.admin_portal',
-    'apps.ai_engine',
-    'apps.alerts',
-    'apps.analysis',
-    'apps.analytics',
-    'apps.audit',
-    'apps.automation',
-    'apps.backtesting',
-    'apps.billing',
-    'apps.broker',
-    'apps.brokers',
-    'apps.community',
-    'apps.contracts',
-    'apps.copy_trading',
-    'apps.dashboard',
-    'apps.deployment',
-    'apps.deriv',
-    'apps.developer',
-    'apps.developer_api',
-    'apps.enterprise',
-    'apps.execution',
-    'apps.feature_flags',
-    'apps.feature_store',
-    'apps.followers',
-    'apps.health',
-    'apps.indicators',
-    'apps.journal',
-    'apps.leaderboards',
-    'apps.licensing',
-    'apps.logging_system',
-    'apps.market_data',
-    'apps.marketplace',
-    'apps.metrics',
-    'apps.ml_models',
-    'apps.monitoring',
-    'apps.notifications',
-    'apps.observability',
-    'apps.optimization',
-    'apps.organizations',
-    'apps.paper_trading',
-    'apps.portfolio',
-    'apps.providers',
-    'apps.rbac',
-    'apps.referrals',
-    'apps.reports',
-    'apps.risk',
-    'apps.signals',
-    'apps.simulation',
-    'apps.smart_money',
-    'apps.strategies',
-    'apps.subscriptions',
-    'apps.support',
-    'apps.tenants',
-    'apps.trading',
-    'apps.training',
-    'apps.usage',
-    'apps.workspace',
+    'daphne', 'django.contrib.admin', 'django.contrib.auth',
+    'django.contrib.contenttypes', 'django.contrib.sessions',
+    'django.contrib.messages', 'django.contrib.staticfiles',
+    'rest_framework', 'rest_framework_simplejwt', 'corsheaders',
+    'django_filters', 'core',
+    'apps.accounts', 'apps.admin_portal', 'apps.ai_engine', 'apps.alerts',
+    'apps.analysis', 'apps.analytics', 'apps.audit', 'apps.automation',
+    'apps.backtesting', 'apps.billing', 'apps.broker', 'apps.brokers',
+    'apps.community', 'apps.contracts', 'apps.copy_trading', 'apps.dashboard',
+    'apps.deployment', 'apps.deriv', 'apps.developer', 'apps.developer_api',
+    'apps.enterprise', 'apps.execution', 'apps.feature_flags',
+    'apps.feature_store', 'apps.followers', 'apps.health', 'apps.indicators',
+    'apps.journal', 'apps.leaderboards', 'apps.licensing',
+    'apps.logging_system', 'apps.market_data', 'apps.marketplace',
+    'apps.metrics', 'apps.ml_models', 'apps.monitoring', 'apps.notifications',
+    'apps.observability', 'apps.optimization', 'apps.organizations',
+    'apps.paper_trading', 'apps.portfolio', 'apps.providers', 'apps.rbac',
+    'apps.referrals', 'apps.reports', 'apps.risk', 'apps.signals',
+    'apps.simulation', 'apps.smart_money', 'apps.strategies',
+    'apps.subscriptions', 'apps.support', 'apps.tenants', 'apps.trading',
+    'apps.training', 'apps.usage', 'apps.workspace',
 ]
 
-# Middleware
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -115,7 +56,6 @@ MIDDLEWARE = [
     'core.middleware.audit_middleware.AuditMiddleware',
 ]
 
-# REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -148,17 +88,14 @@ SIMPLE_JWT = {
 }
 
 CORS_ALLOWED_ORIGINS = get_list_env('CORS_ALLOWED_ORIGINS', [
-    'http://127.0.0.1:3000',
-    'http://localhost:3000',
-    'http://127.0.0.1:8000',
-    'http://localhost:8000',
+    'http://127.0.0.1:3000', 'http://localhost:3000',
+    'http://127.0.0.1:8000', 'http://localhost:8000',
 ])
 CORS_ALLOW_CREDENTIALS = True
 
 TEMPLATES = [{
     'BACKEND': 'django.template.backends.django.DjangoTemplates',
-    'DIRS': [BASE_DIR / 'templates'],
-    'APP_DIRS': True,
+    'DIRS': [BASE_DIR / 'templates'], 'APP_DIRS': True,
     'OPTIONS': {'context_processors': [
         'django.template.context_processors.debug',
         'django.template.context_processors.request',
@@ -174,13 +111,13 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-from config.settings.database import *  # noqa: F403, F401
-from config.settings.cache import *  # noqa: F403, F401
-from config.settings.email import *  # noqa: F403, F401
-from config.settings.broker import *  # noqa: F403, F401
-from config.settings.security import *  # noqa: F403, F401
-from config.settings.logging import *  # noqa: F403, F401
-from config.settings.celery import *  # noqa: F403, F401
+from config.settings.database import *  # noqa: F403,F401
+from config.settings.cache import *  # noqa: F403,F401
+from config.settings.email import *  # noqa: F403,F401
+from config.settings.broker import *  # noqa: F403,F401
+from config.settings.security import *  # noqa: F403,F401
+from config.settings.logging import *  # noqa: F403,F401
+from config.settings.celery import *  # noqa: F403,F401
 
 ROOT_URLCONF = 'deriv_platform.urls'
 WSGI_APPLICATION = 'deriv_platform.wsgi.application'
