@@ -18,7 +18,12 @@ ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", [])
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", [])
 BASE_URL = env("BASE_URL", "").rstrip("/")
 
-SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", True)
+# Render terminates TLS at its edge and forwards requests to Gunicorn over the
+# internal HTTP port. Do not issue a second HTTP->HTTPS redirect from Django:
+# doing so can create an infinite redirect when a custom domain/proxy does not
+# preserve X-Forwarded-Proto exactly as expected. Render already enforces HTTPS
+# for the public service. Keep the proxy header for correct request.is_secure().
+SECURE_SSL_REDIRECT = False
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_HSTS_SECONDS = int(env("SECURE_HSTS_SECONDS", "31536000"))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", True)
