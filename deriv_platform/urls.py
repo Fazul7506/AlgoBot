@@ -115,9 +115,9 @@ urlpatterns = [
     path('billing/status/', billing_status, name='billing_status'),
     path('billing/checkout/', billing_checkout, name='billing_checkout'),
     path('billing/reconcile/', billing_reconcile, name='billing_reconcile'),
-    path('billing/cancel/', billing_cancel, name='billing_cancel'),
-    path('billing/success/', login_required(billing_success_page), name='billing_success'),
-    path('billing/cancel-page/', login_required(billing_cancel_page), name='billing_cancel_page'),
+    path('billing/cancel/', login_required(billing_cancel_page), name='billing_cancel_page'),
+    path('billing/success/', login_required(billing_success_page), name='billing_success_page'),
+    path('api/billing/subscription/cancel/', billing_cancel, name='billing_cancel'),
     
     # Info pages
     path('terms/', terms_page, name='terms_page'),
