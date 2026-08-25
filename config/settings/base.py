@@ -32,12 +32,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
     'django_filters',
-    
     'core',
     'apps.accounts',
     'apps.admin_portal',
@@ -97,11 +95,6 @@ INSTALLED_APPS = [
     'apps.training',
     'apps.usage',
     'apps.workspace',
-
-    # Legacy trading package is still imported by deriv_platform.urls and
-    # trading.views. Register it explicitly so Django can construct the
-    # models in trading.models.* during URL/system-check initialization.
-    'trading.apps.TradingConfig',
 ]
 
 # Middleware
@@ -124,9 +117,7 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
-    ],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
     'DEFAULT_FILTER_BACKENDS': [
@@ -136,16 +127,12 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle'
+        'rest_framework.throttling.UserRateThrottle',
     ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/hour',
-        'user': '1000/hour'
-    },
+    'DEFAULT_THROTTLE_RATES': {'anon': '100/hour', 'user': '1000/hour'},
     'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
 }
 
-# JWT
 from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
@@ -156,7 +143,6 @@ SIMPLE_JWT = {
     'SIGNING_KEY': SECRET_KEY,
 }
 
-# CORS
 CORS_ALLOWED_ORIGINS = get_list_env('CORS_ALLOWED_ORIGINS', [
     'http://127.0.0.1:3000',
     'http://localhost:3000',
@@ -165,54 +151,31 @@ CORS_ALLOWED_ORIGINS = get_list_env('CORS_ALLOWED_ORIGINS', [
 ])
 CORS_ALLOW_CREDENTIALS = True
 
-# Templates
-TEMPLATES = [
-    {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-            ],
-        },
-    },
-]
+TEMPLATES = [{
+    'BACKEND': 'django.template.backends.django.DjangoTemplates',
+    'DIRS': [BASE_DIR / 'templates'],
+    'APP_DIRS': True,
+    'OPTIONS': {'context_processors': [
+        'django.template.context_processors.debug',
+        'django.template.context_processors.request',
+        'django.contrib.auth.context_processors.auth',
+        'django.contrib.messages.context_processors.messages',
+    ]},
+}]
 
-# Static files
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
+STATICFILES_DIRS = [BASE_DIR / 'static']
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
-# Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Database - imported from database.py
 from config.settings.database import *  # noqa: F403, F401
-
-# Cache - imported from cache.py
 from config.settings.cache import *  # noqa: F403, F401
-
-# Email - imported from email.py
 from config.settings.email import *  # noqa: F403, F401
-
-# Broker - imported from broker.py
 from config.settings.broker import *  # noqa: F403, F401
-
-# Security - imported from security.py
 from config.settings.security import *  # noqa: F403, F401
-
-# Logging - imported from logging.py
 from config.settings.logging import *  # noqa: F403, F401
-
-# Celery - imported from celery.py
 from config.settings.celery import *  # noqa: F403, F401
 
 ROOT_URLCONF = 'deriv_platform.urls'
@@ -226,14 +189,12 @@ CHANNEL_LAYERS = {
     },
 }
 
-# Auth
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
-
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/'
