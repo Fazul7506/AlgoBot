@@ -1,3 +1,4 @@
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
 from apps.market_data.constants import TIMEFRAMES
@@ -13,18 +14,61 @@ MARKET_TYPE_MAP = {
 
 
 class Command(BaseCommand):
-    help = "Synchronize the market catalogue from the broker instead of maintaining a hardcoded symbol list."
-    def add_arguments(self, parser): parser.add_argument("--deactivate-missing", action="store_true", help="Deactivate trading-model symbols that are no longer returned by the broker.")
+    help = "Synchronize the market catalogue from the broker and ensure the current model schema exists."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--deactivate-missing",
+            action="store_true",
+            help="Deactivate trading-model symbols that are no longer returned by the broker.",
+        )
+
     def handle(self, *args, **options):
-        synced = sync_active_symbols(); broker_symbols = list(BrokerMarketSymbol.objects.filter(is_active=True)); seen = set(); created = updated = 0
-        supported_timeframes = [key.upper() for key in TIMEFRAMES if key != "tick" and key in {"1m", "5m", "15m", "30m", "1h", "4h", "1d"}]
+        # The repository intentionally carries no committed migration files while the
+        # model/app consolidation is being reset. Generate the current migration graph
+        # and apply it before touching either MarketSymbol table. This makes fresh Render
+        # and CI databases self-initializing instead of querying tables that do not exist.
+        call_command("makemigrations", interactive=False, verbosity=1)
+        call_command("migrate", interactive=False, verbosity=1)
+
+        synced = sync_active_symbols()
+        broker_symbols = list(BrokerMarketSymbol.objects.filter(is_active=True))
+        seen = set()
+        created = updated = 0
+        supported_timeframes = [
+            key.upper()
+            for key in TIMEFRAMES
+            if key != "tick" and key in {"1m", "5m", "15m", "30m", "1h", "4h", "1d"}
+        ]
+
         for source in broker_symbols:
             market_type = MARKET_TYPE_MAP.get(source.market, "SYNTHETIC")
             obj, was_created = TradingMarketSymbol.objects.update_or_create(
                 symbol=source.symbol,
-                defaults={"display_name": source.display_name, "market_type": market_type, "pip_size": float(source.tick_size or source.pip_size or 0), "is_active": source.is_active, "is_tradeable": source.is_tradable, "supported_timeframes": supported_timeframes},
+                defaults={
+                    "display_name": source.display_name,
+                    "market_type": market_type,
+                    "pip_size": float(source.tick_size or source.pip_size or 0),
+                    "is_active": source.is_active,
+                    "is_tradeable": source.is_tradable,
+                    "supported_timeframes": supported_timeframes,
+                },
             )
-            seen.add(obj.pk); created += int(was_created); updated += int(not was_created)
+            seen.add(obj.pk)
+            created += int(was_created)
+            updated += int(not was_created)
+
         deactivated = 0
-        if options["deactivate_missing"] and seen: deactivated = TradingMarketSymbol.objects.filter(is_active=True).exclude(pk__in=seen).update(is_active=False)
-        self.stdout.write(self.style.SUCCESS(f"Broker market sync complete: {synced} broker symbols synchronized; {created} trading records created, {updated} updated, {deactivated} deactivated."))
+        if options["deactivate_missing"] and seen:
+            deactivated = (
+                TradingMarketSymbol.objects.filter(is_active=True)
+                .exclude(pk__in=seen)
+                .update(is_active=False)
+            )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Broker market sync complete: {synced} broker symbols synchronized; "
+                f"{created} trading records created, {updated} updated, {deactivated} deactivated."
+            )
+        )
