@@ -85,6 +85,39 @@ class BrokerAccount(models.Model):
     def is_token_expired(self) -> bool:
         return bool(self.expires_at and self.expires_at <= timezone.now())
 
+    @property
+    def credential_status(self) -> str:
+        """Return a safe, non-secret readiness status for this account.
+
+        An active database row is not proof that its broker credential survived
+        a deployment, key rotation, or token revocation.  The browser can use
+        this status to avoid presenting a stored account as live before the
+        broker has accepted its credential.
+        """
+        auth_type = str((self.broker.metadata or {}).get("auth") or "").lower()
+        requires_oauth = self.broker.broker_type == "deriv" or auth_type == "oauth"
+        if not requires_oauth:
+            return "ready"
+        if self.token_status != "active" or self.is_token_expired:
+            return "credentials_expired"
+        access_token = self.get_access_token()
+        # CredentialEncryptionService intentionally returns the original value
+        # when a Fernet payload cannot be decrypted.  That fallback is useful
+        # for legacy data, but an unchanged encrypted payload is never a usable
+        # OAuth token and must not be presented as a live connection.
+        if not access_token or access_token == self.access_token:
+            return "credentials_unavailable"
+        return "ready"
+
+    @property
+    def is_connection_eligible(self) -> bool:
+        """Whether local account state permits a live broker connection."""
+        return (
+            self.status == "active"
+            and self.broker.status == "active"
+            and self.credential_status == "ready"
+        )
+
 
 class BrokerConnection(models.Model):
     broker = models.ForeignKey(Broker, on_delete=models.CASCADE, related_name='connections')

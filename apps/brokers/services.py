@@ -71,7 +71,7 @@ class SmartOrderRouter:
     def route(self,user,symbol=None,mode='latency_based',preferred_account=None):
         qs=BrokerAccount.objects.select_related('broker').filter(user=user,status='active',broker__status='active')
         if preferred_account: qs=qs.filter(pk=preferred_account.pk)
-        candidates=list(qs)
+        candidates=[account for account in qs if account.is_connection_eligible]
         if not candidates: raise BrokerRoutingError('No active broker accounts are available')
         if mode=='priority': return sorted(candidates,key=lambda a:(not a.is_preferred,a.broker.name))[0]
         def score(a):
@@ -82,7 +82,7 @@ class OrderManagementSystem:
     def create(self,user,**data):
         account=data.get('account') or SmartOrderRouter().route(user,data.get('symbol'))
         if account.user_id!=user.id: raise BrokerRoutingError('The selected broker account does not belong to this user')
-        if account.status!='active' or account.broker.status!='active': raise BrokerRoutingError('The selected broker account is not currently connected')
+        if not account.is_connection_eligible: raise BrokerRoutingError('The selected broker account does not have usable broker credentials')
         order=Order.objects.create(user=user,broker=account.broker,account=account,status='created',**{k:v for k,v in data.items() if k!='account'}); order.status='validated'; order.save(update_fields=['status','updated_at']); return order
     def approve(self,order): order.status='approved'; order.save(update_fields=['status','updated_at']); return order
     def queue(self,order): order.status='queued'; order.save(update_fields=['status','updated_at']); return order
