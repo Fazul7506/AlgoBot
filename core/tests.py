@@ -17,6 +17,12 @@ class AlgoBotExperienceTests(TestCase):
         response = self.client.get(reverse('dashboard_page'))
         self.assertEqual(response.status_code, 302)
 
+    def test_landing_page_head_response_is_empty(self):
+        response = self.client.head(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'')
+
     def test_workspace_pages_require_authentication(self):
         markets_response = self.client.get(reverse('markets_page'))
         strategies_response = self.client.get(reverse('strategies_page'))

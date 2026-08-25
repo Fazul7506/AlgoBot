@@ -7,6 +7,7 @@
   let lastAccountId = null;
   let lastConnection = null;
   let lastBalance = null;
+  let knownAccounts = [];
   let busy = false;
   let timer = null;
 
@@ -30,6 +31,11 @@
 
   async function refreshAccounts(store) {
     const accounts = list(await requestJson('/api/brokers/accounts/')).filter(a => a?.id);
+    knownAccounts = accounts;
+    // Publish the exact backend list once so every widget reads the same
+    // account selection instead of each one independently polling the API.
+    window.AlgoBotBrokerAccounts = accounts.slice();
+    window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded', {detail: accounts.slice()}));
     const account = accounts.find(a => a.is_preferred || a.is_default) || accounts[0] || null;
     if (!account) {
       // Never destroy a known-good account because one polling request returned
@@ -83,13 +89,13 @@
   function schedule() {
     if(timer) clearInterval(timer);
     syncFromBackend();
-    setTimeout(syncFromBackend,750);
-    setTimeout(syncFromBackend,2000);
-    timer=setInterval(syncFromBackend,15000);
+    // One canonical refresh loop prevents competing account/sync requests
+    // from the shell, dashboard, and trading terminal.
+    timer=setInterval(syncFromBackend,30000);
   }
 
-  window.addEventListener('algobot:account-changed',event=>{ if(window.AlgoBotBrokerState&&event.detail) window.AlgoBotBrokerState.setAccount(event.detail,'account-changed'); lastAccountId=String(event.detail?.id||''); lastConnection=event.detail?.status==='active'&&event.detail?.is_connected===true; lastBalance=String(event.detail?.balance??''); });
-  window.addEventListener('algobot:account-synced',event=>{ if(window.AlgoBotBrokerState&&event.detail) window.AlgoBotBrokerState.setAccount(event.detail,'account-synced'); lastAccountId=String(event.detail?.id||''); lastConnection=event.detail?.status==='active'&&event.detail?.is_connected===true; lastBalance=String(event.detail?.balance??''); });
+  window.addEventListener('algobot:account-changed',event=>{ if(window.AlgoBotBrokerState&&event.detail) window.AlgoBotBrokerState.setAccount(event.detail,'account-changed'); knownAccounts=knownAccounts.map(account=>String(account.id)===String(event.detail?.id)?event.detail:{...account,is_preferred:false}); window.AlgoBotBrokerAccounts=knownAccounts.slice(); lastAccountId=String(event.detail?.id||''); lastConnection=event.detail?.status==='active'&&event.detail?.is_connected===true; lastBalance=String(event.detail?.balance??''); });
+  window.addEventListener('algobot:account-synced',event=>{ if(window.AlgoBotBrokerState&&event.detail) window.AlgoBotBrokerState.setAccount(event.detail,'account-synced'); knownAccounts=knownAccounts.map(account=>String(account.id)===String(event.detail?.id)?event.detail:account); window.AlgoBotBrokerAccounts=knownAccounts.slice(); lastAccountId=String(event.detail?.id||''); lastConnection=event.detail?.status==='active'&&event.detail?.is_connected===true; lastBalance=String(event.detail?.balance??''); });
   window.addEventListener('algobot:account-sync-error',event=>{ if(window.AlgoBotBrokerState) { const s=window.AlgoBotBrokerState.get(); window.AlgoBotBrokerState.transition(window.AlgoBotBrokerState.STATES.DEGRADED,{account:s.account,lastError:event.detail?.error?.message||'Broker synchronization failed'},'account-sync-error'); } });
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',schedule,{once:true}); else schedule();

@@ -6,15 +6,12 @@
   const safe = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const money = v => v == null || v === '' || Number.isNaN(Number(v)) ? 'Unavailable' : Number(v).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8});
   const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '';
-  let accounts = [], accountBusy = false, terminalSyncBusy = false;
+  let accounts = [], terminalSyncBusy = false;
 
   function ensureMaterialSymbols() {
-    if (document.getElementById('algobot-material-symbols-font')) return;
-    const link = document.createElement('link');
-    link.id = 'algobot-material-symbols-font';
-    link.rel = 'stylesheet';
-    link.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL,wght,GRAD,opsz@0..1,100..700,-25..200,20..48&display=swap';
-    document.head.appendChild(link);
+    // The base template owns the single, preconnected Material Symbols
+    // stylesheet.  Do not inject a competing font URL after page load.
+    document.documentElement.classList.add('material-symbols-ready');
   }
 
   async function request(url, options = {}, timeout = 5000) {
@@ -139,14 +136,14 @@
   }
 
   async function syncAccounts() {
-    if (accountBusy) return accounts;
-    accountBusy = true;
-    try {
-      accounts = list(await request('/api/brokers/accounts/', {}, 5000)).filter(a => a?.id && a?.broker_account_id);
-      render();
-      return accounts;
-    } catch (e) { render(); return accounts; }
-    finally { accountBusy = false; }
+    // broker_state_bridge is the only account API client.  Reading its
+    // published snapshot keeps the shell, dashboard, and terminal in lockstep.
+    const canonical = window.AlgoBotBrokerAccounts;
+    const selected = window.AlgoBotBrokerState?.get?.().account;
+    accounts = (Array.isArray(canonical) ? canonical : (selected ? [selected] : accounts))
+      .filter(a => a?.id && a?.broker_account_id);
+    render();
+    return accounts;
   }
 
   async function syncSelectedAccount() {
@@ -200,6 +197,17 @@
     if (symbol) { const el = $('[data-symbol]'); if (el && el.value !== symbol) el.value = symbol; }
     setInterval(() => { if (document.visibilityState === 'visible') syncAccounts(); }, 30000);
   }
+  window.addEventListener('algobot:backend-accounts-loaded', event => {
+    accounts = list(event.detail).filter(a => a?.id && a?.broker_account_id);
+    render();
+  });
+  window.addEventListener('algobot:state-changed', event => {
+    const account = event.detail?.state?.account;
+    if (account && !accounts.some(item => String(item.id) === String(account.id))) {
+      accounts = [account];
+      render();
+    }
+  });
   window.addEventListener('DOMContentLoaded', boot, {once:true});
 })();
 
