@@ -6,6 +6,7 @@ from config.settings.utils import get_bool_env, get_list_env
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', os.getenv('DJANGO_SECRET_KEY', 'dev-insecure-key-change-in-production'))
 DEBUG = get_bool_env('DEBUG', get_bool_env('DJANGO_DEBUG', True))
+ALLOW_LIVE_TRADING = get_bool_env('ALLOW_LIVE_TRADING', False)
 ALLOWED_HOSTS = get_list_env('ALLOWED_HOSTS', ['127.0.0.1', 'localhost', 'testserver'])
 TIME_ZONE = os.getenv('TIME_ZONE', 'UTC')
 LANGUAGE_CODE = 'en-us'

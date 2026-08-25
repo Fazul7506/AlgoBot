@@ -2,7 +2,6 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
-from django.http import JsonResponse
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
 from django.contrib.auth.decorators import login_required
@@ -46,12 +45,6 @@ from core.views_broker_oauth import callback
 from core.views_payment import intasend_webhook, pesapal_webhook, pesapal_callback
 from core.views_billing import billing_plans, billing_status, billing_checkout, billing_reconcile, billing_cancel
 
-
-def health_check(request):
-    """Lightweight health endpoint for Render and uptime monitors."""
-    return JsonResponse({'status': 'ok'})
-
-
 # Setup routers
 router = DefaultRouter()
 
@@ -84,8 +77,8 @@ router.register(r'strategies', StrategyViewSet, basename='strategies')
 router.register(r'copy-trading', CopyTradingViewSet, basename='copy-trading')
 
 urlpatterns = [
-    # Health check — Render probes this endpoint by default
-    path('health/', health_check, name='health_check'),
+    # Lightweight liveness and dependency readiness probes.
+    path('health/', include('apps.health.urls')),
 
     # Admin
     path('admin/', admin.site.urls),
@@ -148,7 +141,7 @@ urlpatterns = [
     path('brokers/marketplace/', broker_marketplace_page, name='broker_marketplace_page'),
     
     # OAuth callback
-    path('callback/', callback, name='oauth_callback'),
+    path('callback/', callback, name='callback'),
     
     # API endpoints
     path('api/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -156,12 +149,11 @@ urlpatterns = [
     path('api/auth/register/', register, name='register'),
     path('api/auth/login/', login_view, name='login'),
     path('api/auth/change-password/', change_password, name='change_password'),
-    path('api/', include(router.urls)),
-    
     # Module API includes
     path('api/', include('apps.brokers.urls')),
     path('api/', include('apps.execution.urls')),
     path('api/', include('apps.market_data.urls')),
+    path('api/developer/', include('apps.developer.urls')),
     path('api/', include('apps.indicators.urls')),
     path('api/', include('apps.risk.urls')),
     path('api/', include('apps.copy_trading.urls')),
@@ -169,6 +161,9 @@ urlpatterns = [
     path('api/', include('apps.automation.urls')),
     path('api/', include('apps.notifications.urls')),
     path('api/', include('apps.deployment.urls')),
+    # Keep explicit module routes ahead of router detail patterns such as
+    # ``market/ticks/<pk>/`` so nested endpoints resolve correctly.
+    path('api/', include(router.urls)),
     
     # Webhooks
     path('webhooks/intasend/', intasend_webhook, name='intasend_webhook'),
