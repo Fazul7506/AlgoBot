@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from unittest.mock import patch
 
 
 class AlgoBotExperienceTests(TestCase):
@@ -35,26 +36,39 @@ class AlgoBotExperienceTests(TestCase):
 
 
 class AuthExperienceCleanupTests(TestCase):
-    def test_auth_pages_redirect_to_broker_connect(self):
-        login_response = self.client.get(reverse('login_page'))
-        register_response = self.client.get(reverse('register_page'))
+    @patch('core.views.DerivOAuthService.create_authorization_url', return_value='https://auth.deriv.test/authorize')
+    @patch('core.views.DerivOAuthService.store_oauth_state_in_session')
+    @patch('core.views.DerivOAuthService.generate_state', return_value='state')
+    @patch('core.views.DerivOAuthService.generate_pkce_pair', return_value=('verifier', 'challenge'))
+    @patch('core.views.DerivOAuthService.validate_configuration', return_value=(True, None))
+    def test_auth_aliases_start_deriv_oauth_without_a_local_login(
+        self, validate_configuration, generate_pkce, generate_state, store_state, create_url
+    ):
+        for path in ('/login/', '/register/', '/forgot-password/', '/reset-password/demo-token/', '/verify-email/'):
+            response = self.client.get(path)
 
-        self.assertEqual(login_response.status_code, 302)
-        self.assertEqual(register_response.status_code, 302)
-        self.assertIn('/brokers/connect/?broker=deriv', login_response['Location'])
-        self.assertIn('/brokers/connect/?broker=deriv', register_response['Location'])
+            self.assertEqual(response.status_code, 302, path)
+            self.assertEqual(response['Location'], 'https://auth.deriv.test/authorize', path)
 
-    def test_public_auth_recovery_routes_redirect_to_broker_connect(self):
-        forgot_response = self.client.get('/forgot-password/')
-        reset_response = self.client.get('/reset-password/demo-token/')
-        verify_response = self.client.get('/verify-email/')
+        self.assertEqual(validate_configuration.call_count, 5)
+        self.assertEqual(generate_pkce.call_count, 5)
+        self.assertEqual(generate_state.call_count, 5)
+        self.assertEqual(store_state.call_count, 5)
+        self.assertEqual(create_url.call_count, 5)
 
-        self.assertEqual(forgot_response.status_code, 302)
-        self.assertEqual(reset_response.status_code, 302)
-        self.assertEqual(verify_response.status_code, 302)
-        self.assertIn('/brokers/connect/?broker=deriv', forgot_response['Location'])
-        self.assertIn('/brokers/connect/?broker=deriv', reset_response['Location'])
-        self.assertIn('/brokers/connect/?broker=deriv', verify_response['Location'])
+    @patch('core.views.DerivOAuthService.create_authorization_url', return_value='https://auth.deriv.test/authorize')
+    @patch('core.views.DerivOAuthService.store_oauth_state_in_session')
+    @patch('core.views.DerivOAuthService.generate_state', return_value='state')
+    @patch('core.views.DerivOAuthService.generate_pkce_pair', return_value=('verifier', 'challenge'))
+    @patch('core.views.DerivOAuthService.validate_configuration', return_value=(True, None))
+    def test_anonymous_broker_connect_starts_deriv_oauth(
+        self, validate_configuration, generate_pkce, generate_state, store_state, create_url
+    ):
+        response = self.client.get('/brokers/connect/?broker=deriv')
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], 'https://auth.deriv.test/authorize')
+        store_state.assert_called_once()
 
 
 class BillingRedirectPagesTests(TestCase):
