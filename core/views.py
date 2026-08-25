@@ -37,6 +37,11 @@ def _deriv_connected(account):
 
 def home(request):
     """Home page - redirect to dashboard if connected"""
+    # Daphne warns when an application provides a body for a HEAD response.
+    # The landing page is probed with HEAD by uptime monitors, so return an
+    # explicitly empty success response rather than rendering the full page.
+    if request.method == 'HEAD':
+        return HttpResponse(status=200)
     if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)):
         return redirect('/dashboard/')
     return render(request, 'core/home.html', {

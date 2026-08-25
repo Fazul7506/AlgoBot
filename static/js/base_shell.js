@@ -65,7 +65,7 @@
 
     if (toggle) {
       const setCollapsed = collapsed => {
-        if (window.innerWidth <= 800) return;
+        if (window.innerWidth <= 900) return;
         sidebar.classList.toggle('is-collapsed', !!collapsed);
         shell?.classList.toggle('sidebar-collapsed', !!collapsed);
         document.body.classList.toggle('sidebar-collapsed', !!collapsed);
@@ -75,7 +75,7 @@
         if (icon) icon.textContent = collapsed ? 'left_panel_open' : 'left_panel_close';
         try { localStorage.setItem(storageKey, collapsed ? '1' : '0'); } catch (_) {}
       };
-      try { if (window.innerWidth > 800 && localStorage.getItem(storageKey) === '1') setCollapsed(true); } catch (_) {}
+      try { if (window.innerWidth > 900 && localStorage.getItem(storageKey) === '1') setCollapsed(true); } catch (_) {}
       toggle.addEventListener('click', event => {
         event.preventDefault();
         event.stopPropagation();
@@ -83,7 +83,7 @@
       });
     }
     document.addEventListener('keydown', event => { if (event.key === 'Escape') setMobileOpen(false); });
-    window.addEventListener('resize', () => { if (window.innerWidth > 800) setMobileOpen(false); });
+    window.addEventListener('resize', () => { if (window.innerWidth > 900) setMobileOpen(false); });
   }
 
   function bindTheme() {
