@@ -27,6 +27,12 @@ def env_list(name: str, default: Iterable[str] = ()) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+# Backwards-compatible names used by the base settings module and older
+# settings consumers. Keep these aliases so the settings API remains stable
+# while env_bool/env_list are the canonical helper names.
+get_bool_env = env_bool
+get_list_env = env_list
+
 
 def validate_required_settings(*, production: bool, values: dict[str, str]) -> None:
     """Raise a clear error when production-critical configuration is missing."""
