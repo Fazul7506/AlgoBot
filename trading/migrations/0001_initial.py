@@ -678,7 +678,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='trade',
-            constraint=models.UniqueConstraint(condition=models.Q(('client_request_id', ''), _negated=True), fields=('user', 'client_request_id'), name='unique_trade_client_request'),
+            constraint=models.UniqueConstraint(condition=models.Q(('client_request_id', ''), _negated=True), fields=('user', 'client_request_id'), name='legacy_trading_unique_trade_client_request'),
         ),
         migrations.AddIndex(
             model_name='technicalsignal',

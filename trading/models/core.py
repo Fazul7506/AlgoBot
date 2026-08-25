@@ -59,7 +59,7 @@ class Trade(models.Model):
     class Meta:
         ordering = ['-opened_at']
         indexes = [models.Index(fields=['user','status','-opened_at']), models.Index(fields=['symbol','status'])]
-        constraints = [models.UniqueConstraint(fields=['user','client_request_id'], condition=~models.Q(client_request_id=''), name='unique_trade_client_request')]
+        constraints = [models.UniqueConstraint(fields=['user','client_request_id'], condition=~models.Q(client_request_id=''), name='legacy_trading_unique_trade_client_request')]
     def __str__(self): return f"{self.symbol} {self.contract_type} - {self.status}"
 
 
