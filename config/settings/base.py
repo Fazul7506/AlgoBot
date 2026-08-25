@@ -37,6 +37,10 @@ INSTALLED_APPS = [
     'corsheaders',
     'django_filters',
     'core',
+    # The legacy API package still owns the models imported by the top-level
+    # REST router.  Register it explicitly so Django can build those model
+    # classes while the browser and broker APIs are loaded.
+    'trading.apps.TradingConfig',
     'apps.accounts',
     'apps.admin_portal',
     'apps.ai_engine',

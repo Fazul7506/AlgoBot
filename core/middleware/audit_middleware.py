@@ -30,8 +30,10 @@ class AuditMiddleware(MiddlewareMixin):
             return response
         
         try:
-            # Skip audit logging if database is locked
-            if not connection.connection or connection.connection.closed:
+            # DB-API connections do not expose a portable ``closed`` flag
+            # (SQLite does not). Django owns that detail, so use its
+            # cross-database health check before writing an audit record.
+            if not connection.connection or not connection.is_usable():
                 return response
             
             user = getattr(request, 'user', None)

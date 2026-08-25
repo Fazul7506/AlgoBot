@@ -118,6 +118,48 @@ def performance_page(request):
 
 
 @login_required
+def risk_page(request):
+    """Risk controls page backed by the authenticated browser session."""
+    return render(request, 'core/risk.html')
+
+
+@login_required
+def orders_page(request):
+    """Broker-backed order history page."""
+    return render(request, 'core/orders.html')
+
+
+@login_required
+def positions_page(request):
+    """Broker-backed open positions page."""
+    return render(request, 'core/positions.html')
+
+
+@login_required
+def signals_page(request):
+    """Trading signals page."""
+    return render(request, 'core/signals.html')
+
+
+@login_required
+def portfolio_page(request):
+    """Portfolio view for the currently selected broker account."""
+    return render(request, 'core/portfolio.html')
+
+
+@login_required
+def billing_success_page(request):
+    """Payment completion page for the authenticated subscriber."""
+    return render(request, 'core/billing_success.html')
+
+
+@login_required
+def billing_cancel_page(request):
+    """Payment cancellation page for the authenticated subscriber."""
+    return render(request, 'core/billing_cancel.html')
+
+
+@login_required
 def settings_page(request):
     """Settings page"""
     return render(request, 'core/settings.html')
