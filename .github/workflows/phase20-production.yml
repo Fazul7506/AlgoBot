@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: production-validation-${{ github.workflow }}-${{ github.ref }}
@@ -27,6 +27,8 @@ jobs:
     steps:
       - name: Checkout current project tree
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -52,8 +54,28 @@ jobs:
       - name: Compile every Django template
         run: python scripts/validate_templates.py
 
-      - name: Generate current migration graph
-        run: python manage.py makemigrations --noinput
+      - name: Generate missing Django migrations
+        run: |
+          python manage.py makemigrations --noinput --verbosity 1
+          python manage.py showmigrations --plan
+
+      - name: Persist generated migrations
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git add -A -- '**/migrations/*.py' '**/migrations/__init__.py'
+          if git diff --cached --quiet; then
+            echo "No migration changes to commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: persist generated Django migrations [skip ci]"
+            git push
+          fi
+
+      - name: Verify migrations are present
+        run: |
+          python manage.py makemigrations --check --noinput
+          python manage.py showmigrations
 
       - name: Apply migrations
         run: python manage.py migrate --noinput
