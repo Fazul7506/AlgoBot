@@ -1,4 +1,5 @@
 Django
+daphne
 djangorestframework
 djangorestframework-simplejwt
 dj-database-url
