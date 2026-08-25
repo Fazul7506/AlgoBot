@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from django.conf import settings
 from django.db import transaction
@@ -13,6 +14,7 @@ from .serializers import *
 from .services import BrokerConnectionService, ExecutionEngine, SynchronizationService
 from .exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerRoutingError, BrokerOrderError
 
+logger = logging.getLogger(__name__)
 
 def _run_bounded(coro, timeout=8.0):
     async def runner():
@@ -85,6 +87,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         except BrokerConnectionError as exc:
             return response.Response({'detail': str(exc), 'broker_status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception as exc:
+            logger.exception("broker_account_sync_unexpected_failure", extra={"account_id": account.pk, "broker": account.broker.broker_type})
             return response.Response({'detail': 'Broker synchronization failed; the last known account data was preserved.', 'broker_status': 'error', 'error_code': exc.__class__.__name__}, status=status.HTTP_502_BAD_GATEWAY)
         return response.Response({'source': f'{synced.broker.broker_type}_authorize', 'account': BrokerAccountSerializer(synced).data, 'broker_data': broker_data})
 
