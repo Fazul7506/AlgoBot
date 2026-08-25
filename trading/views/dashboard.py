@@ -13,6 +13,7 @@ from trading.services.market_regime import MarketRegimeDetector
 from trading.services.self_learning_service import SelfLearningService
 from trading.services.advanced_analytics_service import AdvancedAnalyticsService
 from trading.models.notifications import Notification
+from apps.brokers.models import BrokerAccount
 from django.http import HttpResponse
 import logging
 
@@ -32,7 +33,17 @@ class DashboardViewSet(viewsets.ViewSet):
         """
         try:
             user = request.user
-            deriv_account = user.deriv_account
+            # The OAuth callback persists the connected account in the
+            # canonical brokers app.  ``user.deriv_account`` belongs to the
+            # retired model and is absent for every newly connected broker
+            # account, which made this otherwise public dashboard endpoint
+            # return 500 immediately after a successful connection.
+            broker_account = (
+                BrokerAccount.objects.filter(user=user, status='active', broker__status='active')
+                .select_related('broker')
+                .order_by('-is_preferred', '-last_synced_at', '-id')
+                .first()
+            )
             
             # Trade statistics
             all_trades = Trade.objects.filter(user=user)
@@ -52,7 +63,12 @@ class DashboardViewSet(viewsets.ViewSet):
                 'status': 'success',
                 'data': {
                     'account': {
-                        'account_id': deriv_account.account_id if deriv_account else None,
+                        'account_id': broker_account.account_id if broker_account else None,
+                        'broker': broker_account.broker.name if broker_account else None,
+                        'currency': broker_account.currency if broker_account else None,
+                        'balance': broker_account.balance if broker_account else None,
+                        'equity': broker_account.equity if broker_account else None,
+                        'last_synced_at': broker_account.last_synced_at if broker_account else None,
                         'email': user.email,
                         'username': user.username,
                         'registered_date': user.date_joined.isoformat(),
@@ -67,8 +83,8 @@ class DashboardViewSet(viewsets.ViewSet):
                         'avg_pnl_per_trade': round(avg_pnl, 2),
                     },
                     'paper_trading': {
-                        'enabled': user.bot_settings.is_paper_trading,
-                        'balance': user.bot_settings.paper_balance,
+                        'enabled': getattr(getattr(user, 'bot_settings', None), 'is_paper_trading', False),
+                        'balance': getattr(getattr(user, 'bot_settings', None), 'paper_balance', 0),
                     }
                 }
             }, status=status.HTTP_200_OK)
