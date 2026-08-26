@@ -43,8 +43,6 @@ INSTALLED_APPS = [
     'apps.simulation', 'apps.smart_money', 'apps.strategies',
     'apps.subscriptions', 'apps.support', 'apps.tenants', 'apps.trading',
     'apps.training', 'apps.usage', 'apps.workspace',
-    # Legacy compatibility package: its AppConfig uses the unique
-    # ``legacy_trading`` label because apps.trading owns ``engine_trading``.
     'trading.apps.TradingConfig',
 ]
 
@@ -123,6 +121,7 @@ from config.settings.broker import *  # noqa: F403,F401
 from config.settings.security import *  # noqa: F403,F401
 from config.settings.logging import *  # noqa: F403,F401
 from config.settings.celery import *  # noqa: F403,F401
+from config.settings.payment import *  # noqa: F403,F401
 
 ROOT_URLCONF = 'deriv_platform.urls'
 WSGI_APPLICATION = 'deriv_platform.wsgi.application'
