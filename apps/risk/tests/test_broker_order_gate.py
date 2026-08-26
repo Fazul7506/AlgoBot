@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from apps.brokers.models import Broker, BrokerAccount, Order
-from apps.risk.models import RiskAssessment
+from apps.risk.models import RiskAssessment, RiskProfile
 from apps.risk.services import KillSwitchService
 from apps.risk.engine import RiskEngine
 
@@ -20,6 +20,12 @@ class BrokerOrderRiskGateTests(TestCase):
             account_id='RISK-1',
             balance=Decimal('100000'),
         )
+        RiskProfile.objects.create(
+            user=self.user,
+            profile_name='Test Risk Profile',
+            max_risk_per_trade=Decimal('0.02'),
+            max_exposure=Decimal('0.35'),
+        )
 
     def test_broker_order_is_assessed_by_risk_engine(self):
         order = Order.objects.create(
@@ -31,7 +37,7 @@ class BrokerOrderRiskGateTests(TestCase):
             stake=Decimal('10'),
         )
         assessment = RiskEngine().evaluate_order(order)
-        self.assertTrue(assessment.approved)
+        self.assertTrue(assessment.approved, assessment.rejection_reason)
         self.assertEqual(assessment.broker_trade_id, order.pk)
         self.assertEqual(RiskAssessment.objects.filter(broker_trade=order).count(), 1)
 

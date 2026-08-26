@@ -98,7 +98,11 @@ urlpatterns = [
     path('billing/checkout/', billing_checkout, name='billing_checkout'),
     path('billing/change-plan/', billing_change_plan, name='billing_change_plan'),
     path('billing/reconcile/', billing_reconcile, name='billing_reconcile'),
+    # Keep the browser success/cancel pages separate from the authenticated
+    # API cancellation action so frontend billing controls cannot hit a page
+    # endpoint and silently fail.
     path('billing/cancel/', login_required(billing_cancel_page), name='billing_cancel_page'),
+    path('billing/cancel-subscription/', billing_cancel, name='billing_cancel_subscription'),
     path('billing/success/', login_required(billing_success_page), name='billing_success_page'),
     path('market-catalogue/', market_catalogue, name='browser_market_catalogue'),
     path('terms/', terms_page, name='terms_page'),

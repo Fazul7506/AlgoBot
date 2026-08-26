@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase, override_settings
 
 from apps.brokers.adapters.deriv import DerivAdapter
-from apps.brokers.models import Broker, BrokerAccount, ExecutionReport, Order
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection, ExecutionReport, Order
 from apps.brokers.services import ExecutionEngine
 
 
@@ -21,19 +21,20 @@ class CanonicalTradeExecutionTests(TransactionTestCase):
             status="active",
             is_preferred=True,
             credentials={"account_type": "demo"},
-            # The risk gate evaluates stake as a fraction of account balance.
-            # Give the synthetic execution account a realistic test balance so
-            # these routing/idempotency tests exercise execution rather than
-            # failing on the separate insufficient-balance risk rule.
             balance=Decimal("100"),
             equity=Decimal("100"),
             free_margin=Decimal("100"),
         )
-        # Deriv orders require a usable OAuth credential.  Keep this execution
-        # test focused on canonical account routing rather than credential
-        # rejection, which is covered by the connection-contract tests.
+        # Canonical broker routing requires both usable credentials and an
+        # account-scoped connected BrokerConnection. Keep the execution tests
+        # focused on routing/idempotency by creating that connection explicitly.
         self.account.set_access_token("test-access-token")
         self.account.save(update_fields=["access_token"])
+        BrokerConnection.objects.create(
+            broker=self.broker,
+            broker_account=self.account,
+            status="connected",
+        )
 
     @override_settings(BROKER_ORDER_TIMEOUT_SECONDS=2)
     def test_manual_trade_uses_canonical_account_and_returns_execution_report(self):

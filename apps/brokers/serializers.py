@@ -56,9 +56,11 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
         return value if value in {'real', 'demo'} else 'unknown'
 
     def get_avatar_url(self, obj):
-        credentials = obj.credentials or {}
+        # Account identity is inherited from the canonical broker branding.
+        # Credentials may contain provider metadata, but must not override the
+        # broker avatar shown throughout the product.
         metadata = obj.broker.metadata or {}
-        return str(credentials.get('avatar_url') or metadata.get('avatar_url') or '')
+        return str(metadata.get('avatar_url') or '')
 
     def get_display_name(self, obj):
         return f'{obj.broker.name} · {obj.account_id}'
