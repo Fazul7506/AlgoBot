@@ -115,20 +115,29 @@ class OrderManagementSystem:
 
 
 class ExecutionManagementSystem:
+    async def _mark_connection_issue(self, order, state):
+        context = dict(order.routing_context or {})
+        context['execution_state'] = state
+        order.status = 'pending'
+        order.routing_context = context
+        await sync_to_async(order.save)(update_fields=['status', 'routing_context', 'updated_at'])
+        await sync_to_async(BrokerConnection.objects.filter(broker_account=order.account).update)(status='degraded', updated_at=timezone.now())
+
     async def execute(self, order):
         start = time.perf_counter(); order.status = 'submitted'; order.submitted_at = timezone.now(); await sync_to_async(order.save)(update_fields=['status', 'submitted_at', 'updated_at'])
         adapter = BrokerRegistry().adapter(order.broker, order.account); timeout = float(getattr(settings, 'BROKER_ORDER_TIMEOUT_SECONDS', 20))
         try:
             result = await asyncio.wait_for(adapter.place_order(order), timeout=timeout)
         except asyncio.TimeoutError as exc:
-            order.status = 'pending'; context = dict(order.routing_context or {}); context['execution_state'] = 'unknown_timeout'; order.routing_context = context
-            await sync_to_async(order.save)(update_fields=['status', 'routing_context', 'updated_at'])
+            await self._mark_connection_issue(order, 'unknown_timeout')
+            await sync_to_async(TradeReconciliation.objects.create)(broker=order.broker, trade={'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unknown_timeout'}, matched=False, difference={'order': 'broker_response_unknown'}, repaired=False)
             raise BrokerConnectionError('Broker order placement timed out; execution state is unknown and must be reconciled before retrying.') from exc
         except BrokerAuthenticationError:
             order.status = 'rejected'; await sync_to_async(order.save)(update_fields=['status', 'updated_at']); raise
         except BrokerConnectionError:
-            order.status = 'pending'; context = dict(order.routing_context or {}); context['execution_state'] = 'unknown_connection_error'; order.routing_context = context
-            await sync_to_async(order.save)(update_fields=['status', 'routing_context', 'updated_at']); raise
+            await self._mark_connection_issue(order, 'unknown_connection_error')
+            await sync_to_async(TradeReconciliation.objects.create)(broker=order.broker, trade={'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unknown_connection_error'}, matched=False, difference={'order': 'broker_response_unknown'}, repaired=False)
+            raise
         except BrokerOrderError:
             order.status = 'rejected'; await sync_to_async(order.save)(update_fields=['status', 'updated_at']); raise
         except Exception:
@@ -214,16 +223,28 @@ class SynchronizationService:
 
 class ReconciliationService:
     def reconcile_order(self, order, broker_trade=None, repair=True):
-        diff = {} if broker_trade and broker_trade.get('broker_order_id') == order.broker_order_id else {'order': 'missing_or_mismatched'}
-        rec = TradeReconciliation.objects.create(broker=order.broker, trade=broker_trade or {}, matched=not diff, difference=diff, repaired=bool(diff and repair))
-        if rec.repaired: order.status = 'reconciled'; order.save(update_fields=['status', 'updated_at'])
+        expected_reference = str(order.broker_order_id or '')
+        observed_reference = str((broker_trade or {}).get('broker_order_id') or (broker_trade or {}).get('order_id') or '')
+        matched = bool(expected_reference and observed_reference and expected_reference == observed_reference)
+        diff = {} if matched else {'order': 'missing_or_mismatched', 'expected_reference': expected_reference, 'observed_reference': observed_reference}
+        rec = TradeReconciliation.objects.create(broker=order.broker, trade=broker_trade or {}, matched=matched, difference=diff, repaired=False)
+        if matched:
+            if order.status == 'pending':
+                order.status = 'reconciled'; order.save(update_fields=['status', 'updated_at'])
+        elif repair:
+            context = dict(order.routing_context or {})
+            context['reconciliation'] = {'required': True, 'difference': diff}
+            order.routing_context = context
+            order.status = 'pending'
+            order.save(update_fields=['status', 'routing_context', 'updated_at'])
         return rec
 
 
 class BrokerHealthService:
     def summary(self, user=None):
         qs = BrokerAccount.objects.filter(status='active', broker__status='active') if user is None else BrokerAccount.objects.filter(user=user, status='active', broker__status='active')
-        return {'brokers': qs.values('broker_id').distinct().count(), 'connected': qs.count(), 'accounts': [{'id': a.id, 'broker': a.broker.name, 'account_id': a.account_id, 'status': a.status, 'last_synced_at': a.last_synced_at.isoformat() if a.last_synced_at else None} for a in qs.select_related('broker')]}
+        connected_qs = qs.filter(connections__status='connected').distinct()
+        return {'brokers': qs.values('broker_id').distinct().count(), 'connected': connected_qs.count(), 'accounts': [{'id': a.id, 'broker': a.broker.name, 'account_id': a.account_id, 'status': 'connected' if a.is_connected else 'disconnected', 'last_synced_at': a.last_synced_at.isoformat() if a.last_synced_at else None} for a in qs.select_related('broker')]}
 
 
 class FailoverService:
