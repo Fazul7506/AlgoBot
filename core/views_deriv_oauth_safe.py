@@ -9,11 +9,11 @@ browser connection while the OAuth callback is returning a redirect.
 import logging
 
 import requests
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login as auth_login
 from django.contrib.auth.models import User
 from django.shortcuts import redirect
-from django.utils import timezone
 
 from apps.brokers.models import Broker, BrokerAccount
 from core.models import BotSettings, Subscription, UserProfile
@@ -23,7 +23,6 @@ from core.views_broker_oauth import (
     _persist_deriv_account,
     _verify_account,
 )
-from django.conf import settings
 
 logger = logging.getLogger("oauth")
 
@@ -39,9 +38,10 @@ def _fail(request, message, event, **extra):
     logger.warning(event, extra=extra)
     DerivOAuthService.clear_oauth_session(request)
     messages.error(request, message)
-    # Never redirect an OAuth error back to /brokers/connect/: that endpoint
-    # immediately starts OAuth again and can create a browser redirect loop.
-    return redirect("dashboard_page")
+    # Never redirect an OAuth error back to /brokers/connect/ or /login/: both
+    # endpoints can immediately start OAuth again and create a redirect loop.
+    destination = "dashboard_page" if request.user.is_authenticated else "home"
+    return redirect(destination)
 
 
 def callback(request):
