@@ -64,9 +64,12 @@
     const timeframes = Array.isArray(capabilities.timeframes) ? capabilities.timeframes : [];
     if (select) {
       select.innerHTML = timeframes.length ? timeframes.map(tf => `<option value="${safe(tf.seconds)}">${safe(tf.label)}</option>`).join('') : '<option value="">No broker timeframes available</option>';
+      const requested = new URLSearchParams(window.location.search).get('timeframe');
+      if (requested && timeframes.some(tf => String(tf.seconds) === requested)) select.value = requested;
     }
     if (container) {
-      container.innerHTML = timeframes.map((tf, i) => `<button type="button" data-broker-timeframe="${safe(tf.seconds)}" class="${i === 0 ? 'active' : ''}">${safe(tf.label)}</button>`).join('');
+      const active = select?.value || String(timeframes[0]?.seconds || '');
+      container.innerHTML = timeframes.map(tf => `<button type="button" data-broker-timeframe="${safe(tf.seconds)}" class="${String(tf.seconds) === active ? 'active' : ''}">${safe(tf.label)}</button>`).join('');
       container.querySelectorAll('[data-broker-timeframe]').forEach(button => button.addEventListener('click', () => {
         container.querySelectorAll('[data-broker-timeframe]').forEach(b => b.classList.remove('active')); button.classList.add('active');
         if (select) select.value = button.dataset.brokerTimeframe;
