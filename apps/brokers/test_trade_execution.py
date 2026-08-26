@@ -21,6 +21,9 @@ class CanonicalTradeExecutionTests(TransactionTestCase):
             status="active",
             is_preferred=True,
             credentials={"account_type": "demo"},
+            balance=Decimal("100"),
+            equity=Decimal("100"),
+            free_margin=Decimal("100"),
         )
         # Canonical broker routing requires both usable credentials and an
         # account-scoped connected BrokerConnection. Keep the execution tests
