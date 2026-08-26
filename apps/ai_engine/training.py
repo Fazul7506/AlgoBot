@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -28,7 +29,16 @@ def normalize_timeframe(timeframe: str) -> str:
 
 
 def _model_dir() -> Path:
-    path = Path(os.environ.get("AI_MODEL_DIR", Path(__file__).resolve().parents[2] / "trading" / "ai" / "models"))
+    configured = os.environ.get("AI_MODEL_DIR", "").strip()
+    if getattr(settings, "DEBUG", False):
+        path = Path(configured or (Path(__file__).resolve().parents[2] / "trading" / "ai" / "models"))
+    else:
+        # Render/container filesystems are not durable across redeploys unless a
+        # persistent disk or external artifact store is explicitly configured.
+        # Refuse to train into an ephemeral production filesystem.
+        if not configured:
+            raise RuntimeError("AI_MODEL_DIR must point to durable model storage in production")
+        path = Path(configured)
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -117,9 +127,16 @@ class MarketModelTrainer:
             best = max(published, key=lambda item: item["accuracy"])
             AIModel.objects.filter(name__startswith=f"{symbol}-{timeframe}-", status="champion").update(status="active")
             champion = AIModel.objects.filter(name=f"{symbol}-{timeframe}-{best['algorithm']}", status="active").order_by("-created_at").first()
-            if champion is None: raise RuntimeError("Champion model was not persisted")
-            champion.status = "champion"; champion.save(update_fields=["status"])
-            job.model = champion; job.status = "completed"; job.completed_at = timezone.now(); job.duration = (job.completed_at - job.started_at).total_seconds(); job.metrics = {"symbol": symbol, "timeframe": timeframe, "published": published, "champion": best, "feature_set": list(FEATURES)}; job.save(update_fields=["model", "status", "completed_at", "duration", "metrics"])
+            if champion is None:
+                raise RuntimeError("Champion model was not persisted")
+            champion.status = "champion"
+            champion.save(update_fields=["status"])
+            job.model = champion
+            job.status = "completed"
+            job.completed_at = timezone.now()
+            job.duration = (job.completed_at - job.started_at).total_seconds()
+            job.metrics = {"symbol": symbol, "timeframe": timeframe, "published": published, "champion": best, "feature_set": list(FEATURES)}
+            job.save(update_fields=["model", "status", "completed_at", "duration", "metrics"])
         return job.metrics
 
     def train_active_symbols(self, timeframe: str = "M1", min_accuracy: float = 0.52) -> dict[str, Any]:
