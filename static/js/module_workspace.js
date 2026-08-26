@@ -25,6 +25,7 @@
   const csrfHeaders = () => ({ Accept: "application/json", "X-CSRFToken": csrf });
 
   async function request(url, options = {}) {
+    if (!url) throw new Error("No API endpoint configured for this resource.");
     const response = await fetch(url, {
       credentials: "same-origin",
       ...options,
@@ -53,16 +54,17 @@
     const status = card.querySelector("[data-resource-status]");
     const output = card.querySelector("[data-resource-output]");
     if (!status || !output || !endpoint) return;
+    const url = Array.isArray(endpoint) ? endpoint[0] : endpoint.url;
     status.textContent = "Checking…";
     output.textContent = "Connecting to the service…";
     try {
-      const data = await request(endpoint[0]);
+      const data = await request(url);
       const count = recordCount(data);
       status.textContent = "Healthy";
       output.textContent = count ? `${count} live record${count === 1 ? "" : "s"} available.` : "Service responded successfully. No records are currently available.";
     } catch (error) {
       status.textContent = "Unavailable";
-      output.textContent = "This service is temporarily unavailable. The rest of the workspace remains usable.";
+      output.textContent = error.message || "This service is temporarily unavailable. The rest of the workspace remains usable.";
     }
   }
 
@@ -80,7 +82,7 @@
       const method = (button.dataset.actionMethod || "post").toUpperCase();
       let body = {};
       if (root.dataset.module === "ai" && url.endsWith("/predict/")) body = { symbol: "R_100", timeframe: "M1", context: {} };
-      else if (root.dataset.module === "notifications") body = { channel: "in_app", subject: "AlgoBot test alert", message: "Test notification from the operations center." };
+      else if (root.dataset.module === "notifications") body = { channel: "in_app", subject: "AlgoBot test alert", message: "Test notification from operations center." };
       else if (root.dataset.module === "automation") body = { event: "manual", source: "operations-center" };
       button.disabled = true;
       try {
