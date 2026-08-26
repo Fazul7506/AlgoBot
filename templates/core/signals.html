@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Strategy signals | AlgoBot{% endblock %}
 {% block content %}
 <section class="data-page panel" data-data-page="signals-page" data-api-root="/api/">
@@ -7,3 +8,4 @@
 <section class="panel"><div class="panel-head"><div><h2>Live data</h2><p>Search, inspect and refresh backend records.</p></div><input type="search" data-page-search placeholder="Search"></div><div class="table-wrap"><table class="enterprise-table" data-page-table><thead></thead><tbody><tr><td>Loading…</td></tr></tbody></table></div></section>
 </section>
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/signals.js' %}" defer></script>{% endblock %}
