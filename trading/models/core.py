@@ -17,7 +17,7 @@ class Strategy(models.Model):
     STRATEGY_TYPES = [('TREND', 'Trend Following'), ('MEAN_REV', 'Mean Reversion'), ('BREAKOUT', 'Breakout'), ('MOMENTUM', 'Momentum'), ('SCALP', 'Scalping'), ('VOLATILITY', 'Volatility Trading')]
     name = models.CharField(max_length=100, unique=True)
     strategy_type = models.CharField(max_length=20, choices=STRATEGY_TYPES)
-    description = models.TextField(blank=True)
+    description = models.TextField()
     config = models.JSONField(default=dict)
     is_active = models.BooleanField(default=True)
     is_paper_only = models.BooleanField(default=False)
@@ -138,7 +138,7 @@ class ConnectionLog(models.Model):
     latency_ms = models.FloatField(default=0)
     message = models.TextField(blank=True)
     metadata = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ['-created_at']
         indexes = [models.Index(fields=['broker','status','-created_at'])]
@@ -223,7 +223,6 @@ class Candle(models.Model):
     timestamp = models.DateTimeField()
     is_bullish = models.BooleanField(default=True)
     class Meta: ordering = ['timestamp']
-    def __str__(self): return f"{self.symbol} {self.timeframe}"
 
 
 class Signal(models.Model):
@@ -238,7 +237,9 @@ class Signal(models.Model):
     market_regime = models.CharField(max_length=20, blank=True)
     was_executed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
-    class Meta: ordering = ['-created_at']
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['symbol', '-created_at'], name='signal_symbol_created_idx')]
     def __str__(self): return f"{self.strategy} - {self.direction}"
 
 
