@@ -9,22 +9,31 @@ class LiveMarketContextService:
     """Fetch broker candles and build a non-empty, model-compatible live context."""
     def _run(self, awaitable): return asyncio.run(awaitable)
     def _granularity(self, timeframe): return {'M1':60,'M5':300,'M15':900,'M30':1800,'H1':3600,'H4':14400,'D1':86400}.get(str(timeframe).upper(),60)
+    @staticmethod
+    def _rsi(closes, period=14):
+        if len(closes) <= period: return 50.0
+        gains=[]; losses=[]
+        for a,b in zip(closes[-period-1:-1],closes[-period:]):
+            delta=b-a; gains.append(max(delta,0)); losses.append(max(-delta,0))
+        avg_gain=sum(gains)/period; avg_loss=sum(losses)/period
+        if avg_loss == 0: return 100.0 if avg_gain else 50.0
+        return 100.0-(100.0/(1.0+(avg_gain/avg_loss)))
     def build(self, config):
         account=getattr(config,'broker_account',None)
         if account is None or getattr(account,'status',None)!='active': raise RuntimeError('An active broker account is required for autonomous strategy execution')
         from apps.brokers.services import BrokerRegistry
         adapter=BrokerRegistry().adapter(account.broker,account)
         history=self._run(adapter.get_chart_history(config.symbol,mode='candles',count=200,granularity=self._granularity(config.timeframe)))
-        items=history.get('items') or []
-        candles=[]
+        items=history.get('items') or []; candles=[]
         for item in items:
             try: candles.append({'open':float(item['open']),'high':float(item['high']),'low':float(item['low']),'close':float(item['close']),'volume':float(item.get('volume',0) or 0),'epoch':int(item.get('epoch',0) or 0)})
             except (KeyError,TypeError,ValueError): continue
         if len(candles)<20: raise RuntimeError(f'Insufficient live broker candle history for {config.symbol} {config.timeframe}: {len(candles)} usable candles')
         from trading.ai.features.simple_indicators import compute_basic_features
-        latest=compute_basic_features(candles)[-1]; current=candles[-1]
+        rows=compute_basic_features(candles); latest=rows[-1]; current=candles[-1]; closes=[c['close'] for c in candles]
+        trend='up' if latest.get('sma5') is not None and latest.get('sma20') is not None and latest['sma5']>latest['sma20'] else 'down' if latest.get('sma5') is not None and latest.get('sma20') is not None and latest['sma5']<latest['sma20'] else 'sideways'
         market_data={'symbol':config.symbol,'open':current['open'],'high':current['high'],'low':current['low'],'close':current['close'],'volume':current['volume'],'epoch':current['epoch'],'source':'live_broker'}
-        indicator_data={'sma5':latest.get('sma5'),'sma20':latest.get('sma20'),'ema10':latest.get('ema10'),'ret1':latest.get('ret1',0.0),'range':latest.get('range',0.0)}
+        indicator_data={'sma5':latest.get('sma5'),'sma20':latest.get('sma20'),'ema10':latest.get('ema10'),'ret1':latest.get('ret1',0.0),'range':latest.get('range',0.0),'rsi':self._rsi(closes),'trend':trend,'source':'live_broker'}
         return market_data,indicator_data,{'source':'live_broker','candles_used':len(candles),'timeframe':config.timeframe,'latest_epoch':current['epoch']}
 
 class StrategyService:
