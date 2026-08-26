@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("trading", "0001_initial"),
+        ("legacy_trading", "0001_initial"),
     ]
 
     operations = [
