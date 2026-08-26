@@ -1,141 +1,162 @@
-/* Broker-backed trading terminal controller. */
+/* Reliable broker-backed trading terminal. */
 (() => {
   'use strict';
   if (window.__algoBotTradingTerminal) return;
   window.__algoBotTradingTerminal = true;
 
-  const $ = (selector, root = document) => root.querySelector(selector);
-  const list = value => window.AlgoBotFrontendData?.list(value) || [];
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
-  const money = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString(undefined, {maximumFractionDigits: 8}) : 'Unavailable';
-  const api = (url, options, timeout) => window.AlgoBotFrontendData.request(url, options, timeout);
-  let accounts = [];
-  let direction = 'BUY';
-  let loading = false;
+  const $ = (s, r = document) => r.querySelector(s);
+  const list = v => window.AlgoBotFrontendData?.list(v) || [];
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const money = v => Number.isFinite(Number(v)) ? Number(v).toLocaleString(undefined, {maximumFractionDigits: 8}) : 'Unavailable';
+  const api = (url, options = {}, timeout = 10000) => window.AlgoBotFrontendData.request(url, options, timeout);
+  let accounts = [], direction = 'BUY', busy = false;
 
-  const connected = () => {
-    const state = window.AlgoBotBrokerState?.get();
-    return !!state?.account && ['CONNECTED', 'SYNCING', 'READY', 'DEGRADED'].includes(state.status);
-  };
-
-  function selectedAccount() {
+  // Do not make the terminal wait for a separate broker-state websocket.
+  // The authenticated accounts endpoint is the source of truth for page readiness.
+  const selectedAccount = () => {
     const id = $('#account')?.value;
-    return accounts.find(account => String(account.id) === String(id)) || accounts.find(account => account.is_preferred || account.is_default) || accounts[0] || null;
-  }
-
-  function renderAccounts(nextAccounts) {
-    accounts = list(nextAccounts).filter(account => account?.id);
-    const select = $('#account');
-    if (!select) return;
-    const previous = select.value;
-    if (!accounts.length) {
-      select.innerHTML = '<option value="">No connected broker account</option>';
-      return;
-    }
-    select.innerHTML = accounts.map(account => `<option value="${esc(account.id)}">${esc(account.broker?.name || account.broker_name || 'Broker')} · ${esc(account.broker_account_id || account.account_id)} · ${esc(account.currency || '')}</option>`).join('');
-    const preferred = accounts.find(account => account.is_preferred || account.is_default);
-    select.value = accounts.some(account => String(account.id) === previous) ? previous : String(preferred?.id || accounts[0].id);
-    renderAccount(selectedAccount());
-  }
-
-  function renderAccount(account) {
-    const status = $('#terminal-status');
-    const note = $('[data-terminal-account]');
-    if (!account) {
-      if (status) status.textContent = 'Broker account required';
-      if (note) note.textContent = 'No connected account';
-      $('[data-risk-check]')?.replaceChildren(document.createTextNode('Connect broker first'));
-      return;
-    }
-    if (status) status.textContent = `${account.broker?.name || account.broker_name || 'Broker'} account`;
-    if (note) note.textContent = `Account: ${account.broker_account_id || account.account_id}`;
-    $('[data-risk-check]')?.replaceChildren(document.createTextNode(account.is_connected ? 'Pre-trade checks active' : 'Broker verification required'));
-  }
-
-  async function loadSymbols() {
-    const select = $('#symbol');
-    if (!select) return '';
-    const previous = select.value;
-    try {
-      const symbols = list(await api('/api/markets/symbols/')).filter(row => row?.symbol && row.is_active !== false && row.is_tradable !== false);
-      if (!symbols.length) {
-        select.innerHTML = '<option value="">No active broker instruments</option>';
-        return '';
-      }
-      select.innerHTML = symbols.map(row => `<option value="${esc(row.symbol)}">${esc(row.display_name || row.symbol)} · ${esc(row.symbol)}</option>`).join('');
-      const requested = new URLSearchParams(location.search).get('symbol');
-      const chosen = [previous, requested, symbols[0].symbol].find(value => symbols.some(row => row.symbol === value));
-      select.value = chosen;
-      return chosen;
-    } catch (error) {
-      select.innerHTML = `<option value="">Market catalogue unavailable: ${esc(error.message)}</option>`;
-      return '';
-    }
-  }
-
-  async function loadQuote() {
-    const symbol = $('#symbol')?.value;
-    if (!symbol || !connected()) return;
-    try {
-      const tick = await api('/api/market/ticks/broker/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({symbol})}, 9000);
-      $('[data-q="bid"]')?.replaceChildren(document.createTextNode(money(tick.bid ?? tick.quote)));
-      $('[data-q="ask"]')?.replaceChildren(document.createTextNode(money(tick.ask ?? tick.quote)));
-    } catch (error) {
-      $('[data-q="bid"]')?.replaceChildren(document.createTextNode('Quote unavailable'));
-      $('[data-q="ask"]')?.replaceChildren(document.createTextNode('Quote unavailable'));
-    }
-  }
+    return accounts.find(a => String(a.id) === String(id)) || accounts.find(a => a.is_preferred || a.is_default) || accounts[0] || null;
+  };
+  const brokerReady = () => !!selectedAccount();
 
   const renderRows = (selector, rows, empty, format) => {
     const target = $(selector);
     if (target) target.innerHTML = rows.length ? rows.map(format).join('') : `<div class="empty-state">${esc(empty)}</div>`;
   };
 
+  function renderAccount(account) {
+    const status = $('#terminal-status'), note = $('[data-terminal-account]'), risk = $('[data-risk-check]');
+    if (!account) {
+      if (status) status.textContent = 'Broker account required';
+      if (note) note.textContent = 'No connected account';
+      if (risk) risk.textContent = 'Connect broker first';
+      return;
+    }
+    const broker = account.broker?.name || account.broker_name || 'Broker';
+    if (status) status.textContent = `${broker} account`;
+    if (note) note.textContent = `Account: ${account.broker_account_id || account.account_id}`;
+    if (risk) risk.textContent = account.is_connected === false ? 'Broker verification required' : 'Pre-trade checks active';
+  }
+
+  function renderAccounts(rows) {
+    accounts = list(rows).filter(a => a?.id);
+    const select = $('#account');
+    if (!select) return;
+    const previous = select.value;
+    if (!accounts.length) {
+      select.innerHTML = '<option value="">No connected broker account</option>';
+      renderAccount(null);
+      return;
+    }
+    select.innerHTML = accounts.map(a => `<option value="${esc(a.id)}">${esc(a.broker?.name || a.broker_name || 'Broker')} · ${esc(a.broker_account_id || a.account_id)} · ${esc(a.currency || '')}</option>`).join('');
+    const preferred = accounts.find(a => a.is_preferred || a.is_default);
+    select.value = accounts.some(a => String(a.id) === previous) ? previous : String(preferred?.id || accounts[0].id);
+    renderAccount(selectedAccount());
+  }
+
+  async function loadAccounts() {
+    try {
+      const rows = window.AlgoBotBrokerAccounts?.length ? window.AlgoBotBrokerAccounts : await api('/api/brokers/accounts/', {}, 9000);
+      renderAccounts(rows);
+      return selectedAccount();
+    } catch (e) {
+      renderAccounts([]);
+      $('[data-terminal-account]')?.replaceChildren(document.createTextNode(`Broker accounts unavailable: ${e.message || 'request failed'}`));
+      return null;
+    }
+  }
+
+  async function loadSymbols() {
+    const select = $('#symbol'); if (!select) return '';
+    const previous = select.value;
+    try {
+      // This is the canonical authenticated/local catalogue route and is already registered by market_data.urls.
+      const payload = await api('/api/markets/symbols/', {}, 9000);
+      const symbols = list(payload).filter(r => r?.symbol && r.is_active !== false && r.is_tradable !== false);
+      if (!symbols.length) throw new Error('No active tradable broker instruments are available');
+      select.innerHTML = symbols.map(r => `<option value="${esc(r.symbol)}">${esc(r.display_name || r.symbol)} · ${esc(r.symbol)}</option>`).join('');
+      const requested = new URLSearchParams(location.search).get('symbol');
+      select.value = [previous, requested, symbols[0].symbol].find(v => symbols.some(r => r.symbol === v)) || symbols[0].symbol;
+      return select.value;
+    } catch (e) {
+      select.innerHTML = `<option value="">${esc(e.message || 'Market catalogue unavailable')}</option>`;
+      return '';
+    }
+  }
+
+  async function loadQuote() {
+    const symbol = $('#symbol')?.value;
+    if (!symbol || !brokerReady()) return;
+    const bid = $('[data-q="bid"]'), ask = $('[data-q="ask"]');
+    try {
+      const tick = await api(`/api/market/ticks/broker/?symbol=${encodeURIComponent(symbol)}`, {}, 9000);
+      const bidValue = tick.bid ?? tick.quote, askValue = tick.ask ?? tick.quote;
+      if (bid) bid.textContent = money(bidValue);
+      if (ask) ask.textContent = money(askValue);
+      $('[data-chart-loading]')?.replaceChildren(document.createTextNode(tick.stale ? 'Last known broker quote · reconnecting live feed' : 'Live broker quote received'));
+    } catch (e) {
+      // Try the persisted latest tick before declaring the market unavailable.
+      try {
+        const cached = await api(`/api/market/ticks/latest/?symbol=${encodeURIComponent(symbol)}`, {}, 5000);
+        if (cached?.quote != null) {
+          if (bid) bid.textContent = money(cached.bid ?? cached.quote);
+          if (ask) ask.textContent = money(cached.ask ?? cached.quote);
+          $('[data-chart-loading]')?.replaceChildren(document.createTextNode('Last known quote · live broker reconnecting'));
+          return;
+        }
+      } catch (_) {}
+      if (bid) bid.textContent = 'Unavailable';
+      if (ask) ask.textContent = 'Unavailable';
+      $('[data-chart-loading]')?.replaceChildren(document.createTextNode(`Broker quote unavailable: ${e.message || 'request failed'}`));
+    }
+  }
+
   async function loadRecords() {
-    if (!connected()) {
+    if (!brokerReady()) {
       renderRows('[data-positions]', [], 'Connect a broker to load positions.', () => '');
       renderRows('[data-orders]', [], 'Connect a broker to load orders.', () => '');
       return;
     }
-    const [positions, orders] = await Promise.allSettled([api('/api/positions/open/'), api('/api/orders/')]);
-    const positionRows = positions.status === 'fulfilled' ? list(positions.value) : [];
-    const orderRows = orders.status === 'fulfilled' ? list(orders.value).slice(0, 8) : [];
-    renderRows('[data-positions]', positionRows, positions.status === 'rejected' ? 'Positions are temporarily unavailable.' : 'No open positions.', row => `<div class="mini-row"><strong>${esc(row.symbol)}</strong><span>${esc(row.direction || row.side || '')}</span><b>${esc(row.profit ?? row.pnl ?? '—')}</b></div>`);
-    renderRows('[data-orders]', orderRows, orders.status === 'rejected' ? 'Orders are temporarily unavailable.' : 'No orders yet.', row => `<div class="mini-row"><strong>${esc(row.symbol)}</strong><span>${esc(row.direction || '')}</span><b>${esc(row.status || '')}</b></div>`);
+    const [positions, orders] = await Promise.allSettled([api('/api/positions/open/', {}, 9000), api('/api/orders/?limit=8', {}, 9000)]);
+    const p = positions.status === 'fulfilled' ? list(positions.value) : [];
+    const o = orders.status === 'fulfilled' ? list(orders.value).slice(0, 8) : [];
+    renderRows('[data-positions]', p, positions.status === 'rejected' ? 'Positions temporarily unavailable.' : 'No open positions.', r => `<div class="mini-row"><strong>${esc(r.symbol || '—')}</strong><span>${esc(r.direction || r.side || '')}</span><b>${esc(r.profit ?? r.pnl ?? '—')}</b></div>`);
+    renderRows('[data-orders]', o, orders.status === 'rejected' ? 'Orders temporarily unavailable.' : 'No orders yet.', r => `<div class="mini-row"><strong>${esc(r.symbol || '—')}</strong><span>${esc(r.direction || r.side || '')}</span><b>${esc(r.status || '')}</b></div>`);
+  }
+
+  async function loadSignals() {
+    const target = $('[data-signals]'); if (!target) return;
+    try {
+      const data = await api('/api/dashboard/signals/?limit=8', {}, 8000);
+      const rows = list(data);
+      target.innerHTML = rows.length ? rows.map(r => `<div class="mini-row"><strong>${esc(r.symbol || 'Signal')}</strong><span>${esc(r.direction || r.signal || r.action || '')}</span><b>${esc(r.confidence ?? r.status ?? '')}</b></div>`).join('') : '<div class="empty-state">No active strategy signals.</div>';
+    } catch (e) { target.innerHTML = `<div class="empty-state">Signals temporarily unavailable.</div>`; }
   }
 
   async function refresh() {
-    if (loading) return;
-    loading = true;
+    if (busy) return; busy = true;
     try {
-      const accountRows = window.AlgoBotBrokerAccounts?.length ? window.AlgoBotBrokerAccounts : await api('/api/brokers/accounts/');
-      renderAccounts(accountRows);
-      await loadSymbols();
-      await Promise.all([loadQuote(), loadRecords()]);
-    } finally { loading = false; }
+      await loadAccounts();
+      const symbol = await loadSymbols();
+      await Promise.all([loadQuote(), loadRecords(), loadSignals()]);
+      // The chart controller listens to the symbol selection; dispatch after the catalogue exists.
+      if (symbol) $('#symbol')?.dispatchEvent(new Event('change', {bubbles: true}));
+    } finally { busy = false; }
   }
 
   async function submitOrder(event) {
     event.preventDefault();
-    const account = selectedAccount();
-    const symbol = $('#symbol')?.value;
-    const result = $('[data-order-result]');
-    if (!account || !symbol || !connected()) {
-      if (result) { result.hidden = false; result.textContent = 'Connect and synchronize a broker account before placing an order.'; }
-      return;
-    }
-    const form = new FormData(event.currentTarget);
-    const button = $('.execute-btn');
+    const account = selectedAccount(), symbol = $('#symbol')?.value, result = $('[data-order-result]');
+    if (!account || !symbol) { if (result) { result.hidden = false; result.textContent = 'Select a connected broker account and instrument first.'; } return; }
+    const form = new FormData(event.currentTarget), button = $('.execute-btn');
     if (button) { button.disabled = true; button.textContent = 'Submitting…'; }
     try {
-      const payload = {account:account.id, symbol, direction, order_type:form.get('order_type'), stake:form.get('stake'), strategy:form.get('strategy') || '', client_order_id:`ui-${crypto.randomUUID?.() || Date.now()}`, routing_context:window.__algobotAiOrderContext || {}};
+      const payload = {account: account.id, symbol, direction, order_type: form.get('order_type'), stake: form.get('stake'), strategy: form.get('strategy') || '', client_order_id: `ui-${crypto.randomUUID?.() || Date.now()}`, routing_context: window.__algobotAiOrderContext || {}};
       const order = await api('/api/orders/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 25000);
       if (result) { result.hidden = false; result.textContent = `Order ${order.broker_order_id || order.id || ''} ${order.status || 'submitted'}.`; }
-      window.__algobotAiOrderContext = null;
-      await loadRecords();
-    } catch (error) {
-      if (result) { result.hidden = false; result.textContent = `Order rejected: ${error.message}`; }
-    } finally { if (button) { button.disabled = false; button.textContent = 'Place order'; } }
+      window.__algobotAiOrderContext = null; await loadRecords();
+    } catch (e) { if (result) { result.hidden = false; result.textContent = `Order rejected: ${e.message || 'request failed'}`; } }
+    finally { if (button) { button.disabled = false; button.textContent = 'Place order'; } }
   }
 
   function boot() {
@@ -143,11 +164,12 @@
     $('[data-order-form]')?.addEventListener('submit', submitOrder);
     $('[data-action="terminal-refresh"]')?.addEventListener('click', refresh);
     $('#symbol')?.addEventListener('change', () => { loadQuote(); loadRecords(); });
-    $('#account')?.addEventListener('change', () => renderAccount(selectedAccount()));
-    document.querySelectorAll('[data-direction]').forEach(button => button.addEventListener('click', () => { direction = button.dataset.direction; document.querySelectorAll('[data-direction]').forEach(item => item.classList.toggle('active', item === button)); }));
-    window.addEventListener('algobot:backend-accounts-loaded', event => renderAccounts(event.detail));
-    window.addEventListener('algobot:account-synced', event => { renderAccounts((window.AlgoBotBrokerAccounts || accounts).map(account => String(account.id) === String(event.detail?.id) ? event.detail : account)); loadQuote(); });
-    window.AlgoBotBrokerState?.subscribe(event => { if (['READY', 'CONNECTED', 'SYNCING'].includes(event.detail.state.status)) refresh(); else if (['NO_BROKER', 'DISCONNECTED'].includes(event.detail.state.status)) renderAccount(null); });
+    $('#account')?.addEventListener('change', () => { renderAccount(selectedAccount()); loadQuote(); loadRecords(); });
+    document.querySelectorAll('[data-direction]').forEach(b => b.addEventListener('click', () => { direction = b.dataset.direction; document.querySelectorAll('[data-direction]').forEach(x => x.classList.toggle('active', x === b)); }));
+    window.addEventListener('algobot:backend-accounts-loaded', e => { renderAccounts(e.detail); loadQuote(); loadRecords(); });
+    window.addEventListener('algobot:account-synced', e => { renderAccounts((window.AlgoBotBrokerAccounts || accounts).map(a => String(a.id) === String(e.detail?.id) ? e.detail : a)); loadQuote(); loadRecords(); });
+    // Broker-state events are supplemental, never a gate for initial page data.
+    window.AlgoBotBrokerState?.subscribe(() => { loadQuote(); loadRecords(); });
     refresh();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true}); else boot();
