@@ -84,10 +84,10 @@
   }
 
   async function loadSymbols() {
-    // /api/markets/symbols/ is challenged by the site's upstream Cloudflare rule.
-    // Use the authenticated equivalent under /api/market/ instead.
-    const data = await window.AlgoBotFrontendData.request('/api/market/catalogue/');
-    rows = list(data?.symbols ?? data).filter(row => row?.is_active !== false && row?.is_tradeable !== false);
+    // Cloudflare is challenging /api/market/* on this deployment. The browser-safe
+    // endpoint below uses the same Django session but is outside the protected API path.
+    const data = await window.AlgoBotFrontendData.request('/market-catalogue/', {}, 7000);
+    rows = list(data?.symbols ?? data).filter(row => row?.is_active !== false && row?.is_tradable !== false);
     renderCategories();
     render();
     await refreshQuotes();
@@ -104,14 +104,10 @@
         : '<option value="">Broker intervals unavailable</option>';
       selectedTimeframe = select.value;
     } catch (_) {
-      // Keep the terminal usable even if the broker capability endpoint is temporarily challenged.
       const fallback = [
-        { seconds: 60, label: '1 minute' },
-        { seconds: 300, label: '5 minutes' },
-        { seconds: 900, label: '15 minutes' },
-        { seconds: 1800, label: '30 minutes' },
-        { seconds: 3600, label: '1 hour' },
-        { seconds: 14400, label: '4 hours' },
+        { seconds: 60, label: '1 minute' }, { seconds: 300, label: '5 minutes' },
+        { seconds: 900, label: '15 minutes' }, { seconds: 1800, label: '30 minutes' },
+        { seconds: 3600, label: '1 hour' }, { seconds: 14400, label: '4 hours' },
         { seconds: 86400, label: '1 day' },
       ];
       select.innerHTML = fallback.map(frame => `<option value="${frame.seconds}">${frame.label}</option>`).join('');
@@ -121,14 +117,7 @@
 
   async function syncBrokerSymbols() {
     const response = await window.AlgoBotFrontendData.request('/api/markets/symbols/sync/', { method:'POST', headers:{ 'Content-Type':'application/json' } }, 10000);
-    if (response?.status === 'ok') {
-      await loadSymbols();
-      return true;
-    }
-    if (response?.stale) {
-      await loadSymbols();
-      return false;
-    }
+    if (response?.status === 'ok') return true;
     return false;
   }
 
@@ -137,10 +126,10 @@
     try {
       await loadSymbols();
       await loadTimeframes();
-      try { await syncBrokerSymbols(); } catch (error) {
-        console.warn('Broker catalogue synchronization unavailable:', error);
-      }
-      await loadSymbols();
+      // Synchronization is deliberately secondary. A transient broker/Cloudflare
+      // failure must never erase the last known local catalogue from the UI.
+      try { await syncBrokerSymbols(); } catch (error) { console.warn('Broker catalogue synchronization unavailable:', error); }
+      try { await loadSymbols(); } catch (error) { console.warn('Catalogue reload skipped:', error); }
     } catch (error) {
       render(`Broker market catalogue unavailable: ${error.message}`);
     }
@@ -156,26 +145,22 @@
       const button = event.currentTarget;
       button.disabled = true;
       try {
-        const refreshed = await syncBrokerSymbols();
-        if (!refreshed) await loadSymbols();
+        try { await syncBrokerSymbols(); } catch (error) { console.warn('Broker sync unavailable:', error); }
+        await loadSymbols();
       } catch (error) {
-        render(`Broker catalogue refresh unavailable: ${error.message}`);
+        if (rows.length) render();
+        else render(`Broker catalogue refresh unavailable: ${error.message}`);
       } finally {
         button.disabled = false;
       }
     });
     window.AlgoBotBrokerState?.subscribe(event => {
       const status = event.detail?.state?.status;
-      if (['READY', 'CONNECTED', 'SYNCING', 'DEGRADED'].includes(status)) {
-        load();
-      } else if (['NO_BROKER', 'DISCONNECTED'].includes(status)) {
-        if (!rows.length) render('No broker market catalogue is currently available.');
-      }
+      if (['READY', 'CONNECTED', 'SYNCING', 'DEGRADED'].includes(status)) load();
+      else if (['NO_BROKER', 'DISCONNECTED'].includes(status) && !rows.length) render('No broker market catalogue is currently available.');
     });
     load();
-    quoteTimer = setInterval(() => {
-      if (document.visibilityState === 'visible') refreshQuotes();
-    }, 15000);
+    quoteTimer = setInterval(() => { if (document.visibilityState === 'visible') refreshQuotes(); }, 15000);
     window.addEventListener('beforeunload', () => clearInterval(quoteTimer), { once: true });
   }
 
