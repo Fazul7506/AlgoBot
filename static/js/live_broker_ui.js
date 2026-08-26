@@ -180,7 +180,11 @@
     return request('/api/markets/symbols/', {}, 5000).then(list).then(rows => {
       const active = rows.filter(x => x?.symbol && x.is_active !== false && x.is_tradable !== false);
       const s = $('[data-symbol]');
-      if (s && !s.value) s.innerHTML = active.map(x => `<option value="${safe(x.symbol)}">${safe(x.display_name || x.symbol)}</option>`).join('');
+      const requested = new URLSearchParams(window.location.search).get('symbol');
+      if (s && !s.value) {
+        s.innerHTML = active.map(x => `<option value="${safe(x.symbol)}">${safe(x.display_name || x.symbol)} · ${safe(x.symbol)}</option>`).join('');
+        if (requested && active.some(x => x.symbol === requested)) s.value = requested;
+      }
       return s?.value || active[0]?.symbol || '';
     }).catch(() => '');
   }

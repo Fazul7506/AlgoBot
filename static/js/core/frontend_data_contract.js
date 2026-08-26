@@ -5,12 +5,14 @@
 
   const brokerState = () => window.AlgoBotBrokerState;
   const list = value => Array.isArray(value) ? value : (Array.isArray(value?.results) ? value.results : (Array.isArray(value?.data) ? value.data : []));
+  const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '';
 
   async function request(url, options = {}, timeout = 12000) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
     try {
       const headers = { Accept: 'application/json', ...(options.headers || {}) };
+      if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase()) && !headers['X-CSRFToken']) headers['X-CSRFToken'] = csrf();
       const response = await fetch(url, { credentials: 'same-origin', ...options, headers, signal: controller.signal });
       const text = await response.text();
       let payload = {};
