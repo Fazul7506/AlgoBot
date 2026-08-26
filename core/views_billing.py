@@ -22,16 +22,23 @@ class CheckoutPlan:
 
 
 def _plans():
-    plans = [{"plan": "FREE", "price_cents": 0, "currency": "KES", "recurring": False}]
+    """Return the complete public plan catalog, including unconfigured paid tiers."""
+    currency = str(getattr(settings, "ALGOBOT_BILLING_CURRENCY", "KES")).upper()
     configured = {
         "BASIC": getattr(settings, "ALGOBOT_BASIC_PRICE_CENTS", None),
         "PRO": getattr(settings, "ALGOBOT_PRO_PRICE_CENTS", None),
         "ENTERPRISE": getattr(settings, "ALGOBOT_ENTERPRISE_PRICE_CENTS", None),
     }
-    currency = str(getattr(settings, "ALGOBOT_BILLING_CURRENCY", "KES")).upper()
+    plans = [{"plan": "FREE", "price_cents": 0, "currency": currency, "recurring": False, "configured": True}]
     for name, price in configured.items():
-        if price not in (None, ""):
-            plans.append({"plan": name, "price_cents": int(price), "currency": currency, "recurring": True})
+        configured_price = price not in (None, "")
+        plans.append({
+            "plan": name,
+            "price_cents": int(price) if configured_price else None,
+            "currency": currency,
+            "recurring": True,
+            "configured": configured_price,
+        })
     return plans
 
 
@@ -83,6 +90,7 @@ def billing_status(request):
         },
         "invoices": invoices,
         "payments": payments,
+        "plans": _plans(),
     })
 
 
@@ -90,8 +98,13 @@ def billing_status(request):
 @permission_classes([IsAuthenticated])
 def billing_checkout(request):
     plan = _plan(request.data.get("plan"))
-    if not plan or plan["plan"] == "FREE":
-        return Response({"detail": "Select a configured paid subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
+    if not plan:
+        return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
+    if plan["plan"] == "FREE":
+        return Response({"detail": "Use the plan change endpoint to switch to FREE."}, status=status.HTTP_400_BAD_REQUEST)
+    if not plan["configured"]:
+        return Response({"detail": f"{plan['plan']} is not configured for checkout yet. Configure its price in the deployment environment."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
     provider = str(request.data.get("provider") or getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower()
     invoice = Invoice.objects.create(
         user=request.user,
@@ -99,7 +112,7 @@ def billing_checkout(request):
         currency=plan["currency"],
         metadata={"plan": plan["plan"], "provider": provider, "state": "checkout_created"},
     )
-    result = PaymentService().create_checkout_session(request.user, CheckoutPlan(**plan), provider=provider)
+    result = PaymentService().create_checkout_session(request.user, CheckoutPlan(**{k: plan[k] for k in ("plan", "price_cents", "currency", "recurring")}), provider=provider)
     if not result.get("url"):
         invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": result.get("error", "Unable to create checkout")}
         invoice.save(update_fields=["metadata"])
@@ -123,6 +136,32 @@ def billing_checkout(request):
         status="PENDING",
     )
     return Response({**result, "plan": plan["plan"], "invoice_id": invoice.id})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def billing_change_plan(request):
+    """Change subscription tier. FREE is immediate; paid tiers use hosted checkout."""
+    requested = str(request.data.get("plan") or "").upper().strip()
+    plan = _plan(requested)
+    if not plan:
+        return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
+    subscription, _ = Subscription.objects.get_or_create(user=request.user)
+    if subscription.plan == plan["plan"] and subscription.is_active:
+        return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
+    if plan["plan"] == "FREE":
+        subscription.plan = "FREE"
+        subscription.price_cents = 0
+        subscription.currency = plan["currency"].lower()
+        subscription.recurring = False
+        subscription.is_active = True
+        subscription.expires_at = None
+        subscription.renewed_at = timezone.now()
+        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at"])
+        return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
+    if not plan["configured"]:
+        return Response({"detail": f"{plan['plan']} is not configured for checkout yet. Configure its price in the deployment environment."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return billing_checkout(request)
 
 
 @api_view(["POST"])
