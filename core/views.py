@@ -8,6 +8,7 @@ from django.http import Http404
 from django.http import HttpResponse
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.cache import never_cache
 from apps.brokers.models import Broker, BrokerAccount
 from core.services.oauth_service import DerivOAuthService
 
@@ -27,19 +28,16 @@ def _preferred_deriv_account(user):
 def _deriv_connected(account):
     """Check if Deriv account is active and connected"""
     return bool(
-        account and 
-        account.status == 'active' and 
-        account.broker.status == 'active' and 
-        account.token_status == 'active' and 
+        account and
+        account.status == 'active' and
+        account.broker.status == 'active' and
+        account.token_status == 'active' and
         not account.is_token_expired
     )
 
 
 def home(request):
     """Home page - redirect to dashboard if connected"""
-    # Daphne warns when an application provides a body for a HEAD response.
-    # The landing page is probed with HEAD by uptime monitors, so return an
-    # explicitly empty success response rather than rendering the full page.
     if request.method == 'HEAD':
         return HttpResponse(status=200)
     if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)):
@@ -177,7 +175,7 @@ def reset_password_page(request, token=None):
 
 
 def verify_email_page(request):
-    """Email verification is completed by Deriv during its OAuth flow."""
+    """Email verification is completed by Deriv during the OAuth sign-in flow."""
     return broker_connect_page(request)
 
 
@@ -206,12 +204,13 @@ def public_status_page(request):
     return render(request, 'core/system_status.html')
 
 
+@never_cache
 def deriv_login(request):
     """Initiate a secure Deriv OAuth + PKCE browser session.
 
-    This endpoint must remain public.  Deriv is AlgoBot's sole browser
-    identity provider, so requiring an existing Django session here sends an
-    anonymous visitor back to ``/login/`` and creates a redirect loop.
+    This endpoint intentionally sends no-cache/no-store headers. OAuth state
+    is unique per browser session, so an intermediary such as Cloudflare must
+    never cache or replay the redirect generated here.
     """
     is_valid, error_message = DerivOAuthService.validate_configuration()
     if not is_valid:
@@ -237,11 +236,23 @@ def deriv_login(request):
         )
         return redirect(canonical_url)
 
-    code_verifier, code_challenge = DerivOAuthService.generate_pkce_pair()
-    state = DerivOAuthService.generate_state()
-    DerivOAuthService.store_oauth_state_in_session(request, state, code_verifier, redirect_uri)
+    try:
+        code_verifier, code_challenge = DerivOAuthService.generate_pkce_pair()
+        state = DerivOAuthService.generate_state()
+        DerivOAuthService.store_oauth_state_in_session(request, state, code_verifier, redirect_uri)
+        authorization_url = DerivOAuthService.create_authorization_url(state, code_challenge)
+    except Exception as exc:
+        # Do not let a transient session/database/configuration failure turn
+        # the broker button into a connection reset. Return an actionable HTTP
+        # response and keep the underlying exception in server logs.
+        logger.exception("deriv_oauth_start_failed", extra={"error": str(exc)})
+        return HttpResponse(
+            "AlgoBot could not start the secure broker connection. Please try again in a moment.",
+            status=503,
+        )
+
     logger.info("deriv_oauth_login_initiated", extra={"redirect_host": configured_uri.netloc})
-    return redirect(DerivOAuthService.create_authorization_url(state, code_challenge))
+    return redirect(authorization_url)
 
 
 def broker_connect_page(request):
