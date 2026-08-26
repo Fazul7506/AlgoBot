@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Backtesting laboratory | AlgoBot{% endblock %}
 {% block content %}
 <h1 class="sr-only">Backtest engine</h1>
@@ -8,6 +9,4 @@
 <section class="panel"><div class="panel-head"><div><p class="eyebrow">Research history</p><h2>Backtests</h2></div><input class="search-input" data-backtest-search placeholder="Search strategy or symbol"></div><div class="table-wrap"><table class="enterprise-table" data-backtest-table><thead></thead><tbody><tr><td>Loading backtests…</td></tr></tbody></table></div></section>
 </section>
 {% endblock %}
-{% block extra_js %}
-<script src="{% static 'js/backtesting_workspace_fix.js' %}?v=20260826"></script>
-{% endblock %}
+{% block extra_js %}<script src="{% static 'js/backtesting_workspace_fix.js' %}?v=20260826"></script>{% endblock %}
