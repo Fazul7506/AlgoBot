@@ -1,10 +1,11 @@
 from __future__ import annotations
-import hashlib, logging, statistics, time
+import hashlib, logging, time
 from typing import Any, Iterable
 from django.core.cache import cache
 from django.utils import timezone
 from .models import AIModel, ModelVersion, Prediction, FeatureVector, TrainingJob, AIRecommendation, MarketRegime, AnomalyEvent
 from .constants import CONFIDENCE_LABELS
+from trading.ai.candlestick_features import FEATURE_NAMES, extract_candlestick_features
 log=logging.getLogger(__name__)
 
 def _num(v, default=0.0):
@@ -22,12 +23,19 @@ class ConfidenceCalibrationService:
         return {"score": round(score,2), "label": label}
 
 class FeatureEngineeringService:
-    SOURCES=("market_data","technical_analysis","smart_money","strategy","risk")
+    SOURCES=("market_data","technical_analysis","smart_money","strategy","risk","candlestick_price_action")
     def build_features(self, symbol:str, timeframe:str, context:dict[str,Any]|None=None)->dict[str,Any]:
         c=context or {}; md=c.get('market_data',{}); ind=c.get('indicators',{}); sm=c.get('smart_money',{}); risk=c.get('risk',{}); strat=c.get('strategy',{})
         o,h,l,cl=map(lambda k:_num(md.get(k)), ('open','high','low','close'))
         volatility=_num(md.get('volatility'), abs(h-l)/(cl or 1)); velocity=_num(md.get('price_velocity'), cl-o)
         features={'open':o,'high':h,'low':l,'close':cl,'spread':_num(md.get('spread')),'volatility':volatility,'price_velocity':velocity,'price_acceleration':_num(md.get('price_acceleration')),'candle_body':abs(cl-o),'candle_range':abs(h-l),'rsi':_num(ind.get('rsi',50)),'macd':_num(ind.get('macd')),'ema':_num(ind.get('ema',cl)),'sma':_num(ind.get('sma',cl)),'atr':_num(ind.get('atr',volatility)),'adx':_num(ind.get('adx')),'bollinger_width':_num(ind.get('bollinger_width')),'supertrend':_num(ind.get('supertrend')),'ichimoku_bias':_num(ind.get('ichimoku_bias')),'bos':int(bool(sm.get('bos'))),'choch':int(bool(sm.get('choch'))),'mss':int(bool(sm.get('mss'))),'order_blocks':_num(sm.get('order_blocks')),'fvg':_num(sm.get('fvg')),'liquidity':_num(sm.get('liquidity')),'premium_discount':_num(sm.get('premium_discount')),'institutional_bias':_num(sm.get('institutional_bias')),'confluence_score':_num(sm.get('confluence_score')),'drawdown':_num(risk.get('drawdown')),'exposure':_num(risk.get('exposure')),'margin':_num(risk.get('margin')),'portfolio_risk':_num(risk.get('portfolio_risk')),'volatility_risk':_num(risk.get('volatility_risk')),'strategy_confidence':_num(strat.get('confidence')),'win_rate':_num(strat.get('win_rate')),'historical_performance':_num(strat.get('historical_performance'))}
+        candles=c.get('candles') or md.get('candles')
+        if candles and len(candles)>=25:
+            try: features.update(extract_candlestick_features(candles[-60:]))
+            except Exception as exc: log.warning('Candlestick feature extraction failed', extra={'symbol':symbol,'error':str(exc)})
+        else:
+            # Preserve the model contract even when live inference has no candle window.
+            features.update({name:0.0 for name in FEATURE_NAMES})
         return features
 
 class FeatureStoreService:
@@ -60,21 +68,12 @@ class InferenceService:
         if ensemble and ensemble.models:
             try:
                 import numpy as np
-                vector=np.array([[_num(features.get('close')), _num(features.get('sma5', features.get('sma'))), _num(features.get('sma20', features.get('sma'))), _num(features.get('ema10', features.get('ema'))), _num(features.get('ret1', features.get('price_velocity'))), _num(features.get('range', features.get('candle_range'))) ]], dtype=float)
+                # Tree models are trained on the exact ordered FEATURE_NAMES contract.
+                vector=np.array([[ _num(features.get(name, 0.0)) for name in FEATURE_NAMES ]], dtype=float)
                 result=ensemble.predict(vector)
                 direction=_decision(result.get('direction'))
                 prob=float(result.get('probability',0))
-                consensus={
-                    'decision': direction,
-                    'probability': round(prob,6),
-                    'confidence': round(float(result.get('confidence',prob*100)),2),
-                    'agreement': round(float(result.get('agreement',0)),6),
-                    'disagreement': round(float(result.get('disagreement',0)),6),
-                    'models_used': int(result.get('models_used',0)),
-                    'model_types': result.get('model_types',[]),
-                    'method': result.get('method','weighted_average'),
-                    'model_outputs': result.get('model_outputs',result.get('predictions',[])),
-                }
+                consensus={'decision': direction,'probability': round(prob,6),'confidence': round(float(result.get('confidence',prob*100)),2),'agreement': round(float(result.get('agreement',0)),6),'disagreement': round(float(result.get('disagreement',0)),6),'models_used': int(result.get('models_used',0)),'model_types': result.get('model_types',[]),'method': result.get('method','weighted_average'),'model_outputs': result.get('model_outputs',result.get('predictions',[]))}
                 return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
             except Exception as exc:
                 log.exception('AI ensemble inference failed', extra={'symbol':symbol}); return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'error':str(exc),'source':'trained_ensemble','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'ensemble_inference_error'}}
@@ -82,7 +81,7 @@ class InferenceService:
 
 class PredictionService:
     def predict(self,symbol,timeframe,context=None):
-        start=time.perf_counter(); feats=FeatureEngineeringService().build_features(symbol,timeframe,context); FeatureStoreService().store(symbol,timeframe,feats); raw=InferenceService().infer(feats, ModelRegistry().champion(), symbol, timeframe); cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score']); consensus=raw.get('consensus',{}); obj=Prediction.objects.create(symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],confidence=cal['score'],expected_return=raw['expected_return'],risk_score=raw['risk_score'],payload={'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),'source':raw.get('source'),'consensus':consensus}); return obj
+        start=time.perf_counter(); feats=FeatureEngineeringService().build_features(symbol,timeframe,context); FeatureStoreService().store(symbol,timeframe,feats); raw=InferenceService().infer(feats, ModelRegistry().champion(), symbol, timeframe); cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score']); consensus=raw.get('consensus',{}); obj=Prediction.objects.create(symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],confidence=cal['score'],expected_return=raw['expected_return'],risk_score=raw['risk_score'],payload={'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),'source':raw.get('source'),'consensus':consensus,'feature_set':list(FEATURE_NAMES)}); return obj
 
 class EnsembleService:
     def combine(self, predictions:Iterable[dict], method='weighted_average'):
@@ -91,15 +90,14 @@ class EnsembleService:
         weights=[max(0.0,_num(p.get('weight',1.0),1.0)) for p in ps]; total=sum(weights) or 1.0
         scores={'BUY':0.0,'SELL':0.0,'AVOID':0.0}
         for p,w in zip(ps,weights):
-            d=_decision(p.get('decision',p.get('direction'))); conf=max(0,min(1,_num(p.get('confidence',p.get('probability',0)))/(100 if _num(p.get('confidence',0))>1 else 1)))
-            scores[d]+=w*conf
+            d=_decision(p.get('decision',p.get('direction'))); conf=max(0,min(1,_num(p.get('confidence',p.get('probability',0)))/(100 if _num(p.get('confidence',0))>1 else 1))); scores[d]+=w*conf
         normalized={k:v/total for k,v in scores.items()}; decision=max(normalized,key=normalized.get); agreement=normalized[decision]; confidence=agreement*100
         if agreement < 0.60: decision='AVOID'
         return {'decision':decision,'direction':decision,'probability':round(agreement if decision!='AVOID' else max(normalized.values()),6),'confidence':round(confidence,2),'models_used':len(ps),'method':method,'agreement':round(agreement,6),'scores':normalized}
 
 class ExplainabilityService:
     def explain(self, features, prediction=None):
-        vals={k:abs(_num(v)) for k,v in features.items() if isinstance(v,(int,float))}; total=sum(vals.values()) or 1; top=sorted(vals.items(), key=lambda kv:kv[1], reverse=True)[:8]; return {'feature_importance':{k:round(v/total,4) for k,v in top},'shap_values':{k:round(v/total,4) for k,v in top},'decision_factors':[k for k,_ in top],'explanation':'The explanation ranks the available market, technical, strategy and risk features. A trade recommendation is only actionable when a trained model is available and passes the confidence gate.','confidence_reasoning':'Confidence is calibrated from the trained model probability and risk penalties.'}
+        vals={k:abs(_num(v)) for k,v in features.items() if isinstance(v,(int,float))}; total=sum(vals.values()) or 1; top=sorted(vals.items(), key=lambda kv:kv[1], reverse=True)[:12]; return {'feature_importance':{k:round(v/total,4) for k,v in top},'shap_values':{k:round(v/total,4) for k,v in top},'decision_factors':[k for k,_ in top],'explanation':'The explanation ranks quantitative market, candlestick, technical, strategy and risk features. A recommendation is actionable only when a trained model passes the configured confidence gate.','confidence_reasoning':'Confidence is calibrated from model probability and risk penalties.'}
 
 class RecommendationService:
     MIN_CONFIDENCE=65.0
@@ -123,7 +121,7 @@ class ConsensusDecisionGate:
 
 class MarketRegimeService:
     def detect(self,symbol,features):
-        vol=_num(features.get('volatility')); trend=abs(_num(features.get('price_velocity'))); regime='volatile' if vol>2 else 'strong_trend' if trend>1 else 'sideways'; return MarketRegime.objects.create(symbol=symbol,regime=regime,confidence=min(100,50+vol*10+trend*10))
+        vol=_num(features.get('volatility')); trend=abs(_num(features.get('trend_score',features.get('price_velocity')))); chop=_num(features.get('chop_score')); regime='volatile' if vol>2 else 'choppy' if chop>.7 else 'strong_trend' if trend>.2 else 'sideways'; return MarketRegime.objects.create(symbol=symbol,regime=regime,confidence=min(100,50+vol*10+trend*10))
 class AnomalyDetectionService:
     def scan(self,symbol,features):
         score=max(_num(features.get('volatility')), abs(_num(features.get('price_acceleration')))); return AnomalyEvent.objects.create(symbol=symbol,anomaly_type='volatility_spike' if score>3 else 'none',score=score,details=features) if score>3 else None
@@ -136,7 +134,7 @@ class TrainingService:
             metrics=MarketModelTrainer().train_symbol(symbol,timeframe,min_accuracy)
             return TrainingJob.objects.filter(metrics__symbol=symbol).order_by('-started_at').first()
         results=MarketModelTrainer().train_active_symbols(timeframe,min_accuracy)
-        return TrainingJob.objects.create(status='completed',started_at=timezone.now(),completed_at=timezone.now(),metrics={'mode':mode,'results':results})
+        return TrainingJob.objects.create(status='completed',started_at=timezone.now(),completed_at=timezone.now(),metrics={'mode':mode,'results':results,'feature_set':list(FEATURE_NAMES)})
 class AIRiskAdvisor:
     def advise(self,prediction): return {'risk_score':prediction.risk_score,'action':'REDUCE RISK' if prediction.risk_score>.6 else 'MAINTAIN'}
 class AIStrategyAdvisor:
