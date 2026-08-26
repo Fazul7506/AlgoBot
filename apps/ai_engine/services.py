@@ -11,6 +11,10 @@ def _num(v, default=0.0):
     try: return float(v or 0)
     except (TypeError,ValueError): return default
 
+def _decision(value):
+    value=str(value or '').upper()
+    return {'UP':'BUY','LONG':'BUY','DOWN':'SELL','SHORT':'SELL','WAIT':'AVOID','HOLD':'AVOID','NO_MODELS':'AVOID','AI_ERROR':'AVOID','DO NOT TRADE':'AVOID'}.get(value,value if value in {'BUY','SELL','AVOID'} else 'AVOID')
+
 class ConfidenceCalibrationService:
     def calibrate(self, probability: float, risk_score: float=0) -> dict:
         score=max(0,min(100, probability*100-(risk_score*20)))
@@ -57,26 +61,65 @@ class InferenceService:
             try:
                 import numpy as np
                 vector=np.array([[_num(features.get('close')), _num(features.get('sma5', features.get('sma'))), _num(features.get('sma20', features.get('sma'))), _num(features.get('ema10', features.get('ema'))), _num(features.get('ret1', features.get('price_velocity'))), _num(features.get('range', features.get('candle_range'))) ]], dtype=float)
-                result=ensemble.predict(vector); prob=float(result.get('probability',0)); return {'direction':result.get('direction','NO_MODELS'),'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':result.get('models_used',0),'model_types':result.get('model_types',[]),'source':'trained_ensemble'}
+                result=ensemble.predict(vector)
+                direction=_decision(result.get('direction'))
+                prob=float(result.get('probability',0))
+                consensus={
+                    'decision': direction,
+                    'probability': round(prob,6),
+                    'confidence': round(float(result.get('confidence',prob*100)),2),
+                    'agreement': round(float(result.get('agreement',0)),6),
+                    'disagreement': round(float(result.get('disagreement',0)),6),
+                    'models_used': int(result.get('models_used',0)),
+                    'model_types': result.get('model_types',[]),
+                    'method': result.get('method','weighted_average'),
+                    'model_outputs': result.get('model_outputs',result.get('predictions',[])),
+                }
+                return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
             except Exception as exc:
-                log.exception('AI ensemble inference failed', extra={'symbol':symbol}); return {'direction':'AI_ERROR','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'error':str(exc),'source':'trained_ensemble'}
-        return {'direction':'NO_MODELS','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'no_trained_model'}
+                log.exception('AI ensemble inference failed', extra={'symbol':symbol}); return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'error':str(exc),'source':'trained_ensemble','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'ensemble_inference_error'}}
+        return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'no_trained_model','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'no_trained_model'}}
 
 class PredictionService:
     def predict(self,symbol,timeframe,context=None):
-        start=time.perf_counter(); feats=FeatureEngineeringService().build_features(symbol,timeframe,context); FeatureStoreService().store(symbol,timeframe,feats); raw=InferenceService().infer(feats, ModelRegistry().champion(), symbol, timeframe); cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score']); obj=Prediction.objects.create(symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],confidence=cal['score'],expected_return=raw['expected_return'],risk_score=raw['risk_score'],payload={'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),'source':raw.get('source')}); return obj
+        start=time.perf_counter(); feats=FeatureEngineeringService().build_features(symbol,timeframe,context); FeatureStoreService().store(symbol,timeframe,feats); raw=InferenceService().infer(feats, ModelRegistry().champion(), symbol, timeframe); cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score']); consensus=raw.get('consensus',{}); obj=Prediction.objects.create(symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],confidence=cal['score'],expected_return=raw['expected_return'],risk_score=raw['risk_score'],payload={'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),'source':raw.get('source'),'consensus':consensus}); return obj
 
 class EnsembleService:
     def combine(self, predictions:Iterable[dict], method='weighted_average'):
-        ps=list(predictions); prob=statistics.fmean([p.get('probability',.5) for p in ps]) if ps else .5; return {'direction':'UP' if prob>=.5 else 'DOWN','probability':prob,'confidence':ConfidenceCalibrationService().calibrate(prob)['score'],'models_used':len(ps),'method':method}
+        ps=list(predictions)
+        if not ps: return {'decision':'AVOID','direction':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'method':method,'agreement':0.0}
+        weights=[max(0.0,_num(p.get('weight',1.0),1.0)) for p in ps]; total=sum(weights) or 1.0
+        scores={'BUY':0.0,'SELL':0.0,'AVOID':0.0}
+        for p,w in zip(ps,weights):
+            d=_decision(p.get('decision',p.get('direction'))); conf=max(0,min(1,_num(p.get('confidence',p.get('probability',0)))/(100 if _num(p.get('confidence',0))>1 else 1)))
+            scores[d]+=w*conf
+        normalized={k:v/total for k,v in scores.items()}; decision=max(normalized,key=normalized.get); agreement=normalized[decision]; confidence=agreement*100
+        if agreement < 0.60: decision='AVOID'
+        return {'decision':decision,'direction':decision,'probability':round(agreement if decision!='AVOID' else max(normalized.values()),6),'confidence':round(confidence,2),'models_used':len(ps),'method':method,'agreement':round(agreement,6),'scores':normalized}
 
 class ExplainabilityService:
     def explain(self, features, prediction=None):
         vals={k:abs(_num(v)) for k,v in features.items() if isinstance(v,(int,float))}; total=sum(vals.values()) or 1; top=sorted(vals.items(), key=lambda kv:kv[1], reverse=True)[:8]; return {'feature_importance':{k:round(v/total,4) for k,v in top},'shap_values':{k:round(v/total,4) for k,v in top},'decision_factors':[k for k,_ in top],'explanation':'The explanation ranks the available market, technical, strategy and risk features. A trade recommendation is only actionable when a trained model is available and passes the confidence gate.','confidence_reasoning':'Confidence is calibrated from the trained model probability and risk penalties.'}
 
 class RecommendationService:
+    MIN_CONFIDENCE=65.0
+    MIN_MODELS=1
     def recommend(self,symbol,prediction):
-        rec='BUY' if prediction.prediction=='UP' and prediction.confidence>=65 else 'SELL' if prediction.prediction=='DOWN' and prediction.confidence>=65 else 'WAIT'; risk='high' if prediction.risk_score>.6 else 'medium' if prediction.risk_score>.3 else 'low'; return AIRecommendation.objects.create(symbol=symbol,recommendation=rec,confidence=prediction.confidence,risk_level=risk,reason=f'{rec} based on {prediction.prediction} prediction with {prediction.confidence:.1f}% calibrated confidence.',evidence=prediction.payload)
+        payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); models=int(consensus.get('models_used',payload.get('models_used',0)) or 0)
+        actionable=decision in {'BUY','SELL'} and confidence>=self.MIN_CONFIDENCE and models>=self.MIN_MODELS
+        rec=decision if actionable else 'WAIT'; risk='high' if prediction.risk_score>.6 else 'medium' if prediction.risk_score>.3 else 'low'
+        evidence={**payload,'consensus':{**consensus,'decision':decision,'confidence':confidence,'actionable':actionable}}
+        return AIRecommendation.objects.create(symbol=symbol,recommendation=rec,confidence=confidence,risk_level=risk,reason=f'{rec} based on ensemble consensus {decision} with {confidence:.1f}% confidence across {models} model(s).',evidence=evidence)
+
+class ConsensusDecisionGate:
+    MIN_CONFIDENCE=65.0
+    def validate(self, prediction, intended_direction=None):
+        payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); models=int(consensus.get('models_used',0) or 0)
+        if decision not in {'BUY','SELL'}: return False, 'Ensemble consensus is not actionable'
+        if confidence < self.MIN_CONFIDENCE: return False, f'Ensemble confidence {confidence:.2f}% below {self.MIN_CONFIDENCE:.2f}% gate'
+        if models < 1: return False, 'No trained ensemble models available'
+        if intended_direction and _decision(intended_direction)!=decision: return False, 'Order direction conflicts with ensemble consensus'
+        return True, 'Ensemble consensus approved'
 
 class MarketRegimeService:
     def detect(self,symbol,features):
@@ -88,19 +131,12 @@ class HyperparameterOptimizationService:
     def optimize(self, algorithm, search='random_search'): return {'algorithm':algorithm,'search':search,'best_params':{'n_estimators':100,'max_depth':5},'score':0.0}
 class TrainingService:
     def train(self, model=None, mode='manual', symbol=None, timeframe='M1', min_accuracy=0.52):
-        """Run real supervised training from persisted broker market candles.
-
-        The old implementation only marked a TrainingJob completed and never
-        produced an artifact. This delegates to the same validated trainer used
-        by the scheduled task, so inference can only use genuinely trained models.
-        """
         from .training import MarketModelTrainer
         if symbol:
             metrics=MarketModelTrainer().train_symbol(symbol,timeframe,min_accuracy)
             return TrainingJob.objects.filter(metrics__symbol=symbol).order_by('-started_at').first()
         results=MarketModelTrainer().train_active_symbols(timeframe,min_accuracy)
-        job=TrainingJob.objects.create(status='completed',started_at=timezone.now(),completed_at=timezone.now(),metrics={'mode':mode,'results':results})
-        return job
+        return TrainingJob.objects.create(status='completed',started_at=timezone.now(),completed_at=timezone.now(),metrics={'mode':mode,'results':results})
 class AIRiskAdvisor:
     def advise(self,prediction): return {'risk_score':prediction.risk_score,'action':'REDUCE RISK' if prediction.risk_score>.6 else 'MAINTAIN'}
 class AIStrategyAdvisor:
