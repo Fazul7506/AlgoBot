@@ -18,7 +18,7 @@ PESAPAL_NOTIFICATION_ID = env("PESAPAL_NOTIFICATION_ID", "")
 PESAPAL_API_BASE_URL = env("PESAPAL_API_BASE_URL", "https://pay.pesapal.com/v3").rstrip("/")
 
 # Keep the provider-specific names as the source of truth, while exposing the
-# generic aliases consumed by the broker abstraction layer.
+generic aliases consumed by the broker abstraction layer.
 DERIV_OAUTH_CLIENT_ID = env("DERIV_OAUTH_CLIENT_ID", env("BROKER_OAUTH_CLIENT_ID", ""))
 DERIV_APP_ID = env("DERIV_APP_ID", env("BROKER_APP_ID", DERIV_OAUTH_CLIENT_ID))
 DERIV_REDIRECT_URI = env("DERIV_REDIRECT_URI", env("BROKER_REDIRECT_URI", ""))
@@ -32,7 +32,11 @@ DERIV_PUBLIC_WS_URL = env(
     "wss://api.derivws.com/trading/v1/options/ws/public",
 )
 DERIV_AUTH_WS_BASE_URL = env("DERIV_AUTH_WS_BASE_URL", DERIV_PUBLIC_WS_URL)
-ENABLE_BROKER_ACCOUNT_SWITCH = env_bool("ENABLE_BROKER_ACCOUNT_SWITCH", False)
+
+# Live execution and account switching are separate safety gates. If a
+# deployment explicitly sets ENABLE_BROKER_ACCOUNT_SWITCH it wins; otherwise
+# enabling live trading also enables the demo/real account selector.
+ENABLE_BROKER_ACCOUNT_SWITCH = env_bool("ENABLE_BROKER_ACCOUNT_SWITCH", env_bool("ALLOW_LIVE_TRADING", False))
 
 BROKER_APP_ID = env("BROKER_APP_ID", DERIV_APP_ID)
 BROKER_WS_URL = env("BROKER_WS_URL", DERIV_PUBLIC_WS_URL)
