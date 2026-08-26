@@ -4,6 +4,6 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements/base.txt
-    startCommand: DJANGO_ENV=production python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
+    startCommand: DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && python manage.py collectstatic --noinput && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
     healthCheckPath: /health/
     autoDeploy: true
