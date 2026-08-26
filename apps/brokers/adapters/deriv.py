@@ -85,8 +85,15 @@ class DerivAdapter(BrokerAdapter):
         return response
 
     async def connect(self):
+        # The authenticated balance request already proves that the OAuth
+        # credential, account and OTP-scoped WebSocket are valid. Do not perform
+        # a second public WebSocket ping here: it is a different channel and can
+        # fail independently, incorrectly turning a valid authenticated session
+        # into a disconnected account.
+        start = time.perf_counter()
         account = await self.authenticate()
-        return {"status": "connected", "account_id": account.get("loginid") or account.get("account_id"), "is_virtual": account.get("is_virtual"), "avatar_url": account.get("avatar_url")}
+        latency = (time.perf_counter() - start) * 1000
+        return {"status": "connected", "account_id": account.get("loginid") or account.get("account_id"), "is_virtual": account.get("is_virtual"), "avatar_url": account.get("avatar_url"), "balance": account.get("balance"), "currency": account.get("currency"), "latency": latency}
 
     async def disconnect(self): return {"status": "disconnected"}
 
@@ -113,46 +120,17 @@ class DerivAdapter(BrokerAdapter):
         except (requests.RequestException, ValueError) as exc: raise BrokerConnectionError("Unable to retrieve Deriv trading accounts") from exc
 
     async def get_balance(self):
-        """Return the selected account's balance without requiring a WebSocket.
-
-        The Options accounts endpoint is already used to verify an OAuth
-        connection and includes the current account balance.  Prefer it here
-        because a deployment can reach HTTPS while an outbound authenticated
-        WebSocket (or its short-lived OTP URL) is temporarily unavailable.
-        Fall back to the WebSocket only when Deriv omits the balance from the
-        account record.
-        """
         account_id = self._account_id()
         accounts = await self.get_accounts()
-        record = next(
-            (
-                item for item in accounts
-                if str(item.get("account_id") or item.get("loginid") or "") == account_id
-            ),
-            None,
-        )
+        record = next((item for item in accounts if str(item.get("account_id") or item.get("loginid") or "") == account_id), None)
         if record is None:
             raise BrokerAuthenticationError("The selected Deriv account is no longer available to this OAuth credential")
-
         if record.get("balance") is None:
             account = await self.authenticate()
-            return {
-                "account_id": account["account_id"],
-                "balance": account.get("balance"),
-                "currency": account.get("currency"),
-                "account_type": "demo" if account.get("is_virtual") else "real",
-                "avatar_url": account.get("avatar_url"),
-            }
-
+            return {"account_id": account["account_id"], "balance": account.get("balance"), "currency": account.get("currency"), "account_type": "demo" if account.get("is_virtual") else "real", "avatar_url": account.get("avatar_url")}
         is_virtual = record.get("is_virtual")
         account_type = str(record.get("account_type") or "").lower()
-        return {
-            "account_id": str(record.get("account_id") or record.get("loginid") or account_id),
-            "balance": record.get("balance"),
-            "currency": record.get("currency"),
-            "account_type": "demo" if is_virtual is True or account_type == "demo" else "real",
-            "avatar_url": record.get("avatar_url"),
-        }
+        return {"account_id": str(record.get("account_id") or record.get("loginid") or account_id), "balance": record.get("balance"), "currency": record.get("currency"), "account_type": "demo" if is_virtual is True or account_type == "demo" else "real", "avatar_url": record.get("avatar_url")}
 
     async def get_positions(self): return (await self._request({"portfolio": 1}, authenticated=True)).get("portfolio", {}).get("contracts", [])
     async def get_orders(self): return (await self._request({"statement": 1, "limit": 50}, authenticated=True)).get("statement", {}).get("transactions", [])
@@ -182,7 +160,6 @@ class DerivAdapter(BrokerAdapter):
         return {"mode": "ticks", "symbol": symbol, "items": [{"epoch": e, "quote": q} for e, q in zip(ticks.get("times", []), ticks.get("prices", []))]}
 
     async def get_chart_capabilities(self):
-        # This is broker-adapter capability metadata, not frontend hardcoding.
         return {"modes": ["ticks", "candles"], "timeframes": [{"label": "1m", "seconds": 60}, {"label": "2m", "seconds": 120}, {"label": "5m", "seconds": 300}, {"label": "10m", "seconds": 600}, {"label": "15m", "seconds": 900}, {"label": "30m", "seconds": 1800}, {"label": "1h", "seconds": 3600}, {"label": "2h", "seconds": 7200}, {"label": "4h", "seconds": 14400}, {"label": "8h", "seconds": 28800}, {"label": "1d", "seconds": 86400}]}
 
     async def subscribe_ticks(self, symbol, callback=None): return {"symbol": symbol, "stream": "ticks", "endpoint": self.endpoint}
