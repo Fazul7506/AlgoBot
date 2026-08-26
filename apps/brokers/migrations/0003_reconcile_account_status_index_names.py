@@ -14,11 +14,12 @@ def _existing_objects(connection, table):
 
 def _safe_rename_index(schema_editor, model, old_name, new_name):
     existing = _existing_objects(schema_editor.connection, model._meta.db_table)
-    if new_name in existing:
+    if new_name in existing or old_name not in existing:
         return
-    if old_name not in existing:
-        return
-    schema_editor.execute(schema_editor._rename_index_sql(model, old_name, new_name))
+    # Use Django's public schema-editor API. The previous implementation
+    # called the private _rename_index_sql() helper directly, which produces
+    # SQL that SQLite cannot execute ("near INDEX: syntax error").
+    schema_editor.rename_index(model, old_name, new_name)
 
 
 def reconcile_index_names(apps, schema_editor):
