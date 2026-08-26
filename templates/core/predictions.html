@@ -3,3 +3,4 @@
 {% block content %}<h1 class="sr-only">Prediction engine</h1>
 {% include "components/enterprise_page.html" with title="AI prediction center" module="AI" page_id="core-predictions" %}
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/predictions_workspace_fix.js' %}?v=20260826-ai1" defer></script>{% endblock %}
