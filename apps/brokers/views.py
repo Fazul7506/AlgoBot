@@ -16,6 +16,7 @@ from .exceptions import BrokerAuthenticationError, BrokerConnectionError, Broker
 
 logger = logging.getLogger(__name__)
 
+
 def _run_bounded(coro, timeout=8.0):
     async def runner():
         return await asyncio.wait_for(coro, timeout=timeout)
@@ -47,11 +48,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
     authentication_classes = [SessionAuthentication, JWTAuthentication]
 
     def get_queryset(self):
-        return (
-            BrokerAccount.objects.filter(user=self.request.user)
-            .select_related('broker')
-            .order_by('-is_preferred', 'broker__name', 'account_id')
-        )
+        return BrokerAccount.objects.filter(user=self.request.user).select_related('broker').order_by('-is_preferred', 'broker__name', 'account_id')
 
     def list(self, request, *args, **kwargs):
         return response.Response(self.get_serializer(self.get_queryset(), many=True).data)
@@ -87,7 +84,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         except BrokerConnectionError as exc:
             return response.Response({'detail': str(exc), 'broker_status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception as exc:
-            logger.exception("broker_account_sync_unexpected_failure", extra={"account_id": account.pk, "broker": account.broker.broker_type})
+            logger.exception('broker_account_sync_unexpected_failure', extra={'account_id': account.pk, 'broker': account.broker.broker_type})
             return response.Response({'detail': 'Broker synchronization failed; the last known account data was preserved.', 'broker_status': 'error', 'error_code': exc.__class__.__name__}, status=status.HTTP_502_BAD_GATEWAY)
         return response.Response({'source': f'{synced.broker.broker_type}_authorize', 'account': BrokerAccountSerializer(synced).data, 'broker_data': broker_data})
 
@@ -98,7 +95,7 @@ class BrokerConnectionViewSet(viewsets.ReadOnlyModelViewSet):
     authentication_classes = [SessionAuthentication, JWTAuthentication]
 
     def get_queryset(self):
-        return BrokerConnection.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
+        return BrokerConnection.objects.filter(broker_account__user=self.request.user).select_related('broker', 'broker_account').order_by('-updated_at')
 
 
 class BrokerOrderViewSet(viewsets.ModelViewSet):
@@ -162,9 +159,22 @@ class BrokerHealthViewSet(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, JWTAuthentication]
 
     def list(self, request):
-        accounts = BrokerAccount.objects.filter(user=request.user).select_related('broker').order_by('-is_preferred')
+        accounts = list(BrokerAccount.objects.filter(user=request.user).select_related('broker').order_by('-is_preferred'))
         preferred = next((account for account in accounts if account.is_preferred), accounts[0] if accounts else None)
-        return response.Response({'accounts': BrokerAccountSerializer(accounts, many=True).data, 'connected': bool(preferred and preferred.is_connection_eligible), 'preferred_account_id': preferred.id if preferred else None, 'switch_enabled': settings.ENABLE_BROKER_ACCOUNT_SWITCH, 'source': 'broker_accounts'})
+        connected = bool(
+            preferred
+            and BrokerConnection.objects.filter(
+                broker_account=preferred,
+                status='connected',
+            ).exists()
+        )
+        return response.Response({
+            'accounts': BrokerAccountSerializer(accounts, many=True).data,
+            'connected': connected,
+            'preferred_account_id': preferred.id if preferred else None,
+            'switch_enabled': settings.ENABLE_BROKER_ACCOUNT_SWITCH,
+            'source': 'broker_connections',
+        })
 
 
 @decorators.api_view(['POST'])
