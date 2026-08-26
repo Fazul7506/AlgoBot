@@ -13,8 +13,9 @@ class SafeDerivOAuthCallbackTests(TestCase):
         response = self.client.get(reverse("callback") + "?error=access_denied")
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("dashboard_page"))
+        self.assertEqual(response.url, reverse("home"))
         self.assertNotIn("/brokers/connect/", response.url)
+        self.assertNotIn("/login/", response.url)
 
     @override_settings(
         DERIV_OAUTH_CLIENT_ID="oauth-client-test",
@@ -33,5 +34,7 @@ class SafeDerivOAuthCallbackTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("dashboard_page"))
+        self.assertEqual(response.url, reverse("home"))
+        self.assertNotIn("/brokers/connect/", response.url)
+        self.assertNotIn("/login/", response.url)
         verify_account.assert_not_called()
