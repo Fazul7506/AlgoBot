@@ -12,11 +12,11 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import AIModel, ModelVersion, TrainingJob
-from trading.ai.candlestick_features import FEATURE_NAMES, feature_vector
+from .training_dataset import build_direction_dataset
+from trading.ai.candlestick_features import FEATURE_NAMES
 
 logger = logging.getLogger(__name__)
 FEATURES = tuple(FEATURE_NAMES)
-DEFAULT_MIN_ROWS = 250
 TIMEFRAME_ALIASES = {"M1": "1m", "M2": "2m", "M5": "5m", "M10": "10m", "M15": "15m", "M30": "30m", "H1": "1h", "H4": "4h", "D1": "1d"}
 
 
@@ -33,9 +33,6 @@ def _model_dir() -> Path:
     if getattr(settings, "DEBUG", False):
         path = Path(configured or (Path(__file__).resolve().parents[2] / "trading" / "ai" / "models"))
     else:
-        # Render/container filesystems are not durable across redeploys unless a
-        # persistent disk or external artifact store is explicitly configured.
-        # Refuse to train into an ephemeral production filesystem.
         if not configured:
             raise RuntimeError("AI_MODEL_DIR must point to durable model storage in production")
         path = Path(configured)
@@ -55,32 +52,13 @@ def _atomic_dump(model: Any, path: Path) -> None:
             tmp.unlink()
 
 
-def _build_dataset(symbol: str, timeframe: str, limit: int = 5000) -> tuple[np.ndarray, np.ndarray]:
-    from apps.market_data.models import Candle, MarketSymbol
-    timeframe = normalize_timeframe(timeframe)
-    market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
-    if not market_symbol:
-        raise ValueError(f"Unknown active market symbol: {symbol}")
-    candles = list(Candle.objects.filter(symbol=market_symbol, timeframe=timeframe).order_by("epoch").values("open", "high", "low", "close", "volume")[:limit])
-    if len(candles) < DEFAULT_MIN_ROWS:
-        raise ValueError(f"Insufficient candles for {symbol}/{timeframe}: {len(candles)}; need at least {DEFAULT_MIN_ROWS}")
-    rows: list[list[float]] = []
-    labels: list[int] = []
-    for i in range(30, len(candles) - 1):
-        try:
-            rows.append(feature_vector(candles[max(0, i - 59): i + 1]))
-            labels.append(int(float(candles[i + 1]["close"]) > float(candles[i]["close"])))
-        except (TypeError, ValueError, KeyError):
-            continue
-    return np.asarray(rows, dtype=np.float64), np.asarray(labels, dtype=np.int8)
-
-
 class MarketModelTrainer:
-    """Train broker-independent directional models from persisted OHLC candles."""
+    """Train broker-independent directional models from canonical market data."""
 
     def train_symbol(self, symbol: str, timeframe: str = "M1", min_accuracy: float = 0.52) -> dict[str, Any]:
         timeframe = normalize_timeframe(timeframe)
-        X, y = _build_dataset(symbol, timeframe)
+        dataset = build_direction_dataset(symbol, timeframe)
+        X, y = dataset.X, dataset.y
         split = int(len(X) * 0.8)
         X_train, X_test, y_train, y_test = X[:split], X[split:], y[:split], y[split:]
         if len(np.unique(y_train)) < 2 or len(np.unique(y_test)) < 2:
@@ -107,7 +85,18 @@ class MarketModelTrainer:
             pred = model.predict(X_test)
             probability = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else pred
             accuracy = float(accuracy_score(y_test, pred))
-            metrics = {"accuracy": accuracy, "precision": float(precision_score(y_test, pred, zero_division=0)), "recall": float(recall_score(y_test, pred, zero_division=0)), "f1": float(f1_score(y_test, pred, zero_division=0)), "auc": float(roc_auc_score(y_test, probability)) if len(np.unique(y_test)) > 1 else 0.5, "samples": int(len(X)), "train_samples": int(len(X_train)), "test_samples": int(len(X_test)), "feature_count": len(FEATURES), "feature_set": list(FEATURES)}
+            metrics = {
+                "accuracy": accuracy,
+                "precision": float(precision_score(y_test, pred, zero_division=0)),
+                "recall": float(recall_score(y_test, pred, zero_division=0)),
+                "f1": float(f1_score(y_test, pred, zero_division=0)),
+                "auc": float(roc_auc_score(y_test, probability)) if len(np.unique(y_test)) > 1 else 0.5,
+                "samples": int(len(X)),
+                "train_samples": int(len(X_train)),
+                "test_samples": int(len(X_test)),
+                "feature_count": len(FEATURES),
+                "feature_set": list(FEATURES),
+            }
             results.append((algorithm, model, metrics))
         eligible = [item for item in results if item[2]["accuracy"] >= min_accuracy]
         if not eligible:
@@ -121,8 +110,9 @@ class MarketModelTrainer:
                 _atomic_dump(model, path)
                 name = f"{symbol}-{timeframe}-{algorithm}"
                 version = timezone.now().strftime("%Y%m%d%H%M%S")
-                ai_model = AIModel.objects.create(name=name, version=version, algorithm=algorithm, framework="sklearn", status="active", accuracy=metrics["accuracy"], precision=metrics["precision"], recall=metrics["recall"], f1_score=metrics["f1"], auc=metrics["auc"], metadata={"features": list(FEATURES), "artifact": str(path), "validation": metrics, "knowledge_source": "candlestick_price_action_rules", "training_target": "next_candle_direction"})
-                ModelVersion.objects.create(model=ai_model, version=version, training_dataset=f"market_data:{symbol}:{timeframe}", feature_set={"features": list(FEATURES)}, hyperparameters={"algorithm": algorithm})
+                metadata = {"features": list(FEATURES), "artifact": str(path), "validation": metrics, "dataset": dataset.metadata, "knowledge_source": "canonical_market_data", "training_target": "next_candle_direction"}
+                ai_model = AIModel.objects.create(name=name, version=version, algorithm=algorithm, framework="sklearn", status="active", accuracy=metrics["accuracy"], precision=metrics["precision"], recall=metrics["recall"], f1_score=metrics["f1"], auc=metrics["auc"], metadata=metadata)
+                ModelVersion.objects.create(model=ai_model, version=version, training_dataset=f"market_data:{symbol}:{timeframe}", feature_set={"features": list(FEATURES), "provenance": dataset.metadata}, hyperparameters={"algorithm": algorithm})
                 published.append({"algorithm": algorithm, "accuracy": metrics["accuracy"], "path": str(path), "features": len(FEATURES)})
             best = max(published, key=lambda item: item["accuracy"])
             AIModel.objects.filter(name__startswith=f"{symbol}-{timeframe}-", status="champion").update(status="active")
@@ -135,7 +125,7 @@ class MarketModelTrainer:
             job.status = "completed"
             job.completed_at = timezone.now()
             job.duration = (job.completed_at - job.started_at).total_seconds()
-            job.metrics = {"symbol": symbol, "timeframe": timeframe, "published": published, "champion": best, "feature_set": list(FEATURES)}
+            job.metrics = {"symbol": symbol, "timeframe": timeframe, "published": published, "champion": best, "dataset": dataset.metadata}
             job.save(update_fields=["model", "status", "completed_at", "duration", "metrics"])
         return job.metrics
 
