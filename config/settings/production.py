@@ -18,11 +18,9 @@ ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", [])
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", [])
 BASE_URL = env("BASE_URL", "").rstrip("/")
 
-# Render terminates TLS at its edge and forwards requests to Gunicorn over the
-# internal HTTP port. Do not issue a second HTTP->HTTPS redirect from Django:
-# doing so can create an infinite redirect when a custom domain/proxy does not
-# preserve X-Forwarded-Proto exactly as expected. Render already enforces HTTPS
-# for the public service. Keep the proxy header for correct request.is_secure().
+# Render terminates TLS at its edge and forwards requests to the application
+# over the internal HTTP port. Keep Django aware of the original HTTPS scheme
+# without creating a second redirect loop behind the proxy.
 SECURE_SSL_REDIRECT = False
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_HSTS_SECONDS = int(env("SECURE_HSTS_SECONDS", "31536000"))
@@ -37,6 +35,11 @@ CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", "Lax")
+
+# WhiteNoise still serves the collected, compressed assets from STATIC_ROOT.
+# A missing optional asset must not make the entire HTML document fail with a
+# manifest exception; the deployment build now runs collectstatic explicitly.
+WHITENOISE_MANIFEST_STRICT = False
 
 USE_POSTGRES = True
 USE_REDIS = True
