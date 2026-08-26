@@ -98,7 +98,7 @@ class BrokerConnection(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['broker', 'status'], name='brokers_bro_broker__2b0b4d_idx'),
-            models.Index(fields=['broker_account', 'status'], name='brokers_bro_account__f3e4a0_idx'),
+            models.Index(fields=['broker_account', 'status'], name='brokers_bro_acct_stat_idx'),
             models.Index(fields=['last_ping'], name='brokers_bro_last_pi_743fac_idx'),
         ]
         constraints = [models.UniqueConstraint(fields=['broker_account'], condition=Q(broker_account__isnull=False), name='unique_broker_connection_per_account')]
@@ -149,7 +149,7 @@ class Order(models.Model):
         indexes = [
             models.Index(fields=['user', 'status']),
             models.Index(fields=['broker', 'status'], name='brokers_ord_broker__e4e374_idx'),
-            models.Index(fields=['account', 'status'], name='brokers_ord_account__d1f2c7_idx'),
+            models.Index(fields=['account', 'status'], name='brokers_ord_acct_stat_idx'),
         ]
         constraints = [models.UniqueConstraint(fields=['user', 'account', 'client_order_id'], condition=~Q(client_order_id=''), name='unique_client_order_id_per_account')]
 
