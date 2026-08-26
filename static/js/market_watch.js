@@ -28,12 +28,12 @@
     if (!root) return;
     const markets = ['All', ...new Set(rows.map(row => row.market).filter(Boolean).sort())];
     root.innerHTML = markets.map(market => `<button type="button" class="${market === selectedMarket ? 'active' : ''}" data-market-category="${esc(market)}">${esc(market)}</button>`).join('');
-    root.querySelectorAll('[data-market-category]').forEach(button => button.addEventListener('click', () => { selectedMarket = button.dataset.marketCategory; renderCategories(); render(); }));
-  }
-
-  function connected() {
-    const state = window.AlgoBotBrokerState?.get();
-    return !!state?.account && ['CONNECTED', 'SYNCING', 'READY', 'DEGRADED'].includes(state.status);
+    root.querySelectorAll('[data-market-category]').forEach(button => button.addEventListener('click', () => {
+      selectedMarket = button.dataset.marketCategory;
+      renderCategories();
+      render();
+      refreshQuotes();
+    }));
   }
 
   function render(message = null) {
@@ -45,9 +45,13 @@
     root.innerHTML = items.map(row => {
       const [a, b] = avatarPalette(row.market);
       const href = `/trading/?symbol=${encodeURIComponent(row.symbol)}${selectedTimeframe ? `&timeframe=${encodeURIComponent(selectedTimeframe)}` : ''}`;
-      return `<article class="market-card" data-symbol="${esc(row.symbol)}"><span class="market-avatar" style="--avatar-a:${a};--avatar-b:${b}" aria-hidden="true">${esc(initials(row))}</span><div class="market-card-copy"><span class="eyebrow">${esc(row.market || 'Broker market')}</span><h2>${esc(row.symbol)}</h2><p>${esc(row.display_name || row.symbol)}</p></div><div class="market-quote"><strong data-quote>Waiting for broker quote…</strong><span data-bidask>Broker quote pending</span></div><div class="market-card-actions"><a class="btn primary small" data-trade-symbol="${esc(row.symbol)}" href="${href}">Trade</a></div></article>`;
+      return `<article class="market-card" data-symbol="${esc(row.symbol)}"><span class="market-avatar" style="--avatar-a:${a};--avatar-b:${b}" aria-hidden="true">${esc(initials(row))}</span><div class="market-card-copy"><span class="eyebrow">${esc(row.market || 'Broker market')}</span><h2>${esc(row.symbol)}</h2><p>${esc(row.display_name || row.symbol)}</p></div><div class="market-quote"><strong data-quote>Loading broker quote…</strong><span data-bidask>Waiting for live quote</span></div><div class="market-card-actions"><a class="btn primary small" data-trade-symbol="${esc(row.symbol)}" href="${href}">Trade</a></div></article>`;
     }).join('') || '<div class="empty-state">No broker instruments match your search.</div>';
-    document.querySelectorAll('[data-trade-symbol]').forEach(link => link.addEventListener('click', () => { selectedSymbol = link.dataset.tradeSymbol; const top = $('[data-trade-selected]'); if (top) top.href = `/trading/?symbol=${encodeURIComponent(selectedSymbol)}`; }));
+    document.querySelectorAll('[data-trade-symbol]').forEach(link => link.addEventListener('click', () => {
+      selectedSymbol = link.dataset.tradeSymbol;
+      const top = $('[data-trade-selected]');
+      if (top) top.href = `/trading/?symbol=${encodeURIComponent(selectedSymbol)}`;
+    }));
   }
 
   async function quote(symbol) {
@@ -59,8 +63,8 @@
   }
 
   async function refreshQuotes() {
-    if (!connected()) return;
     const cards = [...document.querySelectorAll('[data-symbol]')].slice(0, 12);
+    if (!cards.length) return;
     let cursor = 0;
     const worker = async () => {
       while (true) {
@@ -81,7 +85,7 @@
 
   async function loadSymbols() {
     const data = await window.AlgoBotFrontendData.request('/api/markets/symbols/');
-    rows = list(data).filter(row => row?.is_active !== false && row?.is_tradable !== false);
+    rows = list(data).filter(row => row?.is_active !== false && row?.is_tradeable !== false);
     renderCategories();
     render();
     await refreshQuotes();
@@ -91,7 +95,7 @@
     const select = $('[data-market-timeframe]');
     if (!select) return;
     try {
-      const data = await window.AlgoBotFrontendData.request('/api/market/chart/capabilities/');
+      const data = await window.AlgoBotFrontendData.request('/api/chart/capabilities/');
       const frames = list(data?.timeframes);
       select.innerHTML = frames.length
         ? frames.map(frame => `<option value="${esc(frame.seconds)}">${esc(frame.label)}</option>`).join('')
@@ -104,30 +108,65 @@
 
   async function syncBrokerSymbols() {
     const response = await window.AlgoBotFrontendData.request('/api/markets/symbols/sync/', { method:'POST', headers:{ 'Content-Type':'application/json' } }, 10000);
-    if (response?.status === 'ok') await loadSymbols();
-    else if (response?.stale) render('Broker catalogue refresh is delayed; the last known broker catalogue remains visible.');
+    if (response?.status === 'ok') {
+      await loadSymbols();
+      return true;
+    }
+    if (response?.stale) {
+      await loadSymbols();
+      render('Live broker catalogue refresh is delayed; showing the last known broker catalogue.');
+      return false;
+    }
+    return false;
   }
 
   async function load() {
-    if (!connected()) { render('Connect a broker to load the live market catalogue.'); return; }
-    render('Synchronizing broker market catalogue…');
-    try { await Promise.all([loadSymbols(), loadTimeframes()]); } catch (error) { render(`Broker market catalogue unavailable: ${error.message}`); }
+    render('Loading broker market catalogue…');
+    try {
+      // Catalogue loading is independent from the browser-side broker-state cache.
+      // The authenticated backend is the source of truth for live broker access.
+      await loadSymbols();
+      await loadTimeframes();
+      try { await syncBrokerSymbols(); } catch (error) {
+        console.warn('Broker catalogue synchronization unavailable:', error);
+      }
+      await loadSymbols();
+    } catch (error) {
+      render(`Broker market catalogue unavailable: ${error.message}`);
+    }
   }
 
   function boot() {
     $('[data-market-search]')?.addEventListener('input', render);
-    $('[data-market-timeframe]')?.addEventListener('change', event => { selectedTimeframe = event.target.value; render(); });
+    $('[data-market-timeframe]')?.addEventListener('change', event => {
+      selectedTimeframe = event.target.value;
+      render();
+    });
     $('[data-market-refresh]')?.addEventListener('click', async event => {
       const button = event.currentTarget;
       button.disabled = true;
-      try { await syncBrokerSymbols(); } catch (error) { render(`Broker catalogue refresh delayed: ${error.message}`); } finally { button.disabled = false; }
+      try {
+        const refreshed = await syncBrokerSymbols();
+        if (!refreshed) await loadSymbols();
+      } catch (error) {
+        render(`Broker catalogue refresh unavailable: ${error.message}`);
+      } finally {
+        button.disabled = false;
+      }
     });
     window.AlgoBotBrokerState?.subscribe(event => {
-      if (['NO_BROKER', 'DISCONNECTED'].includes(event.detail.state.status)) render('Connect a broker to load the live market catalogue.');
-      else if (['READY', 'CONNECTED'].includes(event.detail.state.status)) load();
+      const status = event.detail?.state?.status;
+      if (['READY', 'CONNECTED', 'SYNCING', 'DEGRADED'].includes(status)) {
+        load();
+      } else if (['NO_BROKER', 'DISCONNECTED'].includes(status)) {
+        // Do not erase a valid cached/backend catalogue merely because the client cache changed state.
+        if (!rows.length) render('No broker market catalogue is currently available.');
+      }
     });
     load();
-    quoteTimer = setInterval(() => { if (document.visibilityState === 'visible') refreshQuotes(); }, 15000);
+    quoteTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') refreshQuotes();
+    }, 15000);
     window.addEventListener('beforeunload', () => clearInterval(quoteTimer), { once: true });
   }
 
