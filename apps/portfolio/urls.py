@@ -11,12 +11,14 @@ from .diversification import DiversificationService
 from .reporting import ReportingService
 
 router = DefaultRouter()
-router.register(r"portfolio", PortfolioViewSet, basename="portfolio")
+# Register concrete nested endpoints before the generic /portfolio/<pk>/ route.
+# Otherwise DRF can interpret paths such as "performance" as a portfolio PK.
 router.register(r"portfolio/performance", PortfolioPerformanceViewSet, basename="portfolio-performance")
 router.register(r"portfolio/allocation", PortfolioAllocationViewSet, basename="portfolio-allocation")
 router.register(r"portfolio/exposure", PortfolioExposureViewSet, basename="portfolio-exposure")
 router.register(r"portfolio/forecast", PortfolioForecastViewSet, basename="portfolio-forecast")
 router.register(r"portfolio/cashflow", CashFlowViewSet, basename="portfolio-cashflow")
+router.register(r"portfolio", PortfolioViewSet, basename="portfolio")
 
 
 @api_view(["GET"])
@@ -42,10 +44,12 @@ def reports(request):
 def benchmark(request):
     return Response(BenchmarkService().compare(0, 0))
 
+# Static portfolio endpoints must also precede the router's generic detail
+# route, otherwise /portfolio/<name>/ is consumed as a primary-key lookup.
 urlpatterns = [
-    path("", include(router.urls)),
     path("portfolio/diversification/", diversification, name="portfolio-diversification"),
     path("portfolio/correlation/", correlation, name="portfolio-correlation"),
     path("portfolio/reports/", reports, name="portfolio-reports"),
     path("portfolio/benchmark/", benchmark, name="portfolio-benchmark"),
+    path("", include(router.urls)),
 ]
