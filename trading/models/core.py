@@ -17,7 +17,7 @@ class Strategy(models.Model):
     STRATEGY_TYPES = [('TREND', 'Trend Following'), ('MEAN_REV', 'Mean Reversion'), ('BREAKOUT', 'Breakout'), ('MOMENTUM', 'Momentum'), ('SCALP', 'Scalping'), ('VOLATILITY', 'Volatility Trading')]
     name = models.CharField(max_length=100, unique=True)
     strategy_type = models.CharField(max_length=20, choices=STRATEGY_TYPES)
-    description = models.TextField()
+    description = models.TextField(blank=True)
     config = models.JSONField(default=dict)
     is_active = models.BooleanField(default=True)
     is_paper_only = models.BooleanField(default=False)
