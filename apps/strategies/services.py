@@ -28,13 +28,13 @@ class LiveMarketContextService:
         for item in items:
             try: candles.append({'open':float(item['open']),'high':float(item['high']),'low':float(item['low']),'close':float(item['close']),'volume':float(item.get('volume',0) or 0),'epoch':int(item.get('epoch',0) or 0)})
             except (KeyError,TypeError,ValueError): continue
-        if len(candles)<20: raise RuntimeError(f'Insufficient live broker candle history for {config.symbol} {config.timeframe}: {len(candles)} usable candles')
+        if len(candles)<25: raise RuntimeError(f'Insufficient live broker candle history for {config.symbol} {config.timeframe}: {len(candles)} usable candles')
         from trading.ai.features.simple_indicators import compute_basic_features
         rows=compute_basic_features(candles); latest=rows[-1]; current=candles[-1]; closes=[c['close'] for c in candles]
         trend='up' if latest.get('sma5') is not None and latest.get('sma20') is not None and latest['sma5']>latest['sma20'] else 'down' if latest.get('sma5') is not None and latest.get('sma20') is not None and latest['sma5']<latest['sma20'] else 'sideways'
         market_data={'symbol':config.symbol,'open':current['open'],'high':current['high'],'low':current['low'],'close':current['close'],'volume':current['volume'],'epoch':current['epoch'],'source':'live_broker'}
         indicator_data={'sma5':latest.get('sma5'),'sma20':latest.get('sma20'),'ema10':latest.get('ema10'),'ret1':latest.get('ret1',0.0),'range':latest.get('range',0.0),'rsi':self._rsi(closes),'trend':trend,'source':'live_broker'}
-        return market_data,indicator_data,{'source':'live_broker','candles_used':len(candles),'timeframe':config.timeframe,'latest_epoch':current['epoch']}
+        return market_data,indicator_data,{'source':'live_broker','candles':candles,'candles_used':len(candles),'timeframe':config.timeframe,'latest_epoch':current['epoch']}
 
 class StrategyService:
     def sync_catalog(self): return [StrategyRepository().create_or_update_catalog(cls) for cls in registry.all().values()]
@@ -50,9 +50,9 @@ class StrategyExecutionService:
             ai_enabled=(config.parameters or {}).get('ai_ensemble_enabled',True); ai_consensus=None
             if ai_enabled:
                 from apps.ai_engine.services import PredictionService,RecommendationService
-                ai_context={'market_data':market_data,'indicators':indicator_data,'strategy':{'confidence':result.get('confidence',0)},'risk':(config.parameters or {}).get('risk',{})}
+                ai_context={'market_data':market_data,'indicators':indicator_data,'strategy':{'confidence':result.get('confidence',0)},'risk':(config.parameters or {}).get('risk',{}),'candles':handoff.get('candles',[])}
                 prediction=PredictionService().predict(config.symbol,config.timeframe,ai_context); recommendation=RecommendationService().recommend(config.symbol,prediction); ai_consensus=(prediction.payload or {}).get('consensus') or {}
-                result={**result,'strategy_signal':result['signal'],'strategy_confidence':result.get('confidence',0),'signal':recommendation.recommendation if recommendation.recommendation in {'BUY','SELL'} else 'HOLD','confidence':recommendation.confidence,'ai_consensus':ai_consensus,'ai_prediction_id':prediction.pk,'ai_recommendation_id':recommendation.pk,'market_data_handoff':handoff}
+                result={**result,'strategy_signal':result['signal'],'strategy_confidence':result.get('confidence',0),'signal':recommendation.recommendation if recommendation.recommendation in {'BUY','SELL'} else 'HOLD','confidence':recommendation.confidence,'ai_consensus':ai_consensus,'ai_prediction_id':prediction.pk,'ai_recommendation_id':recommendation.pk,'market_data_handoff':{k:v for k,v in handoff.items() if k!='candles'}}
             execution.signal=result['signal']; execution.confidence=result['confidence']; execution.status='completed'; execution.completed_at=timezone.now(); execution.latency_ms=(time.perf_counter()-start)*1000; execution.context=result; execution.save()
             StrategySignalRepository().create(strategy=config.strategy,configuration=config,symbol=config.symbol,signal=result['signal'],confidence=result['confidence'],entry_price=result.get('entry_price'),stop_loss=result.get('stop_loss'),take_profit=result.get('take_profit'),metadata=result)
             log.info('Strategy execution completed',extra={'strategy':config.strategy.slug,'signal':result['signal'],'ai_ensemble':bool(ai_consensus),'market_source':handoff.get('source')}); return execution
