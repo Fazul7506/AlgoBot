@@ -137,10 +137,14 @@ def broker_chart_capabilities(request):
     try:
         adapter = BrokerRegistry().adapter(account.broker, account)
         if not hasattr(adapter, "get_chart_capabilities"):
-            return Response({"broker": account.broker.name, "modes": ["ticks", "candles"], "timeframes": ["M1", "M5", "M15", "M30", "H1", "H4", "D1"], "source": "backend_default"})
-        return Response(awaitable_to_sync(adapter.get_chart_capabilities()))
-    except Exception:
-        return Response({"broker": account.broker.name, "modes": ["ticks", "candles"], "timeframes": ["M1", "M5", "M15", "M30", "H1", "H4", "D1"], "source": "safe_backend_fallback", "stale": True}, status=status.HTTP_200_OK)
+            return Response({"status":"error","code":"BROKER_CHART_CAPABILITIES_UNSUPPORTED","detail":"The connected broker adapter does not publish chart capabilities."}, status=status.HTTP_409_CONFLICT)
+        payload = awaitable_to_sync(adapter.get_chart_capabilities())
+        if not isinstance(payload, dict) or not payload.get("timeframes"):
+            return Response({"status":"error","code":"BROKER_CHART_CAPABILITIES_INVALID","detail":"The broker returned no usable chart capabilities."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        payload.update({"broker": account.broker.name, "account_id": account.account_id, "source": "broker_adapter_capabilities"})
+        return Response(payload)
+    except Exception as exc:
+        return Response({"status":"error","code":"BROKER_CHART_CAPABILITIES_FAILED","detail":str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 def awaitable_to_sync(awaitable): return asyncio.run(asyncio.wait_for(awaitable, timeout=7.0))
@@ -155,10 +159,14 @@ def broker_chart_history(request):
     if mode not in {"ticks", "candles"}: return Response({"detail":"mode must be ticks or candles"}, status=status.HTTP_400_BAD_REQUEST)
     account = _connected_account(request.user)
     if not account: return Response({"detail":"Connect a broker before loading live chart history."}, status=status.HTTP_409_CONFLICT)
+    market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True, is_tradable=True).first()
+    if not market_symbol: return Response({"detail":"The requested symbol is not in the active broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
         adapter = BrokerRegistry().adapter(account.broker, account)
-        if not hasattr(adapter, "get_chart_history"): return Response({"detail":"The connected broker does not expose chart history through its adapter."}, status=status.HTTP_409_CONFLICT)
-        data = awaitable_to_sync(adapter.get_chart_history(symbol, mode=mode, count=_limit(request, 120, 1000), granularity=granularity))
+        if not hasattr(adapter, "get_chart_history"): return Response({"status":"error","code":"BROKER_CHART_HISTORY_UNSUPPORTED","detail":"The connected broker adapter does not expose chart history."}, status=status.HTTP_409_CONFLICT)
+        data = awaitable_to_sync(adapter.get_chart_history(symbol, mode=mode, count=_limit(request, 500, 1000), granularity=granularity))
+        if not isinstance(data, dict) or data.get("symbol") != symbol or not isinstance(data.get("items"), list):
+            return Response({"status":"error","code":"BROKER_CHART_HISTORY_INVALID","detail":"The broker returned an invalid chart history payload."}, status=status.HTTP_502_BAD_GATEWAY)
         data.update({"broker": account.broker.name, "account_id": account.account_id, "source": "live_broker"})
         return Response(data)
     except (BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, asyncio.TimeoutError) as exc:
