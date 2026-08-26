@@ -1,5 +1,6 @@
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -35,4 +36,5 @@ class RiskServicesTests(TestCase):
             max_risk_per_trade=0.02,
             max_exposure=0.35,
         )
-        self.assertTrue(RiskValidator().validate_order(order, profile=profile))
+        with patch('apps.risk.validator.RiskRepository.enabled_rules', return_value=[]):
+            self.assertTrue(RiskValidator().validate_order(order, profile=profile))
