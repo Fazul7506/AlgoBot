@@ -64,6 +64,58 @@ def _activate(invoice, plan):
     invoice.save(update_fields=["paid", "metadata"])
 
 
+def _create_checkout(request):
+    """Create a hosted checkout from a DRF Request without nesting DRF decorators."""
+    plan = _plan(request.data.get("plan"))
+    if not plan:
+        return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
+    if plan["plan"] == "FREE":
+        return Response({"detail": "Use the plan change endpoint to switch to FREE."}, status=status.HTTP_400_BAD_REQUEST)
+    if not plan["configured"]:
+        return Response({"detail": f"{plan['plan']} is not configured for checkout yet. Configure its price in the deployment environment."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    provider = str(request.data.get("provider") or getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower()
+    invoice = Invoice.objects.create(
+        user=request.user,
+        amount_cents=plan["price_cents"],
+        currency=plan["currency"],
+        metadata={"plan": plan["plan"], "provider": provider, "state": "checkout_created"},
+    )
+    result = PaymentService().create_checkout_session(
+        request.user,
+        CheckoutPlan(**{k: plan[k] for k in ("plan", "price_cents", "currency", "recurring")}),
+        provider=provider,
+    )
+    if not result.get("url"):
+        invoice.metadata = {
+            **(invoice.metadata or {}),
+            "state": "checkout_failed",
+            "error": result.get("error", "Unable to create checkout"),
+        }
+        invoice.save(update_fields=["metadata"])
+        return Response(result, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    external_id = result.get("invoice_id") or result.get("order_tracking_id") or result.get("session_id") or ""
+    invoice.external_id = external_id or None
+    invoice.metadata = {
+        **(invoice.metadata or {}),
+        "state": "checkout_open",
+        "reference": result.get("reference"),
+        "tracking_id": result.get("order_tracking_id"),
+        "session_id": result.get("session_id"),
+    }
+    invoice.save(update_fields=["external_id", "metadata"])
+    Payment.objects.create(
+        user=request.user,
+        invoice=invoice,
+        external_id=external_id or None,
+        amount_cents=plan["price_cents"],
+        currency=plan["currency"],
+        status="PENDING",
+    )
+    return Response({**result, "plan": plan["plan"], "invoice_id": invoice.id})
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def billing_plans(request):
@@ -97,45 +149,7 @@ def billing_status(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def billing_checkout(request):
-    plan = _plan(request.data.get("plan"))
-    if not plan:
-        return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
-    if plan["plan"] == "FREE":
-        return Response({"detail": "Use the plan change endpoint to switch to FREE."}, status=status.HTTP_400_BAD_REQUEST)
-    if not plan["configured"]:
-        return Response({"detail": f"{plan['plan']} is not configured for checkout yet. Configure its price in the deployment environment."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-
-    provider = str(request.data.get("provider") or getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower()
-    invoice = Invoice.objects.create(
-        user=request.user,
-        amount_cents=plan["price_cents"],
-        currency=plan["currency"],
-        metadata={"plan": plan["plan"], "provider": provider, "state": "checkout_created"},
-    )
-    result = PaymentService().create_checkout_session(request.user, CheckoutPlan(**{k: plan[k] for k in ("plan", "price_cents", "currency", "recurring")}), provider=provider)
-    if not result.get("url"):
-        invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": result.get("error", "Unable to create checkout")}
-        invoice.save(update_fields=["metadata"])
-        return Response(result, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    external_id = result.get("invoice_id") or result.get("order_tracking_id") or result.get("session_id") or ""
-    invoice.external_id = external_id or None
-    invoice.metadata = {
-        **(invoice.metadata or {}),
-        "state": "checkout_open",
-        "reference": result.get("reference"),
-        "tracking_id": result.get("order_tracking_id"),
-        "session_id": result.get("session_id"),
-    }
-    invoice.save(update_fields=["external_id", "metadata"])
-    Payment.objects.create(
-        user=request.user,
-        invoice=invoice,
-        external_id=external_id or None,
-        amount_cents=plan["price_cents"],
-        currency=plan["currency"],
-        status="PENDING",
-    )
-    return Response({**result, "plan": plan["plan"], "invoice_id": invoice.id})
+    return _create_checkout(request)
 
 
 @api_view(["POST"])
@@ -161,7 +175,7 @@ def billing_change_plan(request):
         return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
     if not plan["configured"]:
         return Response({"detail": f"{plan['plan']} is not configured for checkout yet. Configure its price in the deployment environment."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    return billing_checkout(request)
+    return _create_checkout(request)
 
 
 @api_view(["POST"])
