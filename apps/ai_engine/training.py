@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 import tempfile
@@ -12,10 +11,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import AIModel, ModelVersion, TrainingJob
+from trading.ai.candlestick_features import FEATURE_NAMES, feature_vector
 
 logger = logging.getLogger(__name__)
-
-FEATURES = ("close", "sma5", "sma20", "ema10", "ret1", "range")
+FEATURES = tuple(FEATURE_NAMES)
 DEFAULT_MIN_ROWS = 250
 
 
@@ -38,6 +37,11 @@ def _atomic_dump(model: Any, path: Path) -> None:
 
 
 def _build_dataset(symbol: str, timeframe: str, limit: int = 5000) -> tuple[np.ndarray, np.ndarray]:
+    """Build a leakage-safe dataset from historical OHLC candles.
+
+    The feature vector only sees candles through index i. The label is the
+    direction of candle i+1, so future information never enters X.
+    """
     from apps.market_data.models import Candle, MarketSymbol
 
     market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
@@ -46,33 +50,30 @@ def _build_dataset(symbol: str, timeframe: str, limit: int = 5000) -> tuple[np.n
     candles = list(
         Candle.objects.filter(symbol=market_symbol, timeframe=timeframe)
         .order_by("epoch")
-        .values_list("open", "high", "low", "close")[:limit]
+        .values("open", "high", "low", "close", "volume")[:limit]
     )
     if len(candles) < DEFAULT_MIN_ROWS:
         raise ValueError(f"Insufficient candles for {symbol}/{timeframe}: {len(candles)}; need at least {DEFAULT_MIN_ROWS}")
 
-    close = np.asarray([float(row[3]) for row in candles], dtype=np.float64)
-    high = np.asarray([float(row[1]) for row in candles], dtype=np.float64)
-    low = np.asarray([float(row[2]) for row in candles], dtype=np.float64)
     rows: list[list[float]] = []
     labels: list[int] = []
-    for i in range(20, len(close) - 1):
-        window5 = close[i - 4:i + 1]
-        window20 = close[i - 19:i + 1]
-        ema10 = float(np.mean(close[i - 9:i + 1]))
-        ret1 = (close[i] / close[i - 1]) - 1.0 if close[i - 1] else 0.0
-        candle_range = high[i] - low[i]
-        rows.append([close[i], float(window5.mean()), float(window20.mean()), ema10, ret1, candle_range])
-        labels.append(int(close[i + 1] > close[i]))
+    # 30 bars provide enough context for structure, range and pattern features.
+    for i in range(30, len(candles) - 1):
+        history = candles[: i + 1]
+        try:
+            rows.append(feature_vector(history[-60:]))
+            labels.append(int(float(candles[i + 1]["close"]) > float(candles[i]["close"])))
+        except (TypeError, ValueError, KeyError):
+            continue
     return np.asarray(rows, dtype=np.float64), np.asarray(labels, dtype=np.int8)
 
 
 class MarketModelTrainer:
     """Train broker-independent directional models from persisted market candles.
 
-    Labels are generated only from future candle movement; no broker credentials or
-    live account data are included in the training set. A model is published only
-    after an out-of-sample validation gate succeeds.
+    The training set contains quantitative price-action/candlestick features,
+    not account credentials or private broker state. Publication requires an
+    out-of-sample validation gate.
     """
 
     def train_symbol(self, symbol: str, timeframe: str = "M1", min_accuracy: float = 0.52) -> dict[str, Any]:
@@ -86,16 +87,16 @@ class MarketModelTrainer:
         from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 
         candidates: list[tuple[str, Any]] = [
-            ("rf", RandomForestClassifier(n_estimators=250, max_depth=10, min_samples_leaf=3, random_state=42, n_jobs=-1, class_weight="balanced")),
+            ("rf", RandomForestClassifier(n_estimators=300, max_depth=10, min_samples_leaf=3, random_state=42, n_jobs=-1, class_weight="balanced")),
         ]
         try:
             from xgboost import XGBClassifier
-            candidates.append(("xgb", XGBClassifier(n_estimators=250, max_depth=5, learning_rate=0.05, subsample=0.9, colsample_bytree=0.9, eval_metric="logloss", random_state=42, n_jobs=2)))
+            candidates.append(("xgb", XGBClassifier(n_estimators=300, max_depth=5, learning_rate=0.05, subsample=0.9, colsample_bytree=0.9, eval_metric="logloss", random_state=42, n_jobs=2)))
         except Exception:
             logger.info("XGBoost unavailable; continuing with RF")
         try:
             from lightgbm import LGBMClassifier
-            candidates.append(("lgb", LGBMClassifier(n_estimators=250, max_depth=7, learning_rate=0.05, subsample=0.9, colsample_bytree=0.9, random_state=42, verbosity=-1)))
+            candidates.append(("lgb", LGBMClassifier(n_estimators=300, max_depth=7, learning_rate=0.05, subsample=0.9, colsample_bytree=0.9, random_state=42, verbosity=-1)))
         except Exception:
             logger.info("LightGBM unavailable; continuing with RF/XGB")
 
@@ -111,10 +112,9 @@ class MarketModelTrainer:
                 "precision": float(precision_score(y_test, pred, zero_division=0)),
                 "recall": float(recall_score(y_test, pred, zero_division=0)),
                 "f1": float(f1_score(y_test, pred, zero_division=0)),
-                "auc": float(roc_auc_score(y_test, probability)),
-                "samples": int(len(X)),
-                "train_samples": int(len(X_train)),
-                "test_samples": int(len(X_test)),
+                "auc": float(roc_auc_score(y_test, probability)) if len(np.unique(y_test)) > 1 else 0.5,
+                "samples": int(len(X)), "train_samples": int(len(X_train)), "test_samples": int(len(X_test)),
+                "feature_count": len(FEATURES), "feature_set": list(FEATURES),
             }
             results.append((algorithm, model, metrics))
 
@@ -131,25 +131,30 @@ class MarketModelTrainer:
                 name = f"{symbol}-{timeframe}-{algorithm}"
                 version = timezone.now().strftime("%Y%m%d%H%M%S")
                 ai_model = AIModel.objects.create(
-                    name=name, version=version, algorithm=algorithm, framework="sklearn",
-                    status="active", accuracy=metrics["accuracy"], precision=metrics["precision"],
-                    recall=metrics["recall"], f1_score=metrics["f1"], auc=metrics["auc"],
-                    metadata={"features": list(FEATURES), "artifact": str(path), "validation": metrics},
+                    name=name, version=version, algorithm=algorithm, framework="sklearn", status="active",
+                    accuracy=metrics["accuracy"], precision=metrics["precision"], recall=metrics["recall"],
+                    f1_score=metrics["f1"], auc=metrics["auc"],
+                    metadata={"features": list(FEATURES), "artifact": str(path), "validation": metrics,
+                              "knowledge_source": "candlestick_price_action_rules", "training_target": "next_candle_direction"},
                 )
-                ModelVersion.objects.create(model=ai_model, version=version, training_dataset=f"market_data:{symbol}:{timeframe}", feature_set={"features": list(FEATURES)}, hyperparameters={"algorithm": algorithm})
-                published.append({"algorithm": algorithm, "accuracy": metrics["accuracy"], "path": str(path)})
+                ModelVersion.objects.create(model=ai_model, version=version,
+                    training_dataset=f"market_data:{symbol}:{timeframe}", feature_set={"features": list(FEATURES)},
+                    hyperparameters={"algorithm": algorithm})
+                published.append({"algorithm": algorithm, "accuracy": metrics["accuracy"], "path": str(path), "features": len(FEATURES)})
 
             best = max(published, key=lambda item: item["accuracy"])
             AIModel.objects.filter(name__startswith=f"{symbol}-{timeframe}-", status="champion").update(status="active")
-            AIModel.objects.filter(name=f"{symbol}-{timeframe}-{best['algorithm']}", status="active").order_by("-created_at").first().status = "champion"
-            champion = AIModel.objects.filter(name=f"{symbol}-{timeframe}-{best['algorithm']}").order_by("-created_at").first()
+            champion = AIModel.objects.filter(name=f"{symbol}-{timeframe}-{best['algorithm']}", status="active").order_by("-created_at").first()
+            if champion is None:
+                raise RuntimeError("Champion model was not persisted")
+            champion.status = "champion"
             champion.save(update_fields=["status"])
 
             job.model = champion
             job.status = "completed"
             job.completed_at = timezone.now()
             job.duration = (job.completed_at - job.started_at).total_seconds()
-            job.metrics = {"symbol": symbol, "timeframe": timeframe, "published": published, "champion": best}
+            job.metrics = {"symbol": symbol, "timeframe": timeframe, "published": published, "champion": best, "feature_set": list(FEATURES)}
             job.save(update_fields=["model", "status", "completed_at", "duration", "metrics"])
         return job.metrics
 
