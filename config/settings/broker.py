@@ -32,7 +32,11 @@ DERIV_PUBLIC_WS_URL = env(
     "wss://api.derivws.com/trading/v1/options/ws/public",
 )
 DERIV_AUTH_WS_BASE_URL = env("DERIV_AUTH_WS_BASE_URL", DERIV_PUBLIC_WS_URL)
-ENABLE_BROKER_ACCOUNT_SWITCH = env_bool("ENABLE_BROKER_ACCOUNT_SWITCH", False)
+
+# Live execution and account switching are separate safety gates. If a
+# deployment explicitly sets ENABLE_BROKER_ACCOUNT_SWITCH it wins; otherwise
+# enabling live trading also enables the demo/real account selector.
+ENABLE_BROKER_ACCOUNT_SWITCH = env_bool("ENABLE_BROKER_ACCOUNT_SWITCH", env_bool("ALLOW_LIVE_TRADING", False))
 
 BROKER_APP_ID = env("BROKER_APP_ID", DERIV_APP_ID)
 BROKER_WS_URL = env("BROKER_WS_URL", DERIV_PUBLIC_WS_URL)
