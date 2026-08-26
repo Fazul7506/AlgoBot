@@ -10,7 +10,7 @@ def _existing_db_objects(connection, table):
 
 
 def ensure_broker_account_column(apps, schema_editor):
-    """Reconcile broker_account_id without failing on an already-mutated DB."""
+    """Reconcile broker_account_id without relying on the post-migration model state."""
     connection = schema_editor.connection
     table = 'brokers_brokerconnection'
     with connection.cursor() as cursor:
@@ -22,21 +22,20 @@ def ensure_broker_account_column(apps, schema_editor):
     if 'broker_account_id' in columns:
         return
 
-    if connection.vendor == 'postgresql':
-        schema_editor.execute(
-            'ALTER TABLE {} ADD COLUMN {} bigint NULL REFERENCES {} ("id") ON DELETE CASCADE'.format(
-                schema_editor.quote_name(table),
-                schema_editor.quote_name('broker_account_id'),
-                schema_editor.quote_name('brokers_brokeraccount'),
-            )
-        )
-        return
-
-    # For non-PostgreSQL development databases, let Django generate the
-    # backend-specific column definition by adding the field through the
-    # schema editor.
+    # This RunPython operation executes before the state AddField below.  The
+    # historical BrokerConnection model therefore cannot contain
+    # ``broker_account`` yet. Build the historical field explicitly instead of
+    # calling BrokerConnection._meta.get_field(), which raises FieldDoesNotExist.
     BrokerConnection = apps.get_model('brokers', 'BrokerConnection')
-    field = BrokerConnection._meta.get_field('broker_account')
+    BrokerAccount = apps.get_model('brokers', 'BrokerAccount')
+    field = models.ForeignKey(
+        BrokerAccount,
+        on_delete=django.db.models.deletion.CASCADE,
+        related_name='connections',
+        null=True,
+        blank=True,
+    )
+    field.set_attributes_from_name('broker_account')
     schema_editor.add_field(BrokerConnection, field)
 
 
@@ -209,7 +208,7 @@ class Migration(migrations.Migration):
                         fields=('user', 'account', 'client_order_id'),
                         name='unique_client_order_id_per_account',
                     ),
-                ),
-            ],
+                ],
+            ),
         ),
     ]
