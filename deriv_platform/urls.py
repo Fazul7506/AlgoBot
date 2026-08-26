@@ -2,7 +2,6 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
-from django.views.decorators.http import require_GET
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
 from django.contrib.auth.decorators import login_required
@@ -26,6 +25,7 @@ from trading.views.indicators import (
     IndicatorAlertViewSet, IndicatorDashboardViewSet
 )
 from trading.strategies.strategy_api import StrategyViewSet
+from apps.market_data.web_views import market_catalogue
 
 from core.views import (
     deriv_login, broker_connect_page, broker_marketplace_page,
@@ -100,7 +100,7 @@ urlpatterns = [
     path('billing/reconcile/', billing_reconcile, name='billing_reconcile'),
     path('billing/cancel/', login_required(billing_cancel_page), name='billing_cancel_page'),
     path('billing/success/', login_required(billing_success_page), name='billing_success_page'),
-    path('api/billing/subscription/cancel/', billing_cancel, name='billing_cancel'),
+    path('market-catalogue/', market_catalogue, name='browser_market_catalogue'),
     path('terms/', terms_page, name='terms_page'),
     path('privacy/', privacy_page, name='privacy_page'),
     path('cookies/', cookie_policy_page, name='cookie_policy_page'),
