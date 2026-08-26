@@ -455,8 +455,10 @@
         } catch (error) { toast(`Kill switch failed: ${error.message}`, 'error'); }
       });
     });
-    const terminal = $('.terminal-page');
-    if (terminal) tradingTerminal(terminal);
+    // The terminal has a dedicated broker-aware controller.  Do not initialise
+    // the legacy generic controller here: it targets obsolete endpoints and
+    // selectors, which could leave the current terminal stuck on its loading
+    // placeholders after a successful account synchronization.
     $$('.data-page').forEach(dataPage);
   }
 
