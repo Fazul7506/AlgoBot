@@ -3,7 +3,13 @@ services:
     name: AlgoBot
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements/base.txt
-    startCommand: DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && python manage.py collectstatic --noinput && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
+    # Build all deploy-time assets before the service starts. Keeping
+    # collectstatic in the build step prevents a restart from exposing HTML
+    # before WhiteNoise has a complete staticfiles directory.
+    buildCommand: pip install -r requirements/base.txt && DJANGO_ENV=production python manage.py collectstatic --noinput
+    # Migrations remain part of startup so the database is ready before the
+    # ASGI server accepts traffic. Daphne is retained because AlgoBot uses
+    # WebSockets as well as normal HTTP requests.
+    startCommand: DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
     healthCheckPath: /health/
     autoDeploy: true
