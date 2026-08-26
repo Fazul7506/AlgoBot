@@ -4,6 +4,7 @@
 .sidebar-header .brand { min-width: 0; display: inline-flex; align-items: center; gap: 10px; }
 .sidebar-toggle, .mobile-menu-button { border: 1px solid var(--line); background: var(--panel2); color: var(--text); border-radius: var(--ds-radius-md); cursor: pointer; }
 .sidebar-toggle { width: 38px; height: 38px; display: grid; place-items: center; }
+.sidebar-toggle .material-symbols-rounded { font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
 .mobile-menu-button { position: fixed; top: 12px; left: 12px; z-index: 1100; width: 44px; height: 44px; display: none; }
 .sidebar-backdrop { position: fixed; inset: 0; z-index: 999; background: rgba(2, 8, 18, .68); backdrop-filter: blur(3px); }
 .sidebar-backdrop[hidden] { display: none; }
@@ -11,8 +12,69 @@
 .app-sidebar.is-collapsed .brand-name,
 .app-sidebar.is-collapsed nav span:not(.material-symbols-rounded),
 .app-sidebar.is-collapsed .sidebar-new-trade span:not(.material-symbols-rounded),
-.app-sidebar.is-collapsed .sidebar-section h2,
-.app-sidebar.is-collapsed .sidebar-user { display: none; }
+.app-sidebar.is-collapsed .sidebar-section h2 { display: none; }
+
+/* ChatGPT-like compact rail: keep the account control usable instead of
+   removing it when the desktop sidebar collapses. */
+.app-sidebar.is-collapsed .sidebar-user {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 7px !important;
+  width: 100% !important;
+  padding: 10px 0 0 !important;
+  margin-top: 10px !important;
+}
+.app-sidebar.is-collapsed .algobot-sidebar-account {
+  width: 48px !important;
+  min-width: 48px !important;
+  height: 48px !important;
+  padding: 7px !important;
+  margin: 0 auto !important;
+  border-radius: 14px !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
+.app-sidebar.is-collapsed .algobot-account-summary {
+  width: 100% !important;
+  justify-content: center !important;
+  gap: 0 !important;
+}
+.app-sidebar.is-collapsed .algobot-account-avatar,
+.app-sidebar.is-collapsed .algobot-account-avatar.small {
+  width: 32px !important;
+  height: 32px !important;
+  flex-basis: 32px !important;
+}
+.app-sidebar.is-collapsed .algobot-account-copy,
+.app-sidebar.is-collapsed .algobot-account-fresh,
+.app-sidebar.is-collapsed .algobot-account-error { display: none !important; }
+.app-sidebar.is-collapsed .algobot-account-switch {
+  position: absolute !important;
+  inset: auto 3px 3px auto !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  display: grid !important;
+  place-items: center !important;
+  overflow: hidden !important;
+  font-size: 0 !important;
+  z-index: 2 !important;
+}
+.app-sidebar.is-collapsed .algobot-account-switch .algobot-switch-avatar { display: none !important; }
+.app-sidebar.is-collapsed .algobot-account-switch span:last-child::before { content: '↔'; font-size: 11px; line-height: 1; }
+.app-sidebar.is-collapsed .sidebar-user-actions {
+  width: 40px !important;
+  height: 40px !important;
+  margin: 0 auto !important;
+}
+.app-sidebar.is-collapsed .sidebar-user-actions button { width: 40px !important; height: 40px !important; border-radius: 12px !important; }
+
 .app-sidebar.is-collapsed + .app-shell,
 .app-shell.sidebar-collapsed { margin-left: 78px; }
 .connection-indicator { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; }
@@ -22,6 +84,17 @@
 .material-symbols-rounded { font-family: 'Material Symbols Rounded', sans-serif; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr; -webkit-font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased; font-feature-settings: 'liga'; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; width: 1em; min-width: 1em; height: 1em; overflow: hidden; vertical-align: middle; }
 [data-icons-fallback] .material-symbols-rounded { font-size: 0; }
 [data-icons-fallback] .material-symbols-rounded::before { content: '\00a0'; font-size: 24px; }
+
+/* Keep the desktop rail visually stable while the document itself remains the
+   only main scroll container. */
+@media (min-width: 901px) {
+  .app-sidebar { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.38) transparent; }
+  .app-sidebar::-webkit-scrollbar { width: 7px; }
+  .app-sidebar::-webkit-scrollbar-track { background: transparent; }
+  .app-sidebar::-webkit-scrollbar-thumb { background: rgba(148,163,184,.38); border-radius: 999px; }
+  .app-sidebar::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.58); }
+}
+
 @media (max-width: 800px) {
   .mobile-menu-button { display: grid; place-items: center; }
   .app-sidebar { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); transform: translate3d(-105%,0,0); transition: transform .22s ease; overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -30,6 +103,5 @@
   .app-shell { margin-left: 0 !important; }
   .topbar { padding-left: 68px; }
   .sidebar-toggle { display: none; }
-  /* Do not lock the entire dashboard/document. The sidebar is fixed and scrolls independently. */
   body.mobile-nav-open { overflow: auto !important; }
 }
