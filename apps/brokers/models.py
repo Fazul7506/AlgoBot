@@ -51,7 +51,11 @@ class BrokerAccount(models.Model):
 
     class Meta:
         unique_together = [('broker', 'account_id')]
-        indexes = [models.Index(fields=['user', 'status']), models.Index(fields=['broker', 'is_preferred']), models.Index(fields=['user', 'token_status'])]
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['broker', 'is_preferred']),
+            models.Index(fields=['user', 'token_status']),
+        ]
 
     def __str__(self): return f'{self.broker.broker_type}:{self.account_id}'
     def set_access_token(self, token: str) -> None: self.access_token = CredentialEncryptionService().encrypt(token or '')
@@ -75,7 +79,6 @@ class BrokerAccount(models.Model):
         return 'ready'
     @property
     def is_connected(self) -> bool:
-        """True only when this specific broker account has a live connection row."""
         return self.connections.filter(status='connected').exists()
     @property
     def is_connection_eligible(self) -> bool:
@@ -91,8 +94,13 @@ class BrokerConnection(models.Model):
     heartbeat = models.JSONField(default=dict, blank=True)
     connected_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
-        indexes = [models.Index(fields=['broker', 'status']), models.Index(fields=['broker_account', 'status']), models.Index(fields=['last_ping'])]
+        indexes = [
+            models.Index(fields=['broker', 'status'], name='brokers_bro_broker__2b0b4d_idx'),
+            models.Index(fields=['broker_account', 'status'], name='brokers_bro_account__f3e4a0_idx'),
+            models.Index(fields=['last_ping'], name='brokers_bro_last_pi_743fac_idx'),
+        ]
         constraints = [models.UniqueConstraint(fields=['broker_account'], condition=Q(broker_account__isnull=False), name='unique_broker_connection_per_account')]
 
 
@@ -102,6 +110,7 @@ class BrokerConnectionLog(models.Model):
     latency = models.FloatField(null=True, blank=True)
     event = models.CharField(max_length=120)
     created_at = models.DateTimeField(auto_now_add=True)
+
     class Meta:
         ordering = ['-created_at']
         indexes = [models.Index(fields=['broker_account', '-created_at']), models.Index(fields=['event'])]
@@ -134,9 +143,14 @@ class Order(models.Model):
     executed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['user', 'status']), models.Index(fields=['broker', 'status']), models.Index(fields=['account', 'status'])]
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['broker', 'status'], name='brokers_ord_broker__e4e374_idx'),
+            models.Index(fields=['account', 'status'], name='brokers_ord_account__d1f2c7_idx'),
+        ]
         constraints = [models.UniqueConstraint(fields=['user', 'account', 'client_order_id'], condition=~Q(client_order_id=''), name='unique_client_order_id_per_account')]
 
 
