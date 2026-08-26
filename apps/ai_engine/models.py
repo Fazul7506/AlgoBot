@@ -25,6 +25,16 @@ class Prediction(models.Model):
     expected_return=models.FloatField(default=0); risk_score=models.FloatField(default=0); payload=models.JSONField(default=dict,blank=True); created_at=models.DateTimeField(auto_now_add=True)
     class Meta: ordering=["-created_at"]; indexes=[models.Index(fields=["symbol","timeframe","-created_at"])]
 
+class PredictionOutcome(models.Model):
+    prediction=models.OneToOneField(Prediction,on_delete=models.CASCADE,related_name="outcome")
+    actual_direction=models.CharField(max_length=32,blank=True)
+    actual_return=models.FloatField(default=0)
+    correct=models.BooleanField(null=True,db_index=True)
+    horizon_candles=models.PositiveIntegerField(default=1)
+    resolved_at=models.DateTimeField(null=True,blank=True,db_index=True)
+    details=models.JSONField(default=dict,blank=True)
+    class Meta: ordering=["-resolved_at"]; indexes=[models.Index(fields=["correct","resolved_at"])]
+
 class FeatureVector(models.Model):
     symbol=models.CharField(max_length=40,db_index=True); timeframe=models.CharField(max_length=16,db_index=True); features=models.JSONField(default=dict)
     feature_hash=models.CharField(max_length=64,unique=True); timestamp=models.DateTimeField(default=timezone.now,db_index=True)
