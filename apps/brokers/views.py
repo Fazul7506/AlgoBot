@@ -17,6 +17,10 @@ from .exceptions import BrokerAuthenticationError, BrokerConnectionError, Broker
 logger = logging.getLogger(__name__)
 
 
+BROKER_CONNECT_TIMEOUT_SECONDS = 30.0
+BROKER_SYNC_TIMEOUT_SECONDS = 15.0
+
+
 def _run_bounded(coro, timeout=8.0):
     async def runner():
         return await asyncio.wait_for(coro, timeout=timeout)
@@ -74,7 +78,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
     def sync(self, request, pk=None):
         account = self.get_object()
         try:
-            synced, broker_data = _run_bounded(SynchronizationService().sync_account(account), timeout=8.0)
+            synced, broker_data = _run_bounded(SynchronizationService().sync_account(account), timeout=BROKER_SYNC_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
             return response.Response({'detail': 'Broker synchronization timed out; the last known account data was preserved.', 'broker_status': 'sync_timeout'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
         except BrokerRoutingError as exc:
@@ -187,16 +191,25 @@ def connect_broker(request):
         return response.Response({'detail': 'broker_id and account_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
     broker = get_object_or_404(Broker, pk=broker_id)
     account = get_object_or_404(BrokerAccount, pk=account_id, user=request.user, broker=broker)
+    logger.info('broker_connection_requested', extra={'broker_id': broker.id, 'account_id': account.id, 'broker_type': broker.broker_type})
     try:
-        connection = _run_bounded(BrokerConnectionService().connect(broker, account), timeout=8.0)
+        connection = _run_bounded(BrokerConnectionService().connect(broker, account), timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
     except BrokerAuthenticationError as exc:
+        logger.warning('broker_connection_authentication_failed', extra={'account_id': account.id, 'error': str(exc)})
         return response.Response({'detail': str(exc), 'status': 'credentials_expired'}, status=status.HTTP_401_UNAUTHORIZED)
     except BrokerConnectionError as exc:
+        logger.warning('broker_connection_failed', extra={'account_id': account.id, 'error': str(exc)})
         return response.Response({'detail': str(exc), 'status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except BrokerRoutingError as exc:
+        logger.warning('broker_connection_routing_failed', extra={'account_id': account.id, 'error': str(exc)})
         return response.Response({'detail': str(exc), 'status': 'blocked'}, status=status.HTTP_409_CONFLICT)
     except asyncio.TimeoutError:
-        return response.Response({'detail': 'Broker connection timed out.', 'status': 'timeout'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
+        logger.warning('broker_connection_timeout', extra={'account_id': account.id, 'timeout_seconds': BROKER_CONNECT_TIMEOUT_SECONDS})
+        return response.Response({'detail': 'Broker connection timed out while waiting for the provider. The OAuth account remains saved and can be retried.', 'status': 'timeout'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
+    except Exception as exc:
+        logger.exception('broker_connection_unexpected_failure', extra={'account_id': account.id})
+        return response.Response({'detail': 'Broker connection failed unexpectedly. The account credentials were preserved for retry.', 'status': 'error', 'error_code': exc.__class__.__name__}, status=status.HTTP_502_BAD_GATEWAY)
+    logger.info('broker_connection_established', extra={'broker_id': broker.id, 'account_id': account.id, 'connection_id': connection.id})
     return response.Response({'connection': BrokerConnectionSerializer(connection).data, 'account': BrokerAccountSerializer(account).data})
 
 
