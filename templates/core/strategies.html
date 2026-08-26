@@ -13,4 +13,4 @@
   <section class="workspace-grid three"><article class="panel"><h2>Execution controls</h2><p>Run, pause or stop the strategy engine through the authenticated lifecycle API. An active broker is required only when executing.</p><div class="control-stack"><button class="btn primary" data-strategy-run type="button">Run engine</button><button class="btn ghost" data-strategy-pause type="button">Pause running</button><button class="btn danger" data-strategy-stop type="button">Stop strategies</button></div></article><article class="panel"><h2>Signals</h2><div class="signal-feed" data-s-strategy-signals><div class="empty-state">Loading strategy signals…</div></div></article><article class="panel"><h2>Performance</h2><div class="mini-table" data-s-performance><div class="empty-state">Loading strategy performance…</div></div></article></section>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/strategy_center.js' %}" defer></script><script src="{% static 'js/strategy_center_fix.js' %}" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/strategy_center_fix.js' %}" defer></script>{% endblock %}
