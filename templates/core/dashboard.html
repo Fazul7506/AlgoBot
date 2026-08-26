@@ -5,23 +5,23 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">{% endblock %}
 {% block content %}
 <section class="command-center" data-dashboard-command>
-  <header class="command-hero compact-hero"><div><p class="eyebrow">Broker-backed dashboard</p><h1>Trading status</h1><p>Live account, market and execution state is read from authenticated backend resources. Broker-state synchronization never blocks the dashboard from loading its available data.</p></div><div class="hero-actions"><button class="btn ghost" data-dashboard-refresh type="button">Refresh</button><a class="btn primary" href="/trading/">Trade</a></div></header>
+  <header class="command-hero compact-hero"><div><p class="eyebrow">Broker-backed dashboard</p><h1>Trading status</h1><p>Live account, market and execution state is read from authenticated backend resources. Each dashboard panel loads independently so one slow broker resource cannot freeze the workspace.</p></div><div class="hero-actions"><button class="btn ghost" data-dashboard-refresh type="button">Refresh</button><a class="btn primary" href="/trading/">Trade</a></div></header>
   <section class="kpi-grid" aria-label="Account overview">
-    <article class="kpi-card"><span>Balance</span><strong data-kpi="balance">Loading…</strong><small data-kpi-state="balance">Reading authenticated broker account</small></article>
-    <article class="kpi-card"><span>Equity</span><strong data-kpi="equity">Loading…</strong><small data-kpi-state="equity">Reading broker-backed account state</small></article>
-    <article class="kpi-card"><span>Available</span><strong data-kpi="available">Loading…</strong><small>Broker-confirmed available margin when supplied</small></article>
+    <article class="kpi-card"><span>Balance</span><strong data-kpi="balance">Unavailable</strong><small data-kpi-state="balance">Loading broker account…</small></article>
+    <article class="kpi-card"><span>Equity</span><strong data-kpi="equity">Unavailable</strong><small data-kpi-state="equity">Loading broker account…</small></article>
+    <article class="kpi-card"><span>Available</span><strong data-kpi="available">Unavailable</strong><small>Broker-confirmed available margin when supplied</small></article>
     <article class="kpi-card"><span>Net P/L</span><strong data-kpi="pnl">Unavailable</strong><small>Shown only when a broker-backed P/L field is available</small></article>
   </section>
   <section class="command-grid">
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Market watch</p><h2>Live markets</h2></div><a href="/markets/">Open</a></div><div class="mini-table" data-dashboard-markets><div class="empty-state">Loading backend market data…</div></div></article>
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Broker</p><h2>Connection</h2></div><a href="/brokers/connect/">Manage</a></div><div class="health-stack" data-dashboard-brokers><span><b></b>Reading authenticated broker account…</span></div></article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Market watch</p><h2>Live markets</h2></div><a href="/markets/">Open</a></div><div class="mini-table" data-dashboard-markets><div class="empty-state">Loading market data…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Broker</p><h2>Connection</h2></div><a href="/brokers/connect/">Manage</a></div><div class="health-stack" data-dashboard-brokers><span><b></b>Loading broker connection…</span></div></article>
   </section>
   <section class="command-grid lower">
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Exposure</p><h2>Open positions</h2></div><a href="/positions/">Manage</a></div><div class="mini-table" data-dashboard-positions><div class="empty-state">Loading backend positions…</div></div></article>
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Execution</p><h2>Recent orders</h2></div><a href="/orders/">History</a></div><div class="mini-table" data-dashboard-orders><div class="empty-state">Loading backend orders…</div></div></article>
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Signals</p><h2>Recent signals</h2></div><a href="/signals/">View</a></div><div class="signal-feed" data-dashboard-signals><div class="empty-state">Loading backend signals…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Exposure</p><h2>Open positions</h2></div><a href="/positions/">Manage</a></div><div class="mini-table" data-dashboard-positions><div class="empty-state">Loading positions…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Execution</p><h2>Recent orders</h2></div><a href="/orders/">History</a></div><div class="mini-table" data-dashboard-orders><div class="empty-state">Loading orders…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Signals</p><h2>Recent signals</h2></div><a href="/signals/">View</a></div><div class="signal-feed" data-dashboard-signals><div class="empty-state">Loading signals…</div></div></article>
   </section>
-  <section class="panel"><div class="panel-head"><div><p class="eyebrow">Activity</p><h2>Recent activity</h2></div><button class="btn danger" data-dashboard-kill-switch type="button">Kill switch</button></div><div class="mini-table" data-dashboard-activity><div class="empty-state">Loading backend activity…</div></div></section>
+  <section class="panel"><div class="panel-head"><div><p class="eyebrow">Activity</p><h2>Recent activity</h2></div><button class="btn danger" data-dashboard-kill-switch type="button">Kill switch</button></div><div class="mini-table" data-dashboard-activity><div class="empty-state">Loading activity…</div></div></section>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/dashboard.js' %}?v=e019a348" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/dashboard.js' %}?v=20260826-dashboard2" defer></script>{% endblock %}
