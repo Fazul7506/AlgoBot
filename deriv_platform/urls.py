@@ -40,7 +40,7 @@ from core.views import (
 )
 from core.views_trade_history import trade_history_page
 from core.views_automation import workflow_templates_page
-from core.views_broker_oauth import callback
+from core.views_deriv_oauth_safe import callback
 from core.views_payment import intasend_webhook, pesapal_webhook, pesapal_callback
 from core.views_billing import billing_plans, billing_status, billing_checkout, billing_change_plan, billing_reconcile, billing_cancel
 
@@ -51,9 +51,9 @@ router.register(r'subscription', SubscriptionViewSet, basename='subscription')
 router.register(r'dashboard', DashboardViewSet, basename='dashboard')
 router.register(r'notifications', NotificationViewSet, basename='notifications')
 router.register(r'market/symbols', MarketSymbolViewSet, basename='market-symbols')
-router.register(r'market/price-history', PriceHistoryViewSet, basename='market-price-history')
+router.register(r'market/price-history', PriceHistoryViewSet, basename='price-history')
 router.register(r'market/snapshots', MarketSnapshotViewSet, basename='market-snapshots')
-router.register(r'market/ticks', TickDataViewSet, basename='market-ticks')
+router.register(r'market/ticks', TickDataViewSet, basename='ticks')
 router.register(r'market/streams', DataStreamSessionViewSet, basename='market-streams')
 router.register(r'market/regime', MarketRegimeViewSet, basename='market-regime')
 router.register(r'market/indicators', IndicatorValueViewSet, basename='indicators')
@@ -98,9 +98,6 @@ urlpatterns = [
     path('billing/checkout/', billing_checkout, name='billing_checkout'),
     path('billing/change-plan/', billing_change_plan, name='billing_change_plan'),
     path('billing/reconcile/', billing_reconcile, name='billing_reconcile'),
-    # Keep the browser success/cancel pages separate from the authenticated
-    # API cancellation action so frontend billing controls cannot hit a page
-    # endpoint and silently fail.
     path('billing/cancel/', login_required(billing_cancel_page), name='billing_cancel_page'),
     path('billing/cancel-subscription/', billing_cancel, name='billing_cancel_subscription'),
     path('billing/success/', login_required(billing_success_page), name='billing_success_page'),
