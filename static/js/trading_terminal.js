@@ -95,9 +95,10 @@
       if (ask) ask.textContent = money(askValue);
       $('[data-chart-loading]')?.replaceChildren(document.createTextNode(tick.stale ? 'Last known broker quote · reconnecting live feed' : 'Live broker quote received'));
     } catch (e) {
-      // Try the persisted latest tick before declaring the market unavailable.
+      // Use the canonical latest-tick endpoint. The backend also keeps a
+      // compatibility alias for older cached frontend bundles.
       try {
-        const cached = await api(`/api/market/ticks/latest/?symbol=${encodeURIComponent(symbol)}`, {}, 5000);
+        const cached = await api(`/api/ticks/latest/?symbol=${encodeURIComponent(symbol)}`, {}, 5000);
         if (cached?.quote != null) {
           if (bid) bid.textContent = money(cached.bid ?? cached.quote);
           if (ask) ask.textContent = money(cached.ask ?? cached.quote);
@@ -131,32 +132,6 @@
       const rows = list(data);
       target.innerHTML = rows.length ? rows.map(r => `<div class="mini-row"><strong>${esc(r.symbol || 'Signal')}</strong><span>${esc(r.direction || r.signal || r.action || '')}</span><b>${esc(r.confidence ?? r.status ?? '')}</b></div>`).join('') : '<div class="empty-state">No active strategy signals.</div>';
     } catch (e) { target.innerHTML = `<div class="empty-state">Signals temporarily unavailable.</div>`; }
-  }
-
-  async function refresh() {
-    if (busy) return; busy = true;
-    try {
-      await loadAccounts();
-      const symbol = await loadSymbols();
-      await Promise.all([loadQuote(), loadRecords(), loadSignals()]);
-      // The chart controller listens to the symbol selection; dispatch after the catalogue exists.
-      if (symbol) $('#symbol')?.dispatchEvent(new Event('change', {bubbles: true}));
-    } finally { busy = false; }
-  }
-
-  async function submitOrder(event) {
-    event.preventDefault();
-    const account = selectedAccount(), symbol = $('#symbol')?.value, result = $('[data-order-result]');
-    if (!account || !symbol) { if (result) { result.hidden = false; result.textContent = 'Select a connected broker account and instrument first.'; } return; }
-    const form = new FormData(event.currentTarget), button = $('.execute-btn');
-    if (button) { button.disabled = true; button.textContent = 'Submitting…'; }
-    try {
-      const payload = {account: account.id, symbol, direction, order_type: form.get('order_type'), stake: form.get('stake'), strategy: form.get('strategy') || '', client_order_id: `ui-${crypto.randomUUID?.() || Date.now()}`, routing_context: window.__algobotAiOrderContext || {}};
-      const order = await api('/api/orders/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 25000);
-      if (result) { result.hidden = false; result.textContent = `Order ${order.broker_order_id || order.id || ''} ${order.status || 'submitted'}.`; }
-      window.__algobotAiOrderContext = null; await loadRecords();
-    } catch (e) { if (result) { result.hidden = false; result.textContent = `Order rejected: ${e.message || 'request failed'}`; } }
-    finally { if (button) { button.disabled = false; button.textContent = 'Place order'; } }
   }
 
   function boot() {
