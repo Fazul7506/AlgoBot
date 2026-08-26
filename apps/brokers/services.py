@@ -143,7 +143,11 @@ class ExecutionManagementSystem:
 
 class ExecutionEngine:
     def submit(self, user, **data):
-        routing = dict(data.get('routing_context') or {}); account = data.get('account') or SmartOrderRouter().route(user, data.get('symbol')); client_order_id = str(data.get('client_order_id') or '').strip()
+        from apps.risk.engine import RiskEngine
+
+        routing = dict(data.get('routing_context') or {})
+        account = data.get('account') or SmartOrderRouter().route(user, data.get('symbol'))
+        client_order_id = str(data.get('client_order_id') or '').strip()
         if account.user_id != user.id: raise BrokerRoutingError('The selected broker account does not belong to this user')
         if client_order_id:
             existing = Order.objects.filter(user=user, account=account, client_order_id=client_order_id).order_by('-id').first()
@@ -151,6 +155,7 @@ class ExecutionEngine:
                 report = existing.execution_reports.order_by('-id').first()
                 if report and existing.status in OrderManagementSystem.TERMINAL_STATUSES: return report
                 raise BrokerRoutingError(f'Duplicate client order id {client_order_id}; the existing order is already being processed.')
+
         if routing.get('ai_assisted'):
             from apps.ai_engine.services import AIEngine
             from apps.market_data.services import MarketDataService
@@ -160,18 +165,33 @@ class ExecutionEngine:
             if tick is None: raise BrokerRoutingError('AI-assisted execution requires fresh normalized market data')
             spread = float(tick.ask - tick.bid) if tick.bid is not None and tick.ask is not None else 0
             ctx = {'market_data': {'close': float(tick.quote), 'open': float(tick.quote), 'high': float(tick.quote), 'low': float(tick.quote), 'spread': spread}}
-            analysis = AIEngine().analyze(symbol, routing.get('timeframe', 'M1'), ctx); recommendation = analysis['recommendation']; minimum_confidence = float(routing.get('minimum_ai_confidence', 65))
+            analysis = AIEngine().analyze(symbol, routing.get('timeframe', 'M1'), ctx)
+            recommendation = analysis['recommendation']
+            minimum_confidence = float(routing.get('minimum_ai_confidence', 65))
             if recommendation.confidence < minimum_confidence or recommendation.recommendation == 'WAIT': raise BrokerRoutingError(f'AI gate blocked the order: {recommendation.recommendation} at {recommendation.confidence:.1f}% confidence')
             direction = str(data.get('direction', '')).upper()
             if direction in {'BUY', 'CALL', 'RISE'} and recommendation.recommendation != 'BUY': raise BrokerRoutingError('AI gate rejected a BUY/CALL order')
             if direction in {'SELL', 'PUT', 'FALL'} and recommendation.recommendation != 'SELL': raise BrokerRoutingError('AI gate rejected a SELL/PUT order')
-            routing['ai_decision'] = {'recommendation': recommendation.recommendation, 'confidence': recommendation.confidence, 'prediction': analysis['prediction'].prediction}; data['routing_context'] = routing
+            routing['ai_decision'] = {'recommendation': recommendation.recommendation, 'confidence': recommendation.confidence, 'prediction': analysis['prediction'].prediction}
+            routing['ai_consensus'] = (analysis['prediction'].payload or {}).get('consensus', {})
+            data['routing_context'] = routing
+
         data['account'] = account
         try:
-            order = OrderManagementSystem().queue(OrderManagementSystem().approve(OrderManagementSystem().create(user, **data)))
+            order = OrderManagementSystem().create(user, **data)
         except IntegrityError as exc:
             if client_order_id: raise BrokerRoutingError(f'Duplicate client order id {client_order_id}; the existing order wins the idempotency race.') from exc
             raise
+
+        try:
+            RiskEngine().approve_or_raise(order, context={})
+        except PermissionError as exc:
+            order.status = 'rejected'
+            order.routing_context = {**(order.routing_context or {}), 'risk_gate': {'approved': False, 'reason': str(exc)}}
+            order.save(update_fields=['status', 'routing_context', 'updated_at'])
+            raise BrokerRoutingError(f'Risk gate blocked the order: {exc}') from exc
+
+        order = OrderManagementSystem().queue(OrderManagementSystem().approve(order))
         return asyncio.run(ExecutionManagementSystem().execute(order))
 
 
