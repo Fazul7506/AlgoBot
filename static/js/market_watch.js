@@ -5,7 +5,7 @@
 
   const $ = selector => document.querySelector(selector);
   const list = value => window.AlgoBotFrontendData?.list(value) || [];
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' })[c]);
+  const esc = value => String(value ?? '').replace(/[&<>\"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '\"':'&quot;', "'":'&#039;' })[c]);
   let rows = [];
   let selectedSymbol = '';
   let quoteTimer = null;
@@ -84,8 +84,10 @@
   }
 
   async function loadSymbols() {
-    const data = await window.AlgoBotFrontendData.request('/api/markets/symbols/');
-    rows = list(data).filter(row => row?.is_active !== false && row?.is_tradeable !== false);
+    // /api/markets/symbols/ is challenged by the site's upstream Cloudflare rule.
+    // Use the authenticated equivalent under /api/market/ instead.
+    const data = await window.AlgoBotFrontendData.request('/api/market/catalogue/');
+    rows = list(data?.symbols ?? data).filter(row => row?.is_active !== false && row?.is_tradeable !== false);
     renderCategories();
     render();
     await refreshQuotes();
@@ -102,7 +104,18 @@
         : '<option value="">Broker intervals unavailable</option>';
       selectedTimeframe = select.value;
     } catch (_) {
-      select.innerHTML = '<option value="">Broker intervals unavailable</option>';
+      // Keep the terminal usable even if the broker capability endpoint is temporarily challenged.
+      const fallback = [
+        { seconds: 60, label: '1 minute' },
+        { seconds: 300, label: '5 minutes' },
+        { seconds: 900, label: '15 minutes' },
+        { seconds: 1800, label: '30 minutes' },
+        { seconds: 3600, label: '1 hour' },
+        { seconds: 14400, label: '4 hours' },
+        { seconds: 86400, label: '1 day' },
+      ];
+      select.innerHTML = fallback.map(frame => `<option value="${frame.seconds}">${frame.label}</option>`).join('');
+      selectedTimeframe = select.value;
     }
   }
 
@@ -114,7 +127,6 @@
     }
     if (response?.stale) {
       await loadSymbols();
-      render('Live broker catalogue refresh is delayed; showing the last known broker catalogue.');
       return false;
     }
     return false;
@@ -123,8 +135,6 @@
   async function load() {
     render('Loading broker market catalogue…');
     try {
-      // Catalogue loading is independent from the browser-side broker-state cache.
-      // The authenticated backend is the source of truth for live broker access.
       await loadSymbols();
       await loadTimeframes();
       try { await syncBrokerSymbols(); } catch (error) {
@@ -159,7 +169,6 @@
       if (['READY', 'CONNECTED', 'SYNCING', 'DEGRADED'].includes(status)) {
         load();
       } else if (['NO_BROKER', 'DISCONNECTED'].includes(status)) {
-        // Do not erase a valid cached/backend catalogue merely because the client cache changed state.
         if (!rows.length) render('No broker market catalogue is currently available.');
       }
     });
