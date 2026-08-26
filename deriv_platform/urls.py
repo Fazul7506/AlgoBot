@@ -77,20 +77,13 @@ router.register(r'strategies', StrategyViewSet, basename='strategies')
 router.register(r'copy-trading', CopyTradingViewSet, basename='copy-trading')
 
 urlpatterns = [
-    # Lightweight liveness and dependency readiness probes.
     path('health/', include('apps.health.urls')),
-
-    # Admin
     path('admin/', admin.site.urls),
-    
-    # Frontend pages
     path('', home, name='home'),
     path('login/', login_page, name='login_page'),
     path('register/', register_page, name='register_page'),
     path('logout/', browser_logout, name='logout'),
     path('accounts/login/', RedirectView.as_view(url='/login/', permanent=False)),
-    
-    # Dashboard & Main pages
     path('dashboard/', login_required(dashboard_page), name='dashboard_page'),
     path('billing/', login_required(lambda request: render(request, 'core/billing.html')), name='billing_page'),
     path('saas/', login_required(lambda request: render(request, 'core/saas.html')), name='saas_page'),
@@ -112,8 +105,6 @@ urlpatterns = [
     path('trade-history/', login_required(trade_history_page), name='trade_history_page'),
     path('automation/', login_required(workflow_templates_page), name='automation_page'),
     path('operations/<str:module>/', login_required(operations_module_page), name='operations_module'),
-    
-    # Billing
     path('billing/plans/', billing_plans, name='billing_plans'),
     path('billing/status/', billing_status, name='billing_status'),
     path('billing/checkout/', billing_checkout, name='billing_checkout'),
@@ -121,8 +112,6 @@ urlpatterns = [
     path('billing/cancel/', login_required(billing_cancel_page), name='billing_cancel_page'),
     path('billing/success/', login_required(billing_success_page), name='billing_success_page'),
     path('api/billing/subscription/cancel/', billing_cancel, name='billing_cancel'),
-    
-    # Info pages
     path('terms/', terms_page, name='terms_page'),
     path('privacy/', privacy_page, name='privacy_page'),
     path('cookies/', cookie_policy_page, name='cookie_policy_page'),
@@ -130,30 +119,23 @@ urlpatterns = [
     path('contact/', contact_page, name='contact_page'),
     path('about/', about_page, name='about_page'),
     path('status/', public_status_page, name='public_status_page'),
-    
-    # Auth pages (redirects)
     path('forgot-password/', forgot_password_page, name='forgot_password_page'),
     path('reset-password/<str:token>/', reset_password_page, name='reset_password_page'),
     path('verify-email/', verify_email_page, name='verify_email_page'),
-    
-    # Broker pages
     path('brokers/connect/', broker_connect_page, name='broker_connect_page'),
     path('brokers/marketplace/', broker_marketplace_page, name='broker_marketplace_page'),
-    
-    # OAuth callback
     path('callback/', callback, name='callback'),
-    
-    # API endpoints
     path('api/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/register/', register, name='register'),
     path('api/auth/login/', login_view, name='login'),
     path('api/auth/change-password/', change_password, name='change_password'),
-    # Module API includes
     path('api/', include('apps.brokers.urls')),
     path('api/', include('apps.execution.urls')),
     path('api/', include('apps.market_data.urls')),
     path('api/', include('apps.ai_engine.urls')),
+    path('api/', include('apps.backtesting.urls')),
+    path('api/', include('apps.portfolio.urls')),
     path('api/developer/', include('apps.developer.urls')),
     path('api/', include('apps.indicators.urls')),
     path('api/', include('apps.risk.urls')),
@@ -162,11 +144,7 @@ urlpatterns = [
     path('api/', include('apps.automation.urls')),
     path('api/', include('apps.notifications.urls')),
     path('api/', include('apps.deployment.urls')),
-    # Keep explicit module routes ahead of router detail patterns such as
-    # ``market/ticks/<pk>/`` so nested endpoints resolve correctly.
     path('api/', include(router.urls)),
-    
-    # Webhooks
     path('webhooks/intasend/', intasend_webhook, name='intasend_webhook'),
     path('webhooks/pesapal/', pesapal_webhook, name='pesapal_webhook'),
     path('payments/pesapal/callback/', pesapal_callback, name='pesapal_callback'),
