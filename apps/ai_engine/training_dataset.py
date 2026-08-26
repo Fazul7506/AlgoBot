@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone as dt_timezone
 from typing import Any
 
 import numpy as np
@@ -18,12 +19,9 @@ class FeatureDataset:
     metadata: dict[str, Any]
 
 
-def _historical_ai_feedback(symbol: str, timeframe: str, before) -> tuple[float, float, int]:
-    """Return only feedback resolved before the sample timestamp.
-
-    This prevents the model from seeing future prediction outcomes during
-    training. The returned values are rolling accuracy, mean return and count.
-    """
+def _historical_ai_feedback(symbol: str, timeframe: str, before_epoch: int) -> tuple[float, float, int]:
+    """Return feedback resolved before the current candle, without leakage."""
+    before = datetime.fromtimestamp(int(before_epoch), tz=dt_timezone.utc)
     outcomes = PredictionOutcome.objects.filter(
         prediction__symbol=symbol,
         prediction__timeframe=timeframe,
@@ -39,11 +37,10 @@ def _historical_ai_feedback(symbol: str, timeframe: str, before) -> tuple[float,
 
 
 def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 5000) -> FeatureDataset:
-    """Build a chronological next-candle direction dataset with AI feedback.
+    """Build next-candle direction samples plus historical AI feedback features.
 
-    The three feedback features are calculated using only outcomes resolved at
-    or before the current candle timestamp. Therefore historical AI performance
-    can influence future samples without leaking future outcomes.
+    Feedback is computed only from PredictionOutcome records resolved before the
+    sample candle, so model training cannot see future outcomes.
     """
     pipeline = AIDataPipeline()
     candles = pipeline.dataset(symbol, timeframe=timeframe, limit=limit)
@@ -57,13 +54,12 @@ def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 500
         window = candles[i - 59 : i + 1]
         try:
             features = list(feature_vector(window))
-            timestamp = candles[i].get("timestamp") or candles[i].get("time")
-            accuracy, mean_return, count = _historical_ai_feedback(symbol, timeframe, timestamp)
+            accuracy, mean_return, count = _historical_ai_feedback(symbol, timeframe, int(candles[i]["epoch"]))
             features.extend([accuracy, mean_return, float(count)])
             rows.append(features)
             labels.append(int(float(candles[i + 1]["close"]) > float(candles[i]["close"])))
             feedback_rows += int(count > 0)
-        except (TypeError, ValueError, KeyError, FloatingPointError):
+        except (TypeError, ValueError, KeyError, FloatingPointError, OverflowError):
             continue
 
     if not rows:
