@@ -59,7 +59,8 @@
 
   function syncFromBackend(accountId=null){
     const store=window.AlgoBotBrokerState;
-    if(!store||document.body.dataset.authenticated!=='true') return Promise.resolve(store?.get()?.account||null);
+    if(!store) return Promise.resolve(null);
+    if(document.body.dataset.authenticated!=='true') return Promise.resolve(store.get()?.account||null);
     if(syncPromise) return syncPromise;
     syncPromise=(async()=>{
       try{
@@ -71,7 +72,15 @@
     return syncPromise;
   }
 
-  function schedule(){ if(timer) clearInterval(timer); syncFromBackend(); timer=setInterval(()=>syncFromBackend(),30000); }
+  function schedule(){
+    if(timer) clearInterval(timer);
+    const start=()=>{
+      if(!window.AlgoBotBrokerState){ setTimeout(start,250); return; }
+      syncFromBackend();
+      timer=setInterval(()=>syncFromBackend(),30000);
+    };
+    start();
+  }
   window.AlgoBotBrokerSync=syncFromBackend;
   window.addEventListener('algobot:account-changed',event=>{if(window.AlgoBotBrokerState&&event.detail)window.AlgoBotBrokerState.setAccount(event.detail,'account-changed');knownAccounts=knownAccounts.map(a=>String(a.id)===String(event.detail?.id)?event.detail:{...a,is_preferred:false});window.AlgoBotBrokerAccounts=knownAccounts.slice();});
   window.addEventListener('algobot:account-synced',event=>{if(window.AlgoBotBrokerState&&event.detail)window.AlgoBotBrokerState.setAccount(event.detail,'account-synced');knownAccounts=knownAccounts.map(a=>String(a.id)===String(event.detail?.id)?event.detail:a);window.AlgoBotBrokerAccounts=knownAccounts.slice();});

@@ -14,6 +14,7 @@ from django.shortcuts import redirect
 from django.utils import timezone
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from apps.brokers.services import BrokerConnectionService
 from core.models import BotSettings, Subscription, UserProfile
 from core.services.oauth_service import DerivOAuthService
 
@@ -151,6 +152,41 @@ def _persist_deriv_account(*, user, broker, record, access_token, refresh_token,
     return broker_account
 
 
+def _activate_selected_connection(broker, account):
+    """Run the canonical broker adapter connection after OAuth persistence.
+
+    OAuth proves identity and grants credentials; it does not itself create the
+    AlgoBot broker connection. The adapter service is therefore the single
+    canonical activation path so the callback and the normal Connect/Sync APIs
+    cannot drift into different connection semantics.
+    """
+    try:
+        connection = asyncio.run(BrokerConnectionService().connect(broker, account))
+        logger.info(
+            'deriv_oauth_broker_connection_activated',
+            extra={'account_id': account.account_id, 'connection_id': connection.id},
+        )
+        return connection, None
+    except Exception as exc:
+        logger.exception(
+            'deriv_oauth_broker_connection_activation_failed',
+            extra={'account_id': account.account_id, 'error': str(exc)},
+        )
+        # Preserve the OAuth credential/account even when the live broker
+        # session is temporarily unavailable. The frontend can retry /sync.
+        BrokerConnection.objects.update_or_create(
+            broker_account=account,
+            defaults={
+                'broker': broker,
+                'status': 'degraded',
+                'last_ping': None,
+                'connected_at': timezone.now(),
+                'heartbeat': {'oauth_verified': True, 'activation_error': exc.__class__.__name__},
+            },
+        )
+        return None, exc
+
+
 def callback(request):
     """Complete Deriv OAuth after the broker accounts themselves are verified."""
     if request.GET.get('error'):
@@ -204,6 +240,7 @@ def callback(request):
     persisted_ids = []
     skipped_ids = []
     selected_health = 'not_checked'
+    selected_broker_account = None
     for record in accounts:
         current_id = _account_id(record)
         if not current_id:
@@ -239,14 +276,32 @@ def callback(request):
             persisted_ids.append(current_id)
             if current_id == selected_account_id:
                 selected_health = websocket_health
+                selected_broker_account = persisted
 
     # Only accounts returned by this OAuth credential are candidates for the
     # preferred set. Existing unrelated broker accounts stay untouched.
     if persisted_ids:
         BrokerAccount.objects.filter(user=user, broker=broker).exclude(account_id=selected_account_id).update(is_preferred=False)
 
+    if selected_broker_account is None:
+        logger.error('deriv_oauth_selected_account_not_persisted', extra={'account_id': selected_account_id})
+        messages.error(request, 'Deriv authentication succeeded, but AlgoBot could not persist the selected trading account.')
+        DerivOAuthService.clear_oauth_session(request)
+        return redirect('broker_connect_page')
+
+    # Do not treat OAuth/token verification as a live AlgoBot connection. The
+    # canonical broker adapter must be invoked so the account is actually
+    # authenticated through the same path used by the Connect/Sync APIs.
+    connection, activation_error = _activate_selected_connection(broker, selected_broker_account)
+    if connection is not None:
+        selected_health = 'verified'
+    elif activation_error is not None:
+        selected_health = 'degraded'
+
     DerivOAuthService.clear_oauth_session(request)
-    if selected_health == 'degraded':
+    if activation_error is not None:
+        messages.warning(request, f'Deriv account {selected_account_id} was authorized, but live broker activation is temporarily degraded. AlgoBot will retry synchronization automatically.')
+    elif selected_health == 'degraded':
         messages.warning(request, f'Deriv account {selected_account_id} connected. Live broker health is temporarily degraded; AlgoBot will retry automatically.')
     else:
         sibling_count = max(0, len(persisted_ids) - 1)
