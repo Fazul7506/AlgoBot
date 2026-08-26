@@ -18,11 +18,19 @@ class MarketSymbolSerializer(serializers.ModelSerializer):
         read_only_fields = ['broker_name', 'broker_type', 'broker_avatar_url']
 
     def _broker(self, obj):
-        # MarketSymbol historically stores the provider identifier as a string.
-        # Resolve that identifier to the canonical Broker record without changing
-        # the existing database schema or market identifiers.
-        value = str(obj.broker or '').strip()
-        return Broker.objects.filter(broker_type__iexact=value).order_by('id').first() or Broker.objects.filter(name__iexact=value).order_by('id').first()
+        # MarketSymbol stores the provider identifier as a string. Cache the
+        # small broker catalogue once per serializer/request so a catalogue of
+        # hundreds of instruments never performs one or more DB queries per row.
+        cache = self.context.setdefault('_broker_catalogue_cache', {})
+        value = str(obj.broker or '').strip().lower()
+        if value in cache:
+            return cache[value]
+        broker = (
+            Broker.objects.filter(broker_type__iexact=value).order_by('id').first()
+            or Broker.objects.filter(name__iexact=value).order_by('id').first()
+        )
+        cache[value] = broker
+        return broker
 
     def get_broker_avatar_url(self, obj):
         broker = self._broker(obj)
