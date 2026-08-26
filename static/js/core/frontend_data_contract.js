@@ -6,23 +6,40 @@
   const brokerState = () => window.AlgoBotBrokerState;
   const list = value => Array.isArray(value) ? value : (Array.isArray(value?.results) ? value.results : (Array.isArray(value?.data) ? value.data : []));
   const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '';
+  const inflight = new Map();
+  const cache = new Map();
 
-  async function request(url, options = {}, timeout = 12000) {
+  async function request(url, options = {}, timeout = 25000) {
+    const method = (options.method || 'GET').toUpperCase();
+    const key = `${method} ${url}`;
+    if (method === 'GET' && inflight.has(key)) return inflight.get(key);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-    try {
-      const headers = { Accept: 'application/json', ...(options.headers || {}) };
-      if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase()) && !headers['X-CSRFToken']) headers['X-CSRFToken'] = csrf();
-      const response = await fetch(url, { credentials: 'same-origin', ...options, headers, signal: controller.signal });
-      const text = await response.text();
-      let payload = {};
-      try { payload = text ? JSON.parse(text) : {}; } catch (_) { payload = { detail: text }; }
-      if (!response.ok) throw new Error(payload.detail || payload.message || `Request failed (${response.status})`);
-      return payload;
-    } catch (error) {
-      if (error?.name === 'AbortError') throw new Error('Backend request timed out');
-      throw error;
-    } finally { clearTimeout(timer); }
+    const timer = setTimeout(() => controller.abort(), Math.max(1000, timeout));
+    const promise = (async () => {
+      try {
+        const headers = { Accept: 'application/json', ...(options.headers || {}) };
+        if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && !headers['X-CSRFToken']) headers['X-CSRFToken'] = csrf();
+        const response = await fetch(url, { credentials: 'same-origin', ...options, headers, signal: controller.signal, __algoTimeoutMs: timeout });
+        const text = await response.text();
+        let payload = {};
+        try { payload = text ? JSON.parse(text) : {}; } catch (_) { payload = { detail: text }; }
+        if (!response.ok) throw new Error(payload.detail || payload.message || `Request failed (${response.status})`);
+        if (method === 'GET') cache.set(url, { payload, at: Date.now() });
+        return payload;
+      } catch (error) {
+        if (error?.name === 'AbortError' || error?.name === 'AlgoBotTimeoutError') {
+          const e = new Error('Backend request timed out'); e.code = 'API_TIMEOUT'; throw e;
+        }
+        throw error;
+      } finally { clearTimeout(timer); }
+    })();
+    if (method === 'GET') inflight.set(key, promise);
+    try { return await promise; } finally { if (inflight.get(key) === promise) inflight.delete(key); }
+  }
+
+  function cached(url, maxAge = 120000) {
+    const item = cache.get(url);
+    return item && Date.now() - item.at <= maxAge ? item.payload : null;
   }
 
   async function getBrokerAccounts() {
@@ -31,9 +48,11 @@
 
   async function syncBrokerAccount(accountId) {
     if (!accountId) throw new Error('A broker account is required');
+    // Prefer the canonical bridge. It owns synchronization and deduplicates it.
+    if (typeof window.AlgoBotBrokerSync === 'function') return window.AlgoBotBrokerSync(accountId);
     if (brokerState()) brokerState().transition(brokerState().STATES.SYNCING, {}, 'account-sync-started');
     try {
-      const result = await request(`/api/brokers/accounts/${encodeURIComponent(accountId)}/sync/`, { method: 'POST' });
+      const result = await request(`/api/brokers/accounts/${encodeURIComponent(accountId)}/sync/`, { method: 'POST' }, 25000);
       if (brokerState() && result.account) brokerState().setAccount(result.account, 'account-sync-complete');
       return result;
     } catch (error) {
@@ -66,5 +85,5 @@
     return brokerState().patch({}, `broker-event:${type || 'unknown'}`);
   }
 
-  window.AlgoBotFrontendData = Object.freeze({ request, getBrokerAccounts, syncBrokerAccount, requireConnected, applyBrokerEvent, list });
+  window.AlgoBotFrontendData = Object.freeze({ request, cached, getBrokerAccounts, syncBrokerAccount, requireConnected, applyBrokerEvent, list });
 })();
