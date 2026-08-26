@@ -3,31 +3,66 @@ from django.db.models import Q
 import django.db.models.deletion
 
 
+def _existing_db_objects(connection, table):
+    with connection.cursor() as cursor:
+        constraints = connection.introspection.get_constraints(cursor, table)
+    return set(constraints)
+
+
 def ensure_broker_account_column(apps, schema_editor):
-    """Ensure broker_account_id exists without failing on schema drift."""
+    """Reconcile broker_account_id without failing on an already-mutated DB."""
     connection = schema_editor.connection
     table = 'brokers_brokerconnection'
-    cursor = connection.cursor()
-    existing_columns = {
-        column.name
-        for column in connection.introspection.get_table_description(cursor, table)
-    }
+    with connection.cursor() as cursor:
+        columns = {
+            column.name
+            for column in connection.introspection.get_table_description(cursor, table)
+        }
 
-    if 'broker_account_id' in existing_columns:
+    if 'broker_account_id' in columns:
         return
 
-    quoted_table = schema_editor.quote_name(table)
-    quoted_column = schema_editor.quote_name('broker_account_id')
-    quoted_target = schema_editor.quote_name('brokers_brokeraccount')
+    if connection.vendor == 'postgresql':
+        schema_editor.execute(
+            'ALTER TABLE {} ADD COLUMN {} bigint NULL REFERENCES {} ("id") ON DELETE CASCADE'.format(
+                schema_editor.quote_name(table),
+                schema_editor.quote_name('broker_account_id'),
+                schema_editor.quote_name('brokers_brokeraccount'),
+            )
+        )
+        return
 
-    # PostgreSQL is the production database on Render.  The equivalent
-    # nullable BIGINT foreign-key column is also valid for the supported
-    # development databases used by this project.
-    schema_editor.execute(
-        f'ALTER TABLE {quoted_table} '
-        f'ADD COLUMN {quoted_column} bigint NULL '
-        f'REFERENCES {quoted_target} ("id") '
-        f'ON DELETE CASCADE'
+    # For non-PostgreSQL development databases, let Django generate the
+    # backend-specific column definition by adding the field through the
+    # schema editor.
+    BrokerConnection = apps.get_model('brokers', 'BrokerConnection')
+    field = BrokerConnection._meta.get_field('broker_account')
+    schema_editor.add_field(BrokerConnection, field)
+
+
+def ensure_broker_connection_index(apps, schema_editor):
+    """Create the account/status index only when it is absent."""
+    table = 'brokers_brokerconnection'
+    name = 'brokers_bro_account__f3e4a0_idx'
+    if name in _existing_db_objects(schema_editor.connection, table):
+        return
+    Model = apps.get_model('brokers', 'BrokerConnection')
+    schema_editor.add_index(
+        Model,
+        models.Index(fields=['broker_account', 'status'], name=name),
+    )
+
+
+def ensure_order_index(apps, schema_editor):
+    """Create the account/status order index only when it is absent."""
+    table = 'brokers_order'
+    name = 'brokers_ord_account__d1f2c7_idx'
+    if name in _existing_db_objects(schema_editor.connection, table):
+        return
+    Model = apps.get_model('brokers', 'Order')
+    schema_editor.add_index(
+        Model,
+        models.Index(fields=['account', 'status'], name=name),
     )
 
 
@@ -44,6 +79,36 @@ def repair_duplicate_client_order_ids(apps, schema_editor):
             continue
         order.client_order_id = f'{order.client_order_id}-legacy-{order.pk}'
         order.save(update_fields=['client_order_id'])
+
+
+def ensure_broker_connection_uniqueness(apps, schema_editor):
+    """Ensure the conditional unique constraint exists without duplicating it."""
+    table = 'brokers_brokerconnection'
+    name = 'unique_broker_connection_per_account'
+    if name in _existing_db_objects(schema_editor.connection, table):
+        return
+    Model = apps.get_model('brokers', 'BrokerConnection')
+    constraint = models.UniqueConstraint(
+        condition=Q(broker_account__isnull=False),
+        fields=('broker_account',),
+        name=name,
+    )
+    schema_editor.add_constraint(Model, constraint)
+
+
+def ensure_order_idempotency_constraint(apps, schema_editor):
+    """Ensure the conditional order idempotency constraint exists once."""
+    table = 'brokers_order'
+    name = 'unique_client_order_id_per_account'
+    if name in _existing_db_objects(schema_editor.connection, table):
+        return
+    Model = apps.get_model('brokers', 'Order')
+    constraint = models.UniqueConstraint(
+        condition=~Q(client_order_id=''),
+        fields=('user', 'account', 'client_order_id'),
+        name=name,
+    )
+    schema_editor.add_constraint(Model, constraint)
 
 
 class Migration(migrations.Migration):
@@ -73,38 +138,78 @@ class Migration(migrations.Migration):
                 ),
             ],
         ),
-        migrations.AddIndex(
-            model_name='brokerconnection',
-            index=models.Index(
-                fields=['broker_account', 'status'],
-                name='brokers_bro_account__f3e4a0_idx',
-            ),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(
+                    ensure_broker_connection_index,
+                    migrations.RunPython.noop,
+                ),
+            ],
+            state_operations=[
+                migrations.AddIndex(
+                    model_name='brokerconnection',
+                    index=models.Index(
+                        fields=['broker_account', 'status'],
+                        name='brokers_bro_account__f3e4a0_idx',
+                    ),
+                ),
+            ],
         ),
         migrations.RunPython(
             repair_duplicate_client_order_ids,
             migrations.RunPython.noop,
         ),
-        migrations.AddIndex(
-            model_name='order',
-            index=models.Index(
-                fields=['account', 'status'],
-                name='brokers_ord_account__d1f2c7_idx',
-            ),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(
+                    ensure_order_index,
+                    migrations.RunPython.noop,
+                ),
+            ],
+            state_operations=[
+                migrations.AddIndex(
+                    model_name='order',
+                    index=models.Index(
+                        fields=['account', 'status'],
+                        name='brokers_ord_account__d1f2c7_idx',
+                    ),
+                ),
+            ],
         ),
-        migrations.AddConstraint(
-            model_name='brokerconnection',
-            constraint=models.UniqueConstraint(
-                condition=Q(broker_account__isnull=False),
-                fields=('broker_account',),
-                name='unique_broker_connection_per_account',
-            ),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(
+                    ensure_broker_connection_uniqueness,
+                    migrations.RunPython.noop,
+                ),
+            ],
+            state_operations=[
+                migrations.AddConstraint(
+                    model_name='brokerconnection',
+                    constraint=models.UniqueConstraint(
+                        condition=Q(broker_account__isnull=False),
+                        fields=('broker_account',),
+                        name='unique_broker_connection_per_account',
+                    ),
+                ),
+            ],
         ),
-        migrations.AddConstraint(
-            model_name='order',
-            constraint=models.UniqueConstraint(
-                condition=~Q(client_order_id=''),
-                fields=('user', 'account', 'client_order_id'),
-                name='unique_client_order_id_per_account',
-            ),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(
+                    ensure_order_idempotency_constraint,
+                    migrations.RunPython.noop,
+                ),
+            ],
+            state_operations=[
+                migrations.AddConstraint(
+                    model_name='order',
+                    constraint=models.UniqueConstraint(
+                        condition=~Q(client_order_id=''),
+                        fields=('user', 'account', 'client_order_id'),
+                        name='unique_client_order_id_per_account',
+                    ),
+                ),
+            ],
         ),
     ]
