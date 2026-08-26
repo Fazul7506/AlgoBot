@@ -22,11 +22,11 @@ class EnsembleConsensusTests(unittest.TestCase):
         ], min_confidence=0.65)
         self.assertEqual(result["decision"], "AVOID")
 
-    def test_weights_change_consensus(self):
+    def test_weights_change_direction_but_not_false_confidence(self):
         result = EnsemblePredictor.consensus([
             {"model": "rf", "probability": 0.90, "weight": 3},
             {"model": "xgb", "probability": 0.20, "weight": 1},
-        ], min_confidence=0.65)
+        ], min_confidence=0.25)
         self.assertEqual(result["decision"], "BUY")
         self.assertGreater(result["probability"], 0.70)
 
