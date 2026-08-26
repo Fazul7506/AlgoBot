@@ -7,6 +7,7 @@ urlpatterns = [
     path("markets/symbols/", api.symbols, name="symbols"),
     path("markets/symbols/sync/", api.sync_symbols, name="sync_symbols"),
     path("markets/symbol/<str:symbol>/", api.symbol_detail, name="symbol_detail_api"),
+    path("market/catalogue/", api.broker_catalogue, name="broker_catalogue"),
     path("ticks/latest/", api.latest_tick, name="latest_tick"),
     path("ticks/history/", api.tick_history, name="tick_history_api"),
     path("ticks/broker/", api.broker_tick, name="broker_tick"),
