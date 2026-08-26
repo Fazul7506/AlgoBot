@@ -52,21 +52,26 @@ class BrokerConnectionService:
         account_type=verification.get('is_virtual'); avatar_url=verification.get('avatar_url'); credentials=dict(account.credentials or {})
         if account_type is not None: credentials['account_type']='demo' if account_type else 'real'
         if avatar_url: credentials['avatar_url']=str(avatar_url)
-        account.credentials=credentials; account.status='active'; account.last_synced_at=timezone.now(); account.save(update_fields=['account_id','balance','currency','credentials','status','last_synced_at'])
-        return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})[0]
+        account.credentials=credentials; account.status='active'; account.last_synced_at=timezone.now()
+        await sync_to_async(account.save)(update_fields=['account_id','balance','currency','credentials','status','last_synced_at'])
+        connection=await sync_to_async(BrokerConnection.objects.update_or_create)(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'connected_at':timezone.now()})
+        return connection[0]
     async def disconnect(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        await BrokerRegistry().adapter(broker,account).disconnect(); account.status='disabled'; account.save(update_fields=['status']); return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'disconnected'})[0]
+        await BrokerRegistry().adapter(broker,account).disconnect(); account.status='disabled'
+        await sync_to_async(account.save)(update_fields=['status'])
+        connection=await sync_to_async(BrokerConnection.objects.update_or_create)(broker=broker,defaults={'status':'disconnected'})
+        return connection[0]
     async def heartbeat(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        adapter=BrokerRegistry().adapter(broker,account); data=await adapter.health_check(); latency=await adapter.ping(); return BrokerConnection.objects.update_or_create(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data})[0]
+        adapter=BrokerRegistry().adapter(broker,account); data=await adapter.health_check(); latency=await adapter.ping(); connection=await sync_to_async(BrokerConnection.objects.update_or_create)(broker=broker,defaults={'status':'connected','latency':latency,'last_ping':timezone.now(),'heartbeat':data}); return connection[0]
 class AuthenticationService:
     async def authenticate(self,account): return await BrokerRegistry().adapter(account.broker,account).authenticate()
     async def refresh_token(self,account): return await BrokerRegistry().adapter(account.broker,account).refresh_token()
 class LatencyService:
     async def measure(self,broker,account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        latency=await BrokerRegistry().adapter(broker,account).ping(); BrokerConnection.objects.update_or_create(broker=broker,defaults={'latency':latency,'last_ping':timezone.now(),'status':'connected'}); return latency
+        latency=await BrokerRegistry().adapter(broker,account).ping(); await sync_to_async(BrokerConnection.objects.update_or_create)(broker=broker,defaults={'latency':latency,'last_ping':timezone.now(),'status':'connected'}); return latency
 class SmartOrderRouter:
     def route(self,user,symbol=None,mode='latency_based',preferred_account=None):
         qs=BrokerAccount.objects.select_related('broker').filter(user=user,status='active',broker__status='active')
@@ -147,8 +152,10 @@ class SynchronizationService:
         if data.get('account_type'): credentials['account_type']=data['account_type']; fields.append('credentials')
         if data.get('avatar_url'): credentials['avatar_url']=str(data['avatar_url']); fields.append('credentials')
         if credentials != (account.credentials or {}) and 'credentials' not in fields: fields.append('credentials')
-        account.credentials=credentials; account.status='active'; account.last_synced_at=timezone.now(); fields.extend(['status','last_synced_at']); account.save(update_fields=list(dict.fromkeys(fields)))
-        BrokerConnection.objects.update_or_create(broker=account.broker,defaults={'status':'connected','last_ping':timezone.now(),'connected_at':timezone.now()}); return account,data
+        account.credentials=credentials; account.status='active'; account.last_synced_at=timezone.now(); fields.extend(['status','last_synced_at'])
+        await sync_to_async(account.save)(update_fields=list(dict.fromkeys(fields)))
+        await sync_to_async(BrokerConnection.objects.update_or_create)(broker=account.broker,defaults={'status':'connected','last_ping':timezone.now(),'connected_at':timezone.now()})
+        return account,data
 class ReconciliationService:
     def reconcile_order(self,order,broker_trade=None,repair=True):
         diff={} if broker_trade and broker_trade.get('broker_order_id')==order.broker_order_id else {'order':'missing_or_mismatched'}; rec=TradeReconciliation.objects.create(broker=order.broker,trade=broker_trade or {},matched=not diff,difference=diff,repaired=bool(diff and repair));
