@@ -21,6 +21,13 @@ class CanonicalTradeExecutionTests(TransactionTestCase):
             status="active",
             is_preferred=True,
             credentials={"account_type": "demo"},
+            # The risk gate evaluates stake as a fraction of account balance.
+            # Give the synthetic execution account a realistic test balance so
+            # these routing/idempotency tests exercise execution rather than
+            # failing on the separate insufficient-balance risk rule.
+            balance=Decimal("100"),
+            equity=Decimal("100"),
+            free_margin=Decimal("100"),
         )
         # Deriv orders require a usable OAuth credential.  Keep this execution
         # test focused on canonical account routing rather than credential
