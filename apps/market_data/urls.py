@@ -13,6 +13,15 @@ urlpatterns = [
     path("ticks/broker/", api.broker_tick, name="broker_tick"),
     path("chart/capabilities/", api.broker_chart_capabilities, name="broker_chart_capabilities"),
     path("chart/history/", api.broker_chart_history, name="broker_chart_history"),
+
+    # Compatibility aliases for the trading terminal. Older deployed/cached
+    # frontend bundles used the /api/market/... prefix. Keep these aliases
+    # pointing at the same authoritative handlers so a rolling deploy or
+    # browser cache cannot turn valid market requests into 404s.
+    path("market/ticks/latest/", api.latest_tick, name="market_latest_tick"),
+    path("market/ticks/history/", api.tick_history, name="market_tick_history"),
+    path("market/chart/capabilities/", api.broker_chart_capabilities, name="market_chart_capabilities"),
+    path("market/chart/history/", api.broker_chart_history, name="market_chart_history"),
     path("market/ticks/broker/", api.broker_tick, name="market_broker_tick"),
     path("candles/", api.candles, name="candles_api"),
     path("candles/history/", api.candle_history, name="candle_history_api"),
