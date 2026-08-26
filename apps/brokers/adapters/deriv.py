@@ -85,14 +85,13 @@ class DerivAdapter(BrokerAdapter):
         return response
 
     async def connect(self):
-        # The authenticated balance request already proves that the OAuth
-        # credential, account and OTP-scoped WebSocket are valid. Do not perform
-        # a second public WebSocket ping here: it is a different channel and can
-        # fail independently, incorrectly turning a valid authenticated session
-        # into a disconnected account.
+        # The authenticated balance request already proves the OAuth credential,
+        # account and OTP-scoped WebSocket are valid. Reuse its measured latency
+        # for the connection record instead of opening a second public socket.
         start = time.perf_counter()
         account = await self.authenticate()
         latency = (time.perf_counter() - start) * 1000
+        self._last_connection_latency = latency
         return {"status": "connected", "account_id": account.get("loginid") or account.get("account_id"), "is_virtual": account.get("is_virtual"), "avatar_url": account.get("avatar_url"), "balance": account.get("balance"), "currency": account.get("currency"), "latency": latency}
 
     async def disconnect(self): return {"status": "disconnected"}
@@ -199,4 +198,7 @@ class DerivAdapter(BrokerAdapter):
     async def stream_prices(self, symbols, callback=None): return {"stream": "ticks", "symbols": list(symbols)}
     async def health_check(self): return {"status": "ok", "latency": await self.ping()}
     async def ping(self):
+        cached = getattr(self, "_last_connection_latency", None)
+        if cached is not None:
+            return cached
         start = time.perf_counter(); await self._request({"ping": 1}); return (time.perf_counter() - start) * 1000
