@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from unittest.mock import patch
 
@@ -91,6 +91,37 @@ class BillingRedirectPagesTests(TestCase):
 
         response = self.client.get(reverse('billing_cancel_page'))
         self.assertEqual(response.status_code, 302)
+
+
+class BillingCheckoutRegressionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='billing-user', password='pass12345')
+        self.client.force_login(self.user)
+
+    @override_settings(ALGOBOT_PRO_PRICE_CENTS=150000, ALGOBOT_BILLING_CURRENCY='KES')
+    @patch('core.views_billing.PaymentService.create_checkout_session', return_value={
+        'url': 'https://payments.example/checkout',
+        'session_id': 'session-123',
+    })
+    def test_change_plan_does_not_nest_drf_request_wrappers(self, create_checkout):
+        response = self.client.post('/billing/change-plan/', {'plan': 'PRO'}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['plan'], 'PRO')
+        self.assertEqual(response.json()['url'], 'https://payments.example/checkout')
+        create_checkout.assert_called_once()
+
+    @override_settings(ALGOBOT_PRO_PRICE_CENTS=150000, ALGOBOT_BILLING_CURRENCY='KES')
+    @patch('core.views_billing.PaymentService.create_checkout_session', return_value={
+        'url': 'https://payments.example/checkout',
+        'session_id': 'session-456',
+    })
+    def test_direct_checkout_still_uses_same_internal_flow(self, create_checkout):
+        response = self.client.post('/billing/checkout/', {'plan': 'PRO'}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['plan'], 'PRO')
+        create_checkout.assert_called_once()
 
 
 class URLSecurityTests(TestCase):
