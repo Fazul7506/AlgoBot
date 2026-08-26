@@ -1,4 +1,5 @@
 import asyncio
+from django.core.cache import cache
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -118,8 +119,15 @@ def broker_tick(request):
     if not account: return Response({"detail":"Connect a broker before requesting live broker quotes."}, status=status.HTTP_409_CONFLICT)
     if not MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists(): return Response({"detail":"The requested symbol is not in the current broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
-        if account.broker.broker_type == "deriv": data = fetch_tick(symbol)
-        else: data = asyncio.run(_bounded_market_data(BrokerRegistry().adapter(account.broker, account), symbol))
+        # Public Deriv quotes are shared market data. A very short cache absorbs
+        # duplicate requests from the terminal/chart/account widgets without
+        # weakening quote freshness or inventing a price.
+        cache_key = f"algobot:broker-quote:{account.broker.broker_type}:{symbol}"
+        data = cache.get(cache_key)
+        if data is None:
+            if account.broker.broker_type == "deriv": data = fetch_tick(symbol)
+            else: data = asyncio.run(_bounded_market_data(BrokerRegistry().adapter(account.broker, account), symbol))
+            cache.set(cache_key, data, timeout=1)
         tick = MarketDataService().tick_service.ingest({"symbol": symbol, "quote": data.get("price", data.get("quote")), "bid": data.get("bid"), "ask": data.get("ask"), "epoch": data.get("epoch"), "volume": data.get("volume", 0)})
         payload = TickSerializer(tick).data; payload.update({"broker":account.broker.name,"account_id":account.account_id,"stale":False,"source":"live_broker_quote"}); return Response(payload)
     except BrokerAuthenticationError as exc:
