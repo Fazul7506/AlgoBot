@@ -4,19 +4,31 @@ import django.db.models.deletion
 
 
 def ensure_broker_account_column(apps, schema_editor):
-    """Make the broker_account FK safe for databases with partial schema drift."""
+    """Ensure broker_account_id exists without failing on schema drift."""
     connection = schema_editor.connection
     table = 'brokers_brokerconnection'
+    cursor = connection.cursor()
     existing_columns = {
-        column.name for column in connection.introspection.get_table_description(
-            connection.cursor(), table
-        )
+        column.name
+        for column in connection.introspection.get_table_description(cursor, table)
     }
 
-    if 'broker_account_id' not in existing_columns:
-        BrokerConnection = apps.get_model('brokers', 'BrokerConnection')
-        field = BrokerConnection._meta.get_field('broker_account')
-        schema_editor.add_field(BrokerConnection, field)
+    if 'broker_account_id' in existing_columns:
+        return
+
+    quoted_table = schema_editor.quote_name(table)
+    quoted_column = schema_editor.quote_name('broker_account_id')
+    quoted_target = schema_editor.quote_name('brokers_brokeraccount')
+
+    # PostgreSQL is the production database on Render.  The equivalent
+    # nullable BIGINT foreign-key column is also valid for the supported
+    # development databases used by this project.
+    schema_editor.execute(
+        f'ALTER TABLE {quoted_table} '
+        f'ADD COLUMN {quoted_column} bigint NULL '
+        f'REFERENCES {quoted_target} ("id") '
+        f'ON DELETE CASCADE'
+    )
 
 
 def repair_duplicate_client_order_ids(apps, schema_editor):
