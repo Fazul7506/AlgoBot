@@ -6,14 +6,13 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}AlgoBot{% endblock %}</title><link rel="icon" href="{% static 'icons/favicon.ico' %}">
   <link rel="stylesheet" href="{% static 'css/design_system.css' %}"><link rel="stylesheet" href="{% static 'css/base_shell.css' %}"><link rel="stylesheet" href="{% static 'css/enterprise_templates.css' %}"><link rel="stylesheet" href="{% static 'css/ui_upgrade.css' %}"><link rel="stylesheet" href="{% static 'css/chatgpt_shell.css' %}"><link rel="stylesheet" href="{% static 'css/landing_upgrade.css' %}"><link rel="stylesheet" href="{% static 'css/deriv_workspace.css' %}?v=20260826"><link rel="stylesheet" href="{% static 'css/runtime_recovery.css' %}?v=20260825-shellfix2">
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD,opsz,20..48,100..700,0,0,1,0&display=block">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,0&display=block">
   <style>.material-symbols-rounded{font-family:'Material Symbols Rounded';font-weight:normal;font-style:normal;font-size:24px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-feature-settings:'liga';-webkit-font-smoothing:antialiased;font-feature-settings:'liga';font-variation-settings:'FILL' 0,'GRAD' 0,'opsz' 24}html[data-icons-fallback] .material-symbols-rounded{font-size:0;line-height:1;min-width:1em;min-height:1em;overflow:hidden}.brand-favicon{width:28px;height:28px;display:block;object-fit:contain;border-radius:8px}</style>
   {% block extra_css %}{% endblock %}
 </head>
 <body data-authenticated="{% if request.user.is_authenticated %}true{% else %}false{% endif %}">
 <a class="skip-link" href="#main-content">Skip to content</a>
-{% if messages %}<div class="toast-stack" aria-live="polite">{% for message in messages %}<div class="toast {{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}</div>
-{% endif %}
+{% if messages %}<div class="toast-stack" aria-live="polite">{% for message in messages %}<div class="toast {{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}</div>{% endif %}
 {% if request.user.is_authenticated %}
 <button class="mobile-menu-button" type="button" data-mobile-menu aria-controls="app-sidebar" aria-expanded="false" aria-label="Open navigation"><span class="material-symbols-rounded" aria-hidden="true">menu</span></button>
 <div class="sidebar-backdrop" data-sidebar-backdrop hidden></div><aside id="app-sidebar" class="app-sidebar" aria-label="AlgoBot workspace navigation">
