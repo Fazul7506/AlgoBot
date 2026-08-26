@@ -16,6 +16,7 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
     account_type = serializers.SerializerMethodField()
     avatar_url = serializers.SerializerMethodField()
     display_name = serializers.SerializerMethodField()
+    branding = serializers.SerializerMethodField()
     is_default = serializers.BooleanField(source="is_preferred", read_only=True)
     is_connected = serializers.SerializerMethodField()
     credential_status = serializers.CharField(read_only=True)
@@ -26,15 +27,18 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
         model = BrokerAccount
         fields = [
             "id", "user", "broker", "broker_name", "broker_account_id", "account_id",
-            "account_type", "avatar_url", "display_name", "currency", "balance", "equity",
+            "account_type", "avatar_url", "display_name", "branding", "currency", "balance", "equity",
             "margin", "free_margin", "status", "is_preferred", "is_default", "is_connected",
             "credential_status", "last_synced_at", "data_freshness", "switch_enabled", "created_at",
         ]
         read_only_fields = [
             "user", "balance", "equity", "margin", "free_margin", "last_synced_at",
-            "broker_account_id", "account_type", "avatar_url", "display_name", "is_default",
+            "broker_account_id", "account_type", "avatar_url", "display_name", "branding", "is_default",
             "is_connected", "data_freshness", "switch_enabled",
         ]
+
+    def _is_deriv(self, obj):
+        return str(obj.broker.broker_type or "").lower() == "deriv"
 
     def get_broker(self, obj):
         metadata = obj.broker.metadata or {}
@@ -47,15 +51,40 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
         }
 
     def get_account_type(self, obj):
-        return str((obj.credentials or {}).get("account_type") or "unknown").lower()
+        credentials = obj.credentials or {}
+        value = str(credentials.get("account_type") or "").lower()
+        return value if value in {"real", "demo"} else "unknown"
 
     def get_avatar_url(self, obj):
         credentials = obj.credentials or {}
         metadata = obj.broker.metadata or {}
+        # Prefer the actual broker-supplied account avatar. Never replace it
+        # with a fabricated remote image. The frontend supplies a local,
+        # deterministic Deriv fallback when the broker supplies no avatar.
         return str(credentials.get("avatar_url") or metadata.get("avatar_url") or "")
 
     def get_display_name(self, obj):
         return f"{obj.broker.name} · {obj.account_id}"
+
+    def get_branding(self, obj):
+        if self._is_deriv(obj):
+            account_type = self.get_account_type(obj)
+            return {
+                "provider": "Deriv",
+                "powered_by": "Deriv",
+                "country_code": "US",
+                "flag": "🇺🇸",
+                "account_type": account_type,
+                "label": "Deriv Demo Account" if account_type == "demo" else "Deriv Real Account" if account_type == "real" else "Deriv Account",
+            }
+        return {
+            "provider": obj.broker.name,
+            "powered_by": obj.broker.name,
+            "country_code": "",
+            "flag": "",
+            "account_type": self.get_account_type(obj),
+            "label": obj.broker.name,
+        }
 
     def get_is_connected(self, obj):
         return obj.is_connection_eligible
