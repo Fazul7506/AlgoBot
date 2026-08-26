@@ -8,8 +8,49 @@
 {% endblock %}
 {% block extra_js %}
 <script>
-(()=>{const $=(s,r=document)=>r.querySelector(s);const csrf=()=>document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1]||'';const api=async(url,opts={})=>{const r=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json',...(opts.headers||{})},...opts});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.detail||d.error||'Billing request failed');return d};const money=(c,cur)=>`${cur||'KES'} ${(Number(c||0)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;let invoices=[];async function load(){try{const [plans,status]=await Promise.all([api('/api/billing/plans/'),api('/api/billing/status/')]);renderPlans(plans.plans||[]);const s=status.subscription||{};$('[data-subscription-plan]').textContent=s.plan||'FREE';$('[data-subscription-meta]').textContent=s.is_active?`Active · ${money(s.price_cents,s.currency)}${s.expires_at?` · renews ${new Date(s.expires_at).toLocaleDateString()}`:''}`:'Inactive';invoices=status.invoices||[];$('[data-invoice-list]').innerHTML=invoices.length?invoices.map(x=>`<div class="billing-row"><span>${x.metadata?.plan||'Subscription'}</span><span>${money(x.amount_cents,x.currency)}</span><span>${x.paid?'PAID':'PENDING'}</span></div>`).join(''):'No billing records yet.'}catch(e){$('[data-plan-grid]').innerHTML=`<div class="empty-state">${e.message}</div>`}}
-function renderPlans(plans){$('[data-plan-grid]').innerHTML=plans.map(p=>`<article class="panel"><p class="eyebrow">${p.plan}</p><h2>${p.price_cents?money(p.price_cents,p.currency):'Free'}</h2><p>${p.recurring?'Recurring subscription':'No recurring charge'}</p>${p.plan==='FREE'?'<button class="btn ghost" disabled>Current free tier</button>':`<button class="btn primary" data-buy="${p.plan}">Choose ${p.plan}</button>`}</article>`).join('');document.querySelectorAll('[data-buy]').forEach(b=>b.addEventListener('click',async()=>{b.disabled=true;try{const d=await api('/api/billing/checkout/',{method:'POST',body:JSON.stringify({plan:b.dataset.buy})});if(d.url)location.assign(d.url);else throw Error(d.error||'No checkout URL returned')}catch(e){alert(e.message);b.disabled=false}}))}
-$('[data-cancel-subscription]')?.addEventListener('click',async()=>{if(!confirm('Cancel your subscription renewal?'))return;try{await api('/api/billing/subscription/cancel/',{method:'POST',body:'{}'});load()}catch(e){alert(e.message)}});load();})();
+(()=>{
+  const $=(s,r=document)=>r.querySelector(s);
+  const csrf=()=>decodeURIComponent(document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1]||'');
+  const api=async(url,opts={})=>{
+    const method=(opts.method||'GET').toUpperCase();
+    const headers={Accept:'application/json',...(opts.headers||{})};
+    if(method!=='GET') headers['X-CSRFToken']=csrf();
+    if(opts.body!==undefined && !headers['Content-Type']) headers['Content-Type']='application/json';
+    const r=await fetch(url,{credentials:'same-origin',...opts,headers});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw Error(d.detail||d.error||`Billing request failed (${r.status})`);
+    return d;
+  };
+  const money=(c,cur)=>`${cur||'KES'} ${(Number(c||0)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  let invoices=[];
+  async function load(){
+    try{
+      const [plans,status]=await Promise.all([api('/billing/plans/'),api('/billing/status/')]);
+      renderPlans(plans.plans||[]);
+      const s=status.subscription||{};
+      $('[data-subscription-plan]').textContent=s.plan||'FREE';
+      $('[data-subscription-meta]').textContent=s.is_active?`Active · ${money(s.price_cents,s.currency)}${s.expires_at?` · renews ${new Date(s.expires_at).toLocaleDateString()}`:''}`:'Inactive';
+      invoices=status.invoices||[];
+      $('[data-invoice-list]').innerHTML=invoices.length?invoices.map(x=>`<div class="billing-row"><span>${x.metadata?.plan||'Subscription'}</span><span>${money(x.amount_cents,x.currency)}</span><span>${x.paid?'PAID':'PENDING'}</span></div>`).join(''):'No billing records yet.';
+    }catch(e){
+      $('[data-plan-grid]').innerHTML=`<div class="empty-state">${e.message}</div>`;
+    }
+  }
+  function renderPlans(plans){
+    $('[data-plan-grid]').innerHTML=plans.map(p=>`<article class="panel"><p class="eyebrow">${p.plan}</p><h2>${p.price_cents?money(p.price_cents,p.currency):'Free'}</h2><p>${p.recurring?'Recurring subscription':'No recurring charge'}</p>${p.plan==='FREE'?'<button class="btn ghost" disabled>Current free tier</button>':`<button class="btn primary" data-buy="${p.plan}">Choose ${p.plan}</button>`}</article>`).join('');
+    document.querySelectorAll('[data-buy]').forEach(b=>b.addEventListener('click',async()=>{
+      b.disabled=true;
+      try{
+        const d=await api('/billing/checkout/',{method:'POST',body:JSON.stringify({plan:b.dataset.buy})});
+        if(d.url) location.assign(d.url); else throw Error(d.error||'No checkout URL returned');
+      }catch(e){alert(e.message);b.disabled=false;}
+    }));
+  }
+  $('[data-cancel-subscription]')?.addEventListener('click',async()=>{
+    if(!confirm('Cancel your subscription renewal?'))return;
+    try{await api('/api/billing/subscription/cancel/',{method:'POST',body:'{}'});load();}catch(e){alert(e.message);}
+  });
+  load();
+})();
 </script>
 {% endblock %}
