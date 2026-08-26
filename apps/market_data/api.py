@@ -44,6 +44,14 @@ def markets(request): return Response({"markets": sorted(set(MarketSymbol.object
 def symbols(request): return Response(MarketSymbolSerializer(MarketSymbol.objects.filter(is_active=True), many=True).data)
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def broker_catalogue(request):
+    """Authenticated catalogue route outside the Cloudflare-challenged legacy path."""
+    queryset = MarketSymbol.objects.filter(is_active=True, is_tradeable=True).order_by("market", "symbol")
+    data = MarketSymbolSerializer(queryset, many=True).data
+    return Response({"status": "ok", "source": "backend_market_catalogue", "symbols": data, "count": len(data)})
+
+@api_view(["GET"])
 @permission_classes([AllowAny])
 def symbol_detail(request, symbol): return Response(MarketSymbolSerializer(get_object_or_404(MarketSymbol, symbol=symbol, is_active=True)).data)
 
