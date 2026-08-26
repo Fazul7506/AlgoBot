@@ -18,7 +18,7 @@ PESAPAL_NOTIFICATION_ID = env("PESAPAL_NOTIFICATION_ID", "")
 PESAPAL_API_BASE_URL = env("PESAPAL_API_BASE_URL", "https://pay.pesapal.com/v3").rstrip("/")
 
 # Keep the provider-specific names as the source of truth, while exposing the
-generic aliases consumed by the broker abstraction layer.
+# generic aliases consumed by the broker abstraction layer.
 DERIV_OAUTH_CLIENT_ID = env("DERIV_OAUTH_CLIENT_ID", env("BROKER_OAUTH_CLIENT_ID", ""))
 DERIV_APP_ID = env("DERIV_APP_ID", env("BROKER_APP_ID", DERIV_OAUTH_CLIENT_ID))
 DERIV_REDIRECT_URI = env("DERIV_REDIRECT_URI", env("BROKER_REDIRECT_URI", ""))
