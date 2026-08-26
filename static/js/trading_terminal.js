@@ -11,8 +11,6 @@
   const api = (url, options = {}, timeout = 10000) => window.AlgoBotFrontendData.request(url, options, timeout);
   let accounts = [], direction = 'BUY', busy = false;
 
-  // Do not make the terminal wait for a separate broker-state websocket.
-  // The authenticated accounts endpoint is the source of truth for page readiness.
   const selectedAccount = () => {
     const id = $('#account')?.value;
     return accounts.find(a => String(a.id) === String(id)) || accounts.find(a => a.is_preferred || a.is_default) || accounts[0] || null;
@@ -70,9 +68,11 @@
     const select = $('#symbol'); if (!select) return '';
     const previous = select.value;
     try {
-      // This is the canonical authenticated/local catalogue route and is already registered by market_data.urls.
-      const payload = await api('/api/markets/symbols/', {}, 9000);
-      const symbols = list(payload).filter(r => r?.symbol && r.is_active !== false && r.is_tradable !== false);
+      // Use the terminal-specific authenticated catalogue: it contains only
+      // active/tradable instruments and avoids the much larger public symbol
+      // endpoint during page boot.
+      const payload = await api('/api/market/catalogue/', {}, 15000);
+      const symbols = list(payload?.symbols ?? payload).filter(r => r?.symbol && r.is_active !== false && r.is_tradable !== false);
       if (!symbols.length) throw new Error('No active tradable broker instruments are available');
       select.innerHTML = symbols.map(r => `<option value="${esc(r.symbol)}">${esc(r.display_name || r.symbol)} · ${esc(r.symbol)}</option>`).join('');
       const requested = new URLSearchParams(location.search).get('symbol');
@@ -95,7 +95,6 @@
       if (ask) ask.textContent = money(askValue);
       $('[data-chart-loading]')?.replaceChildren(document.createTextNode(tick.stale ? 'Last known broker quote · reconnecting live feed' : 'Live broker quote received'));
     } catch (e) {
-      // Try the persisted latest tick before declaring the market unavailable.
       try {
         const cached = await api(`/api/ticks/latest/?symbol=${encodeURIComponent(symbol)}`, {}, 5000);
         if (cached?.quote != null) {
@@ -139,7 +138,6 @@
       await loadAccounts();
       const symbol = await loadSymbols();
       await Promise.all([loadQuote(), loadRecords(), loadSignals()]);
-      // The chart controller listens to the symbol selection; dispatch after the catalogue exists.
       if (symbol) $('#symbol')?.dispatchEvent(new Event('change', {bubbles: true}));
     } finally { busy = false; }
   }
@@ -168,7 +166,6 @@
     document.querySelectorAll('[data-direction]').forEach(b => b.addEventListener('click', () => { direction = b.dataset.direction; document.querySelectorAll('[data-direction]').forEach(x => x.classList.toggle('active', x === b)); }));
     window.addEventListener('algobot:backend-accounts-loaded', e => { renderAccounts(e.detail); loadQuote(); loadRecords(); });
     window.addEventListener('algobot:account-synced', e => { renderAccounts((window.AlgoBotBrokerAccounts || accounts).map(a => String(a.id) === String(e.detail?.id) ? e.detail : a)); loadQuote(); loadRecords(); });
-    // Broker-state events are supplemental, never a gate for initial page data.
     window.AlgoBotBrokerState?.subscribe(() => { loadQuote(); loadRecords(); });
     refresh();
   }
