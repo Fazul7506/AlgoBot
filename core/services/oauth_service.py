@@ -91,11 +91,20 @@ class DerivOAuthService:
 
     @staticmethod
     def store_oauth_state_in_session(request, state: str, code_verifier: str, redirect_uri: str) -> None:
+        """Store OAuth state for the callback and let SessionMiddleware persist it.
+
+        Explicitly calling ``request.session.save()`` here performs a second,
+        synchronous database write before the redirect is returned. On a busy
+        production deployment that can contend with session/database writes
+        and make the OAuth start endpoint fail before the browser ever reaches
+        Deriv. SessionMiddleware already persists a modified session at the
+        end of the response, so marking it modified is sufficient and keeps
+        this redirect path lightweight.
+        """
         request.session["oauth_state"] = state
         request.session["pkce_verifier"] = code_verifier
         request.session["oauth_redirect_uri"] = redirect_uri
         request.session.modified = True
-        request.session.save()
 
     @staticmethod
     def validate_state(received_state: Optional[str], expected_state: Optional[str]) -> tuple[bool, Optional[str]]:
