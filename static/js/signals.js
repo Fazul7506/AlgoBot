@@ -16,8 +16,8 @@
     const updated = $('[data-page-updated]');
     const risk = $('[data-page-risk]');
     try {
-      if (status) status.textContent = 'Synchronizing';
-      rows = list(await window.AlgoBotFrontendData.request('/api/dashboard/signals/?limit=100'));
+      if (status) status.textContent = 'Loading backend signals';
+      rows = list(await window.AlgoBotFrontendData.request('/api/strategy-signals/?limit=100', {}, 8000));
       if (count) count.textContent = String(rows.length);
       if (updated) updated.textContent = new Date().toLocaleTimeString();
       if (risk) {
@@ -27,7 +27,7 @@
       if (status) status.textContent = 'Ready';
       if (!rows.length) {
         table.querySelector('thead').innerHTML = '';
-        table.querySelector('tbody').innerHTML = '<tr class="empty-row"><td>No broker-backed strategy signals returned.</td></tr>';
+        table.querySelector('tbody').innerHTML = '<tr class="empty-row"><td>No strategy signals returned.</td></tr>';
         return;
       }
       table.querySelector('thead').innerHTML = '<tr><th>Symbol</th><th>Direction</th><th>Confidence</th><th>Regime</th><th>Strategy</th><th>Executed</th><th>Created</th></tr>';
