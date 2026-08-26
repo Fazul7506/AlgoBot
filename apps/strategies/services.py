@@ -4,18 +4,30 @@ from .registry import registry
 from .repositories import StrategyRepository, StrategyExecutionRepository, StrategySignalRepository, StrategyPerformanceRepository
 from .validator import StrategyValidationService
 log=logging.getLogger(__name__)
+
 class StrategyService:
     def sync_catalog(self): return [StrategyRepository().create_or_update_catalog(cls) for cls in registry.all().values()]
+
 class StrategyExecutionService:
     def run_configuration(self, config, market_data=None, indicator_data=None):
         start=time.perf_counter(); execution=StrategyExecutionRepository().create(strategy=config.strategy,configuration=config,symbol=config.symbol,timeframe=config.timeframe,status='running')
         try:
             cls=registry.get(config.strategy.slug); strat=cls(config, market_data or {}, indicator_data or {}); strat.initialize(); strat.validate(); result=strat.execute(); StrategyValidationService().validate_signal(result['signal'])
+            ai_enabled=(config.parameters or {}).get('ai_ensemble_enabled', True)
+            ai_consensus=None
+            if ai_enabled:
+                from apps.ai_engine.services import PredictionService, RecommendationService
+                ai_context={'market_data':market_data or {},'indicators':indicator_data or {},'strategy':{'confidence':result.get('confidence',0)},'risk':(config.parameters or {}).get('risk',{})}
+                prediction=PredictionService().predict(config.symbol, config.timeframe, ai_context)
+                recommendation=RecommendationService().recommend(config.symbol, prediction)
+                ai_consensus=(prediction.payload or {}).get('consensus') or {}
+                result={**result,'strategy_signal':result['signal'],'strategy_confidence':result.get('confidence',0),'signal':recommendation.recommendation if recommendation.recommendation in {'BUY','SELL'} else 'HOLD','confidence':recommendation.confidence,'ai_consensus':ai_consensus,'ai_prediction_id':prediction.pk,'ai_recommendation_id':recommendation.pk}
             execution.signal=result['signal']; execution.confidence=result['confidence']; execution.status='completed'; execution.completed_at=timezone.now(); execution.latency_ms=(time.perf_counter()-start)*1000; execution.context=result; execution.save()
             StrategySignalRepository().create(strategy=config.strategy,configuration=config,symbol=config.symbol,signal=result['signal'],confidence=result['confidence'],entry_price=result.get('entry_price'),stop_loss=result.get('stop_loss'),take_profit=result.get('take_profit'),metadata=result)
-            log.info('Strategy execution completed', extra={'strategy':config.strategy.slug,'signal':result['signal']}); return execution
+            log.info('Strategy execution completed', extra={'strategy':config.strategy.slug,'signal':result['signal'],'ai_ensemble':bool(ai_consensus)}); return execution
         except Exception as exc:
             execution.status='failed'; execution.error=str(exc); execution.completed_at=timezone.now(); execution.latency_ms=(time.perf_counter()-start)*1000; execution.save(); log.exception('Strategy execution failed'); return execution
+
 class StrategyPerformanceService:
     def recalculate(self, strategy):
         perf=StrategyPerformanceRepository().for_strategy(strategy); qs=strategy.executions.filter(status='completed').exclude(signal='HOLD'); perf.total_trades=qs.count(); perf.wins=strategy.executions.filter(context__outcome='win').count(); perf.losses=strategy.executions.filter(context__outcome='loss').count(); perf.win_rate=(perf.wins/perf.total_trades*100) if perf.total_trades else 0; perf.last_updated=timezone.now(); perf.save(); return perf
