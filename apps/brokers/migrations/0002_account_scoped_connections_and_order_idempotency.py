@@ -3,10 +3,28 @@ from django.db.models import Q
 import django.db.models.deletion
 
 
+def ensure_broker_account_column(apps, schema_editor):
+    """Make the broker_account FK safe for databases with partial schema drift."""
+    connection = schema_editor.connection
+    table = 'brokers_brokerconnection'
+    existing_columns = {
+        column.name for column in connection.introspection.get_table_description(
+            connection.cursor(), table
+        )
+    }
+
+    if 'broker_account_id' not in existing_columns:
+        BrokerConnection = apps.get_model('brokers', 'BrokerConnection')
+        field = BrokerConnection._meta.get_field('broker_account')
+        schema_editor.add_field(BrokerConnection, field)
+
+
 def repair_duplicate_client_order_ids(apps, schema_editor):
     Order = apps.get_model('brokers', 'Order')
     seen = set()
-    queryset = Order.objects.exclude(client_order_id='').order_by('user_id', 'account_id', 'client_order_id', 'id')
+    queryset = Order.objects.exclude(client_order_id='').order_by(
+        'user_id', 'account_id', 'client_order_id', 'id'
+    )
     for order in queryset.iterator():
         key = (order.user_id, order.account_id, order.client_order_id)
         if key not in seen:
@@ -22,25 +40,44 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(
+                    ensure_broker_account_column,
+                    migrations.RunPython.noop,
+                ),
+            ],
+            state_operations=[
+                migrations.AddField(
+                    model_name='brokerconnection',
+                    name='broker_account',
+                    field=models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='connections',
+                        to='brokers.brokeraccount',
+                    ),
+                ),
+            ],
+        ),
+        migrations.AddIndex(
             model_name='brokerconnection',
-            name='broker_account',
-            field=models.ForeignKey(
-                blank=True,
-                null=True,
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name='connections',
-                to='brokers.brokeraccount',
+            index=models.Index(
+                fields=['broker_account', 'status'],
+                name='brokers_bro_account__f3e4a0_idx',
             ),
         ),
-        migrations.AddIndex(
-            model_name='brokerconnection',
-            index=models.Index(fields=['broker_account', 'status'], name='brokers_bro_account__f3e4a0_idx'),
+        migrations.RunPython(
+            repair_duplicate_client_order_ids,
+            migrations.RunPython.noop,
         ),
-        migrations.RunPython(repair_duplicate_client_order_ids, migrations.RunPython.noop),
         migrations.AddIndex(
             model_name='order',
-            index=models.Index(fields=['account', 'status'], name='brokers_ord_account__d1f2c7_idx'),
+            index=models.Index(
+                fields=['account', 'status'],
+                name='brokers_ord_account__d1f2c7_idx',
+            ),
         ),
         migrations.AddConstraint(
             model_name='brokerconnection',
