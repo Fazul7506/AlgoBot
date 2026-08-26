@@ -26,6 +26,7 @@ from trading.views.indicators import (
 )
 from trading.strategies.strategy_api import StrategyViewSet
 from apps.market_data.web_views import market_catalogue
+from apps.market_data.signal_views import strategy_signals
 
 from core.views import (
     deriv_login, broker_connect_page, broker_marketplace_page,
@@ -134,6 +135,7 @@ urlpatterns = [
     path('api/', include('apps.automation.urls')),
     path('api/', include('apps.notifications.urls')),
     path('api/', include('apps.deployment.urls')),
+    path('api/strategy-signals/', strategy_signals, name='strategy_signals'),
     path('api/', include(router.urls)),
     path('webhooks/intasend/', intasend_webhook, name='intasend_webhook'),
     path('webhooks/pesapal/', pesapal_webhook, name='pesapal_webhook'),
