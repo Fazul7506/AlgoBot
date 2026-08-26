@@ -32,7 +32,8 @@ def _stale_tick_response(tick, account):
     return Response(payload, status=status.HTTP_200_OK)
 
 
-async def _bounded_market_data(adapter, symbol, timeout=7.0): return await asyncio.wait_for(adapter.get_market_data(symbol), timeout=timeout)
+async def _bounded_market_data(adapter, symbol, timeout=7.0):
+    return await asyncio.wait_for(adapter.get_market_data(symbol), timeout=timeout)
 
 
 @api_view(["GET"])
@@ -46,10 +47,13 @@ def symbols(request): return Response(MarketSymbolSerializer(MarketSymbol.object
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def broker_catalogue(request):
-    """Authenticated catalogue route outside the Cloudflare-challenged legacy path."""
-    queryset = MarketSymbol.objects.filter(is_active=True, is_tradeable=True).order_by("market", "symbol")
-    data = MarketSymbolSerializer(queryset, many=True).data
-    return Response({"status": "ok", "source": "backend_market_catalogue", "symbols": data, "count": len(data)})
+    """Return the authenticated broker catalogue from the local market registry."""
+    try:
+        queryset = MarketSymbol.objects.filter(is_active=True, is_tradable=True).order_by("market", "symbol")
+        data = MarketSymbolSerializer(queryset, many=True).data
+        return Response({"status": "ok", "source": "backend_market_catalogue", "symbols": data, "count": len(data)})
+    except Exception as exc:
+        return Response({"status": "error", "code": "MARKET_CATALOGUE_READ_FAILED", "detail": "Market catalogue could not be read.", "error_type": exc.__class__.__name__}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -125,21 +129,21 @@ def broker_tick(request):
     except Exception:
         cached = _last_known_tick(symbol); return _stale_tick_response(cached, account) if cached else Response({"status":"error","code":"BROKER_TICK_FAILED","detail":"Broker market data request failed."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def broker_chart_capabilities(request):
     account = _connected_account(request.user)
     if not account: return Response({"detail":"Connect a broker before loading chart capabilities."}, status=status.HTTP_409_CONFLICT)
-    adapter = BrokerRegistry().adapter(account.broker, account)
-    if not hasattr(adapter, "get_chart_capabilities"):
-        return Response({"broker": account.broker.name, "modes": [], "timeframes": []})
-    return Response(awaitable_to_sync(adapter.get_chart_capabilities()))
+    try:
+        adapter = BrokerRegistry().adapter(account.broker, account)
+        if not hasattr(adapter, "get_chart_capabilities"):
+            return Response({"broker": account.broker.name, "modes": ["ticks", "candles"], "timeframes": ["M1", "M5", "M15", "M30", "H1", "H4", "D1"], "source": "backend_default"})
+        return Response(awaitable_to_sync(adapter.get_chart_capabilities()))
+    except Exception:
+        return Response({"broker": account.broker.name, "modes": ["ticks", "candles"], "timeframes": ["M1", "M5", "M15", "M30", "H1", "H4", "D1"], "source": "safe_backend_fallback", "stale": True}, status=status.HTTP_200_OK)
 
 
-def awaitable_to_sync(awaitable):
-    return asyncio.run(asyncio.wait_for(awaitable, timeout=7.0))
-
+def awaitable_to_sync(awaitable): return asyncio.run(asyncio.wait_for(awaitable, timeout=7.0))
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -153,8 +157,7 @@ def broker_chart_history(request):
     if not account: return Response({"detail":"Connect a broker before loading live chart history."}, status=status.HTTP_409_CONFLICT)
     try:
         adapter = BrokerRegistry().adapter(account.broker, account)
-        if not hasattr(adapter, "get_chart_history"):
-            return Response({"detail":"The connected broker does not expose chart history through its adapter."}, status=status.HTTP_409_CONFLICT)
+        if not hasattr(adapter, "get_chart_history"): return Response({"detail":"The connected broker does not expose chart history through its adapter."}, status=status.HTTP_409_CONFLICT)
         data = awaitable_to_sync(adapter.get_chart_history(symbol, mode=mode, count=_limit(request, 120, 1000), granularity=granularity))
         data.update({"broker": account.broker.name, "account_id": account.account_id, "source": "live_broker"})
         return Response(data)
