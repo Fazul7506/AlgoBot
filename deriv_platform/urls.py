@@ -153,6 +153,7 @@ urlpatterns = [
     path('api/', include('apps.brokers.urls')),
     path('api/', include('apps.execution.urls')),
     path('api/', include('apps.market_data.urls')),
+    path('api/', include('apps.ai_engine.urls')),
     path('api/developer/', include('apps.developer.urls')),
     path('api/', include('apps.indicators.urls')),
     path('api/', include('apps.risk.urls')),
