@@ -1,11 +1,12 @@
-"""AI market-data ingestion and training-dataset preparation.
+"""Broker-agnostic AI training data pipeline.
 
-Broker adapters normalize data into market_data.Candle/Tick records. This
-service reads that canonical store so the AI remains broker-agnostic.
+Broker adapters normalize data into market_data.Candle/Tick records. The AI
+reads only this canonical store, keeping provider payloads out of models.
 """
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 
 from django.utils import timezone
 
@@ -14,6 +15,8 @@ from apps.market_data.models import Candle, MarketSymbol, Tick
 
 class AIDataPipeline:
     """Read canonical broker data and prepare deterministic training snapshots."""
+
+    MIN_CANDLES = 250
 
     def snapshot(self, timeframe="M1", lookback_hours=168, symbol=None):
         cutoff = timezone.now() - timedelta(hours=lookback_hours)
@@ -60,5 +63,29 @@ class AIDataPipeline:
             "rows": len(rows),
             "brokers": sorted({row["broker"] for row in rows}),
             "symbols": sorted({row["symbol"] for row in rows}),
-            "ready": bool(rows),
+            "ready": len(rows) >= self.MIN_CANDLES,
+        }
+
+    def dataset(self, symbol, timeframe="M1", limit=5000):
+        """Return chronologically ordered OHLCV rows for model construction."""
+        market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
+        if not market_symbol:
+            raise ValueError(f"Unknown active market symbol: {symbol}")
+        return list(
+            Candle.objects.filter(symbol=market_symbol, timeframe=timeframe)
+            .order_by("epoch")
+            .values("epoch", "open", "high", "low", "close", "volume")[:limit]
+        )
+
+    def dataset_metadata(self, symbol, timeframe="M1") -> dict[str, Any]:
+        """Return provenance information to store alongside a trained model."""
+        market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
+        if not market_symbol:
+            raise ValueError(f"Unknown active market symbol: {symbol}")
+        return {
+            "broker": market_symbol.broker,
+            "symbol": market_symbol.symbol,
+            "timeframe": timeframe,
+            "source": "market_data.Candle",
+            "generated_at": timezone.now().isoformat(),
         }
