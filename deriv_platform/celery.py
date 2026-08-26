@@ -9,13 +9,18 @@ app = Celery('deriv_platform')
 app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks()
 
-# AI learning loop. Broker adapters write canonical ticks/candles first; these
-# jobs inspect that shared data store and train validated models from it.
+# AI learning loop. Broker adapters write canonical ticks/candles first; AI
+# records predictions, resolves matured outcomes, then retrains validated models.
 app.conf.beat_schedule = {
     'ai-data-health-every-15-minutes': {
         'task': 'apps.ai_engine.tasks.check_ai_data_health',
         'schedule': crontab(minute='*/15'),
         'kwargs': {'timeframe': 'M1'},
+    },
+    'ai-resolve-predictions-every-5-minutes': {
+        'task': 'apps.ai_engine.tasks.resolve_prediction_outcomes',
+        'schedule': crontab(minute='*/5'),
+        'kwargs': {'timeframe': 'M1', 'horizon_candles': 1, 'batch_size': 500},
     },
     'ai-training-every-6-hours': {
         'task': 'apps.ai_engine.tasks.scheduled_ai_training',
