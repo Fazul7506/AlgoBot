@@ -22,10 +22,11 @@ class BrokerConnectionActivationTests(TestCase):
             user=self.user,
             broker=self.broker,
             account_id='CRTEST123',
-            access_token='encrypted-test-token',
             token_status='active',
             status='active',
         )
+        self.account.set_access_token('test-token')
+        self.account.save(update_fields=['access_token'])
 
     def test_connect_endpoint_creates_connected_account_state(self):
         connection = BrokerConnection.objects.create(
@@ -47,7 +48,7 @@ class BrokerConnectionActivationTests(TestCase):
         self.assertTrue(response.json()['account']['is_connected'])
         self.assertEqual(response.json()['connection']['status'], 'connected')
 
-    def test_connected_state_is_authoritative_in_account_serializer(self):
+    def test_connected_state_is_authoritative_in_account_model(self):
         self.assertFalse(BrokerConnection.objects.filter(broker_account=self.account, status='connected').exists())
         connection = BrokerConnection.objects.create(
             broker=self.broker,
