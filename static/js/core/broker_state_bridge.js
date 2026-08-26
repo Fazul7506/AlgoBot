@@ -13,12 +13,15 @@
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(url, { credentials:'same-origin', headers:{Accept:'application/json',...(options.headers||{})}, cache:'no-store', signal:controller.signal, __algoTimeoutMs:timeoutMs, ...options });
+      const response = await fetch(url, { credentials:'same-origin', headers:{Accept:'application/json',...(options.headers||{})}, cache:'no-store', signal:controller.signal, ...options });
       let payload = null; try { payload = await response.json(); } catch (_) {}
-      if (!response.ok) { const detail=payload?.detail || `Broker request failed (${response.status})`; const error=new Error(detail); error.status=response.status; error.payload=payload; throw error; }
+      if (!response.ok) {
+        const detail=payload?.detail || `Broker request failed (${response.status})`;
+        const error=new Error(detail); error.status=response.status; error.payload=payload; throw error;
+      }
       return payload;
     } catch (error) {
-      if (error?.name === 'AbortError' || error?.name === 'AlgoBotTimeoutError') { error.code='BROKER_SYNC_TIMEOUT'; }
+      if (error?.name === 'AbortError' || error?.name === 'AlgoBotTimeoutError') error.code='BROKER_SYNC_TIMEOUT';
       throw error;
     } finally { clearTimeout(timeout); }
   }
@@ -45,14 +48,21 @@
     }
     store.transition(store.STATES.SYNCING,{account},'broker-live-verification-started');
     try{
-      const payload=await requestJson(`/api/brokers/accounts/${encodeURIComponent(account.id)}/sync/`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken()}},25000);
-      const verified=payload?.account; if(!verified) throw new Error('Backend broker synchronization returned no account payload.');
+      // OAuth proves authorization; this endpoint is the canonical account-scoped
+      // live connection path used by the backend. Do not mark an account connected
+      // merely because the OAuth token exists or because an HTTP balance endpoint works.
+      const payload=await requestJson('/api/brokers/connect/',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken()},
+        body:JSON.stringify({broker_id:account.broker.id,account_id:account.id})
+      },25000);
+      const verified=payload?.account; if(!verified) throw new Error('Backend broker connection returned no account payload.');
       store.setAccount(verified,'broker-live-verified');
       window.dispatchEvent(new CustomEvent('algobot:account-synced',{detail:verified})); return verified;
     }catch(error){
       const brokerStatus=error.payload?.broker_status, current=store.get();
       const state=(error.status===401||brokerStatus==='credentials_expired')?store.STATES.ERROR:(error.status===409?store.STATES.DISCONNECTED:(error.status===503||error.status===504||brokerStatus==='unavailable'||brokerStatus==='sync_timeout'||error.code==='BROKER_SYNC_TIMEOUT'?store.STATES.DEGRADED:store.STATES.ERROR));
-      store.transition(state,{account:current.account||account,lastError:error.code==='BROKER_SYNC_TIMEOUT'?'Broker synchronization timed out.':error.message},'broker-live-verification-failed');
+      store.transition(state,{account:current.account||account,lastError:error.code==='BROKER_SYNC_TIMEOUT'?'Broker connection timed out.':error.message},'broker-live-verification-failed');
       window.dispatchEvent(new CustomEvent('algobot:account-sync-error',{detail:{error,account:current.account||account}})); return current.account||account;
     }
   }
@@ -84,6 +94,6 @@
   window.AlgoBotBrokerSync=syncFromBackend;
   window.addEventListener('algobot:account-changed',event=>{if(window.AlgoBotBrokerState&&event.detail)window.AlgoBotBrokerState.setAccount(event.detail,'account-changed');knownAccounts=knownAccounts.map(a=>String(a.id)===String(event.detail?.id)?event.detail:{...a,is_preferred:false});window.AlgoBotBrokerAccounts=knownAccounts.slice();});
   window.addEventListener('algobot:account-synced',event=>{if(window.AlgoBotBrokerState&&event.detail)window.AlgoBotBrokerState.setAccount(event.detail,'account-synced');knownAccounts=knownAccounts.map(a=>String(a.id)===String(event.detail?.id)?event.detail:a);window.AlgoBotBrokerAccounts=knownAccounts.slice();});
-  window.addEventListener('algobot:account-sync-error',event=>{if(window.AlgoBotBrokerState){const s=window.AlgoBotBrokerState.get();window.AlgoBotBrokerState.transition(window.AlgoBotBrokerState.STATES.DEGRADED,{account:s.account,lastError:event.detail?.error?.message||'Broker synchronization failed'},'account-sync-error');}});
+  window.addEventListener('algobot:account-sync-error',event=>{if(window.AlgoBotBrokerState){const s=window.AlgoBotBrokerState.get();window.AlgoBotBrokerState.transition(window.AlgoBotBrokerState.STATES.DEGRADED,{account:s.account,lastError:event.detail?.error?.message||'Broker connection failed'},'account-sync-error');}});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule,{once:true});else schedule();
 })();
