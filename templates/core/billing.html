@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Billing & subscriptions | AlgoBot{% endblock %}
 {% block content %}
-<section class="enterprise-hero"><div><p class="eyebrow">ACCOUNT BILLING</p><h1>Plans &amp; subscription</h1><p class="hero-copy">Choose a configured AlgoBot plan, pay through the available gateway, and reconcile the provider status before your account is upgraded.</p></div></section>
+<section class="enterprise-hero"><div><p class="eyebrow">ACCOUNT BILLING</p><h1>Plans &amp; subscription</h1><p class="hero-copy">Choose a plan, switch tiers at any time, and complete paid changes through the configured payment gateway.</p></div></section>
 <section class="card-grid" data-plan-grid><div class="empty-state">Loading plans…</div></section>
 <section class="panel" style="margin-top:18px"><div class="section-heading"><div><p class="eyebrow">CURRENT SUBSCRIPTION</p><h2 data-subscription-plan>Loading…</h2></div><button class="btn danger" type="button" data-cancel-subscription>Cancel renewal</button></div><p data-subscription-meta>Checking billing status…</p></section>
 <section class="panel" style="margin-top:18px"><p class="eyebrow">RECENT PAYMENTS</p><div data-invoice-list class="empty-state">Loading billing history…</div></section>
@@ -21,31 +21,47 @@
     if(!r.ok) throw Error(d.detail||d.error||`Billing request failed (${r.status})`);
     return d;
   };
-  const money=(c,cur)=>`${cur||'KES'} ${(Number(c||0)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-  let invoices=[];
+  const money=(c,cur)=>c==null?'Price not configured':`${cur||'KES'} ${(Number(c)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  let currentPlan='FREE';
+
   async function load(){
     try{
-      const [plans,status]=await Promise.all([api('/billing/plans/'),api('/billing/status/')]);
-      renderPlans(plans.plans||[]);
+      const status=await api('/billing/status/');
       const s=status.subscription||{};
-      $('[data-subscription-plan]').textContent=s.plan||'FREE';
+      currentPlan=s.plan||'FREE';
+      $('[data-subscription-plan]').textContent=currentPlan;
       $('[data-subscription-meta]').textContent=s.is_active?`Active · ${money(s.price_cents,s.currency)}${s.expires_at?` · renews ${new Date(s.expires_at).toLocaleDateString()}`:''}`:'Inactive';
-      invoices=status.invoices||[];
+      const plans=status.plans||[];
+      renderPlans(plans);
+      const invoices=status.invoices||[];
       $('[data-invoice-list]').innerHTML=invoices.length?invoices.map(x=>`<div class="billing-row"><span>${x.metadata?.plan||'Subscription'}</span><span>${money(x.amount_cents,x.currency)}</span><span>${x.paid?'PAID':'PENDING'}</span></div>`).join(''):'No billing records yet.';
-    }catch(e){
-      $('[data-plan-grid]').innerHTML=`<div class="empty-state">${e.message}</div>`;
-    }
+    }catch(e){ $('[data-plan-grid]').innerHTML=`<div class="empty-state">${e.message}</div>`; }
   }
+
   function renderPlans(plans){
-    $('[data-plan-grid]').innerHTML=plans.map(p=>`<article class="panel"><p class="eyebrow">${p.plan}</p><h2>${p.price_cents?money(p.price_cents,p.currency):'Free'}</h2><p>${p.recurring?'Recurring subscription':'No recurring charge'}</p>${p.plan==='FREE'?'<button class="btn ghost" disabled>Current free tier</button>':`<button class="btn primary" data-buy="${p.plan}">Choose ${p.plan}</button>`}</article>`).join('');
-    document.querySelectorAll('[data-buy]').forEach(b=>b.addEventListener('click',async()=>{
-      b.disabled=true;
-      try{
-        const d=await api('/billing/checkout/',{method:'POST',body:JSON.stringify({plan:b.dataset.buy})});
-        if(d.url) location.assign(d.url); else throw Error(d.error||'No checkout URL returned');
-      }catch(e){alert(e.message);b.disabled=false;}
-    }));
+    $('[data-plan-grid]').innerHTML=plans.map(p=>{
+      const isCurrent=p.plan===currentPlan;
+      const unavailable=p.plan!=='FREE' && !p.configured;
+      let button;
+      if(isCurrent) button='<button class="btn ghost" disabled>Current plan</button>';
+      else if(unavailable) button='<button class="btn ghost" disabled>Not configured</button>';
+      else button=`<button class="btn primary" data-change-plan="${p.plan}">${p.plan==='FREE'?'Switch to FREE':`Switch to ${p.plan}`}</button>`;
+      return `<article class="panel"><p class="eyebrow">${p.plan}</p><h2>${money(p.price_cents,p.currency)}</h2><p>${p.recurring?'Recurring subscription':'No recurring charge'}</p>${button}${unavailable?'<small>Set this plan price in the deployment environment to enable checkout.</small>':''}</article>`;
+    }).join('');
+    document.querySelectorAll('[data-change-plan]').forEach(b=>b.addEventListener('click',()=>changePlan(b)));
   }
+
+  async function changePlan(button){
+    const plan=button.dataset.changePlan;
+    if(!confirm(`Change your AlgoBot plan to ${plan}?`)) return;
+    button.disabled=true;
+    try{
+      const d=await api('/billing/change-plan/',{method:'POST',body:JSON.stringify({plan})});
+      if(d.url) location.assign(d.url);
+      else await load();
+    }catch(e){alert(e.message);button.disabled=false;}
+  }
+
   $('[data-cancel-subscription]')?.addEventListener('click',async()=>{
     if(!confirm('Cancel your subscription renewal?'))return;
     try{await api('/api/billing/subscription/cancel/',{method:'POST',body:'{}'});load();}catch(e){alert(e.message);}
