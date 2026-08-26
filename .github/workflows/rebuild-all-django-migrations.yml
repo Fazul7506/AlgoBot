@@ -1,24 +1,26 @@
-name: Rebuild All Django Migrations
+name: Validate Django Migrations
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: rebuild-all-django-migrations
-  cancel-in-progress: false
+  group: validate-django-migrations
+  cancel-in-progress: true
 
 jobs:
-  rebuild:
+  validate:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       DJANGO_ENV: development
-      SECRET_KEY: ci-migration-rebuild-key
+      SECRET_KEY: ci-migration-validation-key
       DEBUG: "True"
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
@@ -27,7 +29,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -41,47 +43,19 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements/base.txt
 
-      - name: Remove stale project migration files
+      - name: Validate migration graph without rewriting it
+        run: |
+          python manage.py makemigrations --check --noinput --verbosity 1
+          python manage.py showmigrations --plan
+          python manage.py check --deploy
+
+      - name: Verify migration files are tracked
         run: |
           python - <<'PY'
           import os
           from pathlib import Path
-          import django
           os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deriv_platform.settings")
-          django.setup()
-          from django.apps import apps
-
-          django_apps = {"admin", "auth", "contenttypes", "sessions", "messages", "staticfiles"}
-          removed = []
-          for config in apps.get_app_configs():
-              if config.label in django_apps:
-                  continue
-              migration_dir = Path(config.path) / "migrations"
-              if not migration_dir.exists():
-                  migration_dir.mkdir(parents=True, exist_ok=True)
-              init = migration_dir / "__init__.py"
-              init.touch(exist_ok=True)
-              for path in migration_dir.glob("*.py"):
-                  if path.name != "__init__.py":
-                      path.unlink()
-                      removed.append(str(path))
-          print(f"Removed {len(removed)} stale project migration files.")
-          for path in removed:
-              print(path)
-          PY
-
-      - name: Generate complete initial migrations for every model-bearing app
-        run: |
-          python manage.py makemigrations --noinput --verbosity 1
-          python manage.py makemigrations --check --noinput
-
-      - name: Verify every model-bearing app has migrations
-        run: |
-          python - <<'PY'
-          import os
-          from pathlib import Path
           import django
-          os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deriv_platform.settings")
           django.setup()
           from django.apps import apps
 
@@ -89,27 +63,16 @@ jobs:
           for config in apps.get_app_configs():
               if config.name.startswith("django."):
                   continue
-              models = list(config.get_models())
-              if not models:
+              if not list(config.get_models()):
                   continue
               migration_dir = Path(config.path) / "migrations"
               migrations = [p for p in migration_dir.glob("*.py") if p.name != "__init__.py"] if migration_dir.exists() else []
-              print(f"{config.label}: {len(models)} models, {len(migrations)} migrations")
+              print(f"{config.label}: {len(migrations)} migration file(s)")
               if not migrations:
                   failures.append(config.label)
           if failures:
               raise SystemExit("Missing migrations for model-bearing apps: " + ", ".join(failures))
           PY
-          python manage.py showmigrations
 
-      - name: Persist all migrations to main
-        run: |
-          git add -A -- '**/migrations/*.py' '**/migrations/__init__.py'
-          if git diff --cached --quiet; then
-            echo "No migration changes detected."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "chore: rebuild complete Django migration graph [skip ci]"
-            git push origin HEAD:main
-          fi
+      # This workflow intentionally NEVER deletes, regenerates, commits, or pushes
+      # migration files. Production migration history must remain immutable.
