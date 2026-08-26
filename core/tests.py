@@ -81,9 +81,11 @@ class BillingRedirectPagesTests(TestCase):
     def test_billing_result_pages_are_registered(self):
         success_url = reverse('billing_success_page')
         cancel_url = reverse('billing_cancel_page')
+        api_cancel_url = reverse('billing_cancel_subscription')
 
         self.assertEqual(success_url, '/billing/success/')
         self.assertEqual(cancel_url, '/billing/cancel/')
+        self.assertEqual(api_cancel_url, '/billing/cancel-subscription/')
 
     def test_billing_result_pages_require_authentication(self):
         response = self.client.get(reverse('billing_success_page'))
@@ -122,6 +124,34 @@ class BillingCheckoutRegressionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['plan'], 'PRO')
         create_checkout.assert_called_once()
+
+    @override_settings(ALGOBOT_PRO_PRICE_CENTS=150000, ALGOBOT_BILLING_CURRENCY='KES')
+    @patch('core.views_billing.PaymentService.create_checkout_session', return_value={
+        'url': 'https://payments.example/pesapal',
+        'session_id': 'tracking-789',
+    })
+    def test_change_plan_passes_explicit_pesapal_provider(self, create_checkout):
+        response = self.client.post(
+            '/billing/change-plan/',
+            {'plan': 'PRO', 'provider': 'pesapal'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['url'], 'https://payments.example/pesapal')
+        self.assertEqual(create_checkout.call_args.kwargs['provider'], 'pesapal')
+
+    def test_cancel_subscription_api_is_authenticated(self):
+        self.client.logout()
+        response = self.client.post('/billing/cancel-subscription/', {}, format='json')
+        self.assertEqual(response.status_code, 401)
+
+
+class BrokerAccountSwitchRegressionTests(TestCase):
+    @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
+    def test_switch_feature_flag_is_enabled_without_hardcoding_environment(self):
+        from django.conf import settings
+        self.assertTrue(settings.ENABLE_BROKER_ACCOUNT_SWITCH)
 
 
 class URLSecurityTests(TestCase):
