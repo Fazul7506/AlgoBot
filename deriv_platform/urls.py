@@ -2,12 +2,12 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
+from django.views.decorators.http import require_GET
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
-# API imports
 from core.views_auth import (
     CustomTokenObtainPairView, register, login_view, change_password,
     UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet
@@ -27,7 +27,6 @@ from trading.views.indicators import (
 )
 from trading.strategies.strategy_api import StrategyViewSet
 
-# Frontend page imports
 from core.views import (
     deriv_login, broker_connect_page, broker_marketplace_page,
     home, login_page, register_page, dashboard_page, markets_page,
@@ -43,36 +42,25 @@ from core.views_trade_history import trade_history_page
 from core.views_automation import workflow_templates_page
 from core.views_broker_oauth import callback
 from core.views_payment import intasend_webhook, pesapal_webhook, pesapal_callback
-from core.views_billing import billing_plans, billing_status, billing_checkout, billing_reconcile, billing_cancel
+from core.views_billing import billing_plans, billing_status, billing_checkout, billing_change_plan, billing_reconcile, billing_cancel
 
-# Setup routers
 router = DefaultRouter()
-
-# Auth & Profile
 router.register(r'profile', UserProfileViewSet, basename='profile')
 router.register(r'bot-settings', BotSettingsViewSet, basename='bot-settings')
 router.register(r'subscription', SubscriptionViewSet, basename='subscription')
-
-# Dashboard & Notifications
 router.register(r'dashboard', DashboardViewSet, basename='dashboard')
 router.register(r'notifications', NotificationViewSet, basename='notifications')
-
-# Market Data
 router.register(r'market/symbols', MarketSymbolViewSet, basename='market-symbols')
 router.register(r'market/price-history', PriceHistoryViewSet, basename='market-price-history')
 router.register(r'market/snapshots', MarketSnapshotViewSet, basename='market-snapshots')
 router.register(r'market/ticks', TickDataViewSet, basename='market-ticks')
 router.register(r'market/streams', DataStreamSessionViewSet, basename='market-streams')
 router.register(r'market/regime', MarketRegimeViewSet, basename='market-regime')
-
-# Indicators & Signals
 router.register(r'market/indicators', IndicatorValueViewSet, basename='indicators')
 router.register(r'market/signals', TechnicalSignalViewSet, basename='signals')
 router.register(r'market/indicator-profiles', IndicatorProfileViewSet, basename='indicator-profiles')
 router.register(r'market/indicator-alerts', IndicatorAlertViewSet, basename='indicator-alerts')
 router.register(r'market/indicator-dashboard', IndicatorDashboardViewSet, basename='indicator-dashboard')
-
-# Strategies & Copy Trading
 router.register(r'strategies', StrategyViewSet, basename='strategies')
 router.register(r'copy-trading', CopyTradingViewSet, basename='copy-trading')
 
@@ -108,6 +96,7 @@ urlpatterns = [
     path('billing/plans/', billing_plans, name='billing_plans'),
     path('billing/status/', billing_status, name='billing_status'),
     path('billing/checkout/', billing_checkout, name='billing_checkout'),
+    path('billing/change-plan/', billing_change_plan, name='billing_change_plan'),
     path('billing/reconcile/', billing_reconcile, name='billing_reconcile'),
     path('billing/cancel/', login_required(billing_cancel_page), name='billing_cancel_page'),
     path('billing/success/', login_required(billing_success_page), name='billing_success_page'),
