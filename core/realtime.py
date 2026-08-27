@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from decimal import Decimal
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.core.cache import cache
 from django.utils import timezone
 
 
@@ -12,7 +12,8 @@ class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
     """Authenticated, broker-independent websocket endpoint.
 
     The browser subscribes to resources and receives authoritative data already
-    persisted by backend services. No broker API is called from the websocket layer.
+    persisted by backend services. Market ticks are briefly coalesced so many
+    browser clients cannot create a new broker connection every second.
     """
 
     resource = ""
@@ -69,10 +70,6 @@ class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
         while True:
             if not self.symbol:
                 return
-            # Fetch through the selected broker account before broadcasting.
-            # The WebSocket is therefore a real-time view of broker data rather
-            # than a passive stream of whichever historical tick happened to be
-            # in the database.
             tick = await self.live_tick(self.symbol)
             if tick and tick["epoch"] != last_epoch:
                 last_epoch = tick["epoch"]
@@ -97,9 +94,16 @@ class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
             BrokerAccount.objects.filter(user=self.scope["user"], status="active", broker__status="active")
             .select_related("broker").order_by("-is_preferred", "-id").first()
         )
+        if not account:
+            return None
+
+        cache_key = f"algobot:realtime:broker-quote:{account.broker.broker_type}:{symbol}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        tick = None
         try:
-            if not account:
-                return None
             if account.broker.broker_type == "deriv":
                 data = fetch_tick(symbol)
             else:
@@ -111,12 +115,11 @@ class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
                 "epoch": data.get("epoch"), "volume": data.get("volume", 0),
             })
         except (BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, RuntimeError, OSError, ValueError, TimeoutError):
-            # Preserve the last known quote during a temporary broker outage;
-            # clients can keep their chart visible while reconnecting.
             tick = Tick.objects.filter(symbol__symbol=symbol).select_related("symbol").order_by("-epoch", "-id").first()
         if not tick:
             return None
-        return {
+
+        payload = {
             "symbol": symbol,
             "price": float(tick.quote),
             "bid": float(tick.bid) if tick.bid is not None else None,
@@ -124,6 +127,8 @@ class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
             "timestamp": tick.received_at.timestamp() if tick.received_at else float(tick.epoch),
             "epoch": tick.epoch,
         }
+        cache.set(cache_key, payload, 1)
+        return payload
 
 
 class MarketDataConsumer(AuthenticatedStateConsumer):
