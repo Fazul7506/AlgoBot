@@ -1,6 +1,32 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Live markets | AlgoBot{% endblock %}
+{% block title %}Markets & Scanner | AlgoBot{% endblock %}
 {% block mobile_title %}Markets{% endblock %}
-{% block content %}<section class="markets-center deriv-markets-page algobot-shared-page" data-markets-center><header class="enterprise-hero deriv-market-hero"><div><p class="eyebrow">DERIV · LIVE MARKET CATALOGUE</p><h1>Markets</h1><p class="hero-copy">The Broker market-data engine loads the active catalogue and quotes from the connected broker. No browser-generated market data is used.</p></div><div class="hero-actions"><span class="deriv-live-pill"><i></i> Live broker feed</span><a class="btn primary" data-trade-selected href="/trading/">Open terminal</a></div></header><section class="panel market-toolbar deriv-market-toolbar"><div class="field"><label for="market-search">Search markets</label><input id="market-search" data-market-search placeholder="Search volatility, forex, crypto…" autocomplete="off"></div><div class="field"><label for="market-timeframe">Chart interval</label><select id="market-timeframe" data-market-timeframe aria-label="Chart interval"><option value="">Loading broker intervals…</option></select></div><button class="btn ghost" data-market-refresh type="button">Refresh markets</button></section><div class="market-category-row" data-market-categories aria-label="Market categories"></div><section class="market-grid deriv-market-grid" data-market-list><div class="empty-state">Connect a broker to load the live market catalogue.</div></section></section>{% endblock %}
+{% block content %}
+<section class="markets-center deriv-markets-page algobot-shared-page" data-markets-center>
+  <header class="enterprise-hero deriv-market-hero">
+    <div><p class="eyebrow">BROKER · MARKET INTELLIGENCE</p><h1>Markets & Scanner</h1><p class="hero-copy">Discover active, tradable instruments from the connected broker. Quotes are broker-sourced; AlgoBot does not fabricate prices or market availability.</p></div>
+    <div class="hero-actions"><span class="deriv-live-pill"><i></i> Broker catalogue</span><a class="btn primary" href="/trading/">Open terminal</a></div>
+  </header>
+
+  <section class="market-scanner-summary" aria-label="Market scanner summary">
+    <article class="market-scanner-stat"><span>Visible instruments</span><strong data-scanner-total>0</strong></article>
+    <article class="market-scanner-stat"><span>Favourites</span><strong data-scanner-favourites>0</strong></article>
+    <article class="market-scanner-stat"><span>Live quotes</span><strong data-scanner-live>0</strong></article>
+    <article class="market-scanner-stat"><span>Market groups</span><strong data-scanner-markets>0</strong></article>
+  </section>
+
+  <section class="panel market-toolbar deriv-market-toolbar market-scanner-controls">
+    <div class="field"><label for="market-search">Search instruments</label><input id="market-search" data-market-search placeholder="Symbol, name or market…" autocomplete="off"></div>
+    <div class="field"><label for="market-sort">Sort scanner</label><select id="market-sort" data-market-sort><option value="name">Name</option><option value="favourite">Favourites first</option><option value="price">Latest price</option></select></div>
+    <div class="field"><label for="market-timeframe">Chart interval</label><select id="market-timeframe" data-market-timeframe aria-label="Chart interval"><option value="">Loading broker intervals…</option></select></div>
+    <button class="btn ghost" data-market-refresh type="button">Refresh catalogue</button>
+  </section>
+
+  <div class="market-category-row" data-market-categories aria-label="Market categories"></div>
+  <section class="market-grid deriv-market-grid" data-market-list><div class="market-empty">Connect a broker to load the active market catalogue.</div></section>
+  <p class="scanner-note">Scanner data comes from AlgoBot's authenticated broker market catalogue. Live quote streaming is limited to the visible scanner window to avoid unnecessary connections.</p>
+</section>
+{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/market_scanner.css' %}">{% endblock %}
 {% block extra_js %}<script src="{% static 'js/market_watch.js' %}" defer></script>{% endblock %}
