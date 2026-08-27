@@ -1,5 +1,6 @@
 from django.urls import path
 from . import api, views
+from . import broker_native
 
 app_name = "market_data"
 urlpatterns = [
@@ -7,17 +8,14 @@ urlpatterns = [
     path("markets/symbols/", api.symbols, name="symbols"),
     path("markets/symbols/sync/", api.sync_symbols, name="sync_symbols"),
     path("markets/symbol/<str:symbol>/", api.symbol_detail, name="symbol_detail_api"),
-    path("market/catalogue/", api.broker_catalogue, name="broker_catalogue"),
+    path("market/catalogue/", broker_native.catalogue, name="broker_catalogue"),
+    path("market/broker-catalogue/", broker_native.catalogue, name="broker_native_catalogue"),
+    path("market/broker-capabilities/", broker_native.capabilities, name="broker_capabilities"),
     path("ticks/latest/", api.latest_tick, name="latest_tick"),
     path("ticks/history/", api.tick_history, name="tick_history_api"),
     path("ticks/broker/", api.broker_tick, name="broker_tick"),
     path("chart/capabilities/", api.broker_chart_capabilities, name="broker_chart_capabilities"),
     path("chart/history/", api.broker_chart_history, name="broker_chart_history"),
-
-    # Compatibility aliases for the trading terminal. Older deployed/cached
-    # frontend bundles used the /api/market/... prefix. Keep these aliases
-    # pointing at the same authoritative handlers so a rolling deploy or
-    # browser cache cannot turn valid market requests into 404s.
     path("market/ticks/latest/", api.latest_tick, name="market_latest_tick"),
     path("market/ticks/history/", api.tick_history, name="market_tick_history"),
     path("market/chart/capabilities/", api.broker_chart_capabilities, name="market_chart_capabilities"),

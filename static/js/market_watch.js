@@ -1,4 +1,4 @@
-/* Deriv-native market catalogue and quote stream. */
+/* Connected-broker market catalogue and quote stream. */
 (() => {
   'use strict';
   if (window.__algoBotMarketWatch) return;
@@ -9,12 +9,6 @@
   const esc = value => String(value ?? '').replace(/[&<>\"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '\"':'&quot;', "'":'&#039;' })[c]);
   const money = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString(undefined, {maximumFractionDigits: 8}) : 'Unavailable';
   const DERIV_PUBLIC_WS = 'wss://api.derivws.com/trading/v1/options/ws/public';
-  const DERIV_TIMEFRAMES = [
-    {seconds:60,label:'1 minute'}, {seconds:120,label:'2 minutes'}, {seconds:300,label:'5 minutes'},
-    {seconds:600,label:'10 minutes'}, {seconds:900,label:'15 minutes'}, {seconds:1800,label:'30 minutes'},
-    {seconds:3600,label:'1 hour'}, {seconds:7200,label:'2 hours'}, {seconds:14400,label:'4 hours'},
-    {seconds:28800,label:'8 hours'}, {seconds:86400,label:'1 day'},
-  ];
 
   let rows = [];
   let selectedSymbol = '';
@@ -52,7 +46,7 @@
     root.innerHTML = items.map(row => {
       const [a,b] = avatarPalette(row.market);
       const href = `/trading/?symbol=${encodeURIComponent(row.symbol)}${selectedTimeframe ? `&timeframe=${encodeURIComponent(selectedTimeframe)}` : ''}`;
-      return `<article class="market-card" data-symbol="${esc(row.symbol)}"><span class="market-avatar" style="--avatar-a:${a};--avatar-b:${b}" aria-hidden="true">${esc(initials(row))}</span><div class="market-card-copy"><span class="eyebrow">${esc(row.market || 'Broker market')}</span><h2>${esc(row.symbol)}</h2><p>${esc(row.display_name || row.symbol)}</p></div><div class="market-quote"><strong data-quote>Connecting to Deriv…</strong><span data-bidask>Waiting for live broker quote</span></div><div class="market-card-actions"><a class="btn primary small" data-trade-symbol="${esc(row.symbol)}" href="${href}">Trade</a></div></article>`;
+      return `<article class="market-card" data-symbol="${esc(row.symbol)}"><span class="market-avatar" style="--avatar-a:${a};--avatar-b:${b}" aria-hidden="true">${esc(initials(row))}</span><div class="market-card-copy"><span class="eyebrow">${esc(row.market || 'Broker market')}</span><h2>${esc(row.symbol)}</h2><p>${esc(row.display_name || row.symbol)}</p></div><div class="market-quote"><strong data-quote>Connecting to broker…</strong><span data-bidask>Waiting for live broker quote</span></div><div class="market-card-actions"><a class="btn primary small" data-trade-symbol="${esc(row.symbol)}" href="${href}">Trade</a></div></article>`;
     }).join('') || '<div class="empty-state">No broker instruments match your search.</div>';
     document.querySelectorAll('[data-trade-symbol]').forEach(link => link.addEventListener('click', () => {
       selectedSymbol = link.dataset.tradeSymbol;
@@ -102,25 +96,23 @@
   }
 
   async function loadSymbols() {
-    // The catalogue endpoint is database/cache only. No Deriv connection is opened here.
-    const data = await window.AlgoBotFrontendData.request('/market-catalogue/', {}, 7000);
+    const data = await window.AlgoBotFrontendData.request('/api/market/broker-catalogue/', {}, 10000);
     rows = list(data?.symbols ?? data).filter(row => row?.is_active !== false && row?.is_tradable !== false);
+    if (!rows.length) throw new Error('Connected broker returned no active tradable instruments');
     renderCategories(); render(); connectQuoteStream();
   }
 
   function loadTimeframes() {
     const select = $('[data-market-timeframe]'); if (!select) return;
-    select.innerHTML = DERIV_TIMEFRAMES.map(frame => `<option value="${frame.seconds}">${esc(frame.label)}</option>`).join('');
+    // Chart intervals remain a presentation control; the chart sends the
+    // selected integer granularity directly to the connected broker.
+    const frames = [[60,'1 minute'],[120,'2 minutes'],[300,'5 minutes'],[600,'10 minutes'],[900,'15 minutes'],[1800,'30 minutes'],[3600,'1 hour'],[7200,'2 hours'],[14400,'4 hours'],[28800,'8 hours'],[86400,'1 day']];
+    select.innerHTML = frames.map(frame => `<option value="${frame[0]}">${esc(frame[1])}</option>`).join('');
     selectedTimeframe = select.value || '60';
   }
 
-  async function syncBrokerSymbols() {
-    const response = await window.AlgoBotFrontendData.request('/api/markets/symbols/sync/', {method:'POST',headers:{'Content-Type':'application/json'}},10000);
-    return response?.status === 'ok';
-  }
-
   async function load() {
-    render('Loading broker market catalogue…');
+    render('Loading connected broker market catalogue…');
     try { loadTimeframes(); await loadSymbols(); }
     catch (error) { render(`Broker market catalogue unavailable: ${error.message}`); }
   }
@@ -130,7 +122,7 @@
     $('[data-market-timeframe]')?.addEventListener('change', event => { selectedTimeframe = event.target.value; render(); });
     $('[data-market-refresh]')?.addEventListener('click', async event => {
       const button = event.currentTarget; button.disabled = true;
-      try { try { await syncBrokerSymbols(); } catch (error) { console.warn('Broker sync unavailable:', error); } await loadSymbols(); }
+      try { await loadSymbols(); }
       catch (error) { if (rows.length) render(); else render(`Broker catalogue refresh unavailable: ${error.message}`); }
       finally { button.disabled = false; }
     });
