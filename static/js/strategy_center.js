@@ -1,74 +1,45 @@
 (() => {
   'use strict';
-  if (window.__algoBotStrategyCenter) return;
-  window.__algoBotStrategyCenter = true;
-
-  const $ = selector => document.querySelector(selector);
-  const list = value => window.AlgoBotFrontendData?.list(value) || [];
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' })[c]);
+  const root = document.querySelector('[data-strategy-center]');
+  if (!root) return;
+  const grid = root.querySelector('[data-strategy-grid]');
+  const search = root.querySelector('[data-strategy-search]');
+  const type = root.querySelector('[data-strategy-type]');
+  const status = root.querySelector('[data-strategy-status]');
   let strategies = [];
-
-  const connected = () => {
-    const state = window.AlgoBotBrokerState?.get();
-    return !!state?.account && ['CONNECTED', 'SYNCING', 'READY', 'DEGRADED'].includes(state.status);
-  };
-
-  function renderBlocked(message) {
-    $('[data-s-list]').innerHTML = `<div class="empty-state">${esc(message)}</div>`;
-    $('[data-s-strategy-signals]').innerHTML = `<div class="empty-state">${esc(message)}</div>`;
-    $('[data-s-performance]').innerHTML = `<div class="empty-state">${esc(message)}</div>`;
-    ['[data-s-total]', '[data-s-enabled]', '[data-s-running]', '[data-s-signals]'].forEach(selector => { const node = $(selector); if (node) node.textContent = '—'; });
-  }
-
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const active = s => Boolean(s.enabled ?? s.is_active ?? s.active ?? s.status === 'active');
+  const list = v => Array.isArray(v) ? v : (v?.results || v?.strategies || []);
   function render() {
-    const query = String($('[data-s-search]')?.value || '').toLowerCase();
-    const visible = strategies.filter(strategy => String(strategy.name || strategy.slug || '').toLowerCase().includes(query));
-    $('[data-s-total]').textContent = strategies.length;
-    $('[data-s-enabled]').textContent = strategies.filter(strategy => strategy.enabled).length;
-    $('[data-s-running]').textContent = strategies.filter(strategy => strategy.lifecycle_state === 'running').length;
-    $('[data-s-list]').innerHTML = visible.length ? visible.map(strategy => `<article class="strategy-row" data-name="${esc(String(strategy.name || strategy.slug).toLowerCase())}"><div><strong>${esc(strategy.name || strategy.slug)}</strong><small>${esc(strategy.category || 'Strategy')} · v${esc(strategy.version || '1.0.0')}</small></div><span class="state-badge">${esc(strategy.lifecycle_state || 'created')}</span><span>${strategy.enabled ? 'Enabled' : 'Disabled'}</span><a class="btn small ghost" href="/trading/">Trade</a></article>`).join('') : '<div class="empty-state">No strategies registered by the backend.</div>';
-  }
-
-  async function load() {
-    if (!connected()) { renderBlocked('Connect a broker before loading executable strategy state.'); return; }
-    try {
-      const [strategyResponse, signalResponse, performanceResponse] = await Promise.all([
-        window.AlgoBotFrontendData.request('/api/strategies/'),
-        window.AlgoBotFrontendData.request('/api/strategies/signals/'),
-        window.AlgoBotFrontendData.request('/api/strategies/performance/')
-      ]);
-      strategies = list(strategyResponse);
-      const signals = list(signalResponse), performance = list(performanceResponse);
-      render();
-      $('[data-s-signals]').innerHTML = signals.slice(0, 8).map(signal => `<div class="signal-row"><strong>${esc(signal.symbol)}</strong><span>${esc(signal.signal)}</span><b>${signal.confidence != null ? Number(signal.confidence).toFixed(0) + '%' : 'Unavailable'}</b></div>`).join('') || '<div class="empty-state">No broker-scoped strategy signals.</div>';
-      $('[data-s-performance]').innerHTML = performance.slice(0, 8).map(item => `<div class="mini-row"><strong>${esc(item.strategy_name || item.strategy || 'Strategy')}</strong><span>${item.win_rate != null ? Number(item.win_rate).toFixed(1) + '%' : 'Unavailable'}</span><b>${esc(item.net_profit ?? 'Unavailable')}</b></div>`).join('') || '<div class="empty-state">No performance records.</div>';
-      $('[data-s-signals]').closest('.panel')?.setAttribute('data-broker-state', window.AlgoBotBrokerState.get().status);
-    } catch (error) {
-      renderBlocked(`Strategy data unavailable: ${error.message}`);
-    }
-  }
-
-  async function action(path, body = {}) {
-    try {
-      window.AlgoBotFrontendData.requireConnected('run or change executable strategies');
-      await window.AlgoBotFrontendData.request(path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) });
-      window.alert('Backend strategy action confirmed.');
-      await load();
-    } catch (error) { window.alert(error.message); }
-  }
-
-  function boot() {
-    window.AlgoBotBrokerState?.subscribe(event => {
-      if (['NO_BROKER', 'DISCONNECTED'].includes(event.detail.state.status)) renderBlocked('Connect a broker before loading executable strategy state.');
-      else if (['READY', 'CONNECTED'].includes(event.detail.state.status)) load();
+    const q = String(search?.value || '').toLowerCase().trim();
+    const filtered = strategies.filter(s => {
+      const haystack = JSON.stringify(s).toLowerCase();
+      const kind = String(s.strategy_type || s.type || s.category || '').toUpperCase();
+      return (!q || haystack.includes(q)) && (!type.value || kind === type.value) && (!status.value || (status.value === 'active') === active(s));
     });
-    document.querySelectorAll('[data-strategy-run]').forEach(button => button.addEventListener('click', () => action('/api/strategies/run/')));
-    $('[data-strategy-pause]')?.addEventListener('click', () => action('/api/strategies/pause/'));
-    $('[data-strategy-stop]')?.addEventListener('click', () => { if (window.confirm('Stop all active strategies?')) action('/api/strategies/stop/'); });
-    $('[data-s-search]')?.addEventListener('input', render);
-    load();
+    grid.innerHTML = filtered.length ? filtered.map(s => {
+      const metrics = s.performance_metrics || s.metrics || {};
+      const win = metrics.win_rate ?? s.win_rate;
+      const trades = metrics.total_trades ?? metrics.trades ?? s.total_trades;
+      const name = s.name || s.display_name || s.slug || `Strategy #${s.id ?? '—'}`;
+      return `<article class="strategy-card"><div class="strategy-card-head"><div><span class="strategy-type">${esc(s.strategy_type || s.type || s.category || 'CUSTOM')}</span><h2>${esc(name)}</h2></div><span class="strategy-state ${active(s) ? 'active' : 'inactive'}">${active(s) ? 'ACTIVE' : 'INACTIVE'}</span></div><p>${esc(s.description || 'Configured algorithm ready for inspection, testing and controlled deployment.')}</p><div class="strategy-stats"><div><span>Win rate</span><strong>${win == null ? '—' : `${Number(win).toFixed(1)}%`}</strong></div><div><span>Trades</span><strong>${esc(trades ?? '—')}</strong></div><div><span>Timeframe</span><strong>${esc(s.timeframe || '—')}</strong></div></div><div class="strategy-actions"><a class="btn" href="/strategies/builder/?strategy=${encodeURIComponent(s.id ?? '')}">Edit</a><a class="btn" href="/backtesting/?strategy=${encodeURIComponent(s.id ?? '')}">Backtest</a></div></article>`;
+    }).join('') : '<div class="empty-state">No strategies match the current filters.</div>';
+    root.querySelector('[data-total]').textContent = strategies.length;
+    root.querySelector('[data-active]').textContent = strategies.filter(active).length;
+    root.querySelector('[data-paper]').textContent = strategies.filter(s => s.paper_only || s.paperOnly).length;
+    const rates = strategies.map(s => Number((s.performance_metrics || s.metrics || {}).win_rate ?? s.win_rate)).filter(Number.isFinite);
+    root.querySelector('[data-winrate]').textContent = rates.length ? `${(rates.reduce((a,b)=>a+b,0)/rates.length).toFixed(1)}%` : '—';
   }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once:true });
-  else boot();
+  async function load() {
+    grid.innerHTML = '<div class="empty-state">Loading strategies…</div>';
+    try {
+      const r = await fetch('/api/strategies/', { credentials:'same-origin', headers:{Accept:'application/json'} });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      strategies = list(await r.json());
+      render();
+    } catch (e) { grid.innerHTML = `<div class="empty-state">Strategy feed unavailable: ${esc(e.message)}</div>`; }
+  }
+  [search,type,status].forEach(el => el?.addEventListener('input', render));
+  root.querySelector('[data-refresh-strategies]')?.addEventListener('click', load);
+  load();
 })();
