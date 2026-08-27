@@ -143,6 +143,13 @@ class DerivAdapter(BrokerAdapter):
         if not tick: raise BrokerConnectionError("Deriv did not return a tick")
         return {"symbol": symbol, "price": tick.get("quote"), "bid": tick.get("bid"), "ask": tick.get("ask"), "epoch": tick.get("epoch")}
 
+    async def get_trade_capabilities(self, symbol):
+        """Return the current contract types published by Deriv for a symbol."""
+        response = await self._request({"contracts_for": symbol})
+        root = response.get("contracts_for") or {}
+        available = root.get("available") or []
+        return [item for item in available if isinstance(item, dict) and item.get("contract_type")]
+
     async def get_chart_history(self, symbol, mode="ticks", count=120, granularity=None):
         """Read chart history directly from Deriv. No UI timeframe/price data is fabricated."""
         count = max(1, min(int(count or 120), 1000))
@@ -156,7 +163,10 @@ class DerivAdapter(BrokerAdapter):
         return {"mode": "ticks", "symbol": symbol, "items": [{"epoch": e, "quote": q} for e, q in zip(ticks.get("times", []), ticks.get("prices", []))]}
 
     async def get_chart_capabilities(self):
-        return {"modes": ["ticks", "candles"], "timeframes": [{"label": "1m", "seconds": 60}, {"label": "2m", "seconds": 120}, {"label": "5m", "seconds": 300}, {"label": "10m", "seconds": 600}, {"label": "15m", "seconds": 900}, {"label": "30m", "seconds": 1800}, {"label": "1h", "seconds": 3600}, {"label": "2h", "seconds": 7200}, {"label": "4h", "seconds": 14400}, {"label": "8h", "seconds": 28800}, {"label": "1d", "seconds": 86400}]}
+        # Deriv's current API accepts integer candle granularity values. Keep
+        # this capability statement broker-oriented rather than inventing a
+        # finite list of market intervals.
+        return {"modes": ["ticks", "candles"], "granularity": {"minimum_seconds": 1, "type": "integer_seconds"}}
 
     async def subscribe_ticks(self, symbol, callback=None): return {"symbol": symbol, "stream": "ticks", "endpoint": self.endpoint}
 
@@ -169,8 +179,11 @@ class DerivAdapter(BrokerAdapter):
         direction = str(getattr(order, "direction", "") or "").upper()
         if not requested_contract: requested_contract = {"BUY": "CALL", "SELL": "PUT", "CALL": "CALL", "PUT": "PUT", "RISE": "RISE", "FALL": "FALL"}.get(direction, "")
         elif requested_contract in {"BUY", "SELL"}: requested_contract = {"BUY": "CALL", "SELL": "PUT"}[requested_contract]
-        allowed = {"CALL", "PUT", "MULTUP", "MULTDOWN", "DIGITOVER", "DIGITUNDER", "RISE", "FALL"}
-        if requested_contract not in allowed: raise BrokerOrderError(f"Unsupported Deriv contract type: {requested_contract or 'missing'}")
+        if not requested_contract: raise BrokerOrderError("A broker contract type is required")
+        live_contracts = await self.get_trade_capabilities(order.symbol)
+        allowed = {str(item.get("contract_type") or "").upper() for item in live_contracts}
+        if requested_contract not in allowed:
+            raise BrokerOrderError(f"Deriv does not currently offer {requested_contract} for {order.symbol}")
         amount = float(order.stake or getattr(order, "quantity", 0) or 0)
         if amount <= 0: raise BrokerOrderError("A positive stake is required to place a Deriv order")
         proposal_payload = {"proposal": 1, "amount": amount, "basis": "stake", "contract_type": requested_contract, "currency": routing.get("currency") or getattr(self.account, "currency", None) or "USD", "duration": int(routing.get("duration", 60)), "duration_unit": routing.get("duration_unit", "s"), "underlying_symbol": order.symbol}
