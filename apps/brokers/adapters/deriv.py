@@ -85,9 +85,6 @@ class DerivAdapter(BrokerAdapter):
         return response
 
     async def connect(self):
-        # The authenticated balance request already proves the OAuth credential,
-        # account and OTP-scoped WebSocket are valid. Reuse its measured latency
-        # for the connection record instead of opening a second public socket.
         start = time.perf_counter()
         account = await self.authenticate()
         latency = (time.perf_counter() - start) * 1000
@@ -154,7 +151,7 @@ class DerivAdapter(BrokerAdapter):
             payload = {"ticks_history": symbol, "end": "latest", "count": count, "style": "candles", "granularity": int(granularity)}
             candles = (await self._request(payload)).get("candles", [])
             return {"mode": "candles", "symbol": symbol, "granularity": int(granularity), "items": candles}
-        payload = {"ticks_history": symbol, "end": "latest", "count": count, "style": "ticks", "subscribe": 0}
+        payload = {"ticks_history": symbol, "end": "latest", "count": count, "style": "ticks"}
         ticks = (await self._request(payload)).get("history", {})
         return {"mode": "ticks", "symbol": symbol, "items": [{"epoch": e, "quote": q} for e, q in zip(ticks.get("times", []), ticks.get("prices", []))]}
 
