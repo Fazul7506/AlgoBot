@@ -6,7 +6,7 @@
 
   const $ = (s, r = document) => r.querySelector(s);
   const list = v => window.AlgoBotFrontendData?.list(v) || [];
-  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const esc = v => String(v ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
   const money = v => Number.isFinite(Number(v)) ? Number(v).toLocaleString(undefined, {maximumFractionDigits: 8}) : 'Unavailable';
   const api = (url, options = {}, timeout = 10000) => window.AlgoBotFrontendData.request(url, options, timeout);
   let accounts = [], direction = 'BUY', busy = false;
@@ -56,6 +56,7 @@
       select.innerHTML = symbols.map(r => `<option value="${esc(r.symbol)}">${esc(r.display_name || r.symbol)} · ${esc(r.symbol)}</option>`).join('');
       const requested = new URLSearchParams(location.search).get('symbol');
       select.value = [previous, requested, symbols[0].symbol].find(v => symbols.some(r => r.symbol === v)) || symbols[0].symbol;
+      window.dispatchEvent(new CustomEvent('algobot:broker-symbols-loaded', {detail:{symbol:select.value, count:symbols.length}}));
       return select.value;
     } catch (e) { select.innerHTML = `<option value="">${esc(e.message || 'Market catalogue unavailable')}</option>`; return ''; }
   }
@@ -92,7 +93,7 @@
 
   async function refresh() {
     if (busy) return; busy = true;
-    try { await loadAccounts(); const symbol = await loadSymbols(); await Promise.all([loadQuote(), loadRecords(), loadSignals()]); if (symbol) $('#symbol')?.dispatchEvent(new Event('change', {bubbles:true})); }
+    try { await loadAccounts(); const symbol = await loadSymbols(); await Promise.all([loadQuote(), loadRecords(), loadSignals()]); if (symbol) { $('#symbol')?.dispatchEvent(new Event('change', {bubbles:true})); window.dispatchEvent(new CustomEvent('algobot:market-symbol-changed', {detail:{symbol}})); } }
     finally { busy = false; }
   }
 
@@ -103,9 +104,6 @@
     const form = new FormData(event.currentTarget), button = $('.execute-btn');
     if (button) { button.disabled = true; button.textContent = 'Submitting…'; }
     try {
-      /* Match the OrderSerializer/Order model exactly. The old UI sent `account`,
-         `client_order_id`, and `routing_context`, which are not model fields and
-         caused the observed HTTP 400 before the broker was ever reached. */
       const payload = {
         broker_account: account.id,
         symbol,
@@ -127,11 +125,11 @@
     if (!$('.terminal-page')) return;
     $('[data-order-form]')?.addEventListener('submit', submitOrder);
     $('[data-action="terminal-refresh"]')?.addEventListener('click', refresh);
-    $('#symbol')?.addEventListener('change', () => { loadQuote(); loadRecords(); });
+    $('#symbol')?.addEventListener('change', () => { loadQuote(); loadRecords(); window.dispatchEvent(new CustomEvent('algobot:market-symbol-changed', {detail:{symbol:$('#symbol')?.value || ''}})); });
     $('#account')?.addEventListener('change', () => { renderAccount(selectedAccount()); loadQuote(); loadRecords(); });
     document.querySelectorAll('[data-direction]').forEach(b => b.addEventListener('click', () => { direction = b.dataset.direction; document.querySelectorAll('[data-direction]').forEach(x => x.classList.toggle('active', x === b)); }));
     window.addEventListener('algobot:backend-accounts-loaded', e => { renderAccounts(e.detail); loadQuote(); loadRecords(); });
-    window.addEventListener('algobot:account-synced', e => { renderAccounts((window.AlgoBotBrokerAccounts || accounts).map(a => String(a.id) === String(e.detail?.id) ? e.detail : a)); loadQuote(); loadRecords(); });
+    window.addEventListener('algobot:account-synced', e => { renderAccounts((window.AlgoBotBrokerAccounts || accounts).map(a => String(a.id) === String(e.detail?.id) ? e.detail : a)); loadQuote(); loadRecords(); window.dispatchEvent(new CustomEvent('algobot:market-symbol-changed', {detail:{symbol:$('#symbol')?.value || ''}})); });
     window.AlgoBotBrokerState?.subscribe(() => { loadQuote(); loadRecords(); });
     refresh();
   }
