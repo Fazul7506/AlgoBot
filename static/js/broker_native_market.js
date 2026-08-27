@@ -5,7 +5,6 @@
   window.__algoBotBrokerNativeMarket = true;
 
   const $ = (s, r = document) => r.querySelector(s);
-  const list = v => window.AlgoBotFrontendData?.list(v) || [];
   const esc = v => String(v ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
   const api = (url, options = {}, timeout = 12000) => window.AlgoBotFrontendData?.request?.(url, options, timeout);
   const PUBLIC_WS = 'wss://api.derivws.com/trading/v1/options/ws/public';
@@ -35,7 +34,8 @@
   }
 
   function renderContracts(payload) {
-    const raw = Array.isArray(payload) ? payload : (payload?.contracts || payload?.available || payload?.contracts_for?.available || []);
+    const root = payload?.contracts_for || payload?.data?.contracts_for || payload;
+    const raw = Array.isArray(payload) ? payload : (payload?.contracts || payload?.available || root?.available || []);
     contracts = raw.filter(c => c && c.contract_type).map(c => ({
       ...c,
       contract_type: String(c.contract_type),
@@ -129,24 +129,23 @@
     select.disabled = true;
     select.innerHTML = '<option value="">Loading broker contracts…</option>';
     if ($('[data-broker-trade-type]')) $('[data-broker-trade-type]').textContent = 'Loading';
-    setStatus('Connecting to Deriv contract catalogue…');
+    setStatus('Loading broker-supported contracts…');
 
+    // Use the authenticated Django endpoint first. It is broker-authoritative,
+    // works even when browser WebSockets are restricted, and is already backed
+    // by Deriv's public contracts_for API. The browser WebSocket is fallback.
     try {
-      // Primary source is the same public Deriv WebSocket used by the chart.
-      // This removes Render/API latency from the broker contract selector.
-      const payload = await directDerivContracts(symbol);
+      const payload = await api(`/api/market/broker-capabilities/?symbol=${encodeURIComponent(symbol)}`, {}, 12000);
       if (requestId !== capabilitiesRequest) return;
       renderContracts(payload);
       return;
-    } catch (directError) {
-      // Keep the existing backend route as a resilience fallback. It is still
-      // broker-authoritative because broker_native.capabilities calls Deriv.
+    } catch (backendError) {
       try {
-        const payload = await api(`/api/market/broker-capabilities/?symbol=${encodeURIComponent(symbol)}`, {}, 12000);
+        const payload = await directDerivContracts(symbol);
         if (requestId !== capabilitiesRequest) return;
         renderContracts(payload);
         return;
-      } catch (backendError) {
+      } catch (directError) {
         if (requestId !== capabilitiesRequest) return;
         select.innerHTML = '<option value="">Broker contracts unavailable</option>';
         select.disabled = true;
@@ -154,24 +153,6 @@
         setStatus(backendError?.message || directError?.message || 'Broker capability request failed');
       }
     }
-  }
-
-  function installRequestBridge() {
-    const frontend = window.AlgoBotFrontendData;
-    if (!frontend?.request || frontend.__brokerNativeBridge) return;
-    const original = frontend.request.bind(frontend);
-    frontend.request = (url, options = {}, timeout = 10000) => {
-      const target = String(url || '');
-      if (target === '/api/market/catalogue/' || target === '/api/markets/catalogue/') {
-        return original('/api/market/broker-catalogue/', options, timeout);
-      }
-      if (target.startsWith('/api/market/chart/capabilities/')) {
-        const symbol = new URLSearchParams(target.split('?')[1] || '').get('symbol') || $('#symbol')?.value;
-        return original(`/api/market/broker-capabilities/?symbol=${encodeURIComponent(symbol || '')}`, options, timeout);
-      }
-      return original(url, options, timeout);
-    };
-    frontend.__brokerNativeBridge = true;
   }
 
   function currentSymbol() { return String($('#symbol')?.value || '').trim(); }
@@ -183,7 +164,6 @@
 
   function boot() {
     if (!$('.terminal-page')) return;
-    installRequestBridge();
     setHiddenCompatibilityFields();
 
     const symbol = $('#symbol');
@@ -191,16 +171,15 @@
     symbol?.addEventListener('change', () => loadCapabilities(symbol.value));
     contract?.addEventListener('change', () => applyContract(contract.value));
 
-    // Trading terminal populates the broker symbol list asynchronously.
-    // Listen for its completion and also observe value changes so contract
-    // loading cannot remain stuck on the initial loading placeholder.
+    // Do not monkey-patch AlgoBotFrontendData.request here. The shared runtime
+    // deliberately freezes its API object; the broker-native routes are now
+    // first-class endpoints, so a request bridge is neither needed nor safe.
     window.addEventListener('algobot:broker-symbols-loaded', triggerCurrentSymbol);
     window.addEventListener('algobot:market-symbol-changed', triggerCurrentSymbol);
     window.addEventListener('algobot:account-synced', triggerCurrentSymbol);
 
     let last = '';
     const timer = setInterval(() => {
-      installRequestBridge();
       setHiddenCompatibilityFields();
       const value = currentSymbol();
       if (value && value !== last) {
