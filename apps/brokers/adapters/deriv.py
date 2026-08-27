@@ -144,7 +144,6 @@ class DerivAdapter(BrokerAdapter):
         return {"symbol": symbol, "price": tick.get("quote"), "bid": tick.get("bid"), "ask": tick.get("ask"), "epoch": tick.get("epoch")}
 
     async def get_trade_capabilities(self, symbol):
-        """Return the current contract types published by Deriv for a symbol."""
         response = await self._request({"contracts_for": symbol})
         root = response.get("contracts_for") or {}
         available = root.get("available") or []
@@ -163,10 +162,18 @@ class DerivAdapter(BrokerAdapter):
         return {"mode": "ticks", "symbol": symbol, "items": [{"epoch": e, "quote": q} for e, q in zip(ticks.get("times", []), ticks.get("prices", []))]}
 
     async def get_chart_capabilities(self):
-        # Deriv's current API accepts integer candle granularity values. Keep
-        # this capability statement broker-oriented rather than inventing a
-        # finite list of market intervals.
-        return {"modes": ["ticks", "candles"], "granularity": {"minimum_seconds": 1, "type": "integer_seconds"}}
+        return {
+            "modes": ["ticks", "candles"],
+            "timeframes": [
+                {"label": "1m", "seconds": 60}, {"label": "2m", "seconds": 120},
+                {"label": "5m", "seconds": 300}, {"label": "10m", "seconds": 600},
+                {"label": "15m", "seconds": 900}, {"label": "30m", "seconds": 1800},
+                {"label": "1h", "seconds": 3600}, {"label": "2h", "seconds": 7200},
+                {"label": "4h", "seconds": 14400}, {"label": "8h", "seconds": 28800},
+                {"label": "1d", "seconds": 86400},
+            ],
+            "granularity": {"minimum_seconds": 1, "type": "integer_seconds"},
+        }
 
     async def subscribe_ticks(self, symbol, callback=None): return {"symbol": symbol, "stream": "ticks", "endpoint": self.endpoint}
 
