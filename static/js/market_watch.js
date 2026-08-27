@@ -63,7 +63,7 @@
   }
 
   async function refreshQuotes() {
-    const cards = [...document.querySelectorAll('[data-symbol]')].slice(0, 12);
+    const cards = [...document.querySelectorAll('[data-symbol]')].slice(0, 8);
     if (!cards.length) return;
     let cursor = 0;
     const worker = async () => {
@@ -80,12 +80,12 @@
         if (bidAsk) bidAsk.textContent = `Bid ${data.bid ?? 'Unavailable'} · Ask ${data.ask ?? 'Unavailable'}${data.stale ? ' · last known' : ''}`;
       }
     };
-    await Promise.all(Array.from({ length: Math.min(3, cards.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(2, cards.length) }, worker));
   }
 
   async function loadSymbols() {
-    // Cloudflare is challenging /api/market/* on this deployment. The browser-safe
-    // endpoint below uses the same Django session but is outside the protected API path.
+    // This browser-safe endpoint reads the persisted broker catalogue and never
+    // opens a broker connection. Live broker calls happen only for visible quotes.
     const data = await window.AlgoBotFrontendData.request('/market-catalogue/', {}, 7000);
     rows = list(data?.symbols ?? data).filter(row => row?.is_active !== false && row?.is_tradable !== false);
     renderCategories();
@@ -97,7 +97,7 @@
     const select = $('[data-market-timeframe]');
     if (!select) return;
     try {
-      const data = await window.AlgoBotFrontendData.request('/api/chart/capabilities/');
+      const data = await window.AlgoBotFrontendData.request('/api/market/chart/capabilities/', {}, 9000);
       const frames = list(data?.timeframes);
       select.innerHTML = frames.length
         ? frames.map(frame => `<option value="${esc(frame.seconds)}">${esc(frame.label)}</option>`).join('')
@@ -124,12 +124,11 @@
   async function load() {
     render('Loading broker market catalogue…');
     try {
+      // Do not synchronize Deriv on every page visit. The market catalogue is
+      // already persisted and cached; synchronization is an explicit refresh
+      // action so opening /markets/ cannot stampede the broker or Render.
       await loadSymbols();
       await loadTimeframes();
-      // Synchronization is deliberately secondary. A transient broker/Cloudflare
-      // failure must never erase the last known local catalogue from the UI.
-      try { await syncBrokerSymbols(); } catch (error) { console.warn('Broker catalogue synchronization unavailable:', error); }
-      try { await loadSymbols(); } catch (error) { console.warn('Catalogue reload skipped:', error); }
     } catch (error) {
       render(`Broker market catalogue unavailable: ${error.message}`);
     }
@@ -147,6 +146,7 @@
       try {
         try { await syncBrokerSymbols(); } catch (error) { console.warn('Broker sync unavailable:', error); }
         await loadSymbols();
+        await loadTimeframes();
       } catch (error) {
         if (rows.length) render();
         else render(`Broker catalogue refresh unavailable: ${error.message}`);
@@ -156,7 +156,7 @@
     });
     window.AlgoBotBrokerState?.subscribe(event => {
       const status = event.detail?.state?.status;
-      if (['READY', 'CONNECTED', 'SYNCING', 'DEGRADED'].includes(status)) load();
+      if (['READY', 'CONNECTED', 'DEGRADED'].includes(status)) load();
       else if (['NO_BROKER', 'DISCONNECTED'].includes(status) && !rows.length) render('No broker market catalogue is currently available.');
     });
     load();
