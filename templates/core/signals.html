@@ -1,11 +1,24 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Strategy signals | AlgoBot{% endblock %}
+{% block title %}Signal Intelligence | AlgoBot{% endblock %}
 {% block content %}
-<section class="data-page panel" data-data-page="signals-page" data-api-root="/api/">
-<header class="page-heading"><div><p class="eyebrow">Strategies</p><h1>Strategy signals</h1><p>Live records from the AlgoBot backend.</p></div><div><a class="btn primary" href="/trading/">Open trading terminal</a></div></header>
-<div class="kpi-grid compact"><article class="kpi-card"><span>Total records</span><strong data-record-count>—</strong></article><article class="kpi-card"><span>Status</span><strong data-page-status>Loading</strong></article><article class="kpi-card"><span>Last update</span><strong data-page-updated>—</strong></article><article class="kpi-card"><span>Risk</span><strong data-page-risk>—</strong></article></div>
-<section class="panel"><div class="panel-head"><div><h2>Live data</h2><p>Search, inspect and refresh backend records.</p></div><input type="search" data-page-search placeholder="Search"></div><div class="table-wrap"><table class="enterprise-table" data-page-table><thead></thead><tbody><tr><td>Loading…</td></tr></tbody></table></div></section>
+<section class="data-page panel signal-workspace" data-data-page="signals-page">
+  <header class="page-heading">
+    <div><p class="eyebrow">Trading intelligence</p><h1>Signal Intelligence</h1><p>Inspect strategy-generated opportunities without bypassing risk or execution controls.</p></div>
+    <div class="page-actions"><a class="btn" href="/markets/">Markets</a><a class="btn primary" href="/trading/">Open trading terminal</a></div>
+  </header>
+  <div class="kpi-grid compact signal-kpis">
+    <article class="kpi-card"><span>Signals</span><strong data-record-count>—</strong></article>
+    <article class="kpi-card"><span>Avg confidence</span><strong data-page-confidence>—</strong></article>
+    <article class="kpi-card"><span>Executed</span><strong data-page-executed>—</strong></article>
+    <article class="kpi-card"><span>Feed status</span><strong data-page-status>Loading</strong></article>
+  </div>
+  <section class="panel signal-controls">
+    <div class="panel-head"><div><h2>Signal feed</h2><p>Search by symbol, direction, regime, strategy or execution state.</p></div><input type="search" data-page-search placeholder="Search signals…" aria-label="Search signals"></div>
+  </section>
+  <section class="signal-grid" data-signal-grid></section>
+  <section class="panel"><div class="panel-head"><div><h2>Signal records</h2><p>Raw backend records remain available for audit and inspection.</p></div></div><div class="table-wrap"><table class="enterprise-table" data-page-table><thead></thead><tbody><tr><td>Loading…</td></tr></tbody></table></div></section>
 </section>
 {% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals.css' %}">{% endblock %}
 {% block extra_js %}<script src="{% static 'js/signals.js' %}" defer></script>{% endblock %}
