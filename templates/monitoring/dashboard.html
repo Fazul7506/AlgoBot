@@ -1,57 +1,34 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}System Monitoring | AlgoBot{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">Operations</p>
-  <h1>System Monitoring</h1>
-  <p>Live application, broker, trading, risk and AI telemetry.</p>
-</section>
-
-{% if messages %}
-<section class="card-grid" aria-label="Monitoring messages">
-  {% for message in messages %}
-  <article><p>{{ message }}</p></article>
-  {% endfor %}
-</section>
-{% endif %}
-
-<section class="metrics-grid" aria-label="System status">
-  <article><h3>System</h3><p>{{ dashboard.overall_system_health|title }}</p></article>
-  <article><h3>Broker</h3><p>{{ dashboard.broker_status|title }}</p></article>
-  <article><h3>Open positions</h3><p>{{ dashboard.current_trades }}</p></article>
-  <article><h3>Active alerts</h3><p>{{ dashboard.active_alerts }}</p></article>
-  <article><h3>Incidents</h3><p>{{ dashboard.open_incidents }}</p></article>
-  <article><h3>AI predictions</h3><p>{{ dashboard.current_predictions }}</p></article>
-</section>
-
-<section class="card-grid" aria-label="Engine health">
-  <article><h2>Trading engine</h2><p>{{ dashboard.trading_engine_status|title }}</p><small>Pending orders: {{ dashboard.trading.pending_orders }}</small></article>
-  <article><h2>Strategy engine</h2><p>{{ dashboard.strategy_engine_status|title }}</p><small>Success rate: {{ dashboard.trading.success_rate|floatformat:1 }}%</small></article>
-  <article><h2>AI engine</h2><p>{{ dashboard.ai_engine_status|title }}</p><small>Latest inference: {{ dashboard.ai.prediction_latency|floatformat:1 }} ms</small></article>
-  <article><h2>Risk engine</h2><p>{{ dashboard.risk_engine_status|title }}</p><small>Exposure: {{ dashboard.risk.exposure|floatformat:2 }}</small></article>
-</section>
-
-<section class="card-grid" aria-label="Broker reconciliation">
-  <article>
-    <p class="eyebrow">Broker State Integrity</p>
-    <h2>Reconciliation Center</h2>
-    <p>Compare active-account orders and positions with broker-authoritative state. Discrepancies are recorded for investigation; no trade is automatically created, deleted, closed, or rewritten.</p>
-    <form method="post" action="{% url 'monitoring-reconcile' %}">
-      {% csrf_token %}
-      <button class="btn primary" type="submit">Run broker reconciliation</button>
-    </form>
-  </article>
-  <article>
-    <h2>Safety rule</h2>
-    <p>Reconciliation is an observation and audit operation. It never silently mutates trading state.</p>
-    <small>Use Audit and Logs to investigate recorded discrepancies.</small>
-  </article>
-</section>
-
-<section class="card-grid" aria-label="Monitoring actions">
-  <article><h2>Health checks</h2><p>Refresh database, cache and storage telemetry.</p><a class="btn primary" href="/monitoring/">Refresh telemetry</a></article>
-  <article><h2>Broker health</h2><p>Connection state and latency are sourced from broker connection records.</p><a class="btn" href="/operations/brokers/">Open broker center</a></article>
-  <article><h2>Audit trail</h2><p>Review operational and trading audit records.</p><a class="btn" href="{% url 'audit' %}">Open audit</a></article>
-  <article><h2>Execution logs</h2><p>Inspect order lifecycle events and reconciliation warnings.</p><a class="btn" href="{% url 'logs' %}">Open logs</a></article>
+<section class="monitoring-workspace" data-monitoring-dashboard>
+  <header class="page-heading">
+    <div><p class="eyebrow">Operations & observability</p><h1>System Monitoring</h1><p>Monitor application, broker, trading, risk, AI and reconciliation health from one operational workspace.</p></div>
+    <div class="monitoring-controls"><button class="btn primary" type="button" data-monitoring-refresh>Refresh telemetry</button><a class="btn" href="/trading/">Trading terminal</a></div>
+  </header>
+  <section class="monitoring-kpis" aria-label="System status">
+    <article class="monitoring-card"><span>System</span><h2 class="monitoring-status" data-system-status><i class="monitoring-dot"></i>{{ dashboard.overall_system_health|title }}</h2></article>
+    <article class="monitoring-card"><span>Broker</span><h2 class="monitoring-status" data-broker-status><i class="monitoring-dot"></i>{{ dashboard.broker_status|title }}</h2></article>
+    <article class="monitoring-card"><span>Open positions</span><h2 data-current-trades>{{ dashboard.current_trades }}</h2></article>
+    <article class="monitoring-card"><span>Active alerts</span><h2 data-active-alerts>{{ dashboard.active_alerts }}</h2></article>
+    <article class="monitoring-card"><span>Incidents</span><h2 data-open-incidents>{{ dashboard.open_incidents }}</h2></article>
+    <article class="monitoring-card"><span>AI predictions</span><h2 data-current-predictions>{{ dashboard.current_predictions }}</h2></article>
+  </section>
+  <section class="monitoring-grid" aria-label="Engine health">
+    <article class="monitoring-card"><h2>Trading engine</h2><p class="monitoring-status" data-engine="trading"><i class="monitoring-dot"></i>{{ dashboard.trading_engine_status|title }}</p><small>Pending orders: {{ dashboard.trading.pending_orders }}</small></article>
+    <article class="monitoring-card"><h2>Strategy engine</h2><p class="monitoring-status" data-engine="strategy"><i class="monitoring-dot"></i>{{ dashboard.strategy_engine_status|title }}</p><small>Success rate: {{ dashboard.trading.success_rate|floatformat:1 }}%</small></article>
+    <article class="monitoring-card"><h2>AI engine</h2><p class="monitoring-status" data-engine="ai"><i class="monitoring-dot"></i>{{ dashboard.ai_engine_status|title }}</p><small>Latest inference: {{ dashboard.ai.prediction_latency|floatformat:1 }} ms</small></article>
+    <article class="monitoring-card"><h2>Risk engine</h2><p class="monitoring-status" data-engine="risk"><i class="monitoring-dot"></i>{{ dashboard.risk_engine_status|title }}</p><small>Exposure: {{ dashboard.risk.exposure|floatformat:2 }}</small></article>
+  </section>
+  <section class="monitoring-grid" aria-label="Operations">
+    <article class="monitoring-card"><p class="eyebrow">Broker state integrity</p><h2>Reconciliation</h2><p>Compare active-account state with broker-authoritative orders and positions. Discrepancies are recorded for investigation and never silently mutate trades.</p><form method="post" action="{% url 'monitoring-reconcile' %}">{% csrf_token %}<button class="btn primary" type="submit">Run reconciliation</button></form></article>
+    <article class="monitoring-card"><h2>Alerts</h2><p>Review operational alerts and acknowledge incidents without altering trading state.</p><a class="btn" href="/api/monitoring/alerts/">Open alert feed</a></article>
+    <article class="monitoring-card"><h2>Audit trail</h2><p>Review tamper-evident operational records and recent activity.</p><a class="btn" href="{% url 'audit' %}">Open audit</a></article>
+    <article class="monitoring-card"><h2>Execution logs</h2><p>Inspect order lifecycle events, errors and reconciliation warnings.</p><a class="btn" href="{% url 'logs' %}">Open logs</a></article>
+  </section>
+  <p class="monitoring-note">Last dashboard refresh: <span data-monitoring-updated>server-rendered</span>. Monitoring is observational; execution remains governed by the existing broker, validation and risk pipeline.</p>
 </section>
 {% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/monitoring.css' %}">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/monitoring_dashboard.js' %}" defer></script>{% endblock %}
