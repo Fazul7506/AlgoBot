@@ -99,11 +99,18 @@
 
   async function submitOrder(event) {
     event.preventDefault();
-    const account = selectedAccount(), symbol = $('#symbol')?.value, result = $('[data-order-result]');
+    const account = selectedAccount(), symbol = $('#symbol')?.value, contractType = $('[data-contract-type]')?.value, result = $('[data-order-result]');
     if (!account || !symbol) { if (result) { result.hidden = false; result.textContent = 'Select a connected broker account and instrument first.'; } return; }
+    if (!contractType) { if (result) { result.hidden = false; result.textContent = 'Wait for the broker-supported contract list before placing an order.'; } return; }
     const form = new FormData(event.currentTarget), button = $('.execute-btn');
     if (button) { button.disabled = true; button.textContent = 'Submitting…'; }
     try {
+      const validationContext = {
+        ...(window.__algobotAiOrderContext || {}),
+        broker_source: 'connected_broker',
+        contract_type: contractType,
+        underlying_symbol: symbol,
+      };
       const payload = {
         broker_account: account.id,
         symbol,
@@ -112,7 +119,7 @@
         stake: form.get('stake'),
         strategy: form.get('strategy') || '',
         client_request_id: `ui-${crypto.randomUUID?.() || Date.now()}`,
-        validation_context: window.__algobotAiOrderContext || {},
+        validation_context: validationContext,
       };
       const order = await api('/api/orders/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 25000);
       if (result) { result.hidden = false; result.textContent = `Order ${order.broker_reference || order.id || ''} ${order.status || 'queued'}.`; }
