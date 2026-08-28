@@ -14,16 +14,12 @@
   let portfolioSocket = null;
   let portfolioReconnectTimer = null;
   let portfolioReconnectAttempt = 0;
-  let streamState = 'starting';
   let liveAccount = null;
   const liveContracts = new Map();
-  const MAX_STREAM_RETRIES = 3;
-  const STREAM_RETRY_COOLDOWN = 300000;
 
   function setText(selector, value) { const node = $(selector); if (node) node.textContent = value; }
   function setHtml(selector, html) { const node = $(selector); if (node) node.innerHTML = html; }
   function empty(message) { return `<div class="empty-state">${esc(message)}</div>`; }
-  function setSync(text) { setText('[data-dashboard-sync]', text); }
 
   function timeoutRequest(url, options = {}, timeoutMs = 7000) {
     const controller = new AbortController();
@@ -48,37 +44,34 @@
   function renderAccount(account, errorMessage = '') {
     if (!account) {
       setText('[data-kpi="balance"]', 'Unavailable'); setText('[data-kpi="equity"]', 'Unavailable'); setText('[data-kpi="available"]', 'Unavailable'); setText('[data-kpi="pnl"]', 'Unavailable');
-      setText('[data-kpi-state="balance"]', errorMessage || 'No connected broker account'); setText('[data-kpi-state="equity"]', 'Broker account data unavailable');
-      return;
+      setText('[data-kpi-state="balance"]', errorMessage || 'No connected broker account'); setText('[data-kpi-state="equity"]', 'Broker account data unavailable'); return;
     }
     liveAccount = {...(liveAccount || {}), ...account};
     const currency = liveAccount.currency || '';
     const pnl = liveAccount.net_profit_loss ?? liveAccount.net_pnl ?? liveAccount.profit_loss ?? liveAccount.pnl;
-    const equity = liveAccount.equity ?? (pnl != null && liveAccount.balance != null ? Number(liveAccount.balance) + Number(pnl) : null);
     setText('[data-kpi="balance"]', `${currency} ${money(liveAccount.balance)}`.trim());
-    setText('[data-kpi="equity"]', `${currency} ${money(equity)}`.trim());
+    setText('[data-kpi="equity"]', `${currency} ${money(liveAccount.equity)}`.trim());
     setText('[data-kpi="available"]', `${currency} ${money(liveAccount.free_margin ?? liveAccount.available_margin ?? liveAccount.available)}`.trim());
     setText('[data-kpi="pnl"]', pnl == null ? 'Unavailable' : `${currency} ${money(pnl)}`.trim());
     setText('[data-kpi-state="balance"]', liveAccount.is_connected === false ? 'Last known broker data' : 'Live broker balance');
-    setText('[data-kpi-state="equity"]', equity == null ? 'Waiting for broker equity or open-contract P/L' : (pnl != null && liveAccount.equity == null ? 'Derived from balance + open-contract P/L' : 'Live broker equity'));
+    setText('[data-kpi-state="equity"]', liveAccount.equity == null ? 'Deriv does not expose a native equity field; shown when derivable from open contracts' : 'Live broker equity');
   }
 
   function renderBroker(account, errorMessage = '') {
     if (!account) { setHtml('[data-dashboard-brokers]', empty(errorMessage || 'No connected broker account')); return; }
     const broker = account.broker?.name || account.broker_name || 'Deriv';
     const id = account.broker_account_id || account.account_id || account.loginid || 'Account';
-    const accountConnected = account.is_connected !== false;
-    let status = accountConnected ? 'LIVE' : 'DEGRADED';
-    if (streamState === 'fallback' && accountConnected) status = 'CONNECTED · REST FALLBACK';
-    if (streamState === 'failed' && accountConnected) status = 'CONNECTED · LIVE FEED UNAVAILABLE';
-    setHtml('[data-dashboard-brokers]', `<span><b></b>${esc(broker)} · ${esc(id)} · ${esc(status)}</span>`);
+    const status = account.is_connected === false ? 'DEGRADED' : 'LIVE';
+    setHtml('[data-dashboard-brokers]', `<span><b></b>${esc(broker)} · ${esc(id)} · ${status}</span>`);
   }
 
   function renderRows(selector, rows, renderer, fallback) { setHtml(selector, rows.length ? rows.map(renderer).join('') : empty(fallback)); }
 
   function renderContracts(contracts) {
     const rows = Array.from(contracts.values()).filter(x => x && x.status !== 'sold' && x.status !== 'closed');
-    renderRows('[data-dashboard-positions]', rows, x => `<div class="mini-row"><strong>${esc(x.symbol || 'Market')}</strong><span>${esc(x.contract_type || '')}</span><b>${esc(x.profit ?? '—')}</b></div>`, 'No open positions reported by the connected broker.');
+    renderRows('[data-dashboard-positions]', rows,
+      x => `<div class="mini-row"><strong>${esc(x.symbol || 'Market')}</strong><span>${esc(x.contract_type || '')}</span><b>${esc(x.profit ?? '—')}</b></div>`,
+      'No open positions reported by the connected broker.');
   }
 
   function mergeLiveAccount(patch) {
@@ -95,37 +88,20 @@
     return `${protocol}//${window.location.host}${path}`;
   }
 
-  function markStreamFallback(message) {
-    streamState = 'fallback';
-    portfolioSocket = null;
-    setSync(message || 'Live feed unavailable · using latest broker snapshot');
-    if (liveAccount) renderBroker(liveAccount);
-  }
-
   function schedulePortfolioReconnect() {
-    if (portfolioReconnectTimer || portfolioReconnectAttempt >= MAX_STREAM_RETRIES || document.hidden) return;
-    const delay = Math.min(30000, 1000 * Math.pow(2, Math.max(0, portfolioReconnectAttempt - 1)));
+    if (portfolioReconnectTimer) return;
+    const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(portfolioReconnectAttempt++, 5)));
     portfolioReconnectTimer = window.setTimeout(() => { portfolioReconnectTimer = null; connectPortfolioStream(); }, delay);
   }
 
   function connectPortfolioStream() {
-    if (document.body.dataset.authenticated !== 'true' || portfolioSocket || document.hidden) return;
-    if (!('WebSocket' in window)) { markStreamFallback('Live feed unsupported · using latest broker snapshot'); return; }
-    if (portfolioReconnectAttempt >= MAX_STREAM_RETRIES) {
-      if (streamState !== 'fallback') markStreamFallback('Live feed unavailable · using latest broker snapshot');
-      return;
-    }
-    portfolioReconnectAttempt += 1;
-    streamState = 'connecting';
-    setSync(`Connecting live feed… (${portfolioReconnectAttempt}/${MAX_STREAM_RETRIES})`);
+    if (document.body.dataset.authenticated !== 'true' || portfolioSocket) return;
     try { portfolioSocket = new WebSocket(wsUrl('/ws/portfolio/')); }
-    catch (_) { portfolioSocket = null; if (portfolioReconnectAttempt >= MAX_STREAM_RETRIES) markStreamFallback('Live feed unavailable · using latest broker snapshot'); else schedulePortfolioReconnect(); return; }
+    catch (_) { portfolioSocket = null; schedulePortfolioReconnect(); return; }
 
     portfolioSocket.onopen = () => {
       portfolioReconnectAttempt = 0;
-      streamState = 'live';
-      setSync(`Live · ${new Date().toLocaleTimeString()}`);
-      if (liveAccount) renderBroker(liveAccount);
+      setText('[data-dashboard-sync]', `Live · ${new Date().toLocaleTimeString()}`);
       window.dispatchEvent(new CustomEvent('algobot:portfolio-stream-connected'));
     };
     portfolioSocket.onmessage = event => {
@@ -142,7 +118,7 @@
         const patch = {net_profit_loss: pnl};
         if (liveAccount?.balance != null && pnl != null) patch.equity = Number(liveAccount.balance) + Number(pnl);
         mergeLiveAccount(patch);
-        setSync(`Live · ${new Date().toLocaleTimeString()}`);
+        setText('[data-dashboard-sync]', `Live · ${new Date().toLocaleTimeString()}`);
       } else if (type === 'portfolio.contract') {
         const contract = message.contract || {};
         if (contract.contract_id != null) {
@@ -156,23 +132,13 @@
           if (liveAccount?.balance != null) patch.equity = Number(liveAccount.balance) + Number(message.unrealized_pnl);
           mergeLiveAccount(patch);
         }
-        setSync(`Live · ${new Date().toLocaleTimeString()}`);
+        setText('[data-dashboard-sync]', `Live · ${new Date().toLocaleTimeString()}`);
       } else if (type === 'portfolio.error') {
-        markStreamFallback('Broker live feed degraded · using latest snapshot');
+        setText('[data-dashboard-sync]', 'Broker stream degraded');
       }
     };
-    portfolioSocket.onerror = () => { if (portfolioSocket) { try { portfolioSocket.close(); } catch (_) {} } };
-    portfolioSocket.onclose = () => {
-      portfolioSocket = null;
-      if (streamState === 'live' && liveAccount) {
-        streamState = 'connecting';
-        setSync('Live feed interrupted · reconnecting');
-      }
-      if (portfolioReconnectAttempt >= MAX_STREAM_RETRIES) {
-        markStreamFallback('Live feed unavailable · using latest broker snapshot');
-        window.setTimeout(() => { portfolioReconnectAttempt = 0; streamState = 'fallback'; if (!document.hidden) setSync(`Snapshot · ${new Date().toLocaleTimeString()}`); }, STREAM_RETRY_COOLDOWN);
-      } else schedulePortfolioReconnect();
-    };
+    portfolioSocket.onerror = () => { setText('[data-dashboard-sync]', 'Broker stream reconnecting…'); };
+    portfolioSocket.onclose = () => { portfolioSocket = null; schedulePortfolioReconnect(); };
   }
 
   async function loadAccount() {
@@ -212,17 +178,11 @@
     renderRows('[data-dashboard-signals]', signals, x => `<div class="signal-row"><strong>${esc(x.symbol?.symbol || x.symbol || 'Market')} ${esc(x.direction || x.signal || 'HOLD')}</strong><span>${esc(x.strategy?.name || x.strategy || x.market_regime || '')}</span><b>${x.confidence != null ? Number(x.confidence).toFixed(0) + '%' : '—'}</b></div>`, result.signals?.error?.code === 'API_TIMEOUT' ? 'Signals request timed out' : 'No recent backend signals reported.');
     const activity = [...orders.map(x => ({label:x.symbol?.symbol || x.symbol || 'Order', meta:x.status || 'Order', time:x.updated_at || x.created_at})), ...signals.map(x => ({label:x.symbol?.symbol || x.symbol || 'Signal', meta:x.direction || x.signal || 'Signal', time:x.created_at || x.timestamp}))].sort((a,b) => new Date(b.time || 0) - new Date(a.time || 0)).slice(0, 8);
     renderRows('[data-dashboard-activity]', activity, x => `<div class="mini-row"><strong>${esc(x.label)}</strong><span>${esc(x.meta || '')}</span><b>${esc(x.time ? new Date(x.time).toLocaleString() : '')}</b></div>`, 'No recent backend activity.');
-
-    if (!liveAccount?.equity && liveAccount?.balance != null && positions.length === 0) {
-      liveAccount.equity = Number(liveAccount.balance);
-      renderAccount(liveAccount);
-    }
   }
 
   async function load() {
     if (loading) return;
     loading = true; const generation = ++refreshGeneration; if (refreshTimer) window.clearTimeout(refreshTimer);
-    setSync('Updating dashboard…');
     const accountPromise = loadAccount();
     try { const result = await loadCollections(); if (generation === refreshGeneration) renderCollections(result); }
     catch (error) { const message = error?.message || 'Dashboard backend request failed'; ['[data-dashboard-positions]','[data-dashboard-orders]','[data-dashboard-markets]','[data-dashboard-signals]','[data-dashboard-activity]'].forEach(selector => setHtml(selector, empty(message))); }
@@ -230,7 +190,6 @@
       await accountPromise; loading = false;
       if (!document.hidden) refreshTimer = window.setTimeout(load, 60000);
       connectPortfolioStream();
-      if (streamState === 'fallback') setSync(`Snapshot · ${new Date().toLocaleTimeString()}`);
     }
   }
 
@@ -247,7 +206,7 @@
   function boot() {
     $('[data-dashboard-refresh]')?.addEventListener('click', load);
     $('[data-dashboard-kill-switch]')?.addEventListener('click', activateKillSwitch);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) { window.clearTimeout(refreshTimer); if (portfolioReconnectTimer) { window.clearTimeout(portfolioReconnectTimer); portfolioReconnectTimer = null; } } else { if (!loading) load(); if (streamState !== 'live') connectPortfolioStream(); } });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) window.clearTimeout(refreshTimer); else { if (!loading) load(); connectPortfolioStream(); } });
     window.addEventListener('algobot:account-synced', event => { if (event.detail) { renderAccount(event.detail); renderBroker(event.detail); } connectPortfolioStream(); });
     window.addEventListener('algobot:account-changed', event => { if (event.detail) { liveAccount = event.detail; renderAccount(event.detail); renderBroker(event.detail); } if (!loading) load(); });
     connectPortfolioStream();
