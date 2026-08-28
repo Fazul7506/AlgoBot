@@ -57,14 +57,17 @@ class OrderViewSet(viewsets.ModelViewSet):
         if not ai_ok:
             return response.Response(ai_error, status=status.HTTP_409_CONFLICT)
         try:
+            order_data = dict(data)
+            order_data.pop('risk_context', None)
+            order_data.pop('ai_context', None)
+            order_data.pop('timeframe', None)
             order=ExecutionEngine().place_consensus_order(
                 request.user,
-                symbol=data.get('symbol'),
+                symbol=order_data.pop('symbol'),
                 timeframe=str(self._ai_context(data).get('timeframe') or 'M1').upper(),
                 context=data.get('ai_context') or {},
                 risk_context=data.get('risk_context') or {},
-                direction=data.get('direction'),
-                **data,
+                **order_data,
             )
         except PermissionError as exc:
             return response.Response({'status':'rejected','code':'ORDER_RISK_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
@@ -112,7 +115,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=True, methods=['post'])
     def cancel(self, request, pk=None): return response.Response(OrderSerializer(ExecutionEngine().cancel_order(self.get_object())).data)
     @decorators.action(detail=True, methods=['post'])
-    def retry(self, request, pk=None): ExecutionEngine().retry(self.get_object()); return response.Response({'status':'queued'})
+    def retry(self, request): ExecutionEngine().retry(self.get_object()); return response.Response({'status':'queued'})
 
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
