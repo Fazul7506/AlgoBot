@@ -10,4 +10,5 @@ class AIPredictAuthenticationTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(response.data.get("detail"), "Authentication credentials are required for AI analysis.")
+        self.assertEqual(response.data.get("detail"), "Authentication credentials were not provided.")
+        self.assertEqual(response.data.get("code"), "not_authenticated")
