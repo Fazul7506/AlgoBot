@@ -14,10 +14,8 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self): return Order.objects.filter(user=self.request.user)
-
     @staticmethod
     def _environment(account): return str((account.credentials or {}).get('account_type') or '').lower().strip() if account else ''
-
     @staticmethod
     def _safe_client_context(data):
         context = data.get('validation_context') or {}
@@ -26,7 +24,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         client_request_id = str(request.data.get('client_request_id') or '').strip()
         if client_request_id:
-            existing = Order.objects.filter(user=request.user, client_request_id=client_request_id).first()
+            existing = Order.objects.filter(user=request.user, client_order_id=client_request_id).first()
             if existing: return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
         serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data); account = data.get('broker_account'); environment = self._environment(account); data['validation_context'] = self._safe_client_context(request.data)
@@ -34,12 +32,9 @@ class OrderViewSet(viewsets.ModelViewSet):
             allowed, used, limit = check_live_order(request.user)
             if not allowed: return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)): return response.Response({'status':'rejected','code':'LIVE_TRADING_DISABLED','detail':'Live-money trading is disabled by platform configuration.'}, status=status.HTTP_409_CONFLICT)
-            try:
-                order = ExecutionEngine().place_consensus_order(request.user, timeframe='M1', context=None, risk_context={}, **data)
-            except PermissionError as exc:
-                return response.Response({'status':'rejected','code':'AI_CONSENSUS_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
-            except Exception as exc:
-                return response.Response({'status':'rejected','code':'AI_ANALYSIS_UNAVAILABLE','detail':f'Live execution requires a fresh verified AI decision: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            try: order = ExecutionEngine().place_consensus_order(request.user, timeframe='M1', context=None, risk_context={}, **data)
+            except PermissionError as exc: return response.Response({'status':'rejected','code':'AI_CONSENSUS_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
+            except Exception as exc: return response.Response({'status':'rejected','code':'AI_ANALYSIS_UNAVAILABLE','detail':f'Live execution requires a fresh verified AI decision: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             return response.Response(self.get_serializer(order).data, status=status.HTTP_201_CREATED)
         try: order = ExecutionEngine().place_order(request.user, **data)
         except PermissionError as exc: return response.Response({'status':'rejected','code':'ORDER_RISK_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
@@ -73,10 +68,17 @@ class OrderViewSet(viewsets.ModelViewSet):
                 consensus = prediction.payload.get('consensus', {}) if prediction.payload else {}
                 ai_gate = {'ai_verified':True,'ai_required':True,'prediction_id':prediction.pk,'recommendation_id':recommendation.pk,'decision':consensus.get('decision',prediction.prediction),'confidence':consensus.get('confidence',prediction.confidence),'models_used':consensus.get('models_used',0)}
             except Exception as exc: return response.Response({'status':'rejected','code':'AI_ANALYSIS_UNAVAILABLE','detail':f'Live execution requires a fresh verified AI decision: {exc}'}, status=status.HTTP_409_CONFLICT)
-        stake = data.get('stake')
-        try: stake_value = float(Decimal(str(stake)))
-        except (InvalidOperation, TypeError, ValueError): stake_value = None
-        return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':data.get('symbol'),'direction':data.get('direction'),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':{'price':float(quote.last_price),'bid':float(quote.bid) if quote.bid is not None else None,'ask':float(quote.ask) if quote.ask is not None else None,'spread':float(quote.spread or 0),'timestamp':quote.timestamp.isoformat()},'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'fresh_market_data':True,**ai_gate}})
+        try:
+            stake = data.get('stake')
+            try: stake_value = float(Decimal(str(stake)))
+            except (InvalidOperation, TypeError, ValueError): stake_value = None
+            last_price = getattr(quote, 'last_price', None)
+            if last_price is None: raise ValueError('The authoritative market snapshot has no last price.')
+            timestamp = getattr(quote, 'timestamp', None)
+            market = {'price':float(last_price),'bid':float(quote.bid) if quote.bid is not None else None,'ask':float(quote.ask) if quote.ask is not None else None,'spread':float(quote.spread or 0),'timestamp':timestamp.isoformat() if timestamp else None}
+            return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':data.get('symbol'),'direction':data.get('direction'),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':market,'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'fresh_market_data':True,**ai_gate}})
+        except (TypeError, ValueError, AttributeError, OverflowError) as exc:
+            return response.Response({'status':'rejected','code':'PREVIEW_SERIALIZATION_FAILED','detail':f'Unable to build a safe pre-trade preview: {exc}'}, status=status.HTTP_409_CONFLICT)
 
     @decorators.action(detail=True, methods=['post'])
     def cancel(self, request, pk=None): return response.Response(OrderSerializer(ExecutionEngine().cancel_order(self.get_object())).data)
