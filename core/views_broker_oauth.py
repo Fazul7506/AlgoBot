@@ -90,6 +90,9 @@ def _persist_deriv_account(
     websocket_balance = websocket_balance or {}
     currency = record.get("currency") or websocket_balance.get("currency") or "USD"
     balance_value = record.get("balance") if record.get("balance") is not None else websocket_balance.get("balance") or 0
+    # Equity is not interchangeable with balance. Only persist an equity value
+    # when the broker explicitly supplied one through the live stream.
+    equity_value = websocket_balance.get("equity") if websocket_balance.get("equity") is not None else 0
     avatar_url = str(record.get("avatar_url") or websocket_balance.get("avatar_url") or "").strip()
     account_type = _account_type(record, websocket_balance)
 
@@ -101,7 +104,7 @@ def _persist_deriv_account(
     broker_account.user = user
     broker_account.currency = currency
     broker_account.balance = balance_value
-    broker_account.equity = websocket_balance.get("equity") if websocket_balance.get("equity") is not None else balance_value
+    broker_account.equity = equity_value
     broker_account.status = "active"
     broker_account.is_preferred = preferred
     broker_account.credentials = {
