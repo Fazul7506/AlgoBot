@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -32,10 +30,10 @@ class MarketScannerApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([r["symbol"] for r in response.json()["results"]], ["GAIN"])
 
-    def test_spread_filter_is_applied(self):
+    def test_spread_filter_excludes_symbols_without_a_snapshot(self):
         response = self.client.get("/api/market/scanner/?max_spread=0.25")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual([r["symbol"] for r in response.json()["results"]], ["GAIN", "NODATA"])
+        self.assertEqual([r["symbol"] for r in response.json()["results"]], ["GAIN"])
 
     def test_invalid_filters_are_rejected(self):
         self.assertEqual(self.client.get("/api/market/scanner/?direction=sideways").status_code, 400)
