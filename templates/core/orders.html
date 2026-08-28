@@ -1,12 +1,15 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Orders & execution | AlgoBot{% endblock %}
+{% block title %}Orders & Execution | AlgoBot{% endblock %}
 {% block mobile_title %}Orders{% endblock %}
 {% block content %}
-<section class="data-page panel" data-data-page="orders-page" data-api-root="/api/">
-<header class="page-heading"><div><p class="eyebrow">Broker execution</p><h1>Orders & execution</h1><p>Orders are shown from the authenticated broker-backed execution API. Execution truth remains with the broker.</p></div><div><a class="btn primary" href="/trading/">Open trading terminal</a></div></header>
-<div class="kpi-grid compact"><article class="kpi-card"><span>Total orders</span><strong data-record-count>—</strong></article><article class="kpi-card"><span>Status</span><strong data-page-status>Waiting</strong></article><article class="kpi-card"><span>Last update</span><strong data-page-updated>—</strong></article><article class="kpi-card"><span>Failed/rejected</span><strong data-page-risk>—</strong></article></div>
-<section class="panel"><div class="panel-head"><div><h2>Broker orders</h2><p>Search and inspect execution records. New orders are created through the trading terminal.</p></div><input type="search" data-page-search placeholder="Search orders" aria-label="Search orders"></div><div class="table-wrap"><table class="enterprise-table" data-page-table><thead></thead><tbody><tr><td>Connect a broker to load orders.</td></tr></tbody></table></div></section>
+<section class="data-page panel orders-center" data-data-page="orders-page" data-api-root="/api/">
+  <header class="page-heading"><div><p class="eyebrow">Broker execution</p><h1>Orders & Execution Center</h1><p>Inspect authenticated broker-backed orders, execution state and broker references. New orders are created through the Trading Terminal.</p></div><div class="page-actions"><button class="btn" type="button" data-orders-refresh>Refresh</button><a class="btn primary" href="/trading/">Open Trading Terminal</a></div></header>
+  <div class="kpi-grid compact"><article class="kpi-card"><span>Total orders</span><strong data-record-count>—</strong></article><article class="kpi-card"><span>Pending</span><strong data-page-pending>—</strong></article><article class="kpi-card"><span>Executed</span><strong data-page-executed>—</strong></article><article class="kpi-card"><span>Failed / rejected</span><strong data-page-risk>—</strong></article></div>
+  <section class="panel orders-toolbar"><div class="orders-filter"><label for="orders-search">Search</label><input id="orders-search" type="search" data-page-search placeholder="Symbol, broker reference, strategy…"></div><div class="orders-filter"><label for="orders-status">Status</label><select id="orders-status" data-orders-status><option value="">All statuses</option><option value="draft">Draft</option><option value="validated">Validated</option><option value="queued">Queued</option><option value="sent">Sent</option><option value="accepted">Accepted</option><option value="executed">Executed</option><option value="failed">Failed</option><option value="cancelled">Cancelled</option></select></div><span class="orders-source">Broker-backed execution records</span></section>
+  <section class="panel"><div class="panel-head"><div><h2>Order lifecycle</h2><p>Execution truth remains with the broker. Actions are explicit and use the existing execution service.</p></div></div><div class="table-wrap"><table class="enterprise-table" data-page-table><thead></thead><tbody><tr><td>Connect a broker to load orders.</td></tr></tbody></table></div></section>
+  <p class="orders-note">AlgoBot preserves client request IDs and broker references for traceability. Cancelling or retrying an order never bypasses the existing validation and execution pipeline.</p>
 </section>
 {% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/orders.css' %}">{% endblock %}
 {% block extra_js %}<script src="{% static 'js/orders.js' %}" defer></script>{% endblock %}
