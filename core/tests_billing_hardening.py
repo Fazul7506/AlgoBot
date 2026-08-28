@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from core.models import Invoice, Payment, Subscription
+from core.services.payment_reconciler import PaymentReconciler
 from core.views_billing import _reconcile_invoice
 
 
@@ -79,3 +80,14 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Payment confirmed")
         self.assertEqual(Subscription.objects.get(user=self.user).plan, "ENTERPRISE")
+
+    def test_webhook_reconciler_uses_canonical_payment_states(self):
+        metadata = {"api_ref": "IS-1-BASIC-TEST123", "plan": "BASIC", "currency": "KES"}
+        first = PaymentReconciler.reconcile(provider="intasend", external_id="WEBHOOK-1", status="COMPLETE", amount="999.00", currency="KES", metadata=metadata)
+        second = PaymentReconciler.reconcile(provider="intasend", external_id="WEBHOOK-1", status="COMPLETE", amount="999.00", currency="KES", metadata=metadata)
+        payment = Payment.objects.get(external_id="WEBHOOK-1")
+        self.assertEqual(first["status"], "COMPLETED")
+        self.assertEqual(second["status"], "COMPLETED")
+        self.assertEqual(payment.status, "COMPLETED")
+        self.assertEqual(Payment.objects.filter(external_id="WEBHOOK-1").count(), 1)
+        self.assertEqual(Subscription.objects.get(user=self.user).plan, "BASIC")
