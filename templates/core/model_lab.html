@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Model Lab | AlgoBot{% endblock %}
+{% block content %}
+<main class="enterprise-page" data-page="core-model-lab">
+  <header class="enterprise-page-header">
+    <div><p class="eyebrow">AI / RESEARCH</p><h1>Model Lab</h1><p>Inspect registered models, training health and validation metrics without exposing live execution controls.</p></div>
+    <div class="enterprise-page-actions"><a class="btn" href="/predictions/">Prediction Center</a><button class="btn primary" type="button" data-model-train>Start training</button></div>
+  </header>
+  <section class="model-lab" aria-live="polite">
+    <div class="model-lab-grid">
+      <article class="model-card"><span>Registered models</span><strong data-model-count>—</strong></article>
+      <article class="model-card"><span>Active models</span><strong data-active-count>—</strong></article>
+      <article class="model-card"><span>Training jobs</span><strong data-job-count>—</strong></article>
+      <article class="model-card"><span>Validated models</span><strong data-validated-count>—</strong></article>
+    </div>
+    <div class="model-card"><h2>Model registry</h2><p class="muted">Registry metadata is read from the authenticated AI API. This workspace is research-only; it cannot activate a model for live trading.</p><div class="table-wrap"><table><thead><tr><th>Model</th><th>Version</th><th>Algorithm</th><th>Status</th><th>Accuracy</th><th>F1</th><th>AUC</th></tr></thead><tbody data-models><tr><td colspan="7">Loading…</td></tr></tbody></table></div></div>
+    <div class="model-lab-columns">
+      <section class="model-card"><h2>Training jobs</h2><div class="jobs" data-jobs>Loading…</div></section>
+      <section class="model-card"><h2>Model governance</h2><ul class="governance"><li>AI output remains advisory.</li><li>Risk validation and broker execution gates remain authoritative.</li><li>No synthetic market data is introduced by this workspace.</li><li>Model status is informational until separately verified for production use.</li></ul></section>
+    </div>
+    <div class="model-card"><h2>Training result</h2><div class="result muted" data-train-result>Training has not been requested.</div></div>
+  </section>
+</main>
+{% endblock %}
+{% block extra_css %}<style>.model-lab{display:grid;gap:18px;margin-top:18px}.model-lab-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.model-card{padding:18px;border:1px solid var(--border-color,#e5e7eb);border-radius:14px;background:var(--panel-bg,#fff)}.model-card h2{margin:0 0 8px}.model-card>span{display:block;opacity:.7}.model-card>strong{display:block;font-size:1.55rem;margin-top:6px}.model-lab-columns{display:grid;grid-template-columns:2fr 1fr;gap:18px}.table-wrap{overflow:auto}.model-card table{width:100%;border-collapse:collapse}.model-card th,.model-card td{padding:10px;text-align:left;border-bottom:1px solid var(--border-color,#eee);white-space:nowrap}.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:var(--surface-muted,#f3f4f6)}.jobs{display:grid;gap:10px}.job{padding:12px;border:1px solid var(--border-color,#eee);border-radius:10px}.governance{margin:8px 0 0;padding-left:20px;display:grid;gap:8px}.muted{opacity:.7}.result{padding:12px;border-radius:10px;background:var(--surface-muted,#f8fafc)}.error{background:#fff1f2}@media(max-width:900px){.model-lab-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.model-lab-columns{grid-template-columns:1fr}}@media(max-width:600px){.model-lab-grid{grid-template-columns:1fr}}</style>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/model_lab.js' %}?v=20260828-ml1" defer></script>{% endblock %}
