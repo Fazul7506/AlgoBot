@@ -4,20 +4,26 @@
   if (window.AlgoBotFrontendData) return;
   const brokerState = () => window.AlgoBotBrokerState;
   const list = value => Array.isArray(value) ? value : (Array.isArray(value?.results) ? value.results : (Array.isArray(value?.data) ? value.data : []));
-  const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '';
+  const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || document.querySelector('meta[name="csrf-token"]')?.content || '';
   const inflight = new Map();
   const cache = new Map();
   const GET_CACHE_MS = 1200;
-  const cloudflareAlias = url => typeof url === 'string' && url.startsWith('/api/') ? `/data/${url.slice(5)}` : null;
+  // Production API traffic must use the dedicated API hostname. Keeping this
+  // decision here (rather than in individual pages) prevents one page from
+  // silently falling back to a Cloudflare-proxied /data/ alias.
+  const configuredApiBase = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
+  const defaultApiBase = window.location.hostname === 'algobot.dpdns.org' ? 'https://api.algobot.dpdns.org' : '';
+  const apiBase = (configuredApiBase || defaultApiBase).replace(/\/+$/, '');
+  const resolveUrl = url => /^https?:\/\//i.test(url) ? url : `${apiBase}${url.startsWith('/') ? url : `/${url}`}`;
   const isCloudflareChallenge = (response, text) => {
     if (!response || !text) return false;
     const body = String(text).toLowerCase();
-    return [400,403,429,503,520,521,522,524].includes(response.status) && (body.includes('just a moment') || body.includes('challenge-platform') || body.includes('cf_chl_opt') || body.includes('cf-chl-') || body.includes('enable javascript and cookies to continue'));
+    return [400,403,429,503,520,521,522,524].includes(response.status) && (body.includes('just a moment') || body.includes('challenge-platform') || body.includes('cf_chl_opt') || body.includes('cf-chl-') || body.includes('challenges.cloudflare.com') || body.includes('enable javascript and cookies to continue') || (body.includes('cloudflare') && String(response.headers?.get('content-type') || '').toLowerCase().includes('text/html')));
   };
   const parsePayload = (response, text) => {
     try { return text ? JSON.parse(text) : {}; }
     catch (_) {
-      if (isCloudflareChallenge(response, text)) return {detail:'Production edge security challenged this API request.', code:'EDGE_CHALLENGE'};
+      if (isCloudflareChallenge(response, text)) return {detail:'Production API edge challenge encountered.', code:'EDGE_CHALLENGE'};
       const contentType = String(response?.headers?.get('content-type') || '').toLowerCase();
       return {detail:contentType.includes('text/html') ? `Backend returned an unexpected HTML response (${response.status}).` : String(text || `Request failed (${response?.status || 'unknown'})`)};
     }
@@ -26,7 +32,9 @@
     const method = (options.method || 'GET').toUpperCase();
     const headers = {Accept:'application/json', ...(options.headers || {})};
     if (!['GET','HEAD','OPTIONS'].includes(method) && !headers['X-CSRFToken']) headers['X-CSRFToken'] = csrf();
-    const response = await fetch(url, {credentials:'same-origin', ...options, headers, signal:controller.signal});
+    const target = resolveUrl(url);
+    const crossOrigin = (() => { try { return new URL(target, window.location.origin).origin !== window.location.origin; } catch (_) { return false; } })();
+    const response = await fetch(target, {credentials:crossOrigin ? 'include' : 'same-origin', ...options, headers, signal:controller.signal});
     return {response, text:await response.text()};
   }
   async function request(url, options = {}, timeout = 25000) {
@@ -42,24 +50,20 @@
     const timer = setTimeout(() => controller.abort(), Math.max(1000, timeout));
     const promise = (async () => {
       try {
-        const alias = cloudflareAlias(url);
-        const primary = alias || url;
-        let result = await fetchOnce(primary, options, controller);
-        if (primary !== url && !result.response.ok && !isCloudflareChallenge(result.response, result.text) && [404,405,502,503,504].includes(result.response.status)) result = await fetchOnce(url, options, controller);
-        const {response, text} = result;
+        const {response, text} = await fetchOnce(url, options, controller);
         const payload = parsePayload(response, text);
         if (!response.ok) {
           const error = new Error(payload.detail || payload.message || `Request failed (${response.status})`);
           error.status = response.status;
-          error.code = payload.code || error.code;
+          error.code = payload.code || (isCloudflareChallenge(response, text) ? 'EDGE_CHALLENGE' : 'API_ERROR');
           error.isEdgeChallenge = error.code === 'EDGE_CHALLENGE';
-          window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url, method, status:response.status, code:error.code || 'API_ERROR', message:error.message, retryable:['GET','HEAD'].includes(method), edgeChallenge:error.isEdgeChallenge, retry:['GET','HEAD'].includes(method) ? () => request(url, options, timeout) : null}}));
+          window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url, method, status:response.status, code:error.code, message:error.message, retryable:['GET','HEAD'].includes(method), edgeChallenge:error.isEdgeChallenge, retry:['GET','HEAD'].includes(method) ? () => request(url, options, timeout) : null}}));
           throw error;
         }
         if (method === 'GET') cache.set(url,{payload,at:Date.now()});
         return payload;
       } catch (error) {
-        if (error?.name === 'AbortError' || error?.name === 'AlgoBotTimeoutError') {
+        if (error?.name === 'AbortError' || error?.code === 'API_TIMEOUT') {
           const e=new Error('Backend request timed out'); e.code='API_TIMEOUT';
           window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url, method, status:0, code:e.code, message:e.message, retryable:['GET','HEAD'].includes(method), retry:['GET','HEAD'].includes(method) ? () => request(url, options, timeout) : null}}));
           throw e;
