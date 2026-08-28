@@ -3,6 +3,12 @@ services:
     name: AlgoBot
     runtime: python
     plan: free
+    # Keep the public UI and dedicated API hostname on the same Render service.
+    # Cloudflare should proxy the UI hostname if desired, while the API hostname
+    # is configured DNS-only at the DNS provider.
+    domains:
+      - algobot.dpdns.org
+      - api.algobot.dpdns.org
     # Build all deploy-time assets before the service starts. Keeping
     # collectstatic in the build step prevents a restart from exposing HTML
     # before WhiteNoise has a complete staticfiles directory.
