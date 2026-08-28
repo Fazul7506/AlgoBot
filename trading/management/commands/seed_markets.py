@@ -13,33 +13,27 @@ MARKET_TYPE_MAP = {
 }
 
 
+def broker_timeframe_key(key):
+    """Normalize the broker data-service timeframe key for the trading catalog."""
+    return str(key).strip().lower()
+
+
 class Command(BaseCommand):
     help = "Synchronize the market catalogue from the broker and ensure the current model schema exists."
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            "--deactivate-missing",
-            action="store_true",
-            help="Deactivate trading-model symbols that are no longer returned by the broker.",
-        )
+        parser.add_argument("--deactivate-missing", action="store_true", help="Deactivate trading-model symbols that are no longer returned by the broker.")
 
     def handle(self, *args, **options):
-        # The repository intentionally carries no committed migration files while the
-        # model/app consolidation is being reset. Generate the current migration graph
-        # and apply it before touching either MarketSymbol table. This makes fresh Render
-        # and CI databases self-initializing instead of querying tables that do not exist.
         call_command("makemigrations", interactive=False, verbosity=1)
         call_command("migrate", interactive=False, verbosity=1)
-
         synced = sync_active_symbols()
         broker_symbols = list(BrokerMarketSymbol.objects.filter(is_active=True))
         seen = set()
         created = updated = 0
-        supported_timeframes = [
-            key.upper()
-            for key in TIMEFRAMES
-            if key != "tick" and key in {"1m", "5m", "15m", "30m", "1h", "4h", "1d"}
-        ]
+        # Keep the timeframe catalog aligned with the broker data service rather than
+        # maintaining a second hard-coded list in the UI. Tick is a streaming mode, not OHLC.
+        supported_timeframes = [broker_timeframe_key(key) for key in TIMEFRAMES if broker_timeframe_key(key) != "tick"]
 
         for source in broker_symbols:
             market_type = MARKET_TYPE_MAP.get(source.market, "SYNTHETIC")
@@ -60,15 +54,6 @@ class Command(BaseCommand):
 
         deactivated = 0
         if options["deactivate_missing"] and seen:
-            deactivated = (
-                TradingMarketSymbol.objects.filter(is_active=True)
-                .exclude(pk__in=seen)
-                .update(is_active=False)
-            )
+            deactivated = TradingMarketSymbol.objects.filter(is_active=True).exclude(pk__in=seen).update(is_active=False)
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Broker market sync complete: {synced} broker symbols synchronized; "
-                f"{created} trading records created, {updated} updated, {deactivated} deactivated."
-            )
-        )
+        self.stdout.write(self.style.SUCCESS(f"Broker market sync complete: {synced} broker symbols synchronized; {created} trading records created, {updated} updated, {deactivated} deactivated."))
