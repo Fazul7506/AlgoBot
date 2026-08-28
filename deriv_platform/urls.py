@@ -7,38 +7,17 @@ from rest_framework.routers import DefaultRouter
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
-from core.views_auth import (
-    CustomTokenObtainPairView, register, login_view, change_password,
-    UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet
-)
+from core.views_auth import CustomTokenObtainPairView, register, login_view, change_password, UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet
 from core.browser_views import browser_logout
 from trading.views.dashboard import DashboardViewSet
-from trading.views.market import (
-    MarketSymbolViewSet, PriceHistoryViewSet, MarketSnapshotViewSet,
-    TickDataViewSet, DataStreamSessionViewSet, MarketDataStatsViewSet,
-    MarketRegimeViewSet
-)
+from trading.views.market import MarketSymbolViewSet, PriceHistoryViewSet, MarketSnapshotViewSet, TickDataViewSet, DataStreamSessionViewSet, MarketDataStatsViewSet, MarketRegimeViewSet
 from trading.views.notifications import NotificationViewSet
 from trading.views.copy_trading import CopyTradingViewSet
-from trading.views.indicators import (
-    IndicatorValueViewSet, TechnicalSignalViewSet, IndicatorProfileViewSet,
-    IndicatorAlertViewSet, IndicatorDashboardViewSet
-)
+from trading.views.indicators import IndicatorValueViewSet, TechnicalSignalViewSet, IndicatorProfileViewSet, IndicatorAlertViewSet, IndicatorDashboardViewSet
 from trading.strategies.strategy_api import StrategyViewSet
 from apps.market_data.web_views import market_catalogue
 from apps.market_data.signal_views import strategy_signals
-
-from core.views import (
-    deriv_login, broker_connect_page, broker_marketplace_page,
-    home, login_page, register_page, dashboard_page, markets_page,
-    strategies_page, trading_page, backtesting_page, predictions_page,
-    performance_page, settings_page, profile_page, terms_page, privacy_page,
-    forgot_password_page, reset_password_page, verify_email_page,
-    cookie_policy_page, licensing_page, contact_page, about_page,
-    public_status_page, risk_page, billing_success_page, billing_cancel_page,
-    orders_page, positions_page, signals_page, portfolio_page,
-    operations_module_page
-)
+from core.views import deriv_login, broker_connect_page, broker_marketplace_page, home, login_page, register_page, dashboard_page, markets_page, strategies_page, trading_page, backtesting_page, predictions_page, performance_page, settings_page, profile_page, terms_page, privacy_page, forgot_password_page, reset_password_page, verify_email_page, cookie_policy_page, licensing_page, contact_page, about_page, public_status_page, risk_page, billing_success_page, billing_cancel_page, orders_page, positions_page, signals_page, portfolio_page, operations_module_page, strategy_builder_page
 from core.views_trade_history import trade_history_page
 from core.views_automation import workflow_templates_page
 from core.views_deriv_oauth_safe import callback
@@ -78,6 +57,7 @@ urlpatterns = [
     path('saas/', login_required(lambda request: render(request, 'core/saas.html')), name='saas_page'),
     path('markets/', login_required(markets_page), name='markets_page'),
     path('strategies/', login_required(strategies_page), name='strategies_page'),
+    path('strategies/builder/', login_required(strategy_builder_page), name='strategy_builder_page'),
     path('trading/', login_required(trading_page), name='trading_page'),
     path('backtesting/', login_required(backtesting_page), name='backtesting_page'),
     path('predictions/', login_required(predictions_page), name='predictions_page'),
