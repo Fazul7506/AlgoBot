@@ -43,38 +43,16 @@ class TrainingJobViewSet(viewsets.ModelViewSet):
 def model_governance(request):
     model_id = request.query_params.get("model_id")
     versions = ModelVersion.objects.select_related("model")
-    if model_id:
-        versions = versions.filter(model_id=model_id)
+    if model_id: versions = versions.filter(model_id=model_id)
     recent_cutoff = timezone.now() - timedelta(days=30)
     predictions = Prediction.objects.filter(created_at__gte=recent_cutoff)
     resolved = PredictionOutcome.objects.filter(prediction__in=predictions, correct__isnull=False)
-    total = resolved.count()
-    correct = resolved.filter(correct=True).count()
-    accuracy = (correct / total) if total else None
-    calibration = None
-    if total:
-        calibration = {
-            "sample_size": total,
-            "accuracy": round(accuracy, 6),
-            "mean_confidence": round(float(resolved.aggregate(v=Avg("prediction__confidence"))["v"] or 0), 6),
-            "status": "available",
-        }
-    else:
-        calibration = {"sample_size": 0, "accuracy": None, "mean_confidence": None, "status": "insufficient_data"}
+    total = resolved.count(); correct = resolved.filter(correct=True).count(); accuracy = (correct / total) if total else None
+    calibration = {"sample_size": total, "accuracy": round(accuracy, 6) if accuracy is not None else None, "mean_confidence": round(float(resolved.aggregate(v=Avg("prediction__confidence"))["v"] or 0), 6) if total else None, "status": "available" if total else "insufficient_data"}
     latest_features = FeatureVector.objects.filter(timestamp__gte=recent_cutoff).count()
     previous_features = FeatureVector.objects.filter(timestamp__lt=recent_cutoff, timestamp__gte=recent_cutoff - timedelta(days=30)).count()
-    drift = {
-        "status": "available" if latest_features and previous_features else "insufficient_data",
-        "recent_feature_vectors": latest_features,
-        "previous_period_feature_vectors": previous_features,
-    }
-    return response.Response({
-        "models": AIModelSerializer(AIModel.objects.all(), many=True).data,
-        "versions": ModelVersionSerializer(versions, many=True).data,
-        "calibration": calibration,
-        "drift": drift,
-        "governance": {"live_trading_authority": False, "role": "research_and_advisory"},
-    })
+    drift = {"status": "available" if latest_features and previous_features else "insufficient_data", "recent_feature_vectors": latest_features, "previous_period_feature_vectors": previous_features}
+    return response.Response({"models": AIModelSerializer(AIModel.objects.all(), many=True).data, "versions": ModelVersionSerializer(versions, many=True).data, "calibration": calibration, "drift": drift, "governance": {"live_trading_authority": False, "role": "research_and_advisory"}})
 
 
 @decorators.api_view(["POST"])
@@ -84,7 +62,7 @@ def train(request):
         job = TrainingService().train(mode=request.data.get("mode", "manual"))
         return response.Response(TrainingJobSerializer(job).data, status=status.HTTP_201_CREATED)
     except Exception as exc:
-        return response.Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return response.Response({"detail": str(exc), "code": "AI_TRAINING_UNAVAILABLE"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 def _discover_symbol(request):
@@ -97,7 +75,7 @@ def _discover_symbol(request):
 
 
 def _connected_account(user):
-    return (BrokerAccount.objects.filter(user=user, status="active", broker__status="active").select_related("broker").order_by("-is_preferred", "-id").first())
+    return BrokerAccount.objects.filter(user=user, status="active", broker__status="active").select_related("broker").order_by("-is_preferred", "-id").first()
 
 
 async def _bounded_market_data(account, symbol):
@@ -106,92 +84,53 @@ async def _bounded_market_data(account, symbol):
 
 
 def _persisted_market_context(symbol, timeframe):
-    """Return the freshest locally persisted broker feed for fast AI inference.
-
-    The terminal already ingests the broker tick before the user requests AI.
-    Reusing that persisted tick/candle stream avoids opening a second broker
-    connection for every Analyse click while preserving the no-fabrication rule.
-    """
-    max_age = int(getattr(settings, "BROKER_MARKET_DATA_MAX_AGE_SECONDS", 30))
-    now = timezone.now()
+    """Return fresh broker-ingested data only; never use browser-provided market data."""
+    max_age = int(getattr(settings, "BROKER_MARKET_DATA_MAX_AGE_SECONDS", 30)); now = timezone.now()
     tick = Tick.objects.filter(symbol__symbol=symbol).order_by("-epoch", "-received_at").first()
-    candles_qs = Candle.objects.filter(symbol__symbol=symbol, timeframe=timeframe).order_by("-epoch")[:60]
-    candles = list(reversed(list(candles_qs)))
-    if tick is None:
-        return None
+    candles = list(reversed(list(Candle.objects.filter(symbol__symbol=symbol, timeframe=timeframe).order_by("-epoch")[:60])))
+    if tick is None: return None
     age = max(0, (now - tick.received_at).total_seconds())
-    if age > max_age:
-        return None
+    if age > max_age: return None
     price = float(tick.quote)
-    context = {
-        "market_data": {
-            "close": price,
-            "open": price,
-            "high": price,
-            "low": price,
-            "bid": float(tick.bid) if tick.bid is not None else None,
-            "ask": float(tick.ask) if tick.ask is not None else None,
-            "spread": float(tick.spread or 0),
-            "volume": float(tick.volume or 0),
-            "source": "persisted_broker_tick",
-            "age_seconds": round(age, 3),
-        },
-        "candles": [
-            {"open": float(c.open), "high": float(c.high), "low": float(c.low), "close": float(c.close), "volume": float(c.volume or 0), "epoch": c.epoch}
-            for c in candles
-        ],
-    }
-    return context
+    return {"market_data":{"close":price,"open":price,"high":price,"low":price,"bid":float(tick.bid) if tick.bid is not None else None,"ask":float(tick.ask) if tick.ask is not None else None,"spread":float(tick.spread or 0),"volume":float(tick.volume or 0),"source":"persisted_broker_tick","age_seconds":round(age,3)},"candles":[{"open":float(c.open),"high":float(c.high),"low":float(c.low),"close":float(c.close),"volume":float(c.volume or 0),"epoch":c.epoch} for c in candles]}
 
 
 def _broker_market_context(account, symbol):
-    tick = asyncio.run(_bounded_market_data(account, symbol))
-    price = tick.get("price", tick.get("quote"))
-    return {
-        "market_data": {
-            "close": price,
-            "open": price,
-            "high": price,
-            "low": price,
-            "bid": tick.get("bid"),
-            "ask": tick.get("ask"),
-            "spread": (tick.get("ask") - tick.get("bid")) if tick.get("ask") is not None and tick.get("bid") is not None else 0,
-            "source": "live_broker_tick",
-        }
-    }
+    tick = asyncio.run(_bounded_market_data(account, symbol)); price = tick.get("price", tick.get("quote"))
+    if price is None: raise ValueError("Broker returned no usable market price for the selected symbol.")
+    return {"market_data":{"close":price,"open":price,"high":price,"low":price,"bid":tick.get("bid"),"ask":tick.get("ask"),"spread":(tick.get("ask")-tick.get("bid")) if tick.get("ask") is not None and tick.get("bid") is not None else 0,"source":"live_broker_tick"}}
 
 
 @decorators.api_view(["POST"])
 @decorators.permission_classes([permissions.IsAuthenticated])
 def predict(request):
     symbol = _discover_symbol(request)
-    if not symbol: return response.Response({"detail": "No active broker market is available. Connect a broker and synchronize markets first.", "code": "NO_ACTIVE_MARKET"}, status=status.HTTP_409_CONFLICT)
+    if not symbol: return response.Response({"detail":"No active broker market is available. Connect a broker and synchronize markets first.","code":"NO_ACTIVE_MARKET"},status=status.HTTP_409_CONFLICT)
     account = _connected_account(request.user)
-    if not account: return response.Response({"detail": "Connect a broker before requesting AI analysis.", "code": "NO_CONNECTED_BROKER"}, status=status.HTTP_409_CONFLICT)
+    if not account: return response.Response({"detail":"Connect a broker before requesting AI analysis.","code":"NO_CONNECTED_BROKER"},status=status.HTTP_409_CONFLICT)
     timeframe = str(request.data.get("timeframe") or "M1").upper()
     try:
-        raw_context = request.data.get("context") or {}
-        context_source = "client_context" if raw_context.get("market_data") else None
-        if not raw_context.get("market_data"):
-            raw_context = _persisted_market_context(symbol, timeframe)
-            if raw_context:
-                context_source = raw_context.get("market_data", {}).get("source", "persisted_broker_tick")
-            else:
-                raw_context = _broker_market_context(account, symbol)
-                context_source = "live_broker_tick"
+        # Never trust context, confidence, prediction, or candles supplied by the browser.
+        # The backend chooses the freshest persisted broker feed and only then falls
+        # back to a bounded direct broker read. This removes the old client-context
+        # path that could produce Unsupported AI data sources / inconsistent decisions.
+        raw_context = _persisted_market_context(symbol, timeframe)
+        context_source = raw_context.get("market_data", {}).get("source", "persisted_broker_tick") if raw_context else "live_broker_tick"
+        if raw_context is None: raw_context = _broker_market_context(account, symbol)
         ctx = validate_feature_context(raw_context)
         result = AIEngine().analyze(symbol, timeframe, ctx)
-        return response.Response({"symbol": symbol, "timeframe": timeframe, "broker": account.broker.name, "account_id": account.account_id, "market_context_source": context_source, "prediction": PredictionSerializer(result["prediction"]).data, "recommendation": AIRecommendationSerializer(result["recommendation"]).data, "regime": MarketRegimeSerializer(result["regime"]).data, "explainability": result["explainability"]})
-    except (ValueError, TypeError) as exc: return response.Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    except asyncio.TimeoutError: return response.Response({"detail": "Connected broker market data timed out; the last known data was not fabricated.", "code": "BROKER_MARKET_DATA_TIMEOUT"}, status=status.HTTP_504_GATEWAY_TIMEOUT)
-    except Exception as exc: return response.Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return response.Response({"symbol":symbol,"timeframe":timeframe,"broker":account.broker.name,"account_id":account.account_id,"market_context_source":context_source,"prediction":PredictionSerializer(result["prediction"]).data,"recommendation":AIRecommendationSerializer(result["recommendation"]).data,"regime":MarketRegimeSerializer(result["regime"]).data,"explainability":result["explainability"]})
+    except (ValueError, TypeError) as exc: return response.Response({"detail":str(exc),"code":"AI_CONTEXT_INVALID"},status=status.HTTP_400_BAD_REQUEST)
+    except asyncio.TimeoutError: return response.Response({"detail":"Connected broker market data timed out; the last known data was not fabricated.","code":"BROKER_MARKET_DATA_TIMEOUT"},status=status.HTTP_504_GATEWAY_TIMEOUT)
+    except Exception as exc:
+        return response.Response({"detail":"AI analysis failed on the server.","code":"AI_INFERENCE_FAILED","error_id":f"ai-{int(timezone.now().timestamp())}"},status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 @decorators.api_view(["GET"])
 @decorators.permission_classes([permissions.IsAuthenticated])
 def explain(request):
     symbol = str(request.query_params.get("symbol") or "").strip(); timeframe = str(request.query_params.get("timeframe") or "M1").upper()
-    if not symbol: return response.Response({"detail": "symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
-    features = FeatureStoreService().latest(symbol, timeframe)
-    if not features: return response.Response({"detail": "No AI feature vector is available for this market yet."}, status=status.HTTP_404_NOT_FOUND)
+    if not symbol: return response.Response({"detail":"symbol is required"},status=status.HTTP_400_BAD_REQUEST)
+    features = FeatureStoreService().latest(symbol,timeframe)
+    if not features: return response.Response({"detail":"No AI feature vector is available for this market yet."},status=status.HTTP_404_NOT_FOUND)
     return response.Response(ExplainabilityService().explain(features))
