@@ -1,5 +1,5 @@
 from django.urls import path
-from . import api, views, scanner_api, data_center_api
+from . import api, views, scanner_api, data_center_api, intelligence_api
 from . import broker_native
 
 app_name = "market_data"
@@ -12,6 +12,8 @@ urlpatterns = [
     path("market/broker-catalogue/", broker_native.catalogue, name="broker_native_catalogue"),
     path("market/broker-capabilities/", broker_native.capabilities, name="broker_capabilities"),
     path("market/scanner/", scanner_api.scanner, name="scanner"),
+    path("market/intelligence/", intelligence_api.market_intelligence, name="market_intelligence"),
+    path("market/signals/lifecycle/", intelligence_api.signal_lifecycle, name="signal_lifecycle"),
     path("ticks/latest/", api.latest_tick, name="latest_tick"),
     path("ticks/history/", api.tick_history, name="tick_history_api"),
     path("ticks/broker/", api.broker_tick, name="broker_tick"),
