@@ -16,11 +16,11 @@
 
   <div class="ds-card api-security-banner">
     <span class="material-symbols-rounded" aria-hidden="true">shield_lock</span>
-    <div><strong>Secrets stay private</strong><p>API secrets are shown only once after creation or rotation. Lists expose only a masked key identifier and last-four hint.</p></div>
+    <div><strong>Secrets stay private</strong><p>The key identifier is safe to copy. The API secret is shown only once after creation or rotation and is never returned by the key list.</p></div>
   </div>
 
   <section class="ds-card api-key-table-card" aria-labelledby="api-key-list-title">
-    <div class="section-heading"><div><h2 id="api-key-list-title">Your API keys</h2><p>Use the masked key fingerprint to identify credentials safely.</p></div><span class="ds-status ds-status--ready" data-api-key-count>Loading…</span></div>
+    <div class="section-heading"><div><h2 id="api-key-list-title">Your API keys</h2><p>Lists show only a masked fingerprint; use the creation/rotation dialog to copy the full key identifier and one-time secret.</p></div><span class="ds-status ds-status--ready" data-api-key-count>Loading…</span></div>
     <div class="api-key-list" data-api-key-list>
       <div class="ds-state" data-api-key-loading><strong>Loading keys</strong><p>Fetching your developer credentials securely.</p></div>
     </div>
@@ -43,8 +43,16 @@
   </dialog>
 
   <dialog class="ds-dialog" data-api-secret-dialog aria-labelledby="api-secret-title">
-    <div class="secret-reveal"><span class="material-symbols-rounded secret-icon">key</span><p class="eyebrow">Save this secret now</p><h2 id="api-secret-title">Your API secret</h2><p>This secret will not be displayed again. Copy it into your password manager or deployment secret store.</p><div class="secret-box"><code data-api-secret></code><button type="button" class="ds-btn" data-copy-api-secret>Copy</button></div><button type="button" class="ds-btn ds-btn--primary" data-api-secret-close>Done</button></div>
+    <div class="secret-reveal">
+      <span class="material-symbols-rounded secret-icon">key</span>
+      <p class="eyebrow">Save these credentials now</p>
+      <h2 id="api-secret-title">API credentials</h2>
+      <p>The key identifier can be copied again later from your integration configuration. The secret will not be displayed again after this dialog is closed.</p>
+      <div class="secret-field"><label>Key</label><div class="secret-box"><code data-api-key-value></code><button type="button" class="ds-btn" data-copy-api-key>Copy key</button></div></div>
+      <div class="secret-field"><label>Secret</label><div class="secret-box"><code data-api-secret></code><button type="button" class="ds-btn" data-copy-api-secret>Copy secret</button></div></div>
+      <button type="button" class="ds-btn ds-btn--primary" data-api-secret-close>Done</button>
+    </div>
   </dialog>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/api_keys.js' %}?v=20260829-key3" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/api_keys.js' %}?v=20260829-key4" defer></script>{% endblock %}
