@@ -13,7 +13,13 @@
     if (url.endsWith('/api/orders/') && window.__algobotAiOrderContext && typeof nextInit.body === 'string') {
       try {
         const payload = JSON.parse(nextInit.body);
-        payload.routing_context = { ...(payload.routing_context || {}), ...window.__algobotAiOrderContext };
+        // validation_context is the actual Order model/API field. The previous
+        // guard created an undeclared routing_context field, which DRF rejected
+        // with HTTP 400 before the execution engine was reached.
+        payload.validation_context = {
+          ...(payload.validation_context || {}),
+          ...window.__algobotAiOrderContext,
+        };
         nextInit.body = JSON.stringify(payload);
         window.__algobotAiOrderContext = null;
       } catch (_) {}
