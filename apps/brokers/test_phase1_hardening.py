@@ -25,16 +25,17 @@ class TradingFoundationTests(TestCase):
             metadata={'auth': 'none'},
         )
 
-    def make_account(self, account_id, preferred=False, account_type='demo'):
+    def make_account(self, account_id, preferred=False, account_type='demo', broker=None):
+        broker = broker or self.paper
         account = BrokerAccount.objects.create(
             user=self.user,
-            broker=self.paper,
+            broker=broker,
             account_id=account_id,
             is_preferred=preferred,
             credentials={'account_type': account_type},
         )
         BrokerConnection.objects.create(
-            broker=self.paper,
+            broker=broker,
             broker_account=account,
             status='connected',
             last_ping=timezone.now(),
@@ -65,7 +66,15 @@ class TradingFoundationTests(TestCase):
             )
 
     def test_real_account_is_blocked_when_live_trading_is_disabled(self):
-        account = self.make_account('REAL-1', preferred=True, account_type='real')
+        live_broker = Broker.objects.create(
+            name='Deriv',
+            broker_type='deriv',
+            status='active',
+            supports_demo=True,
+            supports_live=True,
+            metadata={'auth': 'oauth'},
+        )
+        account = self.make_account('REAL-1', preferred=True, account_type='real', broker=live_broker)
 
         with override_settings(ALLOW_LIVE_TRADING=False):
             with self.assertRaisesMessage(BrokerRoutingError, 'Live-money trading is disabled'):
