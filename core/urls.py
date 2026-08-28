@@ -1,15 +1,9 @@
 from django.urls import path
-from .views import (
-    deriv_login, callback,
-    strategy_builder_page,
-)
+from .views import deriv_login, broker_connect_page, broker_marketplace_page
+from .views_deriv_oauth_safe import callback
+from .views import strategy_builder_page
 from .settings_api import account_settings_api
-from .views_oauth import (
-    disconnect_deriv,
-    refresh_deriv_token,
-    deriv_account_status,
-    reconnect_deriv,
-)
+from .views_oauth import disconnect_deriv, refresh_deriv_token, deriv_account_status, reconnect_deriv
 
 urlpatterns = [
     path("connect-deriv/", deriv_login, name="connect_deriv"),
