@@ -2,9 +2,12 @@ import asyncio
 from datetime import timedelta
 
 from django.conf import settings
-from django.db.models import Count, Avg
+from django.db.models import Avg
 from django.utils import timezone
 from rest_framework import viewsets, permissions, decorators, response, status
+from rest_framework.authentication import SessionAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from apps.market_data.models import MarketSymbol, Tick, Candle
 from apps.brokers.models import BrokerAccount
 from apps.brokers.services import BrokerRegistry
@@ -14,8 +17,17 @@ from .services import AIEngine, TrainingService, ExplainabilityService, FeatureS
 from .validators import validate_feature_context
 
 
+class JWTAuthenticatedPermission(permissions.IsAuthenticated):
+    """Fail closed for browser/API AI requests instead of querying with AnonymousUser."""
+    message = "Authentication credentials are required for AI analysis."
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
+
 class _UserScoped:
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [JWTAuthenticatedPermission]
+
     def _owned(self, qs):
         return qs
 
@@ -39,7 +51,8 @@ class TrainingJobViewSet(viewsets.ModelViewSet):
 
 
 @decorators.api_view(["GET"])
-@decorators.permission_classes([permissions.IsAuthenticated])
+@decorators.permission_classes([JWTAuthenticatedPermission])
+@decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
 def model_governance(request):
     model_id = request.query_params.get("model_id")
     versions = ModelVersion.objects.select_related("model")
@@ -56,7 +69,8 @@ def model_governance(request):
 
 
 @decorators.api_view(["POST"])
-@decorators.permission_classes([permissions.IsAuthenticated])
+@decorators.permission_classes([JWTAuthenticatedPermission])
+@decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
 def train(request):
     try:
         job = TrainingService().train(mode=request.data.get("mode", "manual"))
@@ -102,18 +116,19 @@ def _broker_market_context(account, symbol):
 
 
 @decorators.api_view(["POST"])
-@decorators.permission_classes([permissions.IsAuthenticated])
+@decorators.permission_classes([JWTAuthenticatedPermission])
+@decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
 def predict(request):
+    # Guard before any ORM query. This prevents the production TypeError where
+    # a missing cross-subdomain session reached BrokerAccount.user=AnonymousUser.
+    if not request.user or not request.user.is_authenticated:
+        return response.Response({"detail":"Authentication credentials are required for AI analysis.","code":"NOT_AUTHENTICATED"}, status=status.HTTP_401_UNAUTHORIZED)
     symbol = _discover_symbol(request)
     if not symbol: return response.Response({"detail":"No active broker market is available. Connect a broker and synchronize markets first.","code":"NO_ACTIVE_MARKET"},status=status.HTTP_409_CONFLICT)
     account = _connected_account(request.user)
     if not account: return response.Response({"detail":"Connect a broker before requesting AI analysis.","code":"NO_CONNECTED_BROKER"},status=status.HTTP_409_CONFLICT)
     timeframe = str(request.data.get("timeframe") or "M1").upper()
     try:
-        # Never trust context, confidence, prediction, or candles supplied by the browser.
-        # The backend chooses the freshest persisted broker feed and only then falls
-        # back to a bounded direct broker read. This removes the old client-context
-        # path that could produce Unsupported AI data sources / inconsistent decisions.
         raw_context = _persisted_market_context(symbol, timeframe)
         context_source = raw_context.get("market_data", {}).get("source", "persisted_broker_tick") if raw_context else "live_broker_tick"
         if raw_context is None: raw_context = _broker_market_context(account, symbol)
@@ -127,7 +142,8 @@ def predict(request):
 
 
 @decorators.api_view(["GET"])
-@decorators.permission_classes([permissions.IsAuthenticated])
+@decorators.permission_classes([JWTAuthenticatedPermission])
+@decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
 def explain(request):
     symbol = str(request.query_params.get("symbol") or "").strip(); timeframe = str(request.query_params.get("timeframe") or "M1").upper()
     if not symbol: return response.Response({"detail":"symbol is required"},status=status.HTTP_400_BAD_REQUEST)
