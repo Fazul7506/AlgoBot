@@ -3,7 +3,6 @@ from .models import Strategy, StrategyConfiguration, StrategyExecution, Strategy
 from .serializers import StrategySerializer, StrategyExecutionSerializer, StrategyPerformanceSerializer, StrategySignalSerializer, StrategyConfigurationSerializer
 from .engine import StrategyEngine
 from .services import StrategyService
-from .validator import StrategyValidationService
 
 
 class StrategyViewSet(viewsets.ModelViewSet):
