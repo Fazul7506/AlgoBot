@@ -7,16 +7,10 @@
     ? value
     : (Array.isArray(value?.results) ? value.results : (Array.isArray(value?.data) ? value.data : []));
   const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || document.querySelector('meta[name="csrf-token"]')?.content || '';
-
-  // Dedicated API host support keeps browser/API traffic off the public
-  // Cloudflare challenge path. Same-origin remains the safe default.
   const configuredApiBase = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
   const defaultApiBase = window.location.hostname === 'algobot.dpdns.org' ? 'https://api.algobot.dpdns.org' : '';
   const apiBase = (configuredApiBase || defaultApiBase).replace(/\/+$/, '');
-  const resolveUrl = url => {
-    if (/^https?:\/\//i.test(url)) return url;
-    return `${apiBase}${url.startsWith('/') ? url : `/${url}`}`;
-  };
+  const resolveUrl = url => /^https?:\/\//i.test(url) ? url : `${apiBase}${url.startsWith('/') ? url : `/${url}`}`;
   const isCloudflareChallenge = (response, text) => {
     const body = String(text || '').toLowerCase();
     const contentType = String(response?.headers?.get('content-type') || '').toLowerCase();
@@ -45,18 +39,16 @@
     let result;
     try {
       result = await requestOnce(url, options, timeout);
-      // Legacy same-origin /data fallback is retained only when no dedicated
-      // API hostname has been configured.
-      if (!result.response.ok && !apiBase && !/^https?:\/\//i.test(url)) {
-        const parsed = new URL(url, window.location.origin);
-        if (parsed.pathname.startsWith('/api/')) {
-          parsed.pathname = `/data/${parsed.pathname.slice('/api/'.length)}`;
-          result = await requestOnce(`${parsed.pathname}${parsed.search}${parsed.hash}`, options, timeout);
-        }
-      }
     } catch (error) {
-      if (error?.name === 'AbortError') throw new Error('Backend request timed out');
-      throw error;
+      // If the dedicated hostname has not propagated yet, preserve application
+      // availability by falling back to the existing same-origin API path.
+      if (apiBase && !/^https?:\/\//i.test(url) && error?.name !== 'AbortError') {
+        result = await requestOnce.call(null, url, options, timeout).catch(() => null);
+      }
+      if (!result) {
+        if (error?.name === 'AbortError') throw new Error('Backend request timed out');
+        throw error;
+      }
     }
     const {response,text} = result;
     const payload = parse(response,text);
