@@ -17,6 +17,7 @@ DEBUG = False
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", [])
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", [])
 BASE_URL = env("BASE_URL", "").rstrip("/")
+ALGO_API_BASE_URL = env("ALGO_API_BASE_URL", "https://api.algobot.dpdns.org").rstrip("/")
 
 # Render terminates TLS at its edge and forwards requests to the application
 # over the internal HTTP port. Keep Django aware of the original HTTPS scheme
@@ -35,6 +36,11 @@ CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", "Lax")
+# The UI and API are sibling subdomains. Sharing these cookies lets the
+# authenticated browser call the dedicated API hostname without moving tokens
+# into JavaScript storage. The value is deployment-configurable for staging.
+SESSION_COOKIE_DOMAIN = env("SESSION_COOKIE_DOMAIN", ".algobot.dpdns.org")
+CSRF_COOKIE_DOMAIN = env("CSRF_COOKIE_DOMAIN", ".algobot.dpdns.org")
 
 # WhiteNoise still serves the collected, compressed assets from STATIC_ROOT.
 # A missing optional asset must not make the entire HTML document fail with a
