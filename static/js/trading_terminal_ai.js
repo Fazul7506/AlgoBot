@@ -6,12 +6,9 @@
 
   const $ = (s, r = document) => r.querySelector(s);
   const text = (s, value) => $(s)?.replaceChildren(document.createTextNode(String(value ?? '—')));
-  const api = (url, options = {}, timeout = 25000) => window.AlgoBotFrontendData?.request(url, options, timeout);
-  const esc = v => String(v ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
+  const api = (url, options = {}, timeout = 15000) => window.AlgoBotFrontendData?.request(url, options, timeout);
 
-  function show(message) {
-    text('[data-ai-explanation]', message);
-  }
+  function show(message) { text('[data-ai-explanation]', message); }
 
   function render(data) {
     const prediction = data?.prediction || {};
@@ -42,7 +39,7 @@
       ai_recommendation: recommendationLabel,
       ai_confidence: Number.isFinite(Number(confidenceRaw)) ? Number(confidenceRaw) : null,
       ai_regime: regimeLabel,
-      ai_source: 'decision_engine',
+      ai_source: data?.market_context_source ? `decision_engine:${data.market_context_source}` : 'decision_engine',
     };
   }
 
@@ -51,13 +48,13 @@
     const symbol = $('#symbol')?.value;
     if (!symbol) { show('Select a broker instrument before running AI analysis.'); return; }
     if (button) { button.disabled = true; button.textContent = 'Analysing…'; }
-    show('Requesting broker-backed market context and trained-model inference…');
+    show('Running AI inference from the latest persisted broker market feed…');
     try {
       const data = await api('/api/ai/predict/', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({symbol, timeframe: 'M1'})
-      }, 25000);
+      }, 15000);
       render(data);
       window.dispatchEvent(new CustomEvent('algobot:ai-analysis-updated', {detail: data}));
     } catch (error) {
@@ -66,7 +63,8 @@
       text('[data-ai-confidence-card]', 'Unavailable');
       text('[data-ai-confidence]', 'Unavailable');
       text('[data-ai-regime]', 'Unavailable');
-      show(error?.message || 'AI analysis is temporarily unavailable. No signal was fabricated.');
+      const message = String(error?.message || 'AI analysis is temporarily unavailable.');
+      show(message.includes('<html') || message.includes('Just a moment') ? 'Production edge security blocked the AI request. Market data remains broker-authoritative; no signal was fabricated.' : message);
     } finally {
       if (button) { button.disabled = false; button.textContent = 'Analyse market'; }
     }
