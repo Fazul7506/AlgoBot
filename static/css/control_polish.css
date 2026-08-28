@@ -1,0 +1,12 @@
+/* Shared control polish: native form controls remain accessible while matching AlgoBot's workspace. */
+:root{--control-bg:var(--surface-2,#11161d);--control-border:var(--border,#303844);--control-focus:var(--accent,#ef4444)}
+select,input,textarea,button{font:inherit}
+select{appearance:none;-webkit-appearance:none;min-height:42px;padding:0 40px 0 12px;border:1px solid var(--control-border);border-radius:10px;background-color:var(--control-bg);color:inherit;line-height:1.2;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:16px}
+select:hover{border-color:#596575}select:focus,input:focus,textarea:focus,button:focus-visible{outline:2px solid color-mix(in srgb,var(--control-focus) 55%,transparent);outline-offset:1px}
+select option,select optgroup{background:#11161d;color:#e5e7eb}
+.field select,.filters select,.indicator-group select{width:100%;box-sizing:border-box}
+button, .btn{box-sizing:border-box}
+/* Prevent flex/grid children from forcing horizontal overlap. */
+.panel-head,.panel-actions,.terminal-toolbar,.filters,.workspace-grid,.terminal-workspace{min-width:0}
+.panel-head>*{min-width:0}
+@media(max-width:720px){select{min-height:44px}.panel-head{flex-wrap:wrap}.panel-actions{width:100%}}
