@@ -44,6 +44,26 @@ class StrategyService:
         return []
 
     @staticmethod
+    def _research_confidence(result: Dict[str, Any]) -> float:
+        """Convert historical backtest quality into a research-only 0..100 score.
+
+        This score is deliberately stored as research metadata.  It is not a
+        live execution authority and is never treated as a permanent model
+        confidence value.
+        """
+        trades = max(0, int(result.get('total_trades', result.get('trades') and len(result.get('trades')) or 0) or 0))
+        if trades <= 0:
+            return 0.0
+        win_rate = max(0.0, min(100.0, float(result.get('win_rate', 0) or 0)))
+        profit_factor = float(result.get('profit_factor', 0) or 0)
+        pf_score = max(0.0, min(100.0, profit_factor / 2.0 * 100.0))
+        sample_score = max(0.0, min(100.0, trades / 100.0 * 100.0))
+        drawdown = abs(float(result.get('maximum_drawdown', result.get('max_drawdown', 0)) or 0))
+        drawdown_penalty = min(20.0, drawdown)
+        score = (win_rate * 0.55) + (pf_score * 0.25) + (sample_score * 0.20) - drawdown_penalty
+        return round(max(0.0, min(100.0, score)), 2)
+
+    @staticmethod
     def run_backtest(strategy_record: StrategyModel, symbol: str, timeframe: str = 'M1', data_type: str = 'auto', min_history: int = 20, start_date=None, end_date=None):
         if start_date is not None and end_date is not None and end_date <= start_date:
             raise ValueError('end_date must be later than start_date')
@@ -52,6 +72,10 @@ class StrategyService:
             raise ValueError('No broker historical data exists for the selected symbol, timeframe and date range')
         strategy_instance = StrategyService.build_instance(strategy_record)
         result = StrategyBacktester(strategy_instance, prices, min_history=min_history).run()
+        result['strategy_confidence'] = StrategyService._research_confidence(result)
+        result['strategy_confidence_scope'] = 'historical_research_only'
+        result['training_eligible'] = True
+        result['live_authority'] = False
 
         BacktestResult.objects.create(
             strategy_fk=strategy_record, strategy=strategy_record.name, symbol=symbol, timeframe=timeframe,
