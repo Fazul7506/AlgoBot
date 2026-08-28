@@ -1,13 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
+{% block title %}Developer & API | AlgoBot{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Dashboard</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
-</section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
-</section>
+<section class="hero-panel"><p class="eyebrow">DEVELOPER & API</p><h1>Connect AlgoBot to your tools</h1><p>Use your account's API access to connect trading tools, automation services and custom applications. You do not need a paid plan to access this area.</p></section>
+<section class="card-grid" aria-label="Developer access"><article><h2>API access</h2><p>Available on every AlgoBot plan.</p><a class="btn primary" href="/developer/keys/">Manage API keys</a></article><article><h2>Webhooks</h2><p>Send trading and account events to your own service.</p><a class="btn" href="/developer/keys/">Open developer tools</a></article><article><h2>Integrations</h2><p>Connect AlgoBot with software you already use.</p><a class="btn" href="/developer/keys/">View integrations</a></article><article><h2>API health</h2><p><strong>{{ api_health|title }}</strong></p><small>Access and rate limits are enforced securely for API clients.</small></article></section>
+<section class="panel" style="margin-top:18px"><p class="eyebrow">QUICK START</p><h2>What can you do here?</h2><div class="quick"><div><b>Create a key</b><span>Generate a credential for your application.</span></div><div><b>Connect a webhook</b><span>Receive events without repeatedly polling AlgoBot.</span></div><div><b>Use the API</b><span>Read market/account data and submit supported trading actions.</span></div></div></section>
 {% endblock %}
+{% block extra_css %}<style>.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.quick div{padding:16px;border:1px solid rgba(255,255,255,.08);border-radius:14px}.quick b,.quick span{display:block}.quick span{margin-top:6px;color:var(--muted-text,#9299a8)}@media(max-width:700px){.quick{grid-template-columns:1fr}}</style>{% endblock %}
