@@ -1,13 +1,12 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
+{% block title %}Broker Connections | AlgoBot{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Broker Connections</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
-</section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
+<section class="broker-connections-page">
+<header class="page-heading"><div><p class="eyebrow">BROKERS</p><h1>Connections</h1></div><div class="hero-actions"><button class="btn ghost" type="button" data-refresh-connections>Refresh</button><a class="btn" href="/brokers/accounts/">Accounts</a><a class="btn primary" href="/brokers/connect/">Connect broker</a></div></header>
+<section class="panel"><div class="panel-head"><div><h2>Connection status</h2></div><span data-connection-status>Loading…</span></div><div class="connection-list" data-connection-list><div class="empty-state">Loading connections…</div></div></section>
+<section class="panel"><div class="panel-head"><div><h2>Connection history</h2><p>Recent broker connection state for your accounts.</p></div></div><div class="connection-list" data-history-list><div class="empty-state">Loading history…</div></div></section>
 </section>
 {% endblock %}
+{% block extra_js %}<script>
+(()=>{const $=s=>document.querySelector(s);const api=async u=>{const r=await fetch(u,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}});const d=await r.json().catch(()=>[]);if(!r.ok)throw Error(d.detail||`Request failed (${r.status})`);return d};const esc=x=>String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));async function load(){try{const [health,connections]=await Promise.all([api('/api/brokers/broker-health/'),api('/api/brokers/connections/')]);const accounts=health.accounts||[];const rows=accounts.map(a=>`<div class="connection-row"><div><strong>${esc(a.broker_name||a.broker||'Broker')}</strong><small>${esc(a.account_id||a.account_number||'Account')}</small></div><span>${a.is_preferred?'Preferred':'Available'}</span><b>${health.connected&&a.id===health.preferred_account_id?'Connected':'Not connected'}</b></div>`).join('');$('[data-connection-list]').innerHTML=rows||'<div class="empty-state">No broker accounts available.</div>';const hist=Array.isArray(connections)?connections:(connections.results||[]);$('[data-history-list]').innerHTML=hist.map(c=>`<div class="connection-row"><div><strong>${esc(c.broker_name||c.broker||'Broker')}</strong><small>${esc(c.status||'unknown')}</small></div><span>${c.updated_at?new Date(c.updated_at).toLocaleString():''}</span><b>${esc(c.status||'Unknown')}</b></div>`).join('')||'<div class="empty-state">No connection history.</div>';$('[data-connection-status]').textContent=health.connected?'Connected':'No active connection'}catch(e){$('[data-connection-status]').textContent='Unavailable';$('[data-connection-list]').innerHTML='<div class="empty-state">Unable to load broker state. Retry.</div>'}}$('[data-refresh-connections]').onclick=load;load()})();
+</script><style>.broker-connections-page{max-width:1200px;margin:auto}.connection-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.07)}.connection-row small{display:block;color:var(--muted-text,#8e96a3);margin-top:3px}.connection-row span,.connection-row b{color:var(--muted-text,#8e96a3)}@media(max-width:650px){.connection-row{grid-template-columns:1fr}.connection-row b{text-align:left}}</style>{% endblock %}
