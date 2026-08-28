@@ -36,12 +36,12 @@
     if (button) { button.disabled = true; button.textContent = 'Submitting…'; }
     try {
       const validationContext = {...(window.__algobotAiOrderContext || {}), broker_source: 'connected_broker', contract_type: contractType, underlying_symbol: symbol, selected_strategy: form.get('strategy') || null};
-      const payload = {broker_account: account.id, symbol, direction, order_type: form.get('order_type') || 'market', stake: form.get('stake'), strategy: form.get('strategy') || '', client_request_id: `ui-${crypto.randomUUID?.() || Date.now()}`, validation_context: validationContext};
-      const order = await api('/trading/order/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 25000);
+      const payload = {broker_account: account.id, symbol, direction: direction.toLowerCase(), order_type: form.get('order_type') || 'market', stake: form.get('stake'), strategy: form.get('strategy') || '', client_request_id: `ui-${crypto.randomUUID?.() || Date.now()}`, validation_context: validationContext};
+      const order = await api('/api/orders/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 25000);
       renderOrderResult(`Order ${order.broker_reference || order.id || ''} ${order.status || 'queued'}.`, 'success');
       window.__algobotAiOrderContext = null; await loadRecords();
     } catch (e) {
-      if (e?.code === 'EDGE_CHALLENGE' || e?.isEdgeChallenge) renderOrderResult('The broker order endpoint was blocked by the production edge. The order was not treated as successful; check Recent orders before retrying.', 'edge');
+      if (e?.code === 'EDGE_CHALLENGE' || e?.isEdgeChallenge) renderOrderResult('The production edge challenged the order request before broker submission. No order was treated as successful. Refresh and verify Recent orders before retrying.', 'edge');
       else renderOrderResult(`Order rejected: ${e.message || 'request failed'}`, 'error');
     }
     finally { if (button) { button.disabled = false; button.textContent = 'Place order'; } }
