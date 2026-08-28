@@ -12,7 +12,7 @@
   const isCloudflareChallenge = (response, text) => {
     if (!response || !text) return false;
     const body = String(text).toLowerCase();
-    return [403,429,503,520,521,522,524].includes(response.status) && (body.includes('just a moment') || body.includes('challenge-platform') || body.includes('cf_chl_opt') || body.includes('cf-chl-') || body.includes('enable javascript and cookies to continue'));
+    return [400,403,429,503,520,521,522,524].includes(response.status) && (body.includes('just a moment') || body.includes('challenge-platform') || body.includes('cf_chl_opt') || body.includes('cf-chl-') || body.includes('enable javascript and cookies to continue'));
   };
   const parsePayload = (response, text) => {
     try { return text ? JSON.parse(text) : {}; }
