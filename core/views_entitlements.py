@@ -4,7 +4,6 @@ from core.billing_entitlements import PLAN_ENTITLEMENTS, entitlement_payload
 
 
 @login_required
-
 def billing_entitlements(request):
     return JsonResponse({
         "current": entitlement_payload(request.user),
@@ -17,6 +16,7 @@ def billing_entitlements(request):
                 "backtests_daily": value.backtests_daily,
                 "predictions_daily": value.predictions_daily,
                 "orders_daily": value.orders_daily,
+                "live_orders_daily": value.live_orders_daily,
                 "broker_accounts": value.broker_accounts,
                 "automations": value.automations,
                 "live_trading": value.live_trading,
