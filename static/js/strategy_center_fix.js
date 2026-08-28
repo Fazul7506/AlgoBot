@@ -6,6 +6,7 @@
   const $ = s => document.querySelector(s);
   const list = v => Array.isArray(v) ? v : (v?.results || v?.data || v?.items || []);
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const tradeUrl = s => `/trading/?strategy=${encodeURIComponent(s.slug || s.name || '')}`;
   let strategies = [];
 
   function renderList() {
@@ -14,7 +15,7 @@
     $('[data-s-total]').textContent = strategies.length;
     $('[data-s-enabled]').textContent = strategies.filter(s => s.enabled).length;
     $('[data-s-running]').textContent = strategies.filter(s => ['running','active'].includes(String(s.lifecycle_state || '').toLowerCase())).length;
-    $('[data-s-list]').innerHTML = visible.length ? visible.map(s => `<article class="strategy-row"><div><strong>${esc(s.name || s.slug || 'Strategy')}</strong><small>${esc(s.category || 'Strategy')} · v${esc(s.version || '1.0.0')}</small></div><span class="state-badge">${esc(s.lifecycle_state || 'created')}</span><span>${s.enabled ? 'Enabled' : 'Disabled'}</span><a class="btn small ghost" href="/trading/">Trade</a></article>`).join('') : '<div class="empty-state">No strategies are registered for this account yet.</div>';
+    $('[data-s-list]').innerHTML = visible.length ? visible.map(s => `<article class="strategy-row"><div><strong>${esc(s.name || s.slug || 'Strategy')}</strong><small>${esc(s.category || 'Strategy')} · v${esc(s.version || '1.0.0')}</small></div><span class="state-badge">${esc(s.lifecycle_state || 'created')}</span><span>${s.enabled ? 'Enabled' : 'Disabled'}</span><a class="btn small ghost" href="${tradeUrl(s)}">Trade</a></article>`).join('') : '<div class="empty-state">No strategies are registered for this account yet.</div>';
   }
 
   async function load() {
@@ -32,9 +33,9 @@
       renderList();
       const signals = sig.status === 'fulfilled' ? list(sig.value) : [];
       const performance = perf.status === 'fulfilled' ? list(perf.value) : [];
-      $('[data-s-signals]').innerHTML = signals.length ? signals.slice(0,8).map(s => `<div class="signal-row"><strong>${esc(s.symbol || '—')}</strong><span>${esc(s.signal || 'HOLD')}</span><b>${s.confidence != null ? Number(s.confidence).toFixed(0) + '%' : '—'}</b></div>`).join('') : '<div class="empty-state">No strategy signals have been generated yet.</div>';
+      $('[data-s-strategy-signals]').innerHTML = signals.length ? signals.slice(0,8).map(s => `<div class="signal-row"><strong>${esc(s.symbol || '—')}</strong><span>${esc(s.signal || 'HOLD')}</span><b>${s.confidence != null ? Number(s.confidence).toFixed(0) + '%' : '—'}</b></div>`).join('') : '<div class="empty-state">No strategy signals have been generated yet.</div>';
       $('[data-s-performance]').innerHTML = performance.length ? performance.slice(0,8).map(p => `<div class="mini-row"><strong>${esc(p.strategy_name || p.strategy || 'Strategy')}</strong><span>${p.win_rate != null ? Number(p.win_rate).toFixed(1) + '%' : '—'}</span><b>${esc(p.net_profit ?? '0')}</b></div>`).join('') : '<div class="empty-state">No strategy performance records yet.</div>';
-      $('[data-s-signals]').closest('.panel')?.setAttribute('data-broker-state', window.AlgoBotBrokerState?.get()?.status || 'UNKNOWN');
+      $('[data-s-strategy-signals]').closest('.panel')?.setAttribute('data-broker-state', window.AlgoBotBrokerState?.get()?.status || 'UNKNOWN');
     } catch (e) {
       const msg = esc(e?.message || 'Unable to load strategy data.');
       $('[data-s-list]').innerHTML = `<div class="empty-state">Strategy registry unavailable: ${msg} <button class="btn small ghost" type="button" data-s-retry>Retry</button></div>`;

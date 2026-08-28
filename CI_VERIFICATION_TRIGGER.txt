@@ -1,1 +1,1 @@
-Final CI verification marker. This file intentionally exists only to create a fresh pull-request head so GitHub Actions validates the current main architecture and production validation workflow. Remove after verification if desired.
+Strategy Builder / UI validation trigger — 2026-08-29. This marker intentionally changes with each production UI validation pass so the repository CI integration can validate the current branch.
