@@ -1,8 +1,8 @@
 """Payment and subscription billing settings.
 
-Production deployments can override prices through environment variables. The
-repository defaults are intentionally live so the public billing catalog does
-not silently ship with unconfigured paid tiers.
+Production deployments can override prices and gateway endpoints through
+environment variables.  IntaSend's live REST base is payment.intasend.com;
+the sandbox uses sandbox.intasend.com.
 """
 import os
 
@@ -17,8 +17,8 @@ ALGOBOT_SUBSCRIPTION_PERIOD_DAYS = int(os.getenv("ALGOBOT_SUBSCRIPTION_PERIOD_DA
 INTASEND_PUBLIC_KEY = os.getenv("INTASEND_PUBLIC_KEY", "").strip()
 INTASEND_SECRET_KEY = os.getenv("INTASEND_SECRET_KEY", "").strip()
 INTASEND_WEBHOOK_CHALLENGE = os.getenv("INTASEND_WEBHOOK_CHALLENGE", "").strip()
-INTASEND_API_BASE_URL = os.getenv("INTASEND_API_BASE_URL", "https://api.intasend.com").strip()
+INTASEND_API_BASE_URL = os.getenv("INTASEND_API_BASE_URL", "https://payment.intasend.com").strip().rstrip("/")
 PESAPAL_CONSUMER_KEY = os.getenv("PESAPAL_CONSUMER_KEY", "").strip()
 PESAPAL_CONSUMER_SECRET = os.getenv("PESAPAL_CONSUMER_SECRET", "").strip()
 PESAPAL_NOTIFICATION_ID = os.getenv("PESAPAL_NOTIFICATION_ID", "").strip()
-PESAPAL_API_BASE_URL = os.getenv("PESAPAL_API_BASE_URL", "https://pay.pesapal.com/v3").strip()
+PESAPAL_API_BASE_URL = os.getenv("PESAPAL_API_BASE_URL", "https://pay.pesapal.com/v3").strip().rstrip("/")
