@@ -7,6 +7,7 @@
   const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '';
   const inflight = new Map();
   const cache = new Map();
+  const GET_CACHE_MS = 1200;
   const cloudflareAlias = url => typeof url === 'string' && url.startsWith('/api/') ? `/data/${url.slice(5)}` : null;
   const isCloudflareChallenge = (response, text) => {
     if (!response || !text) return false;
@@ -16,7 +17,7 @@
   const parsePayload = (response, text) => {
     try { return text ? JSON.parse(text) : {}; }
     catch (_) {
-      if (isCloudflareChallenge(response, text)) return {detail:'Production edge security challenged this API request.'};
+      if (isCloudflareChallenge(response, text)) return {detail:'Production edge security challenged this API request.', code:'EDGE_CHALLENGE'};
       const contentType = String(response?.headers?.get('content-type') || '').toLowerCase();
       return {detail:contentType.includes('text/html') ? `Backend returned an unexpected HTML response (${response.status}).` : String(text || `Request failed (${response?.status || 'unknown'})`)};
     }
@@ -32,28 +33,30 @@
     if (!url) throw new Error('No API endpoint configured');
     const method = (options.method || 'GET').toUpperCase();
     const key = `${method} ${url}`;
-    if (method === 'GET' && inflight.has(key)) return inflight.get(key);
+    if (method === 'GET') {
+      if (inflight.has(key)) return inflight.get(key);
+      const recent = cache.get(url);
+      if (recent && Date.now() - recent.at <= GET_CACHE_MS) return recent.payload;
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), Math.max(1000, timeout));
     const promise = (async () => {
       try {
         const alias = cloudflareAlias(url);
-        // Use the edge-safe /data/ mount first. The public /api/ contract remains
-        // available as a fallback for clients/edges where /data/ is not routed.
+        // Prefer the edge-safe /data/ mount. Do not immediately replay a
+        // challenge against /api/: challenge pages are HTML and are not valid
+        // XHR responses, so duplicating the request only increases rate pressure.
         const primary = alias || url;
         let result = await fetchOnce(primary, options, controller);
-        if (primary !== url && !result.response.ok) {
-          const challenge = isCloudflareChallenge(result.response, result.text);
-          // A real application rejection (400/401/403/409/422) should not be
-          // duplicated against the canonical route. Only route failures and
-          // edge challenges warrant the compatibility fallback.
-          if (challenge || [404,405,502,503,504].includes(result.response.status)) result = await fetchOnce(url, options, controller);
+        if (primary !== url && !result.response.ok && !isCloudflareChallenge(result.response, result.text) && [404,405,502,503,504].includes(result.response.status)) {
+          result = await fetchOnce(url, options, controller);
         }
         const {response, text} = result;
         const payload = parsePayload(response, text);
         if (!response.ok) {
           const error = new Error(payload.detail || payload.message || `Request failed (${response.status})`);
           error.status = response.status;
+          error.code = payload.code || error.code;
           throw error;
         }
         if (method === 'GET') cache.set(url,{payload,at:Date.now()});

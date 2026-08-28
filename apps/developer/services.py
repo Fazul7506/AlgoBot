@@ -1,17 +1,20 @@
 import hashlib
 import hmac
+import ipaddress
 import json
 import secrets
+import socket
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import timedelta
 
 from django.conf import settings
-from django.core.cache import cache
-from django.db.models import Avg, Count
 from django.contrib.auth.hashers import make_password
+from django.core.cache import cache
+from django.db.models import Count
 from django.utils import timezone as django_timezone
 
 from .models import APIKey, APIUsageEvent, RateLimitEvent, Webhook, WebhookDelivery
@@ -40,22 +43,13 @@ class APIKeyService:
         return api_key, generated["secret"]
 
     def rotate(self, api_key):
-        # Keep the previous secret valid for a short grace period so an
-        # in-flight client can complete the rotation/revocation workflow.
-        # The previous credential is still hashed and automatically expires.
         raw_secret = secrets.token_urlsafe(32)
         now = django_timezone.now()
         api_key.previous_secret = api_key.secret
         api_key.previous_secret_expires_at = now + timedelta(minutes=5)
         api_key.secret = make_password(raw_secret)
         api_key.last_used = now
-        api_key.save(update_fields=[
-            "secret",
-            "previous_secret",
-            "previous_secret_expires_at",
-            "last_used",
-            "updated_at",
-        ])
+        api_key.save(update_fields=["secret", "previous_secret", "previous_secret_expires_at", "last_used", "updated_at"])
         return api_key, raw_secret
 
     def revoke(self, api_key):
@@ -66,8 +60,10 @@ class APIKeyService:
 
 class OAuthService:
     grants = ["authorization_code", "pkce", "client_credentials", "refresh_token"]
+
     def issue_jwt(self, client_id, scopes=None):
         return ServiceResult("issued", {"client_id": client_id, "scopes": scopes or [], "token_type": "Bearer"})
+
     def revoke_token(self, token):
         return ServiceResult("revoked", {"token_hash": hashlib.sha256(token.encode()).hexdigest()})
 
@@ -93,15 +89,18 @@ class APIGatewayService:
 
     def record_usage(self, request, status_code, started, api_key=None):
         elapsed = (time.monotonic() - started) * 1000
-        APIUsageEvent.objects.create(user=getattr(request, "user", None) if getattr(getattr(request, "user", None), "is_authenticated", False) else None, api_key=api_key, method=request.method, path=request.path, status_code=status_code, latency_ms=round(elapsed, 3))
+        user = getattr(request, "user", None)
+        APIUsageEvent.objects.create(user=user if getattr(user, "is_authenticated", False) else None, api_key=api_key, method=request.method, path=request.path, status_code=status_code, latency_ms=round(elapsed, 3))
         if api_key:
             APIKey.objects.filter(pk=api_key.pk).update(last_used=django_timezone.now())
 
 
 class PluginService:
     categories = ["Indicators", "Strategies", "AI Models", "Dashboards", "Reports", "Themes", "Notifications", "Risk Modules", "Broker Adapters", "Utilities"]
+
     def validate_signature(self, plugin, signature=""):
         return ServiceResult("validated", {"plugin": plugin.name, "signature_present": bool(signature)})
+
     def install(self, plugin):
         plugin.status = "active"
         plugin.save(update_fields=["status"])
@@ -114,6 +113,28 @@ class MarketplaceService:
 
 
 class WebhookService:
+    EVENT_NAMES = ["order.created", "order.updated", "position.updated", "trade.closed", "account.updated", "market.tick", "signal.created", "test"]
+
+    @staticmethod
+    def validate_url(url):
+        parsed = urllib.parse.urlparse(str(url).strip())
+        if parsed.scheme not in {"https", "http"} or not parsed.hostname:
+            raise ValueError("Webhook URL must be a valid HTTP or HTTPS URL")
+        if parsed.username or parsed.password:
+            raise ValueError("Webhook URLs cannot contain embedded credentials")
+        host = parsed.hostname.lower().rstrip(".")
+        if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
+            raise ValueError("Local webhook destinations are not allowed")
+        try:
+            addresses = {info[4][0] for info in socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)}
+        except socket.gaierror as exc:
+            raise ValueError("Webhook hostname could not be resolved") from exc
+        for address in addresses:
+            ip = ipaddress.ip_address(address)
+            if not ip.is_global:
+                raise ValueError("Webhook destination must resolve to a public IP address")
+        return parsed
+
     def sign(self, secret, payload):
         if not isinstance(payload, str):
             payload = json.dumps(payload, separators=(",", ":"), sort_keys=True)
@@ -127,6 +148,10 @@ class WebhookService:
             return ServiceResult("skipped", {"reason": "webhook_inactive"})
         if webhook.events and event not in webhook.events:
             return ServiceResult("skipped", {"reason": "event_not_subscribed"})
+        try:
+            self.validate_url(webhook.url)
+        except ValueError as exc:
+            return ServiceResult("failed", {"reason": "invalid_destination", "error": str(exc)})
         delivery = self.create_delivery(webhook, event, payload)
         body = json.dumps({"event": event, "payload": payload or {}, "delivery_id": delivery.id}, separators=(",", ":")).encode()
         signature = self.sign(webhook.secret, body.decode())
@@ -150,6 +175,7 @@ class WebhookService:
 
 class SDKService:
     languages = ["Python", "JavaScript", "TypeScript", "Java", "C#", "Go", "Rust", "Dart", "PHP", "Swift", "Kotlin"]
+
     def generate(self, language, version="latest"):
         if language not in self.languages:
             raise ValueError("Unsupported SDK language")
@@ -157,11 +183,13 @@ class SDKService:
 
 
 class EventBusService:
-    def publish(self, topic, payload): return ServiceResult("published", {"topic": topic, "payload": payload})
+    def publish(self, topic, payload):
+        return ServiceResult("published", {"topic": topic, "payload": payload})
 
 
 class IntegrationService:
     providers = ["TradingView", "Zapier", "Make.com", "n8n", "GitHub", "Discord", "Slack", "Telegram", "Google Sheets", "Notion", "Airtable", "Power BI", "Grafana"]
+
     def connect(self, provider, configuration=None):
         if provider not in self.providers:
             raise ValueError("Unsupported integration provider")
@@ -169,21 +197,45 @@ class IntegrationService:
 
 
 class AnalyticsService:
-    def aggregate(self):
-        usage = APIUsageEvent.objects.aggregate(calls=Count("id"), latency=Avg("latency_ms"))
-        return {"api_calls_today": usage["calls"] or 0, "latency_p95_ms": round(usage["latency"] or 0, 2), "rate_limit_events": RateLimitEvent.objects.count()}
+    def aggregate(self, user=None):
+        start = django_timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        usage = APIUsageEvent.objects.filter(created_at__gte=start)
+        limits = RateLimitEvent.objects.filter(created_at__gte=start)
+        if user is not None:
+            usage = usage.filter(user=user)
+            limits = limits.filter(api_key__user=user)
+        latencies = sorted(float(value) for value in usage.values_list("latency_ms", flat=True))
+        if latencies:
+            rank = max(0, min(len(latencies) - 1, int(0.95 * len(latencies)) - 1))
+            p95 = round(latencies[rank], 2)
+        else:
+            p95 = 0
+        return {"api_calls_today": usage.count(), "latency_p95_ms": p95, "rate_limit_events": limits.count()}
 
 
 class SandboxService:
-    def provision(self):
-        return {"api_key": f"sandbox_{secrets.token_urlsafe(16)}", "broker": "sandbox", "market_data": "simulated"}
+    def provision(self, user=None):
+        return {"api_key": f"sandbox_{secrets.token_urlsafe(16)}", "broker": "sandbox", "market_data": "simulated", "expires_in_seconds": 3600, "owner": getattr(user, "username", None)}
 
 
 class DocumentationService:
     def publish(self):
-        return ServiceResult("published", {"formats": ["OpenAPI", "ReDoc", "GraphQL Playground"], "version": "v1"})
+        base = "/api/developer/"
+        paths = {
+            "/keys/": {"get": {"summary": "List your API keys"}, "post": {"summary": "Create an API key"}},
+            "/keys/{id}/rotate/": {"post": {"summary": "Rotate an API key"}},
+            "/keys/{id}/revoke/": {"post": {"summary": "Revoke an API key"}},
+            "/webhooks/": {"get": {"summary": "List webhooks"}, "post": {"summary": "Create a webhook"}},
+            "/webhooks/{id}/test/": {"post": {"summary": "Send a test webhook"}},
+            "/docs/": {"get": {"summary": "Read API documentation metadata"}},
+            "/analytics/": {"get": {"summary": "Read developer API analytics"}},
+            "/sandbox/": {"get": {"summary": "Create a short-lived sandbox credential"}},
+            "/integrations/": {"get": {"summary": "List integrations"}},
+        }
+        return ServiceResult("published", {"openapi": "3.0.3", "info": {"title": "AlgoBot Developer API", "version": "v1"}, "servers": [{"url": base}], "authentication": {"type": "ApiKey", "headers": ["X-API-Key", "X-API-Secret"]}, "paths": paths})
 
 
 class DeveloperPlatformService:
     def dashboard(self):
-        return {"api_health": "operational", "active_keys": APIKey.objects.filter(status="active").count(), "installed_plugins": __import__("apps.developer.models", fromlist=["Plugin"]).Plugin.objects.filter(status="active").count()}
+        from .models import Plugin
+        return {"api_health": "operational", "active_keys": APIKey.objects.filter(status="active").count(), "installed_plugins": Plugin.objects.filter(status="active").count()}
