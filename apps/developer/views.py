@@ -43,6 +43,9 @@ def key_create(request):
     serializer.is_valid(raise_exception=True)
     api_key, secret = APIKeyService().create(request.user, serializer.validated_data["name"], serializer.validated_data.get("permissions"), serializer.validated_data.get("expires_at"))
     data = APIKeySerializer(api_key).data
+    # The key identifier is safe to reveal and copy.  The secret is returned
+    # exactly once and is never persisted in plaintext.
+    data["key"] = api_key.key
     data["secret"] = secret
     data["warning"] = "Store this secret securely. It will not be shown again."
     return Response(data, status=status.HTTP_201_CREATED)
@@ -59,7 +62,7 @@ def key_rotate(request, pk):
     if not api_key.is_active():
         return Response({"detail": "Only active keys can be rotated"}, status=400)
     _, raw_secret = APIKeyService().rotate(api_key)
-    return Response({"id": api_key.id, "key": APIKeySerializer(api_key).data["key"], "secret": raw_secret, "warning": "Store this secret securely. It will not be shown again."})
+    return Response({"id": api_key.id, "key": api_key.key, "secret": raw_secret, "warning": "Store this secret securely. It will not be shown again."})
 
 
 @api_view(["POST"])
