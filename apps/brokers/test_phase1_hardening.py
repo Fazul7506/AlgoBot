@@ -75,6 +75,8 @@ class TradingFoundationTests(TestCase):
             metadata={'auth': 'oauth'},
         )
         account = self.make_account('REAL-1', preferred=True, account_type='real', broker=live_broker)
+        account.set_access_token('ci-live-test-token')
+        account.save(update_fields=['access_token'])
 
         with override_settings(ALLOW_LIVE_TRADING=False):
             with self.assertRaisesMessage(BrokerRoutingError, 'Live-money trading is disabled'):
