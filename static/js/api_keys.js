@@ -35,10 +35,12 @@
           <div class="api-key-meta"><span class="ds-status ds-status--${statusClass(key.status)}">${escapeHtml(key.status)}</span><span>${key.permissions?.map(escapeHtml).join(' · ') || 'read'}</span><small>Created ${new Date(key.created_at).toLocaleDateString()}</small></div>
           <div class="api-key-actions">
             ${key.status === 'active' ? `<button class="ds-btn" type="button" data-rotate="${key.id}">Rotate</button>` : ''}
-            ${key.status !== 'revoked' ? `<button class="ds-btn ds-btn--danger" type="button" data-delete="${key.id}" data-name="${escapeHtml(key.name)}">Delete</button>` : ''}
+            ${key.status === 'active' ? `<button class="ds-btn ds-btn--danger" type="button" data-revoke="${key.id}">Revoke</button>` : ''}
+            <button class="ds-btn ds-btn--danger" type="button" data-delete="${key.id}" data-name="${escapeHtml(key.name)}">Delete</button>
           </div>
         </article>`).join('');
       root.querySelectorAll('[data-rotate]').forEach(button => button.onclick = () => rotate(button.dataset.rotate));
+      root.querySelectorAll('[data-revoke]').forEach(button => button.onclick = () => revoke(button.dataset.revoke));
       root.querySelectorAll('[data-delete]').forEach(button => button.onclick = () => remove(button.dataset.delete, button.dataset.name));
     } catch (error) {
       count.textContent = 'Unavailable';
@@ -56,6 +58,12 @@
   const rotate = async id => {
     if (!confirm('Rotate this API key? Existing clients using its secret will stop working after the rotation grace period.')) return;
     try { const result = await request(`${endpoint}${id}/rotate/`, { method: 'POST', body: '{}' }); showSecret(result.secret); await load(); }
+    catch (error) { alert(error.message); }
+  };
+
+  const revoke = async id => {
+    if (!confirm('Revoke this API key? Existing clients will stop authenticating.')) return;
+    try { await request(`${endpoint}${id}/revoke/`, { method: 'POST', body: '{}' }); await load(); }
     catch (error) { alert(error.message); }
   };
 
@@ -77,6 +85,6 @@
   document.querySelectorAll('[data-api-key-create]').forEach(button => button.onclick = () => dialog?.showModal());
   document.querySelectorAll('[data-api-key-close]').forEach(button => button.onclick = () => dialog?.close());
   document.querySelector('[data-api-secret-close]')?.addEventListener('click', () => secretDialog?.close());
-  document.querySelector('[data-copy-api-secret]')?.addEventListener('click', async event => { await navigator.clipboard.writeText(secretValue); event.currentTarget.textContent = 'Copied'; setTimeout(() => event.currentTarget.textContent = 'Copy', 1400); });
+  document.querySelector('[data-copy-api-secret]')?.addEventListener('click', async event => { try { await navigator.clipboard.writeText(secretValue); event.currentTarget.textContent = 'Copied'; setTimeout(() => event.currentTarget.textContent = 'Copy', 1400); } catch (_) { alert('Clipboard access was blocked by the browser.'); } });
   load();
 })();
