@@ -236,6 +236,7 @@ class DocumentationService:
             "/keys/create/": {"post": {"summary": "Create an API key", "required_scope": "admin"}},
             "/keys/{id}/rotate/": {"post": {"summary": "Rotate an API key", "required_scope": "admin"}},
             "/keys/{id}/revoke/": {"post": {"summary": "Revoke an API key", "required_scope": "admin"}},
+            "/keys/{id}/delete/": {"delete": {"summary": "Permanently delete an API key", "required_scope": "admin"}},
             "/plugins/": {"get": {"summary": "List available plugins", "required_scope": "read"}},
             "/plugins/install/": {"post": {"summary": "Install a plugin", "required_scope": "admin"}},
             "/webhooks/": {"get": {"summary": "List your webhooks", "required_scope": "read"}},
