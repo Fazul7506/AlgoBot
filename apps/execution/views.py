@@ -12,7 +12,6 @@ from core.billing_entitlements import check_live_order, effective_plan
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
-
     def get_queryset(self): return Order.objects.filter(user=self.request.user)
     @staticmethod
     def _environment(account): return str((account.credentials or {}).get('account_type') or '').lower().strip() if account else ''
@@ -20,11 +19,10 @@ class OrderViewSet(viewsets.ModelViewSet):
     def _safe_client_context(data):
         context = data.get('validation_context') or {}
         return {'broker_source': context.get('broker_source') or 'connected_broker', 'contract_type': context.get('contract_type'), 'underlying_symbol': context.get('underlying_symbol') or data.get('symbol'), 'selected_strategy': context.get('selected_strategy') or data.get('strategy') or None}
-
     def create(self, request, *args, **kwargs):
         client_request_id = str(request.data.get('client_request_id') or '').strip()
         if client_request_id:
-            existing = Order.objects.filter(user=request.user, client_order_id=client_request_id).first()
+            existing = Order.objects.filter(user=request.user, client_request_id=client_request_id).first()
             if existing: return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
         serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data); account = data.get('broker_account'); environment = self._environment(account); data['validation_context'] = self._safe_client_context(request.data)
@@ -39,7 +37,6 @@ class OrderViewSet(viewsets.ModelViewSet):
         try: order = ExecutionEngine().place_order(request.user, **data)
         except PermissionError as exc: return response.Response({'status':'rejected','code':'ORDER_RISK_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
         return response.Response(self.get_serializer(order).data, status=status.HTTP_201_CREATED)
-
     @decorators.action(detail=False, methods=['post'])
     def preview(self, request):
         serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True); data = serializer.validated_data; account = data.get('broker_account')
@@ -79,7 +76,6 @@ class OrderViewSet(viewsets.ModelViewSet):
             return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':data.get('symbol'),'direction':data.get('direction'),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':market,'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'fresh_market_data':True,**ai_gate}})
         except (TypeError, ValueError, AttributeError, OverflowError) as exc:
             return response.Response({'status':'rejected','code':'PREVIEW_SERIALIZATION_FAILED','detail':f'Unable to build a safe pre-trade preview: {exc}'}, status=status.HTTP_409_CONFLICT)
-
     @decorators.action(detail=True, methods=['post'])
     def cancel(self, request, pk=None): return response.Response(OrderSerializer(ExecutionEngine().cancel_order(self.get_object())).data)
     @decorators.action(detail=True, methods=['post'])
