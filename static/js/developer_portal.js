@@ -8,7 +8,7 @@
   const $$ = (s, root = document) => [...root.querySelectorAll(s)];
   const api = (url, options = {}, timeout = 15000) => window.AlgoBotFrontendData.request(url, options, timeout);
   const csrfHeaders = () => ({'Content-Type':'application/json'});
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const esc = value => String(value ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
   const pretty = value => JSON.stringify(value, null, 2);
 
   let keys = [];
@@ -52,7 +52,7 @@
     const permissions = $$('[name="permission"]:checked', form).map(x => x.value);
     if (!name) return notice('Give the API key a name.', 'error');
     try {
-      const data = await api('/api/developer/keys/', {method:'POST', headers:csrfHeaders(), body:JSON.stringify({name, permissions})});
+      const data = await api('/api/developer/keys/create/', {method:'POST', headers:csrfHeaders(), body:JSON.stringify({name, permissions})});
       revealSecret(data);
       form.reset();
       $('[value="read"]', form).checked = true;
@@ -91,7 +91,7 @@
     const url = String($('[name="webhook_url"]', form)?.value || '').trim();
     const events = $$('[name="webhook_event"]:checked', form).map(x => x.value);
     try {
-      const data = await api('/api/developer/webhooks/', {method:'POST', headers:csrfHeaders(), body:JSON.stringify({url, events})});
+      const data = await api('/api/developer/webhooks/create/', {method:'POST', headers:csrfHeaders(), body:JSON.stringify({url, events})});
       const panel = $('[data-webhook-secret-panel]');
       if (panel) { panel.hidden = false; $('[data-webhook-secret]').textContent = data.secret || ''; }
       form.reset();
