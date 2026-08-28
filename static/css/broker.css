@@ -1,1 +1,1 @@
-.broker-card { border-radius: 1rem; padding: 1rem; }
+.broker-card{border-radius:16px;padding:18px;background:var(--panel);border:1px solid var(--ui-border);box-shadow:0 14px 40px rgba(0,0,0,.14)}.broker-card+.broker-card{margin-top:12px}.broker-card input,.broker-card select,.broker-card textarea{width:100%;box-sizing:border-box}.broker-card .btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}.broker-card .status,.broker-card .badge{display:inline-flex;align-items:center;gap:6px}
