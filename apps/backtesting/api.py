@@ -1,4 +1,3 @@
-from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import viewsets, permissions, decorators, response, status
@@ -75,7 +74,7 @@ class BacktestViewSet(viewsets.ModelViewSet):
 
         try:
             from .tasks import execute_backtest
-            transaction.on_commit(lambda: execute_backtest.delay(backtest.pk))
+            execute_backtest.delay(backtest.pk)
         except Exception as exc:
             now = timezone.now()
             backtest.status = 'failed'
@@ -90,7 +89,7 @@ class BacktestViewSet(viewsets.ModelViewSet):
             }
             backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
             job.status = 'failed'
-            job.attempts = 1
+            job.attempts = max(1, int(job.attempts or 0))
             job.save(update_fields=['status', 'attempts'])
 
 
