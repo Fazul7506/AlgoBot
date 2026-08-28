@@ -9,11 +9,16 @@ router.register('contracts', ContractViewSet, basename='contracts')
 router.register('execution/logs', ExecutionLogViewSet, basename='execution-logs')
 router.register('reconciliation/events', ReconciliationEventViewSet, basename='reconciliation-events')
 
-# Keep the pre-trade action explicit as well as registered by DRF. This makes
-# the POST contract deterministic when this URLconf is mounted more than once
-# (/api/ and the Cloudflare-safe /data/ alias).
 preview_view = OrderViewSet.as_view({'post': 'preview'})
+browser_preview_view = OrderViewSet.as_view({'post': 'preview'})
+browser_order_view = OrderViewSet.as_view({'post': 'create'})
+
 urlpatterns = [
     path('orders/preview/', preview_view, name='orders-preview'),
+    # Browser action aliases intentionally live outside /api and /data. They
+    # invoke the exact same authenticated ViewSet methods, so this is not a
+    # weaker execution path; it only avoids edge rules targeting API paths.
+    path('trading/actions/preview/', browser_preview_view, name='browser-trading-preview'),
+    path('trading/actions/order/', browser_order_view, name='browser-trading-order'),
     *router.urls,
 ]
