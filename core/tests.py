@@ -55,7 +55,6 @@ class AuthExperienceCleanupTests(TestCase):
     @patch('core.views.DerivOAuthService.store_oauth_state_in_session')
     @patch('core.views.DerivOAuthService.generate_state', return_value='state')
     @patch('core.views.DerivOAuthService.generate_pkce_pair', return_value=('verifier', 'challenge'))
-    @patch('core.views.DerivOAuthService.generate_pkce_pair', return_value=('verifier', 'challenge'))
     @patch('core.views.DerivOAuthService.validate_configuration', return_value=(True, None))
     @override_settings(DERIV_REDIRECT_URI='http://testserver/brokers/callback/')
     def test_anonymous_broker_connect_starts_deriv_oauth(self, validate_configuration, generate_pkce, generate_state, store_state, create_url):
