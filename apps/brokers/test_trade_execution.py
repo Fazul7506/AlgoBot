@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase, override_settings
+from django.utils import timezone
 
 from apps.brokers.adapters.deriv import DerivAdapter
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection, ExecutionReport, Order
@@ -30,7 +31,7 @@ class CanonicalTradeExecutionTests(TransactionTestCase):
         self.account.save(update_fields=["access_token"])
         BrokerConnection.objects.create(broker=self.broker, broker_account=self.account, status="connected")
         symbol = MarketSymbol.objects.create(symbol="R_100", display_name="Volatility 100", market="Volatility Indices")
-        MarketSnapshot.objects.create(symbol=symbol, last_price="1.25", timestamp=__import__("django.utils.timezone", fromlist=["timezone"]).timezone.now())
+        MarketSnapshot.objects.create(symbol=symbol, last_price="1.25", timestamp=timezone.now())
 
     @override_settings(BROKER_ORDER_TIMEOUT_SECONDS=2)
     def test_manual_trade_uses_canonical_account_and_returns_execution_report(self):
