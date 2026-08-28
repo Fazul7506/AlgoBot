@@ -10,7 +10,6 @@ class PlanEntitlementMiddleware:
         ("backtests", ("/api/backtesting/", "/api/strategies/")),
         ("predictions", ("/api/ai/", "/api/predictions/")),
         ("orders", ("/api/orders/",)),
-        ("broker_accounts", ("/api/brokers/connect/", "/api/brokers/disconnect/")),
         ("automations", ("/api/automation/",)),
     )
     BACKTEST_ACTIONS = ("/backtest", "/compare", "/optimize")
@@ -22,8 +21,9 @@ class PlanEntitlementMiddleware:
         if not request.path.startswith("/api/") or not getattr(request.user, "is_authenticated", False):
             return self.get_response(request)
 
-        # Every authenticated API call consumes the plan's general API budget
-        # and burst budget, regardless of whether it is a feature-specific call.
+        # General API capacity applies to authenticated API calls. Resource
+        # count quotas (for example broker accounts) are enforced when a
+        # resource is created, never on connect/disconnect/read/sync actions.
         for window, retry in (("day", "86400"), ("minute", "60")):
             allowed, current, limit = check(request.user, "api_calls", 1, window)
             if not allowed:
