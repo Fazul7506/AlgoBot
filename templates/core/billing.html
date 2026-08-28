@@ -25,20 +25,21 @@ const alertBox=$('[data-billing-alert]');
 const showError=m=>{if(!alertBox)return;alertBox.hidden=false;alertBox.textContent=m};
 function renderPlans(plans,current){
 $('[data-plan-grid]').innerHTML=(plans||[]).map(p=>{const active=p.plan===current;const disabled=!p.configured||active;const action=active?'Current plan':p.plan==='FREE'?'Use Free':p.configured?'Upgrade':'Not configured';return `<article class="panel billing-plan-card"><p class="eyebrow">${esc(p.plan)}</p><h2 class="billing-plan-price money-value">${money(p.price_cents,p.currency)}</h2><p>${p.recurring?'Recurring subscription':'No recurring charge'}</p><div class="billing-plan-actions">${disabled?`<button class="btn ghost" type="button" disabled>${action}</button>`:`<button class="btn primary" type="button" data-checkout-plan="${esc(p.plan)}">${action}</button>`}</div></article>`}).join('')||'<div class="panel">No billing plans are configured.</div>';
-$('[data-plan-grid]').querySelectorAll('[data-checkout-plan]').forEach(btn=>btn.addEventListener('click',()=>startCheckout(btn.dataset.checkoutPlan)));
+$('[data-plan-grid]').querySelectorAll('[data-checkout-plan]').forEach(btn=>btn.addEventListener('click',()=>startCheckout(btn.dataset.checkoutPlan,btn)));
 }
-async function startCheckout(plan){
+async function startCheckout(plan,button){
+if(button){button.disabled=true;button.textContent='Starting checkout…';}
 try{
 showError('');alertBox.hidden=true;
-const data=await api('/billing/checkout/',{method:'POST',body:JSON.stringify({plan})});
+const data=await api('/api/billing/checkout/',{method:'POST',body:JSON.stringify({plan})});
 if(!data.url)throw Error('The payment provider did not return a checkout URL.');
 window.location.assign(data.url);
-}catch(e){console.error(e);showError(`Payment could not be started: ${e.message}`)}
+}catch(e){console.error(e);showError(`Payment could not be started: ${e.message}`);if(button){button.disabled=false;button.textContent='Upgrade';}}
 }
 async function load(){
 alertBox.hidden=true;
 try{
-const [status,ent,plansData]=await Promise.all([api('/billing/status/'),api('/billing/entitlements/'),api('/billing/plans/')]);
+const [status,ent,plansData]=await Promise.all([api('/api/billing/status/'),api('/api/billing/entitlements/'),api('/api/billing/plans/')]);
 const s=status.subscription||{},plan=s.plan||'FREE';renderPlans(plansData.plans||status.plans||[],plan);
 $('[data-subscription-plan]').textContent=plan;$('[data-subscription-meta]').textContent=s.is_active?`Active · ${money(s.price_cents,s.currency)}${s.expires_at?` · renews ${new Date(s.expires_at).toLocaleDateString()}`:''}`:'Inactive · Free entitlements apply';
 const u=(ent.current||{}).usage||{},labels={api_calls:'API calls / day',strategies:'Active strategies',backtests:'Backtests / day',predictions:'AI predictions / day',orders:'Orders / day',broker_accounts:'Broker accounts',automations:'Automation runs / day',live_orders:'Live orders / day'};
@@ -49,7 +50,7 @@ $('[data-payment-list]').innerHTML=payments.length?payments.map(x=>{const raw=St
 }catch(e){console.error(e);showError(`Billing data could not be loaded: ${e.message}`);$('[data-subscription-meta]').textContent='Billing status unavailable. Retry.'}
 }
 $('[data-billing-refresh]').onclick=load;
-$('[data-cancel-subscription]').onclick=async()=>{if(!confirm('Cancel your subscription renewal?'))return;try{await api('/billing/cancel-subscription/',{method:'POST',body:'{}'});await load()}catch(e){showError(e.message)}};
+$('[data-cancel-subscription]').onclick=async()=>{if(!confirm('Cancel your subscription renewal?'))return;try{await api('/api/billing/cancel-subscription/',{method:'POST',body:'{}'});await load()}catch(e){showError(e.message)}};
 load();
 })();
 </script>{% endblock %}
