@@ -17,6 +17,14 @@ class Phase19DeveloperPlatformTests(TestCase):
     def use_admin_key(self):
         self.client.credentials(HTTP_X_API_KEY=self.admin_key.key, HTTP_X_API_SECRET=self.admin_secret)
 
+    def test_key_list_masks_secret_material(self):
+        response = self.client.get("/api/developer/keys/")
+        self.assertEqual(response.status_code, 200)
+        key_payload = next(item for item in response.data if item["id"] == self.key.id)
+        self.assertEqual(key_payload["key"], f"{self.key.key[:6]}••••••••{self.key.key[-4:]}")
+        self.assertNotIn(self.secret, str(response.data))
+        self.assertNotIn(self.key.secret, str(response.data))
+
     def test_key_list_and_create_requires_admin_scope(self):
         response = self.client.get("/api/developer/keys/")
         self.assertEqual(response.status_code, 200)
@@ -46,10 +54,20 @@ class Phase19DeveloperPlatformTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.key.refresh_from_db()
         self.assertNotEqual(self.key.secret, self.secret)
+        self.assertIn("secret", response.data)
+        self.assertNotIn(self.key.secret, str(response.data))
         response = self.client.post(f"/api/developer/keys/{self.key.id}/revoke/")
         self.assertEqual(response.status_code, 200)
         self.key.refresh_from_db()
         self.assertEqual(self.key.status, "revoked")
+
+    def test_key_delete_requires_admin_and_is_scoped_to_owner(self):
+        response = self.client.delete(f"/api/developer/keys/{self.key.id}/delete/")
+        self.assertEqual(response.status_code, 403)
+        self.use_admin_key()
+        response = self.client.delete(f"/api/developer/keys/{self.key.id}/delete/")
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(APIKey.objects.filter(pk=self.key.id).exists())
 
     def test_scope_authorization_and_signing(self):
         self.assertTrue(APIGatewayService().authorize(self.key, "read"))

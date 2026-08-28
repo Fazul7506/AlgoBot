@@ -1,13 +1,50 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
+{% load static %}
+{% block title %}API Keys | AlgoBot{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Api Keys</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
-</section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
+<section class="developer-page api-keys-page">
+  <header class="developer-hero">
+    <div>
+      <p class="eyebrow">Developer & API</p>
+      <h1>API keys</h1>
+      <p>Create, rotate and revoke credentials without exposing secrets in the browser.</p>
+    </div>
+    <button class="ds-btn ds-btn--primary" type="button" data-api-key-create>
+      <span class="material-symbols-rounded" aria-hidden="true">add</span> Create key
+    </button>
+  </header>
+
+  <div class="ds-card api-security-banner">
+    <span class="material-symbols-rounded" aria-hidden="true">shield_lock</span>
+    <div><strong>Secrets stay private</strong><p>Your secret is shown only once after creation or rotation. AlgoBot never returns stored secrets from the list API.</p></div>
+  </div>
+
+  <section class="ds-card api-key-table-card" aria-labelledby="api-key-list-title">
+    <div class="section-heading"><div><h2 id="api-key-list-title">Your API keys</h2><p>Use the masked key fingerprint to identify credentials safely.</p></div><span class="ds-status ds-status--ready" data-api-key-count>Loading…</span></div>
+    <div class="api-key-list" data-api-key-list>
+      <div class="ds-state" data-api-key-loading><strong>Loading keys</strong><p>Fetching your developer credentials securely.</p></div>
+    </div>
+  </section>
+
+  <dialog class="ds-dialog" data-api-key-dialog aria-labelledby="api-key-dialog-title">
+    <form method="dialog" class="api-key-dialog-form" data-api-key-form>
+      <button class="dialog-close" type="button" data-api-key-close aria-label="Close"><span class="material-symbols-rounded">close</span></button>
+      <p class="eyebrow">New credential</p><h2 id="api-key-dialog-title">Create API key</h2>
+      <label class="ds-field"><span>Name</span><input name="name" required maxlength="120" placeholder="Production trading bot"></label>
+      <fieldset class="scope-picker"><legend>Permissions</legend>
+        <label><input type="checkbox" name="permissions" value="read" checked> Read</label>
+        <label><input type="checkbox" name="permissions" value="market_data"> Market data</label>
+        <label><input type="checkbox" name="permissions" value="trading"> Trading</label>
+        <label><input type="checkbox" name="permissions" value="webhooks"> Webhooks</label>
+        <label><input type="checkbox" name="permissions" value="analytics"> Analytics</label>
+      </fieldset>
+      <div class="dialog-actions"><button type="button" class="ds-btn ds-btn--ghost" data-api-key-close>Cancel</button><button type="submit" class="ds-btn ds-btn--primary">Create key</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="ds-dialog" data-api-secret-dialog aria-labelledby="api-secret-title">
+    <div class="secret-reveal"><span class="material-symbols-rounded secret-icon">key</span><p class="eyebrow">Save this secret now</p><h2 id="api-secret-title">Your API secret</h2><p>This secret will not be displayed again. Copy it into your password manager or deployment secret store.</p><div class="secret-box"><code data-api-secret></code><button type="button" class="ds-btn" data-copy-api-secret>Copy</button></div><button type="button" class="ds-btn ds-btn--primary" data-api-secret-close>Done</button></div>
+  </dialog>
 </section>
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/api_keys.js' %}?v=20260828-security1" defer></script>{% endblock %}

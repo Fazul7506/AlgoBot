@@ -59,7 +59,7 @@ def key_rotate(request, pk):
     if not api_key.is_active():
         return Response({"detail": "Only active keys can be rotated"}, status=400)
     _, raw_secret = APIKeyService().rotate(api_key)
-    return Response({"id": api_key.id, "key": api_key.key, "secret": raw_secret})
+    return Response({"id": api_key.id, "key": APIKeySerializer(api_key).data["key"], "secret": raw_secret, "warning": "Store this secret securely. It will not be shown again."})
 
 
 @api_view(["POST"])
@@ -72,6 +72,18 @@ def key_revoke(request, pk):
         return Response({"detail": "Not found"}, status=404)
     APIKeyService().revoke(api_key)
     return Response(APIKeySerializer(api_key).data)
+
+
+@api_view(["DELETE"])
+@authentication_classes(AUTH_CLASSES)
+@permission_classes(_developer_permissions(HasDeveloperAdminScope))
+def key_delete(request, pk):
+    try:
+        api_key = APIKey.objects.get(pk=pk, user=request.user)
+    except APIKey.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    api_key.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["GET"])
