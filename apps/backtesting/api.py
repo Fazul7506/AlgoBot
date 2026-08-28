@@ -7,8 +7,8 @@ from .models import Backtest, BacktestStatistics
 from .serializers import BacktestSerializer, BacktestStatisticsSerializer
 from .services import ParameterOptimizationService, ReplayService
 from trading.models.core import Strategy as StrategyModel
-from trading.strategies.strategy_service import StrategyService
 from apps.market_data.models import MarketSymbol
+
 
 class BacktestViewSet(viewsets.ModelViewSet):
     serializer_class = BacktestSerializer
@@ -23,8 +23,10 @@ class BacktestViewSet(viewsets.ModelViewSet):
         end_date = parse_datetime(str(data.get('end_date') or ''))
         if not start_date or not end_date:
             raise ValidationError({'date_range': 'Valid start_date and end_date are required.'})
-        if timezone.is_naive(start_date): start_date = timezone.make_aware(start_date)
-        if timezone.is_naive(end_date): end_date = timezone.make_aware(end_date)
+        if timezone.is_naive(start_date):
+            start_date = timezone.make_aware(start_date)
+        if timezone.is_naive(end_date):
+            end_date = timezone.make_aware(end_date)
         if end_date <= start_date:
             raise ValidationError({'date_range': 'End date/time must be later than start date/time.'})
 
@@ -45,30 +47,30 @@ class BacktestViewSet(viewsets.ModelViewSet):
         if not strategy:
             raise ValidationError({'strategy': 'Selected strategy does not exist in the strategy catalog.'})
 
-        backtest = serializer.save(user=self.request.user, strategy=strategy.name, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date, status='running')
-        try:
-            result = StrategyService.run_backtest(strategy, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date)
-            backtest.status = 'completed'
-            backtest.result_snapshot = {'status':'completed','start_date':start_date.isoformat(),'end_date':end_date.isoformat(),'strategy':strategy.name,'symbol':symbol,'timeframe':timeframe,'result':result}
-            backtest.save(update_fields=['status','result_snapshot','updated_at'])
-            s = result
-            BacktestStatistics.objects.update_or_create(backtest=backtest, defaults={
-                'net_profit':s.get('net_profit', s.get('total_profit', 0)), 'gross_profit':s.get('gross_profit', 0), 'gross_loss':s.get('gross_loss', 0),
-                'profit_factor':0 if s.get('profit_factor') == float('inf') else s.get('profit_factor', 0), 'expectancy':s.get('expectancy', 0),
-                'win_rate':s.get('win_rate', 0), 'loss_rate':s.get('loss_rate', 0), 'drawdown':s.get('maximum_drawdown', s.get('max_drawdown', 0)),
-                'sharpe':s.get('sharpe_ratio', 0), 'sortino':s.get('sortino_ratio', 0), 'calmar':s.get('calmar_ratio', 0), 'metrics':s,
-                'equity_curve':s.get('equity_curve', []), 'monthly_returns':s.get('monthly_returns', {}),
-            })
-        except Exception as exc:
+        backtest = serializer.save(user=self.request.user, strategy=strategy.name, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date, mode=str(data.get('mode') or 'candle_close'), status='pending')
+        from .tasks import execute_backtest
+        if not hasattr(execute_backtest, 'delay'):
             backtest.status = 'failed'
-            backtest.result_snapshot = {'status':'failed','error':str(exc),'start_date':start_date.isoformat(),'end_date':end_date.isoformat()}
-            backtest.save(update_fields=['status','result_snapshot','updated_at'])
-            raise
+            backtest.result_snapshot = {'status': 'failed', 'error': 'Backtest worker is not configured. Start the Celery worker before running historical tests.', 'start_date': start_date.isoformat(), 'end_date': end_date.isoformat()}
+            backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+            return
+        backtest.status = 'running'
+        backtest.save(update_fields=['status', 'updated_at'])
+        execute_backtest.delay(backtest.pk)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        instance = self.get_queryset().get(pk=serializer.instance.pk)
+        return response.Response(self.get_serializer(instance).data, status=status.HTTP_202_ACCEPTED, headers=self.get_success_headers(serializer.data))
+
 
 class StatisticsViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BacktestStatisticsSerializer
     permission_classes = [permissions.IsAuthenticated]
     def get_queryset(self): return BacktestStatistics.objects.filter(backtest__user=self.request.user)
+
 
 @decorators.api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
