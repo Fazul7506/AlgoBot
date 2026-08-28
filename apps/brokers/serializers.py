@@ -22,17 +22,21 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
     credential_status = serializers.CharField(read_only=True)
     data_freshness = serializers.SerializerMethodField()
     switch_enabled = serializers.SerializerMethodField()
+    equity = serializers.SerializerMethodField()
+    margin = serializers.SerializerMethodField()
+    free_margin = serializers.SerializerMethodField()
+    net_profit_loss = serializers.SerializerMethodField()
 
     class Meta:
         model = BrokerAccount
         fields = [
             'id', 'user', 'broker', 'broker_name', 'broker_account_id', 'account_id',
             'account_type', 'avatar_url', 'display_name', 'branding', 'currency', 'balance', 'equity',
-            'margin', 'free_margin', 'status', 'is_preferred', 'is_default', 'is_connected',
+            'margin', 'free_margin', 'net_profit_loss', 'status', 'is_preferred', 'is_default', 'is_connected',
             'credential_status', 'last_synced_at', 'data_freshness', 'switch_enabled', 'created_at',
         ]
         read_only_fields = [
-            'user', 'balance', 'equity', 'margin', 'free_margin', 'last_synced_at',
+            'user', 'balance', 'equity', 'margin', 'free_margin', 'net_profit_loss', 'last_synced_at',
             'broker_account_id', 'account_type', 'avatar_url', 'display_name', 'branding', 'is_default',
             'is_connected', 'data_freshness', 'switch_enabled',
         ]
@@ -40,25 +44,19 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
     def _is_deriv(self, obj):
         return str(obj.broker.broker_type or '').lower() == 'deriv'
 
+    def _realtime(self, obj):
+        value = (obj.credentials or {}).get('realtime') or {}
+        return value if isinstance(value, dict) else {}
+
     def get_broker(self, obj):
         metadata = obj.broker.metadata or {}
-        return {
-            'id': obj.broker_id,
-            'name': obj.broker.name,
-            'type': obj.broker.broker_type,
-            'status': obj.broker.status,
-            'avatar_url': metadata.get('avatar_url') or '',
-        }
+        return {'id': obj.broker_id, 'name': obj.broker.name, 'type': obj.broker.broker_type, 'status': obj.broker.status, 'avatar_url': metadata.get('avatar_url') or ''}
 
     def get_account_type(self, obj):
-        credentials = obj.credentials or {}
-        value = str(credentials.get('account_type') or '').lower()
+        value = str((obj.credentials or {}).get('account_type') or '').lower()
         return value if value in {'real', 'demo'} else 'unknown'
 
     def get_avatar_url(self, obj):
-        # Account identity is inherited from the canonical broker branding.
-        # Credentials may contain provider metadata, but must not override the
-        # broker avatar shown throughout the product.
         metadata = obj.broker.metadata or {}
         return str(metadata.get('avatar_url') or '')
 
@@ -68,27 +66,10 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
     def get_branding(self, obj):
         if self._is_deriv(obj):
             account_type = self.get_account_type(obj)
-            return {
-                'provider': 'Deriv',
-                'powered_by': 'Deriv',
-                'country_code': 'US',
-                'flag': '🇺🇸',
-                'account_type': account_type,
-                'label': 'Deriv Demo Account' if account_type == 'demo' else 'Deriv Real Account' if account_type == 'real' else 'Deriv Account',
-            }
-        return {
-            'provider': obj.broker.name,
-            'powered_by': obj.broker.name,
-            'country_code': '',
-            'flag': '',
-            'account_type': self.get_account_type(obj),
-            'label': obj.broker.name,
-        }
+            return {'provider': 'Deriv', 'powered_by': 'Deriv', 'country_code': 'US', 'flag': '🇺🇸', 'account_type': account_type, 'label': 'Deriv Demo Account' if account_type == 'demo' else 'Deriv Real Account' if account_type == 'real' else 'Deriv Account'}
+        return {'provider': obj.broker.name, 'powered_by': obj.broker.name, 'country_code': '', 'flag': '', 'account_type': self.get_account_type(obj), 'label': obj.broker.name}
 
     def get_is_connected(self, obj):
-        # Credentials being valid only means the account can connect; it does
-        # not mean a broker session is currently healthy. Report the actual
-        # account-scoped connection state to prevent stale "connected" UI.
         return obj.connections.filter(status='connected').exists()
 
     def get_data_freshness(self, obj):
@@ -100,6 +81,34 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
 
     def get_switch_enabled(self, obj):
         return bool(settings.ENABLE_BROKER_ACCOUNT_SWITCH)
+
+    def get_equity(self, obj):
+        realtime = self._realtime(obj)
+        if realtime.get('equity') is not None:
+            return realtime['equity']
+        if not self._is_deriv(obj) or obj.equity != 0:
+            return obj.equity
+        return None
+
+    def get_margin(self, obj):
+        realtime = self._realtime(obj)
+        if realtime.get('margin') is not None:
+            return realtime['margin']
+        if not self._is_deriv(obj) or obj.margin != 0:
+            return obj.margin
+        return None
+
+    def get_free_margin(self, obj):
+        realtime = self._realtime(obj)
+        if realtime.get('available_margin') is not None:
+            return realtime['available_margin']
+        if not self._is_deriv(obj) or obj.free_margin != 0:
+            return obj.free_margin
+        return None
+
+    def get_net_profit_loss(self, obj):
+        realtime = self._realtime(obj)
+        return realtime.get('unrealized_pnl')
 
 
 class BrokerConnectionSerializer(serializers.ModelSerializer):
@@ -122,10 +131,7 @@ class ExecutionReportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ExecutionReport
-        fields = [
-            'id', 'order', 'execution_price', 'requested_price', 'slippage', 'latency', 'fees',
-            'status', 'raw_report', 'created_at', 'symbol', 'direction', 'broker_order_id',
-        ]
+        fields = ['id', 'order', 'execution_price', 'requested_price', 'slippage', 'latency', 'fees', 'status', 'raw_report', 'created_at', 'symbol', 'direction', 'broker_order_id']
 
 
 class PositionSerializer(serializers.ModelSerializer):
