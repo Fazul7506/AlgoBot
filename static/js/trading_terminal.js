@@ -17,13 +17,7 @@
   };
   const brokerReady = () => !!selectedAccount();
   const renderRows = (selector, rows, empty, format) => { const target = $(selector); if (target) target.innerHTML = rows.length ? rows.map(format).join('') : `<div class="empty-state">${esc(empty)}</div>`; };
-  const renderOrderResult = (message, state = 'info') => {
-    const result = $('[data-order-result]');
-    if (!result) return;
-    result.hidden = false;
-    result.dataset.state = state;
-    result.textContent = message;
-  };
+  const renderOrderResult = (message, state = 'info') => { const result = $('[data-order-result]'); if (!result) return; result.hidden = false; result.dataset.state = state; result.textContent = message; };
 
   function renderAccount(account) {
     const status = $('#terminal-status'), note = $('[data-terminal-account]'), risk = $('[data-risk-check]');
@@ -77,7 +71,7 @@
       if (!symbols.length) throw new Error('No active tradable broker instruments are available');
       select.innerHTML = symbols.map(r => `<option value="${esc(r.symbol)}">${esc(r.display_name || r.symbol)} · ${esc(r.symbol)}</option>`).join('');
       const requested = new URLSearchParams(location.search).get('symbol');
-      select.value = [previous, requested, symbols[0].symbol].find(v => symbols.some(r => r === v)) || symbols[0].symbol;
+      select.value = [previous, requested, symbols[0].symbol].find(v => symbols.some(r => r.symbol === v)) || symbols[0].symbol;
       renderWatchlist($('[data-watchlist-search]')?.value || '');
       window.dispatchEvent(new CustomEvent('algobot:broker-symbols-loaded', {detail:{symbol:select.value, count:symbols.length}}));
       return select.value;
@@ -131,11 +125,8 @@
       renderOrderResult(`Order ${order.broker_reference || order.id || ''} ${order.status || 'queued'}.`, 'success');
       window.__algobotAiOrderContext = null; await loadRecords();
     } catch (e) {
-      if (e?.code === 'EDGE_CHALLENGE' || e?.isEdgeChallenge) {
-        renderOrderResult('Order status unknown: the production edge blocked the response. Check Recent orders before retrying to prevent a duplicate trade.', 'edge');
-      } else {
-        renderOrderResult(`Order rejected: ${e.message || 'request failed'}`, 'error');
-      }
+      if (e?.code === 'EDGE_CHALLENGE' || e?.isEdgeChallenge) renderOrderResult('Order status unknown: the production edge blocked the response. Check Recent orders before retrying to prevent a duplicate trade.', 'edge');
+      else renderOrderResult(`Order rejected: ${e.message || 'request failed'}`, 'error');
     }
     finally { if (button) { button.disabled = false; button.textContent = 'Place order'; } }
   }
