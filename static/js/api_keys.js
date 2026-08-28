@@ -6,10 +6,13 @@
   const secretDialog = document.querySelector('[data-api-secret-dialog]');
   const form = document.querySelector('[data-api-key-form]');
   const count = document.querySelector('[data-api-key-count]');
+  const keyNode = document.querySelector('[data-api-key-value]');
   const secretNode = document.querySelector('[data-api-secret]');
-  const copyButton = document.querySelector('[data-copy-api-secret]');
+  const copyKeyButton = document.querySelector('[data-copy-api-key]');
+  const copySecretButton = document.querySelector('[data-copy-api-secret]');
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
   const endpoint = '/api/developer/keys/';
+  let keyValue = '';
   let secretValue = '';
   let secretVisible = false;
 
@@ -23,10 +26,13 @@
   const statusClass = status => ({active:'ready', revoked:'danger', expired:'danger', inactive:'degraded'}[status] || 'pending');
 
   const clearSecret = () => {
+    keyValue = '';
     secretValue = '';
     secretVisible = false;
+    if (keyNode) keyNode.textContent = '—';
     if (secretNode) secretNode.textContent = '••••••••••••••••••••';
-    if (copyButton) { copyButton.disabled = true; copyButton.textContent = 'Copy'; }
+    if (copyKeyButton) { copyKeyButton.disabled = true; copyKeyButton.textContent = 'Copy key'; }
+    if (copySecretButton) { copySecretButton.disabled = true; copySecretButton.textContent = 'Copy secret'; }
   };
 
   const load = async () => {
@@ -59,19 +65,23 @@
     }
   };
 
-  const showSecret = secret => {
+  const showCredentials = (key, secret) => {
     clearSecret();
+    keyValue = String(key || '');
     secretValue = String(secret || '');
-    if (!secretValue) return;
-    secretVisible = true;
-    if (secretNode) secretNode.textContent = secretValue;
-    if (copyButton) copyButton.disabled = false;
+    if (keyNode) keyNode.textContent = keyValue || 'Unavailable';
+    if (copyKeyButton) copyKeyButton.disabled = !keyValue;
+    if (secretValue) {
+      secretVisible = true;
+      if (secretNode) secretNode.textContent = secretValue;
+      if (copySecretButton) copySecretButton.disabled = false;
+    }
     secretDialog?.showModal();
   };
 
   const rotate = async id => {
     if (!confirm('Rotate this API key? Existing clients using its secret will stop working after the rotation grace period.')) return;
-    try { const result = await request(`${endpoint}${encodeURIComponent(id)}/rotate/`, { method: 'POST', body: '{}' }); showSecret(result.secret); await load(); }
+    try { const result = await request(`${endpoint}${encodeURIComponent(id)}/rotate/`, { method: 'POST', body: '{}' }); showCredentials(result.key, result.secret); await load(); }
     catch (error) { alert(error.message); }
   };
 
@@ -93,27 +103,38 @@
     const permissions = data.getAll('permissions');
     try {
       const result = await request(`${endpoint}create/`, { method: 'POST', body: JSON.stringify({ name: data.get('name'), permissions }) });
-      form.reset(); dialog?.close(); showSecret(result.secret); await load();
+      form.reset(); dialog?.close(); showCredentials(result.key, result.secret); await load();
     } catch (error) { alert(error.message); }
   });
   document.querySelectorAll('[data-api-key-create]').forEach(button => button.onclick = () => dialog?.showModal());
   document.querySelectorAll('[data-api-key-close]').forEach(button => button.onclick = () => dialog?.close());
   document.querySelector('[data-api-secret-close]')?.addEventListener('click', () => { clearSecret(); secretDialog?.close(); });
   secretDialog?.addEventListener('close', clearSecret);
-  copyButton?.addEventListener('click', async event => {
+
+  copyKeyButton?.addEventListener('click', async event => {
+    if (!keyValue) return;
+    try {
+      await navigator.clipboard.writeText(keyValue);
+      event.currentTarget.textContent = 'Key copied';
+      setTimeout(() => { if (event.currentTarget) event.currentTarget.textContent = 'Copy key'; }, 1600);
+    } catch (_) {
+      alert('Clipboard access was blocked by the browser. The key remains visible so you can retry Copy key.');
+    }
+  });
+
+  copySecretButton?.addEventListener('click', async event => {
     if (!secretVisible || !secretValue) return;
     const value = secretValue;
     try {
       await navigator.clipboard.writeText(value);
-      // The secret is intentionally masked immediately after a successful copy.
       secretValue = '';
       secretVisible = false;
       if (secretNode) secretNode.textContent = '••••••••••••••••••••';
       event.currentTarget.disabled = true;
-      event.currentTarget.textContent = 'Copied · masked';
-      setTimeout(() => { event.currentTarget.textContent = 'Copy'; }, 1600);
+      event.currentTarget.textContent = 'Secret copied · masked';
+      setTimeout(() => { if (event.currentTarget) event.currentTarget.textContent = 'Copy secret'; }, 1600);
     } catch (_) {
-      alert('Clipboard access was blocked by the browser. The secret remains visible so you can retry Copy.');
+      alert('Clipboard access was blocked by the browser. The secret remains visible so you can retry Copy secret.');
     }
   });
   clearSecret();
