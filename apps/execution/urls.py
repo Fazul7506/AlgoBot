@@ -9,9 +9,6 @@ router.register('contracts', ContractViewSet, basename='contracts')
 router.register('execution/logs', ExecutionLogViewSet, basename='execution-logs')
 router.register('reconciliation/events', ReconciliationEventViewSet, basename='reconciliation-events')
 
-# Keep the pre-trade action explicit as well as registered by DRF. This makes
-# the POST contract deterministic when this URLconf is mounted more than once
-# (/api/ and the Cloudflare-safe /data/ alias).
 preview_view = OrderViewSet.as_view({'post': 'preview'})
 urlpatterns = [
     path('orders/preview/', preview_view, name='orders-preview'),

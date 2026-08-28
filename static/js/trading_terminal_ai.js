@@ -7,6 +7,9 @@
   const $ = (s, r = document) => r.querySelector(s);
   const text = (s, value) => $(s)?.replaceChildren(document.createTextNode(String(value ?? '—')));
   const api = (url, options = {}, timeout = 15000) => window.AlgoBotFrontendData?.request(url, options, timeout);
+  let analysing = false;
+  let scheduledSymbol = '';
+  let autoTimer = null;
 
   function show(message) { text('[data-ai-explanation]', message); }
 
@@ -15,7 +18,8 @@
     const recommendation = data?.recommendation || {};
     const regime = data?.regime || {};
     const confidenceRaw = prediction.confidence ?? recommendation.confidence;
-    const confidence = confidenceRaw == null ? '—' : `${(Number(confidenceRaw) <= 1 ? Number(confidenceRaw) * 100 : Number(confidenceRaw)).toFixed(1)}%`;
+    const confidenceNumber = Number(confidenceRaw);
+    const confidence = confidenceRaw == null ? '—' : `${(confidenceNumber <= 1 ? confidenceNumber * 100 : confidenceNumber).toFixed(1)}%`;
     const predictionLabel = prediction.prediction ?? prediction.direction ?? prediction.label ?? prediction.class ?? '—';
     const recommendationLabel = recommendation.recommendation ?? recommendation.action ?? recommendation.signal ?? recommendation.direction ?? '—';
     const regimeLabel = regime.regime ?? regime.name ?? regime.label ?? '—';
@@ -33,29 +37,35 @@
       show(summary || `AI analysis completed for ${data.symbol || $('#symbol')?.value || 'the selected market'}.`);
     } else show(`AI analysis completed for ${data.symbol || $('#symbol')?.value || 'the selected market'}.`);
 
+    const actionable = String(recommendationLabel).toUpperCase() !== 'WAIT' && String(predictionLabel).toUpperCase() !== 'AVOID' && Number.isFinite(confidenceNumber) && (confidenceNumber <= 1 ? confidenceNumber * 100 : confidenceNumber) >= 65;
     window.__algobotAiOrderContext = {
       ...(window.__algobotAiOrderContext || {}),
       ai_prediction: predictionLabel,
       ai_recommendation: recommendationLabel,
-      ai_confidence: Number.isFinite(Number(confidenceRaw)) ? Number(confidenceRaw) : null,
+      ai_confidence: Number.isFinite(confidenceNumber) ? confidenceNumber : null,
       ai_regime: regimeLabel,
+      ai_actionable: actionable,
       ai_source: data?.market_context_source ? `decision_engine:${data.market_context_source}` : 'decision_engine',
     };
+    window.dispatchEvent(new CustomEvent('algobot:ai-gate-updated', {detail:{actionable, confidence:confidenceNumber, recommendation:recommendationLabel, prediction:predictionLabel}}));
   }
 
-  async function analyse() {
+  async function analyse({silent = false} = {}) {
+    if (analysing) return;
     const button = $('[data-ai-analyze]');
     const symbol = $('#symbol')?.value;
-    if (!symbol) { show('Select a broker instrument before running AI analysis.'); return; }
-    if (button) { button.disabled = true; button.textContent = 'Analysing…'; }
-    show('Running AI inference from the latest persisted broker market feed…');
+    if (!symbol) { if (!silent) show('Select a broker instrument before running AI analysis.'); return; }
+    analysing = true;
+    if (button && !silent) { button.disabled = true; button.textContent = 'Analysing…'; }
+    if (!silent) show('Running AI inference from the latest persisted broker market feed…');
     try {
-      const data = await api('/api/ai/predict/', {
+      const data = await api('/trading/ai/predict/', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({symbol, timeframe: 'M1'})
       }, 15000);
       render(data);
+      scheduledSymbol = symbol;
       window.dispatchEvent(new CustomEvent('algobot:ai-analysis-updated', {detail: data}));
     } catch (error) {
       text('[data-ai-prediction]', 'Unavailable');
@@ -63,23 +73,36 @@
       text('[data-ai-confidence-card]', 'Unavailable');
       text('[data-ai-confidence]', 'Unavailable');
       text('[data-ai-regime]', 'Unavailable');
+      window.__algobotAiOrderContext = null;
       const message = String(error?.message || 'AI analysis is temporarily unavailable.');
-      show(message.includes('<html') || message.includes('Just a moment') ? 'Production edge security blocked the AI request. Market data remains broker-authoritative; no signal was fabricated.' : message);
+      show(message.includes('Production edge security challenged') || message.includes('<html') || message.includes('Just a moment') ? 'AI analysis is temporarily unavailable at the production edge. Live execution remains blocked until a verified AI decision is available.' : message);
+      window.dispatchEvent(new CustomEvent('algobot:ai-gate-updated', {detail:{actionable:false, error:true}}));
     } finally {
-      if (button) { button.disabled = false; button.textContent = 'Analyse market'; }
+      analysing = false;
+      if (button && !silent) { button.disabled = false; button.textContent = 'Analyse market'; }
     }
+  }
+
+  function scheduleAutoAnalysis() {
+    const symbol = $('#symbol')?.value;
+    if (!symbol || symbol === scheduledSymbol) return;
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => analyse({silent:true}), 250);
   }
 
   function boot() {
     if (!$('.terminal-page')) return;
-    $('[data-ai-analyze]')?.addEventListener('click', analyse);
+    $('[data-ai-analyze]')?.addEventListener('click', () => analyse());
+    window.addEventListener('algobot:broker-symbols-loaded', scheduleAutoAnalysis);
     window.addEventListener('algobot:market-symbol-changed', () => {
-      text('[data-ai-prediction]', 'No analysis');
-      text('[data-ai-recommendation]', 'No analysis');
-      text('[data-ai-confidence-card]', 'No analysis');
+      scheduledSymbol = '';
+      text('[data-ai-prediction]', 'Analysing…');
+      text('[data-ai-recommendation]', 'Waiting for decision');
+      text('[data-ai-confidence-card]', '—');
       text('[data-ai-confidence]', 'Not analysed');
-      text('[data-ai-regime]', 'No analysis');
-      show('Run market analysis to request an AI decision.');
+      text('[data-ai-regime]', 'Waiting for analysis');
+      show('Refreshing the AI decision for the selected broker market…');
+      scheduleAutoAnalysis();
     });
   }
 

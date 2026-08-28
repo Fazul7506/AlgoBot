@@ -18,7 +18,7 @@
     target.textContent='Running authoritative pre-trade checks…';
     if(!account||!symbol){target.textContent='Select a connected broker account and instrument first.';return;}
     try{
-      const data=await api('/api/orders/preview/',{
+      const data=await api('/trading/actions/preview/',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
