@@ -1,86 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Billing & subscriptions | AlgoBot{% endblock %}
 {% block content %}
-<section class="enterprise-hero"><div><p class="eyebrow">ACCOUNT BILLING</p><h1>Plans &amp; subscription</h1><p class="hero-copy">Choose a plan, switch tiers at any time, and complete paid changes through IntaSend or PesaPal.</p></div></section>
+<section class="enterprise-hero"><div><p class="eyebrow">ACCOUNT BILLING</p><h1>Plans, limits & subscription</h1><p class="hero-copy">Every plan has explicit entitlements enforced server-side. Usage meters reset automatically and paid access activates only after confirmed payment.</p></div></section>
 <section class="card-grid" data-plan-grid><div class="empty-state">Loading plans…</div></section>
 <section class="panel" style="margin-top:18px"><div class="section-heading"><div><p class="eyebrow">CURRENT SUBSCRIPTION</p><h2 data-subscription-plan>Loading…</h2></div><button class="btn danger" type="button" data-cancel-subscription>Cancel renewal</button></div><p data-subscription-meta>Checking billing status…</p></section>
+<section class="panel" style="margin-top:18px"><div class="section-heading"><div><p class="eyebrow">LIVE USAGE</p><h2>Plan limits</h2></div><span data-reset-time></span></div><div class="usage-grid" data-usage-grid><div class="empty-state">Loading usage…</div></div></section>
 <section class="panel" style="margin-top:18px"><p class="eyebrow">RECENT PAYMENTS</p><div data-invoice-list class="empty-state">Loading billing history…</div></section>
 {% endblock %}
+{% block extra_css %}<style>.usage-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.usage-card{padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:12px}.usage-card strong{display:block;font-size:1.2rem;margin-top:4px}.usage-card small{color:var(--muted-text,#8e96a3)}@media(max-width:900px){.usage-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:520px){.usage-grid{grid-template-columns:1fr}}</style>{% endblock %}
 {% block extra_js %}
 <script>
 (()=>{
-  const $=(s,r=document)=>r.querySelector(s);
-  const csrf=()=>decodeURIComponent(document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1]||'');
-  const api=async(url,opts={})=>{
-    const method=(opts.method||'GET').toUpperCase();
-    const headers={Accept:'application/json',...(opts.headers||{})};
-    if(method!=='GET') headers['X-CSRFToken']=csrf();
-    if(opts.body!==undefined && !headers['Content-Type']) headers['Content-Type']='application/json';
-    const r=await fetch(url,{credentials:'same-origin',...opts,headers});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok) throw Error(d.detail||d.error||`Billing request failed (${r.status})`);
-    return d;
-  };
-  const money=(c,cur)=>c==null?'Price not configured':`${cur||'KES'} ${(Number(c)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-  let currentPlan='FREE';
-
-  async function load(){
-    try{
-      const status=await api('/billing/status/');
-      const s=status.subscription||{};
-      currentPlan=s.plan||'FREE';
-      $('[data-subscription-plan]').textContent=currentPlan;
-      $('[data-subscription-meta]').textContent=s.is_active?`Active · ${money(s.price_cents,s.currency)}${s.expires_at?` · renews ${new Date(s.expires_at).toLocaleDateString()}`:''}`:'Inactive';
-      renderPlans(status.plans||[]);
-      const invoices=status.invoices||[];
-      $('[data-invoice-list]').innerHTML=invoices.length?invoices.map(x=>`<div class="billing-row"><span>${x.metadata?.plan||'Subscription'}</span><span>${money(x.amount_cents,x.currency)}</span><span>${x.paid?'PAID':'PENDING'}</span></div>`).join(''):'No billing records yet.';
-    }catch(e){ $('[data-plan-grid]').innerHTML=`<div class="empty-state">${e.message}</div>`; }
-  }
-
-  function paymentButtons(plan){
-    if(plan==='FREE') return `<button class="btn primary" data-change-plan="FREE" data-provider="">Switch to FREE</button>`;
-    // Both gateways are intentionally explicit. Each button sends the chosen
-    // provider to the backend, which returns the provider's real hosted URL.
-    return `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-change-plan="${plan}" data-provider="intasend">Pay with IntaSend</button><button class="btn primary" data-change-plan="${plan}" data-provider="pesapal">Pay with PesaPal</button></div>`;
-  }
-
-  function renderPlans(plans){
-    $('[data-plan-grid]').innerHTML=plans.map(p=>{
-      const isCurrent=p.plan===currentPlan;
-      const unavailable=p.plan!=='FREE' && !p.configured;
-      let button;
-      if(isCurrent) button='<button class="btn ghost" disabled>Current plan</button>';
-      else if(unavailable) button='<button class="btn ghost" disabled>Not configured</button>';
-      else button=paymentButtons(p.plan);
-      return `<article class="panel"><p class="eyebrow">${p.plan}</p><h2>${money(p.price_cents,p.currency)}</h2><p>${p.recurring?'Recurring subscription':'No recurring charge'}</p>${button}${unavailable?'<small>Set this plan price in the deployment environment to enable checkout.</small>':''}</article>`;
-    }).join('');
-    document.querySelectorAll('[data-change-plan]').forEach(b=>b.addEventListener('click',()=>changePlan(b)));
-  }
-
-  async function changePlan(button){
-    const plan=button.dataset.changePlan;
-    const provider=button.dataset.provider||undefined;
-    if(!confirm(`Change your AlgoBot plan to ${plan}${provider?` using ${provider==='pesapal'?'PesaPal':'IntaSend'}`:''}?`)) return;
-    button.disabled=true;
-    try{
-      const payload={plan};
-      if(provider) payload.provider=provider;
-      const d=await api('/billing/change-plan/',{method:'POST',body:JSON.stringify(payload)});
-      if(d.url){
-        // Only navigate to a URL returned by our authenticated backend after
-        // it successfully created a real provider checkout session.
-        window.location.assign(d.url);
-        return;
-      }
-      await load();
-    }catch(e){alert(e.message);button.disabled=false;}
-  }
-
-  $('[data-cancel-subscription]')?.addEventListener('click',async()=>{
-    if(!confirm('Cancel your subscription renewal?'))return;
-    try{await api('/billing/cancel-subscription/',{method:'POST',body:'{}'});await load();}catch(e){alert(e.message);}
-  });
-  load();
+ const $=(s,r=document)=>r.querySelector(s);
+ const csrf=()=>decodeURIComponent(document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1]||'');
+ const api=async(url,opts={})=>{const method=(opts.method||'GET').toUpperCase(),headers={Accept:'application/json',...(opts.headers||{})};if(method!=='GET')headers['X-CSRFToken']=csrf();if(opts.body!==undefined&&!headers['Content-Type'])headers['Content-Type']='application/json';const r=await fetch(url,{credentials:'same-origin',...opts,headers}),d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.detail||d.error||`Billing request failed (${r.status})`);return d};
+ const money=(c,cur)=>c==null?'Price not configured':`${cur||'KES'} ${(Number(c)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;let currentPlan='FREE';
+ async function load(){try{const [status,ent]=await Promise.all([api('/billing/status/'),api('/billing/entitlements/')]);const s=status.subscription||{};currentPlan=s.plan||'FREE';$('[data-subscription-plan]').textContent=currentPlan;$('[data-subscription-meta]').textContent=s.is_active?`Active · ${money(s.price_cents,s.currency)}${s.expires_at?` · renews ${new Date(s.expires_at).toLocaleDateString()}`:''}`:'Inactive';renderPlans(status.plans||[]);renderUsage(ent.current);const invoices=status.invoices||[];$('[data-invoice-list]').innerHTML=invoices.length?invoices.map(x=>`<div class="billing-row"><span>${x.metadata?.plan||'Subscription'}</span><span>${money(x.amount_cents,x.currency)}</span><span>${x.paid?'PAID':'PENDING'}</span></div>`).join(''):'No billing records yet.'}catch(e){$('[data-plan-grid]').innerHTML=`<div class="empty-state">${e.message}</div>`}}
+ function renderUsage(current){const u=current.usage||{};const labels={api_calls:'API calls / day',strategies:'Active strategies',backtests:'Backtests / day',predictions:'AI predictions / day',orders:'Orders / day',broker_accounts:'Broker accounts',automations:'Automation runs / day'};const keys=Object.keys(labels);$('[data-usage-grid]').innerHTML=keys.map(k=>{const x=u[k]||{};return `<article class="usage-card"><small>${labels[k]}</small><strong>${x.unlimited?'Unlimited':`${x.used||0} / ${x.limit}`}</strong><small>${x.unlimited?'Fair use':`${x.remaining} remaining`}</small></article>`}).join('');$('[data-reset-time]').textContent=current.reset_at?`Resets ${new Date(current.reset_at).toLocaleString()}`:''}
+ function paymentButtons(plan){if(plan==='FREE')return `<button class="btn primary" data-change-plan="FREE">Switch to FREE</button>`;return `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-change-plan="${plan}" data-provider="intasend">Pay with IntaSend</button><button class="btn primary" data-change-plan="${plan}" data-provider="pesapal">Pay with PesaPal</button></div>`}
+ function renderPlans(plans){$('[data-plan-grid]').innerHTML=plans.map(p=>{const isCurrent=p.plan===currentPlan,unavailable=p.plan!=='FREE'&&!p.configured;let b=isCurrent?'<button class="btn ghost" disabled>Current plan</button>':unavailable?'<button class="btn ghost" disabled>Not configured</button>':paymentButtons(p.plan);return `<article class="panel"><p class="eyebrow">${p.plan}</p><h2>${money(p.price_cents,p.currency)}</h2><p>${p.recurring?'Recurring subscription':'No recurring charge'}</p>${b}${unavailable?'<small>Configure this tier price in the deployment environment to enable checkout.</small>':''}</article>`}).join('');document.querySelectorAll('[data-change-plan]').forEach(b=>b.addEventListener('click',()=>changePlan(b)))}
+ async function changePlan(button){const plan=button.dataset.changePlan,provider=button.dataset.provider;if(!confirm(`Change your AlgoBot plan to ${plan}${provider?` using ${provider==='pesapal'?'PesaPal':'IntaSend'}`:''}?`))return;button.disabled=true;try{const payload={plan};if(provider)payload.provider=provider;const d=await api('/billing/change-plan/',{method:'POST',body:JSON.stringify(payload)});if(d.url){window.location.assign(d.url);return}await load()}catch(e){alert(e.message);button.disabled=false}}
+ $('[data-cancel-subscription]')?.addEventListener('click',async()=>{if(!confirm('Cancel your subscription renewal?'))return;try{await api('/billing/cancel-subscription/',{method:'POST',body:'{}'});await load()}catch(e){alert(e.message)}});load();
 })();
-</script>
-{% endblock %}
+</script>{% endblock %}
