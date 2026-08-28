@@ -48,7 +48,6 @@ def symbols(request): return Response(MarketSymbolSerializer(MarketSymbol.object
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def broker_catalogue(request):
-    """Return the authenticated broker catalogue from the local market registry."""
     try:
         queryset = MarketSymbol.objects.filter(is_active=True, is_tradable=True).order_by("market", "symbol")
         data = MarketSymbolSerializer(queryset, many=True).data
@@ -119,15 +118,11 @@ def broker_tick(request):
     if not account: return Response({"detail":"Connect a broker before requesting live broker quotes."}, status=status.HTTP_409_CONFLICT)
     if not MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists(): return Response({"detail":"The requested symbol is not in the current broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
-        # Public Deriv quotes are shared market data. A very short cache absorbs
-        # duplicate requests from the terminal/chart/account widgets without
-        # weakening quote freshness or inventing a price.
-        cache_key = f"algobot:broker-quote:{account.broker.broker_type}:{symbol}"
-        data = cache.get(cache_key)
-        if data is None:
-            if account.broker.broker_type == "deriv": data = fetch_tick(symbol)
-            else: data = asyncio.run(_bounded_market_data(BrokerRegistry().adapter(account.broker, account), symbol))
-            cache.set(cache_key, data, timeout=1)
+        # Always ingest the broker response directly. A cross-request cache can
+        # return a test or stale quote for an otherwise identical symbol; live
+        # trading UI must never silently substitute an unrelated cached tick.
+        if account.broker.broker_type == "deriv": data = fetch_tick(symbol)
+        else: data = asyncio.run(_bounded_market_data(BrokerRegistry().adapter(account.broker, account), symbol))
         tick = MarketDataService().tick_service.ingest({"symbol": symbol, "quote": data.get("price", data.get("quote")), "bid": data.get("bid"), "ask": data.get("ask"), "epoch": data.get("epoch"), "volume": data.get("volume", 0)})
         payload = TickSerializer(tick).data; payload.update({"broker":account.broker.name,"account_id":account.account_id,"stale":False,"source":"live_broker_quote"}); return Response(payload)
     except BrokerAuthenticationError as exc:
@@ -178,4 +173,8 @@ def broker_chart_history(request):
         data.update({"broker": account.broker.name, "account_id": account.account_id, "source": "live_broker"})
         return Response(data)
     except (BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, asyncio.TimeoutError) as exc:
-        return Response({"detail":str(exc),"source":"broker","stale":False}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        cached = _last_known_tick(symbol)
+        if cached: return _stale_tick_response(cached, account)
+        return Response({"status":"error","code":"BROKER_CHART_HISTORY_FAILED","detail":str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except Exception as exc:
+        return Response({"status":"error","code":"BROKER_CHART_HISTORY_FAILED","detail":str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
