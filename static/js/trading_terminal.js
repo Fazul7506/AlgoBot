@@ -9,17 +9,14 @@
   const esc = v => String(v ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
   const money = v => Number.isFinite(Number(v)) ? Number(v).toLocaleString(undefined, {maximumFractionDigits: 8}) : 'Unavailable';
   const api = (url, options = {}, timeout = 10000) => window.AlgoBotFrontendData.request(url, options, timeout);
-  let accounts = [], direction = 'BUY', busy = false;
+  let accounts = [], symbols = [], direction = 'BUY', busy = false;
 
   const selectedAccount = () => {
     const id = $('#account')?.value;
     return accounts.find(a => String(a.id) === String(id)) || accounts.find(a => a.is_preferred || a.is_default) || accounts[0] || null;
   };
   const brokerReady = () => !!selectedAccount();
-  const renderRows = (selector, rows, empty, format) => {
-    const target = $(selector);
-    if (target) target.innerHTML = rows.length ? rows.map(format).join('') : `<div class="empty-state">${esc(empty)}</div>`;
-  };
+  const renderRows = (selector, rows, empty, format) => { const target = $(selector); if (target) target.innerHTML = rows.length ? rows.map(format).join('') : `<div class="empty-state">${esc(empty)}</div>`; };
 
   function renderAccount(account) {
     const status = $('#terminal-status'), note = $('[data-terminal-account]'), risk = $('[data-risk-check]');
@@ -46,19 +43,38 @@
     catch (e) { renderAccounts([]); $('[data-terminal-account]')?.replaceChildren(document.createTextNode(`Broker accounts unavailable: ${e.message || 'request failed'}`)); return null; }
   }
 
+  function renderWatchlist(filter = '') {
+    const target = $('[data-watchlist]'); if (!target) return;
+    const q = String(filter).trim().toLowerCase();
+    const rows = symbols.filter(r => !q || String(r.symbol || '').toLowerCase().includes(q) || String(r.display_name || '').toLowerCase().includes(q));
+    const current = $('#symbol')?.value;
+    const count = $('[data-watchlist-count]'); if (count) count.textContent = String(symbols.length);
+    target.innerHTML = rows.length ? rows.slice(0, 100).map(r => `<button type="button" class="watchlist-row ${r.symbol === current ? 'active' : ''}" data-watch-symbol="${esc(r.symbol)}"><span><strong>${esc(r.display_name || r.symbol)}</strong><small>${esc(r.symbol)}</small></span><b>›</b></button>`).join('') : '<div class="empty-state">No matching instruments.</div>';
+    target.querySelectorAll('[data-watch-symbol]').forEach(button => button.addEventListener('click', () => selectSymbol(button.dataset.watchSymbol)));
+  }
+
+  function selectSymbol(symbol) {
+    const select = $('#symbol');
+    if (!select || !symbols.some(r => r.symbol === symbol)) return;
+    select.value = symbol;
+    select.dispatchEvent(new Event('change', {bubbles:true}));
+    renderWatchlist($('[data-watchlist-search]')?.value || '');
+  }
+
   async function loadSymbols() {
     const select = $('#symbol'); if (!select) return '';
     const previous = select.value;
     try {
       const payload = await api('/api/market/catalogue/', {}, 15000);
-      const symbols = list(payload?.symbols ?? payload).filter(r => r?.symbol && r.is_active !== false && r.is_tradable !== false);
+      symbols = list(payload?.symbols ?? payload).filter(r => r?.symbol && r.is_active !== false && r.is_tradable !== false);
       if (!symbols.length) throw new Error('No active tradable broker instruments are available');
       select.innerHTML = symbols.map(r => `<option value="${esc(r.symbol)}">${esc(r.display_name || r.symbol)} · ${esc(r.symbol)}</option>`).join('');
       const requested = new URLSearchParams(location.search).get('symbol');
       select.value = [previous, requested, symbols[0].symbol].find(v => symbols.some(r => r.symbol === v)) || symbols[0].symbol;
+      renderWatchlist($('[data-watchlist-search]')?.value || '');
       window.dispatchEvent(new CustomEvent('algobot:broker-symbols-loaded', {detail:{symbol:select.value, count:symbols.length}}));
       return select.value;
-    } catch (e) { select.innerHTML = `<option value="">${esc(e.message || 'Market catalogue unavailable')}</option>`; return ''; }
+    } catch (e) { symbols = []; renderWatchlist(); select.innerHTML = `<option value="">${esc(e.message || 'Market catalogue unavailable')}</option>`; return ''; }
   }
 
   async function loadQuote() {
@@ -69,10 +85,7 @@
       const bidValue = tick.bid ?? tick.quote, askValue = tick.ask ?? tick.quote;
       if (bid) bid.textContent = money(bidValue); if (ask) ask.textContent = money(askValue);
     } catch (e) {
-      try {
-        const cached = await api(`/api/ticks/latest/?symbol=${encodeURIComponent(symbol)}`, {}, 5000);
-        if (cached?.quote != null) { if (bid) bid.textContent = money(cached.bid ?? cached.quote); if (ask) ask.textContent = money(cached.ask ?? cached.quote); return; }
-      } catch (_) {}
+      try { const cached = await api(`/api/ticks/latest/?symbol=${encodeURIComponent(symbol)}`, {}, 5000); if (cached?.quote != null) { if (bid) bid.textContent = money(cached.bid ?? cached.quote); if (ask) ask.textContent = money(cached.ask ?? cached.quote); return; } } catch (_) {}
       if (bid) bid.textContent = 'Unavailable'; if (ask) ask.textContent = 'Unavailable';
     }
   }
@@ -105,22 +118,8 @@
     const form = new FormData(event.currentTarget), button = $('.execute-btn');
     if (button) { button.disabled = true; button.textContent = 'Submitting…'; }
     try {
-      const validationContext = {
-        ...(window.__algobotAiOrderContext || {}),
-        broker_source: 'connected_broker',
-        contract_type: contractType,
-        underlying_symbol: symbol,
-      };
-      const payload = {
-        broker_account: account.id,
-        symbol,
-        direction,
-        order_type: form.get('order_type') || 'market',
-        stake: form.get('stake'),
-        strategy: form.get('strategy') || '',
-        client_request_id: `ui-${crypto.randomUUID?.() || Date.now()}`,
-        validation_context: validationContext,
-      };
+      const validationContext = {...(window.__algobotAiOrderContext || {}), broker_source: 'connected_broker', contract_type: contractType, underlying_symbol: symbol};
+      const payload = {broker_account: account.id, symbol, direction, order_type: form.get('order_type') || 'market', stake: form.get('stake'), strategy: form.get('strategy') || '', client_request_id: `ui-${crypto.randomUUID?.() || Date.now()}`, validation_context: validationContext};
       const order = await api('/api/orders/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 25000);
       if (result) { result.hidden = false; result.textContent = `Order ${order.broker_reference || order.id || ''} ${order.status || 'queued'}.`; }
       window.__algobotAiOrderContext = null; await loadRecords();
@@ -132,7 +131,8 @@
     if (!$('.terminal-page')) return;
     $('[data-order-form]')?.addEventListener('submit', submitOrder);
     $('[data-action="terminal-refresh"]')?.addEventListener('click', refresh);
-    $('#symbol')?.addEventListener('change', () => { loadQuote(); loadRecords(); window.dispatchEvent(new CustomEvent('algobot:market-symbol-changed', {detail:{symbol:$('#symbol')?.value || ''}})); });
+    $('[data-watchlist-search]')?.addEventListener('input', event => renderWatchlist(event.target.value));
+    $('#symbol')?.addEventListener('change', () => { loadQuote(); loadRecords(); renderWatchlist($('[data-watchlist-search]')?.value || ''); window.dispatchEvent(new CustomEvent('algobot:market-symbol-changed', {detail:{symbol:$('#symbol')?.value || ''}})); });
     $('#account')?.addEventListener('change', () => { renderAccount(selectedAccount()); loadQuote(); loadRecords(); });
     document.querySelectorAll('[data-direction]').forEach(b => b.addEventListener('click', () => { direction = b.dataset.direction; document.querySelectorAll('[data-direction]').forEach(x => x.classList.toggle('active', x === b)); }));
     window.addEventListener('algobot:backend-accounts-loaded', e => { renderAccounts(e.detail); loadQuote(); loadRecords(); });

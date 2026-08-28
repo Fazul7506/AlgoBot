@@ -1,13 +1,14 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
+{% load static %}
+{% block title %}Broker Accounts | AlgoBot{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Accounts</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
-</section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
+<section class="broker-accounts-page">
+  <header class="enterprise-hero"><div><p class="eyebrow">Broker & account management</p><h1>Broker Accounts</h1><p class="hero-copy">Manage connected trading accounts, connection health, preferred routing and broker synchronization without exposing credentials.</p></div><div class="hero-actions"><a class="btn" href="/brokers/">Broker directory</a><a class="btn primary" href="/trading/">Trading terminal</a></div></header>
+  <div class="kpi-grid compact"><article class="kpi-card"><span>Accounts</span><strong data-account-count>—</strong></article><article class="kpi-card"><span>Connected</span><strong data-connected-count>—</strong></article><article class="kpi-card"><span>Preferred</span><strong data-preferred-account>—</strong></article><article class="kpi-card"><span>Healthy credentials</span><strong data-ready-count>—</strong></article></div>
+  <section class="panel account-toolbar"><div><h2>Your trading accounts</h2><p>Only accounts belonging to the authenticated user are displayed.</p></div><button class="btn" type="button" data-refresh-accounts>Refresh</button></section>
+  <section class="account-grid" data-account-grid><div class="account-empty">Loading broker accounts…</div></section>
+  <section class="panel safety-panel"><div><h2>Connection safety</h2><p>AlgoBot never displays access or refresh tokens. Broker credentials remain behind the broker service boundary.</p></div><a class="btn" href="/brokers/connections/">Connection history</a></section>
 </section>
 {% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/broker_accounts.css' %}">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/broker_accounts.js' %}" defer></script>{% endblock %}

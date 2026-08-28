@@ -1,4 +1,4 @@
-from rest_framework import decorators, permissions, response, viewsets
+from rest_framework import decorators, permissions, response, status, viewsets
 
 from .models import ApprovalRequest, AutomationEvent, AutomationRule, Workflow, WorkflowExecution
 from .serializers import ApprovalRequestSerializer, AutomationEventSerializer, AutomationRuleSerializer, ScheduledTaskSerializer, WorkflowExecutionSerializer, WorkflowSerializer
@@ -19,14 +19,20 @@ class WorkflowViewSet(viewsets.ModelViewSet):
 class EventViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AutomationEventSerializer
     permission_classes = [permissions.IsAuthenticated]
-    def get_queryset(self): return AutomationEvent.objects.filter(payload__user_id=self.request.user.id).order_by("-created_at")
+
+    def get_queryset(self):
+        return AutomationEvent.objects.filter(payload__user_id=self.request.user.id).order_by("-created_at")
 
 
-class RuleViewSet(viewsets.ModelViewSet):
+class RuleViewSet(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get", "head", "options"]
-    queryset = AutomationRule.objects.all().order_by("priority")
     serializer_class = AutomationRuleSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        # Rules are currently system-owned configuration. They must never be exposed
+        # through a writable user endpoint until ownership is explicit in the model.
+        return AutomationRule.objects.filter(enabled=True).order_by("priority")
 
 
 class HistoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -40,19 +46,36 @@ class HistoryViewSet(viewsets.ReadOnlyModelViewSet):
 @decorators.api_view(["POST"])
 @decorators.permission_classes([permissions.IsAuthenticated])
 def execute(request):
-    return response.Response(AutomationEngine().handle_event(request.data.get("event", "api"), request.data, "api").result)
+    # The authenticated principal is authoritative; never trust a client-supplied user_id.
+    payload = dict(request.data)
+    payload.pop("user_id", None)
+    payload.pop("owner_id", None)
+    result = AutomationEngine().handle_event(
+        request.data.get("event", "api"), payload, "api", actor=request.user
+    ).result
+    return response.Response(result)
 
 
 @decorators.api_view(["POST"])
 @decorators.permission_classes([permissions.IsAuthenticated])
 def schedule(request):
     workflow = Workflow.objects.get(id=request.data["workflow"], user=request.user)
-    task = SchedulerService().schedule(workflow, request.data.get("schedule_type", "one_time"), request.data.get("cron_expression", ""))
+    task = SchedulerService().schedule(
+        workflow,
+        request.data.get("schedule_type", "one_time"),
+        request.data.get("cron_expression", ""),
+    )
     return response.Response(ScheduledTaskSerializer(task).data)
 
 
 @decorators.api_view(["POST"])
 @decorators.permission_classes([permissions.IsAuthenticated])
 def approve(request):
-    approval = ApprovalRequest.objects.get(id=request.data["approval"], workflow__user=request.user)
-    return response.Response(ApprovalRequestSerializer(ApprovalService().approve(approval, request.user)).data)
+    approval = ApprovalRequest.objects.get(
+        id=request.data["approval"], workflow__user=request.user
+    )
+    return response.Response(
+        ApprovalRequestSerializer(
+            ApprovalService().approve(approval, request.user)
+        ).data
+    )

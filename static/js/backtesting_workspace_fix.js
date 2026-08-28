@@ -1,122 +1,14 @@
 (() => {
   'use strict';
-
-  const $ = (selector, root = document) => root.querySelector(selector);
-  const table = $('[data-backtest-table]');
-  if (!table) return;
-
-  const json = async (url, options = {}) => {
-    const response = await fetch(url, {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json', ...(options.headers || {}) },
-      ...options,
-    });
-    const text = await response.text();
-    let data = {};
-    try { data = text ? JSON.parse(text) : {}; } catch { data = { detail: text }; }
-    if (!response.ok) throw new Error(data.detail || data.message || `Request failed (${response.status})`);
-    return data;
-  };
-
-  const arrayFrom = value => Array.isArray(value) ? value : (value?.results || value?.data || []);
-  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[ch]));
-  const csrf = () => decodeURIComponent((document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) || [])[1] || '');
-
-  const setTableMessage = message => {
-    table.innerHTML = `<tbody><tr><td colspan="7">${escapeHtml(message)}</td></tr></tbody>`;
-  };
-
-  async function loadBacktests() {
-    setTableMessage('Loading backtests…');
-    try {
-      const rows = arrayFrom(await json('/api/backtests/'));
-      const keys = ['strategy', 'symbol', 'timeframe', 'start_date', 'end_date', 'status', 'created_at'];
-      table.innerHTML = `<thead><tr>${keys.map(k => `<th>${escapeHtml(k.replaceAll('_', ' '))}</th>`).join('')}</tr></thead><tbody></tbody>`;
-      const body = $('tbody', table);
-      if (!rows.length) {
-        body.innerHTML = '<tr><td colspan="7">No backtests yet. Configure a test above and create your first run.</td></tr>';
-      } else {
-        body.innerHTML = rows.map(row => `<tr data-search="${escapeHtml(`${row.strategy || ''} ${row.symbol || ''}`.toLowerCase())}">${keys.map(k => `<td>${escapeHtml(row[k])}</td>`).join('')}</tr>`).join('');
-      }
-    } catch (error) {
-      console.error('Backtest history failed', error);
-      setTableMessage(`Unable to load backtest history: ${error.message}`);
-    }
-  }
-
-  async function loadPaperAccount() {
-    const balance = $('[data-paper-balance]');
-    const equity = $('[data-paper-equity]');
-    try {
-      const data = await json('/api/paper/account/');
-      balance.textContent = Number(data.balance ?? 0).toLocaleString();
-      equity.textContent = Number(data.equity ?? data.balance ?? 0).toLocaleString();
-    } catch (error) {
-      console.error('Paper account failed', error);
-      balance.textContent = 'Unavailable';
-      equity.textContent = 'Unavailable';
-    }
-  }
-
-  $('[data-backtest-search]')?.addEventListener('input', event => {
-    const query = event.target.value.trim().toLowerCase();
-    table.querySelectorAll('[data-search]').forEach(row => {
-      row.hidden = !row.dataset.search.includes(query);
-    });
-  });
-
-  $('[data-backtest-form]')?.addEventListener('submit', async event => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const start = new Date(form.elements.start_date.value);
-    const end = new Date(form.elements.end_date.value);
-    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
-      alert('End date/time must be later than start date/time.');
-      return;
-    }
-    const button = form.querySelector('button[type="submit"]');
-    button.disabled = true;
-    try {
-      const payload = Object.fromEntries(new FormData(form).entries());
-      await json('/api/backtests/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
-        body: JSON.stringify(payload),
-      });
-      alert('Backtest created and queued for processing.');
-      form.reset();
-      await loadBacktests();
-    } catch (error) {
-      alert(`Could not create backtest: ${error.message}`);
-    } finally {
-      button.disabled = false;
-    }
-  });
-
-  $('[data-paper-start]')?.addEventListener('click', async event => {
-    event.currentTarget.disabled = true;
-    try {
-      const result = await json('/api/paper/start/', { method: 'POST', headers: { 'X-CSRFToken': csrf() } });
-      alert(`Paper trading ${result.status || 'started'}.`);
-      await loadPaperAccount();
-    } catch (error) {
-      alert(`Could not start paper trading: ${error.message}`);
-    } finally { event.currentTarget.disabled = false; }
-  });
-
-  $('[data-paper-stop]')?.addEventListener('click', async event => {
-    event.currentTarget.disabled = true;
-    try {
-      const result = await json('/api/paper/stop/', { method: 'POST', headers: { 'X-CSRFToken': csrf() } });
-      alert(`Paper trading ${result.status || 'stopped'}.`);
-      await loadPaperAccount();
-    } catch (error) {
-      alert(`Could not stop paper trading: ${error.message}`);
-    } finally { event.currentTarget.disabled = false; }
-  });
-
-  $('[data-paper-refresh]')?.addEventListener('click', loadPaperAccount);
-
-  loadBacktests();
-  loadPaperAccount();
+  const $=(s,r=document)=>r.querySelector(s); const table=$('[data-backtest-table]'); if(!table)return;
+  const json=async(url,options={})=>{const r=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json',...(options.headers||{})},...options});const t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch{d={detail:t}}if(!r.ok)throw new Error(d.detail||d.message||`Request failed (${r.status})`);return d};
+  const arr=v=>Array.isArray(v)?v:(v?.results||v?.data||[]); const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); const csrf=()=>decodeURIComponent((document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1]||'');
+  const msg=m=>{table.innerHTML=`<tbody><tr><td colspan="7">${esc(m)}</td></tr></tbody>`}; let rows=[];
+  function kpis(){const set=(s,v)=>{const e=$(s);if(e)e.textContent=v};set('[data-backtest-count]',rows.length);set('[data-backtest-completed]',rows.filter(x=>String(x.status).toLowerCase()==='completed').length);set('[data-backtest-running]',rows.filter(x=>['running','pending'].includes(String(x.status).toLowerCase())).length)}
+  async function load(){msg('Loading backtests…');try{rows=arr(await json('/api/backtests/'));const keys=['strategy','symbol','timeframe','start_date','end_date','status','created_at'];table.innerHTML=`<thead><tr>${keys.map(x=>`<th>${esc(x.replaceAll('_',' '))}</th>`).join('')}</tr></thead><tbody></tbody>`;const b=$('tbody',table);b.innerHTML=rows.length?rows.map(x=>`<tr data-search="${esc(`${x.strategy||''} ${x.symbol||''}`.toLowerCase())}">${keys.map(k=>`<td>${esc(x[k])}</td>`).join('')}</tr>`).join(''):'<tr><td colspan="7">No backtests yet. Configure a test above and create your first run.</td></tr>';kpis()}catch(e){console.error(e);msg(`Unable to load backtest history: ${e.message}`)}}
+  async function paper(){try{const d=await json('/api/paper/account/');const b=$('[data-paper-balance]'),e=$('[data-paper-equity]');if(b)b.textContent=Number(d.balance??0).toLocaleString();if(e)e.textContent=Number(d.equity??d.balance??0).toLocaleString()}catch(e){console.error(e);const b=$('[data-paper-balance]'),q=$('[data-paper-equity]');if(b)b.textContent='Unavailable';if(q)q.textContent='Unavailable'}}
+  $('[data-backtest-search]')?.addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();table.querySelectorAll('[data-search]').forEach(r=>r.hidden=!r.dataset.search.includes(q))});
+  $('[data-backtest-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget,s=new Date(f.elements.start_date.value),n=new Date(f.elements.end_date.value);if(!Number.isFinite(s.getTime())||!Number.isFinite(n.getTime())||n<=s){alert('End date/time must be later than start date/time.');return}const b=f.querySelector('button[type="submit"]');b.disabled=true;try{await json('/api/backtests/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(Object.fromEntries(new FormData(f).entries()))});alert('Backtest created and queued for processing.');f.reset();await load()}catch(e){alert(`Could not create backtest: ${e.message}`)}finally{b.disabled=false}});
+  $('[data-paper-start]')?.addEventListener('click',async e=>{e.currentTarget.disabled=true;try{const r=await json('/api/paper/start/',{method:'POST',headers:{'X-CSRFToken':csrf()}});alert(`Paper trading ${r.status||'started'}.`);await paper()}catch(x){alert(`Could not start paper trading: ${x.message}`)}finally{e.currentTarget.disabled=false}});
+  $('[data-paper-stop]')?.addEventListener('click',async e=>{e.currentTarget.disabled=true;try{const r=await json('/api/paper/stop/',{method:'POST',headers:{'X-CSRFToken':csrf()}});alert(`Paper trading ${r.status||'stopped'}.`);await paper()}catch(x){alert(`Could not stop paper trading: ${x.message}`)}finally{e.currentTarget.disabled=false}}); $('[data-paper-refresh]')?.addEventListener('click',paper); load();paper();
 })();

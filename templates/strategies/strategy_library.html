@@ -1,5 +1,13 @@
 {% extends "base.html" %}
-{% block title %}strategy library | AlgoBot Enterprise{% endblock %}
+{% load static %}
+{% block title %}Strategy Center | AlgoBot{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="strategy library" module="Strategies" page_id="strategies-strategy_library" %}
+<section class="strategy-center panel" data-strategy-center>
+<header class="page-heading"><div><p class="eyebrow">Algorithm management</p><h1>Strategy Center</h1><p>Build, inspect, test and control strategies without bypassing risk or broker execution controls.</p></div><div class="page-actions"><a class="btn" href="/strategies/builder/">Strategy Builder</a><button class="btn primary" type="button" data-refresh-strategies>Refresh</button></div></header>
+<div class="kpi-grid compact"><article class="kpi-card"><span>Total strategies</span><strong data-total>—</strong></article><article class="kpi-card"><span>Active</span><strong data-active>—</strong></article><article class="kpi-card"><span>Paper only</span><strong data-paper>—</strong></article><article class="kpi-card"><span>Average win rate</span><strong data-winrate>—</strong></article></div>
+<section class="panel strategy-toolbar"><input type="search" data-strategy-search placeholder="Search strategies…" aria-label="Search strategies"><select data-strategy-type aria-label="Strategy type"><option value="">All types</option><option value="TREND">Trend</option><option value="MEAN_REV">Mean reversion</option><option value="BREAKOUT">Breakout</option><option value="MOMENTUM">Momentum</option><option value="SCALP">Scalping</option><option value="VOLATILITY">Volatility</option></select><select data-strategy-status aria-label="Strategy status"><option value="">All status</option><option value="active">Active</option><option value="inactive">Inactive</option></select></section>
+<div class="strategy-grid" data-strategy-grid><div class="empty-state">Loading strategies…</div></div>
+</section>
 {% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/strategy_center.css' %}">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/strategy_center.js' %}" defer></script>{% endblock %}

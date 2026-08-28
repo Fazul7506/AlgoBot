@@ -2,12 +2,40 @@
 {% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
 {% block content %}
 <section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Reconciliation</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
+  <p class="eyebrow">AlgoBot Enterprise · Operations</p>
+  <h1>Broker Reconciliation</h1>
+  <p>Investigate differences between AlgoBot's local execution records and broker-authoritative state without automatically mutating trades.</p>
 </section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
+
+<section class="card-grid" aria-label="Reconciliation controls">
+  <article>
+    <h2>Safe investigation</h2>
+    <p>Open discrepancies are evidence for an operator to review. Reviewing an event does not alter the order, position, broker response, or account balance.</p>
+  </article>
+  <article>
+    <h2>Broker authority</h2>
+    <p>Broker state remains authoritative for execution. A missing item in a limited broker snapshot is treated as a discrepancy, not proof that the trade never existed.</p>
+  </article>
+  <article>
+    <h2>Resolution rule</h2>
+    <p>Do not create, delete, close, or rewrite a trade from this screen. Corrective actions must go through the normal execution and audit paths.</p>
+  </article>
+</section>
+
+<section class="card-grid" aria-label="Reconciliation event workflow">
+  <article>
+    <h2>Event lifecycle</h2>
+    <ol>
+      <li><strong>Open</strong> — discrepancy detected during synchronization.</li>
+      <li><strong>Investigate</strong> — inspect broker reference, symbol, account and captured details.</li>
+      <li><strong>Reviewed</strong> — operator acknowledges the event; underlying trading state remains unchanged.</li>
+    </ol>
+  </article>
+  <article>
+    <h2>API investigation</h2>
+    <p>The authenticated execution API exposes reconciliation events with user/account scoping and status filtering.</p>
+    <p><code>/api/execution/reconciliation/events/</code></p>
+    <p><code>?status=open</code> can be used to focus on unresolved events.</p>
+  </article>
 </section>
 {% endblock %}

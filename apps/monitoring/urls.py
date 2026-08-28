@@ -1,5 +1,6 @@
 from django.urls import path
 from . import api, views
+from .reconciliation import reconcile_accounts
 
 urlpatterns = [
     path("", views.dashboard, name="monitoring-dashboard-page"),
@@ -18,5 +19,6 @@ urlpatterns = [
     path("audit/", api.audit, name="audit"),
     path("logs/", api.logs, name="logs"),
     path("traces/", api.traces, name="traces"),
+    path("reconcile/", reconcile_accounts, name="monitoring-reconcile"),
     path("ui/", views.dashboard, name="monitoring-ui"),
 ]
