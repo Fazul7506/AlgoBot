@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 class DerivOAuthStartRegressionTests(TestCase):
     @override_settings(
         DEBUG=False,
+        ALLOWED_HOSTS=["algobot.dpdns.org"],
         DERIV_OAUTH_CLIENT_ID="oauth-client-test",
         DERIV_REDIRECT_URI="https://algobot.dpdns.org/callback/",
     )
