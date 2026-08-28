@@ -6,28 +6,28 @@
   const nativeFetch = window.fetch.bind(window);
 
   window.fetch = (input, init = {}) => {
-    const url = typeof input === 'string' ? input : (input?.url || '');
-    if (!url.includes('/api/') || init.signal) return nativeFetch(input, init);
+    let url = typeof input === 'string' ? input : (input?.url || '');
+    if (!url.includes('/api/') && url !== '/trading/order/' && url !== '/trading/preview/') return nativeFetch(input, init);
+    if (init.signal) return nativeFetch(input, init);
+
+    if (url === '/trading/order/') url = '/api/orders/';
+    if (url === '/trading/preview/') url = '/api/orders/preview/';
 
     let nextInit = { ...init };
-    if (url.endsWith('/api/orders/') && window.__algobotAiOrderContext && typeof nextInit.body === 'string') {
+    if ((url.endsWith('/api/orders/') || url.endsWith('/api/orders/preview/')) && typeof nextInit.body === 'string') {
       try {
         const payload = JSON.parse(nextInit.body);
-        // validation_context is the actual Order model/API field. The previous
-        // guard created an undeclared routing_context field, which DRF rejected
-        // with HTTP 400 before the execution engine was reached.
         payload.validation_context = {
           ...(payload.validation_context || {}),
-          ...window.__algobotAiOrderContext,
+          ...(window.__algobotAiOrderContext || {}),
         };
         nextInit.body = JSON.stringify(payload);
-        window.__algobotAiOrderContext = null;
       } catch (_) {}
     }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
-    return nativeFetch(input, { ...nextInit, signal: controller.signal })
+    return nativeFetch(url, { ...nextInit, signal: controller.signal })
       .finally(() => clearTimeout(timer))
       .catch(error => {
         if (error?.name === 'AbortError') throw new Error('Backend request timed out after 12 seconds');
