@@ -9,13 +9,34 @@ services:
     domains:
       - algobot.dpdns.org
       - api.algobot.dpdns.org
+    envVars:
+      - key: DJANGO_ENV
+        value: production
+      - key: ALGO_API_BASE_URL
+        value: https://api.algobot.dpdns.org
+      - key: BASE_URL
+        value: https://algobot.dpdns.org
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://algobot.dpdns.org
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://algobot.dpdns.org
+      - key: SESSION_COOKIE_DOMAIN
+        value: .algobot.dpdns.org
+      - key: CSRF_COOKIE_DOMAIN
+        value: .algobot.dpdns.org
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: CSRF_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_COOKIE_SAMESITE
+        value: Lax
+      - key: CSRF_COOKIE_SAMESITE
+        value: Lax
     # Build all deploy-time assets before the service starts. Keeping
     # collectstatic in the build step prevents a restart from exposing HTML
     # before WhiteNoise has a complete staticfiles directory.
     buildCommand: pip install -r requirements/base.txt && DJANGO_ENV=production python manage.py collectstatic --noinput
-    # Migrations remain part of startup so the database is ready before the
-    # ASGI server accepts traffic. Daphne is retained because AlgoBot uses
-    # WebSockets as well as normal HTTP requests.
+    # Migrations remain part of startup so the database is ready before the ASGI server accepts traffic. Daphne is retained because AlgoBot uses WebSockets as well as normal HTTP requests.
     startCommand: DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
     healthCheckPath: /health/
     autoDeploy: true
