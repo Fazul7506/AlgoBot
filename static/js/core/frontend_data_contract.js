@@ -8,7 +8,10 @@
   const inflight = new Map();
   const cache = new Map();
   const GET_CACHE_MS = 1200;
-  const cloudflareAlias = url => typeof url === 'string' && url.startsWith('/api/') ? `/data/${url.slice(5)}` : null;
+  // The /data/ mirror is intentionally GET-only.  Browser mutations must hit
+  // the canonical /api/ endpoint so a cache/edge layer can never rewrite a
+  // POST/DELETE into a data-mirror request.
+  const cloudflareAlias = (url, method) => method === 'GET' && typeof url === 'string' && url.startsWith('/api/') ? `/data/${url.slice(5)}` : null;
   const isCloudflareChallenge = (response, text) => {
     if (!response || !text) return false;
     const body = String(text).toLowerCase();
@@ -42,7 +45,7 @@
     const timer = setTimeout(() => controller.abort(), Math.max(1000, timeout));
     const promise = (async () => {
       try {
-        const alias = cloudflareAlias(url);
+        const alias = cloudflareAlias(url, method);
         const primary = alias || url;
         let result = await fetchOnce(primary, options, controller);
         if (primary !== url && !result.response.ok && !isCloudflareChallenge(result.response, result.text) && [404,405,502,503,504].includes(result.response.status)) result = await fetchOnce(url, options, controller);
