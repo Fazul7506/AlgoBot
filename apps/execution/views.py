@@ -5,17 +5,18 @@ from apps.trading.models import Position
 from apps.contracts.models import Contract
 from .serializers import OrderSerializer, PositionSerializer, ContractSerializer, ExecutionLogSerializer, ReconciliationEventSerializer
 from .engine import ExecutionEngine
-from core.billing_entitlements import effective_plan
+from core.billing_entitlements import check_live_order, effective_plan
 
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class=OrderSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return Order.objects.filter(user=self.request.user)
     def create(self, request, *args, **kwargs):
         serializer=self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
-        account=serializer.validated_data.get('broker_account'); plan=effective_plan(request.user)
-        environment=str((account.credentials or {}).get('account_type') or '').lower().strip() if account else ''
-        if environment == 'real' and not plan.live_trading:
-            return response.Response({'status':'rejected','code':'PLAN_LIVE_TRADING_REQUIRED','detail':f'Live-money execution requires the Pro or Enterprise plan. Your current plan is {plan.name}.','plan':plan.key}, status=status.HTTP_403_FORBIDDEN)
+        account=serializer.validated_data.get('broker_account'); environment=str((account.credentials or {}).get('account_type') or '').lower().strip() if account else ''
+        if environment == 'real':
+            allowed, used, limit = check_live_order(request.user)
+            if not allowed:
+                return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         order=ExecutionEngine().place_order(request.user, **serializer.validated_data)
         return response.Response(self.get_serializer(order).data, status=201)
     @decorators.action(detail=False, methods=['post'])
@@ -26,11 +27,11 @@ class OrderViewSet(viewsets.ModelViewSet):
         environment=str((account.credentials or {}).get('account_type') or '').lower().strip()
         if not environment: return response.Response({'status':'rejected','code':'ACCOUNT_ENVIRONMENT_UNVERIFIED','detail':'Broker account environment has not been verified.'}, status=status.HTTP_409_CONFLICT)
         if environment == 'real' and not bool(getattr(account.broker, 'supports_live', False)): return response.Response({'status':'rejected','code':'LIVE_BROKER_UNSUPPORTED','detail':'The selected broker is not live-trading capable.'}, status=status.HTTP_409_CONFLICT)
-        if environment == 'real' and not effective_plan(request.user).live_trading: return response.Response({'status':'rejected','code':'PLAN_LIVE_TRADING_REQUIRED','detail':f'Live-money execution requires the Pro or Enterprise plan. Your current plan is {effective_plan(request.user).name}.','plan':effective_plan(request.user).key}, status=status.HTTP_403_FORBIDDEN)
         if environment == 'real':
+            allowed, used, limit=check_live_order(request.user)
+            if not allowed: return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             from django.conf import settings
             if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)): return response.Response({'status':'rejected','code':'LIVE_TRADING_DISABLED','detail':'Live-money trading is disabled by platform configuration.'}, status=status.HTTP_409_CONFLICT)
-        quote=None
         try:
             from apps.brokers.services import MarketDataFreshnessService
             quote=MarketDataFreshnessService().latest(data.get('symbol'))
@@ -38,7 +39,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         stake=data.get('stake')
         try: stake_value=float(Decimal(str(stake)))
         except (InvalidOperation, TypeError, ValueError): stake_value=None
-        return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':data.get('symbol'),'direction':data.get('direction'),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':{'price':float(quote.last_price),'bid':float(quote.bid) if quote.bid is not None else None,'ask':float(quote.ask) if quote.ask is not None else None,'spread':float(quote.spread or 0),'timestamp':quote.timestamp.isoformat()},'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':environment != 'real' or effective_plan(request.user).live_trading,'live_trading_allowed':environment != 'real' or bool(getattr(__import__('django.conf',fromlist=['settings']).settings,'ALLOW_LIVE_TRADING',False)),'fresh_market_data':True}})
+        return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':data.get('symbol'),'direction':data.get('direction'),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':{'price':float(quote.last_price),'bid':float(quote.bid) if quote.bid is not None else None,'ask':float(quote.ask) if quote.ask is not None else None,'spread':float(quote.spread or 0),'timestamp':quote.timestamp.isoformat()},'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(__import__('django.conf',fromlist=['settings']).settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'fresh_market_data':True}})
     @decorators.action(detail=True, methods=['post'])
     def cancel(self, request, pk=None): return response.Response(OrderSerializer(ExecutionEngine().cancel_order(self.get_object())).data)
     @decorators.action(detail=True, methods=['post'])
@@ -55,11 +56,9 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
 class ContractViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ContractSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return Contract.objects.filter(position__order__user=self.request.user)
-
 class ExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ExecutionLogSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return ExecutionLog.objects.filter(order__user=self.request.user)
-
 class ReconciliationEventViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ReconciliationEventSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self):
