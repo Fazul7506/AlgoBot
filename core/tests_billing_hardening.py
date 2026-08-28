@@ -85,7 +85,7 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(Subscription.objects.get(user=self.user).plan, "ENTERPRISE")
 
     def test_webhook_reconciler_uses_canonical_payment_states(self):
-        metadata = {"api_ref": f"IS-{self.user.id}-BASIC-TEST123", "plan": "BASIC", "currency": "KES"}
+        metadata = {"api_ref": f"IS-{self.user.id}-BASIC-TEST123", "user_id": self.user.id, "plan": "BASIC", "currency": "KES"}
         first = PaymentReconciler.reconcile(provider="intasend", external_id="WEBHOOK-1", status="COMPLETE", amount="999.00", currency="KES", metadata=metadata)
         second = PaymentReconciler.reconcile(provider="intasend", external_id="WEBHOOK-1", status="COMPLETE", amount="999.00", currency="KES", metadata=metadata)
         payment = Payment.objects.get(external_id="WEBHOOK-1")
