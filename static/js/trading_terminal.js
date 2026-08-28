@@ -17,6 +17,13 @@
   };
   const brokerReady = () => !!selectedAccount();
   const renderRows = (selector, rows, empty, format) => { const target = $(selector); if (target) target.innerHTML = rows.length ? rows.map(format).join('') : `<div class="empty-state">${esc(empty)}</div>`; };
+  const renderOrderResult = (message, state = 'info') => {
+    const result = $('[data-order-result]');
+    if (!result) return;
+    result.hidden = false;
+    result.dataset.state = state;
+    result.textContent = message;
+  };
 
   function renderAccount(account) {
     const status = $('#terminal-status'), note = $('[data-terminal-account]'), risk = $('[data-risk-check]');
@@ -70,7 +77,7 @@
       if (!symbols.length) throw new Error('No active tradable broker instruments are available');
       select.innerHTML = symbols.map(r => `<option value="${esc(r.symbol)}">${esc(r.display_name || r.symbol)} · ${esc(r.symbol)}</option>`).join('');
       const requested = new URLSearchParams(location.search).get('symbol');
-      select.value = [previous, requested, symbols[0].symbol].find(v => symbols.some(r => r.symbol === v)) || symbols[0].symbol;
+      select.value = [previous, requested, symbols[0].symbol].find(v => symbols.some(r => r === v)) || symbols[0].symbol;
       renderWatchlist($('[data-watchlist-search]')?.value || '');
       window.dispatchEvent(new CustomEvent('algobot:broker-symbols-loaded', {detail:{symbol:select.value, count:symbols.length}}));
       return select.value;
@@ -112,18 +119,24 @@
 
   async function submitOrder(event) {
     event.preventDefault();
-    const account = selectedAccount(), symbol = $('#symbol')?.value, contractType = $('[data-contract-type]')?.value, result = $('[data-order-result]');
-    if (!account || !symbol) { if (result) { result.hidden = false; result.textContent = 'Select a connected broker account and instrument first.'; } return; }
-    if (!contractType) { if (result) { result.hidden = false; result.textContent = 'Wait for the broker-supported contract list before placing an order.'; } return; }
+    const account = selectedAccount(), symbol = $('#symbol')?.value, contractType = $('[data-contract-type]')?.value;
+    if (!account || !symbol) { renderOrderResult('Select a connected broker account and instrument first.', 'validation'); return; }
+    if (!contractType) { renderOrderResult('Wait for the broker-supported contract list before placing an order.', 'validation'); return; }
     const form = new FormData(event.currentTarget), button = $('.execute-btn');
     if (button) { button.disabled = true; button.textContent = 'Submitting…'; }
     try {
       const validationContext = {...(window.__algobotAiOrderContext || {}), broker_source: 'connected_broker', contract_type: contractType, underlying_symbol: symbol};
       const payload = {broker_account: account.id, symbol, direction, order_type: form.get('order_type') || 'market', stake: form.get('stake'), strategy: form.get('strategy') || '', client_request_id: `ui-${crypto.randomUUID?.() || Date.now()}`, validation_context: validationContext};
       const order = await api('/api/orders/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 25000);
-      if (result) { result.hidden = false; result.textContent = `Order ${order.broker_reference || order.id || ''} ${order.status || 'queued'}.`; }
+      renderOrderResult(`Order ${order.broker_reference || order.id || ''} ${order.status || 'queued'}.`, 'success');
       window.__algobotAiOrderContext = null; await loadRecords();
-    } catch (e) { if (result) { result.hidden = false; result.textContent = `Order rejected: ${e.message || 'request failed'}`; } }
+    } catch (e) {
+      if (e?.code === 'EDGE_CHALLENGE' || e?.isEdgeChallenge) {
+        renderOrderResult('Order status unknown: the production edge blocked the response. Check Recent orders before retrying to prevent a duplicate trade.', 'edge');
+      } else {
+        renderOrderResult(`Order rejected: ${e.message || 'request failed'}`, 'error');
+      }
+    }
     finally { if (button) { button.disabled = false; button.textContent = 'Place order'; } }
   }
 
