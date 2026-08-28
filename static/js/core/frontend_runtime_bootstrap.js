@@ -21,14 +21,14 @@
     try { return text ? JSON.parse(text) : {}; }
     catch (_) { return {detail:isCloudflareChallenge(response,text) ? 'Production edge security challenged this API request.' : `Backend returned an unexpected response (${response?.status || 'unknown'}).`}; }
   };
-  async function requestOnce(url, options, timeout) {
+  async function requestOnce(url, options, timeout, sameOrigin = false) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), Math.max(1000, timeout));
     try {
       const method = String(options.method || 'GET').toUpperCase();
       const headers = {Accept:'application/json', ...(options.headers || {})};
       if (!['GET','HEAD','OPTIONS'].includes(method) && !headers['X-CSRFToken']) headers['X-CSRFToken'] = csrf();
-      const target = resolveUrl(url);
+      const target = sameOrigin ? url : resolveUrl(url);
       const crossOrigin = (() => { try { return new URL(target, window.location.origin).origin !== window.location.origin; } catch (_) { return false; } })();
       const response = await fetch(target,{credentials:crossOrigin ? 'include' : 'same-origin',...options,headers,signal:controller.signal});
       return {response,text:await response.text()};
@@ -43,7 +43,7 @@
       // If the dedicated hostname has not propagated yet, preserve application
       // availability by falling back to the existing same-origin API path.
       if (apiBase && !/^https?:\/\//i.test(url) && error?.name !== 'AbortError') {
-        result = await requestOnce.call(null, url, options, timeout).catch(() => null);
+        try { result = await requestOnce(url, options, timeout, true); } catch (_) { result = null; }
       }
       if (!result) {
         if (error?.name === 'AbortError') throw new Error('Backend request timed out');
