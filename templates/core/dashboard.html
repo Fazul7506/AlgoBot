@@ -6,34 +6,34 @@
 {% block content %}
 <section class="command-center" data-dashboard-command>
   <header class="command-hero compact-hero">
-    <div><p class="eyebrow">AlgoBot command center</p><h1>Trading dashboard</h1><p>One operational view for broker state, capital, exposure, execution, market coverage and AI signals. Live account state is delivered through the authenticated broker stream.</p></div>
+    <div><p class="eyebrow">Command center</p><h1>Trading dashboard</h1></div>
     <div class="hero-actions"><span class="dashboard-sync" data-dashboard-sync>Connecting live feed…</span><button class="btn ghost" data-dashboard-refresh type="button">Refresh</button><a class="btn primary" href="/trading/">Open terminal</a></div>
   </header>
   <section class="kpi-grid" aria-label="Account overview">
     <article class="kpi-card"><span>Balance</span><strong data-kpi="balance">Unavailable</strong><small data-kpi-state="balance">Connecting to broker…</small></article>
     <article class="kpi-card"><span>Equity</span><strong data-kpi="equity">Unavailable</strong><small data-kpi-state="equity">Waiting for live broker state</small></article>
-    <article class="kpi-card"><span>Available</span><strong data-kpi="available">Unavailable</strong><small>Broker-confirmed available margin when supplied</small></article>
-    <article class="kpi-card"><span>Net P/L</span><strong data-kpi="pnl">Unavailable</strong><small>Broker-backed open-contract P/L when available</small></article>
+    <article class="kpi-card"><span>Available</span><strong data-kpi="available">Unavailable</strong><small>Available margin</small></article>
+    <article class="kpi-card"><span>Net P/L</span><strong data-kpi="pnl">Unavailable</strong><small>Open-contract P/L</small></article>
   </section>
   <section class="dashboard-status" aria-label="Platform readiness">
     <article class="status-card"><span class="status-dot" data-status-dot="account"></span><div><b>Broker account</b><small data-status="account">Connecting…</small></div></article>
     <article class="status-card"><span class="status-dot" data-status-dot="markets"></span><div><b>Market data</b><small data-status="markets">Checking…</small></div></article>
     <article class="status-card"><span class="status-dot" data-status-dot="positions"></span><div><b>Exposure</b><small data-status="positions">Checking…</small></div></article>
-    <article class="status-card"><span class="status-dot" data-status-dot="execution"></span><div><b>Execution feed</b><small data-status="execution">Checking…</small></div></article>
+    <article class="status-card"><span class="status-dot" data-status-dot="execution"></span><div><b>Execution</b><small data-status="execution">Checking…</small></div></article>
     <article class="status-card"><span class="status-dot" data-status-dot="signals"></span><div><b>AI signals</b><small data-status="signals">Checking…</small></div></article>
   </section>
   <section class="command-grid">
-    <article class="panel panel-featured"><div class="panel-head"><div><p class="eyebrow">Market intelligence</p><h2>Live markets</h2></div><a href="/markets/">Open markets</a></div><div class="mini-table" data-dashboard-markets><div class="empty-state">Loading market data…</div></div></article>
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Broker infrastructure</p><h2>Connection</h2></div><a href="/brokers/connect/">Manage</a></div><div class="health-stack" data-dashboard-brokers><span><b></b>Connecting broker stream…</span></div><div class="dashboard-links"><a href="/monitoring/">Monitoring</a><a href="/orders/">Orders</a><a href="/positions/">Positions</a></div></article>
+    <article class="panel panel-featured"><div class="panel-head"><div><h2>Live markets</h2></div><a href="/markets/">Open markets</a></div><div class="mini-table" data-dashboard-markets><div class="empty-state">Loading market data…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><h2>Connection</h2></div><a href="/brokers/connect/">Manage</a></div><div class="health-stack" data-dashboard-brokers><span><b></b>Connecting broker stream…</span></div><div class="dashboard-links"><a href="/monitoring/">Monitoring</a><a href="/orders/">Orders</a><a href="/positions/">Positions</a></div></article>
   </section>
   <section class="command-grid lower">
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Exposure</p><h2>Open positions</h2></div><a href="/positions/">Manage</a></div><div class="mini-table" data-dashboard-positions><div class="empty-state">Waiting for broker positions…</div></div></article>
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Execution</p><h2>Recent orders</h2></div><a href="/orders/">History</a></div><div class="mini-table" data-dashboard-orders><div class="empty-state">Loading orders…</div></div></article>
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">AI intelligence</p><h2>Recent signals</h2></div><a href="/signals/">View signals</a></div><div class="signal-feed" data-dashboard-signals><div class="empty-state">Loading signals…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><h2>Open positions</h2></div><a href="/positions/">Manage</a></div><div class="mini-table" data-dashboard-positions><div class="empty-state">Waiting for broker positions…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><h2>Recent orders</h2></div><a href="/orders/">History</a></div><div class="mini-table" data-dashboard-orders><div class="empty-state">Loading orders…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><h2>Recent signals</h2></div><a href="/signals/">View signals</a></div><div class="signal-feed" data-dashboard-signals><div class="empty-state">Loading signals…</div></div></article>
   </section>
   <section class="command-grid lower operations-grid">
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">Controls</p><h2>Risk & operations</h2></div><a href="/monitoring/">Open center</a></div><div class="operation-list"><a href="/monitoring/"><strong>System monitoring</strong><span>Services, broker health and reconciliation</span></a><a href="/risk/"><strong>Risk controls</strong><span>Review limits and protection state</span></a><a href="/audit/"><strong>Audit trail</strong><span>Trace operational and trading events</span></a></div></article>
-    <article class="panel panel-wide"><div class="panel-head"><div><p class="eyebrow">Activity</p><h2>Recent activity</h2></div><button class="btn danger" data-dashboard-kill-switch type="button">Emergency stop</button></div><div class="mini-table" data-dashboard-activity><div class="empty-state">Loading activity…</div></div></article>
+    <article class="panel"><div class="panel-head"><div><h2>Risk & operations</h2></div><a href="/monitoring/">Open center</a></div><div class="operation-list"><a href="/monitoring/"><strong>System monitoring</strong><span>Services and broker health</span></a><a href="/risk/"><strong>Risk controls</strong><span>Limits and protection state</span></a><a href="/audit/"><strong>Audit trail</strong><span>Operational and trading events</span></a></div></article>
+    <article class="panel panel-wide"><div class="panel-head"><div><h2>Recent activity</h2></div><button class="btn danger" data-dashboard-kill-switch type="button">Emergency stop</button></div><div class="mini-table" data-dashboard-activity><div class="empty-state">Loading activity…</div></div></article>
   </section>
 </section>
 {% endblock %}
