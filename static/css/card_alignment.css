@@ -1,0 +1,8 @@
+/* Global card alignment and responsive presentation layer. */
+.panel,.kpi-card,.status-card,.market-card,.market-scanner-stat,.card-grid > article,.scanner-card,.auth-card,.legal-page,.enterprise-hero,.workspace-banner,.module-card-grid .panel{text-align:left}
+.panel-head,.panel-head > div,.kpi-card,.status-card,.market-card-copy,.market-scanner-stat,.scanner-card,.auth-card,.legal-page,.enterprise-hero,.workspace-banner,.module-card-grid .panel{text-align:left}
+/* Preserve deliberate alignment for controls and data surfaces. */
+.market-quote{text-align:right}.enterprise-table th,.enterprise-table td,.scanner-table th,.scanner-table td{text-align:left}.empty-state,.market-empty,.empty,.empty-row td{text-align:center}
+.panel-head{justify-content:space-between}.panel-head > div{min-width:0}.panel-head h2,.panel-head .eyebrow,.panel-head p{text-align:left}
+@media(max-width:760px){.panel,.kpi-card,.status-card,.market-card,.market-scanner-stat,.card-grid > article,.scanner-card,.auth-card,.legal-page,.enterprise-hero,.workspace-banner{text-align:left}.panel-head{align-items:flex-start}.panel-head > div{flex:1 1 auto}.panel-head > a,.panel-head > button{flex:0 0 auto}.market-quote{text-align:left}}
+@media(max-width:420px){.panel-head{gap:12px}.panel-head > a,.panel-head > button{max-width:48%}.market-card{align-items:start}.market-card-actions{justify-content:flex-start}}
