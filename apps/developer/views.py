@@ -10,6 +10,7 @@ from rest_framework.response import Response
 
 from .authentication import APIKeyAuthentication
 from .models import APIKey, Integration, Plugin, Webhook
+from .permissions import HasAnalyticsScope, HasDeveloperAdminScope, HasDeveloperScope, HasWebhookScope
 from .serializers import APIKeyCreateSerializer, APIKeySerializer, IntegrationSerializer, PluginSerializer, WebhookSerializer
 from .services import AnalyticsService, APIKeyService, DeveloperPlatformService, DocumentationService, SandboxService, SDKService, WebhookService
 
@@ -21,13 +22,23 @@ def dashboard(request):
     return render(request, "developer/dashboard.html", {"page_title": "Developer Platform", **DeveloperPlatformService().dashboard()})
 
 
-@api_view(["GET", "POST"])
+def _developer_permissions(scope):
+    """Build the common DRF permission list while preserving browser sessions."""
+    return [IsAuthenticated, scope]
+
+
+@api_view(["GET"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasDeveloperScope))
 def keys(request):
-    if request.method == "GET":
-        rows = APIKey.objects.filter(user=request.user).order_by("-created_at")
-        return Response(APIKeySerializer(rows, many=True).data)
+    rows = APIKey.objects.filter(user=request.user).order_by("-created_at")
+    return Response(APIKeySerializer(rows, many=True).data)
+
+
+@api_view(["POST"])
+@authentication_classes(AUTH_CLASSES)
+@permission_classes(_developer_permissions(HasDeveloperAdminScope))
+def key_create(request):
     serializer = APIKeyCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     api_key, secret = APIKeyService().create(request.user, serializer.validated_data["name"], serializer.validated_data.get("permissions"), serializer.validated_data.get("expires_at"))
@@ -39,7 +50,7 @@ def keys(request):
 
 @api_view(["POST"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasDeveloperAdminScope))
 def key_rotate(request, pk):
     try:
         api_key = APIKey.objects.get(pk=pk, user=request.user)
@@ -53,7 +64,7 @@ def key_rotate(request, pk):
 
 @api_view(["POST"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasDeveloperAdminScope))
 def key_revoke(request, pk):
     try:
         api_key = APIKey.objects.get(pk=pk, user=request.user)
@@ -63,21 +74,16 @@ def key_revoke(request, pk):
     return Response(APIKeySerializer(api_key).data)
 
 
-@api_view(["GET", "POST"])
+@api_view(["GET"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasDeveloperScope))
 def plugins(request):
-    if request.method == "GET":
-        return Response(PluginSerializer(Plugin.objects.all().order_by("name", "version"), many=True).data)
-    serializer = PluginSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    obj = serializer.save()
-    return Response(PluginSerializer(obj).data, status=201)
+    return Response(PluginSerializer(Plugin.objects.all().order_by("name", "version"), many=True).data)
 
 
 @api_view(["POST"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasDeveloperAdminScope))
 def install_plugin(request):
     try:
         plugin = Plugin.objects.get(pk=request.data.get("plugin_id"))
@@ -88,18 +94,26 @@ def install_plugin(request):
     return Response(PluginSerializer(plugin).data)
 
 
-@api_view(["GET", "POST"])
+@api_view(["GET"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasDeveloperScope))
 def webhooks(request):
-    if request.method == "GET":
-        rows = Webhook.objects.filter(user=request.user).order_by("-created_at")
-        return Response(WebhookSerializer(rows, many=True).data)
+    rows = Webhook.objects.filter(user=request.user).order_by("-created_at")
+    return Response(WebhookSerializer(rows, many=True).data)
+
+
+@api_view(["POST"])
+@authentication_classes(AUTH_CLASSES)
+@permission_classes(_developer_permissions(HasWebhookScope))
+def webhook_create(request):
     data = request.data.copy()
     url = str(data.get("url", "")).strip()
     events = data.get("events", [])
     if not isinstance(events, list):
         return Response({"detail": "events must be an array"}, status=400)
+    unknown_events = sorted(set(events) - set(WebhookService.EVENT_NAMES))
+    if unknown_events:
+        return Response({"detail": f"Unsupported webhook events: {', '.join(unknown_events)}"}, status=400)
     try:
         WebhookService().validate_url(url)
     except ValueError as exc:
@@ -114,7 +128,7 @@ def webhooks(request):
 
 @api_view(["POST"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasWebhookScope))
 def webhook_test(request, pk):
     try:
         webhook = Webhook.objects.get(pk=pk, user=request.user)
@@ -126,35 +140,35 @@ def webhook_test(request, pk):
 
 @api_view(["GET"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasDeveloperScope))
 def sdk(request):
     return Response({"languages": SDKService.languages})
 
 
 @api_view(["GET"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasDeveloperScope))
 def docs(request):
     return Response(DocumentationService().publish().payload)
 
 
 @api_view(["GET"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasAnalyticsScope))
 def analytics(request):
     return Response(AnalyticsService().aggregate(user=request.user))
 
 
 @api_view(["GET"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasDeveloperScope))
 def sandbox(request):
     return Response(SandboxService().provision(request.user))
 
 
 @api_view(["GET"])
 @authentication_classes(AUTH_CLASSES)
-@permission_classes([IsAuthenticated])
+@permission_classes(_developer_permissions(HasDeveloperScope))
 def integrations(request):
     rows = Integration.objects.all().order_by("provider")
     return Response(IntegrationSerializer(rows, many=True).data)

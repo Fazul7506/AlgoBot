@@ -146,6 +146,8 @@ class WebhookService:
     def deliver(self, webhook, event, payload=None, timeout=5):
         if webhook.status != "active":
             return ServiceResult("skipped", {"reason": "webhook_inactive"})
+        if event not in self.EVENT_NAMES:
+            return ServiceResult("skipped", {"reason": "event_unsupported"})
         if webhook.events and event not in webhook.events:
             return ServiceResult("skipped", {"reason": "event_not_subscribed"})
         try:
@@ -158,7 +160,8 @@ class WebhookService:
         request = urllib.request.Request(webhook.url, data=body, method="POST", headers={"Content-Type": "application/json", "X-AlgoBot-Signature": signature})
         try:
             delivery.attempts += 1
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            opener = urllib.request.build_opener(_NoRedirectHandler())
+            with opener.open(request, timeout=timeout) as response:
                 delivery.response_status = response.status
                 delivery.response_body = response.read(4096).decode(errors="replace")
                 delivery.status = "delivered" if 200 <= response.status < 300 else "failed"
@@ -171,6 +174,13 @@ class WebhookService:
             delivery.next_attempt_at = django_timezone.now() + timedelta(minutes=min(60, 2 ** min(delivery.attempts, 5)))
             delivery.save()
             return ServiceResult("failed", {"delivery_id": delivery.id, "error": str(exc)})
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Never follow webhook redirects, which can bypass the initial SSRF check."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 class SDKService:
@@ -222,15 +232,20 @@ class DocumentationService:
     def publish(self):
         base = "/api/developer/"
         paths = {
-            "/keys/": {"get": {"summary": "List your API keys"}, "post": {"summary": "Create an API key"}},
-            "/keys/{id}/rotate/": {"post": {"summary": "Rotate an API key"}},
-            "/keys/{id}/revoke/": {"post": {"summary": "Revoke an API key"}},
-            "/webhooks/": {"get": {"summary": "List webhooks"}, "post": {"summary": "Create a webhook"}},
-            "/webhooks/{id}/test/": {"post": {"summary": "Send a test webhook"}},
-            "/docs/": {"get": {"summary": "Read API documentation metadata"}},
-            "/analytics/": {"get": {"summary": "Read developer API analytics"}},
-            "/sandbox/": {"get": {"summary": "Create a short-lived sandbox credential"}},
-            "/integrations/": {"get": {"summary": "List integrations"}},
+            "/keys/": {"get": {"summary": "List your API keys", "required_scope": "read"}},
+            "/keys/create/": {"post": {"summary": "Create an API key", "required_scope": "admin"}},
+            "/keys/{id}/rotate/": {"post": {"summary": "Rotate an API key", "required_scope": "admin"}},
+            "/keys/{id}/revoke/": {"post": {"summary": "Revoke an API key", "required_scope": "admin"}},
+            "/plugins/": {"get": {"summary": "List available plugins", "required_scope": "read"}},
+            "/plugins/install/": {"post": {"summary": "Install a plugin", "required_scope": "admin"}},
+            "/webhooks/": {"get": {"summary": "List your webhooks", "required_scope": "read"}},
+            "/webhooks/create/": {"post": {"summary": "Create a webhook", "required_scope": "webhooks"}},
+            "/webhooks/{id}/test/": {"post": {"summary": "Send a test webhook", "required_scope": "webhooks"}},
+            "/sdk/": {"get": {"summary": "List supported SDK languages", "required_scope": "read"}},
+            "/docs/": {"get": {"summary": "Read API documentation metadata", "required_scope": "read"}},
+            "/analytics/": {"get": {"summary": "Read developer API analytics", "required_scope": "analytics"}},
+            "/sandbox/": {"get": {"summary": "Create a short-lived sandbox credential", "required_scope": "read"}},
+            "/integrations/": {"get": {"summary": "List integration providers", "required_scope": "read"}},
         }
         return ServiceResult("published", {"openapi": "3.0.3", "info": {"title": "AlgoBot Developer API", "version": "v1"}, "servers": [{"url": base}], "authentication": {"type": "ApiKey", "headers": ["X-API-Key", "X-API-Secret"]}, "paths": paths})
 

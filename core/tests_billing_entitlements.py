@@ -87,7 +87,7 @@ class BillingEntitlementTests(TestCase):
         with patch('core.middleware.plan_entitlement_middleware.check', return_value=(True, 0, 250)) as check:
             response = middleware(request)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(check.call_count, 2)  # daily + minute execution API limits
+        self.assertEqual(check.call_count, 3)  # daily + minute generic API limits + daily orders limit
 
     def test_minute_reset_is_next_minute(self):
         now = timezone.now()

@@ -43,26 +43,29 @@
     const promise = (async () => {
       try {
         const alias = cloudflareAlias(url);
-        // Prefer the edge-safe /data/ mount. Do not immediately replay a
-        // challenge against /api/: challenge pages are HTML and are not valid
-        // XHR responses, so duplicating the request only increases rate pressure.
         const primary = alias || url;
         let result = await fetchOnce(primary, options, controller);
-        if (primary !== url && !result.response.ok && !isCloudflareChallenge(result.response, result.text) && [404,405,502,503,504].includes(result.response.status)) {
-          result = await fetchOnce(url, options, controller);
-        }
+        if (primary !== url && !result.response.ok && !isCloudflareChallenge(result.response, result.text) && [404,405,502,503,504].includes(result.response.status)) result = await fetchOnce(url, options, controller);
         const {response, text} = result;
         const payload = parsePayload(response, text);
         if (!response.ok) {
           const error = new Error(payload.detail || payload.message || `Request failed (${response.status})`);
           error.status = response.status;
           error.code = payload.code || error.code;
+          error.isEdgeChallenge = error.code === 'EDGE_CHALLENGE';
+          window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url, method, status:response.status, code:error.code || 'API_ERROR', message:error.message, retryable:['GET','HEAD'].includes(method), edgeChallenge:error.isEdgeChallenge, retry:['GET','HEAD'].includes(method) ? () => request(url, options, timeout) : null}}));
           throw error;
         }
         if (method === 'GET') cache.set(url,{payload,at:Date.now()});
         return payload;
       } catch (error) {
-        if (error?.name === 'AbortError' || error?.name === 'AlgoBotTimeoutError') { const e=new Error('Backend request timed out'); e.code='API_TIMEOUT'; throw e; }
+        if (error?.name === 'AbortError' || error?.name === 'AlgoBotTimeoutError') {
+          const e=new Error('Backend request timed out'); e.code='API_TIMEOUT';
+          window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url, method, status:0, code:e.code, message:e.message, retryable:['GET','HEAD'].includes(method), retry:['GET','HEAD'].includes(method) ? () => request(url, options, timeout) : null}}));
+          throw e;
+        }
+        if (error?.code === 'EDGE_CHALLENGE' || error?.code === 'API_ERROR') throw error;
+        window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url, method, status:error?.status || 0, code:error?.code || 'NETWORK_ERROR', message:error?.message || 'Network request failed', retryable:['GET','HEAD'].includes(method), retry:['GET','HEAD'].includes(method) ? () => request(url, options, timeout) : null}}));
         throw error;
       } finally { clearTimeout(timer); }
     })();

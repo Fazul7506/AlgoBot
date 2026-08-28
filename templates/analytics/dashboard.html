@@ -4,79 +4,15 @@
 {% block mobile_title %}Analytics{% endblock %}
 {% block content %}
 <section class="enterprise-page analytics-dashboard" data-page="analytics-dashboard">
-  <header class="enterprise-hero">
-    <div>
-      <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/dashboard/">AlgoBot</a><span>/</span><strong>Analytics</strong></nav>
-      <p class="eyebrow">Performance intelligence</p>
-      <h1>Trading Analytics</h1>
-      <p class="hero-copy">Review trade quality, profitability, equity progression and strategy distribution from your authenticated trading records.</p>
-    </div>
-    <div class="hero-actions"><a class="btn ghost" href="/performance/">Performance</a><a class="btn primary" href="{% url 'analytics-export' %}">Export CSV</a></div>
-  </header>
-
-  <section class="kpi-grid" aria-label="Trading analytics summary">
-    <article class="kpi-card"><span>Total trades</span><strong>{{ total_trades }}</strong><small>All recorded trades</small></article>
-    <article class="kpi-card"><span>Win rate</span><strong>{{ win_rate|floatformat:2 }}%</strong><small>{{ winning_trades }} wins / {{ losing_trades }} losses</small></article>
-    <article class="kpi-card"><span>Profit factor</span><strong>{{ profit_factor|floatformat:2 }}</strong><small>Gross profit ÷ gross loss</small></article>
-    <article class="kpi-card"><span>Net P/L</span><strong>{{ net_pnl|floatformat:2 }}</strong><small>Closed-trade performance</small></article>
-  </section>
-
+  <header class="enterprise-hero"><div><p class="eyebrow">PERFORMANCE INTELLIGENCE</p><h1>Analytics</h1><p class="hero-copy">Measure closed-trade quality, equity and strategy mix from your authenticated records.</p></div><div class="hero-actions"><a class="btn ghost" href="/performance/">Performance</a><a class="btn primary" href="{% url 'analytics-export' %}">Export CSV</a></div></header>
+  <section class="kpi-grid" aria-label="Trading analytics summary"><article class="kpi-card"><span>Total trades</span><strong>{{ total_trades }}</strong></article><article class="kpi-card"><span>Win rate</span><strong>{{ win_rate|floatformat:2 }}%</strong><small>{{ winning_trades }} wins · {{ losing_trades }} losses</small></article><article class="kpi-card"><span>Profit factor</span><strong>{{ profit_factor|floatformat:2 }}</strong></article><article class="kpi-card"><span>Net P/L</span><strong>{{ net_pnl|floatformat:2 }}</strong></article></section>
   <section class="workspace-grid">
-    <article class="panel analytics-chart-card">
-      <div class="panel-head"><div><p class="eyebrow">Equity curve</p><h2>Portfolio progression</h2><p>Latest authenticated portfolio snapshots.</p></div></div>
-      <div class="chart-shell"><canvas id="equity-chart" aria-label="Portfolio equity curve"></canvas><div class="empty-state" id="equity-empty" hidden>No portfolio snapshots are available yet.</div></div>
-    </article>
-    <article class="panel">
-      <div class="panel-head"><div><p class="eyebrow">Trade quality</p><h2>Closed trades</h2></div></div>
-      <div class="metric-stack">
-        <div><span>Closed</span><strong>{{ closed_trades }}</strong></div>
-        <div><span>Average profit</span><strong>{{ average_profit|floatformat:2 }}</strong></div>
-        <div><span>Gross profit</span><strong>{{ profit_factor|floatformat:2 }} PF</strong></div>
-      </div>
-      <div class="control-stack"><a class="btn ghost" href="/trade-history/">Open trade history</a><a class="btn ghost" href="/portfolio/">Open portfolio</a></div>
-    </article>
+    <article class="panel analytics-chart-card"><div class="panel-head"><div><p class="eyebrow">EQUITY</p><h2>Portfolio progression</h2></div></div><div class="chart-shell"><canvas id="equity-chart" aria-label="Portfolio equity curve"></canvas><div class="empty-state" id="equity-empty" hidden>No portfolio snapshots yet.</div></div></article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">QUALITY</p><h2>Closed trades</h2></div></div><div class="metric-stack"><div><span>Closed</span><strong>{{ closed_trades }}</strong></div><div><span>Average profit</span><strong>{{ average_profit|floatformat:2 }}</strong></div><div><span>Profit factor</span><strong>{{ profit_factor|floatformat:2 }}</strong></div></div><div class="control-stack"><a class="btn ghost" href="/trade-history/">Trade history</a><a class="btn ghost" href="/portfolio/">Portfolio</a></div></article>
   </section>
-
-  <section class="panel data-panel">
-    <div class="panel-head"><div><p class="eyebrow">Strategy mix</p><h2>Strategy distribution</h2><p>Trade count by strategy from your records.</p></div></div>
-    <div class="table-wrap"><table class="enterprise-table"><thead><tr><th>Strategy</th><th>Trades</th></tr></thead><tbody>
-      {% for item in strategy_distribution %}<tr><td>{{ item.strategy|default:"Unspecified" }}</td><td>{{ item.total }}</td></tr>{% empty %}<tr class="empty-row"><td colspan="2">No strategy distribution data is available yet.</td></tr>{% endfor %}
-    </tbody></table></div>
-  </section>
+  <section class="panel data-panel"><div class="panel-head"><div><p class="eyebrow">STRATEGIES</p><h2>Strategy mix</h2></div></div><div class="table-wrap"><table class="enterprise-table"><thead><tr><th>Strategy</th><th>Trades</th></tr></thead><tbody>{% for item in strategy_distribution %}<tr><td>{{ item.strategy|default:"Unspecified" }}</td><td>{{ item.total }}</td></tr>{% empty %}<tr class="empty-row"><td colspan="2">No strategy data yet.</td></tr>{% endfor %}</tbody></table></div></section>
 </section>
 {{ equity_curve|json_script:"equity-curve-data" }}
 {% endblock %}
-{% block extra_css %}
-<style>
-.analytics-dashboard .workspace-grid{grid-template-columns:minmax(0,2fr) minmax(280px,1fr)}
-.analytics-dashboard .chart-shell{height:360px;display:grid;place-items:center}.analytics-dashboard .chart-shell canvas{width:100%;height:100%}
-.metric-stack{display:grid;gap:10px;margin:14px 0}.metric-stack div{display:flex;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--ui-border);border-radius:12px;background:rgba(255,255,255,.025)}.metric-stack span{color:#91a3ba}.metric-stack strong{font-variant-numeric:tabular-nums}
-@media(max-width:800px){.analytics-dashboard .workspace-grid{grid-template-columns:1fr}.analytics-dashboard .chart-shell{height:280px}}
-</style>
-{% endblock %}
-{% block extra_js %}
-<script>
-(() => {
-  const node = document.getElementById('equity-curve-data');
-  const canvas = document.getElementById('equity-chart');
-  const empty = document.getElementById('equity-empty');
-  if (!node || !canvas) return;
-  let rows = [];
-  try { rows = JSON.parse(node.textContent || '[]').reverse(); } catch { rows = []; }
-  const values = rows.map(x => Number(x.equity ?? x.balance)).filter(Number.isFinite);
-  if (!values.length) { empty.hidden = false; canvas.hidden = true; return; }
-  const draw = () => {
-    const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
-    const w = Math.max(rect.width, 320), h = Math.max(rect.height, 240);
-    canvas.width = w * dpr; canvas.height = h * dpr;
-    const ctx = canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
-    const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
-    ctx.strokeStyle = 'rgba(130,170,220,.16)';
-    for (let i=1;i<5;i++){ctx.beginPath();ctx.moveTo(0,h*i/5);ctx.lineTo(w,h*i/5);ctx.stroke();}
-    ctx.strokeStyle = '#35d9ff'; ctx.lineWidth = 2; ctx.beginPath();
-    values.forEach((v,i)=>{const x=values.length===1?w/2:i*w/(values.length-1);const y=h-18-((v-min)/range)*(h-36);i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.stroke();
-  };
-  draw(); window.addEventListener('resize', draw, {passive:true});
-})();
-</script>
-{% endblock %}
+{% block extra_css %}<style>.analytics-dashboard .workspace-grid{grid-template-columns:minmax(0,2fr) minmax(280px,1fr)}.analytics-dashboard .chart-shell{height:360px;display:grid;place-items:center}.analytics-dashboard .chart-shell canvas{width:100%;height:100%}.metric-stack{display:grid;gap:10px;margin:14px 0}.metric-stack div{display:flex;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--ui-border);border-radius:12px;background:rgba(255,255,255,.025)}.metric-stack span{color:#91a3ba}.metric-stack strong{font-variant-numeric:tabular-nums}@media(max-width:800px){.analytics-dashboard .workspace-grid{grid-template-columns:1fr}.analytics-dashboard .chart-shell{height:280px}}</style>{% endblock %}
+{% block extra_js %}<script>{(()=>{const node=document.getElementById('equity-curve-data'),canvas=document.getElementById('equity-chart'),empty=document.getElementById('equity-empty');if(!node||!canvas)return;let rows=[];try{rows=JSON.parse(node.textContent||'[]').reverse()}catch{rows=[]}const values=rows.map(x=>Number(x.equity??x.balance)).filter(Number.isFinite);if(!values.length){empty.hidden=false;canvas.hidden=true;return}const draw=()=>{const rect=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1,w=Math.max(rect.width,320),h=Math.max(rect.height,240);canvas.width=w*dpr;canvas.height=h*dpr;const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);const min=Math.min(...values),max=Math.max(...values),range=max-min||1;ctx.strokeStyle='rgba(130,170,220,.16)';for(let i=1;i<5;i++){ctx.beginPath();ctx.moveTo(0,h*i/5);ctx.lineTo(w,h*i/5);ctx.stroke()}ctx.strokeStyle='#35d9ff';ctx.lineWidth=2;ctx.beginPath();values.forEach((v,i)=>{const x=values.length===1?w/2:i*w/(values.length-1),y=h-18-((v-min)/range)*(h-36);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()};draw();window.addEventListener('resize',draw,{passive:true})})()</script>{% endblock %}
