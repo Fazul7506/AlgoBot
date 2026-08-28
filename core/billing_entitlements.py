@@ -29,6 +29,7 @@ EXECUTION_PATH_PREFIXES = (
     "/api/execution/",
 )
 EXECUTION_METHODS = ("POST", "PUT", "PATCH")
+RESETTABLE_METRICS = {"api_calls", "backtests", "predictions", "orders", "automations", "live_orders"}
 
 
 def subscription_for(user):
@@ -89,8 +90,13 @@ def entitlement_payload(user):
     plan=effective_plan(user); subscription=subscription_for(user); items={}
     for metric in ("api_calls","strategies","backtests","predictions","orders","broker_accounts","automations","live_orders"):
         limit=limit_for(plan,metric); current=usage(user,metric); window="day"
-        items[metric]={"used":current,"limit":None if limit<0 else limit,"unlimited":limit<0,"remaining":None if limit<0 else max(0,limit-current),"reset_at":reset_at(window).isoformat(),"reset_window":window}
-    return {"plan":plan.key,"name":plan.name,"active":bool(subscription.is_active and (not subscription.expires_at or subscription.expires_at>timezone.now())),"expires_at":subscription.expires_at.isoformat() if subscription.expires_at else None,"priority":plan.priority,"support":plan.support,"features":{"live_trading":True,"advanced_ai":plan.advanced_ai},"usage":items,"reset_at":reset_at("day").isoformat(),"reset_policy":{"daily":"Every day at 00:00 UTC","minute":"Every minute; applies to the trading API-call burst limit","subscription":"Paid-plan entitlements fall back to FREE when the subscription expires; usage meters reset automatically"}}
+        item={"used":current,"limit":None if limit<0 else limit,"unlimited":limit<0,"remaining":None if limit<0 else max(0,limit-current)}
+        if metric in RESETTABLE_METRICS:
+            item.update({"reset_at":reset_at(window).isoformat(),"reset_window":window})
+        else:
+            item.update({"reset_at":None,"reset_window":None,"limit_type":"capacity"})
+        items[metric]=item
+    return {"plan":plan.key,"name":plan.name,"active":bool(subscription.is_active and (not subscription.expires_at or subscription.expires_at>timezone.now())),"expires_at":subscription.expires_at.isoformat() if subscription.expires_at else None,"priority":plan.priority,"support":plan.support,"features":{"live_trading":True,"advanced_ai":plan.advanced_ai},"usage":items,"reset_at":reset_at("day").isoformat(),"reset_policy":{"daily":"Every day at 00:00 UTC","minute":"Every minute; applies to the trading API-call burst limit","subscription":"Paid-plan entitlements fall back to FREE when the subscription expires; usage meters reset automatically","capacity":"Connected broker-account and active-strategy limits are capacity limits, not expiring counters"}}
 
 def rate_limit_response_data(user,metric,window,current,limit):
     plan=effective_plan(user); reset=reset_at(window)
