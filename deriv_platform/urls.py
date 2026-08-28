@@ -56,6 +56,7 @@ urlpatterns = [
     path('billing/', login_required(lambda request: render(request, 'core/billing.html')), name='billing_page'),
     path('saas/', login_required(lambda request: render(request, 'core/saas.html')), name='saas_page'),
     path('markets/', login_required(markets_page), name='markets_page'),
+    path('market-scanner/', login_required(lambda request: render(request, 'core/market_scanner.html')), name='market_scanner_page'),
     path('strategies/', login_required(strategies_page), name='strategies_page'),
     path('strategies/builder/', login_required(strategy_builder_page), name='strategy_builder_page'),
     path('trading/', login_required(trading_page), name='trading_page'),
