@@ -7,11 +7,11 @@
 <section class="command-center" data-dashboard-command>
   <header class="command-hero compact-hero">
     <div><p class="eyebrow">Command center</p><h1>Trading dashboard</h1></div>
-    <div class="hero-actions"><span class="dashboard-sync" data-dashboard-sync>Connecting live feed…</span><button class="btn ghost" data-dashboard-refresh type="button">Refresh</button><a class="btn primary" href="/trading/">Open terminal</a></div>
+    <div class="hero-actions"><span class="dashboard-sync" data-dashboard-sync>Updating dashboard…</span><button class="btn ghost" data-dashboard-refresh type="button">Refresh</button><a class="btn primary" href="/trading/">Open terminal</a></div>
   </header>
   <section class="kpi-grid" aria-label="Account overview">
     <article class="kpi-card"><span>Balance</span><strong data-kpi="balance">Unavailable</strong><small data-kpi-state="balance">Connecting to broker…</small></article>
-    <article class="kpi-card"><span>Equity</span><strong data-kpi="equity">Unavailable</strong><small data-kpi-state="equity">Waiting for live broker state</small></article>
+    <article class="kpi-card"><span>Equity</span><strong data-kpi="equity">Unavailable</strong><small data-kpi-state="equity">Waiting for broker state</small></article>
     <article class="kpi-card"><span>Available</span><strong data-kpi="available">Unavailable</strong><small>Available margin</small></article>
     <article class="kpi-card"><span>Net P/L</span><strong data-kpi="pnl">Unavailable</strong><small>Open-contract P/L</small></article>
   </section>
@@ -24,7 +24,7 @@
   </section>
   <section class="command-grid">
     <article class="panel panel-featured"><div class="panel-head"><div><h2>Live markets</h2></div><a href="/markets/">Open markets</a></div><div class="mini-table" data-dashboard-markets><div class="empty-state">Loading market data…</div></div></article>
-    <article class="panel"><div class="panel-head"><div><h2>Connection</h2></div><a href="/brokers/connect/">Manage</a></div><div class="health-stack" data-dashboard-brokers><span><b></b>Connecting broker stream…</span></div><div class="dashboard-links"><a href="/monitoring/">Monitoring</a><a href="/orders/">Orders</a><a href="/positions/">Positions</a></div></article>
+    <article class="panel"><div class="panel-head"><div><h2>Connection</h2></div><a href="/brokers/connect/">Manage</a></div><div class="health-stack" data-dashboard-brokers><span><b></b>Connecting broker…</span></div><div class="dashboard-links"><a href="/monitoring/">Monitoring</a><a href="/orders/">Orders</a><a href="/positions/">Positions</a></div></article>
   </section>
   <section class="command-grid lower">
     <article class="panel"><div class="panel-head"><div><h2>Open positions</h2></div><a href="/positions/">Manage</a></div><div class="mini-table" data-dashboard-positions><div class="empty-state">Waiting for broker positions…</div></div></article>
@@ -37,4 +37,4 @@
   </section>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/dashboard.js' %}?v=20260829-realtime2" defer></script><script src="{% static 'js/dashboard_status.js' %}?v=20260827-status1" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/dashboard_v2.js' %}?v=20260829-stable1" defer></script><script src="{% static 'js/dashboard_status.js' %}?v=20260827-status1" defer></script>{% endblock %}
