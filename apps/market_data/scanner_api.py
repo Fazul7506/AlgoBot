@@ -41,6 +41,12 @@ def scanner(request):
     for symbol in queryset:
         snapshot = getattr(symbol, "snapshot", None)
         if snapshot is None:
+            # A direction or numeric threshold requires an actual quote. Keep
+            # no-data symbols visible for an unfiltered research scan, but do
+            # not classify missing observations as gainers/losers or as passing
+            # numeric filters.
+            if direction != "all" or min_change is not None or max_change is not None or max_spread is not None:
+                continue
             rows.append({"symbol": symbol.symbol, "display_name": symbol.display_name, "market": symbol.market, "sub_market": symbol.sub_market, "currency": symbol.currency, "status": "no_data", "source": "broker_snapshot_store"})
             continue
         change = Decimal(snapshot.change_percent or 0)
