@@ -6,12 +6,13 @@
   const secretDialog = document.querySelector('[data-api-secret-dialog]');
   const form = document.querySelector('[data-api-key-form]');
   const count = document.querySelector('[data-api-key-count]');
+  const keyNode = document.querySelector('[data-api-key-plain]');
   const secretNode = document.querySelector('[data-api-secret]');
-  const copyButton = document.querySelector('[data-copy-api-secret]');
+  const copyKeyButton = document.querySelector('[data-copy-api-key]');
+  const copySecretButton = document.querySelector('[data-copy-api-secret]');
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
   const endpoint = '/api/developer/keys/';
-  let secretValue = '';
-  let secretVisible = false;
+  let keyValue = '', secretValue = '', revealOpen = false;
 
   const request = async (url, options = {}) => {
     const response = await fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf, ...(options.headers || {}) }, ...options });
@@ -21,12 +22,14 @@
   };
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const statusClass = status => ({active:'ready', revoked:'danger', expired:'danger', inactive:'degraded'}[status] || 'pending');
+  const mask = () => '••••••••••••••••••••';
 
-  const clearSecret = () => {
-    secretValue = '';
-    secretVisible = false;
-    if (secretNode) secretNode.textContent = '••••••••••••••••••••';
-    if (copyButton) { copyButton.disabled = true; copyButton.textContent = 'Copy'; }
+  const clearReveal = () => {
+    keyValue = ''; secretValue = ''; revealOpen = false;
+    if (keyNode) keyNode.textContent = mask();
+    if (secretNode) secretNode.textContent = mask();
+    if (copyKeyButton) { copyKeyButton.disabled = true; copyKeyButton.textContent = 'Copy key'; }
+    if (copySecretButton) { copySecretButton.disabled = true; copySecretButton.textContent = 'Copy secret'; }
   };
 
   const load = async () => {
@@ -59,28 +62,28 @@
     }
   };
 
-  const showSecret = secret => {
-    clearSecret();
-    secretValue = String(secret || '');
-    if (!secretValue) return;
-    secretVisible = true;
-    if (secretNode) secretNode.textContent = secretValue;
-    if (copyButton) copyButton.disabled = false;
+  const showCredentials = (key, secret) => {
+    clearReveal();
+    keyValue = String(key || ''); secretValue = String(secret || '');
+    if (!keyValue && !secretValue) return;
+    revealOpen = true;
+    if (keyNode) keyNode.textContent = keyValue || mask();
+    if (secretNode) secretNode.textContent = secretValue || mask();
+    if (copyKeyButton) copyKeyButton.disabled = !keyValue;
+    if (copySecretButton) copySecretButton.disabled = !secretValue;
     secretDialog?.showModal();
   };
 
   const rotate = async id => {
     if (!confirm('Rotate this API key? Existing clients using its secret will stop working after the rotation grace period.')) return;
-    try { const result = await request(`${endpoint}${encodeURIComponent(id)}/rotate/`, { method: 'POST', body: '{}' }); showSecret(result.secret); await load(); }
+    try { const result = await request(`${endpoint}${encodeURIComponent(id)}/rotate/`, { method: 'POST', body: '{}' }); showCredentials(result.key, result.secret); await load(); }
     catch (error) { alert(error.message); }
   };
-
   const revoke = async id => {
     if (!confirm('Revoke this API key? Existing clients will stop authenticating.')) return;
     try { await request(`${endpoint}${encodeURIComponent(id)}/revoke/`, { method: 'POST', body: '{}' }); await load(); }
     catch (error) { alert(error.message); }
   };
-
   const remove = async (id, name) => {
     if (!confirm(`Delete “${name}”? This permanently removes the credential and cannot be undone.`)) return;
     try { await request(`${endpoint}${encodeURIComponent(id)}/delete/`, { method: 'DELETE' }); await load(); }
@@ -93,29 +96,28 @@
     const permissions = data.getAll('permissions');
     try {
       const result = await request(`${endpoint}create/`, { method: 'POST', body: JSON.stringify({ name: data.get('name'), permissions }) });
-      form.reset(); dialog?.close(); showSecret(result.secret); await load();
+      form.reset(); dialog?.close(); showCredentials(result.key, result.secret); await load();
     } catch (error) { alert(error.message); }
   });
   document.querySelectorAll('[data-api-key-create]').forEach(button => button.onclick = () => dialog?.showModal());
   document.querySelectorAll('[data-api-key-close]').forEach(button => button.onclick = () => dialog?.close());
-  document.querySelector('[data-api-secret-close]')?.addEventListener('click', () => { clearSecret(); secretDialog?.close(); });
-  secretDialog?.addEventListener('close', clearSecret);
-  copyButton?.addEventListener('click', async event => {
-    if (!secretVisible || !secretValue) return;
-    const value = secretValue;
+  document.querySelector('[data-api-secret-close]')?.addEventListener('click', () => { clearReveal(); secretDialog?.close(); });
+  secretDialog?.addEventListener('close', clearReveal);
+
+  const copyPlain = async (value, button, label) => {
+    if (!revealOpen || !value) return;
     try {
       await navigator.clipboard.writeText(value);
-      // The secret is intentionally masked immediately after a successful copy.
-      secretValue = '';
-      secretVisible = false;
-      if (secretNode) secretNode.textContent = '••••••••••••••••••••';
-      event.currentTarget.disabled = true;
-      event.currentTarget.textContent = 'Copied · masked';
-      setTimeout(() => { event.currentTarget.textContent = 'Copy'; }, 1600);
+      button.textContent = `${label} copied`;
+      // Do not clear or mask either credential after one copy: the user may
+      // need to copy the second value. Mask both only when Done/close is used.
+      setTimeout(() => { if (button.isConnected && revealOpen) button.textContent = label; }, 1600);
     } catch (_) {
-      alert('Clipboard access was blocked by the browser. The secret remains visible so you can retry Copy.');
+      alert('Clipboard access was blocked by the browser. The credential remains visible so you can retry Copy.');
     }
-  });
-  clearSecret();
+  };
+  copyKeyButton?.addEventListener('click', () => copyPlain(keyValue, copyKeyButton, 'Copy key'));
+  copySecretButton?.addEventListener('click', () => copyPlain(secretValue, copySecretButton, 'Copy secret'));
+  clearReveal();
   load();
 })();
