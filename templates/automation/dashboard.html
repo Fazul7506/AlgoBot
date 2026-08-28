@@ -4,12 +4,9 @@
 {% block mobile_title %}Automation{% endblock %}
 {% block content %}
 <section class="algobot-shared-page automation-page">
-  <header class="enterprise-hero">
-    <div><p class="eyebrow">Broker-aware automation</p><h1>Automation Control Center</h1><p class="hero-copy">Monitor workflows and execution history from one authenticated control surface. Trading-impacting automation remains subject to the backend execution and approval boundaries.</p></div>
-    <div class="hero-actions"><a class="btn" href="/workspace/automation/">Manage workflows</a><a class="btn" href="/automation/rules/">Automation rules</a><a class="btn primary" href="/trading/">Trading terminal</a></div>
-  </header>
-  <section class="automation-safety panel"><strong>Safety boundary</strong><span>Broker-disconnected state blocks this trading-impacting automation surface. Workflow approval is enforced by the backend.</span></section>
-  <section data-automation-dashboard aria-live="polite"><div class="ds-state"><strong>Waiting for broker connection</strong><p>Connect a broker to load trading-impacting automation state.</p><a class="ds-btn ds-btn--primary" href="/brokers/connect/">Connect broker</a></div></section>
+  <header class="enterprise-hero"><div><p class="eyebrow">AUTOMATION</p><h1>Automation</h1></div><div class="hero-actions"><button class="btn ghost" type="button" data-automation-refresh>Refresh</button><a class="btn" href="/workspace/automation/">Workflows</a><a class="btn" href="/automation/rules/">Rules</a><a class="btn primary" href="/trading/">Trading terminal</a></div></header>
+  <section class="automation-safety panel"><strong>Trading safety</strong><span>Trading-impacting automation remains subject to broker connection, backend validation and approval.</span></section>
+  <section data-automation-dashboard aria-live="polite"><div class="ds-state"><strong>Waiting for broker connection</strong><p>Connect a broker to load automation state.</p><a class="ds-btn ds-btn--primary" href="/brokers/connect/">Connect broker</a></div></section>
 </section>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/automation_dashboard.css' %}">{% endblock %}
