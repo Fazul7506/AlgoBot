@@ -1,10 +1,11 @@
 import asyncio
 from datetime import timedelta
 
+from django.conf import settings
 from django.db.models import Count, Avg
 from django.utils import timezone
 from rest_framework import viewsets, permissions, decorators, response, status
-from apps.market_data.models import MarketSymbol
+from apps.market_data.models import MarketSymbol, Tick, Candle
 from apps.brokers.models import BrokerAccount
 from apps.brokers.services import BrokerRegistry
 from .models import AIModel, ModelVersion, Prediction, PredictionOutcome, FeatureVector, TrainingJob, AIRecommendation, MarketRegime, AnomalyEvent
@@ -104,6 +105,62 @@ async def _bounded_market_data(account, symbol):
     return await asyncio.wait_for(adapter.get_market_data(symbol), timeout=7.0)
 
 
+def _persisted_market_context(symbol, timeframe):
+    """Return the freshest locally persisted broker feed for fast AI inference.
+
+    The terminal already ingests the broker tick before the user requests AI.
+    Reusing that persisted tick/candle stream avoids opening a second broker
+    connection for every Analyse click while preserving the no-fabrication rule.
+    """
+    max_age = int(getattr(settings, "BROKER_MARKET_DATA_MAX_AGE_SECONDS", 30))
+    now = timezone.now()
+    tick = Tick.objects.filter(symbol__symbol=symbol).order_by("-epoch", "-received_at").first()
+    candles_qs = Candle.objects.filter(symbol__symbol=symbol, timeframe=timeframe).order_by("-epoch")[:60]
+    candles = list(reversed(list(candles_qs)))
+    if tick is None:
+        return None
+    age = max(0, (now - tick.received_at).total_seconds())
+    if age > max_age:
+        return None
+    price = float(tick.quote)
+    context = {
+        "market_data": {
+            "close": price,
+            "open": price,
+            "high": price,
+            "low": price,
+            "bid": float(tick.bid) if tick.bid is not None else None,
+            "ask": float(tick.ask) if tick.ask is not None else None,
+            "spread": float(tick.spread or 0),
+            "volume": float(tick.volume or 0),
+            "source": "persisted_broker_tick",
+            "age_seconds": round(age, 3),
+        },
+        "candles": [
+            {"open": float(c.open), "high": float(c.high), "low": float(c.low), "close": float(c.close), "volume": float(c.volume or 0), "epoch": c.epoch}
+            for c in candles
+        ],
+    }
+    return context
+
+
+def _broker_market_context(account, symbol):
+    tick = asyncio.run(_bounded_market_data(account, symbol))
+    price = tick.get("price", tick.get("quote"))
+    return {
+        "market_data": {
+            "close": price,
+            "open": price,
+            "high": price,
+            "low": price,
+            "bid": tick.get("bid"),
+            "ask": tick.get("ask"),
+            "spread": (tick.get("ask") - tick.get("bid")) if tick.get("ask") is not None and tick.get("bid") is not None else 0,
+            "source": "live_broker_tick",
+        }
+    }
+
+
 @decorators.api_view(["POST"])
 @decorators.permission_classes([permissions.IsAuthenticated])
 def predict(request):
@@ -114,12 +171,17 @@ def predict(request):
     timeframe = str(request.data.get("timeframe") or "M1").upper()
     try:
         raw_context = request.data.get("context") or {}
+        context_source = "client_context" if raw_context.get("market_data") else None
         if not raw_context.get("market_data"):
-            tick = asyncio.run(_bounded_market_data(account, symbol))
-            raw_context["market_data"] = {"close": tick.get("price", tick.get("quote")), "open": tick.get("price", tick.get("quote")), "high": tick.get("price", tick.get("quote")), "low": tick.get("price", tick.get("quote")), "bid": tick.get("bid"), "ask": tick.get("ask"), "spread": (tick.get("ask") - tick.get("bid")) if tick.get("ask") is not None and tick.get("bid") is not None else 0}
+            raw_context = _persisted_market_context(symbol, timeframe)
+            if raw_context:
+                context_source = raw_context.get("market_data", {}).get("source", "persisted_broker_tick")
+            else:
+                raw_context = _broker_market_context(account, symbol)
+                context_source = "live_broker_tick"
         ctx = validate_feature_context(raw_context)
         result = AIEngine().analyze(symbol, timeframe, ctx)
-        return response.Response({"symbol": symbol, "timeframe": timeframe, "broker": account.broker.name, "account_id": account.account_id, "prediction": PredictionSerializer(result["prediction"]).data, "recommendation": AIRecommendationSerializer(result["recommendation"]).data, "regime": MarketRegimeSerializer(result["regime"]).data, "explainability": result["explainability"]})
+        return response.Response({"symbol": symbol, "timeframe": timeframe, "broker": account.broker.name, "account_id": account.account_id, "market_context_source": context_source, "prediction": PredictionSerializer(result["prediction"]).data, "recommendation": AIRecommendationSerializer(result["recommendation"]).data, "regime": MarketRegimeSerializer(result["regime"]).data, "explainability": result["explainability"]})
     except (ValueError, TypeError) as exc: return response.Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     except asyncio.TimeoutError: return response.Response({"detail": "Connected broker market data timed out; the last known data was not fabricated.", "code": "BROKER_MARKET_DATA_TIMEOUT"}, status=status.HTTP_504_GATEWAY_TIMEOUT)
     except Exception as exc: return response.Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
