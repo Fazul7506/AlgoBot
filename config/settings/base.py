@@ -113,16 +113,19 @@ TEMPLATES = [{
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
-# Django 5.2/6 uses STORAGES instead of the removed/deprecated
-# STATICFILES_STORAGE setting. WhiteNoise must be explicitly configured here
-# or production can return successful but empty static responses, preventing
-# the broker-state bridge and dashboard JavaScript from executing.
+# Development/test requests must be able to render templates before collectstatic
+# has produced a manifest. Production keeps WhiteNoise's hashed manifest storage
+# so deployed assets remain cache-safe and deterministic.
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
     'staticfiles': {
-        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+        'BACKEND': (
+            'django.contrib.staticfiles.storage.StaticFilesStorage'
+            if DEBUG else
+            'whitenoise.storage.CompressedManifestStaticFilesStorage'
+        ),
     },
 }
 MEDIA_URL = '/media/'
