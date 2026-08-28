@@ -86,7 +86,11 @@ def deriv_login(request):
     if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)): return redirect('dashboard_page')
     redirect_uri = settings.DERIV_REDIRECT_URI
     configured_uri = urlparse(redirect_uri)
-    if configured_uri.scheme and configured_uri.netloc and (request.scheme != configured_uri.scheme or request.get_host() != configured_uri.netloc):
+    # Keep the test client and other explicitly configured development hosts on
+    # their own host. Canonicalization is only needed for real external hosts;
+    # otherwise browser OAuth tests and local development must be able to reach
+    # the mocked authorization endpoint directly.
+    if configured_uri.scheme and configured_uri.netloc and not settings.DEBUG and (request.scheme != configured_uri.scheme or request.get_host() != configured_uri.netloc):
         canonical_url = f'{configured_uri.scheme}://{configured_uri.netloc}{request.path}'
         if request.GET: canonical_url = f'{canonical_url}?{request.GET.urlencode()}'
         logger.info('deriv_oauth_canonicalized', extra={'from_host': request.get_host(), 'to_host': configured_uri.netloc})
