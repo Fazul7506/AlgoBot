@@ -6,20 +6,22 @@
   const list = value => Array.isArray(value)
     ? value
     : (Array.isArray(value?.results) ? value.results : (Array.isArray(value?.data) ? value.data : []));
-  const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '';
-  const edgeAlias = url => {
-    try {
-      const parsed = new URL(url, window.location.origin);
-      if (parsed.origin !== window.location.origin || !parsed.pathname.startsWith('/api/')) return null;
-      parsed.pathname = `/data/${parsed.pathname.slice('/api/'.length)}`;
-      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-    } catch (_) { return null; }
+  const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+  // Dedicated API host support keeps browser/API traffic off the public
+  // Cloudflare challenge path. Same-origin remains the safe default.
+  const configuredApiBase = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
+  const defaultApiBase = window.location.hostname === 'algobot.dpdns.org' ? 'https://api.algobot.dpdns.org' : '';
+  const apiBase = (configuredApiBase || defaultApiBase).replace(/\/+$/, '');
+  const resolveUrl = url => {
+    if (/^https?:\/\//i.test(url)) return url;
+    return `${apiBase}${url.startsWith('/') ? url : `/${url}`}`;
   };
   const isCloudflareChallenge = (response, text) => {
     const body = String(text || '').toLowerCase();
     const contentType = String(response?.headers?.get('content-type') || '').toLowerCase();
-    return [403,429,503,520,521,522,524].includes(response?.status) &&
-      (body.includes('just a moment') || body.includes('cf_chl_opt') || body.includes('challenge-platform') || body.includes('challenges.cloudflare.com') || body.includes('enable javascript and cookies to continue') || contentType.includes('text/html'));
+    return [400,403,429,503,520,521,522,524].includes(response?.status) &&
+      (body.includes('just a moment') || body.includes('cf_chl_opt') || body.includes('challenge-platform') || body.includes('challenges.cloudflare.com') || body.includes('enable javascript and cookies to continue') || (body.includes('cloudflare') && contentType.includes('text/html')));
   };
   const parse = (response, text) => {
     try { return text ? JSON.parse(text) : {}; }
@@ -32,7 +34,9 @@
       const method = String(options.method || 'GET').toUpperCase();
       const headers = {Accept:'application/json', ...(options.headers || {})};
       if (!['GET','HEAD','OPTIONS'].includes(method) && !headers['X-CSRFToken']) headers['X-CSRFToken'] = csrf();
-      const response = await fetch(url,{credentials:'same-origin',...options,headers,signal:controller.signal});
+      const target = resolveUrl(url);
+      const crossOrigin = (() => { try { return new URL(target, window.location.origin).origin !== window.location.origin; } catch (_) { return false; } })();
+      const response = await fetch(target,{credentials:crossOrigin ? 'include' : 'same-origin',...options,headers,signal:controller.signal});
       return {response,text:await response.text()};
     } finally { clearTimeout(timer); }
   }
@@ -40,17 +44,29 @@
     if (!url) throw new Error('No API endpoint configured');
     let result;
     try {
-      const alias = edgeAlias(url);
-      const primary = alias || url;
-      result = await requestOnce(primary, options, timeout);
-      if (primary !== url && !result.response.ok && (isCloudflareChallenge(result.response,result.text) || [404,405,502,503,504].includes(result.response.status))) result = await requestOnce(url, options, timeout);
+      result = await requestOnce(url, options, timeout);
+      // Legacy same-origin /data fallback is retained only when no dedicated
+      // API hostname has been configured.
+      if (!result.response.ok && !apiBase && !/^https?:\/\//i.test(url)) {
+        const parsed = new URL(url, window.location.origin);
+        if (parsed.pathname.startsWith('/api/')) {
+          parsed.pathname = `/data/${parsed.pathname.slice('/api/'.length)}`;
+          result = await requestOnce(`${parsed.pathname}${parsed.search}${parsed.hash}`, options, timeout);
+        }
+      }
     } catch (error) {
       if (error?.name === 'AbortError') throw new Error('Backend request timed out');
       throw error;
     }
     const {response,text} = result;
     const payload = parse(response,text);
-    if (!response.ok) throw new Error(payload.detail || payload.message || `Request failed (${response.status})`);
+    if (!response.ok) {
+      const error = new Error(payload.detail || payload.message || `Request failed (${response.status})`);
+      error.status = response.status;
+      error.code = isCloudflareChallenge(response,text) ? 'EDGE_CHALLENGE' : 'API_ERROR';
+      error.isEdgeChallenge = error.code === 'EDGE_CHALLENGE';
+      throw error;
+    }
     return payload;
   }
   window.AlgoBotFrontendData = Object.freeze({request,list});
