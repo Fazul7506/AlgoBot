@@ -1,0 +1,14 @@
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+
+class AIPredictAuthenticationTests(APITestCase):
+    def test_predict_rejects_anonymous_before_user_scoped_orm_queries(self):
+        response = self.client.post(
+            reverse("browser-ai-predict"),
+            {"symbol": "1HZ100V", "timeframe": "M1"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data.get("code"), "not_authenticated")
