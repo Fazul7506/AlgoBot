@@ -10,6 +10,7 @@
   const money = v => Number.isFinite(Number(v)) ? Number(v).toLocaleString(undefined, {maximumFractionDigits: 8}) : 'Unavailable';
   const api = (url, options = {}, timeout = 10000) => window.AlgoBotFrontendData.request(url, options, timeout);
   let accounts = [], symbols = [], direction = 'BUY', busy = false;
+  const requestedStrategy = new URLSearchParams(location.search).get('strategy') || '';
 
   const selectedAccount = () => {
     const id = $('#account')?.value;
@@ -18,6 +19,14 @@
   const brokerReady = () => !!selectedAccount();
   const renderRows = (selector, rows, empty, format) => { const target = $(selector); if (target) target.innerHTML = rows.length ? rows.map(format).join('') : `<div class="empty-state">${esc(empty)}</div>`; };
   const renderOrderResult = (message, state = 'info') => { const result = $('[data-order-result]'); if (!result) return; result.hidden = false; result.dataset.state = state; result.textContent = message; };
+
+  function renderSelectedStrategy() {
+    const hidden = $('[name="strategy"]');
+    const banner = $('[data-selected-strategy] strong');
+    const clean = requestedStrategy.trim();
+    if (hidden) hidden.value = clean;
+    if (banner) banner.textContent = clean || 'Manual trading';
+  }
 
   function renderAccount(account) {
     const status = $('#terminal-status'), note = $('[data-terminal-account]'), risk = $('[data-risk-check]');
@@ -107,7 +116,7 @@
 
   async function refresh() {
     if (busy) return; busy = true;
-    try { await loadAccounts(); const symbol = await loadSymbols(); await Promise.all([loadQuote(), loadRecords(), loadSignals()]); if (symbol) { $('#symbol')?.dispatchEvent(new Event('change', {bubbles:true})); window.dispatchEvent(new CustomEvent('algobot:market-symbol-changed', {detail:{symbol}})); } }
+    try { renderSelectedStrategy(); await loadAccounts(); const symbol = await loadSymbols(); await Promise.all([loadQuote(), loadRecords(), loadSignals()]); if (symbol) { $('#symbol')?.dispatchEvent(new Event('change', {bubbles:true})); window.dispatchEvent(new CustomEvent('algobot:market-symbol-changed', {detail:{symbol}})); } }
     finally { busy = false; }
   }
 
@@ -119,7 +128,7 @@
     const form = new FormData(event.currentTarget), button = $('.execute-btn');
     if (button) { button.disabled = true; button.textContent = 'Submitting…'; }
     try {
-      const validationContext = {...(window.__algobotAiOrderContext || {}), broker_source: 'connected_broker', contract_type: contractType, underlying_symbol: symbol};
+      const validationContext = {...(window.__algobotAiOrderContext || {}), broker_source: 'connected_broker', contract_type: contractType, underlying_symbol: symbol, selected_strategy: form.get('strategy') || null};
       const payload = {broker_account: account.id, symbol, direction, order_type: form.get('order_type') || 'market', stake: form.get('stake'), strategy: form.get('strategy') || '', client_request_id: `ui-${crypto.randomUUID?.() || Date.now()}`, validation_context: validationContext};
       const order = await api('/api/orders/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 25000);
       renderOrderResult(`Order ${order.broker_reference || order.id || ''} ${order.status || 'queued'}.`, 'success');
@@ -133,6 +142,7 @@
 
   function boot() {
     if (!$('.terminal-page')) return;
+    renderSelectedStrategy();
     $('[data-order-form]')?.addEventListener('submit', submitOrder);
     $('[data-action="terminal-refresh"]')?.addEventListener('click', refresh);
     $('[data-watchlist-search]')?.addEventListener('input', event => renderWatchlist(event.target.value));
