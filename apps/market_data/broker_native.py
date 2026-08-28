@@ -1,8 +1,9 @@
 """Connected-broker market capabilities.
 
 Deriv is the authoritative source for the market universe and the contracts
-available for the selected underlying. No local catalogue is used as the
-primary source for the trading terminal.
+available for the selected underlying. Broker-specific behavior is routed
+through the canonical broker adapter so the market-data layer remains the
+single application boundary for broker data.
 """
 from __future__ import annotations
 
@@ -15,8 +16,8 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from apps.brokers.models import BrokerAccount
+from apps.brokers.services import BrokerRegistry
 from .deriv_sync import _request
-
 
 CATALOGUE_CACHE = "algobot:broker:deriv:active-symbols"
 CAPABILITIES_CACHE_PREFIX = "algobot:broker:deriv:contracts-for:"
@@ -24,9 +25,7 @@ CAPABILITIES_CACHE_PREFIX = "algobot:broker:deriv:contracts-for:"
 
 def _account(user):
     return (
-        BrokerAccount.objects.filter(
-            user=user, status="active", broker__status="active"
-        )
+        BrokerAccount.objects.filter(user=user, status="active", broker__status="active")
         .select_related("broker")
         .order_by("-is_preferred", "-id")
         .first()
@@ -73,22 +72,9 @@ def catalogue(request):
             cache.set(CATALOGUE_CACHE, payload, timeout=30)
         if not payload:
             raise RuntimeError("Deriv returned no active tradable instruments")
-        return Response({
-            "status": "ok",
-            "source": "connected_broker",
-            "broker": account.broker.name,
-            "account_id": account.account_id,
-            "symbols": payload,
-            "count": len(payload),
-            "stale": False,
-        })
+        return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,"symbols":payload,"count":len(payload),"stale":False})
     except Exception as exc:
-        return Response({
-            "status": "error",
-            "code": "BROKER_CATALOGUE_UNAVAILABLE",
-            "detail": str(exc),
-            "source": "connected_broker",
-        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({"status":"error","code":"BROKER_CATALOGUE_UNAVAILABLE","detail":str(exc),"source":"connected_broker"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 @api_view(["GET"])
@@ -98,24 +84,31 @@ def capabilities(request):
     account = _account(request.user)
     if not account:
         return Response({"detail": "Connect a broker before loading trading capabilities."}, status=status.HTTP_409_CONFLICT)
-    if account.broker.broker_type != "deriv":
-        return Response({"detail": f"Broker contract capabilities are not implemented for {account.broker.name} yet."}, status=status.HTTP_409_CONFLICT)
     if not symbol:
         return Response({"detail": "symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
+    if account.broker.broker_type != "deriv":
+        return Response({"detail": f"Broker contract capabilities are not implemented for {account.broker.name} yet."}, status=status.HTTP_409_CONFLICT)
 
     cache_key = f"{CAPABILITIES_CACHE_PREFIX}{symbol}"
     try:
         payload = cache.get(cache_key)
         if payload is None:
-            response = _public_deriv({"contracts_for": symbol})
-            root = response.get("contracts_for") or {}
-            available = root.get("available") or []
-            contracts = []
-            for item in available:
+            adapter = BrokerRegistry().adapter(account.broker, account)
+            raw_contracts = asyncio.run(asyncio.wait_for(adapter.get_trade_capabilities(symbol), timeout=7.0))
+            if not isinstance(raw_contracts, list):
+                raise RuntimeError("Broker returned an invalid contract capability payload")
+
+            # Deriv can expose several records for the same contract_type with
+            # different expiry/barrier metadata. The terminal's selector is a
+            # contract-type selector, so collapse exact type duplicates while
+            # retaining the first broker-authoritative metadata record.
+            unique = {}
+            for item in raw_contracts:
                 if not isinstance(item, dict) or not item.get("contract_type"):
                     continue
-                contracts.append({
-                    "contract_type": str(item.get("contract_type")),
+                contract_type = str(item.get("contract_type")).strip().upper()
+                unique.setdefault(contract_type, {
+                    "contract_type": contract_type,
                     "contract_category": str(item.get("contract_category") or ""),
                     "expiry_type": str(item.get("expiry_type") or ""),
                     "barriers": item.get("barriers", 0),
@@ -124,31 +117,19 @@ def capabilities(request):
                     "sentiment": str(item.get("sentiment") or ""),
                     "underlying_symbol": str(item.get("underlying_symbol") or symbol),
                 })
-            # Deriv's current ticks_history API accepts integer granularity;
-            # the UI only needs common presets, while the broker remains the
-            # authority that accepts/rejects the actual candle request.
+
+            contracts = list(unique.values())
             payload = {
                 "symbol": symbol,
                 "contracts": contracts,
-                "contract_types": sorted({c["contract_type"] for c in contracts}),
+                "contract_types": sorted(unique),
                 "trade_types": sorted({c["contract_category"] for c in contracts if c["contract_category"]}),
                 "timeframe_capability": {"granularity": "broker_defined_integer_seconds", "minimum_seconds": 1},
             }
             cache.set(cache_key, payload, timeout=15)
+
         if not payload.get("contracts"):
             return Response({"detail": "Deriv reports no contracts for this instrument.", "symbol": symbol}, status=status.HTTP_409_CONFLICT)
-        return Response({
-            "status": "ok",
-            "source": "connected_broker",
-            "broker": account.broker.name,
-            "account_id": account.account_id,
-            **payload,
-        })
+        return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,**payload})
     except Exception as exc:
-        return Response({
-            "status": "error",
-            "code": "BROKER_CAPABILITIES_UNAVAILABLE",
-            "detail": str(exc),
-            "source": "connected_broker",
-            "symbol": symbol,
-        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({"status":"error","code":"BROKER_CAPABILITIES_UNAVAILABLE","detail":str(exc),"source":"connected_broker","symbol":symbol}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
