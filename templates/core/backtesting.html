@@ -6,11 +6,11 @@
 <section class="backtest-center" data-backtest-center>
   <header class="enterprise-hero">
     <div><p class="eyebrow">RESEARCH</p><h1>Backtesting</h1><p class="hero-copy">Test a saved strategy against broker-ingested historical market data for the exact start and end time you specify.</p></div>
-    <div class="hero-actions"><a class="btn ghost" href="/strategies/">Strategies</a><a class="btn primary" href="/trading/">Open broker demo/live terminal</a></div>
+    <div class="hero-actions"><a class="btn ghost" href="/strategies/">Strategies</a></div>
   </header>
   <section class="kpi-grid compact" aria-label="Backtest status"><article class="kpi-card"><span>Saved tests</span><strong data-backtest-count>—</strong></article><article class="kpi-card"><span>Completed</span><strong data-backtest-completed>—</strong></article><article class="kpi-card"><span>Running</span><strong data-backtest-running>—</strong></article><article class="kpi-card"><span>Failed</span><strong data-backtest-failed>—</strong></article></section>
-  <section class="workspace-grid two">
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">CONFIGURE</p><h2>Historical backtest</h2><p>Dates are not decorative: the engine uses them to bound the historical broker data.</p></div></div>
+  <section class="workspace-grid one">
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">CONFIGURE</p><h2>Historical backtest</h2><p>Dates are used as a hard historical-data boundary; the engine never substitutes a different interval.</p></div></div>
       <form class="backtest-form" data-backtest-form>
         <label>Strategy<select name="strategy_id" required><option value="">Loading strategy catalog…</option></select></label>
         <label>Symbol<select name="symbol" required><option value="">Loading broker instruments…</option></select></label>
@@ -22,15 +22,10 @@
       </form>
       <div class="backtest-range-note" data-backtest-range>Choose a broker instrument, timeframe, and exact historical interval.</div>
     </article>
-    <article class="panel broker-demo-panel"><div class="panel-head"><div><p class="eyebrow">EXECUTION</p><h2>Use the broker account for trading</h2></div><span class="badge">Broker-backed</span></div>
-      <p>Backtesting is historical research. It does not create a second synthetic account or duplicate your broker's demo environment.</p>
-      <ul><li><strong>Backtest:</strong> historical broker data + saved strategy + exact date range.</li><li><strong>Demo trading:</strong> connect the broker's demo account and trade through the Trading Terminal.</li><li><strong>Live trading:</strong> use a live broker account only when you intentionally enable live execution.</li></ul>
-      <a class="btn ghost" href="/trading/">Go to Trading Terminal</a>
-    </article>
   </section>
   <section class="panel"><div class="panel-head"><div><p class="eyebrow">RESULTS</p><h2>Backtest history</h2></div><div class="panel-actions"><input class="search-input" data-backtest-search placeholder="Search strategy or symbol" aria-label="Search backtests"><button class="btn ghost" type="button" data-backtest-refresh>Refresh</button></div></div><div class="table-wrap"><table class="enterprise-table" data-backtest-table><thead></thead><tbody><tr><td>Loading backtests…</td></tr></tbody></table></div></section>
-  <section class="panel research-notice"><div class="panel-head"><div><p class="eyebrow">RESEARCH GUARDRAIL</p><h2>Backtest ≠ live performance</h2><p>Results are only as good as the historical broker data available for the selected instrument/timeframe/range. Historical performance does not guarantee live returns.</p></div></div></section>
+  <section class="panel research-notice"><div class="panel-head"><div><p class="eyebrow">RESEARCH GUARDRAIL</p><h2>Backtest ≠ live performance</h2><p>Results are historical research. Completed results can contribute to strategy-confidence scoring and explicitly research-only AI training datasets; they never grant live-trading authority.</p></div></div></section>
 </section>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/backtesting.css' %}"><style>.backtest-center .panel-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.backtest-center .research-notice{margin-bottom:24px}.backtest-center .research-notice p{max-width:760px}.backtest-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.backtest-form label{display:grid;gap:7px;min-width:0}.backtest-form button{grid-column:1/-1}.backtest-form select,.backtest-form input{width:100%;min-width:0}.broker-demo-panel ul{margin:16px 0;padding-left:20px}.backtest-range-note{margin-top:14px;padding:10px 12px;border-radius:10px;background:rgba(127,127,127,.08)}@media(max-width:700px){.backtest-form{grid-template-columns:1fr}}</style>{% endblock %}
-{% block extra_js %}<script src="{% static 'js/backtesting_workspace_fix.js' %}?v=20260829-broker-range1" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/backtesting.css' %}"><style>.backtest-center .panel-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.backtest-center .research-notice{margin-bottom:24px}.backtest-center .research-notice p{max-width:760px}.backtest-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.backtest-form label{display:grid;gap:7px;min-width:0}.backtest-form button{grid-column:1/-1}.backtest-form select,.backtest-form input{width:100%;min-width:0}.backtest-range-note{margin-top:14px;padding:10px 12px;border-radius:10px;background:rgba(127,127,127,.08)}@media(max-width:700px){.backtest-form{grid-template-columns:1fr}}</style>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/backtesting_workspace_fix.js' %}?v=20260829-broker-range2" defer></script>{% endblock %}
