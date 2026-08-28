@@ -14,7 +14,7 @@ class DerivOAuthStartRegressionTests(TestCase):
         return_value="https://auth.deriv.test/oauth2/auth?response_type=code",
     )
     def test_broker_connect_persists_oauth_state_and_returns_redirect(self, create_authorization_url):
-        response = self.client.get("/brokers/connect/?broker=deriv")
+        response = self.client.get("/brokers/connect/?broker=deriv", HTTP_HOST="algobot.dpdns.org", secure=True)
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "https://auth.deriv.test/oauth2/auth?response_type=code")
