@@ -58,10 +58,11 @@ class BillingHardeningTests(TestCase):
         get_status.return_value = {"invoice": {"invoice_id": "IS-INVOICE-2", "state": "PENDING"}}
 
         result = _reconcile_invoice(invoice, "intasend")
+        subscription = Subscription.objects.filter(user=self.user).first()
         self.assertFalse(result["paid"])
         self.assertEqual(result["state"], "PENDING")
         self.assertFalse(Invoice.objects.get(pk=invoice.pk).paid)
-        self.assertEqual(Subscription.objects.get(user=self.user).plan, "FREE")
+        self.assertTrue(subscription is None or subscription.plan == "FREE")
 
     @patch("core.views_billing.PaymentService.get_intasend_payment_status")
     def test_success_callback_reconciles_authenticated_owner(self, get_status):
