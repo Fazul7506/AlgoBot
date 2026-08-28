@@ -130,14 +130,23 @@
     try {
       const validationContext = {...(window.__algobotAiOrderContext || {}), broker_source: 'connected_broker', contract_type: contractType, underlying_symbol: symbol, selected_strategy: form.get('strategy') || null};
       const payload = {broker_account: account.id, symbol, direction, order_type: form.get('order_type') || 'market', stake: form.get('stake'), strategy: form.get('strategy') || '', client_request_id: `ui-${crypto.randomUUID?.() || Date.now()}`, validation_context: validationContext};
-      const order = await api('/trading/actions/order/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 25000);
+      const order = await api('/api/orders/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 25000);
       renderOrderResult(`Order ${order.broker_reference || order.id || ''} ${order.status || 'queued'}.`, 'success');
       window.__algobotAiOrderContext = null; await loadRecords();
     } catch (e) {
-      if (e?.code === 'EDGE_CHALLENGE' || e?.isEdgeChallenge) renderOrderResult('Order status unknown: the production edge blocked the response. Check Recent orders before retrying to prevent a duplicate trade.', 'edge');
+      if (e?.code === 'EDGE_CHALLENGE' || e?.isEdgeChallenge) renderOrderResult('Order was blocked by the production edge before Django could return a result. The canonical API endpoint was used; check Recent orders before retrying.', 'edge');
       else renderOrderResult(`Order rejected: ${e.message || 'request failed'}`, 'error');
     }
     finally { if (button) { button.disabled = false; button.textContent = 'Place order'; } }
+  }
+
+  function applyAiDirection(data = {}) {
+    const prediction = String(data?.prediction?.prediction || data?.prediction?.direction || '').toUpperCase();
+    const recommendation = String(data?.recommendation?.recommendation || data?.recommendation?.action || '').toUpperCase();
+    const next = ['BUY','SELL'].includes(recommendation) ? recommendation : (['BUY','SELL'].includes(prediction) ? prediction : null);
+    if (!next) return;
+    direction = next;
+    document.querySelectorAll('[data-direction]').forEach(x => x.classList.toggle('active', x.dataset.direction === direction));
   }
 
   function boot() {
@@ -149,6 +158,7 @@
     $('#symbol')?.addEventListener('change', () => { loadQuote(); loadRecords(); renderWatchlist($('[data-watchlist-search]')?.value || ''); window.dispatchEvent(new CustomEvent('algobot:market-symbol-changed', {detail:{symbol:$('#symbol')?.value || ''}})); });
     $('#account')?.addEventListener('change', () => { renderAccount(selectedAccount()); loadQuote(); loadRecords(); });
     document.querySelectorAll('[data-direction]').forEach(b => b.addEventListener('click', () => { direction = b.dataset.direction; document.querySelectorAll('[data-direction]').forEach(x => x.classList.toggle('active', x === b)); }));
+    window.addEventListener('algobot:ai-analysis-updated', e => applyAiDirection(e.detail || {}));
     window.addEventListener('algobot:backend-accounts-loaded', e => { renderAccounts(e.detail); loadQuote(); loadRecords(); });
     window.addEventListener('algobot:account-synced', e => { renderAccounts((window.AlgoBotBrokerAccounts || accounts).map(a => String(a.id) === String(e.detail?.id) ? e.detail : a)); loadQuote(); loadRecords(); window.dispatchEvent(new CustomEvent('algobot:market-symbol-changed', {detail:{symbol:$('#symbol')?.value || ''}})); });
     window.AlgoBotBrokerState?.subscribe(() => { loadQuote(); loadRecords(); });
