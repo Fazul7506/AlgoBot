@@ -67,26 +67,15 @@ class Phase19DeveloperPlatformTests(TestCase):
         self.assertEqual(Webhook.objects.count(), 1)
 
     def test_webhook_creation_requires_webhook_scope(self):
-        limited = APIKey.objects.create(
-            user=self.user,
-            name="read-only",
-            key="ak_read_only",
-            secret=self.key.secret,
-            permissions=["read"],
-        )
-        self.client.credentials(HTTP_X_API_KEY=limited.key, HTTP_X_API_SECRET=self.secret)
+        limited_key, limited_secret = APIKeyService().create(self.user, "read-only", ["read"])
+        self.client.credentials(HTTP_X_API_KEY=limited_key.key, HTTP_X_API_SECRET=limited_secret)
         response = self.client.post("/api/developer/webhooks/create/", {"url": "https://example.com/hook", "events": ["test"]}, format="json")
         self.assertEqual(response.status_code, 403)
 
     def test_webhook_rejects_private_destinations(self):
         response = self.client.post("/api/developer/webhooks/create/", {"url": "http://127.0.0.1/hook", "events": ["test"]}, format="json")
-        self.assertEqual(response.status_code, 201)
-
-        # The read-only key does not have webhook scope; use the original scoped key.
-        self.client.credentials(HTTP_X_API_KEY=self.key.key, HTTP_X_API_SECRET=self.secret)
-        response = self.client.post("/api/developer/webhooks/create/", {"url": "http://127.0.0.1/hook", "events": ["test"]}, format="json")
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(Webhook.objects.count(), 1)
+        self.assertEqual(Webhook.objects.count(), 0)
 
     def test_docs_sdk_analytics_and_sandbox(self):
         for url in ["/api/developer/docs/", "/api/developer/sdk/", "/api/developer/sandbox/"]:
