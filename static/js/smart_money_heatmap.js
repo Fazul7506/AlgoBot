@@ -25,7 +25,7 @@
     status.textContent = 'Loading…'; status.className = 'ds-status ds-status--pending'; refresh.disabled = true;
     grid.innerHTML = '<div class="hm-empty">Refreshing market intelligence…</div>';
     try {
-      const response = await fetch(`/api/indicators/dashboard/heatmap/?timeframe=${encodeURIComponent(timeframe.value)}`, {credentials:'same-origin', headers:{Accept:'application/json'}});
+      const response = await fetch(`/api/market/indicator-dashboard/heatmap/?timeframe=${encodeURIComponent(timeframe.value)}`, {credentials:'same-origin', headers:{Accept:'application/json'}});
       if (!response.ok) throw new Error(`Heatmap request failed (${response.status})`);
       const rows = await response.json();
       if (!Array.isArray(rows) || !rows.length) { grid.innerHTML = '<div class="hm-empty">No active market data is available for this timeframe.</div>'; status.textContent = 'No data'; status.className='ds-status ds-status--degraded'; return; }
