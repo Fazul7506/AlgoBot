@@ -25,9 +25,10 @@
   function renderKeys() {
     const target = $('[data-dev-keys]');
     if (!target) return;
-    target.innerHTML = keys.length ? keys.map(k => `<div class="dev-row"><div><strong>${esc(k.name)}</strong><small>${esc(k.key)}</small><span class="dev-meta">${esc((k.permissions || []).join(', '))} · ${esc(k.status)}${k.last_used ? ` · used ${esc(new Date(k.last_used).toLocaleString())}` : ''}</span></div><div class="dev-actions"><button type="button" data-rotate="${esc(k.id)}">Rotate</button><button type="button" data-revoke="${esc(k.id)}" ${k.status !== 'active' ? 'disabled' : ''}>Revoke</button></div></div>`).join('') : '<div class="dev-empty">No API keys yet. Create one to start integrating AlgoBot.</div>';
+    target.innerHTML = keys.length ? keys.map(k => `<div class="dev-row"><div><strong>${esc(k.name)}</strong><small>${esc(k.key)}</small><span class="dev-meta">${esc((k.permissions || []).join(', '))} · ${esc(k.status)}${k.last_used ? ` · used ${esc(new Date(k.last_used).toLocaleString())}` : ''}</span></div><div class="dev-actions"><button type="button" data-rotate="${esc(k.id)}" ${k.status !== 'active' ? 'disabled' : ''}>Rotate</button><button type="button" data-revoke="${esc(k.id)}" ${k.status !== 'active' ? 'disabled' : ''}>Revoke</button><button type="button" data-delete="${esc(k.id)}">Delete</button></div></div>`).join('') : '<div class="dev-empty">No API keys yet. Create one to start integrating AlgoBot.</div>';
     $$('[data-rotate]').forEach(b => b.addEventListener('click', () => rotateKey(b.dataset.rotate)));
     $$('[data-revoke]').forEach(b => b.addEventListener('click', () => revokeKey(b.dataset.revoke)));
+    $$('[data-delete]').forEach(b => b.addEventListener('click', () => deleteKey(b.dataset.delete)));
   }
 
   async function loadKeys() {
@@ -70,6 +71,13 @@
   async function revokeKey(id) {
     if (!confirm('Revoke this API key? Existing clients using it will stop authenticating.')) return;
     try { await api(`/api/developer/keys/${encodeURIComponent(id)}/revoke/`, {method:'POST', headers:csrfHeaders(), body:'{}'}); await loadKeys(); notice('API key revoked.', 'success'); }
+    catch (error) { notice(error.message, 'error'); }
+  }
+
+  async function deleteKey(id) {
+    const key = keys.find(item => String(item.id) === String(id));
+    if (!confirm(`Delete “${key?.name || 'this API key'}”? This permanently removes the credential and cannot be undone.`)) return;
+    try { await api(`/api/developer/keys/${encodeURIComponent(id)}/delete/`, {method:'DELETE', headers:csrfHeaders()}); await loadKeys(); notice('API key deleted.', 'success'); }
     catch (error) { notice(error.message, 'error'); }
   }
 
