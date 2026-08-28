@@ -26,6 +26,7 @@
 
     text('[data-ai-prediction]', predictionLabel);
     text('[data-ai-recommendation]', recommendationLabel);
+    text('[data-recommended]', recommendationLabel);
     text('[data-ai-confidence-card]', confidence);
     text('[data-ai-confidence]', confidence);
     text('[data-ai-regime]', regimeLabel);
@@ -46,6 +47,7 @@
       ai_regime: regimeLabel,
       ai_actionable: actionable,
       ai_source: data?.market_context_source ? `decision_engine:${data.market_context_source}` : 'decision_engine',
+      timeframe: data?.timeframe || 'M1',
     };
     window.dispatchEvent(new CustomEvent('algobot:ai-gate-updated', {detail:{actionable, confidence:confidenceNumber, recommendation:recommendationLabel, prediction:predictionLabel}}));
   }
@@ -70,12 +72,13 @@
     } catch (error) {
       text('[data-ai-prediction]', 'Unavailable');
       text('[data-ai-recommendation]', 'Unavailable');
+      text('[data-recommended]', 'Unavailable');
       text('[data-ai-confidence-card]', 'Unavailable');
       text('[data-ai-confidence]', 'Unavailable');
       text('[data-ai-regime]', 'Unavailable');
       window.__algobotAiOrderContext = null;
       const message = String(error?.message || 'AI analysis is temporarily unavailable.');
-      show(message.includes('Production edge security challenged') || message.includes('<html') || message.includes('Just a moment') ? 'AI analysis is temporarily unavailable at the production edge. Live execution remains blocked until a verified AI decision is available.' : message);
+      show(message.includes('Production edge security challenged') || message.includes('<html') || message.includes('Just a moment') ? 'AI analysis is temporarily unavailable at the production edge. Verify the production WAF/Challenge rule for authenticated API POST requests.' : message);
       window.dispatchEvent(new CustomEvent('algobot:ai-gate-updated', {detail:{actionable:false, error:true}}));
     } finally {
       analysing = false;
@@ -98,6 +101,7 @@
       scheduledSymbol = '';
       text('[data-ai-prediction]', 'Analysing…');
       text('[data-ai-recommendation]', 'Waiting for decision');
+      text('[data-recommended]', 'Waiting');
       text('[data-ai-confidence-card]', '—');
       text('[data-ai-confidence]', 'Not analysed');
       text('[data-ai-regime]', 'Waiting for analysis');
