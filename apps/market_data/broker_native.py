@@ -1,9 +1,9 @@
 """Connected-broker market capabilities.
 
-Deriv is the authoritative source for the market universe and the contracts
-available for the selected underlying. Broker-specific behavior is routed
-through the canonical broker adapter so the market-data layer remains the
-single application boundary for broker data.
+Deriv is the authoritative source for the market universe and contracts. Public
+contract metadata is used for capability discovery because ``contracts_for``
+is broker catalogue data and does not require an authenticated trading socket.
+Actual order execution remains authenticated and broker/risk gated.
 """
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from apps.brokers.models import BrokerAccount
-from apps.brokers.services import BrokerRegistry
 from .deriv_sync import _request
 
 CATALOGUE_CACHE = "algobot:broker:deriv:active-symbols"
@@ -61,7 +60,6 @@ def catalogue(request):
         return Response({"detail": "Connect a broker before loading its market catalogue."}, status=status.HTTP_409_CONFLICT)
     if account.broker.broker_type != "deriv":
         return Response({"detail": f"Live market catalogue is not implemented for {account.broker.name} yet."}, status=status.HTTP_409_CONFLICT)
-
     try:
         payload = cache.get(CATALOGUE_CACHE)
         if payload is None:
@@ -80,6 +78,14 @@ def catalogue(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def capabilities(request):
+    """Return fast broker-authoritative contract capabilities for the selected symbol.
+
+    Capability discovery is deliberately decoupled from authenticated execution:
+    Deriv's public ``contracts_for`` response is sufficient to populate the
+    terminal selector. This avoids the extra OAuth/OTP WebSocket handshake that
+    previously caused the UI to sit on "Loading broker contracts…" until the
+    frontend timeout expired.
+    """
     symbol = str(request.query_params.get("symbol") or "").strip()
     account = _account(request.user)
     if not account:
@@ -93,15 +99,11 @@ def capabilities(request):
     try:
         payload = cache.get(cache_key)
         if payload is None:
-            adapter = BrokerRegistry().adapter(account.broker, account)
-            raw_contracts = asyncio.run(asyncio.wait_for(adapter.get_trade_capabilities(symbol), timeout=7.0))
+            response = _public_deriv({"contracts_for": symbol})
+            root = response.get("contracts_for") or {}
+            raw_contracts = root.get("available") or []
             if not isinstance(raw_contracts, list):
                 raise RuntimeError("Broker returned an invalid contract capability payload")
-
-            # Deriv can expose several records for the same contract_type with
-            # different expiry/barrier metadata. The terminal's selector is a
-            # contract-type selector, so collapse exact type duplicates while
-            # retaining the first broker-authoritative metadata record.
             unique = {}
             for item in raw_contracts:
                 if not isinstance(item, dict) or not item.get("contract_type"):
@@ -117,7 +119,6 @@ def capabilities(request):
                     "sentiment": str(item.get("sentiment") or ""),
                     "underlying_symbol": str(item.get("underlying_symbol") or symbol),
                 })
-
             contracts = list(unique.values())
             payload = {
                 "symbol": symbol,
@@ -126,8 +127,7 @@ def capabilities(request):
                 "trade_types": sorted({c["contract_category"] for c in contracts if c["contract_category"]}),
                 "timeframe_capability": {"granularity": "broker_defined_integer_seconds", "minimum_seconds": 1},
             }
-            cache.set(cache_key, payload, timeout=15)
-
+            cache.set(cache_key, payload, timeout=30)
         if not payload.get("contracts"):
             return Response({"detail": "Deriv reports no contracts for this instrument.", "symbol": symbol}, status=status.HTTP_409_CONFLICT)
         return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,**payload})
