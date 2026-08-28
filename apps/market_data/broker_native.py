@@ -99,7 +99,7 @@ def capabilities(request):
     try:
         payload = cache.get(cache_key)
         if payload is None:
-            response = awaitable = _public_deriv({"contracts_for": symbol})
+            response = _public_deriv({"contracts_for": symbol})
             root = response.get("contracts_for") or {}
             raw_contracts = root.get("available") or []
             if not isinstance(raw_contracts, list):
