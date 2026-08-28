@@ -62,6 +62,7 @@ urlpatterns = [
     path('trading/', login_required(trading_page), name='trading_page'),
     path('backtesting/', login_required(backtesting_page), name='backtesting_page'),
     path('predictions/', login_required(predictions_page), name='predictions_page'),
+    path('model-lab/', login_required(lambda request: render(request, 'core/model_lab.html')), name='model_lab_page'),
     path('performance/', login_required(performance_page), name='performance_page'),
     path('settings/', login_required(settings_page), name='settings_page'),
     path('profile/', login_required(profile_page), name='profile_page'),
