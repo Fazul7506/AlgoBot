@@ -30,6 +30,10 @@ class DashboardViewSet(viewsets.ViewSet):
     def account_overview(self, request):
         """
         Get account-level overview: balance, active trades, win rate, etc.
+
+        This endpoint is strictly broker-backed. Paper/simulation balances are
+        intentionally excluded so the live account view can never present
+        simulated capital as real broker capital.
         """
         try:
             user = request.user
@@ -82,10 +86,6 @@ class DashboardViewSet(viewsets.ViewSet):
                         'total_pnl': round(total_pnl, 2),
                         'avg_pnl_per_trade': round(avg_pnl, 2),
                     },
-                    'paper_trading': {
-                        'enabled': getattr(getattr(user, 'bot_settings', None), 'is_paper_trading', False),
-                        'balance': getattr(getattr(user, 'bot_settings', None), 'paper_balance', 0),
-                    }
                 }
             }, status=status.HTTP_200_OK)
         except Exception as e:
