@@ -14,9 +14,11 @@ from .security import *  # noqa: F403,F401
 from .utils import env, env_bool, env_list, validate_required_settings
 
 DEBUG = False
-ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", [])
-CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", [])
-BASE_URL = env("BASE_URL", "").rstrip("/")
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["algobot.dpdns.org", "api.algobot.dpdns.org"])
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org"])
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", ["https://algobot.dpdns.org"])
+CORS_ALLOW_CREDENTIALS = True
+BASE_URL = env("BASE_URL", "https://algobot.dpdns.org").rstrip("/")
 ALGO_API_BASE_URL = env("ALGO_API_BASE_URL", "https://api.algobot.dpdns.org").rstrip("/")
 
 # Render terminates TLS at its edge and forwards requests to the application
@@ -36,9 +38,6 @@ CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", "Lax")
-# The UI and API are sibling subdomains. Sharing these cookies lets the
-# authenticated browser call the dedicated API hostname without moving tokens
-# into JavaScript storage. The value is deployment-configurable for staging.
 SESSION_COOKIE_DOMAIN = env("SESSION_COOKIE_DOMAIN", ".algobot.dpdns.org")
 CSRF_COOKIE_DOMAIN = env("CSRF_COOKIE_DOMAIN", ".algobot.dpdns.org")
 
@@ -77,7 +76,6 @@ validate_required_settings(
 if SECRET_KEY in {"django-insecure-local-development-only", "change-me"}:
     raise RuntimeError("Production SECRET_KEY must be explicitly configured.")
 
-# Optional Sentry; absence is allowed until the real DSN is supplied.
 SENTRY_DSN = env("SENTRY_DSN", "")
 if SENTRY_DSN:
     import sentry_sdk
