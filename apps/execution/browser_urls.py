@@ -5,6 +5,10 @@ browser_preview_view = OrderViewSet.as_view({'post': 'preview'})
 browser_order_view = OrderViewSet.as_view({'post': 'create'})
 
 urlpatterns = [
+    # Clean browser-facing paths avoid legacy /actions/ edge/WAF rules while
+    # keeping the old URLs available for existing clients.
+    path('preview/', browser_preview_view, name='browser-trading-preview-clean'),
+    path('order/', browser_order_view, name='browser-trading-order-clean'),
     path('actions/preview/', browser_preview_view, name='browser-trading-preview'),
     path('actions/order/', browser_order_view, name='browser-trading-order'),
 ]
