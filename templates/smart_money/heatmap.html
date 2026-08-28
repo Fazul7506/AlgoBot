@@ -1,5 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Heatmap | AlgoBot Enterprise{% endblock %}
+{% load static %}
+{% block title %}Market Heatmap | AlgoBot{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="Heatmap" module="Smart Money" page_id="smart_money-heatmap" %}
+<section class="smart-money-heatmap" data-heatmap-root>
+  <header class="hm-header">
+    <div><p class="eyebrow">Smart Money Intelligence</p><h1>Market heatmap</h1><p>Scan relative momentum, signal direction and confidence across the most active instruments.</p></div>
+    <div class="hm-controls"><label class="ds-field"><span>Timeframe</span><select data-heatmap-timeframe><option>H1</option><option>M15</option><option>M30</option><option>H4</option><option>D1</option></select></label><button type="button" data-heatmap-refresh><span class="material-symbols-rounded">refresh</span> Refresh</button></div>
+  </header>
+  <section class="hm-panel ds-card" aria-live="polite">
+    <div class="section-heading"><div><h2>Signal matrix</h2><p>Cells combine RSI and signal confidence. Green indicates bullish pressure; red indicates bearish pressure; neutral values stay centred.</p></div><span class="ds-status ds-status--ready" data-heatmap-status>Ready</span></div>
+    <div class="hm-grid" data-heatmap-grid><div class="hm-empty">Loading market intelligence…</div></div>
+  </section>
+</section>
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/smart_money_heatmap.js' %}?v=20260828-heatmap1" defer></script>{% endblock %}
