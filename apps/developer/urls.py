@@ -8,6 +8,7 @@ urlpatterns = [
     path("keys/create/", views.key_create, name="key_create"),
     path("keys/<int:pk>/rotate/", views.key_rotate, name="key_rotate"),
     path("keys/<int:pk>/revoke/", views.key_revoke, name="key_revoke"),
+    path("keys/<int:pk>/delete/", views.key_delete, name="key_delete"),
     path("plugins/", views.plugins, name="plugins"),
     path("plugins/install/", views.install_plugin, name="plugin_install"),
     path("webhooks/", views.webhooks, name="webhooks"),
