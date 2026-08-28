@@ -1,1 +1,1 @@
-.branding-module { display: block; }
+.branding-module{display:grid;gap:18px}.branding-module .panel,.branding-module article{background:var(--panel);border:1px solid var(--ui-border);border-radius:18px;padding:18px}.branding-module img{max-width:100%;height:auto}.branding-module input,.branding-module select,.branding-module textarea{width:100%;box-sizing:border-box}.branding-module .btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}

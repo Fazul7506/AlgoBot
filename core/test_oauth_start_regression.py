@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 class DerivOAuthStartRegressionTests(TestCase):
     @override_settings(
         DEBUG=False,
+        ALLOWED_HOSTS=["algobot.dpdns.org"],
         DERIV_OAUTH_CLIENT_ID="oauth-client-test",
         DERIV_REDIRECT_URI="https://algobot.dpdns.org/callback/",
     )
@@ -14,7 +15,7 @@ class DerivOAuthStartRegressionTests(TestCase):
         return_value="https://auth.deriv.test/oauth2/auth?response_type=code",
     )
     def test_broker_connect_persists_oauth_state_and_returns_redirect(self, create_authorization_url):
-        response = self.client.get("/brokers/connect/?broker=deriv")
+        response = self.client.get("/brokers/connect/?broker=deriv", HTTP_HOST="algobot.dpdns.org", secure=True)
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "https://auth.deriv.test/oauth2/auth?response_type=code")

@@ -1,1 +1,1 @@
-.analytics-module { display: block; }
+.analytics-module,.analytics-dashboard{width:100%;}.analytics-dashboard .enterprise-table{min-width:420px}.analytics-dashboard .kpi-card strong{font-variant-numeric:tabular-nums}.analytics-dashboard .chart-shell{min-height:260px}.analytics-dashboard .panel-head{gap:14px}.analytics-dashboard .btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}.analytics-dashboard .empty-state{color:var(--muted);padding:24px;text-align:center}

@@ -1,12 +1,57 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Trade history | AlgoBot{% endblock %}
-{% block mobile_title %}Trade history{% endblock %}
+{% block title %}Trade Journal | AlgoBot{% endblock %}
+{% block mobile_title %}Trade Journal{% endblock %}
 {% block content %}
 <section class="data-page panel" data-trade-history-page>
-  <header class="page-heading"><div><p class="eyebrow">Broker execution</p><h1>Trade history</h1><p>Confirmed execution reports from the broker-backed execution API.</p></div><div><a class="btn" href="/orders/">Orders</a><a class="btn primary" href="/trading/">Trade</a></div></header>
-  <div class="kpi-grid compact"><article class="kpi-card"><span>Executions</span><strong data-history-count>—</strong></article><article class="kpi-card"><span>Status</span><strong data-history-status>Waiting</strong></article><article class="kpi-card"><span>Last update</span><strong data-history-updated>—</strong></article><article class="kpi-card"><span>Source</span><strong>Broker</strong></article></div>
-  <section class="panel"><div class="panel-head"><div><h2>Execution reports</h2><p>Only backend execution records are displayed; the browser never fabricates fills.</p></div><input type="search" data-history-search placeholder="Search executions" aria-label="Search executions"></div><div class="table-wrap"><table class="enterprise-table" data-history-table><thead></thead><tbody><tr><td>Connect a broker to load execution history.</td></tr></tbody></table></div></section>
+  <header class="page-heading">
+    <div>
+      <p class="eyebrow">Execution review</p>
+      <h1>Trade Journal</h1>
+      <p>Confirmed execution reports and broker-backed trade records for this account. Every row comes from authenticated backend data.</p>
+    </div>
+    <div class="page-actions">
+      <a class="btn" href="/orders/">Orders</a>
+      <a class="btn primary" href="/trading/">Trade</a>
+    </div>
+  </header>
+
+  {% if not has_broker_connection %}
+  <section class="panel" data-journal-connection-state>
+    <div class="empty-state">
+      <span class="eyebrow">Broker connection required</span>
+      <h2>Connect a broker to start your journal</h2>
+      <p>The journal never creates fills or trade history in the browser. Connect an eligible broker account to review confirmed execution activity.</p>
+      <a class="btn primary" href="/brokers/connect/">Connect a broker</a>
+    </div>
+  </section>
+  {% endif %}
+
+  <div class="kpi-grid compact">
+    <article class="kpi-card"><span>Recorded trades</span><strong data-history-count>{{ execution_count }}</strong></article>
+    <article class="kpi-card"><span>Connection</span><strong data-history-status>{% if has_broker_connection %}Connected{% else %}Not connected{% endif %}</strong></article>
+    <article class="kpi-card"><span>Last refresh</span><strong data-history-updated>—</strong></article>
+    <article class="kpi-card"><span>Source</span><strong>Backend</strong></article>
+  </div>
+
+  <section class="panel" {% if not has_broker_connection %}hidden{% endif %} data-journal-workspace>
+    <div class="panel-head">
+      <div><h2>Trade records</h2><p>Filter, inspect, and export the authenticated execution record. No synthetic P&amp;L or broker fills are inferred.</p></div>
+      <button class="btn" type="button" data-history-export>Export CSV</button>
+    </div>
+    <div class="filter-grid">
+      <label>Search<input type="search" data-history-search placeholder="Symbol, strategy, order ID"></label>
+      <label>Status<select data-history-status-filter><option value="">All statuses</option><option value="executed">Executed</option><option value="accepted">Accepted</option><option value="sent">Sent</option><option value="failed">Failed</option><option value="cancelled">Cancelled</option></select></label>
+      <label>Direction<select data-history-direction-filter><option value="">All directions</option><option value="buy">Buy</option><option value="sell">Sell</option></select></label>
+    </div>
+    <div class="table-wrap">
+      <table class="enterprise-table" data-history-table>
+        <thead><tr><th>Time</th><th>Symbol</th><th>Direction</th><th>Strategy</th><th>Stake</th><th>Price</th><th>Status</th><th>Broker ref</th></tr></thead>
+        <tbody><tr><td colspan="8">Loading authenticated trade records…</td></tr></tbody>
+      </table>
+    </div>
+    <p class="form-help" data-history-message aria-live="polite"></p>
+  </section>
 </section>
 {% endblock %}
 {% block extra_js %}<script src="{% static 'js/trade_history.js' %}" defer></script>{% endblock %}

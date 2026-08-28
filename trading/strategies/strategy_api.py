@@ -17,6 +17,19 @@ class StrategyViewSet(viewsets.ModelViewSet):
             return Strategy.objects.filter(is_active=True).order_by('-updated_at')
         return Strategy.objects.all().order_by('-updated_at')
 
+    def get_object(self):
+        """Resolve both legacy numeric IDs and Builder strategy names."""
+        lookup = str(self.kwargs.get(self.lookup_field, '')).strip()
+        if lookup and not lookup.isdigit():
+            queryset = self.get_queryset()
+            obj = queryset.filter(name=lookup).first()
+            if obj is None:
+                from django.http import Http404
+                raise Http404
+            self.check_object_permissions(self.request, obj)
+            return obj
+        return super().get_object()
+
     @action(detail=False, methods=['get'])
     def available(self, request):
         return Response({
@@ -44,7 +57,10 @@ class StrategyViewSet(viewsets.ModelViewSet):
         symbol = request.data.get('symbol', 'R_75')
         timeframe = request.data.get('timeframe', 'M1')
         data_type = request.data.get('data_type', 'auto')
-        min_history = int(request.data.get('min_history', 20))
+        try:
+            min_history = int(request.data.get('min_history', 20))
+        except (TypeError, ValueError):
+            return Response({'detail': 'min_history must be an integer.'}, status=status.HTTP_400_BAD_REQUEST)
         result = StrategyService.run_backtest(
             strategy,
             symbol=symbol,
@@ -69,8 +85,11 @@ class StrategyViewSet(viewsets.ModelViewSet):
         timeframe = request.data.get('timeframe', 'M1')
         param_grid = request.data.get('param_grid', {})
         walk_forward = request.data.get('walk_forward')
-        top_n = int(request.data.get('top_n', 3))
-        min_history = int(request.data.get('min_history', 20))
+        try:
+            top_n = int(request.data.get('top_n', 3))
+            min_history = int(request.data.get('min_history', 20))
+        except (TypeError, ValueError):
+            return Response({'detail': 'top_n and min_history must be integers.'}, status=status.HTTP_400_BAD_REQUEST)
         result = StrategyService.optimize_strategy(
             strategy,
             symbol=symbol,

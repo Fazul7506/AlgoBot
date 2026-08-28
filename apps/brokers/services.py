@@ -88,8 +88,24 @@ class LatencyService:
         return latency
 
 
+class MarketDataFreshnessService:
+    """Authoritative freshness gate for execution; never fabricates a quote."""
+    def __init__(self, max_age_seconds=None):
+        self.max_age_seconds = int(max_age_seconds if max_age_seconds is not None else getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30))
+
+    def latest(self, symbol):
+        from apps.market_data.models import MarketSnapshot
+        snapshot = MarketSnapshot.objects.filter(symbol__symbol=symbol).first()
+        if snapshot is None:
+            raise BrokerRoutingError(f'No persisted market snapshot is available for {symbol}')
+        age = max(0, (timezone.now() - snapshot.timestamp).total_seconds())
+        if age > self.max_age_seconds:
+            raise BrokerRoutingError(f'Market data for {symbol} is stale ({int(age)}s old; limit {self.max_age_seconds}s)')
+        return snapshot
+
+
 class SmartOrderRouter:
-    def route(self, user, symbol=None, mode='latency_based', preferred_account=None):
+    def route(self, user, symbol=None, mode='priority', preferred_account=None):
         qs = BrokerAccount.objects.select_related('broker').filter(user=user, status='active', broker__status='active')
         if preferred_account: qs = qs.filter(pk=preferred_account.pk)
         candidates = [account for account in qs if account.is_connection_eligible]
@@ -103,12 +119,26 @@ class SmartOrderRouter:
 
 class OrderManagementSystem:
     TERMINAL_STATUSES = {'filled', 'executed', 'partially_filled', 'rejected', 'cancelled', 'expired', 'closed', 'failed', 'reconciled'}
+    RETRYABLE_STATUSES = {'failed', 'rejected'}
     def create(self, user, **data):
         account = data.get('account') or SmartOrderRouter().route(user, data.get('symbol'))
         if account.user_id != user.id: raise BrokerRoutingError('The selected broker account does not belong to this user')
         if not account.is_connection_eligible: raise BrokerRoutingError('The selected broker account does not have usable broker credentials')
+        self._validate_environment(account, data.get('routing_context') or {})
         order = Order.objects.create(user=user, broker=account.broker, account=account, status='created', **{k: v for k, v in data.items() if k != 'account'})
         order.status = 'validated'; order.save(update_fields=['status', 'updated_at']); return order
+    def _validate_environment(self, account, routing):
+        verified = str((account.credentials or {}).get('account_type') or '').lower().strip()
+        requested = str(routing.get('account_type') or '').lower().strip()
+        if not verified:
+            raise BrokerRoutingError('Broker account environment has not been verified; synchronize the account before trading.')
+        if requested and requested != verified:
+            raise BrokerRoutingError(f'Execution environment mismatch: selected account is {verified}, request asked for {requested}.')
+        if verified == 'real':
+            if not bool(getattr(account.broker, 'supports_live', False)):
+                raise BrokerRoutingError('The selected broker account is real-money but this broker is not live-trading capable.')
+            if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)):
+                raise BrokerRoutingError('Live-money trading is disabled by platform configuration.')
     def approve(self, order): order.status = 'approved'; order.save(update_fields=['status', 'updated_at']); return order
     def queue(self, order): order.status = 'queued'; order.save(update_fields=['status', 'updated_at']); return order
     def cancel(self, order): order.status = 'cancelled'; order.save(update_fields=['status', 'updated_at']); return order
@@ -118,6 +148,7 @@ class ExecutionManagementSystem:
     async def _mark_connection_issue(self, order, state):
         context = dict(order.routing_context or {})
         context['execution_state'] = state
+        context['reconciliation_required'] = True
         order.status = 'pending'
         order.routing_context = context
         await sync_to_async(order.save)(update_fields=['status', 'routing_context', 'updated_at'])
@@ -158,17 +189,32 @@ class ExecutionEngine:
         account = data.get('account') or SmartOrderRouter().route(user, data.get('symbol'))
         client_order_id = str(data.get('client_order_id') or '').strip()
         if account.user_id != user.id: raise BrokerRoutingError('The selected broker account does not belong to this user')
+        if not account.is_connection_eligible: raise BrokerRoutingError('The selected broker account is not connected or its credentials are not usable')
+        verified_environment = str((account.credentials or {}).get('account_type') or '').lower().strip()
+        requested_environment = str(routing.get('account_type') or '').lower().strip()
+        if requested_environment and requested_environment != verified_environment:
+            raise BrokerRoutingError(f'Execution environment mismatch: selected account is {verified_environment}, request asked for {requested_environment}.')
+        if verified_environment == 'real' and not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)):
+            raise BrokerRoutingError('Live-money trading is disabled by platform configuration.')
         if client_order_id:
             existing = Order.objects.filter(user=user, account=account, client_order_id=client_order_id).order_by('-id').first()
             if existing:
                 report = existing.execution_reports.order_by('-id').first()
                 if report and existing.status in OrderManagementSystem.TERMINAL_STATUSES: return report
-                raise BrokerRoutingError(f'Duplicate client order id {client_order_id}; the existing order is already being processed.')
+                if existing.status in {'pending', 'submitted', 'queued', 'approved'}:
+                    raise BrokerRoutingError(f'Duplicate client order id {client_order_id}; the existing order has unresolved execution state and must be reconciled before retrying.')
+                if existing.status in OrderManagementSystem.RETRYABLE_STATUSES and not existing.broker_order_id:
+                    routing['retry_of_order_id'] = existing.id
+                else:
+                    raise BrokerRoutingError(f'Duplicate client order id {client_order_id}; the existing order already has execution state.')
+
+        symbol = data.get('symbol')
+        if symbol:
+            MarketDataFreshnessService().latest(symbol)
 
         if routing.get('ai_assisted'):
             from apps.ai_engine.services import AIEngine
             from apps.market_data.services import MarketDataService
-            symbol = data.get('symbol')
             if not symbol: raise BrokerRoutingError('AI-assisted execution requires a broker symbol')
             tick = MarketDataService().history.tick_history(symbol, limit=1).first()
             if tick is None: raise BrokerRoutingError('AI-assisted execution requires fresh normalized market data')
@@ -185,6 +231,8 @@ class ExecutionEngine:
             routing['ai_consensus'] = (analysis['prediction'].payload or {}).get('consensus', {})
             data['routing_context'] = routing
 
+        routing['account_type'] = verified_environment
+        data['routing_context'] = routing
         data['account'] = account
         try:
             order = OrderManagementSystem().create(user, **data)
@@ -212,7 +260,7 @@ class SynchronizationService:
         for f in ['balance', 'equity', 'margin', 'free_margin', 'currency']:
             if data.get(f) is not None: setattr(account, f, data[f]); fields.append(f)
         credentials = dict(account.credentials or {})
-        if data.get('account_type'): credentials['account_type'] = data['account_type']
+        if data.get('account_type'): credentials['account_type'] = str(data['account_type']).lower()
         if data.get('avatar_url'): credentials['avatar_url'] = str(data['avatar_url'])
         if credentials != (account.credentials or {}): account.credentials = credentials; fields.append('credentials')
         account.status = 'active'; account.last_synced_at = timezone.now(); fields.extend(['status', 'last_synced_at'])

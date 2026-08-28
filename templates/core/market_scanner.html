@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Market Scanner · AlgoBot{% endblock %}
+{% block mobile_title %}Market Scanner{% endblock %}
+{% block extra_css %}
+<style>
+.scanner{padding:28px;max-width:1500px;margin:auto}.scanner-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:22px}.scanner-head h1{margin:0;font-size:30px}.scanner-head p{margin:7px 0 0;opacity:.68}.scanner-card{background:var(--surface,#12161c);border:1px solid var(--border,#29303a);border-radius:16px;padding:18px}.filters{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr auto;gap:10px;margin-bottom:16px}.filters input,.filters select,.filters button{min-height:42px;border:1px solid var(--border,#29303a);border-radius:10px;background:var(--surface-2,#0d1117);color:inherit;padding:0 12px}.filters button{cursor:pointer;font-weight:700}.meta{display:flex;gap:16px;flex-wrap:wrap;opacity:.7;font-size:13px;margin:8px 0 14px}.table-wrap{overflow:auto}.scanner-table{width:100%;border-collapse:collapse;min-width:900px}.scanner-table th,.scanner-table td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--border,#29303a);white-space:nowrap}.scanner-table th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;opacity:.65}.up{font-weight:700}.down{font-weight:700}.muted{opacity:.5}.status{font-size:11px;text-transform:uppercase;letter-spacing:.05em}.empty{text-align:center;padding:45px;opacity:.6}.error{padding:12px;border-radius:10px;border:1px solid #713f3f;background:#2a1717;margin-bottom:12px}.note{margin-top:14px;font-size:12px;opacity:.55}@media(max-width:900px){.scanner{padding:18px}.scanner-head{display:block}.filters{grid-template-columns:1fr 1fr}.filters input:first-child{grid-column:1/-1}}@media(max-width:520px){.filters{grid-template-columns:1fr}.filters input:first-child{grid-column:auto}.scanner-head h1{font-size:24px}}
+</style>
+{% endblock %}
+{% block content %}
+<section class="scanner">
+  <header class="scanner-head"><div><h1>Market Scanner</h1><p>Screen the authenticated broker market universe using persisted market snapshots.</p></div><a href="/markets/" class="button">Markets</a></header>
+  <div class="scanner-card">
+    <form id="scanner-form" class="filters">
+      <input id="search" aria-label="Search symbols" placeholder="Search symbol or name">
+      <select id="market" aria-label="Market"><option value="">All markets</option></select>
+      <select id="direction" aria-label="Direction"><option value="all">All</option><option value="gainers">Gainers</option><option value="losers">Losers</option></select>
+      <input id="min-change" type="number" step="any" placeholder="Min % change" aria-label="Minimum change percent">
+      <input id="max-spread" type="number" step="any" placeholder="Max spread" aria-label="Maximum spread">
+      <button type="submit">Scan</button>
+    </form>
+    <div id="error" class="error" hidden></div>
+    <div class="meta"><span id="count">Loading…</span><span>Source: broker snapshot store</span><span id="updated">—</span></div>
+    <div class="table-wrap"><table class="scanner-table"><thead><tr><th>Symbol</th><th>Market</th><th>Price</th><th>Change</th><th>Spread</th><th>Volume</th><th>High / Low</th><th>Status</th></tr></thead><tbody id="rows"><tr><td colspan="8" class="empty">Loading scanner data…</td></tr></tbody></table></div>
+    <div class="note">Scanner results are research data only. This page does not place, modify, or activate trades.</div>
+  </div>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script>
+(() => {
+  const form=document.getElementById('scanner-form'), rows=document.getElementById('rows'), count=document.getElementById('count'), error=document.getElementById('error'), updated=document.getElementById('updated'), market=document.getElementById('market');
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const fmt=(v,d=4)=>v==null?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
+  function render(data){
+    const markets=[...new Set((data.results||[]).map(r=>r.market).filter(Boolean))]; const selected=market.value;
+    if(market.options.length===1){markets.sort().forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;market.appendChild(o)});market.value=selected;}
+    count.textContent=`${data.count} result${data.count===1?'':'s'} · ${data.total_available} available`;updated.textContent=`Updated ${new Date().toLocaleTimeString()}`;
+    if(!data.results.length){rows.innerHTML='<tr><td colspan="8" class="empty">No markets match these filters.</td></tr>';return}
+    rows.innerHTML=data.results.map(r=>{if(r.status==='no_data')return `<tr><td><strong>${esc(r.symbol)}</strong><div class="muted">${esc(r.display_name)}</div></td><td>${esc(r.market)}</td><td colspan="5" class="muted">No persisted snapshot available</td><td class="status">No data</td></tr>`;const c=Number(r.change_percent);return `<tr><td><strong>${esc(r.symbol)}</strong><div class="muted">${esc(r.display_name)}</div></td><td>${esc(r.market)}</td><td>${fmt(r.last_price)}</td><td class="${c>0?'up':c<0?'down':''}">${c>0?'+':''}${fmt(r.change_percent,2)}%</td><td>${fmt(r.spread)}</td><td>${fmt(r.volume,2)}</td><td>${fmt(r.high)} / ${fmt(r.low)}</td><td class="status">Ready</td></tr>`}).join('');
+  }
+  async function scan(){error.hidden=true;rows.innerHTML='<tr><td colspan="8" class="empty">Scanning…</td></tr>';const p=new URLSearchParams({limit:'250',sort:'change_percent',direction:document.getElementById('direction').value});for(const [id,key] of [['search','search'],['market','market'],['min-change','min_change'],['max-spread','max_spread']]){const v=document.getElementById(id).value.trim();if(v)p.set(key,v)}try{const r=await fetch('/api/market/scanner/?'+p.toString(),{headers:{Accept:'application/json'},credentials:'same-origin'});const data=await r.json();if(!r.ok||data.status!=='ok')throw new Error(data.detail||'Scanner request failed.');render(data)}catch(e){error.textContent=e.message;error.hidden=false;rows.innerHTML='<tr><td colspan="8" class="empty">Scanner unavailable.</td></tr>'}}
+  form.addEventListener('submit',e=>{e.preventDefault();scan()});scan();
+})();
+</script>
+{% endblock %}

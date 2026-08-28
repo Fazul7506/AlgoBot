@@ -1,5 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Dashboard | AlgoBot Enterprise{% endblock %}
+{% load static %}
+{% block title %}Data Center | AlgoBot Enterprise{% endblock %}
+{% block mobile_title %}Data Center{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="Dashboard" module="Market Data" page_id="market_data-dashboard" %}
+<section class="data-center-page algobot-shared-page" data-data-center>
+  <header class="enterprise-hero">
+    <div><p class="eyebrow">QUANT RESEARCH · DATA OPERATIONS</p><h1>Data Center</h1><p class="hero-copy">Inspect broker-sourced market data, coverage, freshness and research readiness without introducing synthetic prices into the trading path.</p></div>
+    <div class="hero-actions"><span class="data-source-pill">Backend data store</span><button class="btn primary" type="button" data-data-refresh>Refresh quality</button></div>
+  </header>
+  <section class="market-scanner-summary data-summary" aria-label="Data center summary">
+    <article class="market-scanner-stat"><span>Active symbols</span><strong data-stat="active_symbols">—</strong></article>
+    <article class="market-scanner-stat"><span>Symbols with ticks</span><strong data-stat="symbols_with_ticks">—</strong></article>
+    <article class="market-scanner-stat"><span>Total ticks</span><strong data-stat="total_ticks">—</strong></article>
+    <article class="market-scanner-stat"><span>Total candles</span><strong data-stat="total_candles">—</strong></article>
+    <article class="market-scanner-stat"><span>Stale ticks</span><strong data-stat="stale_ticks">—</strong></article>
+  </section>
+  <section class="panel data-center-toolbar">
+    <div class="field"><label for="data-filter">Filter symbols</label><input id="data-filter" data-data-filter placeholder="Symbol, name or market…" autocomplete="off"></div>
+    <div class="field"><label for="data-status">Quality status</label><select id="data-status" data-data-status><option value="all">All states</option><option value="healthy">Healthy</option><option value="stale">Stale</option><option value="no_data">No data</option></select></div>
+    <div class="field"><label for="data-limit">Rows</label><select id="data-limit" data-data-limit><option>25</option><option>50</option><option>100</option></select></div>
+  </section>
+  <section class="panel data-quality-panel" aria-live="polite">
+    <div class="panel-heading"><div><p class="eyebrow">DATA QUALITY</p><h2>Research coverage</h2></div><span class="data-updated" data-data-updated>Waiting for quality scan…</span></div>
+    <div class="data-error" data-data-error hidden></div>
+    <div class="data-table-wrap"><table class="data-quality-table"><thead><tr><th>Instrument</th><th>Market</th><th>Ticks</th><th>Candles</th><th>Timeframes</th><th>Latest</th><th>State</th></tr></thead><tbody data-data-rows><tr><td colspan="7" class="data-empty">Loading broker data inventory…</td></tr></tbody></table></div>
+  </section>
+  <section class="data-research-note"><strong>Research/live separation</strong><span>This page is observational. It reads the authenticated backend market-data store and never generates prices or changes live execution state.</span></section>
+</section>
 {% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/data_center.css' %}">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/data_center.js' %}" defer></script>{% endblock %}

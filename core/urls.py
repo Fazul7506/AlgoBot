@@ -1,5 +1,8 @@
 from django.urls import path
-from .views import deriv_login, callback
+from .views import (
+    deriv_login, callback,
+    strategy_builder_page,
+)
 from .settings_api import account_settings_api
 from .views_oauth import (
     disconnect_deriv,
@@ -16,4 +19,5 @@ urlpatterns = [
     path("api/deriv/status/", deriv_account_status, name="deriv_account_status"),
     path("api/deriv/reconnect/", reconnect_deriv, name="deriv_reconnect"),
     path("api/settings/", account_settings_api, name="account_settings_api"),
+    path("strategies/builder/", strategy_builder_page, name="strategy_builder"),
 ]
