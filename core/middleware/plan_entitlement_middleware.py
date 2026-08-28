@@ -21,6 +21,14 @@ class PlanEntitlementMiddleware:
     def __call__(self, request):
         if not request.path.startswith("/api/") or not getattr(request.user, "is_authenticated", False):
             return self.get_response(request)
+
+        # Every authenticated API call consumes the plan's general API budget
+        # and burst budget, regardless of whether it is a feature-specific call.
+        for window, retry in (("day", "86400"), ("minute", "60")):
+            allowed, current, limit = check(request.user, "api_calls", 1, window)
+            if not allowed:
+                return JsonResponse(rate_limit_response_data(request.user, "api_calls", window, current, limit), status=429, headers={"Retry-After": retry})
+
         mutation = request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}
         metric = "api_calls"
         if mutation:
@@ -30,9 +38,12 @@ class PlanEntitlementMiddleware:
                         continue
                     metric = candidate
                     break
-        allowed, current, limit = check(request.user, metric, 1, "day")
-        if not allowed:
-            return JsonResponse(rate_limit_response_data(request.user, metric, "day", current, limit), status=429, headers={"Retry-After": "86400"})
+
+        if metric != "api_calls":
+            allowed, current, limit = check(request.user, metric, 1, "day")
+            if not allowed:
+                return JsonResponse(rate_limit_response_data(request.user, metric, "day", current, limit), status=429, headers={"Retry-After": "86400"})
+
         response = self.get_response(request)
         response["X-AlgoBot-Plan"] = effective_plan(request.user).key
         response["X-AlgoBot-Quota-Metric"] = metric
