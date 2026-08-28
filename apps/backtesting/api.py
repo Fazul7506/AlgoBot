@@ -46,10 +46,12 @@ class BacktestViewSet(viewsets.ModelViewSet):
             raise ValidationError({'strategy': 'Selected strategy does not exist in the strategy catalog.'})
 
         backtest = serializer.save(user=self.request.user, strategy=strategy.name, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date, status='running')
+        started_at = timezone.now()
         try:
             result = StrategyService.run_backtest(strategy, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date)
+            finished_at = timezone.now()
             backtest.status = 'completed'
-            backtest.result_snapshot = {'status':'completed','start_date':start_date.isoformat(),'end_date':end_date.isoformat(),'strategy':strategy.name,'symbol':symbol,'timeframe':timeframe,'result':result}
+            backtest.result_snapshot = {'status':'completed','started_at':started_at.isoformat(),'completed_at':finished_at.isoformat(),'start_date':start_date.isoformat(),'end_date':end_date.isoformat(),'strategy':strategy.name,'symbol':symbol,'timeframe':timeframe,'result':result}
             backtest.save(update_fields=['status','result_snapshot','updated_at'])
             s = result
             BacktestStatistics.objects.update_or_create(backtest=backtest, defaults={
@@ -60,10 +62,13 @@ class BacktestViewSet(viewsets.ModelViewSet):
                 'equity_curve':s.get('equity_curve', []), 'monthly_returns':s.get('monthly_returns', {}),
             })
         except Exception as exc:
+            finished_at = timezone.now()
             backtest.status = 'failed'
-            backtest.result_snapshot = {'status':'failed','error':str(exc),'start_date':start_date.isoformat(),'end_date':end_date.isoformat()}
+            backtest.result_snapshot = {'status':'failed','started_at':started_at.isoformat(),'completed_at':finished_at.isoformat(),'start_date':start_date.isoformat(),'end_date':end_date.isoformat(),'strategy':strategy.name,'symbol':symbol,'timeframe':timeframe,'error':str(exc),'live_authority':False,'training_eligible':False}
             backtest.save(update_fields=['status','result_snapshot','updated_at'])
-            raise
+            # The backtest record is still the authoritative result. Returning
+            # it lets the UI show FAILED instead of losing the job behind a 500.
+            return
 
 class StatisticsViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BacktestStatisticsSerializer
