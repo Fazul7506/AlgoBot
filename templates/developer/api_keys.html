@@ -7,7 +7,7 @@
     <div>
       <p class="eyebrow">Developer & API</p>
       <h1>API keys</h1>
-      <p>Create, rotate and revoke credentials without exposing secrets in the browser.</p>
+      <p>Create, rotate, revoke and permanently delete credentials without exposing secrets in the browser.</p>
     </div>
     <button class="ds-btn ds-btn--primary" type="button" data-api-key-create>
       <span class="material-symbols-rounded" aria-hidden="true">add</span> Create key
@@ -16,7 +16,7 @@
 
   <div class="ds-card api-security-banner">
     <span class="material-symbols-rounded" aria-hidden="true">shield_lock</span>
-    <div><strong>Secrets stay private</strong><p>Your secret is shown only once after creation or rotation. AlgoBot never returns stored secrets from the list API.</p></div>
+    <div><strong>Secrets stay private</strong><p>API secrets are shown only once after creation or rotation. Lists expose only a masked key identifier and last-four hint.</p></div>
   </div>
 
   <section class="ds-card api-key-table-card" aria-labelledby="api-key-list-title">
@@ -47,4 +47,4 @@
   </dialog>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/api_keys.js' %}?v=20260828-security1" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/api_keys.js' %}?v=20260829-key3" defer></script>{% endblock %}

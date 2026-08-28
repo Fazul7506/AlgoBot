@@ -21,7 +21,9 @@ class Phase19DeveloperPlatformTests(TestCase):
         response = self.client.get("/api/developer/keys/")
         self.assertEqual(response.status_code, 200)
         key_payload = next(item for item in response.data if item["id"] == self.key.id)
-        self.assertEqual(key_payload["key"], f"{self.key.key[:6]}••••••••{self.key.key[-4:]}")
+        prefix = self.key.key.split("_", 1)[0] + "_"
+        self.assertEqual(key_payload["key"], f"{prefix}••••••••••••{self.key.key[-4:]}")
+        self.assertEqual(key_payload["key_hint"], self.key.key[-4:])
         self.assertNotIn(self.secret, str(response.data))
         self.assertNotIn(self.key.secret, str(response.data))
 
@@ -69,6 +71,13 @@ class Phase19DeveloperPlatformTests(TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertFalse(APIKey.objects.filter(pk=self.key.id).exists())
 
+    def test_revoked_keys_are_still_deletable(self):
+        self.use_admin_key()
+        self.client.post(f"/api/developer/keys/{self.key.id}/revoke/")
+        response = self.client.delete(f"/api/developer/keys/{self.key.id}/delete/")
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(APIKey.objects.filter(pk=self.key.id).exists())
+
     def test_scope_authorization_and_signing(self):
         self.assertTrue(APIGatewayService().authorize(self.key, "read"))
         self.assertFalse(APIGatewayService().authorize(self.key, "trading"))
@@ -98,6 +107,9 @@ class Phase19DeveloperPlatformTests(TestCase):
     def test_docs_sdk_analytics_and_sandbox(self):
         for url in ["/api/developer/docs/", "/api/developer/sdk/", "/api/developer/sandbox/"]:
             self.assertEqual(self.client.get(url).status_code, 200)
+        docs = self.client.get("/api/developer/docs/")
+        self.assertEqual(docs.status_code, 200)
+        self.assertIn("/keys/{id}/delete/", docs.data["paths"])
         self.assertEqual(self.client.get("/api/developer/analytics/").status_code, 403)
 
         self.use_admin_key()

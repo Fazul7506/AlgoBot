@@ -1,9 +1,4 @@
-"""Billing views.
-
-The browser checkout is deliberately separate from the JSON API. A trader
-clicking Upgrade is sent directly to the hosted payment page; provider JSON
-is never rendered as a browser confirmation dialog.
-"""
+"""Authenticated billing API plus provider-safe browser callback pages."""
 from dataclasses import dataclass
 from datetime import timedelta
 from urllib.parse import urlparse
@@ -11,8 +6,9 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import HttpResponseRedirect
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -32,7 +28,8 @@ class CheckoutPlan:
 
 
 class RequestBoundPaymentService(PaymentService):
-    """Payment service whose callback URL is tied to the real public request."""
+    """Payment service whose browser callback URL is tied to the public host."""
+
     def __init__(self, request):
         self._request = request
         super().__init__()
@@ -42,10 +39,8 @@ class RequestBoundPaymentService(PaymentService):
         parsed = urlparse(configured)
         host = self._request.get_host().split(":", 1)[0]
         local_hosts = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
-        if parsed.scheme == "https" and parsed.netloc:
-            configured_host = parsed.hostname or ""
-            if configured_host.lower() not in local_hosts:
-                return configured
+        if parsed.scheme == "https" and parsed.netloc and (parsed.hostname or "").lower() not in local_hosts:
+            return configured
         scheme = "https" if not settings.DEBUG else self._request.scheme
         return f"{scheme}://{host}".rstrip("/")
 
@@ -69,18 +64,106 @@ def _plan(name):
 
 
 def _activate(invoice, plan):
-    subscription, _ = Subscription.objects.get_or_create(user=invoice.user)
-    subscription.plan = plan["plan"]
-    subscription.price_cents = int(plan["price_cents"])
-    subscription.currency = plan["currency"].lower()
-    subscription.recurring = bool(plan["recurring"])
-    subscription.is_active = True
-    subscription.renewed_at = timezone.now()
-    subscription.expires_at = timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30))) if plan["recurring"] else None
-    subscription.save()
-    invoice.paid = True
-    invoice.metadata = {**(invoice.metadata or {}), "subscription_activated": True, "plan": plan["plan"]}
-    invoice.save(update_fields=["paid", "metadata"])
+    """Idempotently activate a paid subscription after authoritative provider success."""
+    with transaction.atomic():
+        invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+        subscription, _ = Subscription.objects.select_for_update().get_or_create(user=invoice.user)
+        subscription.plan = plan["plan"]
+        subscription.price_cents = int(plan["price_cents"])
+        subscription.currency = plan["currency"].lower()
+        subscription.recurring = bool(plan["recurring"])
+        subscription.is_active = True
+        subscription.renewed_at = timezone.now()
+        subscription.expires_at = timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30))) if plan["recurring"] else None
+        subscription.save()
+        invoice.paid = True
+        invoice.metadata = {**(invoice.metadata or {}), "subscription_activated": True, "plan": plan["plan"]}
+        invoice.save(update_fields=["paid", "metadata"])
+        Payment.objects.filter(invoice=invoice).update(status="COMPLETED")
+        return invoice, subscription
+
+
+def _provider_state(result, provider):
+    """Normalize provider status responses, including IntaSend's nested invoice payload."""
+    data = result or {}
+    if provider == PaymentService.INTASEND and isinstance(data.get("invoice"), dict):
+        data = {**data, **data["invoice"]}
+    if provider == PaymentService.PESAPAL:
+        return str(data.get("payment_status_description", "")).upper(), data
+    return str(data.get("state", "")).upper(), data
+
+
+def _reconcile_invoice(invoice, provider):
+    plan = _plan((invoice.metadata or {}).get("plan"))
+    if not plan:
+        return {"paid": False, "state": "INVALID_PLAN", "invoice": invoice, "subscription": None}
+    service = PaymentService()
+    provider = str(provider or (invoice.metadata or {}).get("provider") or service.provider).lower().strip()
+    if provider == service.PESAPAL:
+        tracking = (invoice.metadata or {}).get("tracking_id") or invoice.external_id
+        result = service.get_pesapal_transaction_status(str(tracking)) if tracking else None
+    elif provider == service.INTASEND:
+        result = service.get_intasend_payment_status(invoice.external_id) if invoice.external_id else None
+    else:
+        return {"paid": False, "state": "UNSUPPORTED_PROVIDER", "invoice": invoice, "subscription": None}
+
+    state, payload = _provider_state(result, provider)
+    paid_states = {"COMPLETE", "COMPLETED", "COMPLETED_SUCCESS", "SUCCESS", "SUCCEEDED", "PAID"}
+    failed_states = {"FAILED", "CANCELLED", "CANCELED", "INVALID", "REVERSED"}
+    if state in paid_states:
+        invoice, subscription = _activate(invoice, plan)
+        return {"paid": True, "state": state, "invoice": invoice, "subscription": subscription, "provider_payload": payload}
+    if state in failed_states:
+        Payment.objects.filter(invoice=invoice).update(status="FAILED")
+    return {"paid": False, "state": state or "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first(), "provider_payload": payload}
+
+
+def _find_callback_invoice(request, provider, reference="", tracking_id=""):
+    """Resolve a browser callback without trusting a client-supplied user id."""
+    qs = Invoice.objects.all()
+    if request.user.is_authenticated:
+        qs = qs.filter(user=request.user)
+    if tracking_id:
+        invoice = qs.filter(external_id=tracking_id).first() or qs.filter(metadata__tracking_id=tracking_id).first()
+        if invoice:
+            return invoice
+    if reference:
+        invoice = qs.filter(metadata__reference=reference).first()
+        if invoice:
+            return invoice
+    return qs.filter(paid=False).order_by("-created_at").first() if request.user.is_authenticated else None
+
+
+def billing_success_page(request):
+    provider = str(request.GET.get("provider", "")).lower().strip()
+    reference = str(request.GET.get("reference") or request.GET.get("OrderMerchantReference") or "").strip()
+    tracking_id = str(request.GET.get("tracking_id") or request.GET.get("OrderTrackingId") or "").strip()
+    invoice = _find_callback_invoice(request, provider, reference, tracking_id)
+    result = None
+    if invoice and provider:
+        try:
+            result = _reconcile_invoice(invoice, provider)
+        except Exception:
+            result = {"paid": bool(invoice.paid), "state": "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
+    elif invoice:
+        result = {"paid": bool(invoice.paid), "state": "PAID" if invoice.paid else "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
+
+    callback_invoice = (result or {}).get("invoice")
+    context = {
+        "provider": provider or "payment provider",
+        "payment_state": (result or {}).get("state", "PENDING"),
+        "payment_paid": bool((result or {}).get("paid")),
+        "invoice": callback_invoice,
+        "invoice_amount": (float(callback_invoice.amount_cents) / 100) if callback_invoice else None,
+        "subscription": (result or {}).get("subscription"),
+        "reference": reference,
+        "tracking_id": tracking_id,
+    }
+    return render(request, "core/billing_success.html", context)
+
+
+def billing_cancel_page(request):
+    return render(request, "core/billing_cancel.html", {"provider": request.GET.get("provider", "payment provider")})
 
 
 def _checkout(request, plan_name, provider=None):
@@ -92,10 +175,12 @@ def _checkout(request, plan_name, provider=None):
     if not plan["configured"]:
         return None, f"{plan['plan']} is not configured for checkout yet."
     selected = str(provider or getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower().strip()
+    if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL}:
+        return None, "Unsupported payment provider."
     invoice = Invoice.objects.create(user=request.user, amount_cents=plan["price_cents"], currency=plan["currency"], metadata={"plan": plan["plan"], "provider": selected, "state": "checkout_created"})
     result = RequestBoundPaymentService(request).create_checkout_session(request.user, CheckoutPlan(**{k: plan[k] for k in ("plan", "price_cents", "currency", "recurring")}), provider=selected)
     if not result.get("url"):
-        invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": "provider_checkout_failed"}
+        invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": result.get("error") or "provider_checkout_failed"}
         invoice.save(update_fields=["metadata"])
         return None, "We couldn't start your payment. Please try again."
     external_id = result.get("invoice_id") or result.get("order_tracking_id") or result.get("session_id") or ""
@@ -155,7 +240,13 @@ def billing_change_plan(request):
     if subscription.plan == plan["plan"] and subscription.is_active:
         return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
     if plan["plan"] == "FREE":
-        subscription.plan = "FREE"; subscription.price_cents = 0; subscription.currency = plan["currency"].lower(); subscription.recurring = False; subscription.is_active = True; subscription.expires_at = None; subscription.renewed_at = timezone.now()
+        subscription.plan = "FREE"
+        subscription.price_cents = 0
+        subscription.currency = plan["currency"].lower()
+        subscription.recurring = False
+        subscription.is_active = True
+        subscription.expires_at = None
+        subscription.renewed_at = timezone.now()
         subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at"])
         return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
     url, error = _checkout(request, requested, request.data.get("provider"))
@@ -170,33 +261,20 @@ def billing_reconcile(request):
     invoice = Invoice.objects.filter(user=request.user, pk=request.data.get("invoice_id")).first()
     if not invoice:
         return Response({"detail": "Invoice not found."}, status=status.HTTP_404_NOT_FOUND)
-    plan = _plan((invoice.metadata or {}).get("plan"))
-    if not plan:
-        return Response({"detail": "The invoice is not associated with a configured plan."}, status=status.HTTP_409_CONFLICT)
     provider = str((invoice.metadata or {}).get("provider") or getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower()
-    service = PaymentService()
-    if provider == service.PESAPAL:
-        tracking = (invoice.metadata or {}).get("tracking_id") or invoice.external_id
-        result = service.get_pesapal_transaction_status(str(tracking)) if tracking else None
-        state = str((result or {}).get("payment_status_description", "")).upper()
-        paid = state in {"COMPLETED", "COMPLETED_SUCCESS", "SUCCESS", "SUCCEEDED", "PAID"}
-    elif provider == service.INTASEND:
-        result = service.get_intasend_payment_status(invoice.external_id) if invoice.external_id else None
-        state = str((result or {}).get("state", "")).upper()
-        paid = state in {"COMPLETE", "COMPLETED", "SUCCESS", "SUCCEEDED", "PAID"}
-    else:
+    result = _reconcile_invoice(invoice, provider)
+    if result["state"] == "INVALID_PLAN":
+        return Response({"detail": "The invoice is not associated with a configured plan."}, status=status.HTTP_409_CONFLICT)
+    if result["state"] == "UNSUPPORTED_PROVIDER":
         return Response({"detail": "Unsupported payment provider."}, status=status.HTTP_400_BAD_REQUEST)
-    if paid:
-        _activate(invoice, plan); Payment.objects.filter(invoice=invoice).update(status="COMPLETED")
-    elif state in {"FAILED", "CANCELLED", "CANCELED", "INVALID", "REVERSED"}:
-        Payment.objects.filter(invoice=invoice).update(status="FAILED")
-    return Response({"paid": paid, "state": state or "PENDING", "invoice_id": invoice.id, "subscription": Subscription.objects.get(user=request.user).plan})
+    return Response({"paid": result["paid"], "state": result["state"], "invoice_id": invoice.id, "subscription": getattr(result.get("subscription"), "plan", Subscription.objects.get(user=request.user).plan)})
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def billing_cancel(request):
     subscription, _ = Subscription.objects.get_or_create(user=request.user)
-    subscription.is_active = False; subscription.expires_at = timezone.now()
+    subscription.is_active = False
+    subscription.expires_at = timezone.now()
     subscription.save(update_fields=["is_active", "expires_at"])
     return Response({"status": "cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat()})
