@@ -1,14 +1,16 @@
+from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.decorators import permission_classes
 from rest_framework.exceptions import ValidationError
-from .models import Backtest, BacktestStatistics
+
+from .models import Backtest, BacktestClusterJob, BacktestStatistics
 from .serializers import BacktestSerializer, BacktestStatisticsSerializer
 from .services import ParameterOptimizationService, ReplayService
 from trading.models.core import Strategy as StrategyModel
-from trading.strategies.strategy_service import StrategyService
 from apps.market_data.models import MarketSymbol
+
 
 class BacktestViewSet(viewsets.ModelViewSet):
     serializer_class = BacktestSerializer
@@ -23,8 +25,10 @@ class BacktestViewSet(viewsets.ModelViewSet):
         end_date = parse_datetime(str(data.get('end_date') or ''))
         if not start_date or not end_date:
             raise ValidationError({'date_range': 'Valid start_date and end_date are required.'})
-        if timezone.is_naive(start_date): start_date = timezone.make_aware(start_date)
-        if timezone.is_naive(end_date): end_date = timezone.make_aware(end_date)
+        if timezone.is_naive(start_date):
+            start_date = timezone.make_aware(start_date)
+        if timezone.is_naive(end_date):
+            end_date = timezone.make_aware(end_date)
         if end_date <= start_date:
             raise ValidationError({'date_range': 'End date/time must be later than start date/time.'})
 
@@ -45,59 +49,90 @@ class BacktestViewSet(viewsets.ModelViewSet):
         if not strategy:
             raise ValidationError({'strategy': 'Selected strategy does not exist in the strategy catalog.'})
 
-        backtest = serializer.save(user=self.request.user, strategy=strategy.name, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date, status='running')
-        started_at = timezone.now()
+        backtest = serializer.save(
+            user=self.request.user,
+            strategy=strategy.name,
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            status='pending',
+        )
+        job = BacktestClusterJob.objects.create(backtest=backtest, status='pending', scheduled_at=timezone.now())
+        backtest.result_snapshot = {
+            'status': 'pending',
+            'queued_at': timezone.now().isoformat(),
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'strategy': strategy.name,
+            'symbol': symbol,
+            'timeframe': timeframe,
+            'job_id': job.id,
+            'live_authority': False,
+            'training_eligible': False,
+        }
+        backtest.save(update_fields=['result_snapshot', 'updated_at'])
+
         try:
-            result = StrategyService.run_backtest(strategy, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date)
-            finished_at = timezone.now()
-            backtest.status = 'completed'
-            backtest.result_snapshot = {'status':'completed','started_at':started_at.isoformat(),'completed_at':finished_at.isoformat(),'start_date':start_date.isoformat(),'end_date':end_date.isoformat(),'strategy':strategy.name,'symbol':symbol,'timeframe':timeframe,'result':result}
-            backtest.save(update_fields=['status','result_snapshot','updated_at'])
-            s = result
-            BacktestStatistics.objects.update_or_create(backtest=backtest, defaults={
-                'net_profit':s.get('net_profit', s.get('total_profit', 0)), 'gross_profit':s.get('gross_profit', 0), 'gross_loss':s.get('gross_loss', 0),
-                'profit_factor':0 if s.get('profit_factor') == float('inf') else s.get('profit_factor', 0), 'expectancy':s.get('expectancy', 0),
-                'win_rate':s.get('win_rate', 0), 'loss_rate':s.get('loss_rate', 0), 'drawdown':s.get('maximum_drawdown', s.get('max_drawdown', 0)),
-                'sharpe':s.get('sharpe_ratio', 0), 'sortino':s.get('sortino_ratio', 0), 'calmar':s.get('calmar_ratio', 0), 'metrics':s,
-                'equity_curve':s.get('equity_curve', []), 'monthly_returns':s.get('monthly_returns', {}),
-            })
+            from .tasks import execute_backtest
+            transaction.on_commit(lambda: execute_backtest.delay(backtest.pk))
         except Exception as exc:
-            finished_at = timezone.now()
+            now = timezone.now()
             backtest.status = 'failed'
-            backtest.result_snapshot = {'status':'failed','started_at':started_at.isoformat(),'completed_at':finished_at.isoformat(),'start_date':start_date.isoformat(),'end_date':end_date.isoformat(),'strategy':strategy.name,'symbol':symbol,'timeframe':timeframe,'error':str(exc),'live_authority':False,'training_eligible':False}
-            backtest.save(update_fields=['status','result_snapshot','updated_at'])
-            # The backtest record is still the authoritative result. Returning
-            # it lets the UI show FAILED instead of losing the job behind a 500.
-            return
+            backtest.result_snapshot = {
+                **(backtest.result_snapshot or {}),
+                'status': 'failed',
+                'started_at': now.isoformat(),
+                'completed_at': now.isoformat(),
+                'error': f'Backtest worker could not be queued: {exc}',
+                'live_authority': False,
+                'training_eligible': False,
+            }
+            backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+            job.status = 'failed'
+            job.attempts = 1
+            job.save(update_fields=['status', 'attempts'])
+
 
 class StatisticsViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BacktestStatisticsSerializer
     permission_classes = [permissions.IsAuthenticated]
-    def get_queryset(self): return BacktestStatistics.objects.filter(backtest__user=self.request.user)
+
+    def get_queryset(self):
+        return BacktestStatistics.objects.filter(backtest__user=self.request.user)
+
 
 @decorators.api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def paper_start(request):
-    return response.Response({'status':'disabled','detail':'Paper trading is not a backtesting feature. Connect and use the broker demo account from Trading Terminal.'}, status=status.HTTP_410_GONE)
+    return response.Response({'status': 'disabled', 'detail': 'Paper trading is not a backtesting feature. Connect and use the broker demo account from Trading Terminal.'}, status=status.HTTP_410_GONE)
+
 
 @decorators.api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def paper_stop(request):
-    return response.Response({'status':'disabled','detail':'Paper trading is not a backtesting feature. Use the connected broker demo account from Trading Terminal.'}, status=status.HTTP_410_GONE)
+    return response.Response({'status': 'disabled', 'detail': 'Paper trading is not a backtesting feature. Use the connected broker demo account from Trading Terminal.'}, status=status.HTTP_410_GONE)
+
 
 @decorators.api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def paper_account(request):
-    return response.Response({'status':'disabled','detail':'Backtesting does not create a synthetic account. Use the connected broker demo account in Trading Terminal.'}, status=status.HTTP_410_GONE)
+    return response.Response({'status': 'disabled', 'detail': 'Backtesting does not create a synthetic account. Use the connected broker demo account in Trading Terminal.'}, status=status.HTTP_410_GONE)
+
 
 @decorators.api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-def optimization_start(request): return response.Response({'status':'started','results':ParameterOptimizationService().optimize(request.data.get('optimizer','grid'), request.data.get('space',{'x':[1]}))})
+def optimization_start(request):
+    return response.Response({'status': 'started', 'results': ParameterOptimizationService().optimize(request.data.get('optimizer', 'grid'), request.data.get('space', {'x': [1]}))})
+
 
 @decorators.api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
-def optimization_results(request): return response.Response({'results':[]})
+def optimization_results(request):
+    return response.Response({'results': []})
+
 
 @decorators.api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
-def replay(request): return response.Response(ReplayService().play())
+def replay(request):
+    return response.Response(ReplayService().play())
