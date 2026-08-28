@@ -1,17 +1,20 @@
-/* Shared API safety guard for execution requests. */
+/* Shared API safety guard for execution and AI requests. */
 (() => {
   'use strict';
   if (window.__algoBotApiExecutionGuard) return;
   window.__algoBotApiExecutionGuard = true;
   const nativeFetch = window.fetch.bind(window);
+  const aliases = {
+    '/trading/order/': '/api/orders/',
+    '/trading/preview/': '/api/orders/preview/',
+    '/trading/ai/predict/': '/api/ai/predict/',
+  };
 
   window.fetch = (input, init = {}) => {
     let url = typeof input === 'string' ? input : (input?.url || '');
-    if (!url.includes('/api/') && url !== '/trading/order/' && url !== '/trading/preview/') return nativeFetch(input, init);
+    if (!url.includes('/api/') && !aliases[url]) return nativeFetch(input, init);
     if (init.signal) return nativeFetch(input, init);
-
-    if (url === '/trading/order/') url = '/api/orders/';
-    if (url === '/trading/preview/') url = '/api/orders/preview/';
+    url = aliases[url] || url;
 
     let nextInit = { ...init };
     if ((url.endsWith('/api/orders/') || url.endsWith('/api/orders/preview/')) && typeof nextInit.body === 'string') {
