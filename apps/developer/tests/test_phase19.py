@@ -1,8 +1,10 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
+
 from apps.developer.models import APIKey, Webhook
 from apps.developer.services import APIKeyService, APIGatewayService, WebhookService
+
 
 class Phase19DeveloperPlatformTests(TestCase):
     def setUp(self):
@@ -18,13 +20,24 @@ class Phase19DeveloperPlatformTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertIn("secret", response.data)
 
+    def test_browser_session_can_bootstrap_api_key(self):
+        session = APIClient()
+        self.assertTrue(session.login(username="dev", password="pass12345"))
+        response = session.get("/api/developer/keys/")
+        self.assertEqual(response.status_code, 200)
+        response = session.post("/api/developer/keys/", {"name": "browser-key", "permissions": ["read"]}, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("secret", response.data)
+
     def test_key_rotation_and_revoke(self):
         response = self.client.post(f"/api/developer/keys/{self.key.id}/rotate/")
         self.assertEqual(response.status_code, 200)
-        self.key.refresh_from_db(); self.assertNotEqual(self.key.secret, self.secret)
+        self.key.refresh_from_db()
+        self.assertNotEqual(self.key.secret, self.secret)
         response = self.client.post(f"/api/developer/keys/{self.key.id}/revoke/")
         self.assertEqual(response.status_code, 200)
-        self.key.refresh_from_db(); self.assertEqual(self.key.status, "revoked")
+        self.key.refresh_from_db()
+        self.assertEqual(self.key.status, "revoked")
 
     def test_scope_authorization_and_signing(self):
         self.assertTrue(APIGatewayService().authorize(self.key, "read"))
@@ -36,6 +49,11 @@ class Phase19DeveloperPlatformTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertIn("secret", response.data)
         self.assertEqual(Webhook.objects.count(), 1)
+
+    def test_webhook_rejects_private_destinations(self):
+        response = self.client.post("/api/developer/webhooks/", {"url": "http://127.0.0.1/hook", "events": ["test"]}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Webhook.objects.count(), 0)
 
     def test_docs_sdk_analytics_and_sandbox(self):
         for url in ["/api/developer/docs/", "/api/developer/sdk/", "/api/developer/analytics/", "/api/developer/sandbox/"]:
