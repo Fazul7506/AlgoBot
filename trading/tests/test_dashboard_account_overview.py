@@ -31,3 +31,8 @@ class DashboardAccountOverviewTests(APITestCase):
         self.assertEqual(account["account_id"], self.account.account_id)
         self.assertEqual(account["broker"], self.broker.name)
         self.assertEqual(Decimal(str(account["balance"])), Decimal("42.50000000"))
+
+    def test_live_account_overview_never_exposes_simulation_metrics(self):
+        response = self.client.get(reverse("dashboard-account-overview"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("paper_trading", response.data["data"])
