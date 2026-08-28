@@ -3,48 +3,11 @@
 {% block title %}API Keys | AlgoBot{% endblock %}
 {% block content %}
 <section class="developer-page api-keys-page">
-  <header class="developer-hero">
-    <div>
-      <p class="eyebrow">Developer & API</p>
-      <h1>API keys</h1>
-      <p>Create, rotate, revoke and permanently delete credentials without exposing secrets in the browser.</p>
-    </div>
-    <button class="ds-btn ds-btn--primary" type="button" data-api-key-create>
-      <span class="material-symbols-rounded" aria-hidden="true">add</span> Create key
-    </button>
-  </header>
-
-  <div class="ds-card api-security-banner">
-    <span class="material-symbols-rounded" aria-hidden="true">shield_lock</span>
-    <div><strong>Secrets stay private</strong><p>API secrets are shown only once after creation or rotation. Lists expose only a masked key identifier and last-four hint.</p></div>
-  </div>
-
-  <section class="ds-card api-key-table-card" aria-labelledby="api-key-list-title">
-    <div class="section-heading"><div><h2 id="api-key-list-title">Your API keys</h2><p>Use the masked key fingerprint to identify credentials safely.</p></div><span class="ds-status ds-status--ready" data-api-key-count>Loading…</span></div>
-    <div class="api-key-list" data-api-key-list>
-      <div class="ds-state" data-api-key-loading><strong>Loading keys</strong><p>Fetching your developer credentials securely.</p></div>
-    </div>
-  </section>
-
-  <dialog class="ds-dialog" data-api-key-dialog aria-labelledby="api-key-dialog-title">
-    <form method="dialog" class="api-key-dialog-form" data-api-key-form>
-      <button class="dialog-close" type="button" data-api-key-close aria-label="Close"><span class="material-symbols-rounded">close</span></button>
-      <p class="eyebrow">New credential</p><h2 id="api-key-dialog-title">Create API key</h2>
-      <label class="ds-field"><span>Name</span><input name="name" required maxlength="120" placeholder="Production trading bot"></label>
-      <fieldset class="scope-picker"><legend>Permissions</legend>
-        <label><input type="checkbox" name="permissions" value="read" checked> Read</label>
-        <label><input type="checkbox" name="permissions" value="market_data"> Market data</label>
-        <label><input type="checkbox" name="permissions" value="trading"> Trading</label>
-        <label><input type="checkbox" name="permissions" value="webhooks"> Webhooks</label>
-        <label><input type="checkbox" name="permissions" value="analytics"> Analytics</label>
-      </fieldset>
-      <div class="dialog-actions"><button type="button" class="ds-btn ds-btn--ghost" data-api-key-close>Cancel</button><button type="submit" class="ds-btn ds-btn--primary">Create key</button></div>
-    </form>
-  </dialog>
-
-  <dialog class="ds-dialog" data-api-secret-dialog aria-labelledby="api-secret-title">
-    <div class="secret-reveal"><span class="material-symbols-rounded secret-icon">key</span><p class="eyebrow">Save this secret now</p><h2 id="api-secret-title">Your API secret</h2><p>This secret will not be displayed again. Copy it into your password manager or deployment secret store.</p><div class="secret-box"><code data-api-secret></code><button type="button" class="ds-btn" data-copy-api-secret>Copy</button></div><button type="button" class="ds-btn ds-btn--primary" data-api-secret-close>Done</button></div>
-  </dialog>
+  <header class="developer-hero"><div><p class="eyebrow">Developer & API</p><h1>API keys</h1><p>Create, rotate, revoke and permanently delete credentials. New credentials are revealed once, then masked after the dialog closes.</p></div><button class="ds-btn ds-btn--primary" type="button" data-api-key-create><span class="material-symbols-rounded" aria-hidden="true">add</span> Create key</button></header>
+  <div class="ds-card api-security-banner"><span class="material-symbols-rounded" aria-hidden="true">shield_lock</span><div><strong>One-time credential reveal</strong><p>The API key and secret are shown in plain text only immediately after creation or rotation. Use Copy while this dialog is open; closing it permanently masks the credential.</p></div></div>
+  <section class="ds-card api-key-table-card" aria-labelledby="api-key-list-title"><div class="section-heading"><div><h2 id="api-key-list-title">Your API keys</h2><p>Existing credentials expose only a masked identifier and last-four hint.</p></div><span class="ds-status ds-status--ready" data-api-key-count>Loading…</span></div><div class="api-key-list" data-api-key-list><div class="ds-state"><strong>Loading keys</strong><p>Fetching your developer credentials securely.</p></div></div></section>
+  <dialog class="ds-dialog" data-api-key-dialog aria-labelledby="api-key-dialog-title"><form method="dialog" class="api-key-dialog-form" data-api-key-form><button class="dialog-close" type="button" data-api-key-close aria-label="Close"><span class="material-symbols-rounded">close</span></button><p class="eyebrow">New credential</p><h2 id="api-key-dialog-title">Create API key</h2><label class="ds-field"><span>Name</span><input name="name" required maxlength="120" placeholder="Production trading bot"></label><fieldset class="scope-picker"><legend>Permissions</legend><label><input type="checkbox" name="permissions" value="read" checked> Read</label><label><input type="checkbox" name="permissions" value="market_data"> Market data</label><label><input type="checkbox" name="permissions" value="trading"> Trading</label><label><input type="checkbox" name="permissions" value="webhooks"> Webhooks</label><label><input type="checkbox" name="permissions" value="analytics"> Analytics</label></fieldset><div class="dialog-actions"><button type="button" class="ds-btn ds-btn--ghost" data-api-key-close>Cancel</button><button type="submit" class="ds-btn ds-btn--primary">Create key</button></div></form></dialog>
+  <dialog class="ds-dialog" data-api-secret-dialog aria-labelledby="api-secret-title"><div class="secret-reveal"><span class="material-symbols-rounded secret-icon">key</span><p class="eyebrow">Save these credentials now</p><h2 id="api-secret-title">Your API credentials</h2><p>Both values are displayed once. Copy them into your password manager or deployment secret store before closing this dialog.</p><div class="secret-box"><div><small>API key</small><code data-api-key-plain></code></div><button type="button" class="ds-btn" data-copy-api-key>Copy key</button></div><div class="secret-box"><div><small>Secret</small><code data-api-secret></code></div><button type="button" class="ds-btn" data-copy-api-secret>Copy secret</button></div><button type="button" class="ds-btn ds-btn--primary" data-api-secret-close>Done — mask credentials</button></div></dialog>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/api_keys.js' %}?v=20260829-key3" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/api_keys.js' %}?v=20260829-key4" defer></script>{% endblock %}
