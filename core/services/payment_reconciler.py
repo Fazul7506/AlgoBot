@@ -104,12 +104,12 @@ class PaymentReconciler:
             invoice.currency = currency
 
             payment = Payment.objects.select_for_update().filter(external_id=external_id).first()
+            was_completed = bool(payment and (payment.status == "COMPLETED" or invoice.paid))
             if not payment:
-                payment = Payment.objects.create(user=user, invoice=invoice, external_id=external_id, amount_cents=amount_minor, currency=currency, status=normalized)
+                payment = Payment.objects.create(user=user, invoice=invoice, external_id=external_id, amount_cents=amount_minor, currency=currency, status="PENDING")
             elif payment.user_id != user.id:
                 return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "payment_owner_mismatch"}
 
-            was_completed = payment.status == "COMPLETED" or invoice.paid
             payment.invoice = invoice
             payment.amount_cents = amount_minor or payment.amount_cents
             payment.currency = currency
@@ -121,8 +121,6 @@ class PaymentReconciler:
                 invoice.save(update_fields=["paid", "amount_cents", "currency", "metadata"])
                 if not was_completed:
                     cls._activate_subscription_and_referral(user, invoice, plan_key)
-            elif normalized == "FAILED":
-                invoice.save(update_fields=["amount_cents", "currency", "metadata"])
             else:
                 invoice.save(update_fields=["amount_cents", "currency", "metadata"])
 
@@ -149,11 +147,7 @@ class PaymentReconciler:
         reward_amount = float(getattr(settings, "REFERRAL_CREDIT_AMOUNT", 0.0) or 0.0)
         if reward_amount <= 0:
             reward_amount = (invoice.amount_cents / 100.0) * 0.05
-        reward, created = ReferralReward.objects.get_or_create(
-            referrer=referrer,
-            referee=user,
-            defaults={"amount_credits": reward_amount},
-        )
+        reward, created = ReferralReward.objects.get_or_create(referrer=referrer, referee=user, defaults={"amount_credits": reward_amount})
         if created:
             profile.referral_credits = (profile.referral_credits or 0.0) + reward_amount
             profile.save(update_fields=["referral_credits"])
