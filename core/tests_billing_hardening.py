@@ -14,12 +14,15 @@ class BillingHardeningTests(TestCase):
         self.user = User.objects.create_user(username="billing-user", password="pass12345")
         self.client.login(username="billing-user", password="pass12345")
 
-    def test_provider_return_pages_are_public_and_not_login_redirects(self):
+    def test_provider_return_pages_are_public_and_direct_navigation_is_protected(self):
         self.client.logout()
         response = self.client.get(reverse("billing_success_page"))
+        self.assertEqual(response.status_code, 302)
+        response = self.client.get(reverse("billing_success_page") + "?provider=intasend&reference=unknown")
         self.assertEqual(response.status_code, 200)
-        self.assertNotEqual(response.url if hasattr(response, "url") else "", "/login/")
         response = self.client.get(reverse("billing_cancel_page"))
+        self.assertEqual(response.status_code, 302)
+        response = self.client.get(reverse("billing_cancel_page") + "?provider=intasend")
         self.assertEqual(response.status_code, 200)
 
     @patch("core.views_billing.PaymentService.get_intasend_payment_status")
@@ -82,7 +85,7 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(Subscription.objects.get(user=self.user).plan, "ENTERPRISE")
 
     def test_webhook_reconciler_uses_canonical_payment_states(self):
-        metadata = {"api_ref": "IS-1-BASIC-TEST123", "plan": "BASIC", "currency": "KES"}
+        metadata = {"api_ref": f"IS-{self.user.id}-BASIC-TEST123", "plan": "BASIC", "currency": "KES"}
         first = PaymentReconciler.reconcile(provider="intasend", external_id="WEBHOOK-1", status="COMPLETE", amount="999.00", currency="KES", metadata=metadata)
         second = PaymentReconciler.reconcile(provider="intasend", external_id="WEBHOOK-1", status="COMPLETE", amount="999.00", currency="KES", metadata=metadata)
         payment = Payment.objects.get(external_id="WEBHOOK-1")
