@@ -16,11 +16,12 @@
   }
   function context(){
     const terminal=$('.terminal-page'); if(!terminal)return;
-    const ticket=$('.order-ticket'); if(ticket&&!$('[data-order-preview]',ticket)){
-      const button=document.createElement('button');button.type='button';button.className='btn ghost';button.textContent='Preview order';button.dataset.orderPreviewButton='';ticket.querySelector('[data-order-form]')?.insertBefore(button,ticket.querySelector('.execute-btn'));button.addEventListener('click',preview);
-      const box=document.createElement('div');box.className='order-preview';box.dataset.orderPreview='';box.hidden=true;ticket.appendChild(box);
-    }
-    document.querySelectorAll('[data-chart-mode],[data-chart-action]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-chart-mode]').forEach(x=>x.classList.toggle('active',x===b));}));
+    const ticket=$('.order-ticket'); if(!ticket)return;
+    let box=$('[data-order-preview]',ticket);
+    if(!box){box=document.createElement('div');box.className='order-preview';box.dataset.orderPreview='';box.hidden=true;ticket.appendChild(box);}
+    const button=$('[data-order-preview-button]',ticket);
+    if(button&&!button.dataset.bound){button.dataset.bound='1';button.addEventListener('click',preview);}
+    document.querySelectorAll('[data-chart-mode],[data-chart-action]').forEach(b=>{if(b.dataset.phase2Bound)return;b.dataset.phase2Bound='1';b.addEventListener('click',()=>{document.querySelectorAll('[data-chart-mode]').forEach(x=>x.classList.toggle('active',x===b));});});
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',context,{once:true});else context();
 })();
