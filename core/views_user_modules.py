@@ -46,5 +46,8 @@ def security_workspace(request):
 
 @login_required
 def alert_workspace(request):
-    alerts=Alert.objects.order_by("-created_at")[:50]; incidents=Incident.objects.filter(assigned_to=request.user).order_by("-started_at")[:20]
-    return render(request,"core/alert_center.html",{"alerts":alerts,"incidents":incidents,"account":_account(request),"open_count":alerts.filter(status__in=["open","acknowledged"]).count()})
+    # Apply all filtering before slicing so the queryset remains composable.
+    alerts=Alert.objects.order_by("-created_at")
+    incidents=Incident.objects.filter(assigned_to=request.user).order_by("-started_at")[:20]
+    open_count=alerts.filter(status__in=["open","acknowledged"]).count()
+    return render(request,"core/alert_center.html",{"alerts":alerts[:50],"incidents":incidents,"account":_account(request),"open_count":open_count})
