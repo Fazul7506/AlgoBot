@@ -1,4 +1,4 @@
-"""Authenticated billing API plus provider-safe browser callback pages."""
+"""Authenticated billing API and provider checkout callback pages."""
 from dataclasses import dataclass
 from datetime import timedelta
 from urllib.parse import urlparse
@@ -28,8 +28,6 @@ class CheckoutPlan:
 
 
 class RequestBoundPaymentService(PaymentService):
-    """Payment service whose browser callback URL is tied to the public host."""
-
     def __init__(self, request):
         self._request = request
         super().__init__()
@@ -64,7 +62,6 @@ def _plan(name):
 
 
 def _activate(invoice, plan):
-    """Idempotently activate a paid subscription after authoritative provider success."""
     with transaction.atomic():
         invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
         subscription, _ = Subscription.objects.select_for_update().get_or_create(user=invoice.user)
@@ -84,13 +81,35 @@ def _activate(invoice, plan):
 
 
 def _provider_state(result, provider):
-    """Normalize provider status responses, including IntaSend's nested invoice payload."""
     data = result or {}
     if provider == PaymentService.INTASEND and isinstance(data.get("invoice"), dict):
         data = {**data, **data["invoice"]}
     if provider == PaymentService.PESAPAL:
         return str(data.get("payment_status_description", "")).upper(), data
     return str(data.get("state", "")).upper(), data
+
+
+def _persist_callback_payment(invoice, state, payload=None):
+    """Payment history is created/updated only after a provider return/webhook."""
+    state = str(state or "").upper()
+    if state in {"COMPLETE", "COMPLETED", "COMPLETED_SUCCESS", "SUCCESS", "SUCCEEDED", "PAID"}:
+        normalized = "COMPLETED"
+    elif state in {"FAILED", "FAILURE", "CANCELLED", "CANCELED", "INVALID", "REVERSED"}:
+        normalized = "FAILED"
+    else:
+        normalized = "PENDING"
+    payload = payload or {}
+    external_id = invoice.external_id or payload.get("order_tracking_id") or payload.get("invoice_id")
+    payment = Payment.objects.filter(invoice=invoice).order_by("-created_at").first()
+    if payment is None:
+        payment = Payment.objects.create(user=invoice.user, invoice=invoice, external_id=external_id or None, amount_cents=invoice.amount_cents, currency=invoice.currency, status=normalized)
+    else:
+        payment.external_id = external_id or payment.external_id
+        payment.amount_cents = invoice.amount_cents
+        payment.currency = invoice.currency
+        payment.status = normalized
+        payment.save(update_fields=["external_id", "amount_cents", "currency", "status"])
+    return payment
 
 
 def _reconcile_invoice(invoice, provider):
@@ -106,23 +125,20 @@ def _reconcile_invoice(invoice, provider):
         result = service.get_intasend_payment_status(invoice.external_id) if invoice.external_id else None
     else:
         return {"paid": False, "state": "UNSUPPORTED_PROVIDER", "invoice": invoice, "subscription": None}
-
     state, payload = _provider_state(result, provider)
-    paid_states = {"COMPLETE", "COMPLETED", "COMPLETED_SUCCESS", "SUCCESS", "SUCCEEDED", "PAID"}
-    failed_states = {"FAILED", "CANCELLED", "CANCELED", "INVALID", "REVERSED"}
-    if state in paid_states:
+    if state in {"COMPLETE", "COMPLETED", "COMPLETED_SUCCESS", "SUCCESS", "SUCCEEDED", "PAID"}:
         invoice, subscription = _activate(invoice, plan)
-        return {"paid": True, "state": state, "invoice": invoice, "subscription": subscription, "provider_payload": payload}
-    if state in failed_states:
-        Payment.objects.filter(invoice=invoice).update(status="FAILED")
-    return {"paid": False, "state": state or "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first(), "provider_payload": payload}
+        _persist_callback_payment(invoice, state, payload)
+        return {"paid": True, "state": "COMPLETED", "invoice": invoice, "subscription": subscription, "provider_payload": payload}
+    if state in {"FAILED", "FAILURE", "CANCELLED", "CANCELED", "INVALID", "REVERSED"}:
+        _persist_callback_payment(invoice, state, payload)
+        return {"paid": False, "state": "FAILED", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first(), "provider_payload": payload}
+    _persist_callback_payment(invoice, state or "PENDING", payload)
+    return {"paid": False, "state": "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first(), "provider_payload": payload}
 
 
-def _find_callback_invoice(request, provider, reference="", tracking_id=""):
-    """Resolve a browser callback without trusting a client-supplied user id."""
-    qs = Invoice.objects.all()
-    if request.user.is_authenticated:
-        qs = qs.filter(user=request.user)
+def _find_callback_invoice(request, reference="", tracking_id=""):
+    qs = Invoice.objects.filter(user=request.user) if request.user.is_authenticated else Invoice.objects.none()
     if tracking_id:
         invoice = qs.filter(external_id=tracking_id).first() or qs.filter(metadata__tracking_id=tracking_id).first()
         if invoice:
@@ -131,14 +147,14 @@ def _find_callback_invoice(request, provider, reference="", tracking_id=""):
         invoice = qs.filter(metadata__reference=reference).first()
         if invoice:
             return invoice
-    return qs.filter(paid=False).order_by("-created_at").first() if request.user.is_authenticated else None
+    return qs.filter(paid=False).order_by("-created_at").first()
 
 
 def billing_success_page(request):
     provider = str(request.GET.get("provider", "")).lower().strip()
     reference = str(request.GET.get("reference") or request.GET.get("OrderMerchantReference") or "").strip()
     tracking_id = str(request.GET.get("tracking_id") or request.GET.get("OrderTrackingId") or "").strip()
-    invoice = _find_callback_invoice(request, provider, reference, tracking_id)
+    invoice = _find_callback_invoice(request, reference, tracking_id)
     result = None
     if invoice and provider:
         try:
@@ -146,10 +162,9 @@ def billing_success_page(request):
         except Exception:
             result = {"paid": bool(invoice.paid), "state": "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
     elif invoice:
-        result = {"paid": bool(invoice.paid), "state": "PAID" if invoice.paid else "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
-
+        result = {"paid": bool(invoice.paid), "state": "COMPLETED" if invoice.paid else "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
     callback_invoice = (result or {}).get("invoice")
-    context = {
+    return render(request, "core/billing_success.html", {
         "provider": provider or "payment provider",
         "payment_state": (result or {}).get("state", "PENDING"),
         "payment_paid": bool((result or {}).get("paid")),
@@ -158,8 +173,7 @@ def billing_success_page(request):
         "subscription": (result or {}).get("subscription"),
         "reference": reference,
         "tracking_id": tracking_id,
-    }
-    return render(request, "core/billing_success.html", context)
+    })
 
 
 def billing_cancel_page(request):
@@ -187,7 +201,6 @@ def _checkout(request, plan_name, provider=None):
     invoice.external_id = external_id or None
     invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_open", "reference": result.get("reference"), "tracking_id": result.get("order_tracking_id"), "session_id": result.get("session_id")}
     invoice.save(update_fields=["external_id", "metadata"])
-    Payment.objects.create(user=request.user, invoice=invoice, external_id=external_id or None, amount_cents=plan["price_cents"], currency=plan["currency"], status="PENDING")
     return result["url"], None
 
 
@@ -195,9 +208,7 @@ def _checkout(request, plan_name, provider=None):
 def billing_checkout_start(request):
     if request.method != "GET":
         return redirect("billing_page")
-    plan = request.GET.get("plan", "")
-    provider = request.GET.get("provider") or None
-    url, error = _checkout(request, plan, provider)
+    url, error = _checkout(request, request.GET.get("plan", ""), request.GET.get("provider") or None)
     if url:
         return HttpResponseRedirect(url)
     messages.error(request, error or "We couldn't start your payment. Please try again.")
@@ -214,8 +225,8 @@ def billing_plans(request):
 @permission_classes([IsAuthenticated])
 def billing_status(request):
     subscription, _ = Subscription.objects.get_or_create(user=request.user)
-    invoices = list(Invoice.objects.filter(user=request.user)[:10].values("id", "external_id", "amount_cents", "currency", "paid", "metadata", "created_at"))
-    payments = list(Payment.objects.filter(user=request.user)[:10].values("id", "external_id", "amount_cents", "currency", "status", "created_at", "invoice_id"))
+    invoices = list(Invoice.objects.filter(user=request.user, paid=True)[:10].values("id", "external_id", "amount_cents", "currency", "paid", "metadata", "created_at"))
+    payments = list(Payment.objects.filter(user=request.user, status__in=["PENDING", "COMPLETED", "FAILED"])[:10].values("id", "external_id", "amount_cents", "currency", "status", "created_at", "invoice_id"))
     return Response({"subscription": {"plan": subscription.plan, "price_cents": subscription.price_cents, "currency": subscription.currency, "is_active": subscription.is_active, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None}, "invoices": invoices, "payments": payments, "plans": _plans()})
 
 
@@ -240,13 +251,7 @@ def billing_change_plan(request):
     if subscription.plan == plan["plan"] and subscription.is_active:
         return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
     if plan["plan"] == "FREE":
-        subscription.plan = "FREE"
-        subscription.price_cents = 0
-        subscription.currency = plan["currency"].lower()
-        subscription.recurring = False
-        subscription.is_active = True
-        subscription.expires_at = None
-        subscription.renewed_at = timezone.now()
+        subscription.plan = "FREE"; subscription.price_cents = 0; subscription.currency = plan["currency"].lower(); subscription.recurring = False; subscription.is_active = True; subscription.expires_at = None; subscription.renewed_at = timezone.now()
         subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at"])
         return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
     url, error = _checkout(request, requested, request.data.get("provider"))
@@ -274,7 +279,5 @@ def billing_reconcile(request):
 @permission_classes([IsAuthenticated])
 def billing_cancel(request):
     subscription, _ = Subscription.objects.get_or_create(user=request.user)
-    subscription.is_active = False
-    subscription.expires_at = timezone.now()
-    subscription.save(update_fields=["is_active", "expires_at"])
+    subscription.is_active = False; subscription.expires_at = timezone.now(); subscription.save(update_fields=["is_active", "expires_at"])
     return Response({"status": "cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat()})
