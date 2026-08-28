@@ -11,13 +11,21 @@ class OrderViewSet(viewsets.ModelViewSet):
     serializer_class=OrderSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return Order.objects.filter(user=self.request.user)
     def create(self, request, *args, **kwargs):
+        client_request_id=str(request.data.get('client_request_id') or '').strip()
+        if client_request_id:
+            existing=Order.objects.filter(user=request.user, client_request_id=client_request_id).first()
+            if existing:
+                return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
         serializer=self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
         account=serializer.validated_data.get('broker_account'); environment=str((account.credentials or {}).get('account_type') or '').lower().strip() if account else ''
         if environment == 'real':
             allowed, used, limit = check_live_order(request.user)
             if not allowed:
                 return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-        order=ExecutionEngine().place_order(request.user, **serializer.validated_data)
+        try:
+            order=ExecutionEngine().place_order(request.user, **serializer.validated_data)
+        except PermissionError as exc:
+            return response.Response({'status':'rejected','code':'ORDER_RISK_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
         return response.Response(self.get_serializer(order).data, status=201)
     @decorators.action(detail=False, methods=['post'])
     def preview(self, request):
@@ -59,7 +67,7 @@ class ContractViewSet(viewsets.ReadOnlyModelViewSet):
 class ExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ExecutionLogSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return ExecutionLog.objects.filter(order__user=self.request.user)
-class ReconciliationEventViewSet(viewsets.ReadOnlyModelViewSet):
+class ReconciliationEventViewSet(viewsets.ModelViewSet):
     serializer_class=ReconciliationEventSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self):
         qs=ReconciliationEvent.objects.filter(user=self.request.user).select_related('broker_account','reviewed_by'); status_value=self.request.query_params.get('status'); broker_account=self.request.query_params.get('broker_account')
