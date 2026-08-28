@@ -20,7 +20,8 @@ class Phase19DeveloperPlatformTests(TestCase):
     def test_key_list_masks_secret_material(self):
         response = self.client.get("/api/developer/keys/")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data[0]["key"], f"{self.key.key[:6]}••••••••{self.key.key[-4:]}")
+        key_payload = next(item for item in response.data if item["id"] == self.key.id)
+        self.assertEqual(key_payload["key"], f"{self.key.key[:6]}••••••••{self.key.key[-4:]}")
         self.assertNotIn(self.secret, str(response.data))
         self.assertNotIn(self.key.secret, str(response.data))
 
