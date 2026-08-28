@@ -17,7 +17,19 @@ PLAN_ENTITLEMENTS: Dict[str, PlanEntitlement] = {
     "PRO": PlanEntitlement("PRO","Pro",25000,300,25,500,2000,1000,5,25,250,True,True,"highest","priority"),
     "ENTERPRISE": PlanEntitlement("ENTERPRISE","Enterprise",250000,1000,250,-1,-1,-1,50,250,-1,True,True,"dedicated","dedicated"),
 }
-FEATURE_LABELS={"api_calls":"API calls","strategies":"active strategy configurations","backtests":"backtests","predictions":"AI predictions","orders":"orders","broker_accounts":"connected broker accounts","automations":"automation runs","live_orders":"live-money orders"}
+FEATURE_LABELS={"api_calls":"Trading API calls","strategies":"active strategy configurations","backtests":"backtests","predictions":"AI predictions","orders":"orders","broker_accounts":"connected broker accounts","automations":"automation runs","live_orders":"live-money orders"}
+
+# Public API quota is deliberately restricted to broker/trade execution requests.
+# Browser reads, dashboard refreshes, market snapshots, signals and ordinary
+# application navigation are not part of this meter.
+EXECUTION_PATH_PREFIXES = (
+    "/api/orders/",
+    "/api/trading/execute/",
+    "/api/trades/execute/",
+    "/api/execution/",
+)
+EXECUTION_METHODS = ("POST", "PUT", "PATCH")
+
 
 def subscription_for(user):
     subscription,_=Subscription.objects.get_or_create(user=user,defaults={"plan":"FREE"}); return subscription
@@ -31,6 +43,10 @@ def effective_plan(user):
 def _start(window):
     now=timezone.now(); return now.replace(hour=0,minute=0,second=0,microsecond=0) if window=="day" else now.replace(second=0,microsecond=0)
 
+def reset_at(window="day"):
+    start = _start(window)
+    return start + (timedelta(days=1) if window == "day" else timedelta(minutes=1))
+
 def _audit_count(user,start,prefixes=None,methods=None):
     qs=AuditLog.objects.filter(user=user,created_at__gte=start)
     if prefixes:
@@ -42,7 +58,7 @@ def _audit_count(user,start,prefixes=None,methods=None):
 
 def usage(user,metric,window="day"):
     start=_start(window)
-    if metric=="api_calls": return _audit_count(user,start,["/api/"])
+    if metric=="api_calls": return _audit_count(user,start,EXECUTION_PATH_PREFIXES,EXECUTION_METHODS)
     if metric=="backtests": return _audit_count(user,start,["/api/backtesting/","/api/strategies/"],["POST"])
     if metric=="predictions": return _audit_count(user,start,["/api/ai/","/api/predictions/"],["POST"])
     if metric in ("orders","live_orders"): return _audit_count(user,start,["/api/orders/"],["POST"])
@@ -72,9 +88,10 @@ def check_live_order(user): return check(user,"live_orders")
 def entitlement_payload(user):
     plan=effective_plan(user); subscription=subscription_for(user); items={}
     for metric in ("api_calls","strategies","backtests","predictions","orders","broker_accounts","automations","live_orders"):
-        limit=limit_for(plan,metric); current=usage(user,metric); items[metric]={"used":current,"limit":None if limit<0 else limit,"unlimited":limit<0,"remaining":None if limit<0 else max(0,limit-current)}
-    return {"plan":plan.key,"name":plan.name,"active":bool(subscription.is_active and (not subscription.expires_at or subscription.expires_at>timezone.now())),"expires_at":subscription.expires_at.isoformat() if subscription.expires_at else None,"priority":plan.priority,"support":plan.support,"features":{"live_trading":True,"advanced_ai":plan.advanced_ai},"usage":items,"reset_at":(_start("day")+timedelta(days=1)).isoformat()}
+        limit=limit_for(plan,metric); current=usage(user,metric); window="day"
+        items[metric]={"used":current,"limit":None if limit<0 else limit,"unlimited":limit<0,"remaining":None if limit<0 else max(0,limit-current),"reset_at":reset_at(window).isoformat(),"reset_window":window}
+    return {"plan":plan.key,"name":plan.name,"active":bool(subscription.is_active and (not subscription.expires_at or subscription.expires_at>timezone.now())),"expires_at":subscription.expires_at.isoformat() if subscription.expires_at else None,"priority":plan.priority,"support":plan.support,"features":{"live_trading":True,"advanced_ai":plan.advanced_ai},"usage":items,"reset_at":reset_at("day").isoformat(),"reset_policy":{"daily":"Every day at 00:00 UTC","minute":"Every minute; applies to the trading API-call burst limit","subscription":"Paid-plan entitlements fall back to FREE when the subscription expires; usage meters reset automatically"}}
 
 def rate_limit_response_data(user,metric,window,current,limit):
-    plan=effective_plan(user); reset=_start(window)+(timedelta(days=1) if window=="day" else timedelta(minutes=1))
-    return {"code":"PLAN_LIMIT_REACHED","detail":f"{FEATURE_LABELS.get(metric,metric)} limit reached for {plan.name}.","plan":plan.key,"metric":metric,"used":current,"limit":limit,"reset_at":reset.isoformat(),"upgrade_available":plan.key!="ENTERPRISE"}
+    plan=effective_plan(user); reset=reset_at(window)
+    return {"code":"PLAN_LIMIT_REACHED","detail":f"{FEATURE_LABELS.get(metric,metric)} limit reached for {plan.name}.","plan":plan.key,"metric":metric,"used":current,"limit":limit,"reset_at":reset.isoformat(),"reset_window":window,"upgrade_available":plan.key!="ENTERPRISE"}
