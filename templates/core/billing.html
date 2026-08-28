@@ -22,21 +22,20 @@ const api=async(url,opts={})=>{const method=(opts.method||'GET').toUpperCase(),h
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const money=(c,cur)=>c==null?'Price not configured':`${esc(cur||'KES')} ${(Number(c)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 const alertBox=$('[data-billing-alert]');
-const showError=m=>{if(!alertBox)return;alertBox.hidden=false;alertBox.textContent=m};
+const showError=m=>{if(!alertBox)return;alertBox.hidden=!m;alertBox.textContent=m||''};
 function renderPlans(plans,current){
 $('[data-plan-grid]').innerHTML=(plans||[]).map(p=>{const active=p.plan===current;const disabled=!p.configured||active;const action=active?'Current plan':p.plan==='FREE'?'Use Free':p.configured?'Upgrade':'Not configured';return `<article class="panel billing-plan-card"><p class="eyebrow">${esc(p.plan)}</p><h2 class="billing-plan-price money-value">${money(p.price_cents,p.currency)}</h2><p>${p.recurring?'Recurring subscription':'No recurring charge'}</p><div class="billing-plan-actions">${disabled?`<button class="btn ghost" type="button" disabled>${action}</button>`:`<button class="btn primary" type="button" data-checkout-plan="${esc(p.plan)}">${action}</button>`}</div></article>`}).join('')||'<div class="panel">No billing plans are configured.</div>';
 $('[data-plan-grid]').querySelectorAll('[data-checkout-plan]').forEach(btn=>btn.addEventListener('click',()=>startCheckout(btn.dataset.checkoutPlan)));
 }
-async function startCheckout(plan){
-try{
-showError('');alertBox.hidden=true;
-const data=await api('/billing/checkout/',{method:'POST',body:JSON.stringify({plan})});
-if(!data.url)throw Error('The payment provider did not return a checkout URL.');
-window.location.assign(data.url);
-}catch(e){console.error(e);showError(`Payment could not be started: ${e.message}`)}
+function startCheckout(plan){
+  // Checkout creation is server-to-provider. Navigating to the protected GET
+  // endpoint keeps the browser out of the edge-sensitive POST path and lets
+  // the server redirect directly to the hosted provider checkout.
+  showError('');
+  window.location.assign(`/billing/checkout/start/?plan=${encodeURIComponent(plan)}`);
 }
 async function load(){
-alertBox.hidden=true;
+showError('');
 try{
 const [status,ent,plansData]=await Promise.all([api('/billing/status/'),api('/billing/entitlements/'),api('/billing/plans/')]);
 const s=status.subscription||{},plan=s.plan||'FREE';renderPlans(plansData.plans||status.plans||[],plan);
