@@ -1,5 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Billing confirmation | AlgoBot Enterprise{% endblock %}
+{% block title %}Billing confirmation | AlgoBot{% endblock %}
+{% block mobile_title %}Billing confirmation{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="Billing confirmation" module="Billing" page_id="core-billing_success" %}
+<section class="billing-callback-page">
+  <article class="panel billing-callback-card">
+    <div class="callback-icon" aria-hidden="true">{% if payment_paid %}✓{% else %}…{% endif %}</div>
+    <p class="eyebrow">PAYMENT RETURN</p>
+    <h1>{% if payment_paid %}Payment confirmed{% else %}Payment received — verification in progress{% endif %}</h1>
+    <p class="callback-copy">{% if payment_paid %}Your subscription has been activated from the provider's authoritative payment status.{% else %}The provider has returned you to AlgoBot, but the final payment state is not yet confirmed. Your account will not be upgraded until the provider reports a successful transaction.{% endif %}</p>
+    <div class="callback-grid">
+      <div><span>Provider</span><strong>{{ provider|title }}</strong></div>
+      <div><span>Status</span><strong class="money-value">{{ payment_state|default:"PENDING" }}</strong></div>
+      {% if invoice %}<div><span>Amount</span><strong class="money-value">{{ invoice.currency|upper }} {{ invoice.amount_cents|floatformat:2 }}</strong></div>{% endif %}
+      {% if subscription %}<div><span>Plan</span><strong>{{ subscription.plan }}</strong></div>{% endif %}
+    </div>
+    <div class="callback-actions"><a class="btn primary" href="/billing/">Open billing</a><a class="btn ghost" href="/dashboard/">Return to dashboard</a></div>
+  </article>
+</section>
 {% endblock %}
+{% block extra_css %}<style>
+.billing-callback-page{max-width:760px;margin:60px auto;padding:18px}.billing-callback-card{text-align:center;padding:36px}.callback-icon{width:58px;height:58px;margin:0 auto 18px;display:grid;place-items:center;border-radius:50%;font-size:28px;font-weight:900;background:rgba(51,214,159,.12);color:var(--ds-success,#33d69f);border:1px solid rgba(51,214,159,.3)}.billing-callback-card h1{margin:8px 0 10px}.callback-copy{max-width:620px;margin:0 auto;color:var(--muted-text,#8e96a3);line-height:1.6}.callback-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:24px 0;text-align:left}.callback-grid>div{padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:12px}.callback-grid span{display:block;font-size:12px;color:var(--muted-text,#8e96a3)}.callback-grid strong{display:block;margin-top:5px}.callback-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}@media(max-width:600px){.billing-callback-page{margin:20px auto;padding:10px}.billing-callback-card{padding:24px}.callback-grid{grid-template-columns:1fr}}
+</style>{% endblock %}
