@@ -1,5 +1,4 @@
 from datetime import timedelta
-from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -81,7 +80,7 @@ class TradingFoundationTests(TestCase):
                 )
 
     def test_freshness_gate_accepts_recent_snapshot(self):
-        symbol = MarketSymbol.objects.create(symbol='R_100', display_name='Volatility 100', market='synthetic_indices')
+        symbol = MarketSymbol.objects.create(symbol='R_100', display_name='Volatility 100', market='Volatility Indices')
         snapshot = MarketSnapshot.objects.create(
             symbol=symbol,
             last_price='100.0',
@@ -91,7 +90,7 @@ class TradingFoundationTests(TestCase):
         self.assertEqual(MarketDataFreshnessService(max_age_seconds=30).latest('R_100').pk, snapshot.pk)
 
     def test_freshness_gate_rejects_stale_snapshot(self):
-        symbol = MarketSymbol.objects.create(symbol='R_101', display_name='Volatility 101', market='synthetic_indices')
+        symbol = MarketSymbol.objects.create(symbol='R_101', display_name='Volatility 101', market='Volatility Indices')
         MarketSnapshot.objects.create(
             symbol=symbol,
             last_price='101.0',
