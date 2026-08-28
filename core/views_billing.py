@@ -144,16 +144,17 @@ def billing_success_page(request):
         try:
             result = _reconcile_invoice(invoice, provider)
         except Exception:
-            # Never turn a valid payment-provider redirect into a Django 500.
             result = {"paid": bool(invoice.paid), "state": "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
     elif invoice:
         result = {"paid": bool(invoice.paid), "state": "PAID" if invoice.paid else "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
 
+    callback_invoice = (result or {}).get("invoice")
     context = {
         "provider": provider or "payment provider",
         "payment_state": (result or {}).get("state", "PENDING"),
         "payment_paid": bool((result or {}).get("paid")),
-        "invoice": (result or {}).get("invoice"),
+        "invoice": callback_invoice,
+        "invoice_amount": (float(callback_invoice.amount_cents) / 100) if callback_invoice else None,
         "subscription": (result or {}).get("subscription"),
         "reference": reference,
         "tracking_id": tracking_id,
