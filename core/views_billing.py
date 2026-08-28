@@ -129,7 +129,7 @@ def _reconcile_invoice(invoice, provider):
     if state in {"COMPLETE", "COMPLETED", "COMPLETED_SUCCESS", "SUCCESS", "SUCCEEDED", "PAID"}:
         invoice, subscription = _activate(invoice, plan)
         _persist_callback_payment(invoice, state, payload)
-        return {"paid": True, "state": "COMPLETED", "invoice": invoice, "subscription": subscription, "provider_payload": payload}
+        return {"paid": True, "state": "COMPLETE", "invoice": invoice, "subscription": subscription, "provider_payload": payload}
     if state in {"FAILED", "FAILURE", "CANCELLED", "CANCELED", "INVALID", "REVERSED"}:
         _persist_callback_payment(invoice, state, payload)
         return {"paid": False, "state": "FAILED", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first(), "provider_payload": payload}
@@ -162,7 +162,7 @@ def billing_success_page(request):
         except Exception:
             result = {"paid": bool(invoice.paid), "state": "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
     elif invoice:
-        result = {"paid": bool(invoice.paid), "state": "COMPLETED" if invoice.paid else "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
+        result = {"paid": bool(invoice.paid), "state": "COMPLETE" if invoice.paid else "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
     callback_invoice = (result or {}).get("invoice")
     return render(request, "core/billing_success.html", {
         "provider": provider or "payment provider",
