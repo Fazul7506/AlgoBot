@@ -22,7 +22,7 @@
 .key-glyph { width:36px; height:36px; display:grid; place-items:center; border-radius:10px; background:color-mix(in srgb,var(--ds-info,#29d3ff) 12%,transparent); color:var(--ds-info,#29d3ff); }
 .api-key-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; color:var(--ink-muted); font-size:12px; }
 .api-key-meta small { width:100%; }
-.api-key-actions { display:flex; gap:8px; justify-content:flex-end; }
+.api-key-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
 .ds-dialog { width:min(560px,calc(100% - 28px)); padding:0; border:1px solid var(--border-safe); border-radius:20px; background:var(--surface-strong); color:var(--ink-strong); box-shadow:0 24px 80px rgba(0,0,0,.45); }
 .ds-dialog::backdrop { background:rgba(0,0,0,.68); backdrop-filter:blur(4px); }
 .api-key-dialog-form,.secret-reveal { position:relative; display:grid; gap:16px; padding:28px; }
@@ -36,13 +36,14 @@
 .secret-reveal p { margin:0; }
 .secret-box { display:flex; align-items:center; gap:8px; padding:10px; border:1px solid var(--border-safe); border-radius:12px; background:var(--surface-deep); text-align:left; }
 .secret-box code { flex:1; overflow:auto; color:var(--ink-strong); word-break:break-all; }
+/* Financial values: account balances, equity, available funds, P/L, prices and billing amounts. */
+:where(.money,.money-value,.currency-value,.amount-value,[data-money],[data-amount],[data-balance],[data-equity],[data-pnl],[data-kpi="balance"],[data-kpi="equity"],[data-kpi="available"],[data-kpi="pnl"]) { color:var(--ds-success,#33d69f)!important; }
 /* Heatmap */
 .smart-money-heatmap { max-width:1500px; margin:0 auto; padding:24px; }
 .hm-header { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:20px; }
 .hm-header h1 { margin:4px 0 8px; font-size:clamp(28px,4vw,44px); }
 .hm-controls { display:flex; gap:8px; flex-wrap:wrap; }
 .hm-controls select,.hm-controls button { min-height:40px; padding:8px 12px; border:1px solid var(--border-safe); border-radius:10px; background:var(--surface-strong); color:var(--ink-strong); }
-.hm-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; }
 .hm-cell { position:relative; min-height:104px; padding:14px; display:flex; flex-direction:column; justify-content:space-between; border:1px solid rgba(255,255,255,.08); border-radius:12px; color:#fff; overflow:hidden; }
 .hm-cell::after { content:""; position:absolute; inset:0; background:linear-gradient(135deg,rgba(255,255,255,.13),transparent 45%); pointer-events:none; }
 .hm-symbol { font-weight:900; letter-spacing:.02em; }
