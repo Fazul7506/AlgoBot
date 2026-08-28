@@ -21,7 +21,13 @@ class OrderRoutingTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user('phase13@example.com', 'phase13@example.com', 'pass')
         broker = Broker.objects.create(name='Paper Trading', broker_type='paper')
-        self.account = BrokerAccount.objects.create(user=self.user, broker=broker, account_id='PAPER-1', is_preferred=True)
+        self.account = BrokerAccount.objects.create(
+            user=self.user,
+            broker=broker,
+            account_id='PAPER-1',
+            is_preferred=True,
+            credentials={'account_type': 'demo'},
+        )
         BrokerConnection.objects.create(broker=broker, broker_account=self.account, status='connected')
 
     def test_registry_returns_adapter_without_engine_changes(self):
