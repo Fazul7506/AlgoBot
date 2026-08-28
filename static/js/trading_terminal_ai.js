@@ -1,8 +1,8 @@
 /* Trading-terminal AI decision bridge. */
 (() => {
   'use strict';
-  if (window.__algoBotTradingTerminalAI) return;
-  window.__algoBotTradingTerminalAI = true;
+  if (window.__algobotTradingTerminalAI) return;
+  window.__algobotTradingTerminalAI = true;
 
   const $ = (s, r = document) => r.querySelector(s);
   const text = (s, value) => $(s)?.replaceChildren(document.createTextNode(String(value ?? '—')));
@@ -59,7 +59,7 @@
     if (button && !silent) { button.disabled = true; button.textContent = 'Analysing…'; }
     if (!silent) show('Running AI inference from the latest persisted broker market feed…');
     try {
-      const data = await api('/trading/ai/predict/', {
+      const data = await api('/api/ai/predict/', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({symbol, timeframe: 'M1'})
@@ -75,8 +75,8 @@
       text('[data-ai-regime]', 'Unavailable');
       window.__algobotAiOrderContext = null;
       const message = String(error?.message || 'AI analysis is temporarily unavailable.');
-      show(message.includes('Production edge security challenged') || message.includes('<html') || message.includes('Just a moment') ? 'AI analysis is temporarily unavailable at the production edge. Live execution remains blocked until a verified AI decision is available.' : message);
-      window.dispatchEvent(new CustomEvent('algobot:ai-gate-updated', {detail:{actionable:false, error:true}}));
+      show(message.includes('EDGE_CHALLENGE') || error?.code === 'EDGE_CHALLENGE' || message.includes('<html') || message.includes('Just a moment') ? 'AI analysis is temporarily unavailable at the production edge. Live execution remains blocked until a verified AI decision is available.' : message);
+      window.dispatchEvent(new CustomEvent('algobot:ai-gate-updated', {detail:{actionable:false, error:true, code:error?.code || null}}));
     } finally {
       analysing = false;
       if (button && !silent) { button.disabled = false; button.textContent = 'Analyse market'; }
