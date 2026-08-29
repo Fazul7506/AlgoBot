@@ -5,7 +5,7 @@ from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import NotificationChannelConnection, NotificationPreference
+from .models import DeliveryLog, Notification, NotificationChannelConnection, NotificationPreference
 from .services import send_transactional_email, sender_for_category
 
 
@@ -18,7 +18,7 @@ class NotificationChannelDisconnectTests(TestCase):
         )
         self.client.force_login(self.user)
 
-    def test_gmail_disconnect_permanently_deletes_connection_and_preference(self):
+    def test_gmail_disconnect_deletes_connection_preference_and_gmail_history_only(self):
         NotificationChannelConnection.objects.create(
             user=self.user,
             provider="gmail",
@@ -30,6 +30,14 @@ class NotificationChannelDisconnectTests(TestCase):
             metadata={"name": "Connected User", "picture": "https://example.com/avatar"},
         )
         NotificationPreference.objects.create(user=self.user, channel="gmail", enabled=True)
+        gmail_notice = Notification.objects.create(
+            user=self.user, title="Gmail notice", message="mail", channel="gmail", status="delivered"
+        )
+        DeliveryLog.objects.create(notification=gmail_notice, channel="gmail", status="delivered", provider="brevo")
+        other_notice = Notification.objects.create(
+            user=self.user, title="In app notice", message="keep", channel="in_app", status="delivered"
+        )
+        DeliveryLog.objects.create(notification=other_notice, channel="in_app", status="delivered", provider="internal")
         session = self.client.session
         session["algobot_gmail_oauth_state"] = "stale-oauth-state"
         session.save()
@@ -37,12 +45,12 @@ class NotificationChannelDisconnectTests(TestCase):
         response = self.client.post(reverse("gmail_disconnect"))
 
         self.assertRedirects(response, "/notifications/")
-        self.assertFalse(
-            NotificationChannelConnection.objects.filter(user=self.user, provider="gmail").exists()
-        )
-        self.assertFalse(
-            NotificationPreference.objects.filter(user=self.user, channel="gmail").exists()
-        )
+        self.assertFalse(NotificationChannelConnection.objects.filter(user=self.user, provider="gmail").exists())
+        self.assertFalse(NotificationPreference.objects.filter(user=self.user, channel="gmail").exists())
+        self.assertFalse(Notification.objects.filter(pk=gmail_notice.pk).exists())
+        self.assertFalse(DeliveryLog.objects.filter(notification_id=gmail_notice.pk).exists())
+        self.assertTrue(Notification.objects.filter(pk=other_notice.pk).exists())
+        self.assertTrue(DeliveryLog.objects.filter(notification_id=other_notice.pk).exists())
         self.assertNotIn("algobot_gmail_oauth_state", self.client.session)
 
         status = self.client.get(reverse("notification_channels_status"))
@@ -53,7 +61,7 @@ class NotificationChannelDisconnectTests(TestCase):
             "address": "",
         })
 
-    def test_telegram_disconnect_permanently_deletes_connection_and_preference(self):
+    def test_telegram_disconnect_deletes_connection_preference_and_telegram_history_only(self):
         NotificationChannelConnection.objects.create(
             user=self.user,
             provider="telegram",
@@ -64,6 +72,13 @@ class NotificationChannelDisconnectTests(TestCase):
             metadata={"first_name": "AlgoBot", "username": "algobot_user"},
         )
         NotificationPreference.objects.create(user=self.user, channel="telegram", enabled=True)
+        telegram_notice = Notification.objects.create(
+            user=self.user, title="Telegram notice", message="telegram", channel="telegram", status="delivered"
+        )
+        DeliveryLog.objects.create(notification=telegram_notice, channel="telegram", status="delivered", provider="telegram")
+        other_notice = Notification.objects.create(
+            user=self.user, title="In app notice", message="keep", channel="in_app", status="delivered"
+        )
         session = self.client.session
         session["algobot_telegram_link"] = "https://t.me/algobot?start=token"
         session.save()
@@ -71,12 +86,11 @@ class NotificationChannelDisconnectTests(TestCase):
         response = self.client.post(reverse("telegram_disconnect"))
 
         self.assertRedirects(response, "/notifications/")
-        self.assertFalse(
-            NotificationChannelConnection.objects.filter(user=self.user, provider="telegram").exists()
-        )
-        self.assertFalse(
-            NotificationPreference.objects.filter(user=self.user, channel="telegram").exists()
-        )
+        self.assertFalse(NotificationChannelConnection.objects.filter(user=self.user, provider="telegram").exists())
+        self.assertFalse(NotificationPreference.objects.filter(user=self.user, channel="telegram").exists())
+        self.assertFalse(Notification.objects.filter(pk=telegram_notice.pk).exists())
+        self.assertFalse(DeliveryLog.objects.filter(notification_id=telegram_notice.pk).exists())
+        self.assertTrue(Notification.objects.filter(pk=other_notice.pk).exists())
         self.assertNotIn("algobot_telegram_link", self.client.session)
 
         status = self.client.get(reverse("notification_channels_status"))
@@ -86,6 +100,16 @@ class NotificationChannelDisconnectTests(TestCase):
             "status": "not_connected",
             "address": "",
         })
+
+    def test_get_disconnect_is_safe_and_does_not_delete_data(self):
+        NotificationChannelConnection.objects.create(user=self.user, provider="gmail", status="verified")
+        Notification.objects.create(user=self.user, title="Keep", message="keep", channel="gmail")
+
+        response = self.client.get(reverse("gmail_disconnect"))
+
+        self.assertRedirects(response, "/notifications/")
+        self.assertTrue(NotificationChannelConnection.objects.filter(user=self.user, provider="gmail").exists())
+        self.assertTrue(Notification.objects.filter(user=self.user, channel="gmail").exists())
 
 
 class BrandedNotificationEmailTests(TestCase):
