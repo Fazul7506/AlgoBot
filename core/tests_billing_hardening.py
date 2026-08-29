@@ -99,6 +99,6 @@ class BillingHardeningTests(TestCase):
     @override_settings(BILLING_SUCCESS_URL="https://algobot.dpdns.org/billing/success/", BILLING_CANCEL_URL="https://algobot.dpdns.org/billing/cancel/", PESAPAL_CALLBACK_URL="https://algobot.dpdns.org/payments/pesapal/callback/")
     def test_explicit_provider_callback_urls_are_used(self):
         service = PaymentService()
-        self.assertEqual(service._callback_url("BILLING_SUCCESS_URL", "/billing/success/", {"provider": "intasend", "reference": "IS-1-BASIC-X"}), "https://algobot.dpdns.org/billing/success/?provider=intasend&reference=IS-1-BASIC-X")
-        self.assertEqual(service._callback_url("BILLING_CANCEL_URL", "/billing/cancel/"), "https://algobot.dpdns.org/billing/cancel/")
-        self.assertEqual(service._callback_url("PESAPAL_CALLBACK_URL", "/payments/pesapal/callback/"), "https://algobot.dpdns.org/payments/pesapal/callback/")
+        self.assertEqual(service._callback_url("BILLING_SUCCESS_URL", "/billing/success/", {"provider": "intasend", "reference": "IS-1-BASIC-X"}), "https://algobot.dpdns.org/billing/success?provider=intasend&reference=IS-1-BASIC-X")
+        self.assertEqual(service._callback_url("BILLING_CANCEL_URL", "/billing/cancel/"), "https://algobot.dpdns.org/billing/cancel")
+        self.assertEqual(service._callback_url("PESAPAL_CALLBACK_URL", "/payments/pesapal/callback/"), "https://algobot.dpdns.org/payments/pesapal/callback")
