@@ -8,9 +8,6 @@
   const inflight = new Map();
   const cache = new Map();
   const GET_CACHE_MS = 1200;
-  // Production API traffic must use the dedicated API hostname. Keeping this
-  // decision here (rather than in individual pages) prevents one page from
-  // silently falling back to a Cloudflare-proxied /data/ alias.
   const configuredApiBase = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
   const defaultApiBase = window.location.hostname === 'algobot.dpdns.org' ? 'https://api.algobot.dpdns.org' : '';
   const apiBase = (configuredApiBase || defaultApiBase).replace(/\/+$/, '');
@@ -28,11 +25,11 @@
       return {detail:contentType.includes('text/html') ? `Backend returned an unexpected HTML response (${response.status}).` : String(text || `Request failed (${response?.status || 'unknown'})`)};
     }
   };
-  async function fetchOnce(url, options, controller) {
+  async function fetchOnce(url, options, controller, sameOrigin = false) {
     const method = (options.method || 'GET').toUpperCase();
     const headers = {Accept:'application/json', ...(options.headers || {})};
     if (!['GET','HEAD','OPTIONS'].includes(method) && !headers['X-CSRFToken']) headers['X-CSRFToken'] = csrf();
-    const target = resolveUrl(url);
+    const target = sameOrigin ? url : resolveUrl(url);
     const crossOrigin = (() => { try { return new URL(target, window.location.origin).origin !== window.location.origin; } catch (_) { return false; } })();
     const response = await fetch(target, {credentials:crossOrigin ? 'include' : 'same-origin', ...options, headers, signal:controller.signal});
     return {response, text:await response.text()};
@@ -46,32 +43,52 @@
       const recent = cache.get(url);
       if (recent && Date.now() - recent.at <= GET_CACHE_MS) return recent.payload;
     }
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), Math.max(1000, timeout));
     const promise = (async () => {
+      let controller = new AbortController();
+      let timer = setTimeout(() => controller.abort(), Math.max(1000, timeout));
+      let result;
       try {
-        const {response, text} = await fetchOnce(url, options, controller);
-        const payload = parsePayload(response, text);
-        if (!response.ok) {
-          const error = new Error(payload.detail || payload.message || `Request failed (${response.status})`);
-          error.status = response.status;
-          error.code = payload.code || (isCloudflareChallenge(response, text) ? 'EDGE_CHALLENGE' : 'API_ERROR');
-          error.isEdgeChallenge = error.code === 'EDGE_CHALLENGE';
-          window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url, method, status:response.status, code:error.code, message:error.message, retryable:['GET','HEAD'].includes(method), edgeChallenge:error.isEdgeChallenge, retry:['GET','HEAD'].includes(method) ? () => request(url, options, timeout) : null}}));
-          throw error;
+        result = await fetchOnce(url, options, controller);
+        if (isCloudflareChallenge(result.response, result.text) && apiBase && !/^https?:\/\//i.test(url)) {
+          controller = new AbortController();
+          clearTimeout(timer);
+          timer = setTimeout(() => controller.abort(), Math.max(1000, timeout));
+          try {
+            const fallback = await fetchOnce(url, options, controller, true);
+            if (!isCloudflareChallenge(fallback.response, fallback.text)) result = fallback;
+          } catch (_) { /* retain edge response */ }
         }
-        if (method === 'GET') cache.set(url,{payload,at:Date.now()});
-        return payload;
       } catch (error) {
-        if (error?.name === 'AbortError' || error?.code === 'API_TIMEOUT') {
-          const e=new Error('Backend request timed out'); e.code='API_TIMEOUT';
-          window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url, method, status:0, code:e.code, message:e.message, retryable:['GET','HEAD'].includes(method), retry:['GET','HEAD'].includes(method) ? () => request(url, options, timeout) : null}}));
+        if (error?.name !== 'AbortError' && apiBase && !/^https?:\/\//i.test(url)) {
+          try {
+            controller = new AbortController();
+            clearTimeout(timer);
+            timer = setTimeout(() => controller.abort(), Math.max(1000, timeout));
+            result = await fetchOnce(url, options, controller, true);
+          } catch (_) { result = null; }
+        }
+        if (!result) {
+          const e = new Error(error?.name === 'AbortError' ? 'Backend request timed out' : (error?.message || 'Network request failed'));
+          e.code = error?.name === 'AbortError' ? 'API_TIMEOUT' : 'NETWORK_ERROR';
+          e.status = 0;
+          e.retryable = ['GET','HEAD'].includes(method);
+          window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url,method,status:0,code:e.code,message:e.message,retryable:e.retryable}}));
           throw e;
         }
-        if (error?.code === 'EDGE_CHALLENGE' || error?.code === 'API_ERROR') throw error;
-        window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url, method, status:error?.status || 0, code:error?.code || 'NETWORK_ERROR', message:error?.message || 'Network request failed', retryable:['GET','HEAD'].includes(method), retry:['GET','HEAD'].includes(method) ? () => request(url, options, timeout) : null}}));
-        throw error;
       } finally { clearTimeout(timer); }
+      const {response,text} = result;
+      const payload = parsePayload(response,text);
+      if (!response.ok) {
+        const error = new Error(payload.detail || payload.message || `Request failed (${response.status})`);
+        error.status = response.status;
+        error.code = payload.code || (isCloudflareChallenge(response,text) ? 'EDGE_CHALLENGE' : 'API_ERROR');
+        error.isEdgeChallenge = error.code === 'EDGE_CHALLENGE';
+        error.retryable = ['GET','HEAD'].includes(method) && response.status >= 500;
+        window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url,method,status:response.status,code:error.code,message:error.message,retryable:error.retryable,edgeChallenge:error.isEdgeChallenge}}));
+        throw error;
+      }
+      if (method === 'GET') cache.set(url,{payload,at:Date.now()});
+      return payload;
     })();
     if (method === 'GET') inflight.set(key,promise);
     try { return await promise; } finally { if (inflight.get(key) === promise) inflight.delete(key); }
