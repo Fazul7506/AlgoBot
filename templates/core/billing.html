@@ -3,16 +3,16 @@
 {% block mobile_title %}Billing{% endblock %}
 {% block content %}
 <section class="billing-page">
-<header class="page-heading"><div><p class="eyebrow">ACCOUNT</p><h1>Billing</h1><p class="billing-subtitle">Choose a plan, complete payment on the provider checkout, then return here to see the authoritative payment result.</p></div><button class="btn ghost" type="button" data-billing-refresh>Refresh</button></header>
-<section class="panel billing-alert" data-billing-alert hidden></section>
-<section class="card-grid" data-plan-grid><div class="panel">Loading plans…</div></section>
-<section class="panel billing-section"><div class="section-heading"><div><p class="eyebrow">SUBSCRIPTION</p><h2 data-subscription-plan>Loading…</h2></div><button class="btn danger" type="button" data-cancel-subscription>Cancel renewal</button></div><p data-subscription-meta>Checking subscription…</p></section>
+<header class="page-heading"><div><p class="eyebrow">ACCOUNT</p><h1>Billing</h1><p class="billing-subtitle">Choose a plan, pay securely with IntaSend or Pesapal, then return here for the verified payment result.</p></div><button class="btn ghost" type="button" data-billing-refresh>Refresh</button></header>
+<section class="panel billing-alert" data-billing-alert hidden role="alert"></section>
+<section class="card-grid billing-plan-grid" data-plan-grid><div class="panel">Loading plans…</div></section>
+<section class="panel billing-section"><div class="section-heading"><div><p class="eyebrow">SUBSCRIPTION CYCLE</p><h2 data-subscription-plan>Loading…</h2></div><button class="btn danger" type="button" data-cancel-subscription>Cancel renewal</button></div><p data-subscription-meta>Checking subscription…</p></section>
 <section class="panel billing-section"><div class="section-heading"><div><p class="eyebrow">USAGE</p><h2>Plan limits</h2></div><span data-reset-time></span></div><div class="usage-grid" data-usage-grid><div class="empty-state">Loading usage…</div></div></section>
 <section class="panel billing-section"><p class="eyebrow">PAYMENT HISTORY</p><div data-payment-list class="empty-state">No completed checkout has been returned yet.</div></section>
 </section>
 {% endblock %}
 {% block extra_css %}<style>
-.billing-page{max-width:1250px;margin:auto}.billing-subtitle{margin:4px 0 0;color:var(--muted-text,#8e96a3)}.billing-section{margin-top:14px}.billing-alert{margin:12px 0;padding:12px 14px;border-color:rgba(248,113,113,.35);color:#fecaca}.billing-alert[hidden]{display:none}.usage-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.usage-card{padding:13px;border:1px solid rgba(255,255,255,.08);border-radius:11px}.usage-card small,.usage-card .reset{display:block;color:var(--muted-text,#8e96a3)}.usage-card strong{display:block;margin:6px 0;font-size:1.1rem}.billing-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.07)}.billing-plan-card{display:flex;flex-direction:column;gap:8px}.billing-plan-card h2{margin:0}.billing-plan-price{font-size:1.35rem;font-weight:800}.billing-plan-actions{margin-top:auto;display:flex;gap:8px;flex-wrap:wrap}.money-value{color:var(--ds-success,#33d69f)!important}.billing-status-paid,.billing-status-completed{color:var(--ds-success,#33d69f);font-weight:800}.billing-status-pending{color:#fbbf24;font-weight:800}.billing-status-failed{color:#fb7185;font-weight:800}@media(max-width:900px){.usage-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:620px){.usage-grid{grid-template-columns:1fr}.billing-row{grid-template-columns:1fr}.billing-plan-actions{width:100%}}
+.billing-page{max-width:1250px;margin:auto}.billing-subtitle{margin:4px 0 0;color:var(--muted-text,#8e96a3)}.billing-section{margin-top:14px}.billing-alert{margin:10px 0;padding:9px 12px;border-color:rgba(248,113,113,.35);color:#fecaca}.billing-alert[hidden]{display:none}.billing-plan-grid{gap:10px}.billing-plan-card{display:flex;flex-direction:column;gap:6px;padding:14px!important;min-height:0}.billing-plan-card h2{margin:0;font-size:1.25rem}.billing-plan-price{font-size:1.3rem;font-weight:800}.billing-plan-actions{margin-top:auto;display:flex;gap:6px;flex-wrap:wrap}.billing-plan-actions .btn{font-size:.82rem;padding:7px 10px}.billing-cycle-note{font-size:.84rem;color:var(--muted-text,#8e96a3)}.provider-label{width:100%;font-size:.72rem;color:var(--muted-text,#8e96a3);margin-top:2px}.usage-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.usage-card{padding:11px;border:1px solid rgba(255,255,255,.08);border-radius:10px}.usage-card small,.usage-card .reset{display:block;color:var(--muted-text,#8e96a3)}.usage-card strong{display:block;margin:5px 0;font-size:1.05rem}.billing-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:.9rem}.money-value{color:var(--ds-success,#33d69f)!important}.billing-status-paid,.billing-status-completed{color:var(--ds-success,#33d69f);font-weight:800}.billing-status-pending{color:#fbbf24;font-weight:800}.billing-status-failed{color:#fb7185;font-weight:800}@media(max-width:900px){.usage-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:620px){.usage-grid{grid-template-columns:1fr}.billing-row{grid-template-columns:1fr}.billing-plan-actions{width:100%}}
 </style>{% endblock %}
 {% block extra_js %}<script>
 (()=>{
@@ -24,22 +24,19 @@ const money=(c,cur)=>c==null?'Price not configured':`${esc(cur||'KES')} ${(Numbe
 const alertBox=$('[data-billing-alert]');
 const showError=m=>{if(!alertBox)return;alertBox.hidden=!m;alertBox.textContent=m||''};
 function renderPlans(plans,current){
-$('[data-plan-grid]').innerHTML=(plans||[]).map(p=>{const active=p.plan===current;const disabled=!p.configured||active;const action=active?'Current plan':p.plan==='FREE'?'Use Free':p.configured?'Upgrade':'Not configured';return `<article class="panel billing-plan-card"><p class="eyebrow">${esc(p.plan)}</p><h2 class="billing-plan-price money-value">${money(p.price_cents,p.currency)}</h2><p>${p.recurring?'Recurring subscription':'No recurring charge'}</p><div class="billing-plan-actions">${disabled?`<button class="btn ghost" type="button" disabled>${action}</button>`:`<button class="btn primary" type="button" data-checkout-plan="${esc(p.plan)}">${action}</button>`}</div></article>`}).join('')||'<div class="panel">No billing plans are configured.</div>';
-$('[data-plan-grid]').querySelectorAll('[data-checkout-plan]').forEach(btn=>btn.addEventListener('click',()=>startCheckout(btn.dataset.checkoutPlan)));
+$('[data-plan-grid]').innerHTML=(plans||[]).map(p=>{const active=p.plan===current;const disabled=!p.configured||active;const action=active?'Current plan':p.plan==='FREE'?'Use Free':p.configured?'Choose plan':'Not configured';if(active||p.plan==='FREE')return `<article class="panel billing-plan-card"><p class="eyebrow">${esc(p.plan)}</p><h2 class="billing-plan-price money-value">${money(p.price_cents,p.currency)}</h2><p>${p.recurring?'30-day subscription cycle':'No recurring charge'}</p><div class="billing-plan-actions">${disabled?`<button class="btn ghost" type="button" disabled>${action}</button>`:`<button class="btn primary" type="button" data-checkout-plan="${esc(p.plan)}" data-provider="intasend">${action}</button>`}</div></article>`;return `<article class="panel billing-plan-card"><p class="eyebrow">${esc(p.plan)}</p><h2 class="billing-plan-price money-value">${money(p.price_cents,p.currency)}</h2><p>30-day subscription cycle</p><div class="billing-plan-actions"><span class="provider-label">Checkout provider</span><button class="btn primary" type="button" data-checkout-plan="${esc(p.plan)}" data-provider="intasend">IntaSend</button><button class="btn ghost" type="button" data-checkout-plan="${esc(p.plan)}" data-provider="pesapal">Pesapal</button></div></article>`}).join('')||'<div class="panel">No billing plans are configured.</div>';
+$('[data-plan-grid]').querySelectorAll('[data-checkout-plan]').forEach(btn=>btn.addEventListener('click',()=>startCheckout(btn.dataset.checkoutPlan,btn.dataset.provider)));
 }
-function startCheckout(plan){
-  // Checkout creation is server-to-provider. Navigating to the protected GET
-  // endpoint keeps the browser out of the edge-sensitive POST path and lets
-  // the server redirect directly to the hosted provider checkout.
-  showError('');
-  window.location.assign(`/billing/checkout/start/?plan=${encodeURIComponent(plan)}`);
-}
+function startCheckout(plan,provider){showError('');window.location.assign(`/billing/checkout/start/?plan=${encodeURIComponent(plan)}&provider=${encodeURIComponent(provider)}`)}
 async function load(){
 showError('');
 try{
 const [status,ent,plansData]=await Promise.all([api('/billing/status/'),api('/billing/entitlements/'),api('/billing/plans/')]);
 const s=status.subscription||{},plan=s.plan||'FREE';renderPlans(plansData.plans||status.plans||[],plan);
-$('[data-subscription-plan]').textContent=plan;$('[data-subscription-meta]').textContent=s.is_active?`Active · ${money(s.price_cents,s.currency)}${s.expires_at?` · renews ${new Date(s.expires_at).toLocaleDateString()}`:''}`:'Inactive · Free entitlements apply';
+$('[data-subscription-plan]').textContent=plan;
+const expiry=s.expires_at?new Date(s.expires_at).toLocaleString():'';
+$('[data-subscription-meta]').textContent=s.is_active?(s.recurring?`Active · ${money(s.price_cents,s.currency)} · ${s.recurring?'renews':'ends'} ${expiry}`:`Active · ${money(s.price_cents,s.currency)} · ends ${expiry}`):'Inactive · Free entitlements apply';
+$('[data-cancel-subscription]').disabled=!s.is_active||!s.recurring;
 const u=(ent.current||{}).usage||{},labels={api_calls:'API calls / day',strategies:'Active strategies',backtests:'Backtests / day',predictions:'AI predictions / day',orders:'Orders / day',broker_accounts:'Broker accounts',automations:'Automation runs / day',live_orders:'Live orders / day'};
 $('[data-usage-grid]').innerHTML=Object.keys(labels).map(k=>{const x=u[k]||{};return `<article class="usage-card"><small>${labels[k]}</small><strong>${x.unlimited?'Unlimited':`${x.used||0} / ${x.limit??'—'}`}</strong><small>${x.unlimited?'Fair use':`${x.remaining??0} remaining`}</small><span class="reset">${x.reset_at?`Resets ${new Date(x.reset_at).toLocaleString()}`:''}</span></article>`}).join('');
 $('[data-reset-time]').textContent=(ent.current||{}).reset_at?`Reset ${new Date(ent.current.reset_at).toLocaleString()}`:'';
@@ -48,7 +45,7 @@ $('[data-payment-list]').innerHTML=payments.length?payments.map(x=>{const raw=St
 }catch(e){console.error(e);showError(`Billing data could not be loaded: ${e.message}`);$('[data-subscription-meta]').textContent='Billing status unavailable. Retry.'}
 }
 $('[data-billing-refresh]').onclick=load;
-$('[data-cancel-subscription]').onclick=async()=>{if(!confirm('Cancel your subscription renewal?'))return;try{await api('/billing/cancel-subscription/',{method:'POST',body:'{}'});await load()}catch(e){showError(e.message)}};
+$('[data-cancel-subscription]').onclick=async()=>{if(!confirm('Stop renewal at the end of your current paid cycle? Your current access will remain until the displayed end date.'))return;try{await api('/billing/cancel-subscription/',{method:'POST',body:'{}'});await load()}catch(e){showError(e.message)}};
 load();
 })();
 </script>{% endblock %}
