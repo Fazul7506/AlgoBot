@@ -16,7 +16,7 @@ from .channel_service import (
     telegram_start,
     telegram_webhook,
 )
-from .models import NotificationChannelConnection, NotificationPreference
+from .models import Notification, NotificationChannelConnection, NotificationPreference
 
 BROWSER_NOTIFICATIONS_URL = "/notifications/"
 
@@ -96,24 +96,27 @@ def telegram_webhook_view(request):
 
 @transaction.atomic
 def _delete_channel_connection(user, provider):
-    """Permanently remove a notification channel and its channel preference."""
+    """Permanently delete a channel, preference, and all history for that channel."""
+    Notification.objects.filter(user=user, channel=provider).delete()
     NotificationChannelConnection.objects.filter(user=user, provider=provider).delete()
     NotificationPreference.objects.filter(user=user, channel=provider).delete()
 
 
 @login_required
 def telegram_disconnect(request):
-    if request.method == "POST":
-        _delete_channel_connection(request.user, "telegram")
-        request.session.pop("algobot_telegram_link", None)
-        messages.success(request, "Telegram account disconnected and all saved connection data was deleted.")
+    if request.method != "POST":
+        return redirect(BROWSER_NOTIFICATIONS_URL)
+    _delete_channel_connection(request.user, "telegram")
+    request.session.pop("algobot_telegram_link", None)
+    messages.success(request, "Telegram disconnected. Its saved connection and notification history were deleted.")
     return redirect(BROWSER_NOTIFICATIONS_URL)
 
 
 @login_required
 def gmail_disconnect(request):
-    if request.method == "POST":
-        _delete_channel_connection(request.user, "gmail")
-        request.session.pop("algobot_gmail_oauth_state", None)
-        messages.success(request, "Gmail account disconnected and all saved connection data was deleted.")
+    if request.method != "POST":
+        return redirect(BROWSER_NOTIFICATIONS_URL)
+    _delete_channel_connection(request.user, "gmail")
+    request.session.pop("algobot_gmail_oauth_state", None)
+    messages.success(request, "Gmail disconnected. Its saved connection and notification history were deleted.")
     return redirect(BROWSER_NOTIFICATIONS_URL)
