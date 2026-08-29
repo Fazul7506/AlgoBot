@@ -8,7 +8,7 @@ from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from apps.market_data.models import MarketSymbol, Tick, Candle
+from apps.market_data.models import MarketSymbol, Tick, Candle, MarketSnapshot
 from apps.brokers.models import BrokerAccount
 from apps.brokers.services import BrokerRegistry
 from .models import AIModel, ModelVersion, Prediction, PredictionOutcome, FeatureVector, TrainingJob, AIRecommendation, MarketRegime, AnomalyEvent
@@ -98,47 +98,60 @@ async def _bounded_market_data(account, symbol):
 
 
 def _persisted_market_context(symbol, timeframe):
-    """Return fresh broker-ingested data only; never use browser-provided market data."""
+    """Return fresh broker-ingested data from ticks or snapshots; never use browser data."""
     max_age = int(getattr(settings, "BROKER_MARKET_DATA_MAX_AGE_SECONDS", 30)); now = timezone.now()
     tick = Tick.objects.filter(symbol__symbol=symbol).order_by("-epoch", "-received_at").first()
     candles = list(reversed(list(Candle.objects.filter(symbol__symbol=symbol, timeframe=timeframe).order_by("-epoch")[:60])))
-    if tick is None: return None
-    age = max(0, (now - tick.received_at).total_seconds())
-    if age > max_age: return None
-    price = float(tick.quote)
-    return {"market_data":{"close":price,"open":price,"high":price,"low":price,"bid":float(tick.bid) if tick.bid is not None else None,"ask":float(tick.ask) if tick.ask is not None else None,"spread":float(tick.spread or 0),"volume":float(tick.volume or 0),"source":"persisted_broker_tick","age_seconds":round(age,3)},"candles":[{"open":float(c.open),"high":float(c.high),"low":float(c.low),"close":float(c.close),"volume":float(c.volume or 0),"epoch":c.epoch} for c in candles]}
+    if tick is not None:
+        age = max(0, (now - tick.received_at).total_seconds())
+        if age <= max_age:
+            price = float(tick.quote)
+            return {"market_data":{"close":price,"open":price,"high":price,"low":price,"bid":float(tick.bid) if tick.bid is not None else None,"ask":float(tick.ask) if tick.ask is not None else None,"spread":float(tick.spread or 0),"volume":float(tick.volume or 0),"source":"persisted_broker_tick","age_seconds":round(age,3)},"candles":[{"open":float(c.open),"high":float(c.high),"low":float(c.low),"close":float(c.close),"volume":float(c.volume or 0),"epoch":c.epoch} for c in candles]}
+    snapshot = MarketSnapshot.objects.filter(symbol__symbol=symbol).first()
+    if snapshot is not None:
+        age = max(0, (now - snapshot.timestamp).total_seconds())
+        if age <= max_age:
+            price = float(snapshot.last_price)
+            return {"market_data":{"close":price,"open":price,"high":float(snapshot.high or price),"low":float(snapshot.low or price),"bid":float(snapshot.bid) if snapshot.bid is not None else None,"ask":float(snapshot.ask) if snapshot.ask is not None else None,"spread":float(snapshot.spread or 0),"volume":float(snapshot.volume or 0),"source":"persisted_market_snapshot","age_seconds":round(age,3)},"candles":[{"open":float(c.open),"high":float(c.high),"low":float(c.low),"close":float(c.close),"volume":float(c.volume or 0),"epoch":c.epoch} for c in candles]}
+    return None
 
 
 def _broker_market_context(account, symbol):
     tick = asyncio.run(_bounded_market_data(account, symbol)); price = tick.get("price", tick.get("quote"))
     if price is None: raise ValueError("Broker returned no usable market price for the selected symbol.")
-    return {"market_data":{"close":price,"open":price,"high":price,"low":price,"bid":tick.get("bid"),"ask":tick.get("ask"),"spread":(tick.get("ask")-tick.get("bid")) if tick.get("ask") is not None and tick.get("bid") is not None else 0,"source":"live_broker_tick"}}
+    price = float(price); bid = float(tick["bid"]) if tick.get("bid") is not None else None; ask = float(tick["ask"]) if tick.get("ask") is not None else None
+    return {"market_data":{"close":price,"open":price,"high":price,"low":price,"bid":bid,"ask":ask,"spread":(ask-bid) if ask is not None and bid is not None else 0.0,"source":"live_broker_tick"}}
 
 
 @decorators.api_view(["POST"])
 @decorators.permission_classes([JWTAuthenticatedPermission])
 @decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
 def predict(request):
-    # Guard before any ORM query. This prevents the production TypeError where
-    # a missing cross-subdomain session reached BrokerAccount.user=AnonymousUser.
     if not request.user or not request.user.is_authenticated:
         return response.Response({"detail":"Authentication credentials are required for AI analysis.","code":"NOT_AUTHENTICATED"}, status=status.HTTP_401_UNAUTHORIZED)
-    symbol = _discover_symbol(request)
-    if not symbol: return response.Response({"detail":"No active broker market is available. Connect a broker and synchronize markets first.","code":"NO_ACTIVE_MARKET"},status=status.HTTP_409_CONFLICT)
-    account = _connected_account(request.user)
-    if not account: return response.Response({"detail":"Connect a broker before requesting AI analysis.","code":"NO_CONNECTED_BROKER"},status=status.HTTP_409_CONFLICT)
-    timeframe = str(request.data.get("timeframe") or "M1").upper()
     try:
+        symbol = _discover_symbol(request)
+        if not symbol: return response.Response({"detail":"No active broker market is available. Connect a broker and synchronize markets first.","code":"NO_ACTIVE_MARKET"},status=status.HTTP_409_CONFLICT)
+        account = _connected_account(request.user)
+        if not account: return response.Response({"detail":"Connect a broker before requesting AI analysis.","code":"NO_CONNECTED_BROKER"},status=status.HTTP_409_CONFLICT)
+        timeframe = str(request.data.get("timeframe") or "M1").upper()
         raw_context = _persisted_market_context(symbol, timeframe)
         context_source = raw_context.get("market_data", {}).get("source", "persisted_broker_tick") if raw_context else "live_broker_tick"
         if raw_context is None: raw_context = _broker_market_context(account, symbol)
         ctx = validate_feature_context(raw_context)
         result = AIEngine().analyze(symbol, timeframe, ctx)
         return response.Response({"symbol":symbol,"timeframe":timeframe,"broker":account.broker.name,"account_id":account.account_id,"market_context_source":context_source,"prediction":PredictionSerializer(result["prediction"]).data,"recommendation":AIRecommendationSerializer(result["recommendation"]).data,"regime":MarketRegimeSerializer(result["regime"]).data,"explainability":result["explainability"]})
-    except (ValueError, TypeError) as exc: return response.Response({"detail":str(exc),"code":"AI_CONTEXT_INVALID"},status=status.HTTP_400_BAD_REQUEST)
-    except asyncio.TimeoutError: return response.Response({"detail":"Connected broker market data timed out; the last known data was not fabricated.","code":"BROKER_MARKET_DATA_TIMEOUT"},status=status.HTTP_504_GATEWAY_TIMEOUT)
+    except (ValueError, TypeError) as exc:
+        return response.Response({"detail":str(exc),"code":"AI_CONTEXT_INVALID"},status=status.HTTP_400_BAD_REQUEST)
+    except asyncio.TimeoutError:
+        return response.Response({"detail":"Connected broker market data timed out; the last known data was not fabricated.","code":"BROKER_MARKET_DATA_TIMEOUT"},status=status.HTTP_504_GATEWAY_TIMEOUT)
     except Exception as exc:
-        return response.Response({"detail":"AI analysis failed on the server.","code":"AI_INFERENCE_FAILED","error_id":f"ai-{int(timezone.now().timestamp())}"},status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        error_id = f"ai-{int(timezone.now().timestamp())}"
+        # Never leak a traceback to the browser, but make every server failure
+        # observable and machine-readable instead of returning an opaque 500.
+        import logging
+        logging.getLogger(__name__).exception("AI decision engine failed", extra={"error_id":error_id})
+        return response.Response({"detail":"AI analysis failed on the server.","code":"AI_INFERENCE_FAILED","error_id":error_id},status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 @decorators.api_view(["GET"])
