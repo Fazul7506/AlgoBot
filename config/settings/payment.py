@@ -1,8 +1,8 @@
 """Payment and subscription billing settings.
 
-Production deployments can override prices through environment variables. The
-repository defaults are intentionally live so the public billing catalog does
-not silently ship with unconfigured paid tiers.
+Production deployments can override prices and callback URLs through environment
+variables. Callback URLs are explicit so hosted payment providers never depend
+on a guessed Render host or local development URL.
 """
 import os
 
@@ -14,6 +14,14 @@ ALGOBOT_BASIC_PRICE_CENTS = os.getenv("ALGOBOT_BASIC_PRICE_CENTS", "99900").stri
 ALGOBOT_PRO_PRICE_CENTS = os.getenv("ALGOBOT_PRO_PRICE_CENTS", "499900").strip() or None
 ALGOBOT_ENTERPRISE_PRICE_CENTS = os.getenv("ALGOBOT_ENTERPRISE_PRICE_CENTS", "2499900").strip() or None
 ALGOBOT_SUBSCRIPTION_PERIOD_DAYS = int(os.getenv("ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", "30"))
+
+# Explicit application return URLs. Provider checkout URLs are dynamic and
+# must be created per invoice/amount; they should never be stored as env vars.
+BILLING_SUCCESS_URL = os.getenv("BILLING_SUCCESS_URL", "").strip().rstrip("/")
+BILLING_CANCEL_URL = os.getenv("BILLING_CANCEL_URL", "").strip().rstrip("/")
+PESAPAL_CALLBACK_URL = os.getenv("PESAPAL_CALLBACK_URL", "").strip().rstrip("/")
+PESAPAL_CANCELLATION_URL = os.getenv("PESAPAL_CANCELLATION_URL", "").strip().rstrip("/")
+
 INTASEND_PUBLIC_KEY = os.getenv("INTASEND_PUBLIC_KEY", "").strip()
 INTASEND_SECRET_KEY = os.getenv("INTASEND_SECRET_KEY", "").strip()
 INTASEND_WEBHOOK_CHALLENGE = os.getenv("INTASEND_WEBHOOK_CHALLENGE", "").strip()
