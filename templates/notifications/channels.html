@@ -4,99 +4,82 @@
 {% block mobile_title %}Notifications{% endblock %}
 {% block extra_css %}
 <style>
-.notifications-page{max-width:980px;margin:0 auto;padding-bottom:40px}.notifications-page .intro{max-width:720px;color:var(--muted);line-height:1.55}.channel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:20px}.channel-card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px}.channel-head{display:flex;align-items:center;gap:12px}.channel-icon{width:44px;height:44px;display:grid;place-items:center;border-radius:11px;background:var(--bg-secondary,var(--panel));flex:0 0 auto}.channel-icon svg{width:29px;height:29px}.channel-card h2{margin:0;font-size:1.05rem}.status{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;font-size:.74rem;border:1px solid var(--border);margin-top:5px;color:var(--muted)}.status.verified{color:#20d99b;border-color:rgba(32,217,155,.3)}.status.pending{color:#e9b949;border-color:rgba(233,185,73,.3)}.channel-card p{color:var(--muted);line-height:1.48;font-size:.9rem;margin:12px 0}.channel-address{color:var(--text)!important;margin-top:4px!important;overflow-wrap:anywhere}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.actions form{margin:0}.actions button,.actions a{border:1px solid var(--border);background:var(--panel);color:inherit;border-radius:9px;padding:8px 12px;text-decoration:none;cursor:pointer;font-size:.86rem}.actions .primary{background:var(--accent);color:#07110d;border-color:var(--accent);font-weight:700}.verification-wait{font-size:.82rem!important;margin:10px 0!important}.how{margin-top:18px;padding:16px 18px;border:1px solid var(--border);border-radius:14px}.how h2{font-size:1rem;margin:0 0 8px}.how li{margin:7px 0;color:var(--muted);font-size:.86rem;line-height:1.45}.secure{font-size:.78rem!important;margin-bottom:0!important}
-@media(max-width:700px){.notifications-page{padding:0 2px 28px}.channel-grid{grid-template-columns:1fr;gap:12px}.channel-card{padding:16px}.how{padding:14px 15px}}
+.notifications-page{max-width:980px;margin:0 auto;padding-bottom:32px}.notifications-page .intro{max-width:720px;color:var(--muted);line-height:1.5}.channel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.channel-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px}.channel-head{display:flex;align-items:center;gap:10px}.channel-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:var(--bg-secondary,var(--panel));flex:0 0 auto}.channel-icon svg{width:24px;height:24px}.channel-card h2{margin:0;font-size:.98rem}.status{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:.7rem;border:1px solid var(--border);margin-top:4px;color:var(--muted)}.status.verified{color:#20d99b;border-color:rgba(32,217,155,.3)}.status.pending{color:#e9b949;border-color:rgba(233,185,73,.3)}.channel-card p{color:var(--muted);line-height:1.4;font-size:.82rem;margin:9px 0}.channel-address{color:var(--text)!important;margin-top:3px!important;overflow-wrap:anywhere}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.actions form{margin:0}.actions button,.actions a{border:1px solid var(--border);background:var(--panel);color:inherit;border-radius:8px;padding:7px 10px;text-decoration:none;cursor:pointer;font-size:.78rem}.actions .primary{background:var(--accent);color:#07110d;border-color:var(--accent);font-weight:700}.verification-wait{font-size:.76rem!important;margin:7px 0!important}.how{margin-top:14px;padding:13px 15px;border:1px solid var(--border);border-radius:12px}.how h2{font-size:.92rem;margin:0 0 6px}.how li{margin:5px 0;color:var(--muted);font-size:.78rem;line-height:1.4}.secure{font-size:.72rem!important;margin-bottom:0!important}
+@media(max-width:700px){.notifications-page{padding:0 2px 24px}.channel-grid{grid-template-columns:1fr;gap:10px}.channel-card{padding:13px}.how{padding:12px 13px}}
 </style>
 {% endblock %}
 {% block content %}
-<div class="notifications-page" data-status-url="{% url 'notification_channels_status' %}">
+<div class="notifications-page" data-notification-page data-status-url="{% url 'notification_channels_status' %}">
   <p class="eyebrow">NOTIFICATIONS</p>
   <h1>Notification channels</h1>
   <p class="intro">Manage the verified channels AlgoBot can use to deliver trading, risk, security and system notifications.</p>
   <div class="channel-grid">
-    <article class="channel-card" data-channel="gmail" data-disconnect-url="{% url 'gmail_disconnect' %}">
-      <div class="channel-head"><div class="channel-icon" aria-label="Gmail icon"><svg viewBox="0 0 48 48" role="img"><path fill="#EA4335" d="M5 10v28h6V18l13 10 13-10v20h6V10L24 25 5 10z"/><path fill="#4285F4" d="M5 10l19 15v7L5 17z"/><path fill="#34A853" d="M43 10L24 25v7l19-15z"/></svg></div><div><h2>Gmail</h2><div class="status {% if channels.gmail.connected %}verified{% endif %}" data-status>{% if channels.gmail.connected %}✓ Verified{% else %}Not connected{% endif %}</div></div></div>
+    <article class="channel-card" data-channel-card="gmail">
+      <div class="channel-head"><div class="channel-icon" aria-label="Gmail icon"><svg viewBox="0 0 48 48" role="img"><path fill="#EA4335" d="M5 10v28h6V18l13 10 13-10v20h6V10L24 25 5 10z"/><path fill="#4285F4" d="M5 10l19 15v7L5 17z"/><path fill="#34A853" d="M43 10L24 25v7l19-15z"/></svg></div><div><h2>Gmail</h2><div class="status {% if channels.gmail.connected %}verified{% endif %}" data-channel-status>{% if channels.gmail.connected %}✓ Verified{% else %}Not connected{% endif %}</div></div></div>
       <p>Use Google's secure OAuth sign-in. AlgoBot never asks for your Gmail password.</p>
-      <p class="channel-address" data-address{% if not channels.gmail.address %} hidden{% endif %}><strong>{{ channels.gmail.address }}</strong></p>
-      <div class="actions" data-actions>{% if channels.gmail.connected %}<form method="post" action="{% url 'gmail_disconnect' %}">{% csrf_token %}<button type="submit">Disconnect</button></form>{% else %}<form method="post" action="{% url 'gmail_connect' %}">{% csrf_token %}<button class="primary" type="submit">Connect Gmail</button></form>{% endif %}</div>
+      {% if channels.gmail.address %}<p class="channel-address" data-channel-address><strong>{{ channels.gmail.address }}</strong></p>{% endif %}
+      <div class="actions">{% if channels.gmail.connected %}<form method="post" action="{% url 'gmail_disconnect' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button type="submit">Disconnect</button></form>{% else %}<form method="post" action="{% url 'gmail_connect' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button class="primary" type="submit">Connect Gmail</button></form>{% endif %}</div>
     </article>
-    <article class="channel-card" data-channel="telegram" data-disconnect-url="{% url 'telegram_disconnect' %}">
-      <div class="channel-head"><div class="channel-icon" aria-label="Telegram icon"><svg viewBox="0 0 48 48" role="img"><circle cx="24" cy="24" r="22" fill="#229ED9"/><path fill="white" d="M10 23.4l25.7-10c1.2-.45 2.25.3 1.86 1.74l-4.37 20.6c-.33 1.48-1.2 1.84-2.44 1.15l-7.1-5.23-3.43 3.3c-.38.37-.7.68-1.43.68l.5-7.22 13.15-11.88c.57-.5-.13-.78-.9-.28L15.3 26.1l-6.94-2.17c-1.5-.48-1.53-1.5.32-2.22z"/></svg></div><div><h2>Telegram</h2><div class="status {% if channels.telegram.connected %}verified{% elif channels.telegram.status == 'pending' %}pending{% endif %}" data-status>{% if channels.telegram.connected %}✓ Verified{% elif channels.telegram.status == 'pending' %}Waiting for Start{% else %}Not connected{% endif %}</div></div></div>
+    <article class="channel-card" data-channel-card="telegram">
+      <div class="channel-head"><div class="channel-icon" aria-label="Telegram icon"><svg viewBox="0 0 48 48" role="img"><circle cx="24" cy="24" r="22" fill="#229ED9"/><path fill="white" d="M10 23.4l25.7-10c1.2-.45 2.25.3 1.86 1.74l-4.37 20.6c-.33 1.48-1.2 1.84-2.44 1.15l-7.1-5.23-3.43 3.3c-.38.37-.7.68-1.43.68l.5-7.22 13.15-11.88c.57-.5-.13-.78-.9-.28L15.3 26.1l-6.94-2.17c-1.5-.48-1.53-1.5.32-2.22z"/></svg></div><div><h2>Telegram</h2><div class="status {% if channels.telegram.connected %}verified{% elif channels.telegram.status == 'pending' %}pending{% endif %}" data-channel-status>{% if channels.telegram.connected %}✓ Verified{% elif channels.telegram.status == 'pending' %}Waiting for Start{% else %}Not connected{% endif %}</div></div></div>
       <p>Connect the Telegram account created specifically for AlgoBot. Open the secure bot link and press <strong>Start</strong>. No Telegram password is requested.</p>
-      <p class="channel-address" data-address{% if not channels.telegram.address %} hidden{% endif %}><strong>{{ channels.telegram.address }}</strong></p>
-      <p class="verification-wait" data-wait{% if channels.telegram.status != 'pending' %} hidden{% endif %}>Waiting for Telegram to confirm the connection. This page will update automatically without reloading.</p>
-      <div class="actions" data-actions>{% if channels.telegram.connected %}<form method="post" action="{% url 'telegram_disconnect' %}">{% csrf_token %}<button type="submit">Disconnect</button></form>{% else %}<form method="post" action="{% url 'telegram_connect' %}">{% csrf_token %}<button class="primary" type="submit">Connect Telegram</button></form>{% if request.session.algobot_telegram_link %}<a href="{% url 'telegram_open' %}">Open Telegram</a>{% endif %}{% endif %}</div>
+      {% if channels.telegram.address %}<p class="channel-address" data-channel-address><strong>{{ channels.telegram.address }}</strong></p>{% endif %}
+      <p class="verification-wait" data-verification-wait {% if channels.telegram.status != 'pending' %}hidden{% endif %}>Waiting for Telegram to confirm the connection. This page will update automatically without reloading.</p>
+      <div class="actions">{% if channels.telegram.connected %}<form method="post" action="{% url 'telegram_disconnect' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button type="submit">Disconnect</button></form>{% else %}<form method="post" action="{% url 'telegram_connect' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button class="primary" type="submit">Connect Telegram</button></form>{% if request.session.algobot_telegram_link %}<a href="{% url 'telegram_open' %}">Open Telegram</a>{% endif %}{% endif %}</div>
     </article>
   </div>
   <section class="how"><h2>How verification works</h2><ol><li><strong>Gmail:</strong> approve AlgoBot's requested notification permission in Google's consent screen, then return here.</li><li><strong>Telegram:</strong> press <strong>Start</strong> in the AlgoBot bot. The one-time token binds that Telegram chat to your AlgoBot account.</li><li><strong>Delivery:</strong> only channels marked <strong>Verified</strong> are eligible for external notifications.</li></ol><p class="secure">Credentials are stored server-side and are never rendered into this page.</p></section>
 </div>
+{% endblock %}
+{% block extra_js %}
 <script>
-(function () {
-  const page = document.querySelector('.notifications-page[data-status-url]');
-  if (!page) return;
-  if (!page.querySelector('[data-channel="telegram"] .status.pending')) return;
-
-  const statusUrl = page.dataset.statusUrl;
-  const csrfToken = page.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '';
-  let timerId = null;
-  let inFlight = false;
-  let stopped = false;
-
-  function renderChannel(provider, state) {
-    const card = page.querySelector('[data-channel="' + provider + '"]');
-    if (!card || !state) return;
-    const status = card.querySelector('[data-status]');
-    const address = card.querySelector('[data-address]');
-    const wait = card.querySelector('[data-wait]');
-    const actions = card.querySelector('[data-actions]');
-
+(() => {
+  const page = document.querySelector('[data-notification-page]');
+  if (!page || page.dataset.pollBound === '1') return;
+  page.dataset.pollBound = '1';
+  const url = page.dataset.statusUrl;
+  let timer = null;
+  let busy = false;
+  let attempts = 0;
+  const maxAttempts = 225;
+  const apply = (provider, data) => {
+    const card = page.querySelector(`[data-channel-card="${provider}"]`);
+    if (!card || !data) return;
+    const status = card.querySelector('[data-channel-status]');
+    const address = card.querySelector('[data-channel-address]');
+    const wait = card.querySelector('[data-verification-wait]');
     if (status) {
-      status.classList.toggle('verified', state.connected === true);
-      status.classList.toggle('pending', state.status === 'pending');
-      status.textContent = state.connected ? '✓ Verified' : (state.status === 'pending' ? 'Waiting for Start' : 'Not connected');
+      status.textContent = data.connected ? '✓ Verified' : data.status === 'pending' ? 'Waiting for Start' : 'Not connected';
+      status.classList.toggle('verified', !!data.connected);
+      status.classList.toggle('pending', !data.connected && data.status === 'pending');
     }
     if (address) {
-      address.hidden = !state.address;
-      const strong = address.querySelector('strong') || address.appendChild(document.createElement('strong'));
-      strong.textContent = state.address || '';
+      const strong = address.querySelector('strong');
+      if (strong) strong.textContent = data.address || '';
+      address.hidden = !data.address;
     }
-    if (wait) wait.hidden = state.status !== 'pending';
-    if (actions && state.connected) {
-      actions.innerHTML = '<form method="post" action="' + card.dataset.disconnectUrl + '"><input type="hidden" name="csrfmiddlewaretoken" value="' + csrfToken + '"><button type="submit">Disconnect</button></form>';
-    }
-  }
-
-  async function pollStatus() {
-    if (stopped || inFlight || document.hidden) return;
-    inFlight = true;
+    if (wait) wait.hidden = !(provider === 'telegram' && data.status === 'pending');
+  };
+  const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+  const poll = async () => {
+    if (busy || document.visibilityState === 'hidden' || attempts >= maxAttempts) return;
+    busy = true;
+    attempts += 1;
     try {
-      const response = await fetch(statusUrl, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        credentials: 'same-origin',
-        cache: 'no-store'
-      });
-      if (!response.ok) throw new Error('status request failed');
+      const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: { 'Accept': 'application/json' } });
+      if (!response.ok) throw new Error(`status ${response.status}`);
       const payload = await response.json();
-      Object.entries(payload.channels || {}).forEach(([provider, state]) => renderChannel(provider, state));
-      if (payload.channels?.telegram?.connected) stopPolling();
+      Object.entries(payload.channels || {}).forEach(([provider, data]) => apply(provider, data));
+      if (payload.channels?.telegram?.status !== 'pending') stop();
     } catch (_) {
-      // Keep the page usable; the next interval retries without a full reload.
+      // A transient poll failure must never navigate or reload the page.
     } finally {
-      inFlight = false;
+      busy = false;
     }
-  }
-
-  function schedule() {
-    if (!stopped) timerId = window.setTimeout(async function tick() { await pollStatus(); schedule(); }, 4000);
-  }
-  function stopPolling() {
-    stopped = true;
-    if (timerId) window.clearTimeout(timerId);
-    timerId = null;
-  }
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) pollStatus(); });
-  schedule();
+  };
+  const start = () => { stop(); attempts = 0; poll(); timer = setInterval(poll, 4000); };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poll(); });
+  start();
 })();
 </script>
 {% endblock %}

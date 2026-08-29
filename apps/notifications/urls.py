@@ -7,6 +7,7 @@ from .channel_views import (
     gmail_callback_view,
     gmail_connect,
     gmail_disconnect,
+    notification_channels_page,
     notification_channels_status,
     telegram_connect,
     telegram_disconnect,
@@ -21,8 +22,6 @@ router.register("notifications/templates", TemplateViewSet, basename="notificati
 router.register("notifications", NotificationViewSet, basename="enterprise-notifications")
 
 urlpatterns = [
-    # Never expose the DRF browsable API for the user-facing notification page.
-    # This route is mounted under both /api/ and /data/ for legacy clients.
     path("notifications/channels/", RedirectView.as_view(url="/notifications/", permanent=False), name="notification_channels"),
     path("", include(router.urls)),
     path("notifications/send/", send),
