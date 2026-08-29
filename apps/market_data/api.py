@@ -15,7 +15,9 @@ from apps.brokers.exceptions import BrokerConnectionError, BrokerAuthenticationE
 
 
 def _limit(request, default=500, maximum=1000):
-    try: return max(1, min(int(request.query_params.get("limit", default)), maximum))
+    try:
+        raw = request.query_params.get("limit", request.query_params.get("page_size", default))
+        return max(1, min(int(raw), maximum))
     except (TypeError, ValueError): return default
 
 
@@ -44,12 +46,8 @@ def markets(request): return Response({"markets": sorted(set(MarketSymbol.object
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def symbols(request):
-    # Honour the frontend's page_size/limit instead of serializing the entire
-    # broker catalogue on every dashboard refresh. The catalogue itself remains
-    # available through the dedicated broker catalogue endpoint.
     queryset = MarketSymbol.objects.filter(is_active=True, is_tradable=True).order_by("market", "symbol")
-    limit = _limit(request, default=100, maximum=500)
-    return Response(MarketSymbolSerializer(queryset[:limit], many=True).data)
+    return Response(MarketSymbolSerializer(queryset[:_limit(request, default=100, maximum=500)], many=True).data)
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -98,9 +96,6 @@ def statistics(request): return Response(MarketStatisticsSerializer(MarketStatis
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def snapshot(request):
-    # MarketSnapshot is a one-row-per-symbol table. Never serialize the entire
-    # table for a dashboard card; cap the response and make symbol filtering
-    # explicit so the endpoint remains bounded as the broker universe grows.
     qs = MarketSnapshot.objects.select_related("symbol").order_by("-timestamp")
     if request.query_params.get("symbol"): qs = qs.filter(symbol__symbol=request.query_params["symbol"])
     return Response(MarketSnapshotSerializer(qs[:_limit(request, default=100, maximum=500)], many=True).data)
