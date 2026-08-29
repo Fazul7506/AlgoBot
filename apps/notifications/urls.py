@@ -1,46 +1,10 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-
-from .api import (
-    DeliveryViewSet,
-    NotificationViewSet,
-    PreferenceViewSet,
-    TemplateViewSet,
-    broadcast,
-    send,
-    webhook,
-)
-
-router = DefaultRouter()
-
-# Register the more specific delivery route BEFORE the generic
-# notifications/<pk>/ route. Otherwise DRF can interpret "delivery" as a
-# notification primary key and return 404 from /api/notifications/delivery/.
-router.register(
-    "notifications/delivery",
-    DeliveryViewSet,
-    basename="notification-delivery",
-)
-router.register(
-    "notifications/preferences",
-    PreferenceViewSet,
-    basename="notification-preferences",
-)
-router.register(
-    "notifications/templates",
-    TemplateViewSet,
-    basename="notification-templates",
-)
-router.register(
-    "notifications",
-    NotificationViewSet,
-    basename="enterprise-notifications",
-)
-
-urlpatterns = [
-    path("", include(router.urls)),
-    path("notifications/send/", send),
-    path("notifications/broadcast/", broadcast),
-    path("notifications/webhook/", webhook),
-    path("notifications/history/", include(router.urls)),
-]
+from .api import DeliveryViewSet, NotificationViewSet, PreferenceViewSet, TemplateViewSet, broadcast, send, webhook
+from .channel_views import notification_channels_page, gmail_connect, gmail_callback_view, telegram_connect, telegram_open, telegram_webhook_view, telegram_disconnect, gmail_disconnect
+router=DefaultRouter()
+router.register('notifications/delivery',DeliveryViewSet,basename='notification-delivery')
+router.register('notifications/preferences',PreferenceViewSet,basename='notification-preferences')
+router.register('notifications/templates',TemplateViewSet,basename='notification-templates')
+router.register('notifications',NotificationViewSet,basename='enterprise-notifications')
+urlpatterns=[path('',include(router.urls)),path('notifications/send/',send),path('notifications/broadcast/',broadcast),path('notifications/webhook/',webhook),path('notifications/history/',include(router.urls)),path('notifications/channels/',notification_channels_page,name='notification_channels'),path('notifications/channels/gmail/connect/',gmail_connect,name='gmail_connect'),path('notifications/channels/gmail/callback/',gmail_callback_view,name='gmail_callback'),path('notifications/channels/gmail/disconnect/',gmail_disconnect,name='gmail_disconnect'),path('notifications/channels/telegram/connect/',telegram_connect,name='telegram_connect'),path('notifications/channels/telegram/open/',telegram_open,name='telegram_open'),path('notifications/channels/telegram/disconnect/',telegram_disconnect,name='telegram_disconnect'),path('notifications/telegram/webhook/',telegram_webhook_view,name='telegram_webhook')]
