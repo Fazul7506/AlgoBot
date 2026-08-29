@@ -26,6 +26,12 @@ def notification_channels_page(request):
 
 
 @login_required
+def notification_channels_status(request):
+    """Return channel state for lightweight in-page polling; never reload the document."""
+    return JsonResponse({"channels": connection_status(request.user)})
+
+
+@login_required
 def gmail_connect(request):
     if request.method != "POST":
         return redirect(BROWSER_NOTIFICATIONS_URL)
