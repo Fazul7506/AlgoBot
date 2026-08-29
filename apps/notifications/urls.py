@@ -1,15 +1,17 @@
 from django.urls import include, path
+from django.views.generic import RedirectView
 from rest_framework.routers import DefaultRouter
+
 from .api import DeliveryViewSet, NotificationViewSet, PreferenceViewSet, TemplateViewSet, broadcast, send, webhook
 from .channel_views import (
-    gmail_connect,
     gmail_callback_view,
+    gmail_connect,
     gmail_disconnect,
     notification_channels_status,
     telegram_connect,
+    telegram_disconnect,
     telegram_open,
     telegram_webhook_view,
-    telegram_disconnect,
 )
 
 router = DefaultRouter()
@@ -19,6 +21,9 @@ router.register("notifications/templates", TemplateViewSet, basename="notificati
 router.register("notifications", NotificationViewSet, basename="enterprise-notifications")
 
 urlpatterns = [
+    # Never expose the DRF browsable API for the user-facing notification page.
+    # This route is mounted under both /api/ and /data/ for legacy clients.
+    path("notifications/channels/", RedirectView.as_view(url="/notifications/", permanent=False), name="notification_channels"),
     path("", include(router.urls)),
     path("notifications/send/", send),
     path("notifications/broadcast/", broadcast),
