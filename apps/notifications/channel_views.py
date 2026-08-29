@@ -4,6 +4,7 @@ import secrets
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
@@ -15,7 +16,7 @@ from .channel_service import (
     telegram_start,
     telegram_webhook,
 )
-from .models import NotificationChannelConnection
+from .models import NotificationChannelConnection, NotificationPreference
 
 BROWSER_NOTIFICATIONS_URL = "/notifications/"
 
@@ -93,22 +94,26 @@ def telegram_webhook_view(request):
         return JsonResponse({"ok": False}, status=400)
 
 
+@transaction.atomic
+def _delete_channel_connection(user, provider):
+    """Permanently remove a notification channel and its channel preference."""
+    NotificationChannelConnection.objects.filter(user=user, provider=provider).delete()
+    NotificationPreference.objects.filter(user=user, channel=provider).delete()
+
+
 @login_required
 def telegram_disconnect(request):
     if request.method == "POST":
-        NotificationChannelConnection.objects.filter(
-            user=request.user, provider="telegram"
-        ).update(status="revoked", external_id="", verification_code_hash="")
+        _delete_channel_connection(request.user, "telegram")
         request.session.pop("algobot_telegram_link", None)
-        messages.success(request, "Telegram notifications disconnected.")
+        messages.success(request, "Telegram account disconnected and all saved connection data was deleted.")
     return redirect(BROWSER_NOTIFICATIONS_URL)
 
 
 @login_required
 def gmail_disconnect(request):
     if request.method == "POST":
-        NotificationChannelConnection.objects.filter(
-            user=request.user, provider="gmail"
-        ).update(status="revoked", access_token="", refresh_token="")
-        messages.success(request, "Gmail notifications disconnected.")
+        _delete_channel_connection(request.user, "gmail")
+        request.session.pop("algobot_gmail_oauth_state", None)
+        messages.success(request, "Gmail account disconnected and all saved connection data was deleted.")
     return redirect(BROWSER_NOTIFICATIONS_URL)
