@@ -39,6 +39,18 @@
     let result;
     try {
       result = await requestOnce(url, options, timeout);
+
+      // A Cloudflare/browser challenge is an edge response, not an application
+      // response. When the API hostname is challenged, retry relative API paths
+      // against the same-origin Render service instead of surfacing a false
+      // backend failure. Only challenge responses are retried, so application
+      // 4xx/5xx responses and mutation errors are never duplicated.
+      if (isCloudflareChallenge(result.response, result.text) && apiBase && !/^https?:\/\//i.test(url)) {
+        try {
+          const fallback = await requestOnce(url, options, timeout, true);
+          if (!isCloudflareChallenge(fallback.response, fallback.text)) result = fallback;
+        } catch (_) { /* preserve the original edge response for diagnostics */ }
+      }
     } catch (error) {
       // If the dedicated hostname has not propagated yet, preserve application
       // availability by falling back to the existing same-origin API path.
