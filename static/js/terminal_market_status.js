@@ -1,8 +1,8 @@
 /* Terminal market-data truth indicator.
  *
- * This is intentionally observational in Step 1: it does not replace the
- * existing order/risk pipeline and does not manufacture prices. The backend
- * remains authoritative for whether an order is allowed to execute.
+ * Observational only: backend remains authoritative for order/risk execution.
+ * Transient quote failures are shown as RETRYING/STALE instead of a persistent
+ * red ERROR, while preserving the last verified quote state.
  */
 (() => {
   'use strict';
@@ -10,10 +10,12 @@
   window.__algoBotTerminalMarketStatus = true;
 
   const $ = (selector, root = document) => root.querySelector(selector);
-  const api = (url, options = {}, timeout = 9000) => window.AlgoBotFrontendData?.request?.(url, options, timeout);
+  const api = (url, options = {}, timeout = 15000) => window.AlgoBotFrontendData?.request?.(url, options, timeout);
   let timer = null;
+  let retryTimer = null;
   let requestInFlight = false;
-  let lastSymbol = '';
+  let lastGoodAt = 0;
+  let consecutiveFailures = 0;
 
   function ensurePanel() {
     const toolbar = $('.terminal-toolbar');
@@ -52,6 +54,12 @@
     return `updated ${Math.floor(seconds / 60)}m ago`;
   }
 
+  function scheduleRetry() {
+    if (retryTimer) clearTimeout(retryTimer);
+    const delay = Math.min(30000, 2000 * Math.pow(2, Math.min(consecutiveFailures - 1, 3)));
+    retryTimer = window.setTimeout(() => { retryTimer = null; refresh(); }, delay);
+  }
+
   async function refresh() {
     if (requestInFlight) return;
     const symbol = String($('#symbol')?.value || '').trim();
@@ -61,15 +69,28 @@
 
     requestInFlight = true;
     try {
-      const payload = await api(`/api/market/ticks/broker/?symbol=${encodeURIComponent(symbol)}`, {}, 9000);
+      const payload = await api(`/api/market/ticks/broker/?symbol=${encodeURIComponent(symbol)}`, {}, 15000);
       const quote = payload?.quote ?? payload?.price ?? payload?.bid ?? payload?.ask;
       if (quote == null) throw new Error('Broker returned no usable quote');
+      consecutiveFailures = 0;
+      lastGoodAt = Date.now();
       const stale = payload?.stale === true;
       const source = payload?.source === 'live_broker_quote' ? 'live broker quote' : 'last known broker quote';
-      const detail = `${source} · ${formatAge(payload?.epoch)}`;
-      setState(stale ? 'stale' : 'live', detail);
+      setState(stale ? 'stale' : 'live', `${source} · ${formatAge(payload?.epoch)}`);
     } catch (error) {
-      setState('error', error?.message || 'Broker quote unavailable');
+      consecutiveFailures += 1;
+      const age = lastGoodAt ? Math.round((Date.now() - lastGoodAt) / 1000) : null;
+      // Do not turn a transient timeout/network hiccup into a permanent ERROR.
+      // The absence of a fresh quote must never be treated as permission to trade.
+      if (age != null && age <= 120) {
+        setState('stale', `Quote refresh delayed · last verified quote ${age}s ago · retrying`);
+      } else {
+        setState('retrying', consecutiveFailures > 2 ? 'Broker quote unavailable · retrying automatically' : 'Quote refresh delayed · retrying');
+      }
+      scheduleRetry();
+      window.dispatchEvent(new CustomEvent('algobot:market-data-refresh-failed', {detail: {
+        symbol, code: error?.code || 'MARKET_REFRESH_ERROR', message: error?.message || 'Broker quote unavailable', consecutiveFailures
+      }}));
     } finally {
       requestInFlight = false;
     }
@@ -84,12 +105,12 @@
     window.addEventListener('algobot:account-synced', refresh);
     window.addEventListener('algobot:market-symbol-changed', refresh);
     refresh();
-    timer = window.setInterval(() => {
-      const symbol = String($('#symbol')?.value || '').trim();
-      if (symbol && symbol !== lastSymbol) lastSymbol = symbol;
-      refresh();
-    }, 3000);
-    window.addEventListener('pagehide', () => { if (timer) window.clearInterval(timer); }, {once: true});
+    // Normal polling is deliberately slower; failures use exponential backoff.
+    timer = window.setInterval(refresh, 10000);
+    window.addEventListener('pagehide', () => {
+      if (timer) window.clearInterval(timer);
+      if (retryTimer) window.clearTimeout(retryTimer);
+    }, {once: true});
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once: true});
