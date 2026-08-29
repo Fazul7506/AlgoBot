@@ -1,7 +1,16 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from .api import DeliveryViewSet, NotificationViewSet, PreferenceViewSet, TemplateViewSet, broadcast, send, webhook
-from .channel_views import gmail_connect, gmail_callback_view, telegram_connect, telegram_open, telegram_webhook_view, telegram_disconnect, gmail_disconnect
+from .channel_views import (
+    gmail_connect,
+    gmail_callback_view,
+    gmail_disconnect,
+    notification_channels_status,
+    telegram_connect,
+    telegram_open,
+    telegram_webhook_view,
+    telegram_disconnect,
+)
 
 router = DefaultRouter()
 router.register("notifications/delivery", DeliveryViewSet, basename="notification-delivery")
@@ -14,6 +23,7 @@ urlpatterns = [
     path("notifications/send/", send),
     path("notifications/broadcast/", broadcast),
     path("notifications/webhook/", webhook),
+    path("notifications/channels/status/", notification_channels_status, name="notification_channels_status"),
     path("notifications/channels/gmail/connect/", gmail_connect, name="gmail_connect"),
     path("notifications/channels/gmail/callback/", gmail_callback_view, name="gmail_callback"),
     path("notifications/channels/gmail/disconnect/", gmail_disconnect, name="gmail_disconnect"),
