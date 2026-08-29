@@ -1,15 +1,14 @@
 """
 Browser-based views for AlgoBot.
 """
-import logging
-import json
+import logging,json
 from urllib.parse import urlparse
 from django.conf import settings
-from django.http import Http404, HttpResponse
-from django.shortcuts import render, redirect
+from django.http import Http404,HttpResponse
+from django.shortcuts import render,redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
-from apps.brokers.models import Broker, BrokerAccount
+from apps.brokers.models import Broker,BrokerAccount
 from core.services.oauth_service import DerivOAuthService
 logger=logging.getLogger(__name__)
 def _preferred_deriv_account(user): return BrokerAccount.objects.filter(user=user,broker__broker_type='deriv').select_related('broker').order_by('-is_preferred','-last_synced_at','-id').first()
@@ -69,9 +68,7 @@ def deriv_login(request):
     if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)): return redirect('dashboard_page')
     redirect_uri=settings.DERIV_REDIRECT_URI; configured_uri=urlparse(redirect_uri)
     if configured_uri.scheme and configured_uri.netloc and not settings.DEBUG and (request.scheme!=configured_uri.scheme or request.get_host()!=configured_uri.netloc):
-        canonical_url=f'{configured_uri.scheme}://{configured_uri.netloc}{request.path}'
-        if request.GET: canonical_url=f'{canonical_url}?{request.GET.urlencode()}'
-        return redirect(canonical_url)
+        canonical_url=f'{configured_uri.scheme}://{configured_uri.netloc}{request.path}'; canonical_url=f'{canonical_url}?{request.GET.urlencode()}' if request.GET else canonical_url; return redirect(canonical_url)
     try:
         code_verifier,code_challenge=DerivOAuthService.generate_pkce_pair(); state=DerivOAuthService.generate_state(); DerivOAuthService.store_oauth_state_in_session(request,state,code_verifier,redirect_uri); authorization_url=DerivOAuthService.create_authorization_url(state,code_challenge)
     except Exception: logger.exception('deriv_oauth_start_failed'); return HttpResponse('AlgoBot could not start the secure broker connection. Please try again in a moment.',status=503)
@@ -83,7 +80,10 @@ def broker_marketplace_page(request): return render(request,'core/broker_marketp
 def strategy_builder_page(request): return render(request,'core/strategy_builder.html')
 @login_required
 def operations_module_page(request,module):
-    modules={'automation':{'title':'Automation','eyebrow':'WORKFLOW OPERATIONS','description':'Review workflows, execution history and approval controls from the API.','actions':[('Open workflows','/automation/','link')],'endpoints':[('/api/automation/workflows/','Workflows','GET'),('/api/automation/history/','Execution history','GET')]},'notifications':{'title':'Notifications','eyebrow':'DELIVERY OPERATIONS','description':'Connect and verify Gmail and Telegram delivery channels for AlgoBot notifications.','actions':[('Connect notification channels','/notifications/channels/','link')],'endpoints':[('/api/notifications/','Notifications','GET'),('/api/notifications/delivery/','Delivery records','GET')]},'brokers':{'title':'Broker accounts','eyebrow':'BROKER OPERATIONS','description':'Manage the connected broker accounts that supply the workspace with trading data.','actions':[('Connect broker','/brokers/connect/','link'),('Browse brokers','/brokers/marketplace/','link')],'endpoints':[('/api/brokers/accounts/','Connected accounts','GET'),('/api/broker-health/','Broker health','GET')]}}
+    if module=='notifications':
+        from apps.notifications.channel_service import connection_status
+        return render(request,'notifications/channels.html',{'channels':connection_status(request.user)})
+    modules={'automation':{'title':'Automation','eyebrow':'WORKFLOW OPERATIONS','description':'Review workflows, execution history and approval controls from the API.','actions':[('Open workflows','/automation/','link')],'endpoints':[('/api/automation/workflows/','Workflows','GET'),('/api/automation/history/','Execution history','GET')]},'brokers':{'title':'Broker accounts','eyebrow':'BROKER OPERATIONS','description':'Manage the connected broker accounts that supply the workspace with trading data.','actions':[('Connect broker','/brokers/connect/','link'),('Browse brokers','/brokers/marketplace/','link')],'endpoints':[('/api/brokers/accounts/','Connected accounts','GET'),('/api/broker-health/','Broker health','GET')]}}
     try: module_config=modules[module]
     except KeyError as exc: raise Http404('Unknown operations module.') from exc
     return render(request,'operations/module_workspace.html',{'module_key':module,'module':module_config,'module_endpoints_json':json.dumps([{'url':u,'label':l,'method':m} for u,l,m in module_config['endpoints']])})
