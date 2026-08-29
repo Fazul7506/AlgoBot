@@ -1,3 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Privacy | AlgoBot{% endblock %}
-{% block content %}<article class="legal-page"><p class="eyebrow">Public policy</p><h1>Privacy Policy</h1><p>AlgoBot protects account, brokerage, telemetry, and operational data with least-privilege access controls, audit logging, and encrypted credential handling.</p><h2>Data use</h2><p>We use submitted information to authenticate users, operate trading workflows, deliver notifications, and maintain compliance evidence.</p><h2>Security</h2><p>Administrative capabilities are restricted to authorized staff and are never exposed in anonymous navigation.</p></article>{% endblock %}
+{% block title %}Privacy Policy | AlgoBot{% endblock %}
+{% block content %}
+<article class="legal-page">
+  <p class="eyebrow">Legal · Data protection</p>
+  <h1>Privacy Policy</h1>
+  <p><strong>Effective date: 29 August 2026.</strong> This Privacy Policy explains how AlgoBot processes information when you visit <strong>algobot.dpdns.org</strong>, create or use an AlgoBot account, connect a broker, or enable notification channels.</p>
+  <h2>1. Who this policy applies to</h2>
+  <p>AlgoBot is a software platform for broker-connected market research, trading operations, risk controls, execution workflows, performance analysis and notifications. This policy applies to information processed through the AlgoBot website and services.</p>
+  <h2>2. Information we process</h2>
+  <ul><li><strong>Account information:</strong> information needed to create and secure your AlgoBot account, such as your email address and account identifiers.</li><li><strong>Broker information:</strong> broker account identifiers, balances, instruments, orders, positions, market data and trading-state information made available through the broker connection you authorize.</li><li><strong>Notification information:</strong> Telegram connection identifiers and, when Gmail is connected, your Google account email/profile information needed to verify the connected account and deliver requested notifications.</li><li><strong>Operational information:</strong> security events, audit records, preferences, application diagnostics and timestamps needed to operate and protect the service.</li></ul>
+  <h2>3. Google user data</h2>
+  <p>When you connect Gmail, AlgoBot uses Google OAuth to request the permissions shown on Google's consent screen. The current Gmail integration requests <code>openid</code>, <code>email</code>, <code>profile</code> and <code>gmail.send</code>. The Gmail connection is used to verify the Google account and send notification emails that you request or configure in AlgoBot.</p>
+  <p>AlgoBot does <strong>not</strong> sell Google user data, use Google user data for targeted advertising, transfer it to data brokers, or use Google Workspace API data to develop, improve or train non-personalized AI/ML models. We do not use Gmail content for unrelated profiling or advertising.</p>
+  <h2>4. How we use information</h2>
+  <p>We use information to authenticate users, connect authorized broker accounts, provide market and trading functionality, enforce configured risk and execution controls, deliver requested notifications, maintain security and audit records, troubleshoot service issues, and comply with legal obligations.</p>
+  <h2>5. Sharing and disclosure</h2>
+  <p>We do not sell personal information or Google user data. Information may be disclosed to service providers that operate infrastructure or communications on our behalf, to the broker or notification provider when necessary to provide a feature you explicitly use, or when required by law, security obligations or a valid legal process. Providers receive only information needed for the relevant service.</p>
+  <h2>6. Security</h2>
+  <p>AlgoBot uses HTTPS for web traffic, server-side access controls, OAuth authorization flows, protected credential storage, least-privilege application access and audit logging. Access tokens and other sensitive connection credentials are protected rather than displayed as plain text in the user interface. No internet service can guarantee absolute security.</p>
+  <h2>7. Retention</h2>
+  <p>We retain account, trading and audit information for as long as reasonably necessary to provide the service, maintain security, support requested features, resolve disputes and meet applicable legal or accounting requirements. Notification connection credentials are retained only while the connection remains useful for the enabled feature, subject to required records and lawful retention obligations.</p>
+  <h2>8. Deletion and account controls</h2>
+  <p>You may disconnect Gmail or Telegram from the Notifications page. You may also request deletion of personal information and connected notification credentials through our <a href="/data-deletion/">Data Deletion Request</a> page. Some records may need to be retained where required by law, fraud prevention, security or legitimate audit obligations.</p>
+  <h2>9. Cookies and similar technologies</h2>
+  <p>AlgoBot uses essential session and security cookies needed to authenticate users, protect requests and maintain the web application. See our <a href="/cookies/">Cookie Policy</a> for more information.</p>
+  <h2>10. Changes</h2>
+  <p>We may update this policy when our services or data practices change. The current version is published on this page with its effective date. Material changes will be communicated through the service where appropriate.</p>
+  <h2>11. Contact</h2>
+  <p>For privacy, Google user-data or deletion questions, use the <a href="/contact/">Contact page</a> and identify the request as a privacy or data-deletion matter.</p>
+</article>
+{% endblock %}
