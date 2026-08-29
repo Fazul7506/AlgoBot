@@ -43,7 +43,13 @@ def markets(request): return Response({"markets": sorted(set(MarketSymbol.object
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-def symbols(request): return Response(MarketSymbolSerializer(MarketSymbol.objects.filter(is_active=True), many=True).data)
+def symbols(request):
+    # Honour the frontend's page_size/limit instead of serializing the entire
+    # broker catalogue on every dashboard refresh. The catalogue itself remains
+    # available through the dedicated broker catalogue endpoint.
+    queryset = MarketSymbol.objects.filter(is_active=True, is_tradable=True).order_by("market", "symbol")
+    limit = _limit(request, default=100, maximum=500)
+    return Response(MarketSymbolSerializer(queryset[:limit], many=True).data)
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -92,9 +98,12 @@ def statistics(request): return Response(MarketStatisticsSerializer(MarketStatis
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def snapshot(request):
-    qs = MarketSnapshot.objects.select_related("symbol")
+    # MarketSnapshot is a one-row-per-symbol table. Never serialize the entire
+    # table for a dashboard card; cap the response and make symbol filtering
+    # explicit so the endpoint remains bounded as the broker universe grows.
+    qs = MarketSnapshot.objects.select_related("symbol").order_by("-timestamp")
     if request.query_params.get("symbol"): qs = qs.filter(symbol__symbol=request.query_params["symbol"])
-    return Response(MarketSnapshotSerializer(qs, many=True).data)
+    return Response(MarketSnapshotSerializer(qs[:_limit(request, default=100, maximum=500)], many=True).data)
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -118,9 +127,6 @@ def broker_tick(request):
     if not account: return Response({"detail":"Connect a broker before requesting live broker quotes."}, status=status.HTTP_409_CONFLICT)
     if not MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists(): return Response({"detail":"The requested symbol is not in the current broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
-        # Always ingest the broker response directly. A cross-request cache can
-        # return a test or stale quote for an otherwise identical symbol; live
-        # trading UI must never silently substitute an unrelated cached tick.
         if account.broker.broker_type == "deriv": data = fetch_tick(symbol)
         else: data = asyncio.run(_bounded_market_data(BrokerRegistry().adapter(account.broker, account), symbol))
         tick = MarketDataService().tick_service.ingest({"symbol": symbol, "quote": data.get("price", data.get("quote")), "bid": data.get("bid"), "ask": data.get("ask"), "epoch": data.get("epoch"), "volume": data.get("volume", 0)})
