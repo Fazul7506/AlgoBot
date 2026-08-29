@@ -15,7 +15,7 @@
   const isCloudflareChallenge = (response, text) => {
     if (!response || !text) return false;
     const body = String(text).toLowerCase();
-    return [400,403,429,503,520,521,522,524].includes(response.status) && (body.includes('just a moment') || body.includes('challenge-platform') || body.includes('cf_chl_opt') || body.includes('cf-chl-') || body.includes('challenges.cloudflare.com') || body.includes('enable javascript and cookies to continue') || (body.includes('cloudflare') && String(response.headers?.get('content-type') || '').toLowerCase().includes('text/html')));
+    return [400,403,429,503,520,521,522,524].includes(response.status) && (body.includes('just a moment') || body.includes('challenge-platform') || body.includes('cf_chl_opt') || body.includes('cf_chl-') || body.includes('challenges.cloudflare.com') || body.includes('enable javascript and cookies to continue') || (body.includes('cloudflare') && String(response.headers?.get('content-type') || '').toLowerCase().includes('text/html')));
   };
   const parsePayload = (response, text) => {
     try { return text ? JSON.parse(text) : {}; }
@@ -47,6 +47,7 @@
       let controller = new AbortController();
       let timer = setTimeout(() => controller.abort(), Math.max(1000, timeout));
       let result;
+      let firstError = null;
       try {
         result = await fetchOnce(url, options, controller);
         if (isCloudflareChallenge(result.response, result.text) && apiBase && !/^https?:\/\//i.test(url)) {
@@ -59,17 +60,25 @@
           } catch (_) { /* retain edge response */ }
         }
       } catch (error) {
-        if (error?.name !== 'AbortError' && apiBase && !/^https?:\/\//i.test(url)) {
+        firstError = error;
+        // A timeout from the configured API host is not proof that the backend
+        // is unavailable. Retry the same endpoint on the dashboard's origin so
+        // deployments where the API subdomain is slow/unreachable can still
+        // use the Django application directly.
+        if (apiBase && !/^https?:\/\//i.test(url)) {
           try {
             controller = new AbortController();
             clearTimeout(timer);
             timer = setTimeout(() => controller.abort(), Math.max(1000, timeout));
             result = await fetchOnce(url, options, controller, true);
-          } catch (_) { result = null; }
+          } catch (fallbackError) {
+            firstError = fallbackError;
+            result = null;
+          }
         }
         if (!result) {
-          const e = new Error(error?.name === 'AbortError' ? 'Backend request timed out' : (error?.message || 'Network request failed'));
-          e.code = error?.name === 'AbortError' ? 'API_TIMEOUT' : 'NETWORK_ERROR';
+          const e = new Error(firstError?.name === 'AbortError' ? 'Backend request timed out' : (firstError?.message || 'Network request failed'));
+          e.code = firstError?.name === 'AbortError' ? 'API_TIMEOUT' : 'NETWORK_ERROR';
           e.status = 0;
           e.retryable = ['GET','HEAD'].includes(method);
           window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url,method,status:0,code:e.code,message:e.message,retryable:e.retryable}}));
