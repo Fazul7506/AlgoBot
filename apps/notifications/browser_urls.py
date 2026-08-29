@@ -5,6 +5,7 @@ from .channel_views import (
     gmail_connect,
     gmail_disconnect,
     notification_channels_page,
+    notification_channels_status,
     telegram_connect,
     telegram_disconnect,
     telegram_open,
@@ -12,6 +13,7 @@ from .channel_views import (
 
 urlpatterns = [
     path("", notification_channels_page, name="notifications_page"),
+    path("channels/status/", notification_channels_status, name="notification_channels_status"),
     path("channels/gmail/connect/", gmail_connect, name="notifications_gmail_connect"),
     path("channels/gmail/callback/", gmail_callback_view, name="notifications_gmail_callback"),
     path("channels/gmail/disconnect/", gmail_disconnect, name="notifications_gmail_disconnect"),
