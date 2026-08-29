@@ -35,6 +35,9 @@
     node.append(message,button); target.appendChild(node); wireToast(node,5000);
   }
   window.AlgoBotMessage = showDjangoMessage;
+  // Legacy scripts may still call alert(). Keep their behavior, but route every
+  // notification through the same Django-message-compatible toast surface.
+  window.alert = message => showDjangoMessage(String(message ?? ''), 'info');
   function friendlyApiMessage(detail) {
     if (!detail) return 'The requested operation could not be completed.';
     const code = String(detail.code || '').toUpperCase();
