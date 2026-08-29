@@ -9,7 +9,7 @@
 </style>
 {% endblock %}
 {% block content %}
-<div class="notifications-page" data-notification-page data-status-url="/api/notifications/channels/status/">
+<div class="notifications-page" data-notification-page data-status-url="{% url 'notification_channels_status' %}">
   <p class="eyebrow">NOTIFICATIONS</p>
   <h1>Notification channels</h1>
   <p class="intro">Manage the verified channels AlgoBot can use to deliver trading, risk, security and system notifications.</p>
@@ -38,11 +38,10 @@
   if (!page || page.dataset.pollBound === '1') return;
   page.dataset.pollBound = '1';
   const url = page.dataset.statusUrl;
-  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
   let timer = null;
   let busy = false;
   let attempts = 0;
-  const maxAttempts = 225; // 15 minutes at 4-second intervals, matching Telegram token expiry.
+  const maxAttempts = 225;
   const apply = (provider, data) => {
     const card = page.querySelector(`[data-channel-card="${provider}"]`);
     if (!card || !data) return;
@@ -61,12 +60,13 @@
     }
     if (wait) wait.hidden = !(provider === 'telegram' && data.status === 'pending');
   };
+  const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
   const poll = async () => {
     if (busy || document.visibilityState === 'hidden' || attempts >= maxAttempts) return;
     busy = true;
     attempts += 1;
     try {
-      const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: { 'Accept': 'application/json', 'X-CSRFToken': csrf } });
+      const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: { 'Accept': 'application/json' } });
       if (!response.ok) throw new Error(`status ${response.status}`);
       const payload = await response.json();
       Object.entries(payload.channels || {}).forEach(([provider, data]) => apply(provider, data));
@@ -77,7 +77,6 @@
       busy = false;
     }
   };
-  const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
   const start = () => { stop(); attempts = 0; poll(); timer = setInterval(poll, 4000); };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poll(); });
   start();
