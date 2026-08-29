@@ -39,26 +39,20 @@ class SenderIdentity:
     email: str
 
 
-CATEGORY_SENDER_MAP = {
-    "security": SenderIdentity("AlgoBot Security", settings.ALGOBOT_SECURITY_EMAIL),
-    "support": SenderIdentity("AlgoBot Support", settings.ALGOBOT_SUPPORT_EMAIL),
-    "general": SenderIdentity("AlgoBot", settings.ALGOBOT_NOREPLY_EMAIL),
-}
-
-
 def sender_for_category(category: str) -> SenderIdentity:
+    """Return the verified AlgoBot sender for the notification category."""
     normalized = (category or "general").strip().lower()
     if normalized in {
         "auth", "authentication", "account_security", "security_alert", "2fa",
         "password", "login", "verification", "verify", "credential",
     }:
-        return CATEGORY_SENDER_MAP["security"]
+        return SenderIdentity("AlgoBot Security", settings.ALGOBOT_SECURITY_EMAIL)
     if normalized in {
         "support", "help", "customer_support", "technical_support", "billing_support",
         "billing", "payments", "payment", "subscription_support",
     }:
-        return CATEGORY_SENDER_MAP["support"]
-    return CATEGORY_SENDER_MAP["general"]
+        return SenderIdentity("AlgoBot Support", settings.ALGOBOT_SUPPORT_EMAIL)
+    return SenderIdentity("AlgoBot", settings.ALGOBOT_NOREPLY_EMAIL)
 
 
 def render_email_html(title: str, message: str, category: str, sender: SenderIdentity, metadata=None) -> str:
@@ -104,6 +98,7 @@ This is an automated message from AlgoBot. Please do not reply directly unless t
 
 
 def send_transactional_email(*, recipient: str, subject: str, message: str, category: str = "general", metadata=None) -> str:
+    """Send a branded HTML transactional email and return the provider name."""
     sender = sender_for_category(category)
     html_body = render_email_html(subject, message, category, sender, metadata)
 
