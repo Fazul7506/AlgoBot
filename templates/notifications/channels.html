@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Notification Channels | AlgoBot{% endblock %}
+{% block extra_css %}
+<style>
+.channels{max-width:980px;margin:auto}.channel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin-top:24px}.channel-card{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:22px}.channel-head{display:flex;align-items:center;gap:14px}.channel-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:12px;background:var(--bg-secondary,var(--panel))}.channel-icon svg{width:32px;height:32px}.channel-card h2{margin:0}.channel-card p{color:var(--muted);line-height:1.55}.status{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:.78rem;border:1px solid var(--border);margin:8px 0 14px}.verified{color:#20d99b}.pending{color:#e9b949}.actions{display:flex;gap:9px;flex-wrap:wrap}.actions button,.actions a{border:1px solid var(--border);background:var(--panel);color:inherit;border-radius:10px;padding:10px 14px;text-decoration:none;cursor:pointer}.actions .primary{background:var(--accent);color:#07110d;border-color:var(--accent);font-weight:700}.how{margin-top:24px;padding:20px;border:1px solid var(--border);border-radius:16px}.how li{margin:9px 0;color:var(--muted)}.secure{font-size:.85rem;color:var(--muted)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="channels">
+  <p class="eyebrow">DELIVERY CHANNELS</p><h1>Notification connections</h1>
+  <p>Connect and verify the accounts where AlgoBot is allowed to deliver trading, risk, security and system notifications.</p>
+  <div class="channel-grid">
+    <article class="channel-card">
+      <div class="channel-head"><div class="channel-icon" aria-label="Gmail icon"><svg viewBox="0 0 48 48" role="img"><path fill="#EA4335" d="M5 10v28h6V18l13 10 13-10v20h6V10L24 25 5 10z"/><path fill="#4285F4" d="M5 10l19 15v7L5 17z"/><path fill="#34A853" d="M43 10L24 25v7l19-15z"/></svg></div><div><h2>Gmail</h2><div class="status {% if channels.gmail.connected %}verified{% endif %}">{% if channels.gmail.connected %}✓ Verified{% else %}Not connected{% endif %}</div></div></div>
+      <p>Use Google's secure OAuth sign-in. AlgoBot never asks you to type or paste your Gmail password.</p>
+      {% if channels.gmail.address %}<p><strong>{{ channels.gmail.address }}</strong></p>{% endif %}
+      <div class="actions">{% if channels.gmail.connected %}<form method="post" action="{% url 'gmail_disconnect' %}">{% csrf_token %}<button type="submit">Disconnect</button></form>{% else %}<form method="post" action="{% url 'gmail_connect' %}">{% csrf_token %}<button class="primary" type="submit">Connect Gmail</button></form>{% endif %}</div>
+    </article>
+    <article class="channel-card">
+      <div class="channel-head"><div class="channel-icon" aria-label="Telegram icon"><svg viewBox="0 0 48 48" role="img"><circle cx="24" cy="24" r="22" fill="#229ED9"/><path fill="white" d="M10 23.4l25.7-10c1.2-.45 2.25.3 1.86 1.74l-4.37 20.6c-.33 1.48-1.2 1.84-2.44 1.15l-7.1-5.23-3.43 3.3c-.38.37-.7.68-1.43.68l.5-7.22 13.15-11.88c.57-.5-.13-.78-.9-.28L15.3 26.1l-6.94-2.17c-1.5-.48-1.53-1.5.32-2.22z"/></svg></div><div><h2>Telegram</h2><div class="status {% if channels.telegram.connected %}verified{% endif %}">{% if channels.telegram.connected %}✓ Verified{% else %}Not connected{% endif %}</div></div></div>
+      <p>Connect the Telegram account you created specifically for AlgoBot by opening the secure AlgoBot bot link and pressing <strong>Start</strong>. No Telegram password is requested.</p>
+      {% if channels.telegram.address %}<p><strong>{{ channels.telegram.address }}</strong></p>{% endif %}
+      <div class="actions">{% if channels.telegram.connected %}<form method="post" action="{% url 'telegram_disconnect' %}">{% csrf_token %}<button type="submit">Disconnect</button></form>{% else %}<form method="post" action="{% url 'telegram_connect' %}">{% csrf_token %}<button class="primary" type="submit">Connect Telegram</button></form>{% endif %}{% if request.session.algobot_telegram_link and not channels.telegram.connected %}<a href="{% url 'telegram_open' %}">Open Telegram</a>{% endif %}</div>
+    </article>
+  </div>
+  <section class="how"><h2>How verification works</h2><ol><li><strong>Gmail:</strong> select the Google account in Google's consent screen, approve the requested AlgoBot notification permission, then return to AlgoBot. Google verifies account ownership.</li><li><strong>Telegram:</strong> AlgoBot creates a short-lived one-time connection token. Open the AlgoBot Telegram bot, press Start, and the bot binds that Telegram chat to your AlgoBot user.</li><li><strong>Delivery:</strong> only channels with <strong>Verified</strong> status are eligible for external notifications. You can disconnect either channel at any time.</li></ol><p class="secure">Connection credentials are stored server-side in encrypted form and are never rendered into the notification page.</p></section>
+</div>
+{% endblock %}
