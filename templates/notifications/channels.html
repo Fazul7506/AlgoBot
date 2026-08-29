@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
-{% block title %}Notification Channels | AlgoBot{% endblock %}
+{% block title %}Notifications | AlgoBot{% endblock %}
+{% block mobile_title %}Notifications{% endblock %}
 {% block extra_css %}
 <style>
 .channels{max-width:980px;margin:auto}.channel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin-top:24px}.channel-card{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:22px}.channel-head{display:flex;align-items:center;gap:14px}.channel-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:12px;background:var(--bg-secondary,var(--panel))}.channel-icon svg{width:32px;height:32px}.channel-card h2{margin:0}.channel-card p{color:var(--muted);line-height:1.55}.status{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:.78rem;border:1px solid var(--border);margin:8px 0 14px}.verified{color:#20d99b}.pending{color:#e9b949}.actions{display:flex;gap:9px;flex-wrap:wrap}.actions button,.actions a{border:1px solid var(--border);background:var(--panel);color:inherit;border-radius:10px;padding:10px 14px;text-decoration:none;cursor:pointer}.actions .primary{background:var(--accent);color:#07110d;border-color:var(--accent);font-weight:700}.how{margin-top:24px;padding:20px;border:1px solid var(--border);border-radius:16px}.how li{margin:9px 0;color:var(--muted)}.secure{font-size:.85rem;color:var(--muted)}
@@ -8,8 +9,8 @@
 {% endblock %}
 {% block content %}
 <div class="channels">
-  <p class="eyebrow">DELIVERY CHANNELS</p><h1>Notification connections</h1>
-  <p>Connect and verify the accounts where AlgoBot is allowed to deliver trading, risk, security and system notifications.</p>
+  <p class="eyebrow">NOTIFICATIONS</p><h1>Notifications</h1>
+  <p>Manage the verified channels AlgoBot can use to deliver trading, risk, security and system notifications.</p>
   <div class="channel-grid">
     <article class="channel-card">
       <div class="channel-head"><div class="channel-icon" aria-label="Gmail icon"><svg viewBox="0 0 48 48" role="img"><path fill="#EA4335" d="M5 10v28h6V18l13 10 13-10v20h6V10L24 25 5 10z"/><path fill="#4285F4" d="M5 10l19 15v7L5 17z"/><path fill="#34A853" d="M43 10L24 25v7l19-15z"/></svg></div><div><h2>Gmail</h2><div class="status {% if channels.gmail.connected %}verified{% endif %}">{% if channels.gmail.connected %}✓ Verified{% else %}Not connected{% endif %}</div></div></div>
