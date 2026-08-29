@@ -1,3 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Cookies | AlgoBot{% endblock %}
-{% block content %}<article class="legal-page"><p class="eyebrow">Public information</p><h1>Cookies</h1><p>This public page provides secure access guidance for AlgoBot visitors without exposing authenticated trading workspaces, portfolio data, AI modules, monitoring views, or administration.</p><div class="hero-actions"><a class="btn primary" href="/brokers/connect/?broker=deriv">Connect Broker</a><a class="btn ghost" href="/contact/">Contact support</a></div></article>{% endblock %}
+{% block title %}Cookie Policy | AlgoBot{% endblock %}
+{% block content %}
+<article class="legal-page">
+  <p class="eyebrow">Legal · Website technology</p>
+  <h1>Cookie Policy</h1>
+  <p><strong>Effective date: 29 August 2026.</strong> AlgoBot uses a limited set of cookies and browser storage mechanisms to operate the website securely and remember necessary application state.</p>
+  <h2>Essential cookies</h2>
+  <p>Session cookies help keep authenticated users signed in and maintain server-side session state. Django CSRF protection uses a security cookie/token to help prevent unauthorized cross-site requests.</p>
+  <h2>Preferences and interface state</h2>
+  <p>Where the application stores interface preferences, such as theme or navigation state, those values are used to provide the requested user experience. They are not sold or used for behavioral advertising.</p>
+  <h2>Third-party authentication</h2>
+  <p>When you choose a third-party authorization flow such as Google OAuth, the third party may process information under its own policies while you are on its authorization page. AlgoBot receives only the authorization response and account information permitted by the scopes you grant.</p>
+  <h2>Analytics and advertising</h2>
+  <p>AlgoBot does not use cookies for targeted advertising and does not sell cookie-derived information to data brokers.</p>
+  <h2>Managing cookies</h2>
+  <p>You can configure or block cookies through your browser. Blocking essential cookies can prevent login, secure requests and other core functionality from working correctly.</p>
+  <h2>More information</h2>
+  <p>For broader data practices, see our <a href="/privacy/">Privacy Policy</a>. For service terms, see <a href="/terms/">Terms of Service</a>.</p>
+</article>
+{% endblock %}
