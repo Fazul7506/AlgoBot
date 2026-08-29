@@ -1,8 +1,7 @@
 from django.urls import include, path
-from django.views.generic import RedirectView
 from rest_framework.routers import DefaultRouter
 from .api import DeliveryViewSet, NotificationViewSet, PreferenceViewSet, TemplateViewSet, broadcast, send, webhook
-from .channel_views import notification_channels_page, notification_channels_status, gmail_connect, gmail_callback_view, telegram_connect, telegram_open, telegram_webhook_view, telegram_disconnect, gmail_disconnect
+from .channel_views import gmail_connect, gmail_callback_view, telegram_connect, telegram_open, telegram_webhook_view, telegram_disconnect, gmail_disconnect
 
 router = DefaultRouter()
 router.register("notifications/delivery", DeliveryViewSet, basename="notification-delivery")
@@ -11,15 +10,10 @@ router.register("notifications/templates", TemplateViewSet, basename="notificati
 router.register("notifications", NotificationViewSet, basename="enterprise-notifications")
 
 urlpatterns = [
-    # Never expose the DRF browsable API for the user-facing notification page.
-    # This route is mounted under both /api/ and /data/ for legacy clients.
-    path("notifications/channels/", RedirectView.as_view(url="/notifications/", permanent=False), name="notification_channels"),
-    path("notifications/channels/status/", notification_channels_status, name="notification_channels_status"),
     path("", include(router.urls)),
     path("notifications/send/", send),
     path("notifications/broadcast/", broadcast),
     path("notifications/webhook/", webhook),
-    path("notifications/history/", include(router.urls)),
     path("notifications/channels/gmail/connect/", gmail_connect, name="gmail_connect"),
     path("notifications/channels/gmail/callback/", gmail_callback_view, name="gmail_callback"),
     path("notifications/channels/gmail/disconnect/", gmail_disconnect, name="gmail_disconnect"),
