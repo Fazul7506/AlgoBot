@@ -1,9 +1,10 @@
-/* Canonical application-shell navigation. Exactly one mobile toggle path. */
+/* Canonical application-shell navigation and Django-message notification UI. */
 (() => {
   'use strict';
   if (window.__algoBotBaseShell) return;
   window.__algoBotBaseShell = true;
   const $ = (selector, root = document) => root.querySelector(selector);
+  const stack = () => $('#django-message-stack');
 
   function setBrokerStateAttribute(event) {
     const state = event?.detail?.state || window.AlgoBotBrokerState?.get() || {};
@@ -20,6 +21,82 @@
     indicator.classList.toggle('error', status === 'ERROR' || status === 'DISCONNECTED');
   }
 
+  function removeToast(node) {
+    if (!node || node.dataset.removing === 'true') return;
+    node.dataset.removing = 'true';
+    node.classList.add('is-leaving');
+    setTimeout(() => node.remove(), 220);
+  }
+
+  function closeToast(node) {
+    removeToast(node);
+  }
+
+  function wireToast(node, lifetime = 5000) {
+    if (!node || node.dataset.toastBound === 'true') return;
+    node.dataset.toastBound = 'true';
+    const close = node.querySelector('[data-toast-close]');
+    close?.addEventListener('click', event => { event.preventDefault(); closeToast(node); });
+    if (lifetime > 0) setTimeout(() => closeToast(node), lifetime);
+  }
+
+  function ensureStack() {
+    let target = stack();
+    if (target) return target;
+    target = document.createElement('div');
+    target.id = 'django-message-stack';
+    target.className = 'toast-stack';
+    target.setAttribute('aria-live', 'polite');
+    target.setAttribute('aria-atomic', 'false');
+    document.body.appendChild(target);
+    return target;
+  }
+
+  // API responses remain machine-readable for programmatic consumers. They are
+  // never inserted into the notification UI. Only a short human-readable
+  // message is allowed through this single Django-message-compatible surface.
+  function showDjangoMessage(text, level = 'info') {
+    if (!text || typeof text !== 'string') return;
+    const clean = text.replace(/\s+/g, ' ').trim().slice(0, 500);
+    if (!clean || /^\s*[[{]/.test(clean)) return;
+    const target = ensureStack();
+    const node = document.createElement('div');
+    node.className = `toast ${['success','warning','error','info'].includes(level) ? level : 'info'}`;
+    node.setAttribute('role', level === 'error' ? 'alert' : 'status');
+    const message = document.createElement('span');
+    message.className = 'toast-message';
+    message.textContent = clean;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'toast-close';
+    button.dataset.toastClose = '1';
+    button.setAttribute('aria-label', 'Close notification');
+    button.title = 'Close notification';
+    button.textContent = '×';
+    node.append(message, button);
+    target.appendChild(node);
+    wireToast(node, 5000);
+  }
+
+  function friendlyApiMessage(detail) {
+    if (!detail) return 'The requested operation could not be completed.';
+    const code = String(detail.code || '').toUpperCase();
+    if (code === 'API_TIMEOUT') return 'The server took too long to respond. Please try again.';
+    if (code === 'NETWORK_ERROR') return 'The data connection is temporarily unavailable. Please try again.';
+    if (code === 'EDGE_CHALLENGE') return 'The production connection is temporarily unavailable. Please try again.';
+    const message = String(detail.message || '').replace(/\s+/g, ' ').trim();
+    if (!message || /^[[{]/.test(message) || message.length > 500) return 'The requested operation could not be completed.';
+    return message;
+  }
+
+  function bindApiMessages() {
+    window.addEventListener('algobot:api-error', event => {
+      const detail = event.detail || {};
+      const level = Number(detail.status) >= 500 || detail.code === 'API_TIMEOUT' || detail.code === 'NETWORK_ERROR' ? 'error' : 'warning';
+      showDjangoMessage(friendlyApiMessage(detail), level);
+    });
+  }
+
   function bindNavigation() {
     const sidebar = $('#app-sidebar');
     if (!sidebar || sidebar.dataset.navigationBound === 'true') return;
@@ -29,58 +106,32 @@
     const toggle = $('[data-sidebar-toggle]');
     const shell = $('.app-shell');
     const storageKey = 'algobot.sidebar.collapsed';
-
     const setMobileOpen = open => {
       const next = !!open;
       sidebar.classList.toggle('is-open', next);
       if (backdrop) backdrop.hidden = !next;
-      if (mobile) {
-        mobile.setAttribute('aria-expanded', String(next));
-        mobile.setAttribute('aria-label', next ? 'Close navigation' : 'Open navigation');
-      }
-      // Never lock html/body scrolling. The fixed sidebar scrolls independently.
+      if (mobile) { mobile.setAttribute('aria-expanded', String(next)); mobile.setAttribute('aria-label', next ? 'Close navigation' : 'Open navigation'); }
       document.body.classList.remove('mobile-nav-open');
       document.documentElement.classList.remove('mobile-nav-open');
     };
     setMobileOpen(false);
-
-    // Use one click path for touch, mouse, and keyboard activation. Multiple
-    // pointer/click handlers used to toggle the drawer twice on mobile.
     const handleNavigationClick = event => {
       const target = event.target?.closest?.('[data-mobile-menu]');
-      if (target) {
-        event.preventDefault();
-        event.stopPropagation();
-        setMobileOpen(!sidebar.classList.contains('is-open'));
-        return;
-      }
-      if (backdrop && (event.target === backdrop || event.target?.closest?.('[data-sidebar-backdrop]'))) {
-        event.preventDefault();
-        setMobileOpen(false);
-        return;
-      }
+      if (target) { event.preventDefault(); event.stopPropagation(); setMobileOpen(!sidebar.classList.contains('is-open')); return; }
+      if (backdrop && (event.target === backdrop || event.target?.closest?.('[data-sidebar-backdrop]'))) { event.preventDefault(); setMobileOpen(false); return; }
       if (sidebar.classList.contains('is-open') && event.target?.closest?.('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')) setMobileOpen(false);
     };
     document.addEventListener('click', handleNavigationClick, true);
-
     if (toggle) {
       const setCollapsed = collapsed => {
         if (window.innerWidth <= 900) return;
-        sidebar.classList.toggle('is-collapsed', !!collapsed);
-        shell?.classList.toggle('sidebar-collapsed', !!collapsed);
-        document.body.classList.toggle('sidebar-collapsed', !!collapsed);
-        toggle.setAttribute('aria-expanded', String(!collapsed));
-        toggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
-        const icon = toggle.querySelector('.material-symbols-rounded');
-        if (icon) icon.textContent = collapsed ? 'left_panel_open' : 'left_panel_close';
+        sidebar.classList.toggle('is-collapsed', !!collapsed); shell?.classList.toggle('sidebar-collapsed', !!collapsed); document.body.classList.toggle('sidebar-collapsed', !!collapsed);
+        toggle.setAttribute('aria-expanded', String(!collapsed)); toggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
+        const icon = toggle.querySelector('.material-symbols-rounded'); if (icon) icon.textContent = collapsed ? 'left_panel_open' : 'left_panel_close';
         try { localStorage.setItem(storageKey, collapsed ? '1' : '0'); } catch (_) {}
       };
       try { if (window.innerWidth > 900 && localStorage.getItem(storageKey) === '1') setCollapsed(true); } catch (_) {}
-      toggle.addEventListener('click', event => {
-        event.preventDefault();
-        event.stopPropagation();
-        setCollapsed(!sidebar.classList.contains('is-collapsed'));
-      });
+      toggle.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); setCollapsed(!sidebar.classList.contains('is-collapsed')); });
     }
     document.addEventListener('keydown', event => { if (event.key === 'Escape') setMobileOpen(false); });
     window.addEventListener('resize', () => { if (window.innerWidth > 900) setMobileOpen(false); });
@@ -100,8 +151,9 @@
   function boot() {
     bindNavigation();
     bindTheme();
+    bindApiMessages();
     if (window.AlgoBotBrokerState) window.AlgoBotBrokerState.subscribe(setBrokerStateAttribute);
-    document.querySelectorAll('.toast-stack .toast').forEach(node => setTimeout(() => node.remove(), 4500));
+    document.querySelectorAll('#django-message-stack .toast').forEach(node => wireToast(node, 5000));
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true}); else boot();
 })();
