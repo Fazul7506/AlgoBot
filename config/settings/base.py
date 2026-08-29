@@ -1,7 +1,7 @@
 """Django base settings - shared across all environments."""
 import os
 from pathlib import Path
-from config.settings.utils import get_bool_env, get_list_env
+from config.settings.utils import get_bool_env,get_list_env
 BASE_DIR=Path(__file__).resolve().parent.parent.parent
 SECRET_KEY=os.getenv('SECRET_KEY',os.getenv('DJANGO_SECRET_KEY','dev-insecure-key-change-in-production')); DEBUG=get_bool_env('DEBUG',get_bool_env('DJANGO_DEBUG',True)); ALLOW_LIVE_TRADING=get_bool_env('ALLOW_LIVE_TRADING',False); ENABLE_BROKER_ACCOUNT_SWITCH=get_bool_env('ENABLE_BROKER_ACCOUNT_SWITCH',True)
 ALLOWED_HOSTS=get_list_env('ALLOWED_HOSTS',['127.0.0.1','localhost','testserver','algobot.dpdns.org','api.algobot.dpdns.org']); TIME_ZONE=os.getenv('TIME_ZONE','UTC'); LANGUAGE_CODE='en-us'; USE_I18N=True; USE_TZ=True; SECURE_SSL_REDIRECT=get_bool_env('SECURE_SSL_REDIRECT',False); SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https'); SESSION_COOKIE_SECURE=get_bool_env('SESSION_COOKIE_SECURE',False); CSRF_COOKIE_SECURE=get_bool_env('CSRF_COOKIE_SECURE',False); SESSION_COOKIE_SAMESITE=os.getenv('SESSION_COOKIE_SAMESITE','Lax'); CSRF_COOKIE_SAMESITE=os.getenv('CSRF_COOKIE_SAMESITE','Lax'); CSRF_TRUSTED_ORIGINS=get_list_env('CSRF_TRUSTED_ORIGINS',['https://algobot.dpdns.org'] if os.getenv('ALGO_API_BASE_URL') else [])
@@ -22,6 +22,5 @@ from config.settings.logging import *
 from config.settings.celery import *
 from config.settings.payment import *
 ROOT_URLCONF='deriv_platform.urls'; WSGI_APPLICATION='deriv_platform.wsgi.application'; ASGI_APPLICATION='deriv_platform.asgi.application'; DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'; CHANNEL_LAYERS={'default':{'BACKEND':'channels_redis.core.RedisChannelLayer' if USE_REDIS else 'channels.layers.InMemoryChannelLayer',**({'CONFIG':{'hosts':[REDIS_URL]}} if USE_REDIS else {})}}; AUTH_PASSWORD_VALIDATORS=[{'NAME':'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},{'NAME':'django.contrib.auth.password_validation.MinimumLengthValidator'},{'NAME':'django.contrib.auth.password_validation.CommonPasswordValidator'},{'NAME':'django.contrib.auth.password_validation.NumericPasswordValidator'}]; LOGIN_URL='/login/'; LOGIN_REDIRECT_URL='/dashboard/'; LOGOUT_REDIRECT_URL='/'
-# External notification channel configuration. Secrets belong only in deployment env vars.
 GOOGLE_CLIENT_ID=os.getenv('GOOGLE_CLIENT_ID',''); GOOGLE_CLIENT_SECRET=os.getenv('GOOGLE_CLIENT_SECRET',''); GOOGLE_OAUTH_REDIRECT_URI=os.getenv('GOOGLE_OAUTH_REDIRECT_URI',f'{os.getenv("BASE_URL","http://127.0.0.1:8000")}/notifications/channels/gmail/callback/')
-TELEGRAM_BOT_TOKEN=os.getenv('TELEGRAM_BOT_TOKEN',''); TELEGRAM_BOT_USERNAME=os.getenv('TELEGRAM_BOT_USERNAME','')
+TELEGRAM_BOT_TOKEN=os.getenv('TELEGRAM_BOT_TOKEN',''); TELEGRAM_BOT_USERNAME=os.getenv('TELEGRAM_BOT_USERNAME',''); TELEGRAM_WEBHOOK_SECRET=os.getenv('TELEGRAM_WEBHOOK_SECRET','')
