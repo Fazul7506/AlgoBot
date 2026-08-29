@@ -80,17 +80,33 @@ class BillingHardeningTests(TestCase):
 
     def test_cancel_subscription_stops_renewal_without_removing_paid_access(self):
         expiry = timezone.now() + timedelta(days=12)
-        Subscription.objects.create(user=self.user, plan="PRO", price_cents=499900, currency="kes", recurring=True, is_active=True, expires_at=expiry)
+        subscription = Subscription.objects.get(user=self.user)
+        subscription.plan = "PRO"
+        subscription.price_cents = 499900
+        subscription.currency = "kes"
+        subscription.recurring = True
+        subscription.is_active = True
+        subscription.expires_at = expiry
+        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at"])
+
         response = self.client.post(reverse("billing_cancel_subscription"), data={}, content_type="application/json")
         self.assertEqual(response.status_code, 200)
-        subscription = Subscription.objects.get(user=self.user)
+        subscription.refresh_from_db()
         self.assertFalse(subscription.recurring)
         self.assertTrue(subscription.is_active)
         self.assertAlmostEqual(subscription.expires_at.timestamp(), expiry.timestamp(), delta=2)
         self.assertEqual(response.json()["status"], "cancelled_at_period_end")
 
     def test_expired_subscription_is_reported_inactive(self):
-        Subscription.objects.create(user=self.user, plan="PRO", price_cents=499900, currency="kes", recurring=True, is_active=True, expires_at=timezone.now() - timedelta(minutes=1))
+        subscription = Subscription.objects.get(user=self.user)
+        subscription.plan = "PRO"
+        subscription.price_cents = 499900
+        subscription.currency = "kes"
+        subscription.recurring = True
+        subscription.is_active = True
+        subscription.expires_at = timezone.now() - timedelta(minutes=1)
+        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at"])
+
         response = self.client.get(reverse("billing_status"))
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["subscription"]["is_active"])
