@@ -39,6 +39,11 @@ class SenderIdentity:
     email: str
 
 
+ALGOBOT_SECURITY_SENDER = SenderIdentity("AlgoBot Security", "security@algobot.dpdns.org")
+ALGOBOT_SUPPORT_SENDER = SenderIdentity("AlgoBot Support", "support@algobot.dpdns.org")
+ALGOBOT_NOREPLY_SENDER = SenderIdentity("AlgoBot", "noreply@algobot.dpdns.org")
+
+
 def sender_for_category(category: str) -> SenderIdentity:
     """Return the verified AlgoBot sender for the notification category."""
     normalized = (category or "general").strip().lower()
@@ -46,13 +51,13 @@ def sender_for_category(category: str) -> SenderIdentity:
         "auth", "authentication", "account_security", "security_alert", "2fa",
         "password", "login", "verification", "verify", "credential",
     }:
-        return SenderIdentity("AlgoBot Security", settings.ALGOBOT_SECURITY_EMAIL)
+        return ALGOBOT_SECURITY_SENDER
     if normalized in {
         "support", "help", "customer_support", "technical_support", "billing_support",
         "billing", "payments", "payment", "subscription_support",
     }:
-        return SenderIdentity("AlgoBot Support", settings.ALGOBOT_SUPPORT_EMAIL)
-    return SenderIdentity("AlgoBot", settings.ALGOBOT_NOREPLY_EMAIL)
+        return ALGOBOT_SUPPORT_SENDER
+    return ALGOBOT_NOREPLY_SENDER
 
 
 def render_email_html(title: str, message: str, category: str, sender: SenderIdentity, metadata=None) -> str:
