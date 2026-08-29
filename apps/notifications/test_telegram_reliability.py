@@ -54,13 +54,13 @@ class TelegramWebhookReliabilityTests(TestCase):
         self.assertEqual(response.json()["method"], "sendMessage")
 
     @override_settings(USE_CELERY=True)
-    @patch("apps.notifications.services.deliver_notification")
+    @patch("apps.notifications.tasks.deliver_notification.delay")
     def test_telegram_notifications_are_queued(self, deliver_notification):
         user = self._user()
         NotificationChannelConnection.objects.create(user=user, provider="telegram", status="verified", external_id="123")
         notices = NotificationEngine().publish(user, "Trade", "Executed", channels=["telegram"])
         self.assertEqual(notices[0].status, "queued")
-        deliver_notification.delay.assert_called_once_with(notices[0].id)
+        deliver_notification.assert_called_once_with(notices[0].id)
 
     def _user(self):
         from django.contrib.auth import get_user_model
