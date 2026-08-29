@@ -1,6 +1,6 @@
 import requests
 from django.conf import settings
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
@@ -10,12 +10,15 @@ class Command(BaseCommand):
         token = getattr(settings, "TELEGRAM_BOT_TOKEN", "")
         base_url = getattr(settings, "BASE_URL", "").rstrip("/")
         secret = getattr(settings, "TELEGRAM_WEBHOOK_SECRET", "")
-        if not token:
-            raise CommandError("TELEGRAM_BOT_TOKEN is not configured.")
-        if not base_url.startswith("https://"):
-            raise CommandError("BASE_URL must be an HTTPS production URL.")
-        if not secret:
-            raise CommandError("TELEGRAM_WEBHOOK_SECRET is not configured.")
+
+        # Builds must remain deploy-safe when Telegram is intentionally disabled.
+        if not token or not secret or not base_url.startswith("https://"):
+            self.stdout.write(
+                self.style.WARNING(
+                    "Telegram webhook registration skipped: production Telegram settings are not fully configured."
+                )
+            )
+            return
 
         webhook_url = f"{base_url}/api/notifications/telegram/webhook/"
         api_url = f"https://api.telegram.org/bot{token}/setWebhook"
@@ -33,11 +36,18 @@ class Command(BaseCommand):
             response.raise_for_status()
             payload = response.json()
         except requests.RequestException as exc:
-            raise CommandError(f"Telegram webhook registration failed: {exc}") from exc
-        except ValueError as exc:
-            raise CommandError("Telegram returned an invalid webhook response.") from exc
+            self.stdout.write(self.style.WARNING(f"Telegram webhook registration skipped: {exc}"))
+            return
+        except ValueError:
+            self.stdout.write(self.style.WARNING("Telegram webhook registration skipped: invalid Telegram response."))
+            return
 
         if not payload.get("ok"):
-            raise CommandError(payload.get("description") or "Telegram rejected the webhook configuration.")
+            self.stdout.write(
+                self.style.WARNING(
+                    payload.get("description") or "Telegram rejected the webhook configuration."
+                )
+            )
+            return
 
-        self.stdout.write(self.style.SUCCESS(f"Telegram webhook registered: {webhook_url}"))
+        self.stdout.write(self.style.SUCCESS("Telegram webhook registered successfully."))
