@@ -1,5 +1,7 @@
 from decimal import Decimal, InvalidOperation
+from types import SimpleNamespace
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import viewsets, permissions, decorators, response, status
 from .models import Order, ExecutionLog, ReconciliationEvent
 from apps.trading.models import Position
@@ -51,8 +53,21 @@ class OrderViewSet(viewsets.ModelViewSet):
             if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)): return response.Response({'status':'rejected','code':'LIVE_TRADING_DISABLED','detail':'Live-money trading is disabled by platform configuration.'}, status=status.HTTP_409_CONFLICT)
         try:
             from apps.brokers.services import MarketDataFreshnessService
-            quote = MarketDataFreshnessService().latest(data.get('symbol'))
-        except Exception as exc: return response.Response({'status':'rejected','code':'MARKET_DATA_GATE_FAILED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
+            try:
+                quote = MarketDataFreshnessService().latest(data.get('symbol'))
+            except Exception:
+                # The terminal also consumes fresh persisted Tick records. Treat
+                # a fresh tick as an authoritative preview quote when the
+                # snapshot writer is briefly behind; never use browser data.
+                from apps.market_data.models import Tick
+                tick = Tick.objects.filter(symbol__symbol=data.get('symbol')).order_by('-epoch', '-received_at').first()
+                if tick is None: raise
+                age = max(0, (timezone.now() - tick.received_at).total_seconds())
+                max_age = int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30))
+                if age > max_age: raise
+                quote = SimpleNamespace(last_price=tick.quote, bid=tick.bid, ask=tick.ask, spread=tick.spread, timestamp=tick.received_at)
+        except Exception as exc:
+            return response.Response({'status':'rejected','code':'MARKET_DATA_GATE_FAILED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
         ai_gate = {'ai_verified':False,'ai_required':environment == 'real'}
         if environment == 'real':
             try:
@@ -76,6 +91,8 @@ class OrderViewSet(viewsets.ModelViewSet):
             return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':data.get('symbol'),'direction':data.get('direction'),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':market,'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'fresh_market_data':True,**ai_gate}})
         except (TypeError, ValueError, AttributeError, OverflowError) as exc:
             return response.Response({'status':'rejected','code':'PREVIEW_SERIALIZATION_FAILED','detail':f'Unable to build a safe pre-trade preview: {exc}'}, status=status.HTTP_409_CONFLICT)
+        except Exception as exc:
+            return response.Response({'status':'rejected','code':'PREVIEW_FAILED','detail':'Unable to complete the pre-trade preview safely.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     @decorators.action(detail=True, methods=['post'])
     def cancel(self, request, pk=None): return response.Response(OrderSerializer(ExecutionEngine().cancel_order(self.get_object())).data)
     @decorators.action(detail=True, methods=['post'])
@@ -83,7 +100,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=PositionSerializer; permission_classes=[permissions.IsAuthenticated]
+    serializer_class = PositionSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return Position.objects.filter(order__user=self.request.user)
     @decorators.action(detail=False)
     def open(self, request): return response.Response(self.get_serializer(self.get_queryset().filter(status='open'),many=True).data)
