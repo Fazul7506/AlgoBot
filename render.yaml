@@ -74,16 +74,6 @@ services:
           name: AlgoBot
           type: web
           envVarKey: REDIS_URL
-      - key: CELERY_BROKER_URL
-        fromService:
-          name: AlgoBot
-          type: web
-          envVarKey: CELERY_BROKER_URL
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          name: AlgoBot
-          type: web
-          envVarKey: CELERY_RESULT_BACKEND
       - key: USE_REDIS
         fromService:
           name: AlgoBot
