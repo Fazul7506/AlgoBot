@@ -1,11 +1,11 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.test import Client, TestCase, override_settings
-from django.urls import reverse
 from django.utils import timezone
 
 from .channel_service import telegram_webhook
-from .models import Notification, NotificationChannelConnection, TelegramUpdate
+from .models import NotificationChannelConnection, TelegramUpdate
 from .services import NotificationEngine
 
 
@@ -29,7 +29,7 @@ class TelegramWebhookReliabilityTests(TestCase):
             provider="telegram",
             status="pending",
             verification_code_hash=hashlib.sha256(raw.encode()).hexdigest(),
-            verification_expires_at=timezone.now() + timezone.timedelta(minutes=5),
+            verification_expires_at=timezone.now() + timedelta(minutes=5),
         )
         result = telegram_webhook({"update_id": 1002, "message": {"chat": {"id": 888, "username": "stepper"}, "text": f"/start {raw}"}})
         conn.refresh_from_db()
@@ -39,14 +39,12 @@ class TelegramWebhookReliabilityTests(TestCase):
 
     @override_settings(TELEGRAM_BOT_TOKEN="123456:TEST", TELEGRAM_MODE="webhook", TELEGRAM_WEBHOOK_SECRET="test-secret")
     def test_webhook_rejects_missing_secret(self):
-        client = Client()
-        response = client.post("/api/notifications/telegram/webhook/", data="{}", content_type="application/json")
+        response = Client().post("/api/notifications/telegram/webhook/", data="{}", content_type="application/json")
         self.assertEqual(response.status_code, 403)
 
     @override_settings(TELEGRAM_BOT_TOKEN="123456:TEST", TELEGRAM_MODE="webhook", TELEGRAM_WEBHOOK_SECRET="test-secret")
     def test_webhook_accepts_secret_and_returns_fast_reply(self):
-        client = Client()
-        response = client.post(
+        response = Client().post(
             "/api/notifications/telegram/webhook/",
             data='{"update_id":1003,"message":{"chat":{"id":999},"text":"/help"}}',
             content_type="application/json",
