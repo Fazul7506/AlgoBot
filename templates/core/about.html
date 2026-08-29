@@ -1,3 +1,20 @@
 {% extends "base.html" %}
-{% block title %}About | AlgoBot{% endblock %}
-{% block content %}<article class="legal-page"><p class="eyebrow">Public information</p><h1>About</h1><p>This public page provides secure access guidance for AlgoBot visitors without exposing authenticated trading workspaces, portfolio data, AI modules, monitoring views, or administration.</p><div class="hero-actions"><a class="btn primary" href="/brokers/connect/?broker=deriv">Connect Broker</a><a class="btn ghost" href="/contact/">Contact support</a></div></article>{% endblock %}
+{% block title %}About AlgoBot | AI trading platform{% endblock %}
+{% block content %}
+<article class="legal-page">
+  <p class="eyebrow">About AlgoBot</p>
+  <h1>Broker-connected trading operations in one workspace.</h1>
+  <p>AlgoBot is software for traders and trading teams who want market intelligence, strategy research, backtesting, risk controls, execution workflows, performance attribution and operational notifications in a single workspace.</p>
+  <h2>How the platform works</h2>
+  <p><strong>1. Connect.</strong> Authorize a supported broker account through the broker's secure connection flow.</p>
+  <p><strong>2. Research.</strong> Review market data, scanners, signals, strategies, backtests and AI-assisted analysis.</p>
+  <p><strong>3. Control.</strong> Apply account-aware risk and execution controls before orders are submitted.</p>
+  <p><strong>4. Execute and review.</strong> Manage orders and positions, then review trade history, portfolio state and performance.</p>
+  <p><strong>5. Notify.</strong> Optionally connect Telegram or Gmail for operational and trading notifications requested by the user.</p>
+  <h2>What AlgoBot is not</h2>
+  <p>AlgoBot is not a bank, broker, investment adviser or promise of financial performance. AI outputs and market signals are decision-support information and can be incorrect. Users retain responsibility for their trading decisions, broker permissions and legal obligations.</p>
+  <h2>Privacy and transparency</h2>
+  <p>We publish a <a href="/privacy/">Privacy Policy</a>, <a href="/terms/">Terms of Service</a>, <a href="/cookies/">Cookie Policy</a> and <a href="/data-deletion/">Data Deletion Request</a> page so users can review data handling before connecting services.</p>
+  <div class="hero-actions"><a class="btn primary" href="/brokers/connect/?broker=deriv">Connect broker</a><a class="btn ghost" href="/notifications/">View Notifications</a></div>
+</article>
+{% endblock %}
