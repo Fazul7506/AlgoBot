@@ -9,13 +9,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 
-from .channel_service import (
-    connection_status,
-    gmail_authorize_url,
-    gmail_callback,
-    telegram_start,
-    telegram_webhook,
-)
+from .channel_service import connection_status, gmail_authorize_url, gmail_callback, telegram_start, telegram_webhook
 from .models import Notification, NotificationChannelConnection, NotificationPreference
 
 BROWSER_NOTIFICATIONS_URL = "/notifications/"
@@ -28,7 +22,6 @@ def notification_channels_page(request):
 
 @login_required
 def notification_channels_status(request):
-    """Return current notification-channel state without reloading the page."""
     return JsonResponse({"channels": connection_status(request.user)})
 
 
@@ -84,19 +77,23 @@ def telegram_webhook_view(request):
         return HttpResponse("Telegram webhook is active.", status=200)
     configured = getattr(settings, "TELEGRAM_WEBHOOK_SECRET", "")
     supplied = request.META.get("HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN", "")
-    if configured and not secrets.compare_digest(configured, supplied):
-        return JsonResponse({"ok": False}, status=403)
+    if not configured or not supplied or not secrets.compare_digest(configured, supplied):
+        return JsonResponse({"ok": False, "error": "invalid webhook secret"}, status=403)
     try:
         payload = json.loads(request.body.decode("utf-8"))
-        verified = telegram_webhook(payload)
-        return JsonResponse({"ok": True, "verified": verified})
+        result = telegram_webhook(payload)
+        reply = result.get("reply")
+        if reply:
+            return JsonResponse(reply, status=200)
+        return JsonResponse({"ok": True, **{k: v for k, v in result.items() if k != "reply"}}, status=200)
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "invalid JSON"}, status=400)
     except Exception:
-        return JsonResponse({"ok": False}, status=400)
+        return JsonResponse({"ok": False}, status=500)
 
 
 @transaction.atomic
 def _delete_channel_connection(user, provider):
-    """Permanently delete a channel, preference, and all history for that channel."""
     Notification.objects.filter(user=user, channel=provider).delete()
     NotificationChannelConnection.objects.filter(user=user, provider=provider).delete()
     NotificationPreference.objects.filter(user=user, channel=provider).delete()

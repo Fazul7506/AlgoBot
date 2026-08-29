@@ -3,17 +3,8 @@ from django.views.generic import RedirectView
 from rest_framework.routers import DefaultRouter
 
 from .api import DeliveryViewSet, NotificationViewSet, PreferenceViewSet, TemplateViewSet, broadcast, send, webhook
-from .channel_views import (
-    gmail_callback_view,
-    gmail_connect,
-    gmail_disconnect,
-    notification_channels_page,
-    notification_channels_status,
-    telegram_connect,
-    telegram_disconnect,
-    telegram_open,
-    telegram_webhook_view,
-)
+from .channel_views import gmail_callback_view, gmail_connect, gmail_disconnect, notification_channels_page, notification_channels_status, telegram_connect, telegram_disconnect, telegram_open, telegram_webhook_view
+from .health import telegram_health_view
 
 router = DefaultRouter()
 router.register("notifications/delivery", DeliveryViewSet, basename="notification-delivery")
@@ -35,4 +26,5 @@ urlpatterns = [
     path("notifications/channels/telegram/open/", telegram_open, name="telegram_open"),
     path("notifications/channels/telegram/disconnect/", telegram_disconnect, name="telegram_disconnect"),
     path("notifications/telegram/webhook/", telegram_webhook_view, name="telegram_webhook"),
+    path("notifications/telegram/health/", telegram_health_view, name="telegram_health"),
 ]
