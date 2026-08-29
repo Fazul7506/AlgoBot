@@ -12,6 +12,10 @@
   const defaultApiBase = window.location.hostname === 'algobot.dpdns.org' ? 'https://api.algobot.dpdns.org' : '';
   const apiBase = (configuredApiBase || defaultApiBase).replace(/\/+$/, '');
   const resolveUrl = url => /^https?:\/\//i.test(url) ? url : `${apiBase}${url.startsWith('/') ? url : `/${url}`}`;
+  const normalizeEndpoint = url => {
+    if (url === '/api/market/snapshots/all_snapshots/') return '/api/market/snapshots/?page_size=8';
+    return url;
+  };
   const isCloudflareChallenge = (response, text) => {
     if (!response || !text) return false;
     const body = String(text).toLowerCase();
@@ -34,7 +38,8 @@
     const response = await fetch(target, {credentials:crossOrigin ? 'include' : 'same-origin', ...options, headers, signal:controller.signal});
     return {response, text:await response.text()};
   }
-  async function request(url, options = {}, timeout = 25000) {
+  async function request(rawUrl, options = {}, timeout = 25000) {
+    const url = normalizeEndpoint(rawUrl);
     if (!url) throw new Error('No API endpoint configured');
     const method = (options.method || 'GET').toUpperCase();
     const key = `${method} ${url}`;
@@ -61,10 +66,6 @@
         }
       } catch (error) {
         firstError = error;
-        // A timeout from the configured API host is not proof that the backend
-        // is unavailable. Retry the same endpoint on the dashboard's origin so
-        // deployments where the API subdomain is slow/unreachable can still
-        // use the Django application directly.
         if (apiBase && !/^https?:\/\//i.test(url)) {
           try {
             controller = new AbortController();
@@ -81,7 +82,7 @@
           e.code = firstError?.name === 'AbortError' ? 'API_TIMEOUT' : 'NETWORK_ERROR';
           e.status = 0;
           e.retryable = ['GET','HEAD'].includes(method);
-          window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url,method,status:0,code:e.code,message:e.message,retryable:e.retryable}}));
+          window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url:rawUrl,method,status:0,code:e.code,message:e.message,retryable:e.retryable}}));
           throw e;
         }
       } finally { clearTimeout(timer); }
@@ -93,7 +94,7 @@
         error.code = payload.code || (isCloudflareChallenge(response,text) ? 'EDGE_CHALLENGE' : 'API_ERROR');
         error.isEdgeChallenge = error.code === 'EDGE_CHALLENGE';
         error.retryable = ['GET','HEAD'].includes(method) && response.status >= 500;
-        window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url,method,status:response.status,code:error.code,message:error.message,retryable:error.retryable,edgeChallenge:error.isEdgeChallenge}}));
+        window.dispatchEvent(new CustomEvent('algobot:api-error', {detail:{url:rawUrl,method,status:response.status,code:error.code,message:error.message,retryable:error.retryable,edgeChallenge:error.isEdgeChallenge}}));
         throw error;
       }
       if (method === 'GET') cache.set(url,{payload,at:Date.now()});
@@ -102,7 +103,7 @@
     if (method === 'GET') inflight.set(key,promise);
     try { return await promise; } finally { if (inflight.get(key) === promise) inflight.delete(key); }
   }
-  function cached(url,maxAge=120000) { const item=cache.get(url); return item && Date.now()-item.at<=maxAge ? item.payload : null; }
+  function cached(url,maxAge=120000) { const item=cache.get(normalizeEndpoint(url)); return item && Date.now()-item.at<=maxAge ? item.payload : null; }
   async function getBrokerAccounts() { return list(await request('/api/brokers/accounts/')); }
   async function syncBrokerAccount(accountId) {
     if (!accountId) throw new Error('A broker account is required');
