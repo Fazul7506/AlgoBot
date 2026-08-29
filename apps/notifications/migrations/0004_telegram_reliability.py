@@ -3,7 +3,7 @@ import uuid
 
 
 class Migration(migrations.Migration):
-    dependencies = [("notifications", "0003_rename_notifications_user_prov_status_idx_enterprise__user_id_72de89_idx")]
+    dependencies = [("enterprise_notifications", "0003_rename_notifications_user_prov_status_idx_enterprise__user_id_72de89_idx")]
 
     operations = [
         migrations.AddField(model_name="notification", name="attempts", field=models.PositiveSmallIntegerField(default=0)),
