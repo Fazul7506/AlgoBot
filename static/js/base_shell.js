@@ -28,8 +28,29 @@
     if (!text || typeof text !== 'string') return;
     const clean = text.replace(/\s+/g,' ').trim().slice(0,500);
     if (!clean || /^\s*[[{]/.test(clean)) return;
+    const normalizedLevel = ['success','warning','error','info'].includes(level) ? level : 'info';
     const target = ensureStack(), node = document.createElement('div');
-    node.className = `toast ${['success','warning','error','info'].includes(level) ? level : 'info'}`; node.setAttribute('role', level === 'error' ? 'alert' : 'status');
+    node.className = `toast ${normalizedLevel}`;
+    node.dataset.toastLevel = normalizedLevel;
+    node.setAttribute('role', normalizedLevel === 'error' ? 'alert' : 'status');
+    // Inline layout fallbacks keep Django messages usable even if another page-specific
+    // stylesheet overrides the shared toast classes.
+    node.style.display = 'grid';
+    node.style.gridTemplateColumns = 'minmax(0,1fr) auto';
+    node.style.alignItems = 'start';
+    node.style.gap = '12px';
+    node.style.minWidth = '0';
+    node.style.maxWidth = 'min(460px, calc(100vw - 28px))';
+    node.style.boxSizing = 'border-box';
+    node.style.padding = '14px 12px 14px 16px';
+    node.style.borderRadius = '14px';
+    node.style.background = 'var(--ds-surface-2, var(--panel2, #10233d))';
+    node.style.color = 'var(--ds-text, var(--text, #e7f0ff))';
+    node.style.border = '1px solid var(--ds-border, var(--line, #203653))';
+    node.style.boxShadow = '0 16px 40px rgba(0,0,0,.32)';
+    if (normalizedLevel === 'success') node.style.borderColor = 'color-mix(in srgb, var(--ds-success, #33d69f) 52%, var(--ds-border, #203653))';
+    if (normalizedLevel === 'warning') node.style.borderColor = 'color-mix(in srgb, var(--ds-warning, #ffd166) 52%, var(--ds-border, #203653))';
+    if (normalizedLevel === 'error') node.style.borderColor = 'color-mix(in srgb, var(--ds-danger, #ff5c7a) 58%, var(--ds-border, #203653))';
     const message = document.createElement('span'); message.className='toast-message'; message.textContent=clean;
     const button = document.createElement('button'); button.type='button'; button.className='toast-close'; button.dataset.toastClose='1'; button.setAttribute('aria-label','Close notification'); button.title='Close notification'; button.textContent='×';
     node.append(message,button); target.appendChild(node); wireToast(node,5000);
