@@ -1,3 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Contact | AlgoBot{% endblock %}
-{% block content %}<article class="legal-page"><p class="eyebrow">Public information</p><h1>Contact</h1><p>This public page provides secure access guidance for AlgoBot visitors without exposing authenticated trading workspaces, portfolio data, AI modules, monitoring views, or administration.</p><div class="hero-actions"><a class="btn primary" href="/brokers/connect/?broker=deriv">Connect Broker</a><a class="btn ghost" href="/contact/">Contact support</a></div></article>{% endblock %}
+{% block title %}Contact AlgoBot | Support and privacy requests{% endblock %}
+{% block content %}
+<article class="legal-page">
+  <p class="eyebrow">Public support</p>
+  <h1>Contact AlgoBot</h1>
+  <p>Use this page as the public support entry point for AlgoBot. For faster handling, identify the category of your request: <strong>technical support</strong>, <strong>privacy</strong>, <strong>Google user data</strong>, <strong>data deletion</strong>, or <strong>broker connection</strong>.</p>
+  <h2>Privacy and Google user-data requests</h2>
+  <p>If your request concerns Google account information, Gmail authorization, OAuth permissions or deletion of connected notification data, state that clearly in your support request. We will use the information necessary to identify the relevant account and process the request securely.</p>
+  <h2>Account and broker support</h2>
+  <p>For broker connection, account, execution or platform issues, include the affected feature and approximate time of the issue. Never send passwords, API secrets, access tokens, Telegram bot tokens or Google client secrets through a support request.</p>
+  <h2>Data deletion</h2>
+  <p>For a formal deletion request, use the dedicated <a href="/data-deletion/">Data Deletion Request</a> page. The request flow explains what can be deleted and what records may need to be retained for security or legal reasons.</p>
+  <div class="hero-actions"><a class="btn primary" href="/data-deletion/">Request data deletion</a><a class="btn ghost" href="/privacy/">Read Privacy Policy</a><a class="btn ghost" href="/about/">About AlgoBot</a></div>
+</article>
+{% endblock %}
