@@ -1,0 +1,37 @@
+name: Frontend Hardening
+
+on:
+  push:
+    branches: [main, 'refactor/frontend-hardening']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Run frontend hygiene audit
+        run: python scripts/frontend_audit.py
+
+      - name: Validate Django templates
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements.txt
+          python manage.py check
+
+      - name: Validate static asset references
+        run: |
+          python manage.py collectstatic --noinput --clear
+          test -f staticfiles/css/base_shell.css
+          test -f staticfiles/js/base_shell.js
