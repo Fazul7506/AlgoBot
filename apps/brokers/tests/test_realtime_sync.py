@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -45,3 +46,17 @@ class BrokerRealtimeSyncTests(SimpleTestCase):
         payload = BrokerRealtimeSync._normalize_transaction({"transaction_id": "tx-1"})
         self.assertEqual(payload["transaction"]["transaction_id"], "tx-1")
         self.assertIn("timestamp", payload)
+
+    def test_account_stream_includes_all_open_contracts_subscription(self):
+        service = self._service()
+        captured = {}
+
+        async def fake_stream(subscriptions, **kwargs):
+            captured["subscriptions"] = subscriptions
+
+        service.adapter._stream = fake_stream
+        asyncio.run(service._run_account_stream())
+        self.assertIn(
+            {"proposal_open_contract": 1, "subscribe": 1, "req_id": 1004},
+            captured["subscriptions"],
+        )
