@@ -48,26 +48,55 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
         value = (obj.credentials or {}).get('realtime') or {}
         return value if isinstance(value, dict) else {}
 
+    def _broker_metadata(self, obj):
+        value = obj.broker.metadata or {}
+        return value if isinstance(value, dict) else {}
+
     def get_broker(self, obj):
-        metadata = obj.broker.metadata or {}
-        return {'id': obj.broker_id, 'name': obj.broker.name, 'type': obj.broker.broker_type, 'status': obj.broker.status, 'avatar_url': metadata.get('avatar_url') or ''}
+        metadata = self._broker_metadata(obj)
+        return {
+            'id': obj.broker_id,
+            'name': obj.broker.name,
+            'type': obj.broker.broker_type,
+            'status': obj.broker.status,
+            'avatar_url': str(metadata.get('avatar_url') or ''),
+        }
 
     def get_account_type(self, obj):
         value = str((obj.credentials or {}).get('account_type') or '').lower()
         return value if value in {'real', 'demo'} else 'unknown'
 
     def get_avatar_url(self, obj):
-        metadata = obj.broker.metadata or {}
-        return str(metadata.get('avatar_url') or '')
+        realtime = self._realtime(obj)
+        metadata = self._broker_metadata(obj)
+        return str(realtime.get('avatar_url') or metadata.get('avatar_url') or '')
 
     def get_display_name(self, obj):
         return f'{obj.broker.name} · {obj.account_id}'
 
     def get_branding(self, obj):
-        if self._is_deriv(obj):
-            account_type = self.get_account_type(obj)
-            return {'provider': 'Deriv', 'powered_by': 'Deriv', 'country_code': 'US', 'flag': '🇺🇸', 'account_type': account_type, 'label': 'Deriv Demo Account' if account_type == 'demo' else 'Deriv Real Account' if account_type == 'real' else 'Deriv Account'}
-        return {'provider': obj.broker.name, 'powered_by': obj.broker.name, 'country_code': '', 'flag': '', 'account_type': self.get_account_type(obj), 'label': obj.broker.name}
+        realtime = self._realtime(obj)
+        metadata = self._broker_metadata(obj)
+        account_type = self.get_account_type(obj)
+        provider = str(metadata.get('provider') or obj.broker.name)
+        avatar_url = str(realtime.get('avatar_url') or metadata.get('avatar_url') or '')
+        country_code = str(realtime.get('country_code') or metadata.get('country_code') or '').upper()
+        country_name = str(realtime.get('country_name') or metadata.get('country_name') or '')
+        label = (
+            f'{provider} Demo Account' if account_type == 'demo'
+            else f'{provider} Real Account' if account_type == 'real'
+            else f'{provider} Account'
+        )
+        return {
+            'provider': provider,
+            'powered_by': provider,
+            'country_code': country_code,
+            'country_name': country_name,
+            'flag': str(realtime.get('flag') or metadata.get('flag') or ''),
+            'avatar_url': avatar_url,
+            'account_type': account_type,
+            'label': label,
+        }
 
     def get_is_connected(self, obj):
         return obj.connections.filter(status='connected').exists()
