@@ -73,7 +73,7 @@ class BrokerRealtimeSync:
             await self._broadcast("broker.connection", message)
             return
         if message.get("error"):
-            await self._persist_connection_status({"status": "degraded", "error": message["error"]})
+            await self._persist_connection_status({"status": "failed", "error": message["error"]})
             await self._broadcast("broker.error", {"error": message["error"]})
             return
         if msg_type == "balance":
@@ -105,9 +105,10 @@ class BrokerRealtimeSync:
         status = str(message.get("status") or "connected")
         db_status = {
             "reconnecting": "degraded",
-            "authentication_error": "error",
+            "authentication_error": "failed",
             "connected": "connected",
-        }.get(status, status if status in {"connected", "disconnected", "degraded", "error"} else "degraded")
+            "failed": "failed",
+        }.get(status, status if status in {"connected", "disconnected", "degraded", "failed", "reconnecting"} else "degraded")
         BrokerConnection.objects.filter(broker_account_id=self.account_id).update(
             status=db_status,
             last_ping=timezone.now() if db_status == "connected" else None,
