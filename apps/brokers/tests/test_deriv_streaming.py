@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock
 
 from apps.brokers.adapters.deriv import DerivAdapter
+from apps.brokers.exceptions import BrokerOrderError
 
 
 class DerivStreamingAdapterTests(unittest.IsolatedAsyncioTestCase):
@@ -36,5 +37,5 @@ class DerivStreamingAdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_stream_prices_rejects_empty_symbol_list(self):
         adapter = DerivAdapter()
-        with self.assertRaises(Exception):
+        with self.assertRaises(BrokerOrderError):
             await adapter.stream_prices([])
