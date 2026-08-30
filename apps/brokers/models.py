@@ -56,6 +56,13 @@ class BrokerAccount(models.Model):
             models.Index(fields=['broker', 'is_preferred']),
             models.Index(fields=['user', 'token_status']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=Q(is_preferred=True),
+                name='unique_preferred_broker_account_per_user',
+            ),
+        ]
 
     def __str__(self): return f'{self.broker.broker_type}:{self.account_id}'
     def set_access_token(self, token: str) -> None: self.access_token = CredentialEncryptionService().encrypt(token or '')
