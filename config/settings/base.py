@@ -12,18 +12,12 @@ from pathlib import Path
 from config.settings.utils import get_bool_env, get_list_env
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
-# A deterministic development key is useful for local bootstrapping, but the
-# production settings explicitly reject this value.
 SECRET_KEY = os.getenv("SECRET_KEY", os.getenv("DJANGO_SECRET_KEY", "django-insecure-local-development-only"))
 DEBUG = get_bool_env("DEBUG", get_bool_env("DJANGO_DEBUG", True))
 ALLOW_LIVE_TRADING = get_bool_env("ALLOW_LIVE_TRADING", False)
 ENABLE_BROKER_ACCOUNT_SWITCH = get_bool_env("ENABLE_BROKER_ACCOUNT_SWITCH", True)
 
-ALLOWED_HOSTS = get_list_env(
-    "ALLOWED_HOSTS",
-    ["127.0.0.1", "localhost", "testserver", "algobot.dpdns.org", "api.algobot.dpdns.org"],
-)
+ALLOWED_HOSTS = get_list_env("ALLOWED_HOSTS", ["127.0.0.1", "localhost", "testserver", "algobot.dpdns.org", "api.algobot.dpdns.org"])
 TIME_ZONE = os.getenv("TIME_ZONE", "UTC")
 LANGUAGE_CODE = "en-us"
 USE_I18N = True
@@ -34,9 +28,7 @@ SESSION_COOKIE_SECURE = get_bool_env("SESSION_COOKIE_SECURE", False)
 CSRF_COOKIE_SECURE = get_bool_env("CSRF_COOKIE_SECURE", False)
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
-CSRF_TRUSTED_ORIGINS = get_list_env(
-    "CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org"] if os.getenv("ALGO_API_BASE_URL") else []
-)
+CSRF_TRUSTED_ORIGINS = get_list_env("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org"] if os.getenv("ALGO_API_BASE_URL") else [])
 
 INSTALLED_APPS = [
     "daphne",
@@ -51,7 +43,6 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_filters",
     "core",
-    "apps.accounts",
     "apps.admin_portal",
     "apps.ai_engine",
     "apps.alerts",
@@ -60,9 +51,6 @@ INSTALLED_APPS = [
     "apps.audit",
     "apps.automation",
     "apps.backtesting",
-    "apps.billing",
-    # ``apps.broker`` is a compatibility import shim only. The canonical
-    # Django app and model source of truth is ``apps.brokers``.
     "apps.brokers",
     "apps.community",
     "apps.contracts",
@@ -129,22 +117,12 @@ MIDDLEWARE = [
 ]
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-        "rest_framework.authentication.SessionAuthentication",
-    ],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication", "rest_framework.authentication.SessionAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
-    "DEFAULT_FILTER_BACKENDS": [
-        "django_filters.rest_framework.DjangoFilterBackend",
-        "rest_framework.filters.SearchFilter",
-        "rest_framework.filters.OrderingFilter",
-    ],
-    "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
-    ],
+    "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend", "rest_framework.filters.SearchFilter", "rest_framework.filters.OrderingFilter"],
+    "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.AnonRateThrottle", "rest_framework.throttling.UserRateThrottle"],
     "DEFAULT_THROTTLE_RATES": {"anon": "100/hour", "user": "1000/hour"},
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
 }
@@ -160,51 +138,30 @@ SIMPLE_JWT = {
 
 CORS_ALLOWED_ORIGINS = get_list_env(
     "CORS_ALLOWED_ORIGINS",
-    [
-        "http://127.0.0.1:3000",
-        "http://localhost:3000",
-        "http://127.0.0.1:8000",
-        "http://localhost:8000",
-        "https://algobot.dpdns.org",
-    ]
+    ["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:8000", "http://localhost:8000", "https://algobot.dpdns.org"]
     if os.getenv("ALGO_API_BASE_URL")
-    else [
-        "http://127.0.0.1:3000",
-        "http://localhost:3000",
-        "http://127.0.0.1:8000",
-        "http://localhost:8000",
-    ],
+    else ["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:8000", "http://localhost:8000"],
 )
 CORS_ALLOW_CREDENTIALS = True
 
-TEMPLATES = [
-    {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
-        "APP_DIRS": True,
-        "OPTIONS": {
-            "context_processors": [
-                "django.template.context_processors.debug",
-                "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
-            ]
-        },
-    }
-]
+TEMPLATES = [{
+    "BACKEND": "django.template.backends.django.DjangoTemplates",
+    "DIRS": [BASE_DIR / "templates"],
+    "APP_DIRS": True,
+    "OPTIONS": {"context_processors": [
+        "django.template.context_processors.debug",
+        "django.template.context_processors.request",
+        "django.contrib.auth.context_processors.auth",
+        "django.contrib.messages.context_processors.messages",
+    ]},
+}]
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {
-        "BACKEND": (
-            "django.contrib.staticfiles.storage.StaticFilesStorage"
-            if DEBUG
-            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
-        )
-    },
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage" if DEBUG else "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -222,14 +179,7 @@ ROOT_URLCONF = "deriv_platform.urls"
 WSGI_APPLICATION = "deriv_platform.wsgi.application"
 ASGI_APPLICATION = "deriv_platform.asgi.application"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer" if USE_REDIS else "channels.layers.InMemoryChannelLayer",
-        **({"CONFIG": {"hosts": [REDIS_URL]}} if USE_REDIS else {}),
-    }
-}
-
+CHANNEL_LAYERS = {"default": {"BACKEND": "channels_redis.core.RedisChannelLayer" if USE_REDIS else "channels.layers.InMemoryChannelLayer", **({"CONFIG": {"hosts": [REDIS_URL]}} if USE_REDIS else {})}}
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -242,11 +192,7 @@ LOGOUT_REDIRECT_URL = "/"
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_OAUTH_REDIRECT_URI = os.getenv(
-    "GOOGLE_OAUTH_REDIRECT_URI",
-    f'{os.getenv("BASE_URL", "http://127.0.0.1:8000")}/notifications/channels/gmail/callback/',
-)
-
+GOOGLE_OAUTH_REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", f'{os.getenv("BASE_URL", "http://127.0.0.1:8000")}/notifications/channels/gmail/callback/')
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
