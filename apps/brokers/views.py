@@ -15,8 +15,6 @@ from .services import BrokerConnectionService, ExecutionEngine, SynchronizationS
 from .exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerRoutingError, BrokerOrderError
 
 logger = logging.getLogger(__name__)
-
-
 BROKER_CONNECT_TIMEOUT_SECONDS = 30.0
 BROKER_SYNC_TIMEOUT_SECONDS = 15.0
 
@@ -61,18 +59,41 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
     def select(self, request, pk=None):
         if not settings.ENABLE_BROKER_ACCOUNT_SWITCH:
             return response.Response({'detail': 'Broker account switching is disabled by platform configuration.'}, status=status.HTTP_403_FORBIDDEN)
-        account = self.get_object()
+        requested = self.get_object()
         requested_type = str(request.data.get('account_type') or '').lower().strip()
-        actual_type = str((account.credentials or {}).get('account_type') or 'unknown').lower()
-        if actual_type == 'unknown':
+        actual_type = str((requested.credentials or {}).get('account_type') or 'unknown').lower().strip()
+        if requested.status != 'active' or requested.broker.status != 'active':
+            return response.Response({'detail': 'The selected broker account is not active.'}, status=status.HTTP_409_CONFLICT)
+        if actual_type not in {'demo', 'real'}:
             return response.Response({'detail': 'The broker has not confirmed this account type yet. Synchronize the account first.'}, status=status.HTTP_409_CONFLICT)
         if requested_type and requested_type != actual_type:
             return response.Response({'detail': f'Selected account is {actual_type}, not {requested_type}.'}, status=status.HTTP_409_CONFLICT)
+        if requested.credential_status != 'ready':
+            return response.Response({'detail': 'The selected broker account credentials are not ready. Reconnect or synchronize the account first.'}, status=status.HTTP_409_CONFLICT)
+        if not BrokerConnection.objects.filter(broker_account=requested, status='connected').exists():
+            return response.Response({'detail': 'The selected broker account is not connected. Connect or synchronize it before switching.'}, status=status.HTTP_409_CONFLICT)
         with transaction.atomic():
-            BrokerAccount.objects.filter(user=request.user).update(is_preferred=False)
-            account.is_preferred = True
-            account.save(update_fields=['is_preferred'])
-        return response.Response({'switch_enabled': True, 'account': BrokerAccountSerializer(account).data})
+            locked = list(BrokerAccount.objects.select_for_update().filter(user=request.user).order_by('pk'))
+            account = next((item for item in locked if item.pk == requested.pk), None)
+            if account is None:
+                return response.Response({'detail': 'The selected broker account is no longer available.'}, status=status.HTTP_404_NOT_FOUND)
+            previous = next((item for item in locked if item.is_preferred and item.pk != account.pk), None)
+            BrokerAccount.objects.filter(user=request.user, is_preferred=True).exclude(pk=account.pk).update(is_preferred=False)
+            if not account.is_preferred:
+                account.is_preferred = True
+                account.save(update_fields=['is_preferred'])
+        serialized = BrokerAccountSerializer(account).data
+        previous_id = previous.id if previous else None
+        logger.info('broker_active_account_switched', extra={'user_id': request.user.pk, 'previous_account_id': previous_id, 'active_account_id': account.pk, 'broker_account_id': account.account_id, 'broker_type': account.broker.broker_type, 'account_type': actual_type})
+        return response.Response({'switch_enabled': True, 'active_account': serialized, 'account': serialized, 'previous_account_id': previous_id, 'active_account_id': account.id})
+
+    @decorators.action(detail=False, methods=['get'])
+    def active(self, request):
+        account = self.get_queryset().filter(is_preferred=True).first()
+        if account is None:
+            return response.Response({'active_account': None, 'active_account_id': None, 'switch_enabled': settings.ENABLE_BROKER_ACCOUNT_SWITCH})
+        serialized = BrokerAccountSerializer(account).data
+        return response.Response({'active_account': serialized, 'active_account_id': account.id, 'switch_enabled': settings.ENABLE_BROKER_ACCOUNT_SWITCH})
 
     @decorators.action(detail=True, methods=['post'])
     def sync(self, request, pk=None):
@@ -97,7 +118,6 @@ class BrokerConnectionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BrokerConnectionSerializer
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [SessionAuthentication, JWTAuthentication]
-
     def get_queryset(self):
         return BrokerConnection.objects.filter(broker_account__user=self.request.user).select_related('broker', 'broker_account').order_by('-updated_at')
 
@@ -106,109 +126,58 @@ class BrokerOrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [SessionAuthentication, JWTAuthentication]
-
-    def get_queryset(self):
-        return Order.objects.filter(user=self.request.user)
-
+    def get_queryset(self): return Order.objects.filter(user=self.request.user)
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = dict(serializer.validated_data)
+        serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True); data = dict(serializer.validated_data)
         account = data.get('account')
-        if account is not None:
-            data['account'] = get_object_or_404(BrokerAccount, pk=account.pk, user=request.user)
-        try:
-            report = ExecutionEngine().submit(request.user, **data)
-        except BrokerRoutingError as exc:
-            return response.Response({'detail': str(exc), 'status': 'blocked'}, status=status.HTTP_409_CONFLICT)
-        except (BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError) as exc:
-            return response.Response({'detail': str(exc), 'status': 'broker_error'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if account is not None: data['account'] = get_object_or_404(BrokerAccount, pk=account.pk, user=request.user)
+        try: report = ExecutionEngine().submit(request.user, **data)
+        except BrokerRoutingError as exc: return response.Response({'detail': str(exc), 'status': 'blocked'}, status=status.HTTP_409_CONFLICT)
+        except (BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError) as exc: return response.Response({'detail': str(exc), 'status': 'broker_error'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return response.Response(ExecutionReportSerializer(report).data, status=status.HTTP_201_CREATED)
 
 
 class ExecutionReportViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = ExecutionReportSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = [SessionAuthentication, JWTAuthentication]
-
-    def get_queryset(self):
-        return ExecutionReport.objects.filter(order__user=self.request.user)
+    serializer_class = ExecutionReportSerializer; permission_classes = [permissions.IsAuthenticated]; authentication_classes = [SessionAuthentication, JWTAuthentication]
+    def get_queryset(self): return ExecutionReport.objects.filter(order__user=self.request.user)
 
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = PositionSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = [SessionAuthentication, JWTAuthentication]
-
-    def get_queryset(self):
-        return Position.objects.filter(account__user=self.request.user)
-
+    serializer_class = PositionSerializer; permission_classes = [permissions.IsAuthenticated]; authentication_classes = [SessionAuthentication, JWTAuthentication]
+    def get_queryset(self): return Position.objects.filter(account__user=self.request.user)
     @decorators.action(detail=False, methods=['get'])
-    def open(self, request):
-        queryset = self.get_queryset().filter(status='open')
-        return response.Response(self.get_serializer(queryset, many=True).data)
+    def open(self, request): return response.Response(self.get_serializer(self.get_queryset().filter(status='open'), many=True).data)
 
 
 class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = TradeReconciliationSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = [SessionAuthentication, JWTAuthentication]
-
-    def get_queryset(self):
-        return TradeReconciliation.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
+    serializer_class = TradeReconciliationSerializer; permission_classes = [permissions.IsAuthenticated]; authentication_classes = [SessionAuthentication, JWTAuthentication]
+    def get_queryset(self): return TradeReconciliation.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
 
 
 class BrokerHealthViewSet(viewsets.ViewSet):
-    permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = [SessionAuthentication, JWTAuthentication]
-
+    permission_classes = [permissions.IsAuthenticated]; authentication_classes = [SessionAuthentication, JWTAuthentication]
     def list(self, request):
         accounts = list(BrokerAccount.objects.filter(user=request.user).select_related('broker').order_by('-is_preferred'))
-        preferred = next((account for account in accounts if account.is_preferred), accounts[0] if accounts else None)
-        connected = bool(
-            preferred
-            and BrokerConnection.objects.filter(
-                broker_account=preferred,
-                status='connected',
-            ).exists()
-        )
-        return response.Response({
-            'accounts': BrokerAccountSerializer(accounts, many=True).data,
-            'connected': connected,
-            'preferred_account_id': preferred.id if preferred else None,
-            'switch_enabled': settings.ENABLE_BROKER_ACCOUNT_SWITCH,
-            'source': 'broker_connections',
-        })
+        preferred = next((account for account in accounts if account.is_preferred), None)
+        connected = bool(preferred and BrokerConnection.objects.filter(broker_account=preferred, status='connected').exists())
+        return response.Response({'accounts': BrokerAccountSerializer(accounts, many=True).data, 'connected': connected, 'preferred_account_id': preferred.id if preferred else None, 'active_account_id': preferred.id if preferred else None, 'switch_enabled': settings.ENABLE_BROKER_ACCOUNT_SWITCH, 'source': 'broker_connections'})
 
 
 @decorators.api_view(['POST'])
 @decorators.permission_classes([JWTAuthenticatedPermission])
 @decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
 def connect_broker(request):
-    broker_id = request.data.get('broker_id') or request.data.get('broker')
-    account_id = request.data.get('account_id')
-    if not broker_id or not account_id:
-        return response.Response({'detail': 'broker_id and account_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
-    broker = get_object_or_404(Broker, pk=broker_id)
-    account = get_object_or_404(BrokerAccount, pk=account_id, user=request.user, broker=broker)
+    broker_id = request.data.get('broker_id') or request.data.get('broker'); account_id = request.data.get('account_id')
+    if not broker_id or not account_id: return response.Response({'detail': 'broker_id and account_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
+    broker = get_object_or_404(Broker, pk=broker_id); account = get_object_or_404(BrokerAccount, pk=account_id, user=request.user, broker=broker)
     logger.info('broker_connection_requested', extra={'broker_id': broker.id, 'account_id': account.id, 'broker_type': broker.broker_type})
-    try:
-        connection = _run_bounded(BrokerConnectionService().connect(broker, account), timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
-    except BrokerAuthenticationError as exc:
-        logger.warning('broker_connection_authentication_failed', extra={'account_id': account.id, 'error': str(exc)})
-        return response.Response({'detail': str(exc), 'status': 'credentials_expired'}, status=status.HTTP_401_UNAUTHORIZED)
-    except BrokerConnectionError as exc:
-        logger.warning('broker_connection_failed', extra={'account_id': account.id, 'error': str(exc)})
-        return response.Response({'detail': str(exc), 'status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    except BrokerRoutingError as exc:
-        logger.warning('broker_connection_routing_failed', extra={'account_id': account.id, 'error': str(exc)})
-        return response.Response({'detail': str(exc), 'status': 'blocked'}, status=status.HTTP_409_CONFLICT)
-    except asyncio.TimeoutError:
-        logger.warning('broker_connection_timeout', extra={'account_id': account.id, 'timeout_seconds': BROKER_CONNECT_TIMEOUT_SECONDS})
-        return response.Response({'detail': 'Broker connection timed out while waiting for the provider. The OAuth account remains saved and can be retried.', 'status': 'timeout'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
+    try: connection = _run_bounded(BrokerConnectionService().connect(broker, account), timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
+    except BrokerAuthenticationError as exc: return response.Response({'detail': str(exc), 'status': 'credentials_expired'}, status=status.HTTP_401_UNAUTHORIZED)
+    except BrokerConnectionError as exc: return response.Response({'detail': str(exc), 'status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except BrokerRoutingError as exc: return response.Response({'detail': str(exc), 'status': 'blocked'}, status=status.HTTP_409_CONFLICT)
+    except asyncio.TimeoutError: return response.Response({'detail': 'Broker connection timed out while waiting for the provider. The OAuth account remains saved and can be retried.', 'status': 'timeout'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
     except Exception as exc:
-        logger.exception('broker_connection_unexpected_failure', extra={'account_id': account.id})
-        return response.Response({'detail': 'Broker connection failed unexpectedly. The account credentials were preserved for retry.', 'status': 'error', 'error_code': exc.__class__.__name__}, status=status.HTTP_502_BAD_GATEWAY)
+        logger.exception('broker_connection_unexpected_failure', extra={'account_id': account.id}); return response.Response({'detail': 'Broker connection failed unexpectedly. The account credentials were preserved for retry.', 'status': 'error', 'error_code': exc.__class__.__name__}, status=status.HTTP_502_BAD_GATEWAY)
     logger.info('broker_connection_established', extra={'broker_id': broker.id, 'account_id': account.id, 'connection_id': connection.id})
     return response.Response({'connection': BrokerConnectionSerializer(connection).data, 'account': BrokerAccountSerializer(account).data})
 
@@ -217,20 +186,12 @@ def connect_broker(request):
 @decorators.permission_classes([JWTAuthenticatedPermission])
 @decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
 def disconnect_broker(request):
-    broker_id = request.data.get('broker_id') or request.data.get('broker')
-    account_id = request.data.get('account_id')
-    if not broker_id or not account_id:
-        return response.Response({'detail': 'broker_id and account_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
-    broker = get_object_or_404(Broker, pk=broker_id)
-    account = get_object_or_404(BrokerAccount, pk=account_id, user=request.user, broker=broker)
-    try:
-        connection = _run_bounded(BrokerConnectionService().disconnect(broker, account), timeout=8.0)
-    except BrokerAuthenticationError as exc:
-        return response.Response({'detail': str(exc), 'status': 'credentials_expired'}, status=status.HTTP_401_UNAUTHORIZED)
-    except BrokerConnectionError as exc:
-        return response.Response({'detail': str(exc), 'status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    except BrokerRoutingError as exc:
-        return response.Response({'detail': str(exc), 'status': 'blocked'}, status=status.HTTP_409_CONFLICT)
-    except asyncio.TimeoutError:
-        return response.Response({'detail': 'Broker disconnection timed out.', 'status': 'timeout'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
+    broker_id = request.data.get('broker_id') or request.data.get('broker'); account_id = request.data.get('account_id')
+    if not broker_id or not account_id: return response.Response({'detail': 'broker_id and account_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
+    broker = get_object_or_404(Broker, pk=broker_id); account = get_object_or_404(BrokerAccount, pk=account_id, user=request.user, broker=broker)
+    try: connection = _run_bounded(BrokerConnectionService().disconnect(broker, account), timeout=8.0)
+    except BrokerAuthenticationError as exc: return response.Response({'detail': str(exc), 'status': 'credentials_expired'}, status=status.HTTP_401_UNAUTHORIZED)
+    except BrokerConnectionError as exc: return response.Response({'detail': str(exc), 'status': 'unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except BrokerRoutingError as exc: return response.Response({'detail': str(exc), 'status': 'blocked'}, status=status.HTTP_409_CONFLICT)
+    except asyncio.TimeoutError: return response.Response({'detail': 'Broker disconnection timed out.', 'status': 'timeout'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
     return response.Response({'connection': BrokerConnectionSerializer(connection).data, 'account': BrokerAccountSerializer(account).data})
