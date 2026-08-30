@@ -6,9 +6,9 @@ on:
   pull_request:
     branches: [main]
 
-# CI validates the repository; it must never mutate the protected source tree.
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: production-validation-${{ github.workflow }}-${{ github.ref }}
@@ -61,7 +61,29 @@ jobs:
           python manage.py showmigrations --plan
 
       - name: Apply migrations to a clean CI database
+        id: migrate
         run: python manage.py migrate --noinput
+
+      - name: Publish migration application diagnostics
+        if: failure() && steps.migrate.outcome == 'failure' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set +e
+          python manage.py migrate --noinput --verbosity 3 > /tmp/migration-apply.txt 2>&1
+          status=$?
+          {
+            echo '### Clean-database migration application failure'
+            echo
+            echo "Diagnostic replay exit code: $status"
+            echo
+            echo '```text'
+            tail -n 250 /tmp/migration-apply.txt
+            echo '```'
+          } > /tmp/migration-apply-comment.md
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/migration-apply-comment.md
+          exit 1
 
       - name: Run Django test suite
         run: python manage.py test --noinput --parallel 1
