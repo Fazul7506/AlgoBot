@@ -1,1 +1,5 @@
-from .services import *  # noqa: F401,F403
+"""Compatibility exports for model inference."""
+
+from .services import InferenceService
+
+__all__ = ["InferenceService"]
