@@ -1,23 +1,252 @@
-/* Phase 2 terminal context controls: preview, market context and mobile-safe state. */
+/* Production Trading Terminal: authoritative preview, execution state, chart controls, and mobile-safe UX. */
 (() => {
   'use strict';
-  const $=(s,r=document)=>r.querySelector(s);
-  const api=(url,o={},t=10000)=>window.AlgoBotFrontendData?.request(url,o,t);
-  const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
-  async function preview(){
-    const account=$('#account')?.value, symbol=$('#symbol')?.value, direction=document.querySelector('[data-direction].active')?.dataset.direction||'BUY', stake=$('[name="stake"]')?.value||'1', orderType=$('[name="order_type"]')?.value||'market', strategy=$('[name="strategy"]')?.value||'', contractType=$('[data-contract-type]')?.value||'', target=$('[data-order-preview]');
-    if(!target)return;
-    target.hidden=false; target.textContent='Running authoritative pre-trade checks…';
-    if(!account||!symbol){target.textContent='Select a connected broker account and instrument first.';return;}
-    try{
-      const data=await api('/api/orders/preview/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({broker_account:Number(account),symbol,direction:direction.toLowerCase(),order_type:orderType,stake,strategy,validation_context:{broker_source:'connected_broker',contract_type:contractType,underlying_symbol:symbol}})},15000);
-      target.innerHTML=`<strong>${esc(data.status==='ready'?'READY TO SUBMIT':'REJECTED')}</strong><div>${esc(data.account?.broker||'Broker')} · ${esc(data.account?.account_id||'')} · ${esc(data.account?.environment||'')}</div><div>Bid ${esc(data.market?.bid??'—')} · Ask ${esc(data.market?.ask??'—')} · Spread ${esc(data.market?.spread??'—')}</div><div>Fresh market data: ${data.gates?.fresh_market_data?'YES':'NO'} · Environment verified: ${data.gates?.environment_verified?'YES':'NO'} · AI gate: ${data.gates?.ai_verified?'VERIFIED':'NOT REQUIRED / NOT VERIFIED'}</div>`;
-    }catch(e){
-      const code=e?.code ? ` [${e.code}]` : '';
-      const status=e?.status ? ` (HTTP ${e.status})` : '';
-      target.textContent=`Pre-trade preview rejected${status}${code}: ${e.message||'request failed'}`;
+  if (window.__algoBotTerminalPhase2) return;
+  window.__algoBotTerminalPhase2 = true;
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const api = (url, options = {}, timeout = 10000) => window.AlgoBotFrontendData?.request?.(url, options, timeout);
+  const esc = v => String(v ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
+  let previewFingerprint = '';
+  let previewData = null;
+  let executionPoll = null;
+  let chartMode = 'ticks';
+  let chartFitRequested = false;
+
+  const activeAccount = () => {
+    const state = window.AlgoBotBrokerState;
+    const account = state?.getState?.()?.activeAccount || state?.getActiveAccount?.();
+    if (account?.id) return account;
+    const id = $('#account')?.value;
+    return window.AlgoBotBrokerAccounts?.find?.(a => String(a.id) === String(id)) || null;
+  };
+
+  function orderContext() {
+    const account = activeAccount();
+    return {
+      accountId: account?.id ?? $('#account')?.value ?? '',
+      symbol: $('#symbol')?.value || '',
+      direction: $('[data-direction].active')?.dataset.direction || 'BUY',
+      stake: $('[name="stake"]')?.value || '1',
+      orderType: $('[name="order_type"]')?.value || 'market',
+      strategy: $('[name="strategy"]')?.value || '',
+      contractType: $('[data-contract-type]')?.value || '',
+    };
+  }
+
+  function fingerprint(ctx) { return JSON.stringify(ctx); }
+
+  function setPreview(html, state = 'info') {
+    const target = $('[data-order-preview]');
+    if (!target) return;
+    target.hidden = false;
+    target.dataset.state = state;
+    target.innerHTML = html;
+  }
+
+  function invalidatePreview(reason) {
+    previewFingerprint = '';
+    previewData = null;
+    const target = $('[data-order-preview]');
+    if (target && !target.hidden) setPreview(`<strong>PREVIEW REQUIRED</strong><div>${esc(reason || 'Order context changed. Run preview again before submitting.')}</div>`, 'validation');
+    const submit = $('.execute-btn');
+    if (submit) submit.dataset.previewRequired = 'true';
+  }
+
+  async function authoritativeAccount() {
+    try {
+      const result = await api('/api/brokers/accounts/active/', {}, 9000);
+      return result?.active_account || null;
+    } catch (_) {
+      return null;
     }
   }
-  function context(){const terminal=$('.terminal-page');if(!terminal)return;const ticket=$('.order-ticket');if(!ticket)return;let box=$('[data-order-preview]',ticket);if(!box){box=document.createElement('div');box.className='order-preview';box.dataset.orderPreview='';box.hidden=true;ticket.appendChild(box)}const button=$('[data-order-preview-button]',ticket);if(button&&!button.dataset.bound){button.dataset.bound='1';button.addEventListener('click',preview)}document.querySelectorAll('[data-chart-mode],[data-chart-action]').forEach(b=>{if(b.dataset.phase2Bound)return;b.dataset.phase2Bound='1';b.addEventListener('click',()=>{document.querySelectorAll('[data-chart-mode]').forEach(x=>x.classList.toggle('active',x===b))})})}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',context,{once:true});else context();
+
+  async function preview() {
+    const ctx = orderContext();
+    const target = $('[data-order-preview]');
+    if (!target) return false;
+    setPreview('<strong>CHECKING</strong><div>Running authoritative broker, market, environment and risk gates…</div>', 'pending');
+    const authoritative = await authoritativeAccount();
+    if (!authoritative?.id || String(authoritative.id) !== String(ctx.accountId)) {
+      invalidatePreview('The selected account is not the authoritative active broker account. Refresh the account selector and try again.');
+      return false;
+    }
+    if (!ctx.symbol || !ctx.contractType) {
+      setPreview('<strong>REJECTED</strong><div>Select a broker instrument and wait for its supported contract list.</div>', 'validation');
+      return false;
+    }
+    const fp = fingerprint(ctx);
+    try {
+      const data = await api('/api/orders/preview/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          broker_account: Number(ctx.accountId),
+          symbol: ctx.symbol,
+          direction: ctx.direction.toLowerCase(),
+          order_type: ctx.orderType,
+          stake: ctx.stake,
+          strategy: ctx.strategy,
+          validation_context: {
+            broker_source: 'connected_broker',
+            contract_type: ctx.contractType,
+            underlying_symbol: ctx.symbol,
+            authoritative_account_id: ctx.accountId,
+          },
+        }),
+      }, 15000);
+      previewFingerprint = fp;
+      previewData = data;
+      const ready = data?.status === 'ready';
+      const gates = data?.gates || {};
+      setPreview(`
+        <strong>${ready ? 'READY TO SUBMIT' : 'REJECTED'}</strong>
+        <div>${esc(data?.account?.broker || 'Broker')} · ${esc(data?.account?.account_id || authoritative.account_id || '')} · ${esc(data?.account?.environment || '')}</div>
+        <div>Contract ${esc(ctx.contractType)} · ${esc(ctx.symbol)} · ${esc(ctx.direction)}</div>
+        <div>Bid ${esc(data?.market?.bid ?? '—')} · Ask ${esc(data?.market?.ask ?? '—')} · Spread ${esc(data?.market?.spread ?? '—')}</div>
+        <div>Fresh data: ${gates.fresh_market_data ? 'YES' : 'NO'} · Environment: ${gates.environment_verified ? 'VERIFIED' : 'FAILED'} · Risk: ${gates.risk_verified ? 'VERIFIED' : 'NOT VERIFIED'} · AI: ${gates.ai_verified ? 'VERIFIED' : 'NOT REQUIRED'}</div>
+        ${data?.message ? `<div>${esc(data.message)}</div>` : ''}
+      `, ready ? 'success' : 'error');
+      const submit = $('.execute-btn');
+      if (submit) submit.dataset.previewRequired = ready ? 'false' : 'true';
+      return ready;
+    } catch (e) {
+      previewFingerprint = '';
+      previewData = null;
+      if ($('.execute-btn')) $('.execute-btn').dataset.previewRequired = 'true';
+      setPreview(`<strong>PREVIEW REJECTED</strong><div>${esc(e?.message || 'Authoritative pre-trade validation failed.')}</div>`, 'error');
+      return false;
+    }
+  }
+
+  async function reconcileOrder(orderId, brokerReference) {
+    if (!orderId && !brokerReference) return;
+    if (executionPoll) clearInterval(executionPoll);
+    let attempts = 0;
+    const tick = async () => {
+      attempts += 1;
+      try {
+        const rows = await api('/api/orders/?limit=20', {}, 9000);
+        const list = window.AlgoBotFrontendData?.list?.(rows) || (Array.isArray(rows) ? rows : []);
+        const match = list.find(o => String(o.id) === String(orderId) || (brokerReference && String(o.broker_reference) === String(brokerReference)));
+        if (!match) return;
+        const status = String(match.status || '').toLowerCase();
+        const terminal = ['filled', 'open', 'executed', 'completed', 'won', 'lost', 'rejected', 'failed', 'cancelled', 'expired'].some(s => status.includes(s));
+        const result = $('[data-order-result]');
+        if (result) {
+          result.dataset.state = terminal && !['rejected','failed','cancelled'].some(s => status.includes(s)) ? 'success' : (terminal ? 'error' : 'pending');
+          result.textContent = `Order ${match.broker_reference || match.id || ''}: ${match.status || 'pending'}${terminal ? '' : ' · broker confirmation pending'}`;
+          result.hidden = false;
+        }
+        if (terminal || attempts >= 12) {
+          clearInterval(executionPoll);
+          executionPoll = null;
+          window.dispatchEvent(new CustomEvent('algobot:terminal-order-reconciled', {detail: match}));
+        }
+      } catch (_) {
+        if (attempts >= 12) { clearInterval(executionPoll); executionPoll = null; }
+      }
+    };
+    await tick();
+    executionPoll = window.setInterval(tick, 2500);
+  }
+
+  function guardSubmit(event) {
+    const ctx = orderContext();
+    if (previewFingerprint !== fingerprint(ctx) || previewData?.status !== 'ready') {
+      event.preventDefault();
+      preview().then(() => {
+        const result = $('[data-order-result]');
+        if (result) {
+          result.hidden = false;
+          result.dataset.state = 'validation';
+          result.textContent = 'Preview required for the current account, symbol, contract and stake. Review the result, then place the order again.';
+        }
+      });
+      return false;
+    }
+    return true;
+  }
+
+  function chartControls() {
+    const terminal = $('.terminal-page');
+    if (!terminal) return;
+    $$('[data-chart-mode]').forEach(button => {
+      if (button.dataset.phase2Bound) return;
+      button.dataset.phase2Bound = '1';
+      button.addEventListener('click', () => {
+        chartMode = button.dataset.chartMode || 'ticks';
+        $$('[data-chart-mode]').forEach(x => x.classList.toggle('active', x === button));
+        window.dispatchEvent(new CustomEvent('algobot:terminal-chart-mode', {detail: {mode: chartMode}}));
+      });
+    });
+    $$('[data-chart-action]').forEach(button => {
+      if (button.dataset.phase2Bound) return;
+      button.dataset.phase2Bound = '1';
+      button.addEventListener('click', () => {
+        const action = button.dataset.chartAction;
+        const chart = $('[data-candle-chart]')?.closest('.terminal-chart');
+        if (action === 'fit') {
+          chartFitRequested = true;
+          window.dispatchEvent(new CustomEvent('algobot:terminal-chart-fit'));
+        } else if (action === 'live') {
+          window.dispatchEvent(new CustomEvent('algobot:terminal-chart-live'));
+        } else if (action === 'fullscreen') {
+          (chart?.requestFullscreen || chart?.webkitRequestFullscreen)?.call(chart);
+        } else if (action === 'screenshot') {
+          const canvas = $('[data-candle-chart]');
+          if (canvas?.toDataURL) {
+            const link = document.createElement('a');
+            link.download = `algobot-${($('#symbol')?.value || 'market').replace(/[^a-z0-9_-]/gi, '_')}-snapshot.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+          }
+        } else if (action === 'export') {
+          window.dispatchEvent(new CustomEvent('algobot:terminal-chart-export', {detail: {symbol: $('#symbol')?.value || '', mode: chartMode}}));
+        }
+      });
+    });
+  }
+
+  function context() {
+    const terminal = $('.terminal-page');
+    if (!terminal) return;
+    const ticket = $('.order-ticket');
+    if (!ticket) return;
+    const button = $('[data-order-preview-button]', ticket);
+    if (button && !button.dataset.bound) {
+      button.dataset.bound = '1';
+      button.addEventListener('click', preview);
+    }
+    const form = $('[data-order-form]', ticket);
+    if (form && !form.dataset.phase2Bound) {
+      form.dataset.phase2Bound = '1';
+      form.addEventListener('submit', guardSubmit, true);
+    }
+    ['#account', '#symbol', '[data-contract-type]', '[name="stake"]', '[name="strategy"]'].forEach(selector => {
+      const node = $(selector);
+      if (node && !node.dataset.previewInvalidator) {
+        node.dataset.previewInvalidator = '1';
+        node.addEventListener('change', () => invalidatePreview('Order context changed. Run preview again.'));
+        node.addEventListener('input', () => invalidatePreview('Order context changed. Run preview again.'));
+      }
+    });
+    $$( '[data-direction]' ).forEach(node => {
+      if (!node.dataset.previewInvalidator) {
+        node.dataset.previewInvalidator = '1';
+        node.addEventListener('click', () => invalidatePreview('Order direction changed. Run preview again.'));
+      }
+    });
+    window.addEventListener('algobot:account-synced', () => invalidatePreview('Active account changed. Run a new preview for the new account.'));
+    window.addEventListener('algobot:market-data-state', event => {
+      if (event.detail?.state !== 'live') invalidatePreview('Live broker market data is not currently verified.');
+    });
+    window.addEventListener('algobot:order-created', event => reconcileOrder(event.detail?.id, event.detail?.broker_reference));
+    chartControls();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', context, {once: true});
+  else context();
 })();
