@@ -41,14 +41,7 @@ class ModelVersion(models.Model):
 
 
 class Prediction(models.Model):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="ai_predictions",
-        null=True,
-        blank=True,
-        db_index=True,
-    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="ai_predictions", null=True, blank=True)
     symbol = models.CharField(max_length=40, db_index=True)
     timeframe = models.CharField(max_length=16, db_index=True)
     prediction = models.CharField(max_length=64)
@@ -62,7 +55,7 @@ class Prediction(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["user", "symbol", "timeframe", "-created_at"]),
+            models.Index(fields=["user", "symbol", "timeframe", "-created_at"], name="ai_engine_pr_user_id_2c6a2f_idx"),
             models.Index(fields=["symbol", "timeframe", "-created_at"]),
         ]
 
@@ -93,14 +86,7 @@ class FeatureVector(models.Model):
 
 
 class TrainingJob(models.Model):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="ai_training_jobs",
-        null=True,
-        blank=True,
-        db_index=True,
-    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="ai_training_jobs", null=True, blank=True)
     model = models.ForeignKey(AIModel, on_delete=models.CASCADE, related_name="training_jobs", null=True, blank=True)
     status = models.CharField(max_length=32, default="pending", db_index=True)
     started_at = models.DateTimeField(null=True, blank=True)
@@ -110,18 +96,11 @@ class TrainingJob(models.Model):
 
     class Meta:
         ordering = ["-started_at"]
-        indexes = [models.Index(fields=["user", "status", "-started_at"])]
+        indexes = [models.Index(fields=["user", "status", "-started_at"], name="ai_engine_tr_user_id_7fdb5a_idx")]
 
 
 class AIRecommendation(models.Model):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="ai_recommendations",
-        null=True,
-        blank=True,
-        db_index=True,
-    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="ai_recommendations", null=True, blank=True)
     symbol = models.CharField(max_length=40, db_index=True)
     recommendation = models.CharField(max_length=32, choices=[(x, x) for x in c.RECOMMENDATIONS])
     confidence = models.FloatField(default=0)
@@ -132,18 +111,11 @@ class AIRecommendation(models.Model):
 
     class Meta:
         ordering = ["-timestamp"]
-        indexes = [models.Index(fields=["user", "symbol", "-timestamp"])]
+        indexes = [models.Index(fields=["user", "symbol", "-timestamp"], name="ai_engine_ar_user_id_0a5f7d_idx")]
 
 
 class MarketRegime(models.Model):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="ai_market_regimes",
-        null=True,
-        blank=True,
-        db_index=True,
-    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="ai_market_regimes", null=True, blank=True)
     symbol = models.CharField(max_length=40, db_index=True)
     regime = models.CharField(max_length=32, choices=[(x, x.replace("_", " ").title()) for x in c.REGIMES])
     confidence = models.FloatField(default=0)
@@ -151,20 +123,17 @@ class MarketRegime(models.Model):
 
     class Meta:
         ordering = ["-timestamp"]
-        indexes = [models.Index(fields=["user", "symbol", "-timestamp"])]
+        indexes = [models.Index(fields=["user", "symbol", "-timestamp"], name="ai_engine_mr_user_id_1b8e6c_idx")]
 
 
 class AnomalyEvent(models.Model):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="ai_anomalies",
-        null=True,
-        blank=True,
-        db_index=True,
-    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="ai_anomalies", null=True, blank=True)
     symbol = models.CharField(max_length=40, db_index=True)
     anomaly_type = models.CharField(max_length=64)
     score = models.FloatField(default=0)
     details = models.JSONField(default=dict, blank=True)
     timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ["-timestamp"]
+        indexes = [models.Index(fields=["user", "symbol", "-timestamp"], name="ai_engine_ae_user_id_3c9f2a_idx")]
