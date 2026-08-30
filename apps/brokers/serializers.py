@@ -152,6 +152,21 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['user', 'broker', 'status', 'submitted_at', 'executed_at', 'broker_order_id']
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        account = attrs.get('account')
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if account is None:
+            return attrs
+        if not user or not user.is_authenticated or account.user_id != user.id:
+            raise serializers.ValidationError({'account': 'The selected broker account does not belong to the authenticated user.'})
+        if not account.is_preferred:
+            raise serializers.ValidationError({'account': 'The selected broker account is stale. Select the current active broker account before submitting an order.'})
+        if account.status != 'active' or account.broker.status != 'active':
+            raise serializers.ValidationError({'account': 'The current broker account is not active.'})
+        return attrs
+
 
 class ExecutionReportSerializer(serializers.ModelSerializer):
     symbol = serializers.CharField(source='order.symbol', read_only=True)
