@@ -55,4 +55,8 @@ class Migration(migrations.Migration):
             model_name="anomalyevent",
             index=models.Index(fields=["user", "symbol", "-timestamp"], name="ai_engine_ae_user_id_3c9f2a_idx"),
         ),
+        migrations.AlterModelOptions(
+            name="anomalyevent",
+            options={"ordering": ["-timestamp"]},
+        ),
     ]
