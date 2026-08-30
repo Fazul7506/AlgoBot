@@ -4,9 +4,9 @@ from django.db.models import Q
 
 def normalize_preferred_accounts(apps, schema_editor):
     BrokerAccount = apps.get_model('brokers', 'BrokerAccount')
-    User = apps.get_model('auth', 'User')
-    for user in User.objects.all().iterator():
-        preferred = list(BrokerAccount.objects.filter(user_id=user.pk, is_preferred=True).order_by('pk'))
+    user_ids = BrokerAccount.objects.filter(is_preferred=True).values_list('user_id', flat=True).distinct()
+    for user_id in user_ids.iterator():
+        preferred = list(BrokerAccount.objects.filter(user_id=user_id, is_preferred=True).order_by('pk'))
         if len(preferred) > 1:
             BrokerAccount.objects.filter(pk__in=[account.pk for account in preferred[1:]]).update(is_preferred=False)
 
