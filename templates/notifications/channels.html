@@ -4,15 +4,16 @@
 {% block mobile_title %}Notifications{% endblock %}
 {% block extra_css %}
 <style>
-.notifications-page{max-width:980px;margin:0 auto;padding-bottom:32px}.notifications-page .intro{max-width:720px;color:var(--muted);line-height:1.5}.channel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.channel-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px}.channel-head{display:flex;align-items:center;gap:10px}.channel-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:var(--bg-secondary,var(--panel));flex:0 0 auto}.channel-icon svg{width:24px;height:24px}.channel-card h2{margin:0;font-size:.98rem}.status{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:.7rem;border:1px solid var(--border);margin-top:4px;color:var(--muted)}.status.verified{color:#20d99b;border-color:rgba(32,217,155,.3)}.status.pending{color:#e9b949;border-color:rgba(233,185,73,.3)}.channel-card p{color:var(--muted);line-height:1.4;font-size:.82rem;margin:9px 0}.channel-address{color:var(--text)!important;margin-top:3px!important;overflow-wrap:anywhere}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.actions form{margin:0}.actions button,.actions a{border:1px solid var(--border);background:var(--panel);color:inherit;border-radius:8px;padding:7px 10px;text-decoration:none;cursor:pointer;font-size:.78rem}.actions .primary{background:var(--accent);color:#07110d;border-color:var(--accent);font-weight:700}.verification-wait{font-size:.76rem!important;margin:7px 0!important}.how{margin-top:14px;padding:13px 15px;border:1px solid var(--border);border-radius:12px}.how h2{font-size:.92rem;margin:0 0 6px}.how li{margin:5px 0;color:var(--muted);font-size:.78rem;line-height:1.4}.secure{font-size:.72rem!important;margin-bottom:0!important}
+.notifications-page{max-width:980px;margin:0 auto;padding-bottom:32px}.notifications-page .intro{max-width:720px;color:var(--muted);line-height:1.5}.runtime-status{display:inline-flex;align-items:center;gap:7px;margin:8px 0 4px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:.75rem}.runtime-status.healthy{color:#20d99b;border-color:rgba(32,217,155,.3)}.runtime-status.degraded{color:#e9b949;border-color:rgba(233,185,73,.3)}.runtime-status.unavailable{color:#ff7b72;border-color:rgba(255,123,114,.3)}.channel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.channel-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px}.channel-head{display:flex;align-items:center;gap:10px}.channel-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:var(--bg-secondary,var(--panel));flex:0 0 auto}.channel-icon svg{width:24px;height:24px}.channel-card h2{margin:0;font-size:.98rem}.status{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:.7rem;border:1px solid var(--border);margin-top:4px;color:var(--muted)}.status.verified{color:#20d99b;border-color:rgba(32,217,155,.3)}.status.pending{color:#e9b949;border-color:rgba(233,185,73,.3)}.channel-card p{color:var(--muted);line-height:1.4;font-size:.82rem;margin:9px 0}.channel-address{color:var(--text)!important;margin-top:3px!important;overflow-wrap:anywhere}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.actions form{margin:0}.actions button,.actions a{border:1px solid var(--border);background:var(--panel);color:inherit;border-radius:8px;padding:7px 10px;text-decoration:none;cursor:pointer;font-size:.78rem}.actions .primary{background:var(--accent);color:#07110d;border-color:var(--accent);font-weight:700}.verification-wait{font-size:.76rem!important;margin:7px 0!important}.how{margin-top:14px;padding:13px 15px;border:1px solid var(--border);border-radius:12px}.how h2{font-size:.92rem;margin:0 0 6px}.how li{margin:5px 0;color:var(--muted);font-size:.78rem;line-height:1.4}.secure{font-size:.72rem!important;margin-bottom:0!important}
 @media(max-width:700px){.notifications-page{padding:0 2px 24px}.channel-grid{grid-template-columns:1fr;gap:10px}.channel-card{padding:13px}.how{padding:12px 13px}}
 </style>
 {% endblock %}
 {% block content %}
-<div class="notifications-page" data-notification-page data-status-url="{% url 'notification_channels_status' %}">
+<div class="notifications-page" data-notification-page data-status-url="{% url 'notification_channels_status' %}" data-health-url="{% url 'telegram_health' %}">
   <p class="eyebrow">NOTIFICATIONS</p>
   <h1>Notification channels</h1>
   <p class="intro">Manage the verified channels AlgoBot can use to deliver trading, risk, security and system notifications.</p>
+  <div class="runtime-status" data-telegram-runtime-status>Telegram bot: checking…</div>
   <div class="channel-grid">
     <article class="channel-card" data-channel-card="gmail">
       <div class="channel-head"><div class="channel-icon" aria-label="Gmail icon"><svg viewBox="0 0 48 48" role="img"><path fill="#EA4335" d="M5 10v28h6V18l13 10 13-10v20h6V10L24 25 5 10z"/><path fill="#4285F4" d="M5 10l19 15v7L5 17z"/><path fill="#34A853" d="M43 10L24 25v7l19-15z"/></svg></div><div><h2>Gmail</h2><div class="status {% if channels.gmail.connected %}verified{% endif %}" data-channel-status>{% if channels.gmail.connected %}✓ Verified{% else %}Not connected{% endif %}</div></div></div>
@@ -38,8 +39,11 @@
   if (!page || page.dataset.pollBound === '1') return;
   page.dataset.pollBound = '1';
   const url = page.dataset.statusUrl;
+  const healthUrl = page.dataset.healthUrl;
   let timer = null;
+  let healthTimer = null;
   let busy = false;
+  let healthBusy = false;
   let attempts = 0;
   const maxAttempts = 225;
   const apply = (provider, data) => {
@@ -60,26 +64,54 @@
     }
     if (wait) wait.hidden = !(provider === 'telegram' && data.status === 'pending');
   };
+  const setRuntime = (state, text) => {
+    const node = page.querySelector('[data-telegram-runtime-status]');
+    if (!node) return;
+    node.classList.remove('healthy', 'degraded', 'unavailable');
+    if (state) node.classList.add(state);
+    node.textContent = text;
+  };
   const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
   const poll = async () => {
     if (busy || document.visibilityState === 'hidden' || attempts >= maxAttempts) return;
     busy = true;
     attempts += 1;
     try {
-      const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: { 'Accept': 'application/json' } });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal, headers: { 'Accept': 'application/json' } });
+      clearTimeout(timeout);
       if (!response.ok) throw new Error(`status ${response.status}`);
       const payload = await response.json();
       Object.entries(payload.channels || {}).forEach(([provider, data]) => apply(provider, data));
       if (payload.channels?.telegram?.status !== 'pending') stop();
     } catch (_) {
-      // A transient poll failure must never navigate or reload the page.
+      // Transient channel-status failures do not block the page or trigger reloads.
+    } finally { busy = false; }
+  };
+  const pollHealth = async () => {
+    if (healthBusy || document.visibilityState === 'hidden') return;
+    healthBusy = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(healthUrl, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal, headers: { 'Accept': 'application/json' } });
+      if (!response.ok) throw new Error(`status ${response.status}`);
+      const data = await response.json();
+      if (data.status === 'healthy') setRuntime('healthy', 'Telegram bot: Operational');
+      else setRuntime('degraded', 'Telegram bot: Temporarily unavailable');
+    } catch (_) {
+      setRuntime('unavailable', 'Telegram bot: Status unavailable — Retry automatically');
     } finally {
-      busy = false;
+      clearTimeout(timeout);
+      healthBusy = false;
     }
   };
   const start = () => { stop(); attempts = 0; poll(); timer = setInterval(poll, 4000); };
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poll(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { poll(); pollHealth(); } });
   start();
+  pollHealth();
+  healthTimer = setInterval(pollHealth, 30000);
 })();
 </script>
 {% endblock %}
