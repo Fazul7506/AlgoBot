@@ -56,7 +56,7 @@ class BrokerHealth(models.Model):
 
 
 class Alert(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, db_index=True, related_name="alerts")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="alerts")
     title = models.CharField(max_length=220)
     category = models.CharField(max_length=40, choices=choices(ALERT_CATEGORIES), db_index=True)
     severity = models.CharField(max_length=20, choices=choices(ALERT_SEVERITIES), db_index=True)
@@ -72,7 +72,7 @@ class Alert(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["severity", "status", "-created_at"]), models.Index(fields=["user", "-created_at"])]
+        indexes = [models.Index(fields=["severity", "status", "-created_at"]), models.Index(fields=["user", "-created_at"], name="monitoring_alert_user_idx")]
 
     def acknowledge(self):
         self.acknowledged = True
