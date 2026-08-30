@@ -79,3 +79,25 @@ class AccountSwitchingTests(TestCase):
         self.assertIn('not active', result.data['detail'])
         current.refresh_from_db()
         self.assertTrue(current.is_preferred)
+
+    @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
+    def test_active_account_cannot_be_selected_with_the_wrong_environment(self):
+        current = self.make_account('DEMO-1', preferred=True)
+        result = self.client.post(
+            f'/api/brokers/accounts/{current.pk}/select/',
+            {'account_type': 'real'},
+            format='json',
+        )
+        self.assertEqual(result.status_code, 409)
+        self.assertIn('not real', result.data['detail'])
+        current.refresh_from_db()
+        self.assertTrue(current.is_preferred)
+
+    @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
+    def test_second_preferred_account_is_rejected_by_database_invariant(self):
+        first = self.make_account('DEMO-1', preferred=True)
+        with self.assertRaises(Exception):
+            self.make_account('DEMO-2', preferred=True)
+        first.refresh_from_db()
+        self.assertTrue(first.is_preferred)
+        self.assertEqual(BrokerAccount.objects.filter(user=self.user, is_preferred=True).count(), 1)
