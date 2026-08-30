@@ -15,7 +15,6 @@ class Migration(migrations.Migration):
             name="user",
             field=models.ForeignKey(
                 blank=True,
-                db_index=True,
                 null=True,
                 on_delete=CASCADE,
                 related_name="alerts",
