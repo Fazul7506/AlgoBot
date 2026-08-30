@@ -34,7 +34,6 @@ USE_POSTGRES = True
 USE_REDIS = True
 EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 
-# OAuth and API authentication must use one canonical Deriv application ID.
 if DERIV_OAUTH_CLIENT_ID and DERIV_APP_ID and DERIV_APP_ID != DERIV_OAUTH_CLIENT_ID:  # noqa: F405
     raise RuntimeError("DERIV_APP_ID must match DERIV_OAUTH_CLIENT_ID in production.")
 
@@ -57,6 +56,27 @@ validate_required_settings(
 
 if SECRET_KEY in {"django-insecure-local-development-only", "change-me"}:
     raise RuntimeError("Production SECRET_KEY must be explicitly configured.")
+
+# Payment callbacks bypass CSRF by design, so production must have provider
+# authentication configured. A missing challenge/credential is fail-closed.
+if PAYMENT_PROVIDER == "intasend":  # noqa: F405
+    validate_required_settings(
+        production=True,
+        values={
+            "INTASEND_PUBLIC_KEY": INTASEND_PUBLIC_KEY,  # noqa: F405
+            "INTASEND_SECRET_KEY": INTASEND_SECRET_KEY,  # noqa: F405
+            "INTASEND_WEBHOOK_CHALLENGE": INTASEND_WEBHOOK_CHALLENGE,  # noqa: F405
+        },
+    )
+elif PAYMENT_PROVIDER == "pesapal":  # noqa: F405
+    validate_required_settings(
+        production=True,
+        values={
+            "PESAPAL_CONSUMER_KEY": PESAPAL_CONSUMER_KEY,  # noqa: F405
+            "PESAPAL_CONSUMER_SECRET": PESAPAL_CONSUMER_SECRET,  # noqa: F405
+            "PESAPAL_NOTIFICATION_ID": PESAPAL_NOTIFICATION_ID,  # noqa: F405
+        },
+    )
 
 SENTRY_DSN = env("SENTRY_DSN", "")
 if SENTRY_DSN:
