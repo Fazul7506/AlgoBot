@@ -11,6 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .channel_service import connection_status, gmail_authorize_url, gmail_callback, telegram_start, telegram_webhook
 from .models import Notification, NotificationChannelConnection, NotificationPreference
+from .services import send_transactional_email
 
 BROWSER_NOTIFICATIONS_URL = "/notifications/"
 
@@ -43,8 +44,38 @@ def gmail_callback_view(request):
         messages.warning(request, "Gmail authorization was cancelled. No account was connected.")
         return redirect(BROWSER_NOTIFICATIONS_URL)
     try:
-        gmail_callback(request, request.GET.get("code", ""), request.GET.get("state", ""))
-        messages.success(request, "Gmail account verified. AlgoBot can now use it for notifications.")
+        conn = gmail_callback(request, request.GET.get("code", ""), request.GET.get("state", ""))
+        # A successful OAuth connection must immediately notify the newly connected
+        # Gmail address. Do this after the connection is persisted so the message
+        # cannot claim success when the connection itself was not established.
+        try:
+            send_transactional_email(
+                recipient=conn.address,
+                subject="AlgoBot Gmail notifications connected successfully",
+                message=(
+                    "Your Gmail notifications channel has been successfully connected to AlgoBot.\n\n"
+                    "AlgoBot can now send notification emails to this address according to your notification preferences.\n\n"
+                    "If you did not initiate this connection, disconnect Gmail from your AlgoBot notification settings and review your Google account security activity."
+                ),
+                category="system",
+                metadata={
+                    "action_url": "https://algobot.dpdns.org/notifications/",
+                    "action_label": "Open AlgoBot notification settings",
+                },
+            )
+        except Exception:
+            # The OAuth connection remains valid even if the acknowledgement email
+            # provider is temporarily unavailable. Tell the user exactly what failed
+            # instead of reporting a misleading delivery success.
+            messages.warning(
+                request,
+                "Gmail account connected successfully, but the confirmation email could not be sent. Please check your email configuration and try again later.",
+            )
+        else:
+            messages.success(
+                request,
+                f"Gmail account verified and connected. A confirmation email was sent to {conn.address}.",
+            )
     except Exception:
         messages.error(request, "Gmail verification failed. Please try connecting the account again.")
     return redirect(BROWSER_NOTIFICATIONS_URL)
