@@ -1,9 +1,4 @@
-"""Reconcile broker execution truth into AlgoBot execution records.
-
-This module deliberately treats broker identifiers and broker responses as
-authoritative. A network timeout after a buy is an UNKNOWN state, never a
-successful local trade.
-"""
+"""Reconcile broker execution truth into AlgoBot execution records."""
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
@@ -12,19 +7,14 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-
 EXECUTION_STATES = {"pending", "submitted", "open", "closed", "rejected", "unknown", "cancelled"}
 
 
 def normalize_execution_event(payload: dict[str, Any]) -> dict[str, Any]:
     contract = payload.get("proposal_open_contract") or payload.get("contract") or {}
-    transaction_payload = payload.get("transaction") or {}
+    tx = payload.get("transaction") or {}
     contract_id = contract.get("contract_id") or payload.get("contract_id")
-    transaction_id = (
-        transaction_payload.get("transaction_id")
-        or payload.get("transaction_id")
-        or payload.get("buy_transaction_id")
-    )
+    transaction_id = tx.get("transaction_id") or payload.get("transaction_id") or payload.get("buy_transaction_id")
     status = str(contract.get("status") or payload.get("status") or "unknown").lower()
     if contract.get("is_sold") or contract.get("is_expired"):
         status = "closed"
@@ -38,12 +28,6 @@ def normalize_execution_event(payload: dict[str, Any]) -> dict[str, Any]:
         "buy_price": contract.get("buy_price") or payload.get("buy_price"),
         "bid_price": contract.get("bid_price"),
         "profit": contract.get("profit"),
-        "payout": contract.get("payout"),
-        "entry_spot": contract.get("entry_spot"),
-        "current_spot": contract.get("current_spot"),
-        "expiry": contract.get("date_expiry") or contract.get("expiry_time"),
-        "is_sold": bool(contract.get("is_sold")),
-        "is_expired": bool(contract.get("is_expired")),
         "raw": payload,
         "received_at": timezone.now(),
     }
@@ -51,11 +35,7 @@ def normalize_execution_event(payload: dict[str, Any]) -> dict[str, Any]:
 
 @transaction.atomic
 def reconcile_execution_event(*, user, event: dict[str, Any]):
-    """Upsert the broker event against an existing user-owned execution.
-
-    The lookup intentionally requires an existing local execution. Broker
-    events must never create an order for an unrelated user.
-    """
+    """Reconcile only an existing user-owned Order; never invent a trade."""
     normalized = normalize_execution_event(event)
     contract_id = normalized["broker_contract_id"]
     transaction_id = normalized["broker_transaction_id"]
@@ -63,30 +43,36 @@ def reconcile_execution_event(*, user, event: dict[str, Any]):
         return None
 
     from .models import Order
+    from . import constants as c
 
     query = Order.objects.filter(user=user)
+    order = None
     if contract_id:
-        order = query.filter(broker_order_id=contract_id).first()
-    else:
+        order = query.filter(broker_reference=contract_id).first()
+    if not order and transaction_id:
         order = query.filter(client_request_id=transaction_id).first()
     if not order:
+        # Do not attach an unknown broker execution to a local order. The
+        # caller can surface the event for reconciliation/recovery instead.
         return None
 
-    if contract_id:
-        order.broker_order_id = contract_id
-    if transaction_id:
-        order.broker_transaction_id = transaction_id
-    order.status = normalized["status"]
+    order.broker_reference = contract_id or order.broker_reference
+    order.broker_response = normalized["raw"]
     if normalized["symbol"]:
         order.symbol = normalized["symbol"]
-    for field, attr in (("buy_price", "entry_price"), ("bid_price", "exit_price"), ("profit", "profit_loss")):
-        value = normalized.get(field)
-        if value is None:
-            continue
+    broker_status = normalized["status"]
+    status_map = {
+        "open": c.ORDER_STATUS_EXECUTED,
+        "closed": c.ORDER_STATUS_ARCHIVED,
+        "cancelled": c.ORDER_STATUS_CANCELLED,
+        "rejected": c.ORDER_STATUS_FAILED,
+        "unknown": c.ORDER_STATUS_SENT,
+    }
+    order.status = status_map.get(broker_status, order.status)
+    if normalized["buy_price"] is not None:
         try:
-            setattr(order, attr, Decimal(str(value)))
+            order.price = Decimal(str(normalized["buy_price"]))
         except (InvalidOperation, TypeError, ValueError):
             pass
-    order.updated_at = timezone.now()
-    order.save()
+    order.save(update_fields=["broker_reference", "broker_response", "symbol", "status", "price", "updated_at"])
     return order
