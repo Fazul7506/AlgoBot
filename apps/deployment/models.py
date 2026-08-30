@@ -1,6 +1,9 @@
+from django.conf import settings
 from django.db import models
 
+
 class DeploymentRecord(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, db_index=True, related_name="deployment_records")
     environment = models.CharField(max_length=40, db_index=True)
     version = models.CharField(max_length=80)
     strategy = models.CharField(max_length=40, default="rolling")
@@ -8,12 +11,15 @@ class DeploymentRecord(models.Model):
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+
 class BackupRecord(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, db_index=True, related_name="backup_records")
     target = models.CharField(max_length=80)
     backup_type = models.CharField(max_length=40, default="incremental")
     status = models.CharField(max_length=32, default="scheduled")
     location = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
 
 class EnvironmentConfig(models.Model):
     name = models.CharField(max_length=40, unique=True)
@@ -21,11 +27,13 @@ class EnvironmentConfig(models.Model):
     is_active = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
+
 class SecretRecord(models.Model):
     name = models.CharField(max_length=120, unique=True)
     provider = models.CharField(max_length=40, default="kubernetes")
     rotated_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=32, default="managed")
+
 
 class ClusterStatus(models.Model):
     name = models.CharField(max_length=120, unique=True)

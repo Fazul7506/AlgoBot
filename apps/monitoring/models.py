@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -55,6 +56,7 @@ class BrokerHealth(models.Model):
 
 
 class Alert(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="alerts")
     title = models.CharField(max_length=220)
     category = models.CharField(max_length=40, choices=choices(ALERT_CATEGORIES), db_index=True)
     severity = models.CharField(max_length=20, choices=choices(ALERT_SEVERITIES), db_index=True)
@@ -70,13 +72,19 @@ class Alert(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["severity", "status", "-created_at"])]
+        indexes = [models.Index(fields=["severity", "status", "-created_at"]), models.Index(fields=["user", "-created_at"], name="monitoring_alert_user_idx")]
 
     def acknowledge(self):
-        self.acknowledged = True; self.status = "acknowledged"; self.acknowledged_at = timezone.now(); self.save(update_fields=["acknowledged", "status", "acknowledged_at"])
+        self.acknowledged = True
+        self.status = "acknowledged"
+        self.acknowledged_at = timezone.now()
+        self.save(update_fields=["acknowledged", "status", "acknowledged_at"])
 
     def resolve(self):
-        self.resolved = True; self.status = "resolved"; self.resolved_at = timezone.now(); self.save(update_fields=["resolved", "status", "resolved_at"])
+        self.resolved = True
+        self.status = "resolved"
+        self.resolved_at = timezone.now()
+        self.save(update_fields=["resolved", "status", "resolved_at"])
 
 
 class AuditLog(models.Model):

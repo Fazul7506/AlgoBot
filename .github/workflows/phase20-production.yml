@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
+  pull-requests: write
 
 concurrency:
   group: production-validation-${{ github.workflow }}-${{ github.ref }}
@@ -28,7 +29,7 @@ jobs:
       - name: Checkout current project tree
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -54,31 +55,35 @@ jobs:
       - name: Compile every Django template
         run: python scripts/validate_templates.py
 
-      - name: Generate missing Django migrations
-        run: |
-          python manage.py makemigrations --noinput --verbosity 1
-          python manage.py showmigrations --plan
-
-      - name: Persist generated migrations
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          git add -A -- '**/migrations/*.py' '**/migrations/__init__.py'
-          if git diff --cached --quiet; then
-            echo "No migration changes to commit."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "chore: persist generated Django migrations [skip ci]"
-            git push
-          fi
-
-      - name: Verify migrations are present
+      - name: Validate migration graph without generating files
         run: |
           python manage.py makemigrations --check --noinput
-          python manage.py showmigrations
+          python manage.py showmigrations --plan
 
-      - name: Apply migrations
+      - name: Apply migrations to a clean CI database
+        id: migrate
         run: python manage.py migrate --noinput
+
+      - name: Publish migration application diagnostics
+        if: failure() && steps.migrate.outcome == 'failure' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set +e
+          python manage.py migrate --noinput --verbosity 3 > /tmp/migration-apply.txt 2>&1
+          status=$?
+          {
+            echo '### Clean-database migration application failure'
+            echo
+            echo "Diagnostic replay exit code: $status"
+            echo
+            echo '```text'
+            tail -n 250 /tmp/migration-apply.txt
+            echo '```'
+          } > /tmp/migration-apply-comment.md
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/migration-apply-comment.md
+          exit 1
 
       - name: Run Django test suite
         run: python manage.py test --noinput --parallel 1
