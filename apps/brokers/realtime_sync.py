@@ -55,6 +55,10 @@ class BrokerRealtimeSync:
             {"balance": 1, "subscribe": 1, "req_id": 1001},
             {"portfolio": 1, "req_id": 1002},
             {"transaction": 1, "subscribe": 1, "req_id": 1003},
+            # With no contract_id, Deriv streams all open contracts for the
+            # authenticated account. This keeps lifecycle state authoritative
+            # without requiring a browser to open a second broker connection.
+            {"proposal_open_contract": 1, "subscribe": 1, "req_id": 1004},
         ]
         await self.adapter._stream(
             subscriptions,
@@ -83,7 +87,8 @@ class BrokerRealtimeSync:
         elif msg_type == "transaction":
             await self._broadcast("account.transaction", self._normalize_transaction(message.get("transaction") or {}))
         elif msg_type == "proposal_open_contract":
-            await self._broadcast("portfolio.contract", self._normalize_contract(message.get("proposal_open_contract") or {}))
+            contract = message.get("proposal_open_contract") or {}
+            await self._broadcast("portfolio.contract", self._normalize_contract(contract))
         elif msg_type == "tick":
             payload = await self._sync_tick(message.get("tick") or {})
             if payload:
@@ -141,9 +146,7 @@ class BrokerRealtimeSync:
         account.last_synced_at = timezone.now()
         account.status = "active"
         account.save(update_fields=["account_id", "balance", "currency", "credentials", "last_synced_at", "status"])
-        BrokerConnection.objects.filter(broker_account=account).update(
-            status="connected", last_ping=timezone.now(), updated_at=timezone.now()
-        )
+        BrokerConnection.objects.filter(broker_account=account).update(status="connected", last_ping=timezone.now(), updated_at=timezone.now())
         return {"account_id": account_id, "balance": raw_balance, "currency": currency or account.currency, "timestamp": time.time()}
 
     @sync_to_async
@@ -170,16 +173,7 @@ class BrokerRealtimeSync:
         account.credentials = credentials
         account.last_synced_at = timezone.now()
         account.save(update_fields=["equity", "credentials", "last_synced_at"])
-        return {
-            "status": "ready",
-            "account_id": account.account_id,
-            "contracts": normalized,
-            "unrealized_pnl": str(unrealized),
-            "equity": str(equity),
-            "balance": str(account.balance),
-            "currency": account.currency,
-            "timestamp": time.time(),
-        }
+        return {"status": "ready", "account_id": account.account_id, "contracts": normalized, "unrealized_pnl": str(unrealized), "equity": str(equity), "balance": str(account.balance), "currency": account.currency, "timestamp": time.time()}
 
     @staticmethod
     def _normalize_contract(contract: dict) -> dict:
@@ -196,6 +190,9 @@ class BrokerRealtimeSync:
             "current_spot": contract.get("current_spot"),
             "date_start": contract.get("date_start"),
             "date_expiry": contract.get("date_expiry"),
+            "is_sold": contract.get("is_sold"),
+            "is_expired": contract.get("is_expired"),
+            "status_display": contract.get("status_display"),
         }
 
     @staticmethod
@@ -210,16 +207,8 @@ class BrokerRealtimeSync:
             return None
         try:
             from apps.market_data.services import MarketDataService
-            await sync_to_async(MarketDataService().tick_service.ingest)({
-                "symbol": symbol,
-                "quote": quote,
-                "bid": tick.get("bid"),
-                "ask": tick.get("ask"),
-                "epoch": epoch,
-                "volume": tick.get("volume", 0),
-            })
+            await sync_to_async(MarketDataService().tick_service.ingest)({"symbol": symbol, "quote": quote, "bid": tick.get("bid"), "ask": tick.get("ask"), "epoch": epoch, "volume": tick.get("volume", 0)})
         except Exception:
-            # Persistence must not kill the broker stream; broker data remains authoritative.
             pass
         return {"symbol": symbol, "price": quote, "bid": tick.get("bid"), "ask": tick.get("ask"), "epoch": epoch, "timestamp": time.time()}
 
@@ -228,11 +217,7 @@ async def sync_active_deriv_accounts() -> None:
     """Run all active Deriv account streams until the worker is stopped."""
     from .models import BrokerAccount
 
-    accounts = await sync_to_async(list)(
-        BrokerAccount.objects.select_related("broker").filter(
-            broker__broker_type="deriv", broker__status="active", status="active"
-        )
-    )
+    accounts = await sync_to_async(list)(BrokerAccount.objects.select_related("broker").filter(broker__broker_type="deriv", broker__status="active", status="active"))
     services = [BrokerRealtimeSync(account) for account in accounts]
     await asyncio.gather(*(service.start() for service in services))
     await asyncio.gather(*(service._task for service in services if service._task), return_exceptions=False)
