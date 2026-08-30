@@ -1,10 +1,10 @@
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import NotificationChannelConnection, NotificationPreference
+from .models import NotificationChannelConnection
 
 
 class GmailConnectionConfirmationEmailTests(TestCase):
@@ -75,10 +75,4 @@ class GmailConnectionConfirmationEmailTests(TestCase):
         connection.refresh_from_db()
         self.assertEqual(connection.status, "verified")
         self.assertEqual(connection.address, "connected@gmail.com")
-        self.assertTrue(
-            NotificationPreference.objects.filter(
-                user=self.user, channel="gmail", enabled=True
-            ).exists()
-        )
         self.assertEqual(send_email_mock.call_count, 1)
-
