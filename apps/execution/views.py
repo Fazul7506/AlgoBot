@@ -1,5 +1,6 @@
 from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
+import logging
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import viewsets, permissions, decorators, response, status
@@ -9,6 +10,8 @@ from apps.contracts.models import Contract
 from .serializers import OrderSerializer, PositionSerializer, ContractSerializer, ExecutionLogSerializer, ReconciliationEventSerializer
 from .engine import ExecutionEngine
 from core.billing_entitlements import check_live_order, effective_plan
+
+log = logging.getLogger(__name__)
 
 
 class OrderViewSet(viewsets.ModelViewSet):
@@ -41,46 +44,45 @@ class OrderViewSet(viewsets.ModelViewSet):
         return response.Response(self.get_serializer(order).data, status=status.HTTP_201_CREATED)
     @decorators.action(detail=False, methods=['post'])
     def preview(self, request):
-        serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True); data = serializer.validated_data; account = data.get('broker_account')
-        if account is None or account.user_id != request.user.id: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_REQUIRED','detail':'Select a connected broker account.'}, status=status.HTTP_409_CONFLICT)
-        if not account.is_connection_eligible: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_NOT_READY','detail':'The selected broker account is not connected or its credentials are not usable.'}, status=status.HTTP_409_CONFLICT)
-        environment = self._environment(account)
-        if not environment: return response.Response({'status':'rejected','code':'ACCOUNT_ENVIRONMENT_UNVERIFIED','detail':'Broker account environment has not been verified.'}, status=status.HTTP_409_CONFLICT)
-        if environment == 'real' and not bool(getattr(account.broker, 'supports_live', False)): return response.Response({'status':'rejected','code':'LIVE_BROKER_UNSUPPORTED','detail':'The selected broker is not live-trading capable.'}, status=status.HTTP_409_CONFLICT)
-        if environment == 'real':
-            allowed, used, limit = check_live_order(request.user)
-            if not allowed: return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-            if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)): return response.Response({'status':'rejected','code':'LIVE_TRADING_DISABLED','detail':'Live-money trading is disabled by platform configuration.'}, status=status.HTTP_409_CONFLICT)
+        """Never turn an unexpected preview dependency failure into an opaque HTTP 500."""
         try:
-            from apps.brokers.services import MarketDataFreshnessService
+            serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
+            data = serializer.validated_data; account = data.get('broker_account')
+            if account is None or account.user_id != request.user.id: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_REQUIRED','detail':'Select a connected broker account.'}, status=status.HTTP_409_CONFLICT)
+            if not account.is_connection_eligible: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_NOT_READY','detail':'The selected broker account is not connected or its credentials are not usable.'}, status=status.HTTP_409_CONFLICT)
+            environment = self._environment(account)
+            if not environment: return response.Response({'status':'rejected','code':'ACCOUNT_ENVIRONMENT_UNVERIFIED','detail':'Broker account environment has not been verified.'}, status=status.HTTP_409_CONFLICT)
+            if environment == 'real' and not bool(getattr(account.broker, 'supports_live', False)): return response.Response({'status':'rejected','code':'LIVE_BROKER_UNSUPPORTED','detail':'The selected broker is not live-trading capable.'}, status=status.HTTP_409_CONFLICT)
+            if environment == 'real':
+                allowed, used, limit = check_live_order(request.user)
+                if not allowed: return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+                if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)): return response.Response({'status':'rejected','code':'LIVE_TRADING_DISABLED','detail':'Live-money trading is disabled by platform configuration.'}, status=status.HTTP_409_CONFLICT)
             try:
-                quote = MarketDataFreshnessService().latest(data.get('symbol'))
-            except Exception:
-                # The terminal also consumes fresh persisted Tick records. Treat
-                # a fresh tick as an authoritative preview quote when the
-                # snapshot writer is briefly behind; never use browser data.
-                from apps.market_data.models import Tick
-                tick = Tick.objects.filter(symbol__symbol=data.get('symbol')).order_by('-epoch', '-received_at').first()
-                if tick is None: raise
-                age = max(0, (timezone.now() - tick.received_at).total_seconds())
-                max_age = int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30))
-                if age > max_age: raise
-                quote = SimpleNamespace(last_price=tick.quote, bid=tick.bid, ask=tick.ask, spread=tick.spread, timestamp=tick.received_at)
-        except Exception as exc:
-            return response.Response({'status':'rejected','code':'MARKET_DATA_GATE_FAILED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
-        ai_gate = {'ai_verified':False,'ai_required':environment == 'real'}
-        if environment == 'real':
-            try:
-                from apps.ai_engine.services import PredictionService, RecommendationService, ConsensusDecisionGate
-                context = ExecutionEngine()._ai_market_context(account, data.get('symbol'), 'M1')
-                prediction = PredictionService().predict(data.get('symbol'), 'M1', context)
-                recommendation = RecommendationService().recommend(data.get('symbol'), prediction)
-                approved, reason = ConsensusDecisionGate().validate(prediction, data.get('direction'))
-                if not approved: return response.Response({'status':'rejected','code':'AI_CONSENSUS_GATE_REJECTED','detail':reason}, status=status.HTTP_409_CONFLICT)
-                consensus = prediction.payload.get('consensus', {}) if prediction.payload else {}
-                ai_gate = {'ai_verified':True,'ai_required':True,'prediction_id':prediction.pk,'recommendation_id':recommendation.pk,'decision':consensus.get('decision',prediction.prediction),'confidence':consensus.get('confidence',prediction.confidence),'models_used':consensus.get('models_used',0)}
-            except Exception as exc: return response.Response({'status':'rejected','code':'AI_ANALYSIS_UNAVAILABLE','detail':f'Live execution requires a fresh verified AI decision: {exc}'}, status=status.HTTP_409_CONFLICT)
-        try:
+                from apps.brokers.services import MarketDataFreshnessService
+                try: quote = MarketDataFreshnessService().latest(data.get('symbol'))
+                except Exception:
+                    from apps.market_data.models import Tick
+                    tick = Tick.objects.filter(symbol__symbol=data.get('symbol')).order_by('-epoch', '-received_at').first()
+                    if tick is None: raise ValueError(f'No persisted broker tick is available for {data.get("symbol")}.')
+                    age = max(0, (timezone.now() - tick.received_at).total_seconds()); max_age = int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30))
+                    if age > max_age: raise ValueError(f'Market data is stale ({int(age)}s old; limit {max_age}s).')
+                    quote = SimpleNamespace(last_price=tick.quote, bid=tick.bid, ask=tick.ask, spread=tick.spread, timestamp=tick.received_at)
+            except Exception as exc:
+                return response.Response({'status':'rejected','code':'MARKET_DATA_GATE_FAILED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
+            ai_gate = {'ai_verified':False,'ai_required':environment == 'real'}
+            if environment == 'real':
+                try:
+                    from apps.ai_engine.services import PredictionService, RecommendationService, ConsensusDecisionGate
+                    context = ExecutionEngine()._ai_market_context(account, data.get('symbol'), 'M1')
+                    prediction = PredictionService().predict(data.get('symbol'), 'M1', context)
+                    recommendation = RecommendationService().recommend(data.get('symbol'), prediction)
+                    approved, reason = ConsensusDecisionGate().validate(prediction, data.get('direction'))
+                    if not approved: return response.Response({'status':'rejected','code':'AI_CONSENSUS_GATE_REJECTED','detail':reason}, status=status.HTTP_409_CONFLICT)
+                    consensus = prediction.payload.get('consensus', {}) if prediction.payload else {}
+                    ai_gate = {'ai_verified':True,'ai_required':True,'prediction_id':prediction.pk,'recommendation_id':recommendation.pk,'decision':consensus.get('decision',prediction.prediction),'confidence':consensus.get('confidence',prediction.confidence),'models_used':consensus.get('models_used',0)}
+                except Exception as exc:
+                    log.exception('Live pre-trade AI verification failed', extra={'symbol':data.get('symbol'),'account_id':account.id})
+                    return response.Response({'status':'rejected','code':'AI_ANALYSIS_UNAVAILABLE','detail':f'Live execution requires a fresh verified AI decision: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             stake = data.get('stake')
             try: stake_value = float(Decimal(str(stake)))
             except (InvalidOperation, TypeError, ValueError): stake_value = None
@@ -89,10 +91,9 @@ class OrderViewSet(viewsets.ModelViewSet):
             timestamp = getattr(quote, 'timestamp', None)
             market = {'price':float(last_price),'bid':float(quote.bid) if quote.bid is not None else None,'ask':float(quote.ask) if quote.ask is not None else None,'spread':float(quote.spread or 0),'timestamp':timestamp.isoformat() if timestamp else None}
             return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':data.get('symbol'),'direction':data.get('direction'),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':market,'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'fresh_market_data':True,**ai_gate}})
-        except (TypeError, ValueError, AttributeError, OverflowError) as exc:
-            return response.Response({'status':'rejected','code':'PREVIEW_SERIALIZATION_FAILED','detail':f'Unable to build a safe pre-trade preview: {exc}'}, status=status.HTTP_409_CONFLICT)
-        except Exception as exc:
-            return response.Response({'status':'rejected','code':'PREVIEW_FAILED','detail':'Unable to complete the pre-trade preview safely.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception:
+            log.exception('Pre-trade preview failed', extra={'user_id':request.user.id,'symbol':request.data.get('symbol')})
+            return response.Response({'status':'rejected','code':'PREVIEW_INTERNAL_ERROR','detail':'Pre-trade preview could not be completed safely. Check market/broker status and retry.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     @decorators.action(detail=True, methods=['post'])
     def cancel(self, request, pk=None): return response.Response(OrderSerializer(ExecutionEngine().cancel_order(self.get_object())).data)
     @decorators.action(detail=True, methods=['post'])
