@@ -1,1 +1,5 @@
-from .services import *  # noqa: F401,F403
+"""Compatibility exports for anomaly detection."""
+
+from .services import AnomalyDetectionService
+
+__all__ = ["AnomalyDetectionService"]
