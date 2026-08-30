@@ -55,7 +55,7 @@ class Prediction(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["user", "symbol", "timeframe", "-created_at"], name="ai_engine_pr_user_id_2c6a2f_idx"),
+            models.Index(fields=["user", "symbol", "timeframe", "-created_at"], name="ai_pr_user_sym_tf_created"),
             models.Index(fields=["symbol", "timeframe", "-created_at"]),
         ]
 
@@ -96,7 +96,7 @@ class TrainingJob(models.Model):
 
     class Meta:
         ordering = ["-started_at"]
-        indexes = [models.Index(fields=["user", "status", "-started_at"], name="ai_engine_tr_user_id_7fdb5a_idx")]
+        indexes = [models.Index(fields=["user", "status", "-started_at"], name="ai_tr_user_status_started")]
 
 
 class AIRecommendation(models.Model):
@@ -111,7 +111,7 @@ class AIRecommendation(models.Model):
 
     class Meta:
         ordering = ["-timestamp"]
-        indexes = [models.Index(fields=["user", "symbol", "-timestamp"], name="ai_engine_ar_user_id_0a5f7d_idx")]
+        indexes = [models.Index(fields=["user", "symbol", "-timestamp"], name="ai_rec_user_sym_time")]
 
 
 class MarketRegime(models.Model):
@@ -123,7 +123,7 @@ class MarketRegime(models.Model):
 
     class Meta:
         ordering = ["-timestamp"]
-        indexes = [models.Index(fields=["user", "symbol", "-timestamp"], name="ai_engine_mr_user_id_1b8e6c_idx")]
+        indexes = [models.Index(fields=["user", "symbol", "-timestamp"], name="ai_reg_user_sym_time")]
 
 
 class AnomalyEvent(models.Model):
@@ -136,4 +136,4 @@ class AnomalyEvent(models.Model):
 
     class Meta:
         ordering = ["-timestamp"]
-        indexes = [models.Index(fields=["user", "symbol", "-timestamp"], name="ai_engine_ae_user_id_3c9f2a_idx")]
+        indexes = [models.Index(fields=["user", "symbol", "-timestamp"], name="ai_anom_user_sym_time")]
