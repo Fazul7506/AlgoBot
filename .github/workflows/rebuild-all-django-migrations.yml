@@ -12,8 +12,8 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: validate-django-migrations
-  cancel-in-progress: true
+  group: validate-django-migrations-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   validate:
