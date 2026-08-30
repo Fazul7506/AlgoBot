@@ -32,16 +32,58 @@
 [data-icons-fallback] .material-symbols-rounded { font-size: 0; }
 [data-icons-fallback] .material-symbols-rounded::before { content: '\00a0'; font-size: 24px; }
 
-/* Django message notifications: compact, dismissible, and self-expiring. */
-.toast-stack { position: fixed; top: 72px; right: 14px; z-index: 5000; width: min(360px, calc(100vw - 24px)); display: grid; gap: 7px; pointer-events: none; }
-.toast { pointer-events: auto; position: relative; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 9px 9px 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2, #171a21); color: var(--text); box-shadow: 0 10px 24px rgba(0,0,0,.24); font-size: 13px; line-height: 1.3; animation: algobot-toast-in .18s ease-out both; }
-.toast-message { min-width: 0; overflow-wrap: anywhere; }
+/* Canonical Django message surface. Keep this isolated from page-level card styles. */
+#django-message-stack.toast-stack {
+  position: fixed;
+  top: max(72px, env(safe-area-inset-top) + 56px);
+  right: max(14px, env(safe-area-inset-right) + 10px);
+  z-index: 5000;
+  width: min(380px, calc(100vw - 28px));
+  max-width: calc(100vw - 28px);
+  max-height: min(70vh, 560px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  pointer-events: none;
+  isolation: isolate;
+}
+#django-message-stack.toast-stack .toast {
+  pointer-events: auto;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 140px;
+  overflow: auto;
+  margin: 0;
+  padding: 11px 10px 11px 13px;
+  border: 1px solid var(--ds-border, var(--line, #203653));
+  border-radius: 12px;
+  background: var(--ds-surface-2, var(--panel2, #10233d));
+  color: var(--ds-text, var(--text, #e7f0ff));
+  box-shadow: 0 14px 34px rgba(0,0,0,.28);
+  box-sizing: border-box;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+#django-message-stack.toast-stack .toast-message { min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+#django-message-stack.toast-stack .toast-close { flex: 0 0 auto; }
+#django-message-stack.toast-stack .toast.success { border-color: color-mix(in srgb, var(--ds-success, #33d69f) 52%, var(--ds-border, #203653)); }
+#django-message-stack.toast-stack .toast.warning { border-color: color-mix(in srgb, var(--ds-warning, #ffd166) 52%, var(--ds-border, #203653)); }
+#django-message-stack.toast-stack .toast.error { border-color: color-mix(in srgb, var(--ds-danger, #ff5c7a) 58%, var(--ds-border, #203653)); }
+#django-message-stack.toast-stack .toast.info { border-color: color-mix(in srgb, var(--ds-info, #29d3ff) 48%, var(--ds-border, #203653)); }
+
 .toast-close { border: 0; background: transparent; color: var(--muted); width: 26px; height: 26px; border-radius: 7px; cursor: pointer; font-size: 20px; line-height: 1; display: grid; place-items: center; }
 .toast-close:hover,.toast-close:focus-visible { background: rgba(148,163,184,.12); color: var(--text); outline: none; }
-.toast.success { border-color: rgba(34,197,94,.38); }
-.toast.warning { border-color: rgba(245,158,11,.42); }
-.toast.error { border-color: rgba(239,68,68,.45); }
-.toast.info { border-color: rgba(59,130,246,.4); }
 .toast.is-leaving { animation: algobot-toast-out .16s ease-in both; }
 @keyframes algobot-toast-in { from { opacity: 0; transform: translate3d(0,-6px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
 @keyframes algobot-toast-out { from { opacity: 1; transform: translate3d(0,0,0); } to { opacity: 0; transform: translate3d(0,-4px,0); } }
@@ -54,7 +96,8 @@
   .app-sidebar::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.58); }
 }
 @media (max-width: 800px) {
-  .toast-stack { top: 60px; right: 10px; width: calc(100vw - 20px); }
+  #django-message-stack.toast-stack { top: max(60px, env(safe-area-inset-top) + 48px); right: max(10px, env(safe-area-inset-right) + 8px); width: min(380px, calc(100vw - 20px)); max-width: calc(100vw - 20px); }
+  #django-message-stack.toast-stack .toast { max-height: 120px; }
   .mobile-menu-button { display: grid; place-items: center; }
   .app-sidebar { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); transform: translate3d(-105%,0,0); transition: transform .22s ease; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .app-sidebar.is-open { transform: translate3d(0,0,0); }
@@ -63,4 +106,7 @@
   .topbar { padding-left: 68px; }
   .sidebar-toggle { display: none; }
   body.mobile-nav-open { overflow: auto !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #django-message-stack.toast-stack .toast { animation: none !important; }
 }
