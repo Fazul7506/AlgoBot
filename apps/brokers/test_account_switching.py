@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -96,7 +97,7 @@ class AccountSwitchingTests(TestCase):
     @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
     def test_second_preferred_account_is_rejected_by_database_invariant(self):
         first = self.make_account('DEMO-1', preferred=True)
-        with self.assertRaises(Exception):
+        with self.assertRaises(IntegrityError):
             self.make_account('DEMO-2', preferred=True)
         first.refresh_from_db()
         self.assertTrue(first.is_preferred)
