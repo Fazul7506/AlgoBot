@@ -1,1 +1,5 @@
-from .services import *  # noqa: F401,F403
+"""Compatibility exports for AI explainability."""
+
+from .services import ExplainabilityService
+
+__all__ = ["ExplainabilityService"]
