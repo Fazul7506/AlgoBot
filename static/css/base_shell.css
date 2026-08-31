@@ -32,6 +32,38 @@
 [data-icons-fallback] .material-symbols-rounded { font-size: 0; }
 [data-icons-fallback] .material-symbols-rounded::before { content: '\00a0'; font-size: 24px; }
 
+/* Canonical active-page state. Navigation JS owns the .active class; CSS owns its presentation. */
+#app-sidebar nav a,
+#app-sidebar .sidebar-new-trade {
+  position: relative;
+  box-sizing: border-box;
+  transition: background-color .14s ease, color .14s ease, border-color .14s ease;
+}
+#app-sidebar nav a.active,
+#app-sidebar nav a[aria-current='page'],
+#app-sidebar .sidebar-new-trade.active,
+#app-sidebar .sidebar-new-trade[aria-current='page'] {
+  color: var(--text) !important;
+  background: color-mix(in srgb, var(--red) 14%, transparent) !important;
+  border-left: 2px solid var(--accent) !important;
+  box-shadow: inset 2px 0 0 var(--red), 0 0 0 1px color-mix(in srgb, var(--red) 10%, transparent);
+  font-weight: 700;
+}
+#app-sidebar nav a.active .material-symbols-rounded,
+#app-sidebar nav a[aria-current='page'] .material-symbols-rounded,
+#app-sidebar .sidebar-new-trade.active .material-symbols-rounded,
+#app-sidebar .sidebar-new-trade[aria-current='page'] .material-symbols-rounded {
+  color: var(--accent) !important;
+}
+#app-sidebar nav a:hover,
+#app-sidebar .sidebar-new-trade:hover { color: var(--text); }
+
+/* Keep the current route visible when navigation changes. */
+#app-sidebar nav a.active,
+#app-sidebar nav a[aria-current='page'],
+#app-sidebar .sidebar-new-trade.active,
+#app-sidebar .sidebar-new-trade[aria-current='page'] { scroll-margin-block: 72px; }
+
 /* Canonical Django message surface. Keep this isolated from page-level card styles. */
 #django-message-stack.toast-stack {
   position: fixed;
@@ -109,4 +141,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
   #django-message-stack.toast-stack .toast { animation: none !important; }
+  #app-sidebar nav a, #app-sidebar .sidebar-new-trade { transition: none !important; }
 }

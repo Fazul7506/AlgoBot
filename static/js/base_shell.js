@@ -8,7 +8,9 @@
   const stack = () => $('#django-message-stack');
   const MESSAGE_LIMIT = 5;
   const MESSAGE_TTL = 5000;
-  const SIDEBAR_SCROLL_KEY = 'algobot.sidebar.scroll.';
+  // The sidebar is one continuous navigation surface. Preserve its position
+  // across route changes instead of maintaining a separate position per page.
+  const SIDEBAR_SCROLL_KEY = 'algobot.sidebar.scroll.position';
 
   function setBrokerStateAttribute(event) {
     const state = event?.detail?.state || window.AlgoBotBrokerState?.get() || {};
@@ -151,26 +153,57 @@
   function bindSidebarScrollState(sidebar) {
     if (sidebar.dataset.scrollStateBound === 'true') return;
     sidebar.dataset.scrollStateBound = 'true';
-    const keyForPath = () => `${SIDEBAR_SCROLL_KEY}${encodeURIComponent(currentPath())}`;
-    const restore = () => {
+
+    const readPosition = () => {
       try {
-        const saved = Number.parseInt(sessionStorage.getItem(keyForPath()) || '', 10);
-        if (Number.isFinite(saved) && saved >= 0) sidebar.scrollTop = saved;
-      } catch (_) { /* storage unavailable */ }
-      // Restoring scroll must never change the route or active navigation item.
-      syncActiveNavigation();
+        const saved = Number.parseInt(sessionStorage.getItem(SIDEBAR_SCROLL_KEY) || '', 10);
+        return Number.isFinite(saved) && saved >= 0 ? saved : null;
+      } catch (_) {
+        return null;
+      }
     };
+
+    const savePosition = () => {
+      try {
+        sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(Math.max(0, Math.round(sidebar.scrollTop))));
+      } catch (_) { /* storage unavailable */ }
+    };
+
+    const restorePosition = () => {
+      const saved = readPosition();
+      if (saved === null) return;
+      // Run after the current page has laid out its sidebar so the scroll
+      // position is applied to the fully populated navigation, including
+      // lower sections such as Developer/API.
+      sidebar.scrollTop = saved;
+      window.requestAnimationFrame(() => { sidebar.scrollTop = saved; });
+    };
+
     let saveTimer = null;
     sidebar.addEventListener('scroll', () => {
       syncActiveNavigation();
       if (saveTimer) window.clearTimeout(saveTimer);
-      saveTimer = window.setTimeout(() => {
-        try { sessionStorage.setItem(keyForPath(), String(sidebar.scrollTop)); } catch (_) { /* storage unavailable */ }
-      }, 80);
+      saveTimer = window.setTimeout(savePosition, 50);
     }, { passive: true });
-    window.addEventListener('pageshow', restore);
-    window.addEventListener('load', restore, { once: true });
-    restore();
+
+    // Save immediately when leaving through sidebar navigation. This avoids
+    // losing the last few pixels if a user clicks before the debounce fires.
+    sidebar.addEventListener('click', event => {
+      const link = event.target?.closest?.('nav a, .sidebar-new-trade');
+      if (!link || event.defaultPrevented || event.button > 0) return;
+      savePosition();
+    }, true);
+
+    // Handle normal navigation, browser back/forward and BFCache restores.
+    window.addEventListener('beforeunload', savePosition);
+    window.addEventListener('pagehide', savePosition);
+    window.addEventListener('pageshow', restorePosition);
+    window.addEventListener('load', restorePosition, { once: true });
+
+    // Initial restore, followed by a second frame for templates whose sidebar
+    // sections finish rendering after DOMContentLoaded.
+    restorePosition();
+    window.requestAnimationFrame(restorePosition);
   }
 
   function bindNavigation() {
