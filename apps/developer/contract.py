@@ -20,7 +20,12 @@ def _clean_route(route: str) -> str:
     route = route.replace("<", "{")
     if not route.startswith("/"):
         route = "/" + route
-    return re.sub(r"//+", "/", route)
+    route = re.sub(r"//+", "/", route)
+    # Django commonly names object URL parameters `pk`; expose the stable
+    # public API spelling `id` in the generated OpenAPI contract without
+    # changing the executable Django route or its view signature.
+    route = re.sub(r"\{pk\}", "{id}", route)
+    return route
 
 
 def _walk(patterns, prefix=""):
