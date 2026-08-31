@@ -74,8 +74,7 @@ class Phase19DeveloperPlatformTests(TestCase):
 
     def test_key_delete_requires_admin_and_is_scoped_to_owner(self):
         response = self.client.delete(f"/api/developer/keys/{self.key.id}/delete/")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("Method not allowed", self.payload(response).get("detail", "")) if isinstance(self.payload(response), dict) and "detail" in self.payload(response) else None
+        self.assertEqual(response.status_code, 403)
         self.use_admin_key()
         response = self.client.delete(f"/api/developer/keys/{self.key.id}/delete/")
         self.assertEqual(response.status_code, 200)
