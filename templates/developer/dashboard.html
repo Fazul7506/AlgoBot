@@ -3,15 +3,81 @@
 {% block title %}Developer API | AlgoBot{% endblock %}
 {% block content %}
 <section class="dev-page" data-developer-page>
-<header class="dev-hero panel"><div><p class="eyebrow">DEVELOPER</p><h1>Developer API</h1></div><div class="dev-hero-actions"><span class="dev-health"><i></i>{{ api_health|title }}</span><button class="btn ghost" type="button" data-refresh-developer>Refresh</button></div></header>
-<div class="dev-notice" data-dev-notice hidden aria-live="polite"></div>
-<section class="dev-metrics"><article class="panel"><span>Calls today</span><strong data-metric="calls">—</strong></article><article class="panel"><span>Latency p95</span><strong data-metric="p95">—</strong></article><article class="panel"><span>Rate limits</span><strong data-metric="limits">—</strong></article><article class="panel"><span>API version</span><strong data-api-version>v1</strong><small data-endpoint-count>Loading endpoints…</small></article></section>
-<section class="dev-grid">
-<article class="panel dev-card dev-wide"><div class="panel-head"><div><p class="eyebrow">CREDENTIALS</p><h2>API keys</h2></div></div><form data-create-key class="dev-form"><label>Key name<input name="key_name" maxlength="120" placeholder="Production app" required></label><fieldset><legend>Permissions</legend><label><input type="checkbox" name="permission" value="read" checked> Read</label><label><input type="checkbox" name="permission" value="market_data"> Market data</label><label><input type="checkbox" name="permission" value="trading"> Trading</label><label><input type="checkbox" name="permission" value="analytics"> Analytics</label><label><input type="checkbox" name="permission" value="webhooks"> Webhooks</label></fieldset><button class="btn primary" type="submit">Create API key</button></form><div class="secret-panel" data-secret-panel hidden><strong>Save this secret now</strong><small data-secret-warning></small><div><span>Key</span><code data-secret-key></code><button type="button" data-copy="[data-secret-key]">Copy</button></div><div><span>Secret</span><code data-secret></code><button type="button" data-copy="[data-secret]">Copy</button></div></div><div class="dev-list" data-dev-keys><div class="dev-empty">Loading keys…</div></div></article>
-<article class="panel dev-card"><div class="panel-head"><div><p class="eyebrow">SANDBOX</p><h2>Sandbox</h2></div></div><button class="btn" type="button" data-provision-sandbox>Provision sandbox</button><pre class="dev-code" data-sandbox-output>Not provisioned.</pre></article>
-<article class="panel dev-card dev-wide"><div class="panel-head"><div><p class="eyebrow">EVENTS</p><h2>Webhooks</h2></div></div><form data-create-webhook class="dev-form"><label>Endpoint URL<input name="webhook_url" type="url" placeholder="https://example.com/webhook" required></label><fieldset><legend>Events</legend><label><input type="checkbox" name="webhook_event" value="order.created" checked> Orders</label><label><input type="checkbox" name="webhook_event" value="position.updated"> Positions</label><label><input type="checkbox" name="webhook_event" value="trade.closed"> Trades</label><label><input type="checkbox" name="webhook_event" value="signal.created"> Signals</label><label><input type="checkbox" name="webhook_event" value="account.updated"> Account</label></fieldset><button class="btn primary" type="submit">Add webhook</button></form><div class="secret-panel" data-webhook-secret-panel hidden><strong>Signing secret</strong><div><code data-webhook-secret></code><button type="button" data-copy="[data-webhook-secret]">Copy</button></div></div><div class="dev-list" data-dev-webhooks><div class="dev-empty">Loading webhooks…</div></div></article>
-<article class="panel dev-card dev-wide"><div class="panel-head"><div><p class="eyebrow">REFERENCE</p><h2>API documentation</h2></div><span class="badge live">v1</span></div><pre class="dev-code dev-docs" data-doc-json>Loading OpenAPI document…</pre></article>
-</section></section>
+  <header class="dev-hero panel">
+    <div><p class="eyebrow">DEVELOPER</p><h1>Developer API</h1></div>
+    <div class="dev-hero-actions"><span class="dev-health"><i></i>{{ api_health|default:"operational"|title }}</span><button class="btn ghost" type="button" data-refresh-developer>Refresh</button></div>
+  </header>
+  <section class="dev-metrics">
+    <article class="panel"><span>Calls today</span><strong>{{ analytics.api_calls_today|default:0 }}</strong></article>
+    <article class="panel"><span>Latency p95</span><strong>{{ analytics.latency_p95_ms|default:0 }} ms</strong></article>
+    <article class="panel"><span>Rate limits</span><strong>{{ analytics.rate_limit_events|default:0 }}</strong></article>
+    <article class="panel"><span>API version</span><strong>v1</strong><small>{{ documentation_endpoint_count }} endpoints</small></article>
+  </section>
+  <section class="dev-grid">
+    <article class="panel dev-card dev-wide">
+      <div class="panel-head"><div><p class="eyebrow">CREDENTIALS</p><h2>API keys</h2></div></div>
+      <form action="/api/developer/browser/keys/create/" method="post" class="dev-form">
+        {% csrf_token %}
+        <label>Key name<input name="name" maxlength="120" placeholder="Production app" required></label>
+        <fieldset><legend>Permissions</legend>
+          <label><input type="checkbox" name="permissions" value="read" checked> Read</label>
+          <label><input type="checkbox" name="permissions" value="market_data"> Market data</label>
+          <label><input type="checkbox" name="permissions" value="trading"> Trading</label>
+          <label><input type="checkbox" name="permissions" value="analytics"> Analytics</label>
+          <label><input type="checkbox" name="permissions" value="webhooks"> Webhooks</label>
+        </fieldset>
+        <button class="btn primary" type="submit">Create API key</button>
+      </form>
+      {% if one_time_secret.kind == "api_key" %}
+      <div class="secret-panel"><strong>Save this secret now</strong><small>{{ one_time_secret.warning }}</small>
+        <div><span>Key</span><code data-secret-key>{{ one_time_secret.key }}</code><button type="button" data-copy="[data-secret-key]">Copy</button></div>
+        <div><span>Secret</span><code data-secret>{{ one_time_secret.secret }}</code><button type="button" data-copy="[data-secret]">Copy</button></div>
+      </div>
+      {% endif %}
+      <div class="dev-list">
+        {% for key in api_keys %}
+        <div class="dev-row"><div><strong>{{ key.name }}</strong><small>{{ key.key }}</small><span class="dev-meta">{{ key.permissions|join:", " }} · {{ key.status }}{% if key.last_used %} · used {{ key.last_used|date:"Y-m-d H:i" }}{% endif %}</span></div>
+          <div class="dev-actions">
+            {% if key.status == "active" %}<form action="/api/developer/browser/keys/{{ key.id }}/rotate/" method="post" data-confirm="Rotate this key? The previous secret remains valid for the configured grace period.">{% csrf_token %}<button type="submit">Rotate</button></form>{% endif %}
+            {% if key.status == "active" %}<form action="/api/developer/browser/keys/{{ key.id }}/revoke/" method="post" data-confirm="Revoke this API key? Existing clients using it will stop authenticating.">{% csrf_token %}<button type="submit">Revoke</button></form>{% endif %}
+            <form action="/api/developer/browser/keys/{{ key.id }}/delete/" method="post" data-confirm="Delete this API key? This permanently removes the credential and cannot be undone.">{% csrf_token %}<button type="submit">Delete</button></form>
+          </div>
+        </div>
+        {% empty %}<div class="dev-empty">No API keys yet. Create one to start integrating AlgoBot.</div>{% endfor %}
+      </div>
+    </article>
+    <article class="panel dev-card"><div class="panel-head"><div><p class="eyebrow">SANDBOX</p><h2>Sandbox</h2></div></div>
+      <form action="/api/developer/browser/sandbox/provision/" method="post">{% csrf_token %}<button class="btn" type="submit">Provision sandbox</button></form>
+      <p class="dev-help">Provisioning is handled server-side. AlgoBot reports the result through Django messages.</p>
+    </article>
+    <article class="panel dev-card dev-wide">
+      <div class="panel-head"><div><p class="eyebrow">EVENTS</p><h2>Webhooks</h2></div></div>
+      <form action="/api/developer/browser/webhooks/create/" method="post" class="dev-form">
+        {% csrf_token %}
+        <label>Endpoint URL<input name="url" type="url" placeholder="https://example.com/webhook" required></label>
+        <fieldset><legend>Events</legend>
+          <label><input type="checkbox" name="events" value="order.created" checked> Orders</label>
+          <label><input type="checkbox" name="events" value="position.updated"> Positions</label>
+          <label><input type="checkbox" name="events" value="trade.closed"> Trades</label>
+          <label><input type="checkbox" name="events" value="signal.created"> Signals</label>
+          <label><input type="checkbox" name="events" value="account.updated"> Account</label>
+        </fieldset>
+        <button class="btn primary" type="submit">Add webhook</button>
+      </form>
+      {% if one_time_secret.kind == "webhook" %}<div class="secret-panel"><strong>Signing secret</strong><small>{{ one_time_secret.warning }}</small><div><span>Secret</span><code data-webhook-secret>{{ one_time_secret.secret }}</code><button type="button" data-copy="[data-webhook-secret]">Copy</button></div></div>{% endif %}
+      <div class="dev-list">
+        {% for webhook in webhooks %}
+        <div class="dev-row"><div><strong>{{ webhook.url }}</strong><small>{{ webhook.events|join:", " }}</small><span class="dev-meta">{{ webhook.status }} · created {{ webhook.created_at|date:"Y-m-d H:i" }}</span></div>
+          <div class="dev-actions"><form action="/api/developer/browser/webhooks/{{ webhook.id }}/test/" method="post">{% csrf_token %}<button type="submit">Send test</button></form></div>
+        </div>
+        {% empty %}<div class="dev-empty">No webhooks configured.</div>{% endfor %}
+      </div>
+    </article>
+    <article class="panel dev-card dev-wide"><div class="panel-head"><div><p class="eyebrow">REFERENCE</p><h2>API documentation</h2></div><span class="badge live">v1</span></div><pre class="dev-code dev-docs">{{ documentation|pprint }}</pre></article>
+  </section>
+</section>
 {% endblock %}
-{% block extra_css %}<style>.dev-page{max-width:1400px;margin:auto;padding:18px}.dev-hero{display:flex;justify-content:space-between;gap:18px;align-items:center}.dev-hero h1{margin:.15em 0}.dev-hero-actions{display:flex;gap:10px;align-items:center}.dev-health{display:inline-flex;gap:8px;align-items:center;padding:8px 11px;border:1px solid rgba(52,211,153,.25);border-radius:999px}.dev-health i{width:8px;height:8px;border-radius:50%;background:#34d399}.dev-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}.dev-metrics article{padding:16px}.dev-metrics span,.dev-metrics small{display:block;color:#94a3b8}.dev-metrics strong{display:block;font-size:25px;margin:7px 0}.dev-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}.dev-wide{grid-column:1/-1}.dev-card{padding:16px}.dev-form{display:grid;gap:12px;margin:14px 0}.dev-form label{display:grid;gap:6px}.dev-form input[type=text],.dev-form input[type=url],.dev-form input:not([type]){background:#11151b;color:#e5e7eb;border:1px solid #303640;border-radius:8px;padding:10px}.dev-form fieldset{border:1px solid #303640;border-radius:9px;display:flex;gap:14px;flex-wrap:wrap}.dev-form fieldset label{display:flex;align-items:center;gap:6px}.dev-list{display:grid;border-top:1px solid #2a3038}.dev-row{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #2a3038}.dev-row small{display:block;margin-top:4px;color:#cbd5e1;word-break:break-all}.dev-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.dev-actions button,.secret-panel button{border:1px solid #39404a;background:#20242b;color:#e5e7eb;border-radius:7px;padding:7px 9px}.dev-actions button:disabled{opacity:.45;cursor:not-allowed}.dev-empty{padding:16px 0;color:#94a3b8}.dev-notice{margin-top:12px;padding:11px 13px;border-radius:9px;background:#17202a;border:1px solid #334155;white-space:pre-wrap}.secret-panel{margin:12px 0;padding:12px;border:1px solid #365314;border-radius:9px;background:#17230f}.secret-panel>strong,.secret-panel>small{display:block}.secret-panel>div{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;margin-top:7px}.secret-panel code{overflow:auto;padding:7px;background:#0b0f13;border-radius:6px}.dev-code{min-height:90px;max-height:420px;overflow:auto;padding:12px;background:#0b0f13;border:1px solid #272d35;border-radius:9px;color:#cbd5e1;white-space:pre-wrap}.dev-docs{max-height:520px}@media(max-width:900px){.dev-grid,.dev-metrics{grid-template-columns:1fr}.dev-wide{grid-column:auto}.dev-hero{align-items:flex-start;flex-direction:column}}@media(max-width:560px){.dev-page{padding:10px}.dev-row{flex-direction:column}.secret-panel>div{grid-template-columns:1fr}}</style>{% endblock %}
-{% block extra_js %}<script src="{% static 'js/developer_portal.js' %}?v=20260829-dev3" defer></script>{% endblock %}
+{% block extra_css %}<style>
+.dev-page{max-width:1400px;margin:auto;padding:18px}.dev-hero{display:flex;justify-content:space-between;gap:18px;align-items:center}.dev-hero h1{margin:.15em 0}.dev-hero-actions{display:flex;gap:10px;align-items:center}.dev-health{display:inline-flex;gap:8px;align-items:center;padding:8px 11px;border:1px solid rgba(52,211,153,.25);border-radius:999px}.dev-health i{width:8px;height:8px;border-radius:50%;background:#34d399}.dev-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}.dev-metrics article{padding:16px}.dev-metrics span,.dev-metrics small{display:block;color:#94a3b8}.dev-metrics strong{display:block;font-size:25px;margin:7px 0}.dev-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}.dev-wide{grid-column:1/-1}.dev-card{padding:16px}.dev-form{display:grid;gap:12px;margin:14px 0}.dev-form label{display:grid;gap:6px}.dev-form input[type=text],.dev-form input[type=url],.dev-form input:not([type]){background:#11151b;color:#e5e7eb;border:1px solid #303640;border-radius:8px;padding:10px}.dev-form fieldset{border:1px solid #303640;border-radius:9px;display:flex;gap:14px;flex-wrap:wrap}.dev-form fieldset label{display:flex;align-items:center;gap:6px}.dev-list{display:grid;border-top:1px solid #2a3038}.dev-row{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #2a3038}.dev-row small{display:block;margin-top:4px;color:#cbd5e1;word-break:break-all}.dev-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.dev-actions form{margin:0}.dev-actions button,.secret-panel button{border:1px solid #39404a;background:#20242b;color:#e5e7eb;border-radius:7px;padding:7px 9px}.dev-empty{padding:16px 0;color:#94a3b8}.secret-panel{margin:12px 0;padding:12px;border:1px solid #365314;border-radius:9px;background:#17230f}.secret-panel>strong,.secret-panel>small{display:block}.secret-panel>div{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;margin-top:7px}.secret-panel code{overflow:auto;padding:7px;background:#0b0f13;border-radius:6px}.dev-code{min-height:90px;max-height:420px;overflow:auto;padding:12px;background:#0b0f13;border:1px solid #272d35;border-radius:9px;color:#cbd5e1;white-space:pre-wrap}.dev-docs{max-height:520px}.dev-help{color:#94a3b8;line-height:1.5;margin-top:14px}@media(max-width:900px){.dev-grid,.dev-metrics{grid-template-columns:1fr}.dev-wide{grid-column:auto}.dev-hero{align-items:flex-start;flex-direction:column}}@media(max-width:560px){.dev-page{padding:10px}.dev-row{flex-direction:column}.secret-panel>div{grid-template-columns:1fr}}
+</style>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/developer_portal.js' %}?v=20260901-django-messages" defer></script>{% endblock %}
