@@ -77,7 +77,7 @@
   async function deleteKey(id) {
     const key = keys.find(item => String(item.id) === String(id));
     if (!confirm(`Delete “${key?.name || 'this API key'}”? This permanently removes the credential and cannot be undone.`)) return;
-    try { await api(`/api/developer/keys/${encodeURIComponent(id)}/delete/`, {method:'DELETE', headers:csrfHeaders()}); await loadKeys(); notice('API key deleted.', 'success'); }
+    try { await api(`/api/developer/keys/${encodeURIComponent(id)}/delete/`, {method:'POST', headers:csrfHeaders(), body:'{}'}); await loadKeys(); notice('API key deleted.', 'success'); }
     catch (error) { notice(error.message, 'error'); }
   }
 
@@ -109,7 +109,7 @@
   }
 
   async function testWebhook(id) {
-    try { const result = await api(`/api/developer/webhooks/${encodeURIComponent(id)}/test/`, {method:'POST', headers:csrfHeaders(), body:JSON.stringify({event:'test',payload:{source:'algobot-developer-portal',timestamp:new Date().toISOString()}})}); notice(`Webhook test: ${pretty(result)}`, result.status === 'delivered' ? 'success' : 'info'); }
+    try { const result = await api(`/api/developer/webhooks/${encodeURIComponent(id)}/test/`, {method:'POST', headers:csrfHeaders(), body:JSON.stringify({event:'test',payload:{source:'algobot-developer-portal',timestamp:new Date().toISOString()}})}); notice(`Webhook test: ${result.status || 'completed'}.`, result.status === 'delivered' ? 'success' : 'info'); }
     catch (error) { notice(`Webhook test failed: ${error.message}`, 'error'); }
   }
 
