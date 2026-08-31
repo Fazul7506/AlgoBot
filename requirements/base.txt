@@ -16,4 +16,5 @@ whitenoise>=6.8,<7
 Pillow>=11,<12
 numpy>=2,<3
 pandas>=2,<3
+scipy>=1.14,<2
 django-anymail>=13,<14
