@@ -1,13 +1,12 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
+{% load static %}
+{% block title %}API Status | AlgoBot{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Api Status</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
-</section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
+<section class="api-status-page" data-api-status-page>
+<header class="hero-panel"><p class="eyebrow">DEVELOPER PLATFORM</p><h1>API Status</h1><p>Live operational visibility for the public API contract, authentication layer, market-data services and execution boundaries.</p><button class="btn ghost" type="button" data-status-refresh>Refresh status</button></header>
+<div class="status-grid"><article class="panel"><span>API gateway</span><strong data-status="gateway">Checking…</strong><small>HTTP request routing and authentication</small></article><article class="panel"><span>API contract</span><strong data-status="contract">Checking…</strong><small data-contract-version>OpenAPI version —</small></article><article class="panel"><span>Realtime</span><strong data-status="realtime">Checking…</strong><small>WebSocket market/account event channel</small></article><article class="panel"><span>Execution</span><strong data-status="execution">Gated</strong><small>Live orders remain behind risk and account gates</small></article></div>
+<section class="panel status-details"><div><p class="eyebrow">SERVICES</p><h2>Service health</h2></div><div data-status-list><p>Loading service health…</p></div></section>
 </section>
 {% endblock %}
+{% block extra_css %}<style>.api-status-page{max-width:1400px;margin:auto;padding:18px}.api-status-page .hero-panel{position:relative}.status-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}.status-grid article{padding:18px}.status-grid span,.status-grid small{display:block;color:#94a3b8}.status-grid strong{display:block;font-size:22px;margin:8px 0}.status-details{margin-top:12px;padding:18px}.status-row{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #2a3038}.status-row:last-child{border-bottom:0}.status-ok{color:#34d399}.status-warn{color:#fbbf24}.status-bad{color:#f87171}@media(max-width:900px){.status-grid{grid-template-columns:1fr 1fr}}@media(max-width:560px){.api-status-page{padding:10px}.status-grid{grid-template-columns:1fr}.status-row{flex-direction:column}}</style>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/api_status.js' %}?v=20260831-api1" defer></script>{% endblock %}
