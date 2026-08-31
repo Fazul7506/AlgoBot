@@ -92,21 +92,18 @@ jobs:
           set -o pipefail
           python manage.py test --noinput --parallel 1 2>&1 | tee /tmp/django-tests.txt
 
-      - name: Publish Django test failure diagnostics
-        if: failure() && steps.tests.outcome == 'failure' && github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          {
-            echo '### Django test suite failure diagnostics'
-            echo
-            echo '```text'
-            tail -n 300 /tmp/django-tests.txt
-            echo '```'
-          } > /tmp/django-tests-comment.md
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/django-tests-comment.md
-          exit 1
+      - name: Upload Django test failure log
+        if: steps.tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: django-test-failure-log-${{ github.run_id }}
+          path: /tmp/django-tests.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Stop validation after Django test failure
+        if: steps.tests.outcome == 'failure'
+        run: exit 1
 
       - name: Validate static assets
         run: python manage.py collectstatic --noinput --clear
