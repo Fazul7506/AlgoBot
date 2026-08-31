@@ -22,6 +22,16 @@ def dashboard(request):
     return render(request, "developer/dashboard.html", {"page_title": "Developer Platform", **DeveloperPlatformService().dashboard()})
 
 
+@login_required
+def api_explorer(request):
+    return render(request, "developer/api_explorer.html", {"page_title": "API Explorer"})
+
+
+@login_required
+def api_status(request):
+    return render(request, "developer/api_status.html", {"page_title": "API Status"})
+
+
 def _developer_permissions(scope):
     return [IsAuthenticated, scope]
 
@@ -42,9 +52,6 @@ def key_create(request):
     serializer.is_valid(raise_exception=True)
     api_key, secret = APIKeyService().create(request.user, serializer.validated_data["name"], serializer.validated_data.get("permissions"), serializer.validated_data.get("expires_at"))
     data = APIKeySerializer(api_key).data
-    # The identifier is not secret material. Reveal it only in this one-time
-    # creation response so the Copy button copies the actual value, while the
-    # normal list remains safely masked. The secret is also one-time only.
     data["key"] = str(api_key.key)
     data["secret"] = secret
     data["warning"] = "Store both the API key and secret securely. They will not be shown again after this dialog is closed."
