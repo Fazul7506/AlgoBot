@@ -27,7 +27,7 @@ class Notification(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["user", "status", "priority"]),
-            models.Index(fields=["channel", "status", "available_at"]),
+            models.Index(fields=["channel", "status", "available_at"], name="notif_chan_status_avail_idx"),
         ]
 
 
