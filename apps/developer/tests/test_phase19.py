@@ -109,7 +109,7 @@ class Phase19DeveloperPlatformTests(TestCase):
             self.assertEqual(self.client.get(url).status_code, 200)
         docs = self.client.get("/api/developer/docs/")
         self.assertEqual(docs.status_code, 200)
-        self.assertIn("/keys/{id}/delete/", docs.data["paths"])
+        self.assertIn("/api/v1/developer/keys/{id}/delete/", docs.data["paths"])
         self.assertEqual(self.client.get("/api/developer/analytics/").status_code, 403)
 
         self.use_admin_key()

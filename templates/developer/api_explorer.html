@@ -1,13 +1,31 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
+{% load static %}
+{% block title %}API Explorer | AlgoBot{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Api Explorer</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
-</section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
+<section class="api-explorer" data-api-explorer>
+  <header class="api-hero panel">
+    <div><p class="eyebrow">DEVELOPER PLATFORM</p><h1>API Explorer</h1><p>Explore AlgoBot's versioned API contract, authentication requirements, request schemas and response examples from one authoritative reference.</p></div>
+    <div class="api-hero-actions"><span class="api-status"><i></i><span data-api-health>Checking API…</span></span><button class="btn ghost" type="button" data-refresh-api>Refresh</button></div>
+  </header>
+  <div class="api-notice" data-api-notice hidden aria-live="polite"></div>
+  <div class="api-layout">
+    <aside class="panel api-sidebar">
+      <div class="api-sidebar-head"><strong>API Reference</strong><span data-endpoint-count>—</span></div>
+      <label class="api-search"><span>Search</span><input type="search" data-api-search placeholder="endpoint, tag, method…" autocomplete="off"></label>
+      <nav data-api-nav aria-label="API endpoints"><p class="api-loading">Loading OpenAPI document…</p></nav>
+    </aside>
+    <main class="panel api-main">
+      <div class="api-main-head"><div><p class="eyebrow">REFERENCE</p><h2 data-selected-title>Select an endpoint</h2><p data-selected-summary>Choose an endpoint from the reference tree.</p></div><span class="badge" data-selected-method>—</span></div>
+      <div class="api-tabs" role="tablist"><button class="active" data-tab="overview" type="button">Overview</button><button data-tab="request" type="button">Request</button><button data-tab="response" type="button">Response</button><button data-tab="examples" type="button">Examples</button></div>
+      <section data-panel="overview" class="api-panel"><div class="api-meta-grid"><article><span>Path</span><code data-selected-path>—</code></article><article><span>Authentication</span><strong data-selected-auth>—</strong></article><article><span>Tags</span><strong data-selected-tags>—</strong></article><article><span>Operation</span><strong data-selected-operation>—</strong></article></div><div class="api-description" data-selected-description>Select an endpoint to inspect its contract.</div></section>
+      <section data-panel="request" class="api-panel" hidden><h3>Request contract</h3><pre data-selected-request>No endpoint selected.</pre></section>
+      <section data-panel="response" class="api-panel" hidden><h3>Response contract</h3><pre data-selected-response>No endpoint selected.</pre></section>
+      <section data-panel="examples" class="api-panel" hidden><h3>Examples</h3><pre data-selected-examples>No endpoint selected.</pre></section>
+    </main>
+  </div>
 </section>
 {% endblock %}
+{% block extra_css %}<style>
+.api-explorer{max-width:1500px;margin:auto;padding:18px}.api-hero{display:flex;justify-content:space-between;gap:20px;align-items:center;padding:22px}.api-hero h1{margin:.15em 0}.api-hero-actions{display:flex;gap:10px;align-items:center;white-space:nowrap}.api-status{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(52,211,153,.25);border-radius:999px;padding:8px 11px}.api-status i{width:8px;height:8px;border-radius:50%;background:#34d399}.api-notice{margin-top:12px;padding:11px 13px;border:1px solid #334155;border-radius:9px;white-space:pre-wrap}.api-layout{display:grid;grid-template-columns:330px minmax(0,1fr);gap:12px;margin-top:12px;min-height:680px}.api-sidebar{padding:14px;overflow:auto}.api-sidebar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.api-sidebar-head span{font-size:12px;color:#94a3b8}.api-search{display:grid;gap:6px;color:#94a3b8;font-size:12px;margin-bottom:14px}.api-search input{background:#0b0f13;color:#e5e7eb;border:1px solid #303640;border-radius:8px;padding:10px}.api-group{margin:12px 0}.api-group h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#94a3b8;margin:0 0 6px}.api-endpoint{display:grid;grid-template-columns:58px minmax(0,1fr);gap:8px;width:100%;text-align:left;border:0;background:transparent;color:#dbe4ee;padding:8px;border-radius:7px;cursor:pointer}.api-endpoint:hover,.api-endpoint.active{background:#1b2430}.api-endpoint code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.method{font-size:10px;font-weight:700}.method.get{color:#60a5fa}.method.post{color:#34d399}.method.put,.method.patch{color:#fbbf24}.method.delete{color:#f87171}.api-main{padding:20px;overflow:auto}.api-main-head{display:flex;justify-content:space-between;gap:15px;border-bottom:1px solid #2a3038;padding-bottom:15px}.api-main-head h2{margin:.15em 0}.api-main-head p{color:#94a3b8;max-width:800px}.api-tabs{display:flex;gap:6px;border-bottom:1px solid #2a3038;padding:10px 0}.api-tabs button{border:0;background:transparent;color:#94a3b8;padding:9px 12px;border-radius:7px;cursor:pointer}.api-tabs button.active{background:#1b2430;color:#fff}.api-panel{padding-top:18px}.api-meta-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.api-meta-grid article{padding:13px;border:1px solid #2a3038;border-radius:9px;background:#10151b}.api-meta-grid span{display:block;color:#94a3b8;font-size:12px;margin-bottom:6px}.api-meta-grid code{word-break:break-all}.api-description{margin-top:15px;line-height:1.7;color:#cbd5e1}.api-panel pre{background:#0b0f13;border:1px solid #272d35;border-radius:9px;padding:14px;overflow:auto;white-space:pre-wrap;max-height:540px}.api-loading{color:#94a3b8}.badge{padding:5px 8px;border-radius:6px;background:#17202a}.api-empty{color:#94a3b8;padding:15px 0}@media(max-width:900px){.api-layout{grid-template-columns:1fr}.api-sidebar{max-height:420px}.api-meta-grid{grid-template-columns:1fr 1fr}.api-hero{align-items:flex-start;flex-direction:column}}@media(max-width:560px){.api-explorer{padding:10px}.api-meta-grid{grid-template-columns:1fr}}
+</style>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/api_explorer.js' %}?v=20260831-api1" defer></script>{% endblock %}
