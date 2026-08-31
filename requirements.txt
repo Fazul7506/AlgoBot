@@ -23,6 +23,7 @@ cryptography
 pyotp
 
 numpy
+pandas
 scikit-learn
 joblib
 xgboost
