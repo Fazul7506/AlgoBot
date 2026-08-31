@@ -154,56 +154,107 @@
     if (sidebar.dataset.scrollStateBound === 'true') return;
     sidebar.dataset.scrollStateBound = 'true';
 
+    let lastKnownTop = Math.max(0, sidebar.scrollTop || 0);
+    let restoreTimer = null;
+    let restoreObserver = null;
+
     const readPosition = () => {
       try {
-        const saved = Number.parseInt(sessionStorage.getItem(SIDEBAR_SCROLL_KEY) || '', 10);
-        return Number.isFinite(saved) && saved >= 0 ? saved : null;
+        const raw = sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
+        if (!raw) return null;
+        const saved = JSON.parse(raw);
+        if (!saved || typeof saved !== 'object') return null;
+        const top = Number(saved.top);
+        if (!Number.isFinite(top) || top < 0) return null;
+        return {
+          top,
+          atBottom: saved.atBottom === true,
+        };
       } catch (_) {
         return null;
       }
     };
 
     const savePosition = () => {
+      const maxScroll = Math.max(0, sidebar.scrollHeight - sidebar.clientHeight);
+      const top = Math.max(0, Math.min(lastKnownTop, maxScroll));
+      const atBottom = maxScroll > 0 && top >= Math.max(0, maxScroll - 12);
       try {
-        sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(Math.max(0, Math.round(sidebar.scrollTop))));
+        sessionStorage.setItem(SIDEBAR_SCROLL_KEY, JSON.stringify({ top, atBottom }));
       } catch (_) { /* storage unavailable */ }
+    };
+
+    const applySavedPosition = saved => {
+      if (!saved) return false;
+      const maxScroll = Math.max(0, sidebar.scrollHeight - sidebar.clientHeight);
+      const target = saved.atBottom ? maxScroll : Math.min(saved.top, maxScroll);
+      sidebar.scrollTop = target;
+      lastKnownTop = target;
+      return sidebar.scrollTop === target;
+    };
+
+    const stopRestoreObserver = () => {
+      if (restoreObserver) {
+        restoreObserver.disconnect();
+        restoreObserver = null;
+      }
+      if (restoreTimer) {
+        window.clearTimeout(restoreTimer);
+        restoreTimer = null;
+      }
     };
 
     const restorePosition = () => {
       const saved = readPosition();
-      if (saved === null) return;
-      // Run after the current page has laid out its sidebar so the scroll
-      // position is applied to the fully populated navigation, including
-      // lower sections such as Developer/API.
-      sidebar.scrollTop = saved;
-      window.requestAnimationFrame(() => { sidebar.scrollTop = saved; });
+      if (!saved) return;
+      stopRestoreObserver();
+
+      // The sidebar is server-rendered on every Django page, but its lower
+      // sections/account area can change height after the first layout. Keep
+      // applying the saved position until the final scroll range exists.
+      const apply = () => applySavedPosition(saved);
+      apply();
+      window.requestAnimationFrame(apply);
+      window.requestAnimationFrame(() => window.requestAnimationFrame(apply));
+
+      let frames = 0;
+      const retry = () => {
+        apply();
+        frames += 1;
+        if (frames < 30) restoreTimer = window.requestAnimationFrame(retry);
+        else restoreTimer = null;
+      };
+      restoreTimer = window.requestAnimationFrame(retry);
+
+      if (window.MutationObserver) {
+        restoreObserver = new MutationObserver(() => apply());
+        restoreObserver.observe(sidebar, { childList: true, subtree: true });
+        window.setTimeout(stopRestoreObserver, 1200);
+      }
     };
 
-    let saveTimer = null;
-    sidebar.addEventListener('scroll', () => {
+    const recordScroll = () => {
+      lastKnownTop = Math.max(0, sidebar.scrollTop || 0);
       syncActiveNavigation();
-      if (saveTimer) window.clearTimeout(saveTimer);
-      saveTimer = window.setTimeout(savePosition, 50);
-    }, { passive: true });
+      savePosition();
+    };
 
-    // Save immediately when leaving through sidebar navigation. This avoids
-    // losing the last few pixels if a user clicks before the debounce fires.
+    sidebar.addEventListener('scroll', recordScroll, { passive: true });
+
+    // Save from the tracked value rather than trusting scrollTop during the
+    // unload transition. Browsers can reset a detached sidebar to zero.
     sidebar.addEventListener('click', event => {
       const link = event.target?.closest?.('nav a, .sidebar-new-trade');
       if (!link || event.defaultPrevented || event.button > 0) return;
       savePosition();
     }, true);
 
-    // Handle normal navigation, browser back/forward and BFCache restores.
     window.addEventListener('beforeunload', savePosition);
     window.addEventListener('pagehide', savePosition);
     window.addEventListener('pageshow', restorePosition);
     window.addEventListener('load', restorePosition, { once: true });
 
-    // Initial restore, followed by a second frame for templates whose sidebar
-    // sections finish rendering after DOMContentLoaded.
     restorePosition();
-    window.requestAnimationFrame(restorePosition);
   }
 
   function bindNavigation() {
