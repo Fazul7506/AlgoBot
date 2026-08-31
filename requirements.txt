@@ -24,6 +24,7 @@ pyotp
 
 numpy
 pandas
+scipy
 scikit-learn
 joblib
 xgboost
