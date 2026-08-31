@@ -86,7 +86,27 @@ jobs:
           exit 1
 
       - name: Run Django test suite
-        run: python manage.py test --noinput --parallel 1
+        id: tests
+        shell: bash
+        run: |
+          set -o pipefail
+          python manage.py test --noinput --parallel 1 2>&1 | tee /tmp/django-tests.txt
+
+      - name: Publish Django test failure diagnostics
+        if: failure() && steps.tests.outcome == 'failure' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo '### Django test suite failure diagnostics'
+            echo
+            echo '```text'
+            tail -n 300 /tmp/django-tests.txt
+            echo '```'
+          } > /tmp/django-tests-comment.md
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/django-tests-comment.md
+          exit 1
 
       - name: Validate static assets
         run: python manage.py collectstatic --noinput --clear
