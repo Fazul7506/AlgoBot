@@ -81,13 +81,13 @@ class StrategyExecutionService:
             result = strat.execute()
             StrategyValidationService().validate_signal(result['signal'])
 
-            # AI is an enhancement to the deterministic strategy, not a hidden
-            # availability dependency. If the AI service is unavailable, the
-            # strategy result remains valid and the execution records the reason.
+            # Criteria are a hard safety gate. AI may enhance an allowed signal,
+            # but it must never turn a criteria-rejected result into a trade.
+            criteria_passed = (result.get('criteria') or {}).get('passed', True)
             ai_enabled = (config.parameters or {}).get('ai_ensemble_enabled', True)
             ai_consensus = None
             ai_error = None
-            if ai_enabled:
+            if ai_enabled and criteria_passed:
                 try:
                     from apps.ai_engine.services import PredictionService, RecommendationService
                     ai_context = {'market_data': market_data, 'indicators': indicator_data, 'strategy': {'confidence': result.get('confidence', 0)}, 'risk': (config.parameters or {}).get('risk', {}), 'candles': handoff.get('candles', [])}
@@ -103,6 +103,9 @@ class StrategyExecutionService:
             result['ai_consensus'] = ai_consensus
             if ai_error:
                 result['ai_error'] = ai_error
+            if not criteria_passed:
+                result['signal'] = 'HOLD'
+                result['ai_blocked_by_criteria'] = True
             execution.signal = result['signal']
             execution.confidence = result.get('confidence', 0)
             execution.status = 'completed'
