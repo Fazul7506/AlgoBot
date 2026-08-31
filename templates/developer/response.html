@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ response_title }} | AlgoBot{% endblock %}
+{% block content %}
+<section class="developer-response" data-django-response data-status="{{ response_status }}" data-kind="{{ response_kind }}">
+  <div class="panel developer-response-card">
+    <p class="eyebrow">DEVELOPER PLATFORM</p>
+    <h1>{{ response_title }}</h1>
+    {% if response_message %}<p data-response-message>{{ response_message }}</p>{% endif %}
+    {{ response_payload|json_script:"django-response-payload" }}
+    {% for message in messages %}<div data-django-message data-kind="{{ message.tags }}">{{ message }}</div>{% endfor %}
+  </div>
+</section>
+{% endblock %}
+{% block extra_css %}<style>.developer-response{max-width:960px;margin:auto;padding:24px}.developer-response-card{padding:24px}.developer-response-card p{color:#cbd5e1;line-height:1.6}.developer-response [data-django-message]{margin-top:10px;padding:10px 12px;border:1px solid #334155;border-radius:8px}.developer-response [data-kind="error"]{border-color:#7f1d1d}.developer-response [data-kind="success"]{border-color:#365314}</style>{% endblock %}
