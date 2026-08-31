@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import Client, TestCase
 
 from apps.developer.models import APIKey, Webhook
 from apps.developer.services import APIKeyService, APIGatewayService, WebhookService
@@ -49,7 +49,7 @@ class Phase19DeveloperPlatformTests(TestCase):
         self.assertIn("secret", self.payload(response))
 
     def test_browser_session_can_bootstrap_api_key(self):
-        session = self.client_class()
+        session = Client()
         self.assertTrue(session.login(username="dev", password="pass12345"))
         response = session.get("/api/developer/keys/")
         self.assertEqual(response.status_code, 200)
