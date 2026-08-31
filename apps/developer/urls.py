@@ -4,6 +4,8 @@ from . import views
 app_name = "developer"
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("api/explorer/", views.api_explorer, name="api_explorer"),
+    path("api/status/", views.api_status, name="api_status"),
     path("keys/", views.keys, name="keys"),
     path("keys/create/", views.key_create, name="key_create"),
     path("keys/<int:pk>/rotate/", views.key_rotate, name="key_rotate"),
