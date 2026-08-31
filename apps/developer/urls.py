@@ -6,6 +6,15 @@ urlpatterns = [
     path("", views.dashboard, name="dashboard"),
     path("api/explorer/", views.api_explorer, name="api_explorer"),
     path("api/status/", views.api_status, name="api_status"),
+    # Browser management uses same-origin HTML forms + Django messages.
+    path("browser/keys/create/", views.browser_key_create, name="browser_key_create"),
+    path("browser/keys/<int:pk>/rotate/", views.browser_key_rotate, name="browser_key_rotate"),
+    path("browser/keys/<int:pk>/revoke/", views.browser_key_revoke, name="browser_key_revoke"),
+    path("browser/keys/<int:pk>/delete/", views.browser_key_delete, name="browser_key_delete"),
+    path("browser/webhooks/create/", views.browser_webhook_create, name="browser_webhook_create"),
+    path("browser/webhooks/<int:pk>/test/", views.browser_webhook_test, name="browser_webhook_test"),
+    path("browser/sandbox/provision/", views.browser_sandbox_provision, name="browser_sandbox_provision"),
+    # Machine/API clients retain their existing developer endpoints.
     path("keys/", views.keys, name="keys"),
     path("keys/create/", views.key_create, name="key_create"),
     path("keys/<int:pk>/rotate/", views.key_rotate, name="key_rotate"),

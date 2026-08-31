@@ -86,7 +86,25 @@ jobs:
           exit 1
 
       - name: Run Django test suite
-        run: python manage.py test --noinput --parallel 1
+        id: tests
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -o pipefail
+          python manage.py test --noinput --parallel 1 2>&1 | tee /tmp/django-tests.txt
+
+      - name: Upload Django test failure log
+        if: steps.tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: django-test-failure-log-${{ github.run_id }}
+          path: /tmp/django-tests.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Stop validation after Django test failure
+        if: steps.tests.outcome == 'failure'
+        run: exit 1
 
       - name: Validate static assets
         run: python manage.py collectstatic --noinput --clear
