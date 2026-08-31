@@ -12,11 +12,11 @@
   <section class="workspace-grid two" aria-label="Broker account state">
     <article class="panel">
       <div class="panel-head"><div><p class="eyebrow">ACTIVE ACCOUNT</p><h2>Current broker</h2></div><span class="badge live" data-account-health>Checking</span></div>
-      <div data-broker-account-center class="account-center-state">Loading connected broker accounts…</div>
+      <div data-broker-account-center class="account-center-state" aria-live="polite">Loading connected broker accounts…</div>
     </article>
     <article class="panel">
       <div class="panel-head"><div><p class="eyebrow">ACCOUNT MODE</p><h2>Demo / Real</h2></div></div>
-      <p class="form-note">Switching is controlled by the backend feature flag and never changes credentials in the browser. The selected broker account remains the source of truth for execution.</p>
+      <p class="form-note">Switching changes only the authenticated user's selected broker account. Credentials remain server-side and the selected account remains the source of truth for execution.</p>
       <div data-account-mode-actions></div>
     </article>
   </section>
@@ -35,7 +35,7 @@
     const u=String(a?.avatar_url||a?.broker?.avatar_url||a?.credentials?.avatar_url||'').trim();
     const b=branding(a),name=a?.broker?.name||a?.broker_name||'Broker';
     if(u) return `<img class="algobot-account-avatar" src="${esc(u)}" alt="${esc(name)} account avatar" loading="lazy" referrerpolicy="no-referrer">`;
-    if(isDeriv(a)) return `<span class="algobot-account-avatar algobot-deriv-avatar" aria-label="Deriv United States identity">${esc(b.flag||'🇺🇸')}</span>`;
+    if(isDeriv(a)) return `<span class="algobot-account-avatar algobot-deriv-avatar" aria-label="Deriv identity">${esc(b.flag||'🇺🇸')}</span>`;
     return `<span class="algobot-account-avatar">${esc(name[0]?.toUpperCase()||'B')}</span>`;
   };
   function renderStyles(){
@@ -44,22 +44,43 @@
       .algobot-account-summary{display:flex;align-items:center;gap:12px;min-width:0}.algobot-account-avatar{width:46px;height:46px;flex:0 0 46px;border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;justify-content:center;background:#132a49;border:1px solid var(--line);font-weight:800;font-size:25px;overflow:hidden}.algobot-deriv-avatar{font-size:27px;background:#fff}.algobot-account-copy{display:grid;min-width:0;gap:3px}.algobot-account-copy strong{font-size:14px}.algobot-account-copy span{color:var(--muted);font-size:12px}.algobot-account-brand{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:11px;color:var(--muted)}.algobot-account-brand .flag{font-size:18px}.algobot-account-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:800;letter-spacing:.04em;margin-left:4px}.algobot-account-badge.real{background:rgba(31,184,111,.14);color:#43d99a;border:1px solid rgba(31,184,111,.35)}.algobot-account-badge.demo{background:rgba(245,166,35,.14);color:#f5b84f;border:1px solid rgba(245,166,35,.35)}
     `;document.head.appendChild(s);
   }
+  async function selectAccount(opposite,ot){
+    const button=mode.querySelector('[data-switch-account]');
+    if(button)button.disabled=true;
+    try{
+      const csrf=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1]||'';
+      const r=await fetch('/api/brokers/accounts/'+encodeURIComponent(opposite.id)+'/select/',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':csrf},body:JSON.stringify({account_type:ot})});
+      let data={};try{data=await r.json();}catch(_){data={};}
+      if(!r.ok)throw new Error(data.detail||`Account switch failed (${r.status})`);
+      window.dispatchEvent(new CustomEvent('algobot:account-changing',{detail:{account:data.active_account||data.account}}));
+      await load();
+      window.dispatchEvent(new CustomEvent('algobot:account-changed',{detail:{account:data.active_account||data.account}}));
+    }catch(e){
+      if(button)button.disabled=false;
+      const note=mode.querySelector('.form-note');if(note)note.textContent=e.message||'Account switch failed. No account state was changed.';
+    }
+  }
   async function load(){
     renderStyles();
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);
     try{
       const r=await fetch('/api/brokers/accounts/',{credentials:'same-origin',headers:{Accept:'application/json'},signal:controller.signal});
-      const data=await r.json();if(!r.ok)throw new Error(data.detail||`Request failed (${r.status})`);
+      let data={};try{data=await r.json();}catch(_){data={};}
+      if(!r.ok)throw new Error(data.detail||`Request failed (${r.status})`);
       const accounts=Array.isArray(data)?data:(data.results||[]),active=accounts.find(a=>a.is_preferred)||accounts[0];
-      if(!active){root.innerHTML='<div class="empty-state"><strong>No connected broker account</strong><p>Connect a supported broker to populate this workspace.</p><a class="btn primary" href="/brokers/connect/">Connect broker</a></div>';health.textContent='Offline';return;}
+      if(!active){root.innerHTML='<div class="empty-state"><strong>No connected broker account</strong><p>Connect a supported broker to populate this workspace.</p><a class="btn primary" href="/brokers/connect/">Connect broker</a></div>';health.textContent='Offline';mode.innerHTML='';return;}
       const t=type(active),b=branding(active),deriv=isDeriv(active),badgeClass=t==='real'?'real':'demo';
       health.textContent=active.is_connected?'Connected':'Unavailable';
-      root.innerHTML=`<div class="algobot-account-summary">${avatar(active)}<div class="algobot-account-copy"><strong>${esc(active.broker?.name||active.broker_name||'Broker')} · ${esc(active.broker_account_id||active.account_id)}</strong><span>${esc(t.toUpperCase())} <span class="algobot-account-badge ${badgeClass}">${esc(t==='real'?'REAL ACCOUNT':t==='demo'?'DEMO ACCOUNT':'ACCOUNT')}</span></span></div></div>${deriv?`<div class="algobot-account-brand"><span class="flag">${esc(b.flag||'🇺🇸')}</span><span>Powered by <strong>Deriv</strong> · United States</span></div>`:''}<p class="form-note">${active.is_connected?'Live broker account data':'Last known broker data; broker connection is unavailable.'}${active.last_synced_at?' · Last sync '+new Date(active.last_synced_at).toLocaleString():''}</p><p class="form-note">Balance: <strong>${esc(active.currency||'')} ${money(active.balance)}</strong></p>`;
+      root.innerHTML=`<div class="algobot-account-summary">${avatar(active)}<div class="algobot-account-copy"><strong>${esc(active.broker?.name||active.broker_name||'Broker')} · ${esc(active.broker_account_id||active.account_id)}</strong><span>${esc(t.toUpperCase())} <span class="algobot-account-badge ${badgeClass}">${esc(t==='real'?'REAL ACCOUNT':t==='demo'?'DEMO ACCOUNT':'ACCOUNT')}</span></span></div></div>${deriv?`<div class="algobot-account-brand"><span class="flag">${esc(b.flag||'🇺🇸')}</span><span>Powered by <strong>Deriv</strong></span></div>`:''}<p class="form-note">${active.is_connected?'Live broker account data':'Last known broker data; broker connection is unavailable.'}${active.last_synced_at?' · Last sync '+new Date(active.last_synced_at).toLocaleString():''}</p><p class="form-note">Balance: <strong>${esc(active.currency||'')} ${money(active.balance)}</strong></p>`;
       const opposite=accounts.find(a=>String(a.broker?.id)===String(active.broker?.id)&&type(a)!==t)||accounts.find(a=>type(a)!==t);
-      if(opposite&&active.switch_enabled){const ot=type(opposite);mode.innerHTML=`<button class="btn primary" type="button" data-switch-account>Switch to ${esc(ot.toUpperCase())}</button><p class="form-note">${esc(t.toUpperCase())} is active now.</p>`;mode.querySelector('button').onclick=async()=>{mode.querySelector('button').disabled=true;try{const r=await fetch('/api/brokers/accounts/'+opposite.id+'/select/',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':document.cookie.match(/(?:^|;\\s*)csrftoken=([^;]+)/)?.[1]||''},body:JSON.stringify({account_type:ot})});if(!r.ok)throw new Error((await r.json()).detail||'Account switch failed');await load();window.dispatchEvent(new CustomEvent('algobot:account-changed'));}catch(e){mode.querySelector('button').disabled=false;mode.querySelector('.form-note').textContent=e.message;}};}
-      else mode.innerHTML='<p class="form-note">Demo / real switching is disabled until ENABLE_BROKER_ACCOUNT_SWITCH is enabled in the deployment environment.</p>';
-    }catch(e){root.innerHTML=`<div class="empty-state"><strong>Broker account unavailable</strong><p>${esc(e.name==='AbortError'?'Account request timed out.':'Unable to read the canonical broker account state.')}</p></div>`;health.textContent='Unavailable';}
-    finally{clearTimeout(timer);}
+      if(opposite){
+        const ot=type(opposite);
+        mode.innerHTML=`<button class="btn primary" type="button" data-switch-account>Switch to ${esc(ot.toUpperCase())}</button><p class="form-note">${esc(t.toUpperCase())} is active now. Switching is available when the target account passes the server-side connection and credential checks.</p>`;
+        mode.querySelector('[data-switch-account]').onclick=()=>selectAccount(opposite,ot);
+      } else mode.innerHTML='<p class="form-note">No alternate connected broker account is available.</p>';
+    }catch(e){
+      root.innerHTML=`<div class="empty-state"><strong>Broker account unavailable</strong><p>${esc(e.name==='AbortError'?'Account request timed out.':'Unable to read the canonical broker account state.')}</p></div>`;health.textContent='Unavailable';mode.innerHTML='<p class="form-note">Account switching is unavailable until the canonical broker account state can be read.</p>';
+    }finally{clearTimeout(timer);}
   }
   load();
 })();
