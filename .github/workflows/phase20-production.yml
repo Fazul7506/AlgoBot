@@ -87,6 +87,7 @@ jobs:
 
       - name: Run Django test suite
         id: tests
+        timeout-minutes: 5
         shell: bash
         run: |
           set -o pipefail
