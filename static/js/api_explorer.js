@@ -1,1 +1,19 @@
-document.documentElement.dataset.algobotModule = 'api_explorer';
+(() => {
+  'use strict';
+  if (window.__algoBotApiExplorer) return;
+  window.__algoBotApiExplorer = true;
+  const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+  const api=(u,o={})=>window.AlgoBotFrontendData.request(u,o,15000);
+  const pretty=v=>JSON.stringify(v,null,2);
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  let spec=null, entries=[], selected=null;
+  function notice(m,k='info'){const e=$('[data-api-notice]');if(e){e.hidden=false;e.dataset.kind=k;e.textContent=m;}}
+  function flatten(s){return Object.entries(s?.paths||{}).flatMap(([path,methods])=>Object.entries(methods||{}).filter(([m])=>['get','post','put','patch','delete','options','head'].includes(m)).map(([method,item])=>({path,method,...item})))}
+  function authFor(i){if(i.security===undefined)return spec?.security?.length?'Authenticated':'Public';if(!i.security?.length)return 'Public';return i.security.map(x=>Object.keys(x)).flat().join(', ')||'Authenticated'}
+  function renderNav(){const nav=$('[data-api-nav]'),q=$('[data-api-search]')?.value.trim().toLowerCase()||'';if(!nav)return;const groups={};entries.filter(i=>[i.path,i.method,i.summary,i.description,...(i.tags||[])].join(' ').toLowerCase().includes(q)).forEach(i=>((i.tags?.length?i.tags:['General']).forEach(t=>(groups[t]??=[]).push(i))));nav.innerHTML=Object.keys(groups).sort().map(t=>`<div class="api-group"><h3>${esc(t)}</h3>${groups[t].map(i=>`<button type="button" class="api-endpoint${selected===i?' active':''}" data-index="${entries.indexOf(i)}"><span class="method ${i.method}">${i.method.toUpperCase()}</span><code>${esc(i.path)}</code></button>`).join('')}</div>`).join('')||'<p class="api-empty">No endpoints match your search.</p>';$$('[data-index]').forEach(b=>b.addEventListener('click',()=>select(+b.dataset.index)))}
+  function select(index){selected=entries[index];if(!selected)return;$('[data-selected-title]').textContent=selected.summary||selected.operationId||selected.path;$('[data-selected-summary]').textContent=selected.description||'No endpoint description has been published yet.';$('[data-selected-method]').textContent=selected.method.toUpperCase();$('[data-selected-path]').textContent=selected.path;$('[data-selected-auth]').textContent=authFor(selected);$('[data-selected-tags]').textContent=(selected.tags||['General']).join(', ');$('[data-selected-operation]').textContent=selected.operationId||'—';$('[data-selected-description]').textContent=selected.description||selected.summary||'No description available.';$('[data-selected-request]').textContent=pretty({parameters:selected.parameters||[],requestBody:selected.requestBody||null});$('[data-selected-response]').textContent=pretty(selected.responses||{});$('[data-selected-examples]').textContent=pretty({request:selected.requestBody?.content||{},responses:Object.fromEntries(Object.entries(selected.responses||{}).map(([c,r])=>[c,r?.content||{}]))});renderNav()}
+  async function load(){try{spec=await api('/api/developer/docs/');entries=flatten(spec);$('[data-endpoint-count]').textContent=`${entries.length} endpoints`;$('[data-api-health]').textContent='API reference online';renderNav();if(entries.length)select(0)}catch(e){$('[data-api-health]').textContent='API reference unavailable';notice(`Unable to load the published API contract: ${e.message}`,'error')}}
+  function tabs(){$$('[data-tab]').forEach(b=>b.addEventListener('click',()=>{$$('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));$$('[data-panel]').forEach(p=>p.hidden=p.dataset.panel!==b.dataset.tab)}))}
+  async function boot(){if(!$('[data-api-explorer]'))return;$('[data-api-search]')?.addEventListener('input',renderNav);$('[data-refresh-api]')?.addEventListener('click',load);tabs();await load()}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+})();
