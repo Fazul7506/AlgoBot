@@ -1,13 +1,16 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title|default:"AlgoBot Enterprise" }}{% endblock %}
+{% load static %}
+{% block title %}API Documentation | AlgoBot{% endblock %}
 {% block content %}
-<section class="hero-panel">
-  <p class="eyebrow">AlgoBot Enterprise</p>
-  <h1>Documentation</h1>
-  <p>{{ page_description|default:"This module is available in the AlgoBot enterprise platform." }}</p>
+<section class="api-docs" data-api-docs>
+<header class="hero-panel"><p class="eyebrow">DEVELOPER PLATFORM</p><h1>API Documentation</h1><p>Build integrations against one versioned contract. Start with authentication, then explore market data, account state, strategy controls, risk and trading boundaries.</p><div class="docs-actions"><a class="btn primary" href="{% url 'developer:api_explorer' %}">Open API Explorer</a><a class="btn ghost" href="{% url 'developer:api_status' %}">API Status</a></div></header>
+<section class="docs-grid">
+<article class="panel"><p class="eyebrow">01 · AUTHENTICATION</p><h2>Secure access</h2><p>Use scoped API credentials for server-to-server integrations. Keep secrets out of browser storage and request only the permissions your integration needs.</p><ul><li>Scoped credentials</li><li>One-time secret reveal</li><li>Rotation and revocation</li><li>Webhook signing secrets</li></ul></article>
+<article class="panel"><p class="eyebrow">02 · MARKET DATA</p><h2>Realtime first</h2><p>Consume broker-authoritative symbols, ticks and historical data through the same contract used by AlgoBot's execution services.</p><ul><li>Active symbols</li><li>Tick streams</li><li>Historical ticks</li><li>Freshness metadata</li></ul></article>
+<article class="panel"><p class="eyebrow">03 · TRADING</p><h2>Explicit execution gates</h2><p>Trading endpoints expose intent and state while live execution remains protected by authentication, account, freshness, risk and environment controls.</p><ul><li>Proposal lifecycle</li><li>Buy / sell state</li><li>Open contract status</li><li>Execution audit trail</li></ul></article>
+<article class="panel"><p class="eyebrow">04 · EVENTS</p><h2>Webhooks & realtime</h2><p>Subscribe external systems to stable events with signed payloads and observable delivery status.</p><ul><li>Account updates</li><li>Position changes</li><li>Trade events</li><li>Signal events</li></ul></article>
 </section>
-<section class="card-grid" aria-label="Module status">
-  <article><h2>Module ready</h2><p>The page is wired into the application and ready for its module-specific workflow.</p></article>
-  <article><h2>System status</h2><p>Application routing and rendering are active.</p></article>
+<section class="panel docs-principles"><p class="eyebrow">CONTRACT PRINCIPLES</p><h2>Designed like a production trading API</h2><div class="principles"><div><strong>Versioned</strong><span>Breaking changes require a new API version.</span></div><div><strong>Discoverable</strong><span>OpenAPI metadata drives the Explorer and generated reference.</span></div><div><strong>Observable</strong><span>Health, latency, rate limits and request identifiers are first-class.</span></div><div><strong>Safe</strong><span>API access never bypasses AlgoBot's live-execution safety boundary.</span></div></div></section>
 </section>
 {% endblock %}
+{% block extra_css %}<style>.api-docs{max-width:1400px;margin:auto;padding:18px}.docs-actions{display:flex;gap:10px;margin-top:18px}.docs-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px}.docs-grid article{padding:18px}.docs-grid ul{margin:14px 0 0;padding-left:20px;color:#cbd5e1;line-height:1.9}.docs-principles{margin-top:12px;padding:18px}.principles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}.principles div{border:1px solid #2a3038;border-radius:9px;padding:13px}.principles strong,.principles span{display:block}.principles span{color:#94a3b8;margin-top:6px}@media(max-width:900px){.docs-grid,.principles{grid-template-columns:1fr 1fr}}@media(max-width:560px){.api-docs{padding:10px}.docs-grid,.principles{grid-template-columns:1fr}.docs-actions{flex-direction:column}}</style>{% endblock %}
