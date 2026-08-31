@@ -13,6 +13,11 @@
   const configured = s => (s.configurations || []).find(c => c.enabled);
   const isCurrent = s => (s.configurations || []).some(c => c.is_active) || Boolean(current?.strategy?.id === s.id);
 
+  function csrfToken() {
+    const match = document.cookie.match(/(?:^|; )csrftoken=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
   function ensureControlPanel() {
     if (root.querySelector('[data-strategy-control-panel]')) return;
     const panel = document.createElement('section');
@@ -21,7 +26,7 @@
     panel.innerHTML = `<div><strong>Current strategy:</strong> <span data-current-strategy>Loading…</span> <span data-current-account></span></div>
       <label>Criteria (JSON)<textarea data-criteria rows="5" spellcheck="false">{}</textarea></label>
       <button type="button" class="btn" data-save-criteria>Save criteria</button>
-      <span data-control-message role="status"></span>`;
+      <span data-control-message role="status" aria-live="polite"></span>`;
     root.insertBefore(panel, grid);
     panel.querySelector('[data-save-criteria]').addEventListener('click', saveCriteria);
   }
@@ -62,15 +67,22 @@
   }
 
   async function api(path, options = {}) {
-    const headers = {'Accept': 'application/json', ...(options.body ? {'Content-Type': 'application/json'} : {})};
-    const r = await fetch(path, {...options, credentials: 'same-origin', headers});
+    const method = String(options.method || 'GET').toUpperCase();
+    const headers = {
+      'Accept': 'application/json',
+      ...(options.body ? {'Content-Type': 'application/json'} : {}),
+      ...(method !== 'GET' && method !== 'HEAD' ? {'X-CSRFToken': csrfToken()} : {}),
+      ...(options.headers || {}),
+    };
+    const r = await fetch(path, {...options, method, credentials: 'same-origin', headers});
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+    if (!r.ok) throw new Error(data.detail || data.message || `HTTP ${r.status}`);
     return data;
   }
 
   async function loadCurrent() {
-    try { current = await api('/api/strategies/current/'); } catch (e) { current = null; }
+    try { current = await api('/api/strategies/current/'); }
+    catch (e) { current = null; ensureControlPanel(); root.querySelector('[data-control-message]').textContent = `Current strategy unavailable: ${e.message}`; }
     renderCurrent();
     render();
   }
@@ -91,8 +103,9 @@
     if (!current?.configuration?.id) { message.textContent = 'Configure and switch a strategy first.'; return; }
     try {
       const criteria = JSON.parse(textarea.value || '{}');
+      if (!criteria || Array.isArray(criteria) || typeof criteria !== 'object') throw new Error('Criteria must be a JSON object.');
       await api('/api/strategies/criteria/', {method: 'POST', body: JSON.stringify({configuration_id: current.configuration.id, criteria})});
-      message.textContent = 'Criteria saved.';
+      message.textContent = 'Criteria saved and will be applied on the next strategy execution.';
       await loadCurrent();
     } catch (e) { message.textContent = `Criteria update failed: ${e.message}`; }
   }
