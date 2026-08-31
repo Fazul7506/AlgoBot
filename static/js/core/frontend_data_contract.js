@@ -12,16 +12,37 @@
   const defaultApiBase = window.location.hostname === 'algobot.dpdns.org' ? 'https://api.algobot.dpdns.org' : '';
   const apiBase = (configuredApiBase || defaultApiBase).replace(/\/+$/, '');
   const resolveUrl = url => /^https?:\/\//i.test(url) ? url : `${apiBase}${url.startsWith('/') ? url : `/${url}`}`;
-  const normalizeEndpoint = url => {
-    if (url === '/api/market/snapshots/all_snapshots/') return '/api/market/snapshots/?page_size=8';
-    return url;
-  };
+  const normalizeEndpoint = url => url === '/api/market/snapshots/all_snapshots/' ? '/api/market/snapshots/?page_size=8' : url;
   const isCloudflareChallenge = (response, text) => {
     if (!response || !text) return false;
     const body = String(text).toLowerCase();
     return [400,403,429,503,520,521,522,524].includes(response.status) && (body.includes('just a moment') || body.includes('challenge-platform') || body.includes('cf_chl_opt') || body.includes('cf_chl-') || body.includes('challenges.cloudflare.com') || body.includes('enable javascript and cookies to continue') || (body.includes('cloudflare') && String(response.headers?.get('content-type') || '').toLowerCase().includes('text/html')));
   };
+  const parseDjangoResponse = (response, text) => {
+    const contentType = String(response?.headers?.get('content-type') || '').toLowerCase();
+    if (!contentType.includes('text/html') || !text) return null;
+    try {
+      const documentNode = new DOMParser().parseFromString(text, 'text/html');
+      const envelope = documentNode.querySelector('[data-django-response]');
+      if (!envelope) return null;
+      const payloadNode = documentNode.querySelector('#django-response-payload');
+      const messageNode = documentNode.querySelector('[data-response-message], [data-django-message]');
+      let payload = {};
+      if (payloadNode?.textContent) payload = JSON.parse(payloadNode.textContent);
+      return {
+        django: true,
+        status: Number(envelope.dataset.status || response.status || 200),
+        kind: envelope.dataset.kind || 'info',
+        message: messageNode?.textContent?.trim() || '',
+        payload
+      };
+    } catch (_) {
+      return null;
+    }
+  };
   const parsePayload = (response, text) => {
+    const django = parseDjangoResponse(response, text);
+    if (django) return django;
     try { return text ? JSON.parse(text) : {}; }
     catch (_) {
       if (isCloudflareChallenge(response, text)) return {detail:'Production API edge challenge encountered.', code:'EDGE_CHALLENGE'};
@@ -31,7 +52,7 @@
   };
   async function fetchOnce(url, options, controller, sameOrigin = false) {
     const method = (options.method || 'GET').toUpperCase();
-    const headers = {Accept:'application/json', ...(options.headers || {})};
+    const headers = {Accept:'text/html, application/json', ...(options.headers || {})};
     if (!['GET','HEAD','OPTIONS'].includes(method) && !headers['X-CSRFToken']) headers['X-CSRFToken'] = csrf();
     const target = sameOrigin ? url : resolveUrl(url);
     const crossOrigin = (() => { try { return new URL(target, window.location.origin).origin !== window.location.origin; } catch (_) { return false; } })();
@@ -87,9 +108,10 @@
         }
       } finally { clearTimeout(timer); }
       const {response,text} = result;
-      const payload = parsePayload(response,text);
+      const parsed = parsePayload(response,text);
+      const payload = parsed?.django ? parsed.payload : parsed;
       if (!response.ok) {
-        const error = new Error(payload.detail || payload.message || `Request failed (${response.status})`);
+        const error = new Error(parsed?.django ? parsed.message || `Request failed (${response.status})` : payload.detail || payload.message || `Request failed (${response.status})`);
         error.status = response.status;
         error.code = payload.code || (isCloudflareChallenge(response,text) ? 'EDGE_CHALLENGE' : 'API_ERROR');
         error.isEdgeChallenge = error.code === 'EDGE_CHALLENGE';
