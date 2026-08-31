@@ -1,60 +1,135 @@
-from .services import PortfolioService, PerformanceService, CashFlowService
+"""Portfolio Correlation Service - Real correlation calculations."""
+import numpy as np
+import pandas as pd
+import logging
+from scipy.stats import spearmanr, kendalltau
 
-
-class OptimizationService:
-    def optimize(self, assets, method="mean_variance", constraints=None):
-        assets = list(assets or [])
-        weight = 1 / len(assets) if assets else 0
-        return {"method": method, "weights": {asset: weight for asset in assets}, "constraints": constraints or {}}
-
-
-class DiversificationService:
-    def analyze(self, allocations):
-        buckets = {}
-        for item in allocations:
-            key = getattr(item, "symbol", None) or item.get("symbol", "cash")
-            buckets[key] = buckets.get(key, 0) + float(getattr(item, "allocation_percent", item.get("allocation_percent", 0)))
-        return {"asset_diversification": buckets, "concentration": max(buckets.values()) if buckets else 0}
+log = logging.getLogger(__name__)
 
 
 class CorrelationService:
+    """Calculate correlation matrices between portfolio assets."""
+    
     def matrix(self, series_by_name, method="pearson"):
-        names = list(series_by_name.keys())
-        return {a: {b: (1.0 if a == b else 0.0) for b in names} for a in names}
-
-
-class ExposureService:
-    def summarize(self, exposures):
-        summary = {}
-        for item in exposures:
-            key = getattr(item, "market", None) or item.get("market", "unknown")
-            summary[key] = summary.get(key, 0) + float(getattr(item, "exposure", item.get("exposure", 0)))
-        return summary
-
-
-class BenchmarkService:
-    def compare(self, portfolio_return, benchmark_return):
-        return {"portfolio_return": portfolio_return, "benchmark_return": benchmark_return, "excess_return": portfolio_return - benchmark_return}
-
-
-class ForecastingService:
-    def forecast(self, returns, period="30d"):
-        returns = list(returns or [])
-        expected = sum(returns) / len(returns) if returns else 0
-        return {"forecast_period": period, "expected_return": expected, "expected_drawdown": min(returns) if returns else 0, "confidence": 0.75 if returns else 0.25}
-
-
-class ReportingService:
-    def generate(self, portfolio, report_type="executive", export_format="json"):
-        return {"portfolio": portfolio.name, "report_type": report_type, "format": export_format, "nav": float(portfolio.net_asset_value)}
-
-
-class RebalancingService:
-    def suggestions(self, portfolio, threshold=5):
-        return [{"symbol": a.symbol, "current": float(a.allocation_percent), "target": float(a.allocation_percent), "action": "hold"} for a in portfolio.allocations.all()]
-
-
-class PerformanceAttributionService:
-    def attribute(self, returns_by_dimension):
-        total = sum(returns_by_dimension.values()) if returns_by_dimension else 0
-        return {k: {"return": v, "contribution": (v / total if total else 0)} for k, v in (returns_by_dimension or {}).items()}
+        """
+        Calculate correlation matrix between assets.
+        
+        Args:
+            series_by_name: Dict of {symbol: [returns_list]} or {symbol: numpy.array}
+            method: 'pearson' (default), 'spearman', 'kendall'
+        
+        Returns:
+            Dict of {symbol: {symbol: correlation_value}}
+        """
+        if not series_by_name or len(series_by_name) == 0:
+            return {}
+        
+        try:
+            # Convert to DataFrame for easier handling
+            df = pd.DataFrame(series_by_name)
+            
+            if len(df) < 2:
+                # Insufficient data, return identity matrix
+                return self._identity_matrix(list(series_by_name.keys()))
+            
+            if method == "pearson":
+                corr = df.corr(method='pearson')
+            elif method == "spearman":
+                corr = df.corr(method='spearman')
+            elif method == "kendall":
+                corr = df.corr(method='kendall')
+            else:
+                corr = df.corr(method='pearson')
+            
+            # Convert to nested dict format
+            return corr.to_dict()
+        
+        except Exception as e:
+            log.warning(f"Correlation calculation failed: {e}", extra={'method': method, 'n_series': len(series_by_name)})
+            # Return identity matrix as fallback
+            return self._identity_matrix(list(series_by_name.keys()))
+    
+    def rolling_correlation(self, series_by_name, window=30, method="pearson"):
+        """
+        Calculate rolling correlation matrices over time.
+        
+        Args:
+            series_by_name: Dict of {symbol: [returns_list]}
+            window: Rolling window size in periods
+            method: 'pearson', 'spearman', 'kendall'
+        
+        Returns:
+            List of correlation dicts, one per rolling window
+        """
+        if not series_by_name or len(series_by_name) == 0:
+            return []
+        
+        try:
+            df = pd.DataFrame(series_by_name)
+            
+            if len(df) < window:
+                return [self.matrix(series_by_name, method)]
+            
+            rolling_corrs = []
+            for i in range(len(df) - window + 1):
+                window_data = df.iloc[i:i+window]
+                if method == "pearson":
+                    corr = window_data.corr(method='pearson')
+                elif method == "spearman":
+                    corr = window_data.corr(method='spearman')
+                elif method == "kendall":
+                    corr = window_data.corr(method='kendall')
+                else:
+                    corr = window_data.corr(method='pearson')
+                
+                rolling_corrs.append(corr.to_dict())
+            
+            return rolling_corrs
+        
+        except Exception as e:
+            log.warning(f"Rolling correlation failed: {e}")
+            return []
+    
+    def correlation_decay(self, series_by_name, alpha=0.95, method="pearson"):
+        """
+        Calculate correlation with exponential decay weighting (recent data weighted more).
+        
+        Args:
+            series_by_name: Dict of {symbol: [returns_list]}
+            alpha: Decay factor (0-1), higher = more recent focus
+            method: 'pearson', 'spearman', 'kendall'
+        
+        Returns:
+            Dict correlation matrix with exponential weighting
+        """
+        if not series_by_name or len(series_by_name) == 0:
+            return {}
+        
+        try:
+            df = pd.DataFrame(series_by_name)
+            n = len(df)
+            
+            # Create exponential weights: older data weighted less
+            weights = np.array([alpha ** (n - i - 1) for i in range(n)])
+            weights = weights / np.sum(weights)  # Normalize
+            
+            # Calculate weighted correlation
+            means = (df * weights).sum(axis=0)
+            centered = df - means
+            cov_weighted = (centered * weights).T @ centered
+            
+            # Calculate correlation from weighted covariance
+            stds = np.sqrt(np.diag(cov_weighted))
+            corr = cov_weighted / np.outer(stds, stds)
+            
+            corr_df = pd.DataFrame(corr, index=df.columns, columns=df.columns)
+            return corr_df.to_dict()
+        
+        except Exception as e:
+            log.warning(f"Decay correlation failed: {e}")
+            return self._identity_matrix(list(series_by_name.keys()))
+    
+    @staticmethod
+    def _identity_matrix(symbols):
+        """Generate identity correlation matrix as fallback."""
+        return {s: {other: (1.0 if s == other else 0.0) for other in symbols} for s in symbols}
