@@ -30,24 +30,29 @@ class StrategyConfiguration(models.Model):
     strategy = models.ForeignKey(Strategy, on_delete=models.CASCADE, related_name='configurations')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='strategy_configurations')
     broker_account = models.ForeignKey(
-        'brokers.BrokerAccount',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='strategy_configurations',
+        'brokers.BrokerAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='strategy_configurations'
     )
+    criteria = models.JSONField(default=dict, blank=True)
     parameters = models.JSONField(default=dict, blank=True)
     timeframe = models.CharField(max_length=16, default='M1', db_index=True)
     symbol = models.CharField(max_length=40, db_index=True)
     risk_profile = models.CharField(max_length=32, choices=[(x, x.title()) for x in c.RISK_PROFILES], default='balanced')
     schedule = models.CharField(max_length=32, choices=[(x, x.replace('_', ' ').title()) for x in c.SCHEDULE_TYPES], default='every_candle')
     enabled = models.BooleanField(default=True, db_index=True)
+    is_active = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = [('strategy', 'user', 'symbol', 'timeframe')]
-        indexes = [models.Index(fields=['user', 'enabled']), models.Index(fields=['symbol', 'timeframe'])]
+        indexes = [
+            models.Index(fields=['user', 'enabled']),
+            models.Index(fields=['user', 'is_active'], name='strategies_u_active_idx'),
+            models.Index(fields=['symbol', 'timeframe']),
+        ]
+
+    def __str__(self):
+        return f'{self.strategy.slug}:{self.symbol}:{self.timeframe}'
 
 
 class StrategyExecution(models.Model):
