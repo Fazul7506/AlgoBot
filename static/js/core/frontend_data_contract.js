@@ -29,16 +29,8 @@
       const messageNode = documentNode.querySelector('[data-response-message], [data-django-message]');
       let payload = {};
       if (payloadNode?.textContent) payload = JSON.parse(payloadNode.textContent);
-      return {
-        django: true,
-        status: Number(envelope.dataset.status || response.status || 200),
-        kind: envelope.dataset.kind || 'info',
-        message: messageNode?.textContent?.trim() || '',
-        payload
-      };
-    } catch (_) {
-      return null;
-    }
+      return {django:true,status:Number(envelope.dataset.status || response.status || 200),kind:envelope.dataset.kind || 'info',message:messageNode?.textContent?.trim() || '',payload};
+    } catch (_) { return null; }
   };
   const parsePayload = (response, text) => {
     const django = parseDjangoResponse(response, text);
@@ -52,7 +44,7 @@
   };
   async function fetchOnce(url, options, controller, sameOrigin = false) {
     const method = (options.method || 'GET').toUpperCase();
-    const headers = {Accept:'text/html, application/json', ...(options.headers || {})};
+    const headers = {Accept:'application/json, text/html', ...(options.headers || {})};
     if (!['GET','HEAD','OPTIONS'].includes(method) && !headers['X-CSRFToken']) headers['X-CSRFToken'] = csrf();
     const target = sameOrigin ? url : resolveUrl(url);
     const crossOrigin = (() => { try { return new URL(target, window.location.origin).origin !== window.location.origin; } catch (_) { return false; } })();
