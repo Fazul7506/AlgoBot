@@ -32,8 +32,6 @@ class StrategyConfiguration(models.Model):
     broker_account = models.ForeignKey(
         'brokers.BrokerAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='strategy_configurations'
     )
-    # criteria is the human/business-facing rule set; parameters remains the
-    # strategy-engine parameter bag for backwards compatibility.
     criteria = models.JSONField(default=dict, blank=True)
     parameters = models.JSONField(default=dict, blank=True)
     timeframe = models.CharField(max_length=16, default='M1', db_index=True)
@@ -49,7 +47,7 @@ class StrategyConfiguration(models.Model):
         unique_together = [('strategy', 'user', 'symbol', 'timeframe')]
         indexes = [
             models.Index(fields=['user', 'enabled']),
-            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['user', 'is_active'], name='strategies_u_active_idx'),
             models.Index(fields=['symbol', 'timeframe']),
         ]
 
