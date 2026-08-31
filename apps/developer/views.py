@@ -3,7 +3,6 @@ from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
 from django.shortcuts import render
 from rest_framework.authentication import SessionAuthentication
 
@@ -17,23 +16,36 @@ AUTH_CLASSES = [APIKeyAuthentication, SessionAuthentication]
 RESPONSE_TEMPLATE = "developer/response.html"
 
 
+def _safe_call(request, label, callback, default):
+    try:
+        return callback()
+    except Exception as exc:
+        messages.error(request, f"{label} is temporarily unavailable: {exc}")
+        return default
+
+
 @login_required
 def dashboard(request):
-    context = {"page_title": "Developer Platform", **DeveloperPlatformService().dashboard()}
-    context["documentation"] = DocumentationService().publish().payload
-    context["sdk_languages"] = SDKService.languages
-    context["api_keys"] = APIKeySerializer(APIKey.objects.filter(user=request.user).order_by("-created_at"), many=True).data
-    context["webhooks"] = WebhookSerializer(Webhook.objects.filter(user=request.user).order_by("-created_at"), many=True).data
-    context["analytics"] = AnalyticsService().aggregate(user=request.user)
-    return render(request, "developer/dashboard.html", context)
+    platform = _safe_call(request, "Developer platform", lambda: DeveloperPlatformService().dashboard(), {})
+    documentation = _safe_call(request, "API documentation", lambda: DocumentationService().publish().payload, {})
+    analytics = _safe_call(request, "Developer analytics", lambda: AnalyticsService().aggregate(user=request.user), {})
+    api_keys = _safe_call(request, "API keys", lambda: APIKeySerializer(APIKey.objects.filter(user=request.user).order_by("-created_at"), many=True).data, [])
+    webhooks = _safe_call(request, "Webhooks", lambda: WebhookSerializer(Webhook.objects.filter(user=request.user).order_by("-created_at"), many=True).data, [])
+    return render(request, "developer/dashboard.html", {
+        "page_title": "Developer Platform",
+        **platform,
+        "documentation": documentation,
+        "sdk_languages": SDKService.languages,
+        "api_keys": api_keys,
+        "webhooks": webhooks,
+        "analytics": analytics,
+    })
 
 
 @login_required
 def api_explorer(request):
-    return render(request, "developer/api_explorer.html", {
-        "page_title": "API Explorer",
-        "documentation": DocumentationService().publish().payload,
-    })
+    documentation = _safe_call(request, "API documentation", lambda: DocumentationService().publish().payload, {})
+    return render(request, "developer/api_explorer.html", {"page_title": "API Explorer", "documentation": documentation})
 
 
 @login_required
@@ -147,8 +159,8 @@ def key_revoke(request, pk):
 
 @_developer_endpoint(HasDeveloperAdminScope)
 def key_delete(request, pk):
-    if request.method != "POST":
-        return _django_response(request, title="Method not allowed", message="Delete API keys with POST.", status=405, kind="error")
+    if request.method not in {"POST", "DELETE"}:
+        return _django_response(request, title="Method not allowed", message="Delete API keys with POST or DELETE.", status=405, kind="error")
     try:
         api_key = APIKey.objects.get(pk=pk, user=request.user)
     except APIKey.DoesNotExist:
