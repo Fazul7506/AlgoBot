@@ -20,7 +20,10 @@ def _safe_call(request, label, callback, default):
     try:
         return callback()
     except Exception as exc:
-        messages.error(request, f"{label} is temporarily unavailable: {exc}")
+        try:
+            messages.error(request, f"{label} is temporarily unavailable: {exc}")
+        except Exception:
+            pass
         return default
 
 
@@ -83,7 +86,10 @@ def _payload(request):
 
 def _django_response(request, *, title, payload=None, message="", status=200, kind="info"):
     if message:
-        messages.add_message(request, messages.SUCCESS if kind == "success" else messages.ERROR if kind == "error" else messages.INFO, message)
+        try:
+            messages.add_message(request, messages.SUCCESS if kind == "success" else messages.ERROR if kind == "error" else messages.INFO, message)
+        except Exception:
+            pass
     return render(request, RESPONSE_TEMPLATE, {
         "response_title": title,
         "response_message": message,
@@ -142,7 +148,7 @@ def key_rotate(request, pk):
     if not api_key.is_active():
         return _django_response(request, title="API key cannot be rotated", message="Only active keys can be rotated.", status=400, kind="error")
     _, raw_secret = APIKeyService().rotate(api_key)
-    return _django_response(request, title="API key rotated", payload={"id": api_key.id, "key": str(api_key.key), "secret": raw_secret, "warning": "Store both the API key and secret securely. They will not be shown again."}, message="API key rotated successfully.", kind="success")
+    return _django_response(request, title="API key rotated", payload={"id": api_key.id, "key": str(api_key.key), "secret": raw_secret, "warning": "Store both the API key and secret. They will not be shown again."}, message="API key rotated successfully.", kind="success")
 
 
 @_developer_endpoint(HasDeveloperAdminScope)
