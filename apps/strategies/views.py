@@ -99,17 +99,26 @@ class StrategyViewSet(viewsets.ModelViewSet):
                 return response.Response({'detail': 'Broker account not found for this user.'}, status=404)
         else:
             # Research/configuration records may exist before a broker is connected.
-            # If the user has a preferred account, bind it automatically; activation
-            # and live execution still require a valid account downstream.
+            # When available, bind the user's preferred account automatically.
             account = BrokerAccount.objects.filter(user=request.user, is_preferred=True).first()
+        if make_active and account is None:
+            return response.Response({'detail': 'An active strategy requires a broker account.'}, status=409)
         with transaction.atomic():
-            if make_active and account is None:
-                return response.Response({'detail': 'An active strategy requires a broker account.'}, status=409)
             if make_active:
                 StrategyConfiguration.objects.select_for_update().filter(user=request.user, is_active=True).update(is_active=False)
             configuration, _ = StrategyConfiguration.objects.update_or_create(
-                strategy=strategy, user=request.user, symbol=symbol, timeframe=timeframe,
-                defaults={'criteria': criteria, 'parameters': parameters, 'risk_profile': risk_profile, 'schedule': schedule, 'broker_account': account, 'is_active': make_active},
+                strategy=strategy,
+                user=request.user,
+                symbol=symbol,
+                timeframe=timeframe,
+                defaults={
+                    'criteria': criteria,
+                    'parameters': parameters,
+                    'risk_profile': risk_profile,
+                    'schedule': schedule,
+                    'broker_account': account,
+                    'is_active': make_active,
+                },
             )
         return response.Response({'status': 'success', 'message': 'Strategy configuration saved. No live order was placed.', 'configuration': StrategyConfigurationSerializer(configuration).data})
 
@@ -122,14 +131,27 @@ class StrategyViewSet(viewsets.ModelViewSet):
         criteria = request.data.get('criteria', {})
         errors = []
         warnings = []
-        if not symbol: errors.append('Broker symbol is required.')
-        if timeframe not in {'M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'}: errors.append(f'Unsupported timeframe: {timeframe}.')
-        if not isinstance(parameters, dict): errors.append('Parameter grid must be a JSON object.')
-        if not isinstance(criteria, dict): errors.append('Criteria must be a JSON object.')
-        if isinstance(parameters, dict) and not parameters: warnings.append('No parameter overrides supplied; strategy defaults will be used.')
-        if isinstance(criteria, dict) and not criteria: warnings.append('No criteria supplied; strategy defaults will be used.')
+        if not symbol:
+            errors.append('Broker symbol is required.')
+        if timeframe not in {'M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'}:
+            errors.append(f'Unsupported timeframe: {timeframe}.')
+        if not isinstance(parameters, dict):
+            errors.append('Parameter grid must be a JSON object.')
+        if not isinstance(criteria, dict):
+            errors.append('Criteria must be a JSON object.')
+        if isinstance(parameters, dict) and not parameters:
+            warnings.append('No parameter overrides supplied; strategy defaults will be used.')
+        if isinstance(criteria, dict) and not criteria:
+            warnings.append('No criteria supplied; strategy defaults will be used.')
         warnings.append('Validation is research-only. Live execution remains behind broker and risk gates.')
-        return response.Response({'status': 'valid' if not errors else 'invalid', 'strategy': strategy.slug, 'errors': errors, 'warnings': warnings, 'ready_for_backtest': not errors, 'ready_for_live_trade': False}, status=200 if not errors else 400)
+        return response.Response({
+            'status': 'valid' if not errors else 'invalid',
+            'strategy': strategy.slug,
+            'errors': errors,
+            'warnings': warnings,
+            'ready_for_backtest': not errors,
+            'ready_for_live_trade': False,
+        }, status=200 if not errors else 400)
 
     @decorators.action(detail=False, methods=['post'])
     def run(self, request):
@@ -163,4 +185,4 @@ class StrategyViewSet(viewsets.ModelViewSet):
     def signals(self, request):
         strategy_ids = self._user_configs().values_list('strategy_id', flat=True).distinct()
         signals = StrategySignal.objects.filter(strategy_id__in=strategy_ids).select_related('strategy').order_by('-timestamp')[:100]
-        return response.Response(StrategySignalSerializer(signals, many=True).data
+        return response.Response(StrategySignalSerializer(signals, many=True).data)
