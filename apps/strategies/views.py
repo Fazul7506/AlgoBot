@@ -98,10 +98,13 @@ class StrategyViewSet(viewsets.ModelViewSet):
             if account is None:
                 return response.Response({'detail': 'Broker account not found for this user.'}, status=404)
         else:
+            # Research/configuration records may exist before a broker is connected.
+            # If the user has a preferred account, bind it automatically; activation
+            # and live execution still require a valid account downstream.
             account = BrokerAccount.objects.filter(user=request.user, is_preferred=True).first()
-        if account is None:
-            return response.Response({'detail': 'Select/connect a broker account before configuring a strategy.'}, status=409)
         with transaction.atomic():
+            if make_active and account is None:
+                return response.Response({'detail': 'An active strategy requires a broker account.'}, status=409)
             if make_active:
                 StrategyConfiguration.objects.select_for_update().filter(user=request.user, is_active=True).update(is_active=False)
             configuration, _ = StrategyConfiguration.objects.update_or_create(
@@ -160,4 +163,4 @@ class StrategyViewSet(viewsets.ModelViewSet):
     def signals(self, request):
         strategy_ids = self._user_configs().values_list('strategy_id', flat=True).distinct()
         signals = StrategySignal.objects.filter(strategy_id__in=strategy_ids).select_related('strategy').order_by('-timestamp')[:100]
-        return response.Response(StrategySignalSerializer(signals, many=True).data)
+        return response.Response(StrategySignalSerializer(signals, many=True).data
