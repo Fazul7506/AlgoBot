@@ -1,12 +1,11 @@
 import secrets
+from functools import wraps
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import render
-from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 
 from .authentication import APIKeyAuthentication
 from .models import APIKey, Integration, Plugin, Webhook
@@ -15,16 +14,26 @@ from .serializers import APIKeyCreateSerializer, APIKeySerializer, IntegrationSe
 from .services import AnalyticsService, APIKeyService, DeveloperPlatformService, DocumentationService, SandboxService, SDKService, WebhookService
 
 AUTH_CLASSES = [APIKeyAuthentication, SessionAuthentication]
+RESPONSE_TEMPLATE = "developer/response.html"
 
 
 @login_required
 def dashboard(request):
-    return render(request, "developer/dashboard.html", {"page_title": "Developer Platform", **DeveloperPlatformService().dashboard()})
+    context = {"page_title": "Developer Platform", **DeveloperPlatformService().dashboard()}
+    context["documentation"] = DocumentationService().publish().payload
+    context["sdk_languages"] = SDKService.languages
+    context["api_keys"] = APIKeySerializer(APIKey.objects.filter(user=request.user).order_by("-created_at"), many=True).data
+    context["webhooks"] = WebhookSerializer(Webhook.objects.filter(user=request.user).order_by("-created_at"), many=True).data
+    context["analytics"] = AnalyticsService().aggregate(user=request.user)
+    return render(request, "developer/dashboard.html", context)
 
 
 @login_required
 def api_explorer(request):
-    return render(request, "developer/api_explorer.html", {"page_title": "API Explorer"})
+    return render(request, "developer/api_explorer.html", {
+        "page_title": "API Explorer",
+        "documentation": DocumentationService().publish().payload,
+    })
 
 
 @login_required
@@ -32,165 +41,207 @@ def api_status(request):
     return render(request, "developer/api_status.html", {"page_title": "API Status"})
 
 
-def _developer_permissions(scope):
-    return [IsAuthenticated, scope]
+def _authenticate(request):
+    if getattr(request.user, "is_authenticated", False):
+        return True
+    for auth_class in AUTH_CLASSES:
+        try:
+            result = auth_class().authenticate(request)
+        except Exception:
+            continue
+        if result:
+            request.user, request.auth = result
+            return True
+    return False
 
 
-@api_view(["GET"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperScope))
+def _payload(request):
+    data = request.POST.copy()
+    if data:
+        return data
+    if request.body:
+        try:
+            import json
+            parsed = json.loads(request.body.decode("utf-8"))
+            return parsed if isinstance(parsed, dict) else {}
+        except (ValueError, UnicodeDecodeError):
+            return {}
+    return {}
+
+
+def _django_response(request, *, title, payload=None, message="", status=200, kind="info"):
+    if message:
+        messages.add_message(request, messages.SUCCESS if kind == "success" else messages.ERROR if kind == "error" else messages.INFO, message)
+    return render(request, RESPONSE_TEMPLATE, {
+        "response_title": title,
+        "response_message": message,
+        "response_payload": payload if payload is not None else {},
+        "response_status": status,
+        "response_kind": kind,
+    }, status=status)
+
+
+def _developer_endpoint(scope):
+    def decorator(view):
+        @wraps(view)
+        def wrapped(request, *args, **kwargs):
+            if not _authenticate(request):
+                return _django_response(request, title="Authentication required", message="Sign in with an authenticated AlgoBot session or valid API key.", status=401, kind="error")
+            permission = scope()
+            if not permission.has_permission(request, view):
+                return _django_response(request, title="Access denied", message=permission.message, status=403, kind="error")
+            try:
+                return view(request, *args, **kwargs)
+            except Exception as exc:
+                return _django_response(request, title="Developer service error", message=f"The developer service could not complete the request: {exc}", status=500, kind="error")
+        return wrapped
+    return decorator
+
+
+@_developer_endpoint(HasDeveloperScope)
 def keys(request):
     rows = APIKey.objects.filter(user=request.user).order_by("-created_at")
-    return Response(APIKeySerializer(rows, many=True).data)
+    return _django_response(request, title="API keys", payload=APIKeySerializer(rows, many=True).data, message="API keys loaded.", kind="info")
 
 
-@api_view(["POST"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperAdminScope))
+@_developer_endpoint(HasDeveloperAdminScope)
 def key_create(request):
-    serializer = APIKeyCreateSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Create API keys with POST.", status=405, kind="error")
+    serializer = APIKeyCreateSerializer(data=_payload(request))
+    if not serializer.is_valid():
+        return _django_response(request, title="Invalid API key request", payload={"errors": serializer.errors}, message="Please correct the API key details.", status=400, kind="error")
     api_key, secret = APIKeyService().create(request.user, serializer.validated_data["name"], serializer.validated_data.get("permissions"), serializer.validated_data.get("expires_at"))
     data = APIKeySerializer(api_key).data
     data["key"] = str(api_key.key)
     data["secret"] = secret
-    data["warning"] = "Store both the API key and secret securely. They will not be shown again after this dialog is closed."
-    return Response(data, status=status.HTTP_201_CREATED)
+    data["warning"] = "Store both the API key and secret securely. They will not be shown again after this response."
+    return _django_response(request, title="API key created", payload=data, message="API key created. Copy the secret now; it will not be shown again.", kind="success", status=201)
 
 
-@api_view(["POST"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperAdminScope))
+@_developer_endpoint(HasDeveloperAdminScope)
 def key_rotate(request, pk):
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Rotate API keys with POST.", status=405, kind="error")
     try:
         api_key = APIKey.objects.get(pk=pk, user=request.user)
     except APIKey.DoesNotExist:
-        return Response({"detail": "Not found"}, status=404)
+        return _django_response(request, title="API key not found", message="The requested API key does not exist.", status=404, kind="error")
     if not api_key.is_active():
-        return Response({"detail": "Only active keys can be rotated"}, status=400)
+        return _django_response(request, title="API key cannot be rotated", message="Only active keys can be rotated.", status=400, kind="error")
     _, raw_secret = APIKeyService().rotate(api_key)
-    return Response({"id": api_key.id, "key": str(api_key.key), "secret": raw_secret, "warning": "Store both the API key and secret securely. They will not be shown again."})
+    return _django_response(request, title="API key rotated", payload={"id": api_key.id, "key": str(api_key.key), "secret": raw_secret, "warning": "Store both the API key and secret securely. They will not be shown again."}, message="API key rotated successfully.", kind="success")
 
 
-@api_view(["POST"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperAdminScope))
+@_developer_endpoint(HasDeveloperAdminScope)
 def key_revoke(request, pk):
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Revoke API keys with POST.", status=405, kind="error")
     try:
         api_key = APIKey.objects.get(pk=pk, user=request.user)
     except APIKey.DoesNotExist:
-        return Response({"detail": "Not found"}, status=404)
+        return _django_response(request, title="API key not found", message="The requested API key does not exist.", status=404, kind="error")
     APIKeyService().revoke(api_key)
-    return Response(APIKeySerializer(api_key).data)
+    return _django_response(request, title="API key revoked", payload=APIKeySerializer(api_key).data, message="API key revoked.", kind="success")
 
 
-@api_view(["DELETE"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperAdminScope))
+@_developer_endpoint(HasDeveloperAdminScope)
 def key_delete(request, pk):
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Delete API keys with POST.", status=405, kind="error")
     try:
         api_key = APIKey.objects.get(pk=pk, user=request.user)
     except APIKey.DoesNotExist:
-        return Response({"detail": "Not found"}, status=404)
+        return _django_response(request, title="API key not found", message="The requested API key does not exist.", status=404, kind="error")
     api_key.delete()
-    return Response(status=status.HTTP_204_NO_CONTENT)
+    return _django_response(request, title="API key deleted", payload={}, message="API key deleted.", kind="success")
 
 
-@api_view(["GET"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperScope))
+@_developer_endpoint(HasDeveloperScope)
 def plugins(request):
-    return Response(PluginSerializer(Plugin.objects.all().order_by("name", "version"), many=True).data)
+    return _django_response(request, title="Plugins", payload=PluginSerializer(Plugin.objects.all().order_by("name", "version"), many=True).data)
 
 
-@api_view(["POST"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperAdminScope))
+@_developer_endpoint(HasDeveloperAdminScope)
 def install_plugin(request):
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Install plugins with POST.", status=405, kind="error")
     try:
-        plugin = Plugin.objects.get(pk=request.data.get("plugin_id"))
+        plugin = Plugin.objects.get(pk=_payload(request).get("plugin_id"))
     except Plugin.DoesNotExist:
-        return Response({"detail": "Plugin not found"}, status=404)
+        return _django_response(request, title="Plugin not found", message="The requested plugin does not exist.", status=404, kind="error")
     plugin.status = "active"
     plugin.save(update_fields=["status"])
-    return Response(PluginSerializer(plugin).data)
+    return _django_response(request, title="Plugin installed", payload=PluginSerializer(plugin).data, message="Plugin activated.", kind="success")
 
 
-@api_view(["GET"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperScope))
+@_developer_endpoint(HasDeveloperScope)
 def webhooks(request):
     rows = Webhook.objects.filter(user=request.user).order_by("-created_at")
-    return Response(WebhookSerializer(rows, many=True).data)
+    return _django_response(request, title="Webhooks", payload=WebhookSerializer(rows, many=True).data)
 
 
-@api_view(["POST"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasWebhookScope))
+@_developer_endpoint(HasWebhookScope)
 def webhook_create(request):
-    data = request.data.copy()
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Create webhooks with POST.", status=405, kind="error")
+    data = _payload(request)
     url = str(data.get("url", "")).strip()
     events = data.get("events", [])
+    if isinstance(events, str):
+        events = [event.strip() for event in events.split(",") if event.strip()]
     if not isinstance(events, list):
-        return Response({"detail": "events must be an array"}, status=400)
+        return _django_response(request, title="Invalid webhook events", message="events must be a list.", status=400, kind="error")
     unknown_events = sorted(set(events) - set(WebhookService.EVENT_NAMES))
     if unknown_events:
-        return Response({"detail": f"Unsupported webhook events: {', '.join(unknown_events)}"}, status=400)
+        return _django_response(request, title="Unsupported webhook events", message=f"Unsupported webhook events: {', '.join(unknown_events)}", status=400, kind="error")
     try:
         WebhookService().validate_url(url)
     except ValueError as exc:
-        return Response({"detail": str(exc)}, status=400)
+        return _django_response(request, title="Invalid webhook URL", message=str(exc), status=400, kind="error")
     secret = secrets.token_urlsafe(32)
     obj = Webhook.objects.create(user=request.user, url=url, events=events, secret=secret)
     result = WebhookSerializer(obj).data
     result["secret"] = secret
     result["warning"] = "Store this signing secret securely. It will not be shown again."
-    return Response(result, status=201)
+    return _django_response(request, title="Webhook created", payload=result, message="Webhook created. Save its signing secret now.", kind="success", status=201)
 
 
-@api_view(["POST"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasWebhookScope))
+@_developer_endpoint(HasWebhookScope)
 def webhook_test(request, pk):
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Test webhooks with POST.", status=405, kind="error")
     try:
         webhook = Webhook.objects.get(pk=pk, user=request.user)
     except Webhook.DoesNotExist:
-        return Response({"detail": "Not found"}, status=404)
-    result = WebhookService().deliver(webhook, request.data.get("event", "test"), request.data.get("payload", {}))
-    return Response(result.payload, status=200 if result.status in {"delivered", "queued", "skipped"} else 502)
+        return _django_response(request, title="Webhook not found", message="The requested webhook does not exist.", status=404, kind="error")
+    data = _payload(request)
+    result = WebhookService().deliver(webhook, data.get("event", "test"), data.get("payload", {}))
+    status_code = 200 if result.status in {"delivered", "queued", "skipped"} else 502
+    return _django_response(request, title="Webhook test", payload=result.payload, message=f"Webhook test: {result.status}.", status=status_code, kind="success" if status_code == 200 else "error")
 
 
-@api_view(["GET"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperScope))
+@_developer_endpoint(HasDeveloperScope)
 def sdk(request):
-    return Response({"languages": SDKService.languages})
+    return _django_response(request, title="SDK information", payload={"languages": SDKService.languages})
 
 
-@api_view(["GET"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperScope))
+@_developer_endpoint(HasDeveloperScope)
 def docs(request):
-    return Response(DocumentationService().publish().payload)
+    return _django_response(request, title="API documentation", payload=DocumentationService().publish().payload)
 
 
-@api_view(["GET"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasAnalyticsScope))
+@_developer_endpoint(HasAnalyticsScope)
 def analytics(request):
-    return Response(AnalyticsService().aggregate(user=request.user))
+    return _django_response(request, title="Developer analytics", payload=AnalyticsService().aggregate(user=request.user))
 
 
-@api_view(["GET"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperScope))
+@_developer_endpoint(HasDeveloperScope)
 def sandbox(request):
-    return Response(SandboxService().provision(request.user))
+    return _django_response(request, title="Sandbox", payload=SandboxService().provision(request.user), message="Sandbox provisioned.", kind="success")
 
 
-@api_view(["GET"])
-@authentication_classes(AUTH_CLASSES)
-@permission_classes(_developer_permissions(HasDeveloperScope))
+@_developer_endpoint(HasDeveloperScope)
 def integrations(request):
     rows = Integration.objects.all().order_by("provider")
-    return Response(IntegrationSerializer(rows, many=True).data)
+    return _django_response(request, title="Integrations", payload=IntegrationSerializer(rows, many=True).data)
