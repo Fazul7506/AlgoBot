@@ -25,9 +25,10 @@ DERIV_OPTIONS_ACCOUNTS_URL = env("DERIV_OPTIONS_ACCOUNTS_URL", f"{DERIV_API_BASE
 DERIV_PUBLIC_WS_URL = env("DERIV_PUBLIC_WS_URL", "wss://api.derivws.com/trading/v1/options/ws/public")
 DERIV_AUTH_WS_BASE_URL = env("DERIV_AUTH_WS_BASE_URL", DERIV_PUBLIC_WS_URL)
 
-# Account selection is a control-plane operation and must not depend on live
-# trading being enabled. Live order submission remains separately gated.
-ENABLE_BROKER_ACCOUNT_SWITCH = env_bool("ENABLE_BROKER_ACCOUNT_SWITCH", True)
+# Account selection is a control-plane operation and must remain available to
+# authenticated users. Live order submission and broker connectivity remain
+# separately gated by their own authoritative checks.
+ENABLE_BROKER_ACCOUNT_SWITCH = True
 
 BROKER_APP_ID = env("BROKER_APP_ID", DERIV_APP_ID)
 BROKER_WS_URL = env("BROKER_WS_URL", DERIV_PUBLIC_WS_URL)
