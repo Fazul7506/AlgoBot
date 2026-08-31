@@ -1,4 +1,4 @@
-.app-sidebar { z-index: 1000; }
+.app-sidebar { z-index: 1000; overscroll-behavior: contain; overflow-anchor: none; }
 .sidebar-header, .topbar-actions, .sidebar-user { min-width: 0; }
 .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sidebar-header .brand { min-width: 0; display: inline-flex; align-items: center; gap: 10px; }
@@ -99,7 +99,7 @@
   #django-message-stack.toast-stack { top: max(60px, env(safe-area-inset-top) + 48px); right: max(10px, env(safe-area-inset-right) + 8px); width: min(380px, calc(100vw - 20px)); max-width: calc(100vw - 20px); }
   #django-message-stack.toast-stack .toast { max-height: 120px; }
   .mobile-menu-button { display: grid; place-items: center; }
-  .app-sidebar { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); transform: translate3d(-105%,0,0); transition: transform .22s ease; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .app-sidebar { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); transform: translate3d(-105%,0,0); transition: transform .22s ease; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
   .app-sidebar.is-open { transform: translate3d(0,0,0); }
   .app-sidebar.is-collapsed + .app-shell, .app-shell.sidebar-collapsed { margin-left: 0; }
   .app-shell { margin-left: 0 !important; }

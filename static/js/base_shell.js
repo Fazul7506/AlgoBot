@@ -8,6 +8,7 @@
   const stack = () => $('#django-message-stack');
   const MESSAGE_LIMIT = 5;
   const MESSAGE_TTL = 5000;
+  const SIDEBAR_SCROLL_KEY = 'algobot.sidebar.scroll.';
 
   function setBrokerStateAttribute(event) {
     const state = event?.detail?.state || window.AlgoBotBrokerState?.get() || {};
@@ -106,12 +107,80 @@
     });
   }
 
+  function currentPath() {
+    return window.location.pathname.replace(/\/+$/, '') || '/';
+  }
+
+  function navigationLinks() {
+    return [...document.querySelectorAll('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')];
+  }
+
+  function routeMatches(path, href) {
+    if (!href || href === '#') return false;
+    try {
+      const url = new URL(href, window.location.origin);
+      const target = url.pathname.replace(/\/+$/, '') || '/';
+      if (target === '/') return path === '/';
+      return path === target || path.startsWith(`${target}/`);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function syncActiveNavigation() {
+    const path = currentPath();
+    const links = navigationLinks();
+    let active = null;
+    let activeLength = -1;
+    links.forEach(link => {
+      const href = link.getAttribute('href');
+      const matched = routeMatches(path, href);
+      link.classList.remove('active');
+      link.removeAttribute('aria-current');
+      if (matched && href && href.length > activeLength) {
+        active = link;
+        activeLength = href.length;
+      }
+    });
+    if (active) {
+      active.classList.add('active');
+      active.setAttribute('aria-current', 'page');
+    }
+  }
+
+  function bindSidebarScrollState(sidebar) {
+    if (sidebar.dataset.scrollStateBound === 'true') return;
+    sidebar.dataset.scrollStateBound = 'true';
+    const keyForPath = () => `${SIDEBAR_SCROLL_KEY}${encodeURIComponent(currentPath())}`;
+    const restore = () => {
+      try {
+        const saved = Number.parseInt(sessionStorage.getItem(keyForPath()) || '', 10);
+        if (Number.isFinite(saved) && saved >= 0) sidebar.scrollTop = saved;
+      } catch (_) { /* storage unavailable */ }
+      // Restoring scroll must never change the route or active navigation item.
+      syncActiveNavigation();
+    };
+    let saveTimer = null;
+    sidebar.addEventListener('scroll', () => {
+      syncActiveNavigation();
+      if (saveTimer) window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(() => {
+        try { sessionStorage.setItem(keyForPath(), String(sidebar.scrollTop)); } catch (_) { /* storage unavailable */ }
+      }, 80);
+    }, { passive: true });
+    window.addEventListener('pageshow', restore);
+    window.addEventListener('load', restore, { once: true });
+    restore();
+  }
+
   function bindNavigation() {
     const sidebar = $('#app-sidebar');
     if (!sidebar || sidebar.dataset.navigationBound === 'true') return;
     sidebar.dataset.navigationBound = 'true';
     const backdrop = $('[data-sidebar-backdrop]'); const mobile = $('[data-mobile-menu]');
     const toggle = $('[data-sidebar-toggle]'); const shell = $('.app-shell'); const storageKey = 'algobot.sidebar.collapsed';
+    syncActiveNavigation();
+    bindSidebarScrollState(sidebar);
     const setMobileOpen = open => {
       const next = !!open; sidebar.classList.toggle('is-open', next);
       if (backdrop) backdrop.hidden = !next;
@@ -135,10 +204,10 @@
         try { localStorage.setItem(storageKey, collapsed ? '1' : '0'); } catch (_) { /* storage unavailable */ }
       };
       try { if (window.innerWidth > 900 && localStorage.getItem(storageKey) === '1') setCollapsed(true); } catch (_) { /* storage unavailable */ }
-      toggle.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); setCollapsed(!sidebar.classList.contains('is-collapsed')); });
+      toggle.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); setCollapsed(!sidebar.classList.contains('is-collapsed')); syncActiveNavigation(); });
     }
     document.addEventListener('keydown', event => { if (event.key === 'Escape') setMobileOpen(false); });
-    window.addEventListener('resize', () => { if (window.innerWidth > 900) setMobileOpen(false); });
+    window.addEventListener('resize', () => { if (window.innerWidth > 900) setMobileOpen(false); syncActiveNavigation(); });
   }
 
   function bindTheme() {
