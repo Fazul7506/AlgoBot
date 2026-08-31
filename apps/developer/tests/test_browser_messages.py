@@ -14,7 +14,8 @@ class DeveloperBrowserMessagesTests(TestCase):
         response = self.client.get("/developer/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Developer API")
-        self.assertNotContains(response, "AlgoBotFrontendData.request")
+        self.assertNotContains(response, "data-dev-keys")
+        self.assertNotContains(response, "data-dev-webhooks")
         self.assertNotContains(response, "Backend returned an unexpected HTML response")
 
     def test_create_key_uses_django_message_and_one_time_session_reveal(self):
@@ -24,12 +25,12 @@ class DeveloperBrowserMessagesTests(TestCase):
         )
         self.assertRedirects(response, "/developer/")
         self.assertEqual(APIKey.objects.filter(user=self.user).count(), 1)
-        self.assertEqual(len(list(response.wsgi_request._messages)), 1)
 
         dashboard = self.client.get("/developer/")
         self.assertEqual(dashboard.status_code, 200)
         self.assertContains(dashboard, "Save this secret now")
         self.assertContains(dashboard, "Browser production")
+        self.assertContains(dashboard, "API key created successfully")
 
         # Secret reveal is consumed after the redirect GET and is not replayed.
         second = self.client.get("/developer/")
@@ -50,3 +51,4 @@ class DeveloperBrowserMessagesTests(TestCase):
         self.assertEqual(Webhook.objects.filter(user=self.user).count(), 1)
         dashboard = self.client.get("/developer/")
         self.assertContains(dashboard, "Signing secret")
+        self.assertContains(dashboard, "Webhook created successfully")
