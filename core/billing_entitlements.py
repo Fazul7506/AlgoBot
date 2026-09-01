@@ -33,10 +33,25 @@ RESETTABLE_METRICS = {"api_calls", "backtests", "predictions", "orders", "automa
 
 
 def subscription_for(user):
-    subscription,_=Subscription.objects.get_or_create(user=user,defaults={"plan":"FREE"}); return subscription
+    """Return the user's subscription, never attempting a DB lookup for anonymous users."""
+    if not getattr(user, "is_authenticated", False):
+        return None
+    subscription,_=Subscription.objects.get_or_create(user=user,defaults={"plan":"FREE"})
+    return subscription
+
 
 def effective_plan(user):
-    subscription=subscription_for(user); key=str(subscription.plan or "FREE").upper()
+    """Return a safe FREE entitlement for anonymous requests.
+
+    Middleware and error-handling paths can legitimately see AnonymousUser.  Billing
+    code must never pass that sentinel into a ForeignKey query, which otherwise
+    raises ``TypeError: Field 'id' expected a number`` and turns an auth failure
+    into an HTTP 500.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return PLAN_ENTITLEMENTS["FREE"]
+    subscription=subscription_for(user)
+    key=str(subscription.plan or "FREE").upper()
     if key not in PLAN_ENTITLEMENTS: key="FREE"
     if key!="FREE" and (not subscription.is_active or (subscription.expires_at and subscription.expires_at<=timezone.now())): key="FREE"
     return PLAN_ENTITLEMENTS[key]
@@ -87,7 +102,10 @@ def check(user,metric,amount=1,window="day"):
 def check_live_order(user): return check(user,"live_orders")
 
 def entitlement_payload(user):
-    plan=effective_plan(user); subscription=subscription_for(user); items={}
+    plan=effective_plan(user); subscription=subscription_for(user)
+    if subscription is None:
+        return {"plan": plan.key, "name": plan.name, "active": False, "expires_at": None, "priority": plan.priority, "support": plan.support, "features": {"live_trading": True, "advanced_ai": plan.advanced_ai}, "usage": {}, "reset_at": reset_at("day").isoformat(), "reset_policy": {"daily":"Every day at 00:00 UTC", "minute":"Every minute; applies to the trading API-call burst limit", "subscription":"Paid-plan entitlements fall back to FREE when the subscription expires; usage meters reset automatically", "capacity":"Connected broker-account and active-strategy limits are capacity limits, not expiring counters"}}
+    items={}
     for metric in ("api_calls","strategies","backtests","predictions","orders","broker_accounts","automations","live_orders"):
         limit=limit_for(plan,metric); current=usage(user,metric); window="day"
         item={"used":current,"limit":None if limit<0 else limit,"unlimited":limit<0,"remaining":None if limit<0 else max(0,limit-current)}
@@ -97,7 +115,3 @@ def entitlement_payload(user):
             item.update({"reset_at":None,"reset_window":None,"limit_type":"capacity"})
         items[metric]=item
     return {"plan":plan.key,"name":plan.name,"active":bool(subscription.is_active and (not subscription.expires_at or subscription.expires_at>timezone.now())),"expires_at":subscription.expires_at.isoformat() if subscription.expires_at else None,"priority":plan.priority,"support":plan.support,"features":{"live_trading":True,"advanced_ai":plan.advanced_ai},"usage":items,"reset_at":reset_at("day").isoformat(),"reset_policy":{"daily":"Every day at 00:00 UTC","minute":"Every minute; applies to the trading API-call burst limit","subscription":"Paid-plan entitlements fall back to FREE when the subscription expires; usage meters reset automatically","capacity":"Connected broker-account and active-strategy limits are capacity limits, not expiring counters"}}
-
-def rate_limit_response_data(user,metric,window,current,limit):
-    plan=effective_plan(user); reset=reset_at(window)
-    return {"code":"PLAN_LIMIT_REACHED","detail":f"{FEATURE_LABELS.get(metric,metric)} limit reached for {plan.name}.","plan":plan.key,"metric":metric,"used":current,"limit":limit,"reset_at":reset.isoformat(),"reset_window":window,"upgrade_available":plan.key!="ENTERPRISE"}
