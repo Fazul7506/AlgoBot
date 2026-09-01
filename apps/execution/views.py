@@ -45,8 +45,16 @@ class OrderViewSet(viewsets.ModelViewSet):
                 log.exception('Terminal live execution failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
                 return response.Response({'status':'rejected','code':'EXECUTION_UNAVAILABLE','detail':f'Broker execution could not be completed: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             return response.Response(self.get_serializer(order).data, status=status.HTTP_201_CREATED)
-        try: order = ExecutionEngine().place_order(request.user, **data)
-        except PermissionError as exc: return response.Response({'status':'rejected','code':'ORDER_RISK_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
+        try:
+            if strategy_selected:
+                order = ExecutionEngine().place_consensus_order(request.user, timeframe='M1', context=None, risk_context={}, **data)
+            else:
+                order = ExecutionEngine().place_order(request.user, **data)
+        except PermissionError as exc:
+            return response.Response({'status':'rejected','code':'ORDER_RISK_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
+        except Exception as exc:
+            log.exception('Terminal demo execution failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
+            return response.Response({'status':'rejected','code':'EXECUTION_UNAVAILABLE','detail':f'Broker execution could not be completed: {exc}','retryable':False}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return response.Response(self.get_serializer(order).data, status=status.HTTP_201_CREATED)
     @decorators.action(detail=False, methods=['post'])
     def preview(self, request):
@@ -99,7 +107,12 @@ class OrderViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=True, methods=['post'])
     def cancel(self, request, pk=None): return response.Response(OrderSerializer(ExecutionEngine().cancel_order(self.get_object())).data)
     @decorators.action(detail=True, methods=['post'])
-    def retry(self, request, pk=None): ExecutionEngine().retry(self.get_object()); return response.Response({'status':'queued'})
+    def retry(self, request, pk=None):
+        order = self.get_object()
+        if order.status in {'sent', 'unknown'}:
+            return response.Response({'status':'rejected','code':'EXECUTION_RETRY_FORBIDDEN','detail':'Broker execution state is uncertain. Reconcile the order with the broker before any retry.','retryable':False}, status=status.HTTP_409_CONFLICT)
+        ExecutionEngine().retry(order)
+        return response.Response({'status':'queued'})
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PositionSerializer; permission_classes=[permissions.IsAuthenticated]
