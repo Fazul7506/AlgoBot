@@ -2,13 +2,40 @@
 from __future__ import annotations
 
 from django.http import JsonResponse
+from django.utils import timezone
 from core.billing_entitlements import (
     EXECUTION_METHODS,
     EXECUTION_PATH_PREFIXES,
     check,
     effective_plan,
-    rate_limit_response_data,
+    FEATURE_LABELS,
+    reset_at,
 )
+
+
+def rate_limit_response_data(user, metric, window, current, limit):
+    """Build the stable JSON response for an exhausted plan quota."""
+    plan = effective_plan(user)
+    reset = reset_at(window)
+    retry_after = max(0, int((reset - timezone.now()).total_seconds()))
+    remaining = None if limit < 0 else max(0, limit - current)
+    label = FEATURE_LABELS.get(metric, metric.replace("_", " "))
+    return {
+        "detail": f"{label} quota exceeded for the {window} window.",
+        "code": "plan_quota_exceeded",
+        "metric": metric,
+        "metric_label": label,
+        "window": window,
+        "used": current,
+        "limit": None if limit < 0 else limit,
+        "remaining": remaining,
+        "unlimited": limit < 0,
+        "reset_at": reset.isoformat(),
+        "retry_after_seconds": retry_after,
+        "plan": plan.key,
+        "plan_name": plan.name,
+        "upgrade_available": plan.key != "ENTERPRISE",
+    }
 
 
 class PlanEntitlementMiddleware:
