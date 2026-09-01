@@ -11,7 +11,7 @@ import uuid
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Optional
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 from django.conf import settings
@@ -53,9 +53,6 @@ class PaymentService:
             return self._configuration_error("INTASEND_PUBLIC_KEY")
         amount, currency = self._amount_and_currency(subscription_plan)
         api_ref = self._reference("IS", user, subscription_plan)
-        # IntaSend's redirect_url schema rejects several otherwise-valid URL
-        # query characters. The payment reference is already carried by
-        # api_ref and the provider webhook, so keep the redirect URL clean.
         redirect_url = self._callback_url("BILLING_SUCCESS_URL", "/billing/success/")
         host_url = self._base_url()
         payload = {
@@ -88,6 +85,8 @@ class PaymentService:
             return self._configuration_error("PESAPAL_NOTIFICATION_ID")
         amount, currency = self._amount_and_currency(subscription_plan)
         reference = self._reference("PP", user, subscription_plan)
+        # Pesapal validates callback/cancellation URLs as absolute provider-safe
+        # URLs. Never forward query strings/fragments or malformed BASE_URL data.
         callback_url = self._callback_url("PESAPAL_CALLBACK_URL", "/payments/pesapal/callback/")
         cancellation_url = self._callback_url("PESAPAL_CANCELLATION_URL", "/billing/cancel/")
         token = self._pesapal_access_token()
@@ -280,11 +279,16 @@ class PaymentService:
         return f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}" or "https://algobot.dpdns.org"
 
     def _callback_url(self, setting_name, default_path, params=None):
-        configured = str(getattr(settings, setting_name, "") or "").strip().strip('"').strip("'").rstrip("/")
+        configured = str(getattr(settings, setting_name, "") or "").strip().strip('"').strip("'")
         if configured:
             parsed = urlsplit(configured)
             if parsed.scheme in {"http", "https"} and parsed.netloc and not any(ch.isspace() for ch in configured):
-                base = configured
+                # Payment providers expect a simple absolute callback URL.
+                # Drop query/fragment components instead of forwarding arbitrary
+                # characters that may violate provider URL validation.
+                base = urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
+                if not base.endswith("/"):
+                    base += "/"
             else:
                 logger.error("Invalid %s payment callback URL; falling back to BASE_URL", setting_name)
                 base = f"{self._base_url()}{default_path}"
@@ -331,50 +335,46 @@ class PaymentService:
     def _parse_payload(payload):
         if isinstance(payload, dict): return payload
         import json
-        try: return json.loads(payload.decode("utf-8") if isinstance(payload, bytes) else payload)
+        try: return json.loads(payload or b"{}")
         except (TypeError, ValueError): return {}
 
     @staticmethod
     def _normalise_status(value):
-        value = str(value or "").strip().upper()
-        if value in {"COMPLETE", "COMPLETED", "SUCCESS", "SUCCEEDED", "PAID"}: return "succeeded"
-        if value in {"FAILED", "FAILURE", "INVALID", "REVERSED", "CANCELLED", "CANCELED"}: return "failed"
+        value = str(value or "").strip().lower()
+        if value in {"completed", "complete", "paid", "successful", "success", "succeeded"}: return "succeeded"
+        if value in {"failed", "failure", "cancelled", "canceled", "invalid", "reversed"}: return "failed"
         return "pending"
 
     @staticmethod
-    def _to_minor_units(value):
-        try: return int((Decimal(str(value or 0)) * Decimal("100")).quantize(Decimal("1")))
-        except (InvalidOperation, ValueError, TypeError): return 0
+    def _to_minor_units(amount):
+        try: return int((Decimal(str(amount or 0)) * Decimal("100")).quantize(Decimal("1")))
+        except (InvalidOperation, ValueError): return 0
 
     @staticmethod
     def _user_id_from_metadata(metadata):
         if not isinstance(metadata, dict): return None
-        direct = metadata.get("user_id") or metadata.get("userId")
-        if direct:
-            try: return int(direct)
-            except (TypeError, ValueError): pass
-        nested = metadata.get("metadata")
+        for key in ("user_id", "userid", "merchant_reference", "api_ref", "reference", "orderMerchantReference", "OrderMerchantReference"):
+            value = metadata.get(key)
+            if value:
+                text = str(value)
+                parts = text.split("-")
+                for part in parts:
+                    if part.isdigit(): return int(part)
+        nested = metadata.get("pesapal")
         if isinstance(nested, dict): return PaymentService._user_id_from_metadata(nested)
-        api_ref = metadata.get("api_ref") or metadata.get("reference")
-        if api_ref:
-            parts = str(api_ref).split("-")
-            if len(parts) >= 3 and parts[0] in {"IS", "PP"}:
-                try: return int(parts[1])
-                except (TypeError, ValueError): pass
-        merchant_reference = metadata.get("merchant_reference") or metadata.get("OrderMerchantReference")
-        if merchant_reference:
-            parts = str(merchant_reference).split("-")
-            if len(parts) >= 3 and parts[0] in {"IS", "PP"}:
-                try: return int(parts[1])
-                except (TypeError, ValueError): pass
         return None
 
     @staticmethod
     def _plan_from_metadata(metadata):
         if not isinstance(metadata, dict): return ""
-        direct = str(metadata.get("plan") or metadata.get("plan_key") or "").upper()
-        if direct: return direct
-        api_ref = str(metadata.get("api_ref") or metadata.get("reference") or metadata.get("merchant_reference") or "")
-        parts = api_ref.split("-")
-        if len(parts) >= 3 and parts[0] in {"IS", "PP"}: return parts[2].upper()
+        for key in ("plan", "subscription_plan"):
+            value = metadata.get(key)
+            if value: return str(value).upper()
+        for key in ("api_ref", "reference", "merchant_reference", "OrderMerchantReference", "orderMerchantReference"):
+            value = metadata.get(key)
+            if value:
+                parts = str(value).split("-")
+                if len(parts) >= 3: return parts[2].upper()
+        nested = metadata.get("pesapal")
+        if isinstance(nested, dict): return PaymentService._plan_from_metadata(nested)
         return ""
