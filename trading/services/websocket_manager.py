@@ -13,7 +13,7 @@ DERIV_PUBLIC_WS = "wss://api.derivws.com/trading/v1/options/ws/public"
 
 
 class WebSocketManager:
-    """Manages Deriv's public market-data WebSocket with reconnects/subscriptions."""
+    """Manages Deriv public market-data WebSocket with bounded reconnects."""
 
     def __init__(self, uri: str = DERIV_PUBLIC_WS):
         self.uri = uri or DERIV_PUBLIC_WS
@@ -23,19 +23,16 @@ class WebSocketManager:
         self.message_handlers: List[Callable] = []
         self.is_connected = False
         self.reconnect_delay = 3
-        self.max_retries = 5
+        # A failed data stream must fail closed instead of recursively retrying
+        # and multiplying connection load during an outage.
+        self.max_retries = 1
         self.retry_count = 0
         self.app_id = None
         self._listener_task = None
         self._closing = False
 
     async def connect(self, app_id: str | None = None):
-        """Connect to public market data.
-
-        The current public Deriv endpoint does not require authentication or an
-        app_id query parameter. Authenticated trading connections are created
-        separately through the account OTP flow in the broker adapter.
-        """
+        """Connect to public market data without an unbounded retry loop."""
         if self.is_connected and self.ws:
             return
         self.app_id = app_id
@@ -60,6 +57,7 @@ class WebSocketManager:
 
     async def _reconnect(self, app_id: str | None = None):
         if self._closing or self.retry_count >= self.max_retries:
+            logger.warning("Deriv market-data reconnect budget exhausted; remaining in degraded state")
             return
         self.retry_count += 1
         await asyncio.sleep(self.reconnect_delay)
@@ -111,7 +109,7 @@ class WebSocketManager:
         except Exception:
             self.is_connected = False
             if not self._closing:
-                logger.exception("WebSocket listener stopped; reconnecting")
+                logger.exception("WebSocket listener stopped; entering degraded state")
                 await self._reconnect(self.app_id)
 
     async def disconnect(self):
