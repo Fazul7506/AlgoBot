@@ -1,163 +1,177 @@
-"""Portfolio Optimization Service - Real implementations with numpy/scipy."""
-import numpy as np
+"""Data-driven portfolio optimization service."""
+from __future__ import annotations
+
 import logging
+from typing import Any
+
+import numpy as np
 from scipy.optimize import minimize
-from decimal import Decimal
+from sklearn.covariance import LedoitWolf
 
 log = logging.getLogger(__name__)
 
 
 class OptimizationService:
-    """Multi-method portfolio optimization using real algorithms."""
-    
+    """Optimize portfolio weights from supplied historical return observations."""
+
+    METHODS = {"equal_weight", "mean_variance", "min_variance", "max_sharpe", "risk_parity"}
+
     def optimize(self, assets, method="mean_variance", constraints=None, returns_data=None):
-        """
-        Optimize portfolio weights using specified method.
-        
-        Args:
-            assets: List of dicts with 'symbol', 'returns' (historical returns array), or list of symbols
-            method: 'equal_weight', 'mean_variance', 'min_variance', 'max_sharpe', 'risk_parity'
-            constraints: Dict with 'min_weight', 'max_weight', 'sector_limits'
-            returns_data: Optional dict mapping symbols to return series
-        
-        Returns:
-            Dict with 'method', 'weights', 'expected_return', 'expected_volatility', 'sharpe_ratio'
-        """
-        # Handle different input formats
+        assets = list(assets or [])
         if not assets:
-            return {"method": method, "weights": {}, "error": "No assets provided"}
-        
-        # Extract symbols and returns
-        symbols = []
-        returns_matrix = None
-        
-        if isinstance(assets[0], dict) and 'returns' in assets[0]:
-            symbols = [a.get('symbol', f'asset_{i}') for i, a in enumerate(assets)]
-            try:
-                returns_matrix = np.array([a['returns'] for a in assets], dtype=float).T
-            except (ValueError, TypeError, KeyError):
-                return self._equal_weight_fallback(assets, "Data format error")
-        elif isinstance(assets[0], str):
-            symbols = assets
-            if returns_data:
-                try:
-                    returns_matrix = np.array([returns_data[s] for s in symbols], dtype=float).T
-                except (KeyError, TypeError):
-                    return self._equal_weight_fallback(symbols, "Returns data incomplete")
-        else:
-            return self._equal_weight_fallback(assets, "Unknown asset format")
-        
-        # If no returns data, fall back to equal weight
-        if returns_matrix is None or returns_matrix.size == 0 or len(returns_matrix) < 2:
-            return self._equal_weight_fallback(symbols, "Insufficient historical data")
-        
+            return {"method": method, "weights": {}, "success": False, "error": "No assets provided"}
+        if method not in self.METHODS:
+            raise ValueError(f"Unsupported optimization method: {method}")
+
+        symbols, matrix = self._prepare_returns(assets, returns_data)
         n = len(symbols)
-        
-        try:
-            # Calculate returns and covariance
-            mean_returns = np.mean(returns_matrix, axis=0)
-            cov_matrix = np.cov(returns_matrix.T)
-            
-            # Handle case of single asset (0-d cov matrix)
-            if cov_matrix.ndim == 0:
-                cov_matrix = np.array([[float(cov_matrix)]])
-            
-            # Apply selected optimization method
-            if method == "equal_weight":
-                weights = np.array([1/n] * n)
-            elif method == "min_variance":
-                weights = self._min_variance_weights(cov_matrix, n, constraints)
-            elif method == "max_sharpe":
-                weights = self._max_sharpe_weights(mean_returns, cov_matrix, n, constraints)
-            elif method == "risk_parity":
-                weights = self._risk_parity_weights(cov_matrix, n, constraints)
-            elif method == "mean_variance":  # Default to Min Variance
-                weights = self._min_variance_weights(cov_matrix, n, constraints)
-            else:
-                weights = np.array([1/n] * n)
-            
-            # Ensure weights sum to 1
-            weights = np.clip(weights, 0, 1)
-            weights = weights / np.sum(weights)
-            
-            # Calculate portfolio metrics
-            expected_return = float(np.sum(mean_returns * weights) * 252)  # Annualized
-            portfolio_vol = float(np.sqrt(np.dot(weights, np.dot(cov_matrix, weights))) * np.sqrt(252))
-            sharpe = float(expected_return / portfolio_vol) if portfolio_vol > 0 else 0
-            
-            return {
-                "method": method,
-                "weights": {sym: float(w) for sym, w in zip(symbols, weights)},
-                "expected_return": expected_return,
-                "expected_volatility": portfolio_vol,
-                "sharpe_ratio": sharpe,
-                "n_assets": n,
-                "success": True
-            }
-        
-        except Exception as e:
-            log.warning(f"Optimization failed: {e}", extra={'method': method, 'n_assets': n})
-            return self._equal_weight_fallback(symbols, str(e))
-    
-    @staticmethod
-    def _equal_weight_fallback(symbols, reason=""):
-        """Fallback to equal-weighted portfolio."""
-        n = len(symbols) if isinstance(symbols, list) else 1
-        weight = 1.0 / max(n, 1)
+        if n == 0:
+            return {"method": method, "weights": {}, "success": False, "error": "No valid assets provided"}
+        if matrix.shape[0] < max(3, n + 1):
+            return self._equal_weight_result(symbols, method, "Insufficient historical observations")
+
+        # Ledoit-Wolf produces a positive, shrunk covariance estimate that is
+        # materially safer for optimization than a raw sample covariance matrix.
+        mean_returns = np.nanmean(matrix, axis=0)
+        covariance = LedoitWolf().fit(matrix).covariance_
+        covariance = (covariance + covariance.T) / 2.0
+
+        if method == "equal_weight":
+            weights = np.full(n, 1.0 / n)
+        elif method == "min_variance":
+            weights = self._solve_min_variance(covariance, constraints)
+        elif method == "max_sharpe":
+            weights = self._solve_max_sharpe(mean_returns, covariance, constraints)
+        elif method == "risk_parity":
+            weights = self._solve_risk_parity(covariance, constraints)
+        else:
+            # Mean-variance maximizes return subject to a configurable risk
+            # aversion. This is distinct from pure minimum-variance optimization.
+            risk_aversion = float((constraints or {}).get("risk_aversion", 1.0))
+            weights = self._solve_mean_variance(mean_returns, covariance, risk_aversion, constraints)
+
+        weights = self._project_weights(weights, constraints)
+        expected_return = float(np.dot(mean_returns, weights) * 252.0)
+        volatility = float(np.sqrt(max(np.dot(weights, covariance @ weights), 0.0)) * np.sqrt(252.0))
+        sharpe = float(expected_return / volatility) if volatility > 0 else 0.0
+
         return {
-            "method": "equal_weight",
-            "weights": {str(s): weight for s in (symbols if isinstance(symbols, list) else [symbols])},
-            "expected_return": 0,
-            "expected_volatility": 0,
-            "sharpe_ratio": 0,
-            "fallback": True,
-            "reason": reason
+            "method": method,
+            "weights": {symbol: float(weight) for symbol, weight in zip(symbols, weights)},
+            "expected_return": expected_return,
+            "expected_volatility": volatility,
+            "sharpe_ratio": sharpe,
+            "n_assets": n,
+            "observations": int(matrix.shape[0]),
+            "success": True,
+            "fallback": False,
         }
-    
+
     @staticmethod
-    def _min_variance_weights(cov_matrix, n, constraints=None):
-        """Minimize portfolio variance."""
+    def _prepare_returns(assets, returns_data):
+        if isinstance(assets[0], dict):
+            symbols = [str(item.get("symbol", f"asset_{i}")) for i, item in enumerate(assets)]
+            series = [item.get("returns") for item in assets]
+        elif all(isinstance(item, str) for item in assets):
+            symbols = [str(item) for item in assets]
+            series = [(returns_data or {}).get(symbol) for symbol in symbols]
+        else:
+            raise TypeError("assets must be a list of mappings or symbols")
+
+        valid = [(symbol, values) for symbol, values in zip(symbols, series) if values is not None]
+        if not valid:
+            return [], np.empty((0, 0))
+        symbols = [symbol for symbol, _ in valid]
+        matrix = np.asarray([list(values) for _, values in valid], dtype=float).T
+        if matrix.ndim != 2:
+            raise ValueError("Historical returns must be one-dimensional numeric series")
+        if np.isnan(matrix).all(axis=0).any():
+            keep = ~np.isnan(matrix).all(axis=0)
+            matrix, symbols = matrix[:, keep], [s for s, k in zip(symbols, keep) if k]
+        # Pairwise missing observations are not suitable for covariance fitting;
+        # remove incomplete rows rather than inventing values.
+        matrix = matrix[~np.isnan(matrix).any(axis=1)]
+        return symbols, matrix
+
+    @staticmethod
+    def _bounds(constraints, n):
+        constraints = constraints or {}
+        min_w = float(constraints.get("min_weight", 0.0))
+        max_w = float(constraints.get("max_weight", 1.0))
+        if min_w < 0 or max_w > 1 or min_w > max_w or n * min_w > 1 or n * max_w < 1:
+            raise ValueError("Infeasible min_weight/max_weight constraints")
+        return tuple((min_w, max_w) for _ in range(n))
+
+    @classmethod
+    def _solve(cls, objective, n, constraints):
+        result = minimize(
+            objective,
+            np.full(n, 1.0 / n),
+            method="SLSQP",
+            bounds=cls._bounds(constraints, n),
+            constraints={"type": "eq", "fun": lambda w: np.sum(w) - 1.0},
+            options={"ftol": 1e-10, "maxiter": 1000},
+        )
+        if not result.success:
+            raise ValueError(f"Optimization did not converge: {result.message}")
+        return result.x
+
+    @classmethod
+    def _solve_min_variance(cls, covariance, constraints):
+        return cls._solve(lambda w: float(w @ covariance @ w), covariance.shape[0], constraints)
+
+    @classmethod
+    def _solve_max_sharpe(cls, returns, covariance, constraints):
         def objective(w):
-            return np.dot(w, np.dot(cov_matrix, w))
-        
-        init_guess = np.array([1/n] * n)
-        bounds = ((constraints.get('min_weight', 0), constraints.get('max_weight', 1)) for _ in range(n)) if constraints else tuple((0, 1) for _ in range(n))
-        cons = {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}
-        
-        try:
-            result = minimize(objective, init_guess, method='SLSQP', bounds=bounds, constraints=cons, options={'ftol': 1e-9})
-            return result.x if result.success else init_guess
-        except:
-            return init_guess
-    
+            volatility = np.sqrt(max(float(w @ covariance @ w), 0.0))
+            return -float(w @ returns) / volatility if volatility > 1e-12 else 1e6
+
+        return cls._solve(objective, len(returns), constraints)
+
+    @classmethod
+    def _solve_mean_variance(cls, returns, covariance, risk_aversion, constraints):
+        if risk_aversion <= 0:
+            raise ValueError("risk_aversion must be greater than zero")
+        return cls._solve(
+            lambda w: -(w @ returns) + risk_aversion * float(w @ covariance @ w),
+            len(returns),
+            constraints,
+        )
+
+    @classmethod
+    def _solve_risk_parity(cls, covariance, constraints):
+        n = covariance.shape[0]
+
+        def objective(w):
+            portfolio_vol = np.sqrt(max(float(w @ covariance @ w), 1e-16))
+            marginal = covariance @ w / portfolio_vol
+            contributions = w * marginal
+            target = np.mean(contributions)
+            return float(np.sum((contributions - target) ** 2))
+
+        return cls._solve(objective, n, constraints)
+
     @staticmethod
-    def _max_sharpe_weights(returns, cov_matrix, n, constraints=None):
-        """Maximize Sharpe ratio."""
-        def neg_sharpe(w):
-            port_return = np.sum(returns * w)
-            port_vol = np.sqrt(np.dot(w, np.dot(cov_matrix, w)))
-            return -port_return / port_vol if port_vol > 1e-8 else 0
-        
-        init_guess = np.array([1/n] * n)
-        bounds = ((constraints.get('min_weight', 0), constraints.get('max_weight', 1)) for _ in range(n)) if constraints else tuple((0, 1) for _ in range(n))
-        cons = {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}
-        
-        try:
-            result = minimize(neg_sharpe, init_guess, method='SLSQP', bounds=bounds, constraints=cons, options={'ftol': 1e-9})
-            return result.x if result.success else init_guess
-        except:
-            return init_guess
-    
+    def _project_weights(weights, constraints):
+        weights = np.asarray(weights, dtype=float)
+        if not np.isfinite(weights).all() or weights.sum() <= 0:
+            raise ValueError("Optimizer produced invalid weights")
+        weights = np.clip(weights, 0.0, 1.0)
+        weights /= weights.sum()
+        return weights
+
     @staticmethod
-    def _risk_parity_weights(cov_matrix, n, constraints=None):
-        """Allocate inversely to volatility (risk parity)."""
-        try:
-            volatilities = np.sqrt(np.diag(cov_matrix))
-            if np.any(volatilities <= 0):
-                return np.array([1/n] * n)
-            
-            weights = 1.0 / volatilities
-            weights = np.clip(weights, constraints.get('min_weight', 0), constraints.get('max_weight', 1)) if constraints else weights
-            return weights / np.sum(weights)
-        except:
-            return np.array([1/n] * n)
+    def _equal_weight_result(symbols, requested_method, reason):
+        weight = 1.0 / len(symbols)
+        return {
+            "method": requested_method,
+            "weights": {symbol: weight for symbol in symbols},
+            "expected_return": 0.0,
+            "expected_volatility": 0.0,
+            "sharpe_ratio": 0.0,
+            "n_assets": len(symbols),
+            "observations": 0,
+            "success": False,
+            "fallback": True,
+            "reason": reason,
+        }
