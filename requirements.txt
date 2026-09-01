@@ -14,7 +14,6 @@ celery
 redis
 django-redis
 channels-redis
-
 django-anymail[brevo]
 python-dotenv
 
@@ -30,6 +29,7 @@ joblib
 xgboost
 lightgbm
 tensorflow
+statsmodels
 
 reportlab
 websockets
