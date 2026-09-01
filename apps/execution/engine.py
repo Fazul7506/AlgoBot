@@ -11,10 +11,8 @@ from apps.brokers.models import BrokerAccount
 
 class ExecutionEngine:
     def _ai_market_context(self, account, symbol, timeframe='M1'):
-        """Build AI context from the broker feed; never trust browser-supplied AI values."""
         from apps.market_data.models import Tick, Candle
-        max_age = int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30))
-        now = timezone.now()
+        max_age = int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30)); now = timezone.now()
         tick = Tick.objects.filter(symbol__symbol=symbol).order_by('-epoch', '-received_at').first()
         if tick is not None:
             age = max(0, (now - tick.received_at).total_seconds())
@@ -24,26 +22,35 @@ class ExecutionEngine:
                 return {'market_data': {'close': price, 'open': price, 'high': price, 'low': price, 'bid': float(tick.bid) if tick.bid is not None else None, 'ask': float(tick.ask) if tick.ask is not None else None, 'spread': float(tick.spread or 0), 'volume': float(tick.volume or 0), 'source': 'persisted_broker_tick', 'age_seconds': round(age, 3)}, 'candles': [{'open': float(x.open), 'high': float(x.high), 'low': float(x.low), 'close': float(x.close), 'volume': float(x.volume or 0), 'epoch': x.epoch} for x in candles]}
         async def fetch(): return await asyncio.wait_for(BrokerRegistry().adapter(account.broker, account).get_market_data(symbol), timeout=7.0)
         tick_data = asyncio.run(fetch()); price = tick_data.get('price', tick_data.get('quote'))
+        if price is None: raise ValueError('Broker returned no usable market price for the selected symbol.')
         return {'market_data': {'close': price, 'open': price, 'high': price, 'low': price, 'bid': tick_data.get('bid'), 'ask': tick_data.get('ask'), 'spread': (tick_data.get('ask') - tick_data.get('bid')) if tick_data.get('ask') is not None and tick_data.get('bid') is not None else 0, 'source': 'live_broker_tick'}}
 
     @staticmethod
     def _assert_authoritative_account(user, account):
-        if account is None or account.user_id != user.id:
-            raise PermissionError('The selected broker account does not belong to this user')
-        if not account.is_preferred:
-            raise PermissionError('The selected broker account is no longer the active account')
-        if not account.is_connection_eligible:
-            raise PermissionError('The active broker account is not connected or its credentials are not usable')
+        if account is None or account.user_id != user.id: raise PermissionError('The selected broker account does not belong to this user')
+        if not account.is_preferred: raise PermissionError('The selected broker account is no longer the active account')
+        if not account.is_connection_eligible: raise PermissionError('The active broker account is not connected or its credentials are not usable')
         return account
+
+    @staticmethod
+    def _order_persistence_data(data):
+        """Strip execution-only kwargs before constructing the Order model.
+        risk_context is validation metadata, not an Order model column.
+        """
+        persisted = dict(data)
+        risk_context = persisted.pop('risk_context', None) or {}
+        priority = persisted.pop('priority', 5)
+        persisted['validation_context'] = {**(persisted.get('validation_context') or {}), 'risk_context': risk_context}
+        return persisted, priority, risk_context
 
     def place_order(self, user, **data):
         account = self._assert_authoritative_account(user, data.get('broker_account'))
-        order = OrderService().create_order(user, **data); OrderValidationService().validate(order)
+        persisted, priority, risk_context = self._order_persistence_data(data)
+        order = OrderService().create_order(user, **persisted); OrderValidationService().validate(order)
         from apps.risk.engine import RiskEngine
-        RiskEngine().approve_or_raise(order, data.get('risk_context') or {}); ExecutionQueueService().enqueue(order, data.get('priority', 5)); return order
+        RiskEngine().approve_or_raise(order, risk_context); ExecutionQueueService().enqueue(order, priority); return order
 
     def place_consensus_order(self, user, *, symbol, timeframe='M1', context=None, risk_context=None, priority=5, **data):
-        """AI trade path: fresh broker context -> ensemble -> recommendation -> consensus gate -> risk -> queue."""
         from apps.ai_engine.services import PredictionService, RecommendationService, ConsensusDecisionGate
         account = self._assert_authoritative_account(user, data.get('broker_account')); context = context if context else self._ai_market_context(account, symbol, timeframe)
         prediction = PredictionService().predict(symbol, timeframe, context); recommendation = RecommendationService().recommend(symbol, prediction)
@@ -53,26 +60,20 @@ class ExecutionEngine:
         if direction not in {'buy', 'sell'}: raise PermissionError('Ensemble returned a non-trade decision')
         data['direction'] = direction
         data['validation_context'] = {**(data.get('validation_context') or {}), 'ai_consensus': consensus, 'ai_prediction_id': prediction.pk, 'ai_recommendation_id': recommendation.pk, 'ai_source': 'ensemble'}
-        data['risk_context'] = {**(risk_context or data.get('risk_context') or {}), 'ai_consensus_confidence': consensus.get('confidence', prediction.confidence), 'ai_consensus_decision': direction}
+        effective_risk = {**(risk_context or data.pop('risk_context', {}) or {}), 'ai_consensus_confidence': consensus.get('confidence', prediction.confidence), 'ai_consensus_decision': direction}
+        data['validation_context'] = {**data['validation_context'], 'risk_context': effective_risk}
         order = OrderService().create_order(user, **data); OrderValidationService().validate(order)
         from apps.risk.engine import RiskEngine
-        RiskEngine().approve_or_raise(order, data.get('risk_context') or {}); ExecutionQueueService().enqueue(order, priority); return order
+        RiskEngine().approve_or_raise(order, effective_risk); ExecutionQueueService().enqueue(order, priority); return order
 
     def cancel_order(self, order): return OrderService().cancel(order)
     def modify_order(self, order, **changes): return OrderService().modify(order, **changes)
 
     async def execute(self, order):
-        """Final execution boundary; re-read account authority immediately before broker submission."""
         if order.status in {c.ORDER_STATUS_ACCEPTED, c.ORDER_STATUS_EXECUTED}: return order
         if order.status in {c.ORDER_STATUS_CANCELLED, c.ORDER_STATUS_FAILED}: raise PermissionError(f'Cannot execute order in {order.status} state')
-
-        account = await asyncio.to_thread(
-            BrokerAccount.objects.select_related('broker').get,
-            pk=order.broker_account_id,
-            user_id=order.user_id,
-        )
+        account = await asyncio.to_thread(BrokerAccount.objects.select_related('broker').get, pk=order.broker_account_id, user_id=order.user_id)
         self._assert_authoritative_account(order.user, account)
-
         validation = getattr(order, 'validation_context', {}) or {}; consensus = validation.get('ai_consensus') or {}
         if validation.get('ai_source') == 'ensemble':
             decision = str(consensus.get('decision', '')).lower(); confidence = float(consensus.get('confidence', 0) or 0)
