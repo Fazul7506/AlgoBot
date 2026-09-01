@@ -11,7 +11,7 @@ import uuid
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import urlsplit
 
 import requests
 from django.conf import settings
@@ -53,12 +53,17 @@ class PaymentService:
             return self._configuration_error("INTASEND_PUBLIC_KEY")
         amount, currency = self._amount_and_currency(subscription_plan)
         api_ref = self._reference("IS", user, subscription_plan)
-        redirect_url = self._callback_url("BILLING_SUCCESS_URL", "/billing/success/", {"provider": self.INTASEND, "reference": api_ref})
+        # IntaSend's redirect_url schema rejects several otherwise-valid URL
+        # query characters. The payment reference is already carried by
+        # api_ref and the provider webhook, so keep the redirect URL clean.
+        redirect_url = self._callback_url("BILLING_SUCCESS_URL", "/billing/success/")
+        host_url = self._base_url()
         payload = {
             "amount": self._decimal_string(amount), "currency": currency.upper(), "api_ref": api_ref,
             "email": getattr(user, "email", "") or None, "first_name": getattr(user, "first_name", "") or None,
             "last_name": getattr(user, "last_name", "") or None, "country": "KE" if currency.upper() == "KES" else None,
-            "channel": "WEBSITE", "redirect_url": redirect_url, "mobile_tarrif": "BUSINESS-PAYS", "card_tarrif": "BUSINESS-PAYS",
+            "channel": "WEBSITE", "host": host_url, "redirect_url": redirect_url,
+            "mobile_tarrif": "BUSINESS-PAYS", "card_tarrif": "BUSINESS-PAYS",
         }
         self._drop_none(payload)
         try:
@@ -266,12 +271,28 @@ class PaymentService:
         return amount, str(currency or "KES")
 
     def _base_url(self):
-        return str(getattr(settings, "BASE_URL", "") or "").split(",")[0].strip().rstrip("/")
+        raw = str(getattr(settings, "BASE_URL", "") or "").strip().strip('"').strip("'")
+        base = raw.split(",", 1)[0].strip().rstrip("/")
+        parsed = urlsplit(base)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or any(ch.isspace() for ch in base):
+            logger.error("Invalid BASE_URL for payment callbacks; using production canonical URL")
+            return "https://algobot.dpdns.org"
+        return f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}" or "https://algobot.dpdns.org"
 
     def _callback_url(self, setting_name, default_path, params=None):
-        configured = str(getattr(settings, setting_name, "") or "").strip().rstrip("/")
-        base = configured or f"{self._base_url()}{default_path}"
-        return f"{base}?{urlencode(params)}" if params else base
+        configured = str(getattr(settings, setting_name, "") or "").strip().strip('"').strip("'").rstrip("/")
+        if configured:
+            parsed = urlsplit(configured)
+            if parsed.scheme in {"http", "https"} and parsed.netloc and not any(ch.isspace() for ch in configured):
+                base = configured
+            else:
+                logger.error("Invalid %s payment callback URL; falling back to BASE_URL", setting_name)
+                base = f"{self._base_url()}{default_path}"
+        else:
+            base = f"{self._base_url()}{default_path}"
+        if params:
+            logger.warning("Ignoring callback query parameters for provider-safe redirect URL")
+        return base
 
     @staticmethod
     def _reference(prefix, user, subscription_plan):
@@ -294,6 +315,9 @@ class PaymentService:
 
     @staticmethod
     def _provider_error(data):
+        if isinstance(data, dict) and isinstance(data.get("errors"), list):
+            details = [item.get("detail") or item.get("message") or item.get("code") for item in data["errors"] if isinstance(item, dict)]
+            if details: return "; ".join(str(item) for item in details if item)
         error = data.get("error") if isinstance(data, dict) else None
         if isinstance(error, dict): return error.get("message") or error.get("code") or str(error)
         return data.get("message") or data.get("detail") or str(data)
