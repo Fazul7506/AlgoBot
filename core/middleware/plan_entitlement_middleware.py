@@ -5,30 +5,28 @@ from django.utils import timezone
 from core.billing_entitlements import EXECUTION_METHODS, EXECUTION_PATH_PREFIXES, check, effective_plan, FEATURE_LABELS, reset_at
 
 def rate_limit_response_data(user, metric, window, current, limit):
-    """Build the stable JSON response for an exhausted plan quota."""
     plan=effective_plan(user); reset=reset_at(window); retry_after=max(0,int((reset-timezone.now()).total_seconds())); remaining=None if limit<0 else max(0,limit-current); label=FEATURE_LABELS.get(metric,metric.replace("_"," "))
     return {"detail":f"{label} quota exceeded for the {window} window.","code":"plan_quota_exceeded","metric":metric,"metric_label":label,"window":window,"used":current,"limit":None if limit<0 else limit,"remaining":remaining,"unlimited":limit<0,"reset_at":reset.isoformat(),"retry_after_seconds":retry_after,"plan":plan.key,"plan_name":plan.name,"upgrade_available":plan.key!="ENTERPRISE"}
 
 class PlanEntitlementMiddleware:
-    FEATURE_PATHS=(("backtests",("/api/backtesting/",)),("strategies",("/api/strategies/",)),("predictions",("/api/ai/","/api/predictions/")),("orders",("/api/orders/",)),("automations",("/api/automation/",)))
+    FEATURE_PATHS=(("backtests",("/api/backtesting/",)),("predictions",("/api/ai/","/api/predictions/")),("orders",("/api/orders/",)),("automations",("/api/automation/",)))
     BACKTEST_ACTIONS=("/backtest","/compare","/optimize")
     @staticmethod
     def _is_execution_request(request):
         return request.method.upper() in EXECUTION_METHODS and any(request.path.startswith(prefix) for prefix in EXECUTION_PATH_PREFIXES)
     @classmethod
     def _feature_metric(cls,request):
-        if request.method.upper() not in EXECUTION_METHODS: return None
-        if request.path.startswith("/api/strategies/"):
+        method=request.method.upper()
+        if method not in EXECUTION_METHODS: return None
+        if request.path.startswith("/api/strategies/") and method=="POST":
             return "backtests" if any(action in request.path for action in cls.BACKTEST_ACTIONS) else "strategies"
         for candidate,prefixes in cls.FEATURE_PATHS:
             if any(request.path.startswith(prefix) for prefix in prefixes): return candidate
         return None
     @classmethod
-    def _requires_authenticated_user(cls,request):
-        return cls._feature_metric(request) is not None or cls._is_execution_request(request)
+    def _requires_authenticated_user(cls,request): return cls._feature_metric(request) is not None or cls._is_execution_request(request)
     @staticmethod
-    def _unauthenticated_response():
-        return JsonResponse({"detail":"Authentication credentials were not provided.","code":"authentication_required"},status=401)
+    def _unauthenticated_response(): return JsonResponse({"detail":"Authentication credentials were not provided.","code":"authentication_required"},status=401)
     def __init__(self,get_response): self.get_response=get_response
     def __call__(self,request):
         is_api=request.path.startswith("/api/"); is_authenticated=bool(getattr(request.user,"is_authenticated",False))
