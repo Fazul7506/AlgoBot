@@ -1,7 +1,6 @@
 /*
  * AlgoBot broker-backed frontend state contract.
- *
- * Backend/broker data is authoritative. This module is only the observable
+ * Backend/broker data is authoritative. This module is the observable
  * browser state container shared by dashboard, terminal and other pages.
  */
 (() => {
@@ -42,8 +41,6 @@
     return snapshot();
   }
 
-  // Broker adapters have historically returned several equivalent connection
-  // labels. Normalize them here so pages cannot disagree about READY vs offline.
   function accountIsConnected(account) {
     if (!account) return false;
     if (account.is_connected === true) return true;
@@ -95,5 +92,13 @@
     return snapshot();
   }
 
-  window.AlgoBotBrokerState = Object.freeze({ STATES, get: snapshot, subscribe, transition, setConnection, setAccount, patch, reset, accountIsConnected });
+  // Compatibility aliases are intentional: older terminal modules used these
+  // names while the canonical state contract uses get()/state.account.
+  const getState = snapshot;
+  const getActiveAccount = () => snapshot().account;
+
+  window.AlgoBotBrokerState = Object.freeze({
+    STATES, get: snapshot, getState, getActiveAccount, subscribe,
+    transition, setConnection, setAccount, patch, reset, accountIsConnected
+  });
 })();
