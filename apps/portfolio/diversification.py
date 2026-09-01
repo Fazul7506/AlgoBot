@@ -1,188 +1,104 @@
-"""Portfolio Diversification Analysis Service."""
-import numpy as np
-import logging
+"""Portfolio diversification and concentration analytics."""
+from __future__ import annotations
 
-log = logging.getLogger(__name__)
+import numpy as np
 
 
 class DiversificationService:
-    """Analyze portfolio diversification metrics and concentration risk."""
-    
-    def analyze(self, allocations, volatilities=None):
-        """
-        Analyze portfolio diversification.
-        
-        Args:
-            allocations: List of allocation objects or dicts with 'symbol', 'allocation_percent'
-            volatilities: Optional dict mapping symbols to volatilities for diversification ratio
-        
-        Returns:
-            Dict with diversification metrics
-        """
-        if not allocations:
+    """Calculate concentration, effective positions and diversification ratio."""
+
+    def analyze(self, allocations, volatilities=None, correlation_matrix=None):
+        buckets = self._bucket_allocations(allocations)
+        if not buckets:
             return {
-                "asset_diversification": {},
-                "concentration": 0,
-                "herfindahl_index": 0,
-                "effective_positions": 0,
-                "diversification_score": 0,
-                "is_concentrated": False
+                "asset_diversification": {}, "concentration": 0.0,
+                "herfindahl_index": 0.0, "effective_positions": 0.0,
+                "diversification_score": 0.0, "diversification_ratio": None,
+                "is_concentrated": False, "n_assets": 0, "weights": {},
             }
-        
-        try:
-            # Extract allocations
-            buckets = {}
-            for item in allocations:
-                if isinstance(item, dict):
-                    key = item.get("symbol", "unknown")
-                    value = float(item.get("allocation_percent", 0))
-                else:
-                    key = getattr(item, "symbol", None) or "unknown"
-                    value = float(getattr(item, "allocation_percent", 0))
-                
-                buckets[key] = buckets.get(key, 0) + value
-            
-            # Convert to weights (0-1)
-            weights = np.array([v / 100.0 for v in buckets.values()]) if any(v >= 1 for v in buckets.values()) else np.array(list(buckets.values()))
-            weights = np.clip(weights, 0, 1)
-            if np.sum(weights) > 0:
-                weights = weights / np.sum(weights)
-            
-            # Calculate diversification metrics
-            hhi = self._herfindahl_index(weights)
-            n_eff = self._effective_positions(weights)
-            diversif_score = self._diversification_score(weights, len(buckets))
-            concentration = float(np.max(weights)) if len(weights) > 0 else 0
-            
-            # Diversification ratio (if volatilities provided)
-            diversif_ratio = None
-            if volatilities and len(buckets) > 0:
-                diversif_ratio = self._diversification_ratio(buckets, weights, volatilities)
-            
-            return {
-                "asset_diversification": buckets,
-                "concentration": concentration,
-                "herfindahl_index": float(hhi),
-                "effective_positions": float(n_eff),
-                "diversification_score": float(diversif_score),
-                "diversification_ratio": diversif_ratio,
-                "is_concentrated": concentration > 0.4,
-                "concentration_warning": "High concentration detected" if concentration > 0.5 else None,
-                "n_assets": len(buckets),
-                "weights": {k: float(w) for k, w in zip(buckets.keys(), weights)}
-            }
-        
-        except Exception as e:
-            log.warning(f"Diversification analysis failed: {e}")
-            return {
-                "asset_diversification": {},
-                "concentration": 0,
-                "herfindahl_index": 0,
-                "effective_positions": 0,
-                "diversification_score": 0,
-                "error": str(e)
-            }
-    
+
+        weights = np.asarray(list(buckets.values()), dtype=float)
+        if np.any(weights < 0) or weights.sum() <= 0:
+            raise ValueError("Allocations must contain non-negative values with a positive total")
+        # Accept either percentages (e.g. 40) or fractions (e.g. 0.4).
+        if weights.sum() > 1.000001:
+            weights /= 100.0
+        weights /= weights.sum()
+
+        hhi = float(np.sum(weights ** 2))
+        n_eff = float(1.0 / hhi) if hhi > 0 else 0.0
+        n_assets = len(weights)
+        min_hhi = 1.0 / n_assets
+        score = 1.0 if n_assets == 1 else float(np.clip(1.0 - (hhi - min_hhi) / (1.0 - min_hhi), 0, 1))
+        ratio = self._diversification_ratio(list(buckets), weights, volatilities, correlation_matrix)
+        concentration = float(np.max(weights))
+
+        return {
+            "asset_diversification": {key: float(value) for key, value in buckets.items()},
+            "concentration": concentration,
+            "herfindahl_index": hhi,
+            "effective_positions": n_eff,
+            "diversification_score": score,
+            "diversification_ratio": ratio,
+            "is_concentrated": concentration > 0.40,
+            "concentration_warning": "High concentration detected" if concentration > 0.50 else None,
+            "n_assets": n_assets,
+            "weights": {key: float(weight) for key, weight in zip(buckets, weights)},
+        }
+
     @staticmethod
-    def _herfindahl_index(weights):
-        """
-        Calculate Herfindahl-Hirschman Index (HHI).
-        Range: [1/n, 1]; lower = more diversified
-        Formula: HHI = sum(w_i^2)
-        """
-        return float(np.sum(weights ** 2))
-    
+    def _bucket_allocations(allocations):
+        buckets = {}
+        for item in allocations or []:
+            if isinstance(item, dict):
+                symbol = item.get("symbol", "unknown")
+                value = item.get("allocation_percent", item.get("weight", 0))
+            else:
+                symbol = getattr(item, "symbol", None) or "unknown"
+                value = getattr(item, "allocation_percent", getattr(item, "weight", 0))
+            buckets[str(symbol)] = buckets.get(str(symbol), 0.0) + float(value or 0)
+        return buckets
+
     @staticmethod
-    def _effective_positions(weights):
-        """
-        Calculate effective number of positions.
-        Formula: N_eff = 1 / HHI
-        """
-        hhi = np.sum(weights ** 2)
-        return float(1.0 / hhi) if hhi > 0 else float(len(weights))
-    
-    @staticmethod
-    def _diversification_score(weights, n_assets):
-        """
-        Calculate diversification score (0-1).
-        0 = completely concentrated, 1 = perfectly diversified
-        """
-        if n_assets <= 1:
-            return 0.0
-        
-        hhi = np.sum(weights ** 2)
-        min_hhi = 1.0 / n_assets  # Perfectly diversified HHI
-        max_hhi = 1.0  # Completely concentrated
-        
-        # Normalize HHI to 0-1 scale
-        diversif_score = 1.0 - (hhi - min_hhi) / (max_hhi - min_hhi)
-        return float(np.clip(diversif_score, 0, 1))
-    
-    @staticmethod
-    def _diversification_ratio(asset_dict, weights, volatilities):
-        """
-        Calculate diversification ratio.
-        DR = weighted average volatility / portfolio volatility
-        Higher DR = better diversification
-        """
-        try:
-            # Get portfolio volatility (assuming weights are aligned with dict keys)
-            assets = list(asset_dict.keys())
-            portfolio_vol_sq = 0
-            
-            for i, asset_i in enumerate(assets):
-                vol_i = volatilities.get(asset_i, 0.1)
-                portfolio_vol_sq += (weights[i] * vol_i) ** 2
-            
-            portfolio_vol = np.sqrt(portfolio_vol_sq)
-            
-            # Weighted average volatility
-            weighted_avg_vol = sum(weights[i] * volatilities.get(assets[i], 0.1) for i in range(len(assets)))
-            
-            if portfolio_vol > 0:
-                return float(weighted_avg_vol / portfolio_vol)
-            return 1.0
-        
-        except Exception as e:
-            log.debug(f"Diversification ratio calculation failed: {e}")
+    def _diversification_ratio(symbols, weights, volatilities, correlation_matrix):
+        if not volatilities:
             return None
-    
+        vols = np.asarray([float(volatilities.get(symbol, np.nan)) for symbol in symbols])
+        if not np.isfinite(vols).all() or np.any(vols < 0):
+            return None
+        numerator = float(weights @ vols)
+        if correlation_matrix:
+            corr = np.asarray([[float(correlation_matrix[a][b]) for b in symbols] for a in symbols], dtype=float)
+            covariance = np.outer(vols, vols) * corr
+            portfolio_vol = float(np.sqrt(max(weights @ covariance @ weights, 0.0)))
+        else:
+            # Without correlations, report the conservative diagonal estimate;
+            # callers can supply the real correlation matrix for the full metric.
+            portfolio_vol = float(np.sqrt(np.sum((weights * vols) ** 2)))
+        return float(numerator / portfolio_vol) if portfolio_vol > 0 else None
+
     @staticmethod
     def concentration_by_dimension(allocations, dimension_key="sector"):
-        """
-        Analyze concentration across a specific dimension (e.g., sector, region, market cap).
-        
-        Args:
-            allocations: List of allocation dicts with keys including dimension_key
-            dimension_key: Key to group by (e.g., 'sector', 'region', 'asset_class')
-        
-        Returns:
-            Dict with dimension breakdown and metrics
-        """
         buckets = {}
-        for item in allocations:
+        for item in allocations or []:
             if isinstance(item, dict):
                 dimension = item.get(dimension_key, "unknown")
-                value = float(item.get("allocation_percent", 0))
+                value = float(item.get("allocation_percent", 0) or 0)
             else:
                 dimension = getattr(item, dimension_key, "unknown")
-                value = float(getattr(item, "allocation_percent", 0))
-            
-            buckets[str(dimension)] = buckets.get(str(dimension), 0) + value
-        
-        weights = np.array([v / 100.0 for v in buckets.values()]) if any(v >= 1 for v in buckets.values()) else np.array(list(buckets.values()))
-        weights = np.clip(weights, 0, 1)
-        if np.sum(weights) > 0:
-            weights = weights / np.sum(weights)
-        
-        concentration = float(np.max(weights)) if len(weights) > 0 else 0
+                value = float(getattr(item, "allocation_percent", 0) or 0)
+            buckets[str(dimension)] = buckets.get(str(dimension), 0.0) + value
+        values = np.asarray(list(buckets.values()), dtype=float)
+        if values.size == 0 or values.sum() <= 0:
+            return {"dimension": dimension_key, "breakdown": {}, "concentration": 0.0, "herfindahl_index": 0.0, "effective_categories": 0.0, "is_concentrated": False}
+        weights = values / values.sum()
         hhi = float(np.sum(weights ** 2))
-        
+        concentration = float(np.max(weights))
         return {
             "dimension": dimension_key,
             "breakdown": buckets,
             "concentration": concentration,
             "herfindahl_index": hhi,
-            "effective_categories": float(1.0 / hhi) if hhi > 0 else 1.0,
-            "is_concentrated": concentration > 0.4
+            "effective_categories": float(1.0 / hhi),
+            "is_concentrated": concentration > 0.40,
         }

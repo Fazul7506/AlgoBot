@@ -1,135 +1,75 @@
-"""Portfolio Correlation Service - Real correlation calculations."""
+"""Portfolio correlation analytics using real statistical calculations."""
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
-import logging
-from scipy.stats import spearmanr, kendalltau
-
-log = logging.getLogger(__name__)
 
 
 class CorrelationService:
-    """Calculate correlation matrices between portfolio assets."""
-    
+    METHODS = {"pearson", "spearman", "kendall"}
+
     def matrix(self, series_by_name, method="pearson"):
-        """
-        Calculate correlation matrix between assets.
-        
-        Args:
-            series_by_name: Dict of {symbol: [returns_list]} or {symbol: numpy.array}
-            method: 'pearson' (default), 'spearman', 'kendall'
-        
-        Returns:
-            Dict of {symbol: {symbol: correlation_value}}
-        """
-        if not series_by_name or len(series_by_name) == 0:
+        if method not in self.METHODS:
+            raise ValueError(f"Unsupported correlation method: {method}")
+        if not series_by_name:
             return {}
-        
-        try:
-            # Convert to DataFrame for easier handling
-            df = pd.DataFrame(series_by_name)
-            
-            if len(df) < 2:
-                # Insufficient data, return identity matrix
-                return self._identity_matrix(list(series_by_name.keys()))
-            
-            if method == "pearson":
-                corr = df.corr(method='pearson')
-            elif method == "spearman":
-                corr = df.corr(method='spearman')
-            elif method == "kendall":
-                corr = df.corr(method='kendall')
-            else:
-                corr = df.corr(method='pearson')
-            
-            # Convert to nested dict format
-            return corr.to_dict()
-        
-        except Exception as e:
-            log.warning(f"Correlation calculation failed: {e}", extra={'method': method, 'n_series': len(series_by_name)})
-            # Return identity matrix as fallback
-            return self._identity_matrix(list(series_by_name.keys()))
-    
+        df = pd.DataFrame(series_by_name, dtype=float)
+        corr = df.corr(method=method, min_periods=2)
+        return self._json_safe(corr.to_dict())
+
     def rolling_correlation(self, series_by_name, window=30, method="pearson"):
-        """
-        Calculate rolling correlation matrices over time.
-        
-        Args:
-            series_by_name: Dict of {symbol: [returns_list]}
-            window: Rolling window size in periods
-            method: 'pearson', 'spearman', 'kendall'
-        
-        Returns:
-            List of correlation dicts, one per rolling window
-        """
-        if not series_by_name or len(series_by_name) == 0:
+        if method not in self.METHODS:
+            raise ValueError(f"Unsupported correlation method: {method}")
+        if window < 2:
+            raise ValueError("window must be at least 2")
+        if not series_by_name:
             return []
-        
-        try:
-            df = pd.DataFrame(series_by_name)
-            
-            if len(df) < window:
-                return [self.matrix(series_by_name, method)]
-            
-            rolling_corrs = []
-            for i in range(len(df) - window + 1):
-                window_data = df.iloc[i:i+window]
-                if method == "pearson":
-                    corr = window_data.corr(method='pearson')
-                elif method == "spearman":
-                    corr = window_data.corr(method='spearman')
-                elif method == "kendall":
-                    corr = window_data.corr(method='kendall')
-                else:
-                    corr = window_data.corr(method='pearson')
-                
-                rolling_corrs.append(corr.to_dict())
-            
-            return rolling_corrs
-        
-        except Exception as e:
-            log.warning(f"Rolling correlation failed: {e}")
+        df = pd.DataFrame(series_by_name, dtype=float)
+        if len(df) < window:
             return []
-    
+        results = []
+        for start in range(len(df) - window + 1):
+            corr = df.iloc[start:start + window].corr(method=method, min_periods=2)
+            results.append(self._json_safe(corr.to_dict()))
+        return results
+
     def correlation_decay(self, series_by_name, alpha=0.95, method="pearson"):
-        """
-        Calculate correlation with exponential decay weighting (recent data weighted more).
-        
-        Args:
-            series_by_name: Dict of {symbol: [returns_list]}
-            alpha: Decay factor (0-1), higher = more recent focus
-            method: 'pearson', 'spearman', 'kendall'
-        
-        Returns:
-            Dict correlation matrix with exponential weighting
-        """
-        if not series_by_name or len(series_by_name) == 0:
+        """Calculate an exponentially weighted Pearson correlation matrix."""
+        if method != "pearson":
+            raise ValueError("Exponential decay currently supports Pearson correlation only")
+        if not 0 < alpha <= 1:
+            raise ValueError("alpha must be in (0, 1]")
+        if not series_by_name:
             return {}
-        
-        try:
-            df = pd.DataFrame(series_by_name)
-            n = len(df)
-            
-            # Create exponential weights: older data weighted less
-            weights = np.array([alpha ** (n - i - 1) for i in range(n)])
-            weights = weights / np.sum(weights)  # Normalize
-            
-            # Calculate weighted correlation
-            means = (df * weights).sum(axis=0)
-            centered = df - means
-            cov_weighted = (centered * weights).T @ centered
-            
-            # Calculate correlation from weighted covariance
-            stds = np.sqrt(np.diag(cov_weighted))
-            corr = cov_weighted / np.outer(stds, stds)
-            
-            corr_df = pd.DataFrame(corr, index=df.columns, columns=df.columns)
-            return corr_df.to_dict()
-        
-        except Exception as e:
-            log.warning(f"Decay correlation failed: {e}")
-            return self._identity_matrix(list(series_by_name.keys()))
-    
+        df = pd.DataFrame(series_by_name, dtype=float).dropna(how="all")
+        if len(df) < 2:
+            return self.matrix(series_by_name, method)
+
+        # Normalize weights over rows that have observations for each pair.
+        result = pd.DataFrame(np.nan, index=df.columns, columns=df.columns, dtype=float)
+        base_weights = alpha ** np.arange(len(df) - 1, -1, -1)
+        for left in df.columns:
+            for right in df.columns:
+                pair = df[[left, right]].dropna()
+                if len(pair) < 2:
+                    continue
+                weights = base_weights[-len(pair):]
+                weights = weights / weights.sum()
+                x, y = pair[left].to_numpy(), pair[right].to_numpy()
+                mx, my = np.sum(weights * x), np.sum(weights * y)
+                cov = np.sum(weights * (x - mx) * (y - my))
+                vx = np.sum(weights * (x - mx) ** 2)
+                vy = np.sum(weights * (y - my) ** 2)
+                denom = np.sqrt(vx * vy)
+                result.loc[left, right] = cov / denom if denom > 0 else np.nan
+        return self._json_safe(result.to_dict())
+
     @staticmethod
-    def _identity_matrix(symbols):
-        """Generate identity correlation matrix as fallback."""
-        return {s: {other: (1.0 if s == other else 0.0) for other in symbols} for s in symbols}
+    def _json_safe(data):
+        return {
+            str(row): {
+                str(col): (None if pd.isna(value) else float(value))
+                for col, value in values.items()
+            }
+            for row, values in data.items()
+        }

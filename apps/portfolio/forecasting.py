@@ -1,190 +1,165 @@
-"""Portfolio Forecasting Service - Real time-series forecasting."""
-import numpy as np
-import pandas as pd
-import logging
-from decimal import Decimal
+"""Portfolio return forecasting with statistical models and measurable accuracy."""
+from __future__ import annotations
 
-log = logging.getLogger(__name__)
+import numpy as np
 
 
 class ForecastingService:
-    """Forecast portfolio returns using statistical methods."""
-    
-    def forecast(self, returns, period="30d", horizon=30, method="exponential_smoothing"):
-        """
-        Forecast portfolio returns using selected method.
-        
-        Args:
-            returns: Historical returns [list or array]
-            period: Forecast period identifier ('7d', '30d', '90d')
-            horizon: Number of periods to forecast ahead
-            method: 'mean', 'exponential_smoothing', 'arima'
-        
-        Returns:
-            Dict with forecast, confidence intervals, method metadata
-        """
-        returns = list(returns or [])
-        
-        if len(returns) < 3:
-            return self._insufficient_data_response(period, horizon)
-        
-        try:
+    """Forecast return series without fabricated confidence values."""
+
+    HORIZONS = {"7d": 7, "30d": 30, "90d": 90}
+
+    def forecast(self, returns, period="30d", horizon=None, method="arima"):
+        values = np.asarray(list(returns or []), dtype=float)
+        values = values[np.isfinite(values)]
+        if period not in self.HORIZONS and horizon is None:
+            raise ValueError(f"Unsupported period: {period}")
+        horizon = int(horizon or self.HORIZONS.get(period, 30))
+        if horizon < 1:
+            raise ValueError("horizon must be positive")
+        if len(values) < 20:
+            return self._insufficient(values, period, horizon)
+
+        if method == "arima":
+            try:
+                return self._arima(values, period, horizon)
+            except Exception as exc:
+                # A failed model fit is reported explicitly; it is never turned
+                # into a fabricated confidence score. The statistical fallback
+                # remains a real sample-based estimate.
+                return self._mean_fallback(values, period, horizon, str(exc))
+        if method in {"mean", "exponential_smoothing"}:
             if method == "exponential_smoothing":
-                return self._forecast_exponential_smoothing(returns, period, horizon)
-            elif method == "arima":
-                return self._forecast_arima(returns, period, horizon)
-            else:  # Default to simple mean
-                return self._forecast_mean(returns, period, horizon)
-        
-        except Exception as e:
-            log.warning(f"Forecasting failed: {e}", extra={'method': method, 'n_returns': len(returns)})
-            return self._forecast_mean(returns, period, horizon)
-    
+                try:
+                    return self._exponential_smoothing(values, period, horizon)
+                except Exception as exc:
+                    return self._mean_fallback(values, period, horizon, str(exc))
+            return self._mean_fallback(values, period, horizon)
+        raise ValueError(f"Unsupported forecasting method: {method}")
+
     @staticmethod
-    def _forecast_mean(returns, period, horizon):
-        """Simple mean reversion forecast."""
-        returns_arr = np.array(returns, dtype=float)
-        mean_ret = np.mean(returns_arr)
-        std_ret = np.std(returns_arr)
-        
-        # Confidence intervals
-        conf_upper = mean_ret + 1.96 * std_ret / np.sqrt(len(returns))
-        conf_lower = mean_ret - 1.96 * std_ret / np.sqrt(len(returns))
-        
+    def _arima(values, period, horizon):
+        from statsmodels.tsa.arima.model import ARIMA
+
+        fitted = ARIMA(values, order=(1, 0, 1), trend="c").fit()
+        frame = fitted.get_forecast(steps=horizon).summary_frame(alpha=0.05)
+        row = frame.iloc[-1]
         return {
-            "forecast": float(mean_ret),
-            "confidence_upper": float(conf_upper),
-            "confidence_lower": float(conf_lower),
-            "std_error": float(std_ret / np.sqrt(len(returns))),
-            "method": "mean_reversion",
+            "forecast": float(row["mean"]),
+            "confidence_upper": float(row["mean_ci_upper"]),
+            "confidence_lower": float(row["mean_ci_lower"]),
+            "std_error": float(row["mean_se"]),
+            "method": "arima",
+            "arima_order": [1, 0, 1],
             "horizon": horizon,
             "period": period,
             "confidence_level": 0.95,
-            "n_observations": len(returns)
+            "aic": float(fitted.aic),
+            "bic": float(fitted.bic),
+            "n_observations": int(len(values)),
+            "fallback": False,
         }
-    
+
     @staticmethod
-    def _forecast_exponential_smoothing(returns, period, horizon):
-        """Exponential smoothing forecast (Holt-Winters)."""
-        try:
-            from statsmodels.tsa.holtwinters import SimpleExpSmoothing
-            
-            returns_arr = np.array(returns, dtype=float)
-            
-            # Fit exponential smoothing model
-            model = SimpleExpSmoothing(returns_arr)
-            fitted = model.fit(optimized=True)
-            
-            # Forecast
-            forecast = fitted.forecast(steps=horizon)
-            
-            # Calculate prediction interval (simple approach: 1.96 * model std error)
-            resid_std = np.std(fitted.fittedvalues - returns_arr)
-            pred_interval = 1.96 * resid_std
-            
-            return {
-                "forecast": float(forecast.iloc[-1] if len(forecast) > 0 else fitted.fittedvalues[-1]),
-                "confidence_upper": float(forecast.iloc[-1] + pred_interval if len(forecast) > 0 else fitted.fittedvalues[-1] + pred_interval),
-                "confidence_lower": float(forecast.iloc[-1] - pred_interval if len(forecast) > 0 else fitted.fittedvalues[-1] - pred_interval),
-                "std_error": float(resid_std),
-                "method": "exponential_smoothing",
-                "horizon": horizon,
-                "period": period,
-                "confidence_level": 0.95,
-                "alpha": float(fitted.params[0]) if hasattr(fitted, 'params') else 0.5,
-                "n_observations": len(returns)
-            }
-        except Exception as e:
-            log.debug(f"Exponential smoothing failed: {e}")
-            return ForecastingService._forecast_mean(returns, period, horizon)
-    
-    @staticmethod
-    def _forecast_arima(returns, period, horizon):
-        """ARIMA-based forecast."""
-        try:
-            from statsmodels.tsa.arima.model import ARIMA
-            
-            returns_arr = np.array(returns, dtype=float)
-            
-            if len(returns_arr) < 10:
-                return ForecastingService._forecast_mean(returns, period, horizon)
-            
-            # Fit ARIMA(1,0,1) - simple AR model with MA component
-            model = ARIMA(returns_arr, order=(1, 0, 1))
-            fitted = model.fit()
-            
-            # Get forecast with confidence intervals
-            forecast_obj = fitted.get_forecast(steps=horizon)
-            forecast_df = forecast_obj.summary_frame(alpha=0.05)
-            
-            # Extract last forecast values
-            last_forecast = forecast_df.iloc[-1]['mean']
-            last_upper = forecast_df.iloc[-1]['mean_ci_upper']
-            last_lower = forecast_df.iloc[-1]['mean_ci_lower']
-            
-            return {
-                "forecast": float(last_forecast),
-                "confidence_upper": float(last_upper),
-                "confidence_lower": float(last_lower),
-                "std_error": float(forecast_df.iloc[-1]['mean_se']),
-                "method": "arima",
-                "arima_order": (1, 0, 1),
-                "horizon": horizon,
-                "period": period,
-                "confidence_level": 0.95,
-                "aic": float(fitted.aic),
-                "bic": float(fitted.bic),
-                "n_observations": len(returns)
-            }
-        except Exception as e:
-            log.debug(f"ARIMA forecasting failed: {e}")
-            return ForecastingService._forecast_mean(returns, period, horizon)
-    
-    @staticmethod
-    def _insufficient_data_response(period, horizon):
-        """Response when there's insufficient data for forecasting."""
+    def _exponential_smoothing(values, period, horizon):
+        from statsmodels.tsa.holtwinters import SimpleExpSmoothing
+
+        fitted = SimpleExpSmoothing(values).fit(optimized=True)
+        forecast = np.asarray(fitted.forecast(horizon), dtype=float)
+        residuals = values - np.asarray(fitted.fittedvalues, dtype=float)
+        stderr = float(np.std(residuals, ddof=1)) if len(residuals) > 1 else 0.0
+        last = float(forecast[-1])
         return {
-            "forecast": 0.0,
-            "confidence_upper": 0.0,
-            "confidence_lower": 0.0,
-            "std_error": 0.0,
+            "forecast": last,
+            "confidence_upper": last + 1.96 * stderr,
+            "confidence_lower": last - 1.96 * stderr,
+            "std_error": stderr,
+            "method": "exponential_smoothing",
+            "horizon": horizon,
+            "period": period,
+            "confidence_level": 0.95,
+            "n_observations": int(len(values)),
+            "fallback": False,
+        }
+
+    @staticmethod
+    def _mean_fallback(values, period, horizon, error=None):
+        mean = float(np.mean(values))
+        stderr = float(np.std(values, ddof=1) / np.sqrt(len(values))) if len(values) > 1 else 0.0
+        result = {
+            "forecast": mean,
+            "confidence_upper": mean + 1.96 * stderr,
+            "confidence_lower": mean - 1.96 * stderr,
+            "std_error": stderr,
+            "method": "sample_mean",
+            "horizon": horizon,
+            "period": period,
+            "confidence_level": 0.95,
+            "n_observations": int(len(values)),
+            "fallback": bool(error),
+        }
+        if error:
+            result["model_error"] = error
+        return result
+
+    @staticmethod
+    def _insufficient(values, period, horizon):
+        return {
+            "forecast": None,
+            "confidence_upper": None,
+            "confidence_lower": None,
+            "std_error": None,
             "method": "insufficient_data",
             "horizon": horizon,
             "period": period,
-            "confidence_level": 0.0,
-            "warning": "Insufficient historical data for reliable forecasting",
-            "n_observations": 0
+            "confidence_level": None,
+            "n_observations": int(len(values)),
+            "warning": "At least 20 observations are required for the configured ARIMA forecast",
+            "fallback": False,
         }
-    
+
+    def forecast_accuracy(self, returns, horizon=1, train_window=None):
+        """Walk-forward MAE/RMSE against observations that were not used to fit."""
+        values = np.asarray(list(returns or []), dtype=float)
+        values = values[np.isfinite(values)]
+        horizon = int(horizon)
+        if horizon < 1 or len(values) < 25 + horizon:
+            return {"mae": None, "rmse": None, "observations": 0, "method": "walk_forward_arima"}
+        start = max(20, len(values) - int(train_window)) if train_window else 20
+        errors = []
+        for index in range(start, len(values) - horizon + 1):
+            train = values[:index]
+            try:
+                from statsmodels.tsa.arima.model import ARIMA
+                fitted = ARIMA(train, order=(1, 0, 1), trend="c").fit()
+                prediction = float(fitted.forecast(steps=horizon)[-1])
+                actual = float(values[index + horizon - 1])
+                errors.append(actual - prediction)
+            except Exception:
+                continue
+        if not errors:
+            return {"mae": None, "rmse": None, "observations": 0, "method": "walk_forward_arima"}
+        errors = np.asarray(errors)
+        return {
+            "mae": float(np.mean(np.abs(errors))),
+            "rmse": float(np.sqrt(np.mean(errors ** 2))),
+            "observations": int(len(errors)),
+            "method": "walk_forward_arima",
+            "horizon": horizon,
+        }
+
     @staticmethod
     def scenario_analysis(returns, scenarios=None):
-        """
-        Generate scenario-based forecasts (bull, base, bear).
-        
-        Args:
-            returns: Historical returns
-            scenarios: Dict with scenario multipliers {'bull': 1.5, 'base': 1.0, 'bear': 0.5}
-        
-        Returns:
-            Dict with scenarios
-        """
-        returns_arr = np.array(returns, dtype=float)
-        mean_ret = np.mean(returns_arr)
-        std_ret = np.std(returns_arr)
-        
-        if scenarios is None:
-            scenarios = {
-                'bull': 1.5,
-                'base': 1.0,
-                'bear': 0.5
+        values = np.asarray(list(returns or []), dtype=float)
+        values = values[np.isfinite(values)]
+        if len(values) == 0:
+            return {}
+        mean, volatility = float(np.mean(values)), float(np.std(values, ddof=1) if len(values) > 1 else 0.0)
+        scenarios = scenarios or {"bull": 1.5, "base": 1.0, "bear": 0.5}
+        return {
+            str(name): {
+                "return": float(mean * float(multiplier)),
+                "volatility": float(volatility * abs(float(multiplier))),
             }
-        
-        results = {}
-        for scenario_name, multiplier in scenarios.items():
-            results[scenario_name] = {
-                "return": float(mean_ret * multiplier),
-                "volatility": float(std_ret * multiplier),
-                "confidence": 0.33  # Equal probability for each scenario
-            }
-        
-        return results
+            for name, multiplier in scenarios.items()
+        }
