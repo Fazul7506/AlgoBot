@@ -2,7 +2,11 @@ from asgiref.sync import async_to_sync
 from rest_framework import permissions, response, status, views
 
 from apps.brokers.deriv_execution import DerivTradingOperations
-from apps.brokers.exceptions import BrokerOrderError
+from apps.brokers.exceptions import (
+    BrokerAuthenticationError,
+    BrokerConnectionError,
+    BrokerOrderError,
+)
 from apps.brokers.models import BrokerAccount
 
 
@@ -25,10 +29,43 @@ class DerivTradingActionView(views.APIView):
             account = self._account(request)
             result = operation(DerivTradingOperations(account))
             return response.Response(result, status=status.HTTP_200_OK)
+        except BrokerAuthenticationError as exc:
+            return response.Response(
+                {"status": "rejected", "code": "BROKER_AUTHENTICATION_FAILED", "detail": str(exc)},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        except BrokerConnectionError as exc:
+            # A connection failure after a broker-side execution request can be
+            # ambiguous. Never convert it to a rejection or retry it here.
+            return response.Response(
+                {
+                    "status": "unknown",
+                    "code": "BROKER_EXECUTION_STATE_UNKNOWN",
+                    "retryable": False,
+                    "reconciliation_required": True,
+                    "detail": str(exc),
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         except BrokerOrderError as exc:
             return response.Response(
-                {"status": "rejected", "code": "DERIV_TRADE_REJECTED", "detail": str(exc)},
+                {"status": "rejected", "code": "DERIV_TRADE_REJECTED", "retryable": False, "detail": str(exc)},
                 status=status.HTTP_409_CONFLICT,
+            )
+        except (ValueError, TypeError) as exc:
+            return response.Response(
+                {"status": "rejected", "code": "DERIV_REQUEST_INVALID", "retryable": False, "detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception:
+            return response.Response(
+                {
+                    "status": "unavailable",
+                    "code": "DERIV_EXECUTION_UNAVAILABLE",
+                    "retryable": False,
+                    "detail": "The Deriv execution service could not safely complete the request.",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
     def post(self, request, action):
@@ -65,7 +102,7 @@ class DerivTradingActionView(views.APIView):
             return self._execute(request, lambda ops: async_to_sync(ops.update_history)(request.data.get("contract_id")))
         if action == "cancel":
             return self._execute(request, lambda ops: async_to_sync(ops.cancel)(request.data.get("contract_id")))
-        return response.Response({"status": "rejected", "code": "UNKNOWN_DERIV_ACTION"}, status=status.HTTP_404_NOT_FOUND)
+        return response.Response({"status": "rejected", "code": "UNKNOWN_DERIV_ACTION", "retryable": False}, status=status.HTTP_404_NOT_FOUND)
 
     def get(self, request, action):
         if action == "contracts-for":
@@ -73,6 +110,10 @@ class DerivTradingActionView(views.APIView):
                 account = self._account(request)
                 symbol = request.query_params.get("symbol")
                 return response.Response(async_to_sync(DerivTradingOperations(account).contracts_for)(symbol))
-            except BrokerOrderError as exc:
-                return response.Response({"status": "rejected", "code": "DERIV_TRADE_REJECTED", "detail": str(exc)}, status=status.HTTP_409_CONFLICT)
-        return response.Response({"status": "rejected", "code": "UNKNOWN_DERIV_ACTION"}, status=status.HTTP_404_NOT_FOUND)
+            except BrokerAuthenticationError as exc:
+                return response.Response({"status": "rejected", "code": "BROKER_AUTHENTICATION_FAILED", "detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+            except (BrokerConnectionError, BrokerOrderError, ValueError, TypeError) as exc:
+                return response.Response({"status": "unavailable", "code": "DERIV_CONTRACTS_UNAVAILABLE", "retryable": True, "detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            except Exception:
+                return response.Response({"status": "unavailable", "code": "DERIV_CONTRACTS_UNAVAILABLE", "retryable": True, "detail": "Broker contract catalogue is temporarily unavailable."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return response.Response({"status": "rejected", "code": "UNKNOWN_DERIV_ACTION", "retryable": False}, status=status.HTTP_404_NOT_FOUND)
