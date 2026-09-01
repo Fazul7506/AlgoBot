@@ -28,12 +28,33 @@ class PlanEntitlementMiddleware:
         )
 
     @classmethod
+    def _feature_metric(cls, request):
+        """Return the feature quota affected by a state-changing request."""
+        if request.method.upper() not in EXECUTION_METHODS:
+            return None
+        for candidate, prefixes in cls.FEATURE_PATHS:
+            if not any(request.path.startswith(prefix) for prefix in prefixes):
+                continue
+            if (
+                candidate == "backtests"
+                and request.path.startswith("/api/strategies/")
+                and not any(action in request.path for action in cls.BACKTEST_ACTIONS)
+            ):
+                continue
+            return candidate
+        return None
+
+    @classmethod
     def _requires_authenticated_user(cls, request):
-        """Protect state-changing AI/order endpoints from AnonymousUser failures."""
-        method = request.method.upper()
-        if method not in EXECUTION_METHODS:
-            return False
-        return request.path.startswith(("/api/ai/", "/api/predictions/", "/api/orders/")) or cls._is_execution_request(request)
+        """Protect state-changing AI/order/execution endpoints from AnonymousUser failures."""
+        return cls._feature_metric(request) is not None or cls._is_execution_request(request)
+
+    @staticmethod
+    def _unauthenticated_response():
+        return JsonResponse(
+            {"detail": "Authentication credentials were not provided.", "code": "authentication_required"},
+            status=401,
+        )
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -46,40 +67,28 @@ class PlanEntitlementMiddleware:
         # AI/order/execution calls return a deterministic 401 instead of a 500
         # caused by trying to persist AnonymousUser into a User FK.
         if is_api and self._requires_authenticated_user(request) and not is_authenticated:
-            return JsonResponse(
-                {"detail": "Authentication credentials were not provided.", "code": "authentication_required"},
-                status=401,
-            )
+            return self._unauthenticated_response()
 
         if not is_api or not is_authenticated:
             return self.get_response(request)
 
-        # The generic API allowance is for actual trading/execution triggers,
-        # not for dashboard reads, market data, account sync, signals, billing,
-        # WebSocket support, or other application plumbing.
-        if not self._is_execution_request(request):
-            response = self.get_response(request)
-            response["X-AlgoBot-Plan"] = effective_plan(request.user).key
-            response["X-AlgoBot-Quota-Metric"] = "none"
-            return response
+        is_execution = self._is_execution_request(request)
+        metric = self._feature_metric(request) or "api_calls"
 
-        for window, retry in (("day", "86400"), ("minute", "60")):
-            allowed, current, limit = check(request.user, "api_calls", 1, window)
-            if not allowed:
-                return JsonResponse(
-                    rate_limit_response_data(request.user, "api_calls", window, current, limit),
-                    status=429,
-                    headers={"Retry-After": retry},
-                )
+        # The generic API allowance is only for actual broker/trade execution
+        # triggers, not dashboard reads, market data, account sync, or navigation.
+        if is_execution:
+            for window, retry in (("day", "86400"), ("minute", "60")):
+                allowed, current, limit = check(request.user, "api_calls", 1, window)
+                if not allowed:
+                    return JsonResponse(
+                        rate_limit_response_data(request.user, "api_calls", window, current, limit),
+                        status=429,
+                        headers={"Retry-After": retry},
+                    )
 
-        metric = "api_calls"
-        for candidate, prefixes in self.FEATURE_PATHS:
-            if any(request.path.startswith(prefix) for prefix in prefixes):
-                if candidate == "backtests" and request.path.startswith("/api/strategies/") and not any(x in request.path for x in self.BACKTEST_ACTIONS):
-                    continue
-                metric = candidate
-                break
-
+        # Feature-specific quotas apply to state-changing feature calls even when
+        # they are not broker execution requests (e.g. AI prediction generation).
         if metric != "api_calls":
             allowed, current, limit = check(request.user, metric, 1, "day")
             if not allowed:
@@ -91,5 +100,5 @@ class PlanEntitlementMiddleware:
 
         response = self.get_response(request)
         response["X-AlgoBot-Plan"] = effective_plan(request.user).key
-        response["X-AlgoBot-Quota-Metric"] = metric
+        response["X-AlgoBot-Quota-Metric"] = metric if is_execution or metric != "api_calls" else "none"
         return response
