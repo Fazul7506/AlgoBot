@@ -1,13 +1,25 @@
-"""Portfolio reporting model."""
+"""Portfolio reporting service.
+
+Reports are derived from the supplied portfolio and its persisted related data.
+No synthetic performance values are generated.
+"""
 
 
 class ReportingService:
     def generate(self, portfolio, report_type="executive", export_format="json"):
         nav = float(getattr(portfolio, "net_asset_value", 0) or 0)
         equity = float(getattr(portfolio, "equity", nav) or nav)
-        balance = float(getattr(portfolio, "current_balance", balance) or 0)
+        balance = float(getattr(portfolio, "current_balance", 0) or 0)
         initial_balance = float(getattr(portfolio, "initial_balance", 0) or 0)
         total_return = ((nav - initial_balance) / initial_balance) if initial_balance else 0.0
+
+        allocations = getattr(portfolio, "allocations", None)
+        performance_relation = getattr(portfolio, "performance", None)
+        latest_performance = None
+        if performance_relation is not None and hasattr(performance_relation, "order_by"):
+            latest_performance = performance_relation.order_by("-created_at").first()
+        elif performance_relation is not None and hasattr(performance_relation, "first"):
+            latest_performance = performance_relation.first()
 
         return {
             "portfolio_name": getattr(portfolio, "name", "Portfolio"),
@@ -17,6 +29,6 @@ class ReportingService:
             "equity": equity,
             "balance": balance,
             "total_return": total_return,
-            "allocation_count": portfolio.allocations.count() if hasattr(portfolio, "allocations") else 0,
-            "performance": getattr(portfolio.performance.first(), "metrics", {}) if hasattr(portfolio, "performance") else {},
+            "allocation_count": allocations.count() if allocations is not None and hasattr(allocations, "count") else 0,
+            "performance": getattr(latest_performance, "metrics", {}) or {},
         }
