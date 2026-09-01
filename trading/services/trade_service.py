@@ -6,10 +6,7 @@ from trading.services.copy_service import CopyService
 
 class TradeService:
 
-    CONTRACT_MAP = {
-        'BUY': 'CALL',
-        'SELL': 'PUT',
-    }
+    CONTRACT_MAP = {'BUY': 'CALL', 'SELL': 'PUT'}
 
     def __init__(self, risk_service=None, user=None):
         self.risk_service = risk_service
@@ -18,7 +15,6 @@ class TradeService:
     def _resolve_strategy_fk(self, strategy_name):
         if not strategy_name:
             return None
-
         return Strategy.objects.filter(name__iexact=strategy_name).first()
 
     def open_trade(
@@ -31,26 +27,29 @@ class TradeService:
         market_regime=None,
         is_paper=True,
         user=None,
+        requested_stake=None,
     ):
         if self.risk_service and not self.risk_service.can_trade():
             return None
-
-        stake = self.risk_service.get_position_size() if self.risk_service else 0.35
-
-        if self.risk_service:
-            remaining_risk = self.risk_service.get_remaining_daily_risk()
-            stake = min(stake, remaining_risk)
-
-            if stake < self.risk_service.min_stake:
-                return None
 
         resolved_user = user or getattr(self, 'user', None)
         if self.risk_service and not resolved_user:
             resolved_user = getattr(self.risk_service, 'user', None)
 
+        if requested_stake is None:
+            stake = self.risk_service.get_position_size() if self.risk_service else 0.35
+        else:
+            stake = round(max(float(requested_stake), 0.0), 2)
+
+        risk_assessment = self.risk_service.calculate_risk(stake) if self.risk_service else {
+            'stake': stake, 'warnings': [], 'warning': False,
+        }
+
+        # Risk-profile thresholds are advisory. Do not silently reduce or reject a
+        # user-selected stake because it exceeds the configured profile suggestion.
+        # Broker/account authority and emergency execution controls remain hard gates.
         contract_type = self.CONTRACT_MAP.get(signal_direction, signal_direction)
 
-        # If user has a subscription, enforce max concurrent trades
         if user:
             try:
                 sub = getattr(user, 'subscription', None)
@@ -74,29 +73,23 @@ class TradeService:
             status='OPEN',
             strategy_confidence=confidence,
             entry_reason=f"Signal {signal_direction} from {strategy_name} ({market_regime})",
-            indicators_snapshot={'market_regime': market_regime},
+            indicators_snapshot={
+                'market_regime': market_regime,
+                'risk_advisory': risk_assessment,
+            },
             is_paper=is_paper,
         )
 
         if getattr(trade, 'user', None):
             NotificationService(user=trade.user).notify_trade_opened(trade)
-            # Trigger copy trading replication for followers
             try:
                 CopyService().handle_leader_trade(trade)
             except Exception:
-                # Non-fatal: log and continue
                 import logging
                 logging.exception('CopyService failed while handling leader trade')
-
         return trade
 
-    def close_trade(
-        self,
-        trade: Trade,
-        pnl: float,
-        exit_price: float = None,
-        exit_reason: str = None,
-    ):
+    def close_trade(self, trade: Trade, pnl: float, exit_price: float = None, exit_reason: str = None):
         trade.status = 'CLOSED'
         if exit_price is not None:
             trade.exit_price = exit_price
@@ -106,15 +99,12 @@ class TradeService:
         if exit_reason:
             trade.exit_reason = exit_reason
         trade.save()
-
         if self.risk_service:
             self.risk_service.record_pnl(pnl)
-
         if getattr(trade, 'user', None):
             if exit_reason == 'target' or (pnl is not None and pnl > 0):
                 NotificationService(user=trade.user).notify_profit_target(trade)
             elif exit_reason in ('drawdown', 'stop_loss', 'loss') or (pnl is not None and pnl < 0):
                 NotificationService(user=trade.user).notify_drawdown_warning(trade)
             NotificationService(user=trade.user).notify_trade_closed(trade)
-
         return trade
