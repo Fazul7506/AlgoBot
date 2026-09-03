@@ -71,7 +71,7 @@
       if (token && !headers.has('X-CSRFToken')) headers.set('X-CSRFToken', token);
     }
 
-    let requestInit = { ...options, method, headers, credentials: options.credentials || (isProtected ? 'include' : 'same-origin') };
+    let requestInit = { ...options, method, headers, credentials: options.credentials || 'include' };
     if ((url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') && typeof requestInit.body === 'string') {
       try { const payload = JSON.parse(requestInit.body); payload.validation_context = { ...(payload.validation_context || {}), ...(window.__algobotAiOrderContext || {}) }; requestInit.body = JSON.stringify(payload); } catch (_) {}
     }
