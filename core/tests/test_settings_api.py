@@ -17,7 +17,9 @@ class AccountSettingsApiTests(TestCase):
 
     def test_get_excludes_secrets(self):
         self.client.force_login(self.user)
-        UserProfile.objects.create(user=self.user, brevo_api_key="must-not-leak")
+        profile = UserProfile.objects.get(user=self.user)
+        profile.brevo_api_key = "must-not-leak"
+        profile.save(update_fields=["brevo_api_key"])
         response = self.client.get(reverse("account_settings_api"))
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(b"must-not-leak", response.content)

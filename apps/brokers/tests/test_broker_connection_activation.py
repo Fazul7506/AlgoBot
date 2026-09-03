@@ -42,6 +42,7 @@ class BrokerConnectionActivationTests(TestCase):
             response = self.client.post(
                 reverse('broker-connect'),
                 data={'broker_id': self.broker.id, 'account_id': self.account.id},
+                HTTP_ORIGIN='http://testserver',
             )
 
         self.assertEqual(response.status_code, 200)
