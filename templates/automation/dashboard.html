@@ -2,12 +2,13 @@
 {% load static %}
 {% block title %}Automation | AlgoBot{% endblock %}
 {% block mobile_title %}Automation{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}">{% endblock %}
 {% block content %}
-<section class="algobot-shared-page automation-page">
+<main id="main-content" class="algobot-shared-page automation-page">
   <header class="enterprise-hero"><div><p class="eyebrow">AUTOMATION</p><h1>Automation</h1></div><div class="hero-actions"><button class="btn ghost" type="button" data-automation-refresh>Refresh</button><a class="btn" href="/workspace/automation/">Workflows</a><a class="btn" href="/automation/rules/">Rules</a><a class="btn primary" href="/trading/">Trading terminal</a></div></header>
   <section class="automation-safety panel"><strong>Trading safety</strong><span>Trading-impacting automation remains subject to broker connection, backend validation and approval.</span></section>
   <section data-automation-dashboard aria-live="polite"><div class="ds-state"><strong>Waiting for broker connection</strong><p>Connect a broker to load automation state.</p><a class="ds-btn ds-btn--primary" href="/brokers/connect/">Connect broker</a></div></section>
-</section>
+</main>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/automation_dashboard.css' %}">{% endblock %}
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/automation_dashboard.css' %}">{% endblock %}
 {% block extra_js %}<script src="{% static 'js/automation_dashboard.js' %}" defer></script>{% endblock %}

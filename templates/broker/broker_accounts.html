@@ -1,14 +1,15 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Broker Accounts | AlgoBot{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}">{% endblock %}
 {% block content %}
-<section class="algobot-shared-page page-section">
+<main id="main-content" class="algobot-shared-page page-section">
   <header class="hero-panel"><p class="eyebrow">BROKER ACCOUNTS</p><h1>Connected broker accounts</h1><p>Each connected account keeps its broker identity, verified environment and live connection state. Demo and Real accounts are equally selectable.</p></header>
   <section class="workspace-grid two" aria-label="Broker account state">
     <article class="panel"><div class="panel-head"><div><p class="eyebrow">ACTIVE ACCOUNT</p><h2>Current broker</h2></div><span class="badge live" data-account-health>Checking</span></div><div data-broker-account-center class="account-center-state" aria-live="polite">Loading connected broker accounts…</div></article>
     <article class="panel"><div class="panel-head"><div><p class="eyebrow">ACCOUNT MODE</p><h2>Demo / Real</h2></div></div><p class="form-note">Selecting an account changes the authenticated user's active account. No account is marked preferred.</p><div data-account-mode-actions></div></article>
   </section>
-</section>
+</main>
 <script>
 (()=>{const root=document.querySelector('[data-broker-account-center]'),mode=document.querySelector('[data-account-mode-actions]'),health=document.querySelector('[data-account-health]');const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));const money=v=>v==null||v===''?'Unavailable':Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:8});const type=a=>String(a?.account_type||a?.credentials?.account_type||'unknown').toLowerCase();const avatar=a=>{const u=String(a?.avatar_url||a?.broker?.avatar_url||a?.credentials?.avatar_url||'').trim(),n=a?.broker?.name||a?.broker_name||'Broker';return u?`<img class="algobot-account-avatar" src="${esc(u)}" alt="${esc(n)} account avatar" loading="lazy" referrerpolicy="no-referrer">`:`<span class="algobot-account-avatar">${esc(n[0]?.toUpperCase()||'B')}</span>`};
 async function selectAccount(a){const b=mode.querySelector('[data-switch-account]');if(b)b.disabled=true;try{const csrf=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1]||'';const r=await fetch(`/api/brokers/accounts/${encodeURIComponent(a.id)}/select/`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':csrf},body:JSON.stringify({account_type:type(a)})});const d=await r.json();if(!r.ok)throw Error(d.detail||`Account switch failed (${r.status})`);window.dispatchEvent(new CustomEvent('algobot:account-changed',{detail:d.active_account||d.account}));await load()}catch(e){if(b)b.disabled=false;const n=mode.querySelector('.form-note');if(n)n.textContent=e.message||'Account switch failed. No account state was changed.'}}

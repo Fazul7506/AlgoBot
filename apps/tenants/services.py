@@ -28,10 +28,7 @@ class QuotaService:
         obj,_=UsageMetric.objects.get_or_create(tenant=tenant,metric=metric,period=period,defaults={'quota':0});
         if obj.quota and obj.usage+increment>obj.quota: raise QuotaExceeded(metric)
         obj.usage+=increment; obj.save(update_fields=['usage']); return obj
-class UsageTrackingService(QuotaService): pass
 class InvitationService:
     def invite(self,email,team,role='viewer'): return {'email':email,'team_id':team.id,'role':role,'status':'pending'}
 class WhiteLabelService:
     def configure(self,tenant,**branding): return WhiteLabelSettings.objects.update_or_create(tenant=tenant,defaults=branding)[0]
-class AdminPortalService: pass
-class CustomerPortalService: pass

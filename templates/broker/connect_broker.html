@@ -2,8 +2,9 @@
 {% load static %}
 {% block title %}Connect Broker | AlgoBot Enterprise{% endblock %}
 {% block mobile_title %}Connect Broker{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}">{% endblock %}
 {% block content %}
-<div class="algobot-shared-page broker-connect-page" data-connection-page>
+<main id="main-content" class="algobot-shared-page broker-connect-page" data-connection-page>
   <section class="enterprise-hero">
     <div>
       <p class="eyebrow">Broker connection</p>
@@ -40,9 +41,10 @@
       {% endfor %}
     </div>
   </section>
-</div>
+</main>
 {% endblock %}
 {% block extra_css %}
+{{ block.super }}
 <style>
 .broker-connect-page{display:grid;gap:18px}.broker-connect-status{display:grid;gap:8px;min-width:min(360px,100%);align-content:start}.broker-connect-status strong{font-size:20px}.broker-connect-status span:last-child{color:var(--muted)}.broker-list{display:grid;gap:12px}.broker-option{display:flex;align-items:center;justify-content:space-between;gap:16px}.broker-option h3{margin:0}.broker-option p{margin:4px 0 0}.broker-option .ds-btn{white-space:nowrap}@media(max-width:800px){.enterprise-hero{display:grid}.broker-connect-status{min-width:0}.broker-option{align-items:stretch;flex-direction:column}}
 </style>

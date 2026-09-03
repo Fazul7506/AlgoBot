@@ -135,10 +135,6 @@ class MirrorExecutionService:
         )
 
 
-class PortfolioMirrorService:
-    pass
-
-
 class RiskScalingService:
     def scale(self, stake, multiplier=1, max_exposure=None):
         value = Decimal(str(stake)) * Decimal(str(multiplier))
@@ -147,42 +143,8 @@ class RiskScalingService:
         return value
 
 
-class ProviderService:
-    pass
-
-
-class FollowerService:
-    pass
-
-
-class SubscriptionService:
-    pass
-
-
-class MarketplaceService:
-    pass
-
-
-class RankingService:
-    pass
-
-
 class AnalyticsService:
     def roi(self, profit, capital):
         return Decimal("0") if not capital else Decimal(str(profit)) / Decimal(str(capital))
 
 
-class RevenueService:
-    pass
-
-
-class CommunityService:
-    pass
-
-
-class ReviewService:
-    pass
-
-
-class VerificationService:
-    pass

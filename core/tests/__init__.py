@@ -100,6 +100,7 @@ class BillingCheckoutRegressionTests(TestCase):
         response = self.client.post('/billing/checkout/', {'plan': 'PRO'}, format='json')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['plan'], 'PRO')
+        self.assertEqual(response.json()['url'], 'https://payments.example/checkout')
         create_checkout.assert_called_once()
 
     @override_settings(ALGOBOT_PRO_PRICE_CENTS=150000, ALGOBOT_BILLING_CURRENCY='KES')

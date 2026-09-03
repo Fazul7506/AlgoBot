@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Brokers | AlgoBot Enterprise{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}">{% endblock %}
 {% block content %}
-<section class="hero-panel">
+<main id="main-content" class="enterprise-page">
+<header class="enterprise-hero">
   <p class="eyebrow">Broker marketplace</p>
   <h1>Available broker integrations</h1>
   <p>Choose a broker to connect and unlock trading, monitoring, and execution workflows in AlgoBot.</p>
@@ -25,4 +28,5 @@
     {% endfor %}
   </ul>
 </section>
+</main>
 {% endblock %}

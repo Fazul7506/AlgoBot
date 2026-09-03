@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Connect Deriv Broker | AlgoBot{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}">{% endblock %}
 {% block content %}
-<section class="hero-panel">
+<main id="main-content" class="enterprise-page">
+<header class="enterprise-hero">
   <p class="eyebrow">Broker connection only</p>
   <h1>Connect your Deriv broker to AlgoBot</h1>
   <p>There is no local login page. Use the broker connection flow to continue.</p>
@@ -9,5 +12,6 @@
     <a class="btn primary" href="/brokers/connect/?broker=deriv">Connect Deriv</a>
     <a class="btn ghost" href="/">Back to home</a>
   </div>
-</section>
+</header>
+</main>
 {% endblock %}
