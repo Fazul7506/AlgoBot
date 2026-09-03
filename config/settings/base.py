@@ -31,93 +31,36 @@ CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
 CSRF_TRUSTED_ORIGINS = get_list_env("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org"] if os.getenv("ALGO_API_BASE_URL") else [])
 
 INSTALLED_APPS = [
-    "daphne",
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
-    "django.contrib.staticfiles",
-    "rest_framework",
-    "rest_framework_simplejwt",
-    "corsheaders",
-    "django_filters",
-    "core",
-    "apps.admin_portal",
-    "apps.ai_engine",
-    "apps.alerts",
-    "apps.analysis",
-    "apps.analytics",
-    "apps.audit",
-    "apps.automation",
-    "apps.backtesting",
-    "apps.brokers",
-    "apps.community",
-    "apps.contracts",
-    "apps.copy_trading",
-    "apps.dashboard",
-    "apps.deployment",
-    "apps.deriv",
-    "apps.developer",
-    "apps.developer_api",
-    "apps.enterprise",
-    "apps.execution",
-    "apps.feature_flags",
-    "apps.feature_store",
-    "apps.followers",
-    "apps.health",
-    "apps.indicators",
-    "apps.journal",
-    "apps.leaderboards",
-    "apps.licensing",
-    "apps.logging_system",
-    "apps.market_data",
-    "apps.marketplace",
-    "apps.metrics",
-    "apps.ml_models",
-    "apps.monitoring",
-    "apps.notifications",
-    "apps.observability",
-    "apps.optimization",
-    "apps.organizations",
-    "apps.paper_trading",
-    "apps.portfolio",
-    "apps.providers",
-    "apps.rbac",
-    "apps.referrals",
-    "apps.reports",
-    "apps.risk",
-    "apps.signals",
-    "apps.simulation",
-    "apps.smart_money",
-    "apps.strategies",
-    "apps.subscriptions",
-    "apps.support",
-    "apps.tenants",
-    "apps.trading",
-    "apps.training",
-    "apps.usage",
-    "apps.workspace",
-    "trading.apps.TradingConfig",
+    "daphne", "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
+    "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
+    "rest_framework", "rest_framework_simplejwt", "corsheaders", "django_filters", "core",
+    "apps.admin_portal", "apps.ai_engine", "apps.alerts", "apps.analysis", "apps.analytics",
+    "apps.audit", "apps.automation", "apps.backtesting", "apps.brokers", "apps.community",
+    "apps.contracts", "apps.copy_trading", "apps.dashboard", "apps.deployment", "apps.deriv",
+    "apps.developer", "apps.developer_api", "apps.enterprise", "apps.execution", "apps.feature_flags",
+    "apps.feature_store", "apps.followers", "apps.health", "apps.indicators", "apps.journal",
+    "apps.leaderboards", "apps.licensing", "apps.logging_system", "apps.market_data", "apps.marketplace",
+    "apps.metrics", "apps.ml_models", "apps.monitoring", "apps.notifications", "apps.observability",
+    "apps.optimization", "apps.organizations", "apps.paper_trading", "apps.portfolio", "apps.providers",
+    "apps.rbac", "apps.referrals", "apps.reports", "apps.risk", "apps.signals", "apps.simulation",
+    "apps.smart_money", "apps.strategies", "apps.subscriptions", "apps.support", "apps.tenants",
+    "apps.trading", "apps.training", "apps.usage", "apps.workspace", "trading.apps.TradingConfig",
 ]
 
 MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
-    "django.middleware.common.CommonMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "apps.developer.middleware.DeveloperAPIMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "core.middleware.audit_middleware.AuditMiddleware",
-    "core.middleware.plan_entitlement_middleware.PlanEntitlementMiddleware",
+    "django.middleware.security.SecurityMiddleware", "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware", "django.middleware.common.CommonMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware", "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware", "apps.developer.middleware.DeveloperAPIMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware", "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.audit_middleware.AuditMiddleware", "core.middleware.plan_entitlement_middleware.PlanEntitlementMiddleware",
 ]
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication", "rest_framework.authentication.SessionAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "core.api_authentication.BrowserSessionAuthentication",
+    ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
@@ -128,12 +71,8 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
-    "ALGORITHM": "HS256",
-    "SIGNING_KEY": SECRET_KEY,
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1), "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True, "BLACKLIST_AFTER_ROTATION": True, "ALGORITHM": "HS256", "SIGNING_KEY": SECRET_KEY,
 }
 
 CORS_ALLOWED_ORIGINS = get_list_env(
@@ -149,20 +88,15 @@ TEMPLATES = [{
     "DIRS": [BASE_DIR / "templates"],
     "APP_DIRS": True,
     "OPTIONS": {"context_processors": [
-        "django.template.context_processors.debug",
-        "django.template.context_processors.request",
-        "django.contrib.auth.context_processors.auth",
-        "django.contrib.messages.context_processors.messages",
+        "django.template.context_processors.debug", "django.template.context_processors.request",
+        "django.contrib.auth.context_processors.auth", "django.contrib.messages.context_processors.messages",
     ]},
 }]
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
-STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage" if DEBUG else "whitenoise.storage.CompressedManifestStaticFilesStorage"},
-}
+STORAGES = {"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"}, "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage" if DEBUG else "whitenoise.storage.CompressedManifestStaticFilesStorage"}}
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
@@ -189,7 +123,6 @@ AUTH_PASSWORD_VALIDATORS = [
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/dashboard/"
 LOGOUT_REDIRECT_URL = "/"
-
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_OAUTH_REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", f'{os.getenv("BASE_URL", "http://127.0.0.1:8000")}/notifications/channels/gmail/callback/')
