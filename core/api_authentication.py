@@ -10,6 +10,14 @@ from rest_framework import exceptions
 from rest_framework.authentication import SessionAuthentication
 
 
+class CSRFAuthenticationFailed(exceptions.APIException):
+    """Machine-readable 403 raised when a browser session fails CSRF."""
+
+    status_code = 403
+    default_detail = "CSRF verification failed. Refresh the page and try again."
+    default_code = "CSRF_FAILED"
+
+
 class BrowserSessionAuthentication(SessionAuthentication):
     """Session authentication with the normal DRF CSRF boundary."""
 
@@ -18,10 +26,8 @@ class BrowserSessionAuthentication(SessionAuthentication):
         if not user or not user.is_authenticated:
             return None
 
-        # Session-authenticated unsafe requests must carry a valid CSRF token.
-        # JWT/API-key clients do not reach this authenticator.
         try:
             self.enforce_csrf(request)
-        except exceptions.PermissionDenied:
-            raise
+        except exceptions.PermissionDenied as exc:
+            raise CSRFAuthenticationFailed() from exc
         return (user, None)
