@@ -41,6 +41,9 @@ def orders_page(request): return render(request,'core/orders.html')
 def positions_page(request): return render(request,'core/positions.html')
 @login_required
 def signals_page(request): return render(request,'core/signals.html')
+
+@login_required
+def analysis_page(request): return render(request, 'core/analysis.html')
 @login_required
 def portfolio_page(request): return render(request,'core/portfolio.html')
 @login_required

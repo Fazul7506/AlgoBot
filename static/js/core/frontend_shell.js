@@ -16,6 +16,11 @@
   };
 
   function updateActiveNavigation() {
+    document.querySelectorAll('#app-sidebar a[href="/operations/mission-control/"]').forEach((link) => {
+      link.href = '/analysis/';
+      const label = link.querySelector('span:last-child');
+      if (label) label.textContent = 'Analysis';
+    });
     const currentPath = window.location.pathname.replace(/\/$/, '');
     const pathTargets = [
       document.querySelectorAll('#app-sidebar nav a'),

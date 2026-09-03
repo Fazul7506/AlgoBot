@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Analysis | AlgoBot{% endblock %}
+{% block mobile_title %}Analysis{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/analysis.css' %}">{% endblock %}
+{% block content %}
+<main id="main-content" class="enterprise-page analysis-workspace" data-analysis-workspace>
+  <header class="enterprise-hero">
+    <div><p class="eyebrow">BROKER MARKET INTELLIGENCE</p><h1>Analysis workspace</h1><p class="hero-copy">Manual trading analysis from broker-confirmed quotes, current signals, market structure and risk-aware contract preparation.</p></div>
+    <div class="hero-actions"><a class="btn" href="/markets/">Markets</a><a class="btn primary" href="/trading/">Open terminal</a></div>
+  </header>
+  <section class="analysis-grid" aria-label="Live analysis panels">
+    <article class="panel analysis-panel"><div class="panel-head"><div><p class="eyebrow">CURRENT SIGNALS</p><h2>Broker signal confluence</h2></div><a class="btn small" href="/signals/">Signals</a></div><div data-analysis-signals><div class="empty-state">Connect a broker and load signals to begin analysis.</div></div></article>
+    <article class="panel analysis-panel"><div class="panel-head"><div><p class="eyebrow">MARKET STRUCTURE</p><h2>Quote and trend context</h2></div></div><div class="analysis-metrics"><div><span>Instrument</span><strong data-analysis-symbol>Unavailable</strong></div><div><span>Bid / Ask</span><strong data-analysis-quote>Unavailable</strong></div><div><span>Trend</span><strong data-analysis-trend>Unavailable</strong></div><div><span>Volatility</span><strong data-analysis-volatility>Unavailable</strong></div></div></article>
+    <article class="panel analysis-panel"><div class="panel-head"><div><p class="eyebrow">CONTRACT READINESS</p><h2>Manual execution guard</h2></div></div><p class="hero-copy">Selecting BUY or SELL only prepares a contract. The terminal performs final account, instrument, contract, entitlement and risk validation before submission.</p><div class="analysis-checks"><span>Broker account <b data-check-account>Waiting</b></span><span>Market quote <b data-check-quote>Waiting</b></span><span>Risk controls <b>Required</b></span></div><a class="btn primary" href="/trading/">Prepare a contract</a></article>
+  </section>
+</main>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/analysis_workspace.js' %}" defer></script>{% endblock %}

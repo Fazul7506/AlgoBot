@@ -2,16 +2,15 @@ from django.contrib.auth.decorators import login_required
 from django.http import Http404
 
 from core.views_user_modules import (
-    mission_control, automation_workspace, bot_runtime_workspace,
+    automation_workspace, bot_runtime_workspace,
     audit_workspace, security_workspace, alert_workspace,
 )
 
 
 @login_required
-def operations_center(request, module="mission-control"):
-    """Compatibility router for existing URLs; each module has its own view/UI."""
+def operations_center(request, module="automation"):
+    """Route supported operational workspaces to their owning views."""
     handlers = {
-        "mission-control": mission_control,
         "automation": automation_workspace,
         "deployments": bot_runtime_workspace,
         "audit": audit_workspace,

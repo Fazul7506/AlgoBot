@@ -13,7 +13,7 @@ class UniversalWorkspaceAccessTests(TestCase):
 
     def test_operations_and_developer_pages_are_available_to_authenticated_users(self):
         routes = (
-            "/operations/mission-control/",
+            "/analysis/",
             "/notifications/",
             "/operations/deployments/",
             "/operations/audit/",
@@ -35,7 +35,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         for label, href in (
-            ("Mission Control", "/operations/mission-control/"),
+            ("Analysis", "/analysis/"),
             ("Notifications", "/notifications/"),
             ("Bot Runtime", "/operations/deployments/"),
             ("Audit Log", "/operations/audit/"),

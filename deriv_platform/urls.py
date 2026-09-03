@@ -16,7 +16,7 @@ from trading.views.indicators import IndicatorValueViewSet, TechnicalSignalViewS
 from trading.strategies.strategy_api import StrategyViewSet
 from apps.market_data.web_views import market_catalogue
 from apps.market_data.signal_views import strategy_signals
-from core.views import deriv_login, broker_connect_page, broker_marketplace_page, home, login_page, register_page, dashboard_page, markets_page, strategies_page, trading_page, backtesting_page, predictions_page, performance_page, settings_page, profile_page, terms_page, privacy_page, forgot_password_page, reset_password_page, verify_email_page, cookie_policy_page, licensing_page, contact_page, about_page, public_status_page, risk_page, orders_page, positions_page, signals_page, portfolio_page, operations_module_page, strategy_builder_page
+from core.views import deriv_login, broker_connect_page, broker_marketplace_page, home, login_page, register_page, dashboard_page, markets_page, strategies_page, trading_page, backtesting_page, predictions_page, performance_page, settings_page, profile_page, terms_page, privacy_page, forgot_password_page, reset_password_page, verify_email_page, cookie_policy_page, licensing_page, contact_page, about_page, public_status_page, risk_page, orders_page, positions_page, signals_page, analysis_page, portfolio_page, operations_module_page, strategy_builder_page
 from core.views_trade_history import trade_history_page
 from core.views_automation import workflow_templates_page
 from core.views_deriv_oauth_safe import callback
@@ -73,6 +73,7 @@ urlpatterns=[
 ]
 urlpatterns += [
     path('api/settings/', account_settings_api, name='account_settings_api'),
+    path('analysis/', login_required(analysis_page), name='analysis_page'),
     path('workspace/automation/', login_required(lambda request: render(request, 'automation/dashboard.html')), name='workspace_automation_page'),
     path('workspace/automation/workflow-templates/', login_required(workflow_templates_page), name='workflow_templates_page'),
 ]

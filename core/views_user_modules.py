@@ -23,30 +23,6 @@ def _account(request):
 
 
 @login_required
-def mission_control(request):
-    workflows = Workflow.objects.filter(user=request.user)
-    executions = WorkflowExecution.objects.filter(workflow__user=request.user)
-    incidents = Incident.objects.filter(
-        assigned_to=request.user,
-        status__in=["open", "investigating", "mitigating"],
-    )
-    return render(
-        request,
-        "core/mission_control.html",
-        {
-            "account": _account(request),
-            "workflow_count": workflows.count(),
-            "running_bots": executions.filter(status="running").count(),
-            "open_incidents": incidents.count(),
-            "pending_approvals": ApprovalRequest.objects.filter(
-                workflow__user=request.user, status="pending"
-            ).count(),
-            "recent_activity": executions.select_related("workflow").order_by("-started_at")[:8],
-        },
-    )
-
-
-@login_required
 def automation_workspace(request):
     workflows = Workflow.objects.filter(user=request.user).order_by("-updated_at", "-id")
     executions = WorkflowExecution.objects.filter(workflow__user=request.user)
