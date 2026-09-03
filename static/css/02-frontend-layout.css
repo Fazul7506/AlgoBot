@@ -1,0 +1,61 @@
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  background: linear-gradient(180deg, rgba(11, 18, 32, 0.96) 0%, rgba(9, 14, 24, 1) 100%);
+}
+
+.app-shell > .app-sidebar {
+  flex: 0 0 260px;
+  width: 260px;
+  min-width: 260px;
+}
+
+.app-shell > .app-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-shell.sidebar-collapsed > .app-sidebar {
+  flex-basis: 84px;
+  min-width: 84px;
+  width: 84px;
+}
+
+.app-shell.sidebar-collapsed > .app-main {
+  margin-left: 0;
+}
+
+.layout-grid {
+  display: grid;
+  gap: var(--algobot-spacing-4);
+}
+
+.layout-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.layout-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1024px) {
+  .layout-grid--three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .app-shell {
+    display: block;
+  }
+
+  .app-shell > .app-sidebar {
+    width: min(320px, 85vw);
+    min-width: 0;
+  }
+
+  .layout-grid--two,
+  .layout-grid--three {
+    grid-template-columns: 1fr;
+  }
+}

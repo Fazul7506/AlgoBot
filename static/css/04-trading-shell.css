@@ -1,0 +1,247 @@
+.terminal-page {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding-bottom: 24px;
+}
+
+.terminal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+.terminal-header h1 {
+  margin: 4px 0 0;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1.05;
+}
+
+.terminal-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 13px;
+  border: 1px solid var(--line, rgba(148, 163, 184, 0.2));
+  border-radius: 14px;
+  background: var(--panel, #111827);
+  min-width: 190px;
+}
+
+.terminal-status small {
+  display: block;
+  color: var(--muted, #94a3b8);
+}
+
+.terminal-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.8fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(110px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.terminal-toolbar > * {
+  min-width: 0;
+}
+
+.terminal-toolbar select {
+  width: 100%;
+  min-width: 0;
+}
+
+.quote-box {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line, rgba(148, 163, 184, 0.2));
+  border-radius: 12px;
+  background: var(--panel-2, #151920);
+  overflow: hidden;
+}
+
+.quote-box span,
+.quote-box strong {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quote-box span {
+  font-size: 11px;
+  color: var(--muted, #94a3b8);
+}
+
+.quote-box strong {
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.terminal-workspace {
+  display: grid;
+  grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) minmax(280px, 330px);
+  gap: 12px;
+  align-items: start;
+}
+
+.terminal-watchlist {
+  min-height: 520px;
+  overflow: hidden;
+}
+
+.watchlist-search {
+  padding: 0 12px 10px;
+}
+
+.watchlist-search input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #151920;
+  color: #e5e7eb;
+  border: 1px solid #303640;
+  border-radius: 9px;
+  padding: 9px;
+}
+
+.watchlist-rows {
+  max-height: 610px;
+  overflow: auto;
+}
+
+.watchlist-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 0;
+  border-top: 1px solid #262b33;
+  cursor: pointer;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+}
+
+.watchlist-row:hover,
+.watchlist-row.active {
+  background: #1b2028;
+}
+
+.watchlist-row strong,
+.watchlist-row small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watchlist-row small {
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.chart-controls,
+.chart-indicators,
+.chart-timeframes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chart-controls button,
+.chart-indicators button,
+.chart-timeframes button {
+  border: 1px solid var(--line, rgba(148, 163, 184, 0.2));
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: #34363b;
+  color: #e5e7eb;
+  cursor: pointer;
+}
+
+.chart-controls button.active,
+.chart-indicators button.active,
+.chart-timeframes button.active {
+  background: #ef4444;
+  color: #fff;
+}
+
+.chart-indicators {
+  padding: 8px 0;
+}
+
+.chart-readout {
+  font: 12px/1.4 system-ui;
+  color: #94a3b8;
+  padding: 6px 2px;
+}
+
+.direct-execution-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.direct-execution-grid button {
+  min-height: 48px;
+  font-weight: 800;
+}
+
+.direct-buy {
+  background: #16a34a !important;
+}
+
+.direct-sell {
+  background: #dc2626 !important;
+}
+
+.direct-execution-grid button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.order-result {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line, rgba(148, 163, 184, 0.2));
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.order-result[data-state='pending'] {
+  border-color: #f59e0b;
+}
+
+.order-result[data-state='error'] {
+  border-color: #ef4444;
+}
+
+.order-result[data-state='success'] {
+  border-color: #22c55e;
+}
+
+@media (max-width: 1200px) {
+  .terminal-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .terminal-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .terminal-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .terminal-toolbar {
+    grid-template-columns: 1fr;
+  }
+}

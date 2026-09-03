@@ -23,7 +23,7 @@ class RiskValidator:
         if KillSwitchService().is_active(order.user):
             raise KillSwitchActiveError("Kill switch is active")
 
-        account = getattr(order, "account", None)
+        account = getattr(order, "account", None) or getattr(order, "broker_account", None)
         balance = self._decimal(getattr(account, "balance", 0), "account balance")
         stake = self._decimal(getattr(order, "stake", 0), "stake")
         if stake <= 0:
