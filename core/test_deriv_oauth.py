@@ -18,7 +18,7 @@ class DerivOAuthTests(TestCase):
     def test_legacy_app_routing_is_explicitly_opt_in(self):
         query=parse_qs(urlparse(DerivOAuthService.create_authorization_url("state","challenge")).query); self.assertEqual(query["app_id"],["legacy-app"])
     def test_callback_rejects_state_mismatch_without_restarting_oauth(self):
-        self._oauth_session(); response=self.client.get(reverse("callback"),{"state":"wrong","code":"abc"}); self.assertEqual(response.status_code,302); self.assertEqual(response.url,"/")
+        self._oauth_session(); response=self.client.get(reverse("callback"),{"state":"wrong","code":"abc"}); self.assertEqual(response.status_code,302); self.assertEqual(response.url,reverse("home"))
     def _mock_token_exchange(self,post):
         token_response=Mock(); token_response.raise_for_status.return_value=None; token_response.json.return_value={"access_token":"token","refresh_token":"refresh","expires_in":3600}; post.return_value=token_response
     def _mock_account_response(self,get,accounts=None):
@@ -35,4 +35,4 @@ class DerivOAuthTests(TestCase):
     @patch("core.views_deriv_oauth_safe.requests.post")
     def test_callback_does_not_create_user_without_verified_account(self,post,get):
         self._oauth_session(); self._mock_token_exchange(post); self._mock_account_response(get,[])
-        result=self.client.get(reverse("callback"),{"state":"expected","code":"abc"}); self.assertEqual(result.status_code,302); self.assertEqual(result.url,"/"); self.assertFalse(User.objects.filter(username__startswith="deriv_").exists())
+        result=self.client.get(reverse("callback"),{"state":"expected","code":"abc"}); self.assertEqual(result.status_code,302); self.assertEqual(result.url,reverse("home")); self.assertFalse(User.objects.filter(username__startswith="deriv_").exists())
