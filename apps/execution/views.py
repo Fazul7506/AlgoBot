@@ -9,7 +9,7 @@ from apps.trading.models import Position
 from apps.contracts.models import Contract
 from .serializers import OrderSerializer, PositionSerializer, ContractSerializer, ExecutionLogSerializer, ReconciliationEventSerializer
 from .engine import ExecutionEngine
-from core.billing_entitlements import check_live_order, effective_plan
+from core.billing_entitlements import check, check_live_order, effective_plan
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +28,10 @@ class OrderViewSet(viewsets.ModelViewSet):
         if client_request_id:
             existing = Order.objects.filter(user=request.user, client_request_id=client_request_id).first()
             if existing: return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
+        allowed_orders, used_orders, order_limit = check(request.user, 'orders')
+        if not allowed_orders:
+            plan = effective_plan(request.user)
+            return response.Response({'status':'rejected','code':'ORDER_LIMIT_REACHED','detail':f'Your {plan.name} order allowance has been reached for today.','plan':plan.key,'used':used_orders,'limit':order_limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data); account = data.get('broker_account'); environment = self._environment(account); data['validation_context'] = self._safe_client_context(request.data)
         strategy_selected = bool(str(data.get('strategy') or '').strip())
@@ -36,22 +40,17 @@ class OrderViewSet(viewsets.ModelViewSet):
             if not allowed: return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)): return response.Response({'status':'rejected','code':'LIVE_TRADING_DISABLED','detail':'Live-money trading is disabled by platform configuration.'}, status=status.HTTP_409_CONFLICT)
             try:
-                if strategy_selected:
-                    order = ExecutionEngine().place_consensus_order(request.user, timeframe='M1', context=None, risk_context={}, **data)
-                else:
-                    order = ExecutionEngine().place_order(request.user, **data)
+                if strategy_selected: order = ExecutionEngine().place_consensus_order(request.user, timeframe='M1', context=None, risk_context={}, **data)
+                else: order = ExecutionEngine().place_order(request.user, **data)
             except PermissionError as exc: return response.Response({'status':'rejected','code':'ORDER_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
             except Exception as exc:
                 log.exception('Terminal live execution failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
                 return response.Response({'status':'rejected','code':'EXECUTION_UNAVAILABLE','detail':f'Broker execution could not be completed: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             return response.Response(self.get_serializer(order).data, status=status.HTTP_201_CREATED)
         try:
-            if strategy_selected:
-                order = ExecutionEngine().place_consensus_order(request.user, timeframe='M1', context=None, risk_context={}, **data)
-            else:
-                order = ExecutionEngine().place_order(request.user, **data)
-        except PermissionError as exc:
-            return response.Response({'status':'rejected','code':'ORDER_RISK_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
+            if strategy_selected: order = ExecutionEngine().place_consensus_order(request.user, timeframe='M1', context=None, risk_context={}, **data)
+            else: order = ExecutionEngine().place_order(request.user, **data)
+        except PermissionError as exc: return response.Response({'status':'rejected','code':'ORDER_RISK_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
         except Exception as exc:
             log.exception('Terminal demo execution failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
             return response.Response({'status':'rejected','code':'EXECUTION_UNAVAILABLE','detail':f'Broker execution could not be completed: {exc}','retryable':False}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -59,8 +58,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=False, methods=['post'])
     def preview(self, request):
         try:
-            serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
-            data = serializer.validated_data; account = data.get('broker_account')
+            serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True); data = serializer.validated_data; account = data.get('broker_account')
             if account is None or account.user_id != request.user.id: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_REQUIRED','detail':'Select a connected broker account.'}, status=status.HTTP_409_CONFLICT)
             if not account.is_connection_eligible: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_NOT_READY','detail':'The selected broker account is not connected or its credentials are not usable.'}, status=status.HTTP_409_CONFLICT)
             environment = self._environment(account)
@@ -76,7 +74,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 except Exception:
                     from apps.market_data.models import Tick
                     tick = Tick.objects.filter(symbol__symbol=data.get('symbol')).order_by('-epoch', '-received_at').first()
-                    if tick is None: raise ValueError(f'No persisted broker tick is available for {data.get("symbol")}.')
+                    if tick is None: raise ValueError(f'No persisted broker tick is available for {data.get("symbol")}.' )
                     age = max(0, (timezone.now() - tick.received_at).total_seconds()); max_age = int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30))
                     if age > max_age: raise ValueError(f'Market data is stale ({int(age)}s old; limit {max_age}s).')
                     quote = SimpleNamespace(last_price=tick.quote, bid=tick.bid, ask=tick.ask, spread=tick.spread, timestamp=tick.received_at)
@@ -109,10 +107,8 @@ class OrderViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=True, methods=['post'])
     def retry(self, request, pk=None):
         order = self.get_object()
-        if order.status in {'sent', 'unknown'}:
-            return response.Response({'status':'rejected','code':'EXECUTION_RETRY_FORBIDDEN','detail':'Broker execution state is uncertain. Reconcile the order with the broker before any retry.','retryable':False}, status=status.HTTP_409_CONFLICT)
-        ExecutionEngine().retry(order)
-        return response.Response({'status':'queued'})
+        if order.status in {'sent', 'unknown'}: return response.Response({'status':'rejected','code':'EXECUTION_RETRY_FORBIDDEN','detail':'Broker execution state is uncertain. Reconcile the order with the broker before any retry.','retryable':False}, status=status.HTTP_409_CONFLICT)
+        ExecutionEngine().retry(order); return response.Response({'status':'queued'})
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PositionSerializer; permission_classes=[permissions.IsAuthenticated]
