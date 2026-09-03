@@ -4,6 +4,9 @@ Reports are derived from the supplied portfolio and its persisted related data.
 No synthetic performance values are generated.
 """
 
+import csv
+import io
+
 
 class ReportingService:
     def generate(self, portfolio, report_type="executive", export_format="json"):
@@ -21,7 +24,7 @@ class ReportingService:
         elif performance_relation is not None and hasattr(performance_relation, "first"):
             latest_performance = performance_relation.first()
 
-        return {
+        report = {
             "portfolio_name": getattr(portfolio, "name", "Portfolio"),
             "report_type": report_type,
             "format": export_format,
@@ -32,3 +35,14 @@ class ReportingService:
             "allocation_count": allocations.count() if allocations is not None and hasattr(allocations, "count") else 0,
             "performance": getattr(latest_performance, "metrics", {}) or {},
         }
+        if export_format == "csv":
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(("metric", "value"))
+            for key, value in report.items():
+                if not isinstance(value, (dict, list, tuple)):
+                    writer.writerow((key, value))
+            report["serialized"] = output.getvalue()
+        elif export_format != "json":
+            raise ValueError("Unsupported report format: %s" % export_format)
+        return report

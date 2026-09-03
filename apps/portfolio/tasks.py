@@ -10,12 +10,16 @@ def update_portfolio_valuation(portfolio_id):
 
 @shared_task
 def calculate_portfolio_performance(portfolio_id, returns=None, equity_curve=None):
-    return PortfolioEngine().performance.record(Portfolio.objects.get(id=portfolio_id), returns or [], equity_curve or []).id
+    return PortfolioEngine().performance.record(
+        Portfolio.objects.get(id=portfolio_id),
+        returns if returns is not None else [],
+        equity_curve if equity_curve is not None else [],
+    ).id
 
 
 @shared_task
 def generate_portfolio_forecast(portfolio_id, returns=None):
-    return PortfolioEngine().forecasting.forecast(returns or [])
+    return PortfolioEngine().forecasting.forecast(returns if returns is not None else [])
 
 
 @shared_task

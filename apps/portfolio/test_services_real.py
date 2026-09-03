@@ -3,8 +3,10 @@ from django.test import SimpleTestCase
 
 from .correlation import CorrelationService
 from .diversification import DiversificationService
+from .exposure import ExposureService
 from .forecasting import ForecastingService
 from .optimization import OptimizationService
+from .reporting import ReportingService
 
 
 class PortfolioAnalyticsRealTests(SimpleTestCase):
@@ -64,3 +66,19 @@ class PortfolioAnalyticsRealTests(SimpleTestCase):
         self.assertAlmostEqual(result["herfindahl_index"], 0.38, places=6)
         self.assertEqual(result["effective_positions"], 1 / 0.38)
         self.assertTrue(result["is_concentrated"])
+
+    def test_optimization_respects_weight_bounds(self):
+        result = OptimizationService().optimize(self.items, method="min_variance", constraints={"min_weight": 0.2, "max_weight": 0.5})
+        self.assertAlmostEqual(sum(result["weights"].values()), 1.0, places=6)
+        self.assertTrue(all(0.2 <= weight <= 0.5 for weight in result["weights"].values()))
+
+    def test_exposure_uses_absolute_gross_and_signed_net(self):
+        positions = [{"symbol": "A", "notional": -100}, {"symbol": "B", "notional": 40, "direction": "short"}]
+        service = ExposureService()
+        self.assertEqual(service.gross_exposure(positions), 140.0)
+        self.assertEqual(service.net_exposure(positions), 60.0)
+
+    def test_csv_report_contains_persisted_scalar_fields(self):
+        report = ReportingService().generate(type("Portfolio", (), {"name": "Research", "net_asset_value": 100, "equity": 100, "current_balance": 100, "initial_balance": 100})(), export_format="csv")
+        self.assertIn("metric,value", report["serialized"])
+        self.assertIn("portfolio_name,Research", report["serialized"])

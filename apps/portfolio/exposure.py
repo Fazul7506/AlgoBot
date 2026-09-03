@@ -21,7 +21,7 @@ class ExposureService:
         """
         summary = {}
         
-        for item in exposures:
+        for item in exposures or []:
             if isinstance(item, dict):
                 key = item.get(by_dimension, item.get("market", "unknown"))
                 value = float(item.get("exposure", 0))
@@ -29,6 +29,8 @@ class ExposureService:
                 key = getattr(item, by_dimension, None) or getattr(item, "market", "unknown")
                 value = float(getattr(item, "exposure", 0))
             
+            if not np.isfinite(value):
+                raise ValueError("Exposure values must be finite numbers")
             summary[str(key)] = summary.get(str(key), 0) + value
         
         return summary
@@ -44,12 +46,15 @@ class ExposureService:
             Total gross exposure value
         """
         total = 0
-        for pos in (positions or []):
+        for pos in positions or []:
             if isinstance(pos, dict):
                 value = pos.get("notional") or pos.get("market_value") or abs(pos.get("quantity", 0))
             else:
                 value = getattr(pos, "notional", None) or getattr(pos, "market_value", None) or abs(getattr(pos, "quantity", 0))
-            total += float(value or 0)
+            value = float(value or 0)
+            if not np.isfinite(value):
+                raise ValueError("Position exposures must be finite numbers")
+            total += abs(value)
         
         return float(total)
     
@@ -64,7 +69,7 @@ class ExposureService:
             Net exposure value
         """
         net = 0
-        for pos in (positions or []):
+        for pos in positions or []:
             if isinstance(pos, dict):
                 value = pos.get("notional") or pos.get("market_value") or abs(pos.get("quantity", 0))
                 direction = pos.get("direction", "long").lower()
@@ -74,11 +79,15 @@ class ExposureService:
                 direction = getattr(pos, "direction", "long").lower()
                 quantity = getattr(pos, "quantity", 0)
             
+            value = abs(float(value or 0))
+            if not np.isfinite(value):
+                raise ValueError("Position exposures must be finite numbers")
+
             # Account for position direction
             if direction == "short" or quantity < 0:
-                net -= float(value or 0)
+                net -= value
             else:
-                net += float(value or 0)
+                net += value
         
         return float(net)
     

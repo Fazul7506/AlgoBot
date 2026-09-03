@@ -7,8 +7,8 @@ def safe_divide(a, b):
 
 class AnalyticsService:
     def calculate(self, returns=None, equity_curve=None, benchmark_returns=None):
-        returns = [float(r) for r in (returns or [])]
-        equity_curve = [float(v) for v in (equity_curve or [])]
+        returns = [float(r) for r in (returns if returns is not None else [])]
+        equity_curve = [float(v) for v in (equity_curve if equity_curve is not None else [])]
         total = sum(returns)
         gains = sum(r for r in returns if r > 0)
         losses = abs(sum(r for r in returns if r < 0))
@@ -25,7 +25,7 @@ class AnalyticsService:
             drawdowns.append(dd)
             max_dd = max(max_dd, dd)
         beta = alpha = tracking_error = 0
-        if benchmark_returns:
+        if benchmark_returns is not None and len(benchmark_returns):
             benchmark_returns = [float(r) for r in benchmark_returns]
             n = min(len(returns), len(benchmark_returns))
             r, b = returns[:n], benchmark_returns[:n]

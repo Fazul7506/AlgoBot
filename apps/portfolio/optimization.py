@@ -156,8 +156,23 @@ class OptimizationService:
         weights = np.asarray(weights, dtype=float)
         if not np.isfinite(weights).all() or weights.sum() <= 0:
             raise ValueError("Optimizer produced invalid weights")
-        weights = np.clip(weights, 0.0, 1.0)
-        weights /= weights.sum()
+        min_w = float((constraints or {}).get("min_weight", 0.0))
+        max_w = float((constraints or {}).get("max_weight", 1.0))
+        if min_w < 0 or max_w > 1 or min_w > max_w or len(weights) * min_w > 1 or len(weights) * max_w < 1:
+            raise ValueError("Infeasible min_weight/max_weight constraints")
+        weights = np.clip(weights, min_w, max_w)
+        remaining = 1.0 - float(weights.sum())
+        while abs(remaining) > 1e-10:
+            if remaining > 0:
+                capacity = max_w - weights
+            else:
+                capacity = weights - min_w
+            available = capacity > 1e-12
+            if not np.any(available):
+                raise ValueError("Unable to satisfy weight constraints")
+            adjustment = min(abs(remaining), float(capacity[available].sum()))
+            weights[available] += np.sign(remaining) * adjustment * capacity[available] / capacity[available].sum()
+            remaining = 1.0 - float(weights.sum())
         return weights
 
     @staticmethod

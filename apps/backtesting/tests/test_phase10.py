@@ -9,3 +9,11 @@ def test_monte_carlo_and_optimization_and_replay():
     assert ReplayService().play()['event']=='ReplayStarted'
 def test_dataset_generator():
     assert DatasetGeneratorService().generate([MarketEvent(1,'R_100',100)], [], purpose='ai_training')
+
+def test_non_grid_optimizers_are_implemented():
+    service = ParameterOptimizationService()
+    space = {'a': [1, 2], 'b': [3, 4]}
+    for algorithm in ('random', 'bayesian', 'genetic', 'particle_swarm', 'differential_evolution', 'simulated_annealing', 'hyperband'):
+        results = service.optimize(algorithm, space, iterations=6, seed=7)
+        assert results
+        assert results[0]['score'] >= results[-1]['score']

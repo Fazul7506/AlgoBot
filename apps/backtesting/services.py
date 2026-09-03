@@ -74,15 +74,85 @@ class OptimizationEngine:
 class GridSearchOptimizer(OptimizationEngine):
     def optimize(self, space): return sorted([{'parameters':dict(zip(space.keys(),vals)),'score':self.score(dict(zip(space.keys(),vals)))} for vals in product(*space.values())], key=lambda x:x['score'], reverse=True)
 class GeneticOptimizer(OptimizationEngine):
-    def optimize(self, space, generations=10, population=20, seed=42): return RandomSearchOptimizer().optimize(space, population, seed)[:max(1,population//2)]
+    def optimize(self, space, iterations=50, generations=None, population=20, seed=42):
+        generations = int(generations or max(1, iterations // max(1, population)))
+        return RandomSearchOptimizer().optimize(space, generations * population, seed)[:max(1, population // 2)]
 class RandomSearchOptimizer(OptimizationEngine):
     def optimize(self, space, iterations=50, seed=42):
-        rng=random.Random(seed); return sorted([{'parameters':{k:rng.choice(v) for k,v in space.items()},'score':0} for _ in range(iterations)], key=lambda x:x['score'], reverse=True)
-class BayesianOptimizer(RandomSearchOptimizer): pass
-class ParticleSwarmOptimizer(RandomSearchOptimizer): pass
-class DifferentialEvolutionOptimizer(RandomSearchOptimizer): pass
-class SimulatedAnnealingOptimizer(RandomSearchOptimizer): pass
-class HyperbandOptimizer(RandomSearchOptimizer): pass
+        rng=random.Random(seed); return self._rank([{'parameters':{k:rng.choice(v) for k,v in space.items()}} for _ in range(iterations)])
+    def _rank(self, candidates):
+        return sorted([{**candidate, 'score':self.score(candidate['parameters'])} for candidate in candidates], key=lambda x:x['score'], reverse=True)
+
+class BayesianOptimizer(RandomSearchOptimizer):
+    """Discrete surrogate-style search: sample, then exploit the best values."""
+    def optimize(self, space, iterations=50, seed=42):
+        keys=list(space); rng=random.Random(seed); candidates=[]
+        for _ in range(max(1, iterations)):
+            candidates.append({'parameters':{key:rng.choice(space[key]) for key in keys}})
+        ranked=self._rank(candidates)
+        best=ranked[0]['parameters'] if ranked else {}
+        for _ in range(max(1, iterations // 2)):
+            params=dict(best)
+            if keys:
+                key=rng.choice(keys); params[key]=rng.choice(space[key])
+            ranked.extend(self._rank([{'parameters':params}]))
+            ranked=sorted(ranked, key=lambda x:x['score'], reverse=True)
+            best=ranked[0]['parameters']
+        return ranked[:max(1, iterations)]
+
+class ParticleSwarmOptimizer(RandomSearchOptimizer):
+    def optimize(self, space, iterations=50, population=12, seed=42):
+        keys=list(space); rng=random.Random(seed)
+        particles=[{key:rng.randrange(len(space[key])) for key in keys} for _ in range(max(2, population))]
+        best=None; results=[]
+        for _ in range(max(1, iterations)):
+            scored=[]
+            for particle in particles:
+                params={key:space[key][particle[key]] for key in keys}
+                scored.append((self.score(params), particle.copy(), params))
+            scored.sort(reverse=True, key=lambda item:item[0]); best=scored[0] if best is None or scored[0][0]>best[0] else best
+            results.extend({'parameters':item[2], 'score':item[0]} for item in scored)
+            for particle in particles:
+                for key in keys:
+                    if rng.random() < 0.5:
+                        particle[key]=best[1][key]
+                    elif rng.random() < 0.25:
+                        particle[key]=rng.randrange(len(space[key]))
+        return sorted(results, key=lambda x:x['score'], reverse=True)[:max(1, population)]
+
+class DifferentialEvolutionOptimizer(RandomSearchOptimizer):
+    def optimize(self, space, iterations=50, population=12, seed=42):
+        keys=list(space); rng=random.Random(seed); size=max(3, population)
+        population_values=[{key:rng.randrange(len(space[key])) for key in keys} for _ in range(size)]
+        for _ in range(max(1, iterations)):
+            for index, target in enumerate(population_values):
+                donors=[population_values[i] for i in range(size) if i != index]
+                a,b,c=rng.sample(donors, 3)
+                trial={key:(a[key] + rng.choice((-1, 0, 1)) * (b[key]-c[key])) % len(space[key]) for key in keys}
+                target_score=self.score({key:space[key][target[key]] for key in keys})
+                trial_score=self.score({key:space[key][trial[key]] for key in keys})
+                if trial_score >= target_score: population_values[index]=trial
+        return self._rank([{'parameters':{key:space[key][item[key]] for key in keys}} for item in population_values])
+
+class SimulatedAnnealingOptimizer(RandomSearchOptimizer):
+    def optimize(self, space, iterations=50, seed=42):
+        keys=list(space); rng=random.Random(seed)
+        current={key:rng.choice(space[key]) for key in keys}; current_score=self.score(current); results=[]
+        for step in range(max(1, iterations)):
+            candidate=dict(current)
+            if keys:
+                key=rng.choice(keys); candidate[key]=rng.choice(space[key])
+            score=self.score(candidate); temperature=max(0.01, 1.0-step/max(1, iterations))
+            if score >= current_score or rng.random() < math.exp((score-current_score)/temperature): current,current_score=candidate,score
+            results.append({'parameters':dict(current), 'score':current_score})
+        return sorted(results, key=lambda x:x['score'], reverse=True)
+
+class HyperbandOptimizer(RandomSearchOptimizer):
+    def optimize(self, space, iterations=50, seed=42):
+        candidates=super().optimize(space, iterations=max(1, iterations), seed=seed)
+        while len(candidates)>1:
+            candidates=candidates[:max(1, (len(candidates)+1)//2)]
+        return candidates
 class ParameterOptimizationService:
     algorithms={'grid':GridSearchOptimizer,'random':RandomSearchOptimizer,'bayesian':BayesianOptimizer,'genetic':GeneticOptimizer,'particle_swarm':ParticleSwarmOptimizer,'differential_evolution':DifferentialEvolutionOptimizer,'simulated_annealing':SimulatedAnnealingOptimizer,'hyperband':HyperbandOptimizer,'optuna':BayesianOptimizer}
     def optimize(self, algorithm, space, **kw): return self.algorithms[algorithm]().optimize(space, **kw)

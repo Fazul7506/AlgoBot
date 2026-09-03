@@ -3,7 +3,7 @@
 
 class PerformanceSummaryService:
     def summarize(self, returns=None):
-        returns = list(returns or [])
+        returns = list(returns) if returns is not None else []
         if not returns:
             return {"average_return": 0.0, "volatility": 0.0}
         mean_return = sum(returns) / len(returns)

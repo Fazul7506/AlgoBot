@@ -33,6 +33,12 @@ class PortfolioEngineTests(TestCase):
         self.assertEqual(result["excess_return"], 0.04)
         self.assertIn("tracking_error", result)
 
+    def test_benchmark_series_calculates_tracking_error(self):
+        result = BenchmarkService().compare([0.10, 0.04], [0.08, 0.02])
+        self.assertEqual(result["observations"], 2)
+        self.assertAlmostEqual(result["excess_return"], 0.02)
+        self.assertAlmostEqual(result["tracking_error"], 0.0)
+
     def test_reporting_includes_summary_fields(self):
         report = ReportingService().generate(self.portfolio, report_type="executive", export_format="json")
         self.assertEqual(report["portfolio_name"], "Core")
