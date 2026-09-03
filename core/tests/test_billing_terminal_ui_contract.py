@@ -10,10 +10,20 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("Usage is measured from persisted platform audit/database records", template)
         self.assertNotIn("filter(p=>p.plan!=='ENTERPRISE'||admin)", template)
 
+    def test_billing_backend_catalogue_includes_enterprise_without_ui_role_filtering(self):
+        from pathlib import Path
+        billing = Path("core/views_billing.py").read_text(encoding="utf-8")
+        self.assertIn('"ENTERPRISE": _safe_price(getattr(settings, "ALGOBOT_ENTERPRISE_PRICE_CENTS", None))', billing)
+        self.assertIn('return Response({"plans": _plans()', billing)
+        template = Path("templates/core/billing.html").read_text(encoding="utf-8")
+        self.assertNotIn("p.plan!=='ENTERPRISE'||admin", template)
+        self.assertIn("if(name==='ENTERPRISE')", template)
+
     def test_terminal_template_uses_canonical_shell_navigation(self):
         from pathlib import Path
         template = Path("templates/core/trading.html").read_text(encoding="utf-8")
-        self.assertIn("/trading/", template)
+        self.assertIn('data-page="trading-terminal"', template)
+        self.assertIn('data-api-root="/api/"', template)
         shell = Path("static/js/base_shell.js").read_text(encoding="utf-8")
         frontend_shell = Path("static/js/core/frontend_shell.js").read_text(encoding="utf-8")
         self.assertIn("syncActiveNavigation", shell)
