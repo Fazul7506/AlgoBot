@@ -11,7 +11,7 @@ import uuid
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Optional
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import requests
 from django.conf import settings
@@ -283,19 +283,16 @@ class PaymentService:
         if configured:
             parsed = urlsplit(configured)
             if parsed.scheme in {"http", "https"} and parsed.netloc and not any(ch.isspace() for ch in configured):
-                # Payment providers expect a simple absolute callback URL.
-                # Drop query/fragment components instead of forwarding arbitrary
-                # characters that may violate provider URL validation.
+                # Keep the configured endpoint, while rebuilding query values
+                # from trusted provider parameters below.
                 base = urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
-                if not base.endswith("/"):
-                    base += "/"
             else:
                 logger.error("Invalid %s payment callback URL; falling back to BASE_URL", setting_name)
                 base = f"{self._base_url()}{default_path}"
         else:
             base = f"{self._base_url()}{default_path}"
         if params:
-            logger.warning("Ignoring callback query parameters for provider-safe redirect URL")
+            base = f"{base}?{urlencode(params, doseq=True)}"
         return base
 
     @staticmethod

@@ -30,7 +30,6 @@ class PlanEntitlementMiddleware:
     def __init__(self,get_response): self.get_response=get_response
     def __call__(self,request):
         is_api=request.path.startswith("/api/"); is_authenticated=bool(getattr(request.user,"is_authenticated",False))
-        if is_api and self._requires_authenticated_user(request) and not is_authenticated: return self._unauthenticated_response()
         if not is_api or not is_authenticated: return self.get_response(request)
         is_execution=self._is_execution_request(request); metric=self._feature_metric(request) or "api_calls"
         if is_execution:

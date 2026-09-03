@@ -10,7 +10,7 @@ class ForecastingService:
     HORIZONS = {"7d": 7, "30d": 30, "90d": 90}
 
     def forecast(self, returns, period="30d", horizon=None, method="arima"):
-        values = np.asarray(list(returns or []), dtype=float)
+        values = np.asarray(list(returns) if returns is not None else [], dtype=float)
         values = values[np.isfinite(values)]
         if period not in self.HORIZONS and horizon is None:
             raise ValueError(f"Unsupported period: {period}")
@@ -120,7 +120,7 @@ class ForecastingService:
 
     def forecast_accuracy(self, returns, horizon=1, train_window=None):
         """Walk-forward MAE/RMSE against observations that were not used to fit."""
-        values = np.asarray(list(returns or []), dtype=float)
+        values = np.asarray(list(returns) if returns is not None else [], dtype=float)
         values = values[np.isfinite(values)]
         horizon = int(horizon)
         if horizon < 1 or len(values) < 25 + horizon:
@@ -150,7 +150,7 @@ class ForecastingService:
 
     @staticmethod
     def scenario_analysis(returns, scenarios=None):
-        values = np.asarray(list(returns or []), dtype=float)
+        values = np.asarray(list(returns) if returns is not None else [], dtype=float)
         values = values[np.isfinite(values)]
         if len(values) == 0:
             return {}
