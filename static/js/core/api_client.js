@@ -56,11 +56,12 @@
   }
 
   async function guardedFetch(input, init = {}, retryCsrf = true) {
+    const options = init;
     const raw = typeof input === 'string' ? input : input?.url || '';
     const url = resolveUrl(raw);
-    const method = String(init.method || (typeof input === 'object' && input?.method) || 'GET').toUpperCase();
+    const method = String(options.method || (typeof input === 'object' && input?.method) || 'GET').toUpperCase();
     const headers = new Headers((typeof input === 'object' && input?.headers) || {});
-    new Headers(init.headers || {}).forEach((value, key) => headers.set(key, value));
+    new Headers(options.headers || {}).forEach((value, key) => headers.set(key, value));
     headers.set('Accept', headers.get('Accept') || 'application/json');
     const isProtected = protectedTarget(url);
 
@@ -70,14 +71,14 @@
       if (token && !headers.has('X-CSRFToken')) headers.set('X-CSRFToken', token);
     }
 
-    let requestInit = { ...init, method, headers, credentials: init.credentials || (isProtected ? 'include' : 'same-origin') };
+    let requestInit = { ...options, method, headers, credentials: options.credentials || (isProtected ? 'include' : 'same-origin') };
     if ((url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') && typeof requestInit.body === 'string') {
       try { const payload = JSON.parse(requestInit.body); payload.validation_context = { ...(payload.validation_context || {}), ...(window.__algobotAiOrderContext || {}) }; requestInit.body = JSON.stringify(payload); } catch (_) {}
     }
 
     const controller = new AbortController();
-    const callerSignal = init.signal;
-    const timeoutMs = Number.isFinite(Number(init.__algoTimeoutMs)) ? Math.max(1000, Number(init.__algoTimeoutMs)) : 30000;
+    const callerSignal = options.signal;
+    const timeoutMs = Number.isFinite(Number(options.__algoTimeoutMs)) ? Math.max(1000, Number(options.__algoTimeoutMs)) : 30000;
     const timer = setTimeout(() => controller.abort(new Error('API request timeout')), timeoutMs);
     const signal = callerSignal && typeof AbortSignal.any === 'function' ? AbortSignal.any([callerSignal, controller.signal]) : controller.signal;
     if (callerSignal?.aborted) controller.abort(callerSignal.reason);
@@ -85,7 +86,7 @@
       const response = await nativeFetch(url.toString(), { ...requestInit, signal });
       if (retryCsrf && response.status === 403 && !SAFE_METHODS.has(method) && isProtected) {
         const payload = parsePayload(await response.clone().text());
-        if (payload?.code === 'CSRF_FAILED') { await bootstrapCsrf(); return guardedFetch(input, { ...init, headers: { ...Object.fromEntries(headers.entries()), 'X-CSRFToken': csrfToken() } }, false); }
+        if (payload?.code === 'CSRF_FAILED') { await bootstrapCsrf(); return guardedFetch(input, { ...options, headers: { ...Object.fromEntries(headers.entries()), 'X-CSRFToken': csrfToken() } }, false); }
       }
       return response;
     } catch (error) {
