@@ -9,6 +9,9 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("Custom pricing", template)
         self.assertIn("Usage is measured from persisted platform audit/database records", template)
         self.assertNotIn("filter(p=>p.plan!=='ENTERPRISE'||admin)", template)
+        self.assertNotIn("Contact sales", template)
+        self.assertIn('data-provider="intasend"', template)
+        self.assertIn('data-provider="pesapal"', template)
 
     def test_billing_backend_catalogue_includes_enterprise_without_ui_role_filtering(self):
         from pathlib import Path
@@ -17,7 +20,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('return Response({"plans": _plans()', billing)
         template = Path("templates/core/billing.html").read_text(encoding="utf-8")
         self.assertNotIn("p.plan!=='ENTERPRISE'||admin", template)
-        self.assertIn("if(name==='ENTERPRISE')", template)
+        self.assertNotIn("if(name==='ENTERPRISE')", template)
+        self.assertIn('data-checkout-plan="${esc(name)}"', template)
 
     def test_terminal_template_uses_canonical_shell_navigation(self):
         from pathlib import Path
