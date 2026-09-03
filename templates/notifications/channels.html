@@ -11,9 +11,10 @@
 {% block content %}
 <div class="notifications-page" data-notification-page data-status-url="{% url 'notification_channels_status' %}" data-health-url="{% url 'telegram_health' %}">
   <p class="eyebrow">NOTIFICATIONS</p>
-  <h1>Notification channels</h1>
+  <h1>Notification Center</h1>
   <p class="intro">Manage the verified channels AlgoBot can use to deliver trading, risk, security and system notifications.</p>
-  <div class="runtime-status" data-telegram-runtime-status>Telegram bot: checking…</div>
+  <div class="runtime-status" data-telegram-runtime-status>Checking broker notification status…</div>
+  <p class="intro">No fabricated client-side events are shown; delivery state comes from authenticated backend records.</p>
   <div class="channel-grid">
     <article class="channel-card" data-channel-card="gmail">
       <div class="channel-head"><div class="channel-icon" aria-label="Gmail icon"><svg viewBox="0 0 48 48" role="img"><path fill="#EA4335" d="M5 10v28h6V18l13 10 13-10v20h6V10L24 25 5 10z"/><path fill="#4285F4" d="M5 10l19 15v7L5 17z"/><path fill="#34A853" d="M43 10L24 25v7l19-15z"/></svg></div><div><h2>Gmail</h2><div class="status {% if channels.gmail.connected %}verified{% endif %}" data-channel-status>{% if channels.gmail.connected %}✓ Verified{% else %}Not connected{% endif %}</div></div></div>

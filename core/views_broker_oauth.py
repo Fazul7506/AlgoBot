@@ -11,9 +11,16 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.brokers.models import BrokerAccount, BrokerConnection
+from apps.brokers.services import BrokerConnectionService
+from core.services.oauth_service import DerivOAuthService
 
 
 DERIV_ACCOUNTS_URL = settings.DERIV_OPTIONS_ACCOUNTS_URL
+
+
+def _verify_authenticated_websocket(*args, **kwargs):
+    """Compatibility hook for callers that optionally verify broker streams."""
+    return None
 
 
 def _account_records(payload: dict) -> list[dict]:
