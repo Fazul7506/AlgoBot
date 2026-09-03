@@ -33,6 +33,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
     def select(self,request,pk=None):
         if not settings.ENABLE_BROKER_ACCOUNT_SWITCH:return response.Response({'detail':'Broker account switching is disabled by platform configuration.'},status=status.HTTP_403_FORBIDDEN)
         account=self.get_object()
+        if str(account.status).lower() != 'active': return response.Response({'detail':'The selected broker account is not active.'},status=status.HTTP_409_CONFLICT)
         if not account.is_connection_eligible:return response.Response({'detail':'The selected broker account is not connected and ready.'},status=status.HTTP_409_CONFLICT)
         actual=str((account.credentials or {}).get('account_type') or '').lower().strip(); requested=str(request.data.get('account_type') or '').lower().strip()
         if actual not in {'demo','real'}:return response.Response({'detail':'The broker has not confirmed this account type yet. Synchronize the account first.'},status=status.HTTP_409_CONFLICT)
