@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from core.services.encryption_service import CredentialEncryptionService
@@ -34,6 +35,7 @@ class BrokerAccount(models.Model):
     margin = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     free_margin = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     status = models.CharField(max_length=24, choices=choices(c.ACCOUNT_STATUSES), default='active')
+    is_preferred = models.BooleanField(default=False)
     credentials = models.JSONField(default=dict, blank=True)
     access_token = models.TextField(blank=True)
     refresh_token = models.TextField(blank=True)
@@ -44,7 +46,8 @@ class BrokerAccount(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         unique_together = [('broker', 'account_id')]
-        indexes = [models.Index(fields=['user', 'status']), models.Index(fields=['user', 'token_status'])]
+        indexes = [models.Index(fields=['user', 'status']), models.Index(fields=['broker', 'is_preferred']), models.Index(fields=['user', 'token_status'])]
+        constraints = [models.UniqueConstraint(fields=['user'], condition=Q(is_preferred=True), name='unique_preferred_broker_account_per_user')]
     def __str__(self): return f'{self.broker.broker_type}:{self.account_id}'
     def set_access_token(self, token: str) -> None: self.access_token = CredentialEncryptionService().encrypt(token or '')
     def get_access_token(self) -> str:
@@ -83,7 +86,7 @@ class BrokerConnection(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:
         indexes = [models.Index(fields=['broker', 'status'], name='brokers_bro_broker__2b0b4d_idx'), models.Index(fields=['broker_account', 'status'], name='brokers_bro_acct_stat_idx'), models.Index(fields=['last_ping'], name='brokers_bro_last_pi_743fac_idx')]
-        constraints = [models.UniqueConstraint(fields=['broker_account'], condition=models.Q(broker_account__isnull=False), name='unique_broker_connection_per_account')]
+        constraints = [models.UniqueConstraint(fields=['broker_account'], condition=Q(broker_account__isnull=False), name='unique_broker_connection_per_account')]
 
 
 class BrokerConnectionLog(models.Model):
@@ -127,13 +130,13 @@ class Order(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [models.Index(fields=['user', 'status']), models.Index(fields=['broker', 'status'], name='brokers_ord_broker__e4e374_idx'), models.Index(fields=['account', 'status'], name='brokers_ord_acct_stat_idx')]
-        constraints = [models.UniqueConstraint(fields=['user', 'account', 'client_order_id'], condition=~models.Q(client_order_id=''), name='unique_client_order_id_per_account')]
+        constraints = [models.UniqueConstraint(fields=['user', 'account', 'client_order_id'], condition=~Q(client_order_id=''), name='unique_client_order_id_per_account')]
 
 
 class ExecutionReport(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='execution_reports')
     execution_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
-    requested_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    requested_price = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     slippage = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     latency = models.FloatField(default=0)
     fees = models.DecimalField(max_digits=20, decimal_places=8, default=0)
