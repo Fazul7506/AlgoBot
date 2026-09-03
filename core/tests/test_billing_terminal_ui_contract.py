@@ -34,11 +34,11 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("window.AlgoBotBaseShell?.syncActiveNavigation", frontend_shell)
         self.assertNotIn("link.href = '/analysis/'", frontend_shell)
 
-    def test_shared_api_clients_attach_csrf_to_mutations(self):
+    def test_shared_api_clients_centralize_csrf_on_mutations(self):
         from pathlib import Path
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
         guard = Path("static/js/core/api_execution_guard.js").read_text(encoding="utf-8")
         self.assertIn("X-CSRFToken", client)
-        self.assertIn("X-CSRFToken", guard)
         self.assertIn("credentials: options.credentials || 'include'", client)
-        self.assertIn("credentials: init.credentials || 'include'", guard)
+        self.assertNotIn("window.fetch =", guard)
+        self.assertIn("__algoBotApiExecutionGuard", guard)
