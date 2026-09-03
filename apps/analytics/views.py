@@ -8,7 +8,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 
 from apps.analysis.advanced import analyze_candles
-from market_data.models import Candle, MarketSnapshot, MarketSymbol
+from apps.market_data.models import Candle, MarketSnapshot, MarketSymbol
 from trading.models import PortfolioSnapshot, Trade
 
 
@@ -41,7 +41,10 @@ def analytics_dashboard(request):
 def analysis_data(request):
     symbol = (request.GET.get("symbol") or "R_100").strip().upper()
     timeframe = (request.GET.get("timeframe") or "M1").strip().upper()
-    limit = min(max(int(request.GET.get("limit", 300)), 50), 1000)
+    try:
+        limit = min(max(int(request.GET.get("limit", 300)), 50), 1000)
+    except (TypeError, ValueError):
+        limit = 300
     market = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
     if not market:
         return JsonResponse({"status": "error", "message": "Unknown or inactive market symbol."}, status=404)
