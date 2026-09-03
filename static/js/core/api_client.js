@@ -21,19 +21,13 @@
     if (cookieToken) return decodeURIComponent(cookieToken);
     return document.querySelector('meta[name="csrf-token"]')?.content || '';
   }
-  function resolveUrl(path) {
-    const raw = aliases[path] || path || '/';
-    return new URL(raw, apiBase || window.location.origin);
-  }
+  function resolveUrl(path) { return new URL(aliases[path] || path || '/', apiBase || window.location.origin); }
   function protectedTarget(url) {
     const origins = new Set([window.location.origin]);
     if (apiBase) { try { origins.add(new URL(apiBase, window.location.origin).origin); } catch (_) {} }
     return origins.has(url.origin);
   }
-  function parsePayload(text) {
-    if (!text) return {};
-    try { return JSON.parse(text); } catch (_) { return { detail: text }; }
-  }
+  function parsePayload(text) { if (!text) return {}; try { return JSON.parse(text); } catch (_) { return { detail: text }; } }
   function messageFromPayload(payload, fallback) {
     if (!payload) return fallback;
     if (typeof payload === 'string') return payload;
@@ -41,11 +35,11 @@
     if (typeof payload.message === 'string') return payload.message;
     if (typeof payload.error === 'string') return payload.error;
     if (payload.detail && typeof payload.detail === 'object') return Object.entries(payload.detail).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('; ');
-    if (typeof payload === 'object') {
-      const entries = Object.entries(payload).filter(([k]) => !['code', 'status'].includes(k));
-      if (entries.length) return entries.map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : v}`).join('; ');
-    }
+    if (typeof payload === 'object') return Object.entries(payload).filter(([k]) => !['code', 'status'].includes(k)).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : v}`).join('; ') || fallback;
     return fallback;
+  }
+  function emitError(error) {
+    window.dispatchEvent(new CustomEvent('algobot:api-error', { detail: { url: error.url, method: error.method, status: error.status, code: error.code, message: error.message, retryable: error.retryable } }));
   }
 
   class APIError extends Error {
@@ -62,7 +56,8 @@
   }
 
   async function guardedFetch(input, init = {}, retryCsrf = true) {
-    let url = resolveUrl(typeof input === 'string' ? input : input?.url || '');
+    const raw = typeof input === 'string' ? input : input?.url || '';
+    const url = resolveUrl(raw);
     const method = String(init.method || (typeof input === 'object' && input?.method) || 'GET').toUpperCase();
     const headers = new Headers((typeof input === 'object' && input?.headers) || {});
     new Headers(init.headers || {}).forEach((value, key) => headers.set(key, value));
@@ -77,11 +72,7 @@
 
     let requestInit = { ...init, method, headers, credentials: init.credentials || (isProtected ? 'include' : 'same-origin') };
     if ((url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') && typeof requestInit.body === 'string') {
-      try {
-        const payload = JSON.parse(requestInit.body);
-        payload.validation_context = { ...(payload.validation_context || {}), ...(window.__algobotAiOrderContext || {}) };
-        requestInit.body = JSON.stringify(payload);
-      } catch (_) {}
+      try { const payload = JSON.parse(requestInit.body); payload.validation_context = { ...(payload.validation_context || {}), ...(window.__algobotAiOrderContext || {}) }; requestInit.body = JSON.stringify(payload); } catch (_) {}
     }
 
     const controller = new AbortController();
@@ -93,20 +84,15 @@
     try {
       const response = await nativeFetch(url.toString(), { ...requestInit, signal });
       if (retryCsrf && response.status === 403 && !SAFE_METHODS.has(method) && isProtected) {
-        const clone = response.clone();
-        const payload = parsePayload(await clone.text());
-        if (payload?.code === 'CSRF_FAILED') {
-          await bootstrapCsrf();
-          return guardedFetch(input, { ...init, headers: { ...Object.fromEntries(headers.entries()), 'X-CSRFToken': csrfToken() } }, false);
-        }
+        const payload = parsePayload(await response.clone().text());
+        if (payload?.code === 'CSRF_FAILED') { await bootstrapCsrf(); return guardedFetch(input, { ...init, headers: { ...Object.fromEntries(headers.entries()), 'X-CSRFToken': csrfToken() } }, false); }
       }
       return response;
     } catch (error) {
       if (controller.signal.aborted && !callerSignal?.aborted) {
-        const timeout = new APIError(`API request timed out after ${timeoutMs}ms`, { code: 'API_TIMEOUT', url: url.toString(), method });
-        throw timeout;
+        const timeout = new APIError(`API request timed out after ${timeoutMs}ms`, { code: 'API_TIMEOUT', url: url.toString(), method }); emitError(timeout); throw timeout;
       }
-      throw error;
+      const network = new APIError(error?.message || 'Network request failed', { code: 'NETWORK_ERROR', url: url.toString(), method }); emitError(network); throw network;
     } finally { clearTimeout(timer); }
   }
 
@@ -114,17 +100,14 @@
   window.__algoBotApiClientFetch = true;
 
   class APIClient {
-    constructor({ baseURL = apiBase, defaultHeaders = {}, timeout = 25000 } = {}) {
-      this.baseURL = String(baseURL || '').replace(/\/+$/, ''); this.defaultHeaders = { Accept: 'application/json', ...defaultHeaders }; this.timeout = timeout;
-    }
+    constructor({ baseURL = apiBase, defaultHeaders = {}, timeout = 25000 } = {}) { this.baseURL = String(baseURL || '').replace(/\/+$/, ''); this.defaultHeaders = { Accept: 'application/json', ...defaultHeaders }; this.timeout = timeout; }
     buildUrl(path) { if (!path) return this.baseURL || '/'; if (/^https?:\/\//i.test(path)) return path; return `${this.baseURL}${path.startsWith('/') ? path : `/${path}`}`; }
     async request(path, options = {}) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), this.timeout);
+      const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), this.timeout);
       try {
         const response = await guardedFetch(this.buildUrl(path), { ...options, headers: { ...this.defaultHeaders, ...(options.headers || {}) }, signal: options.signal || controller.signal, __algoTimeoutMs: this.timeout });
         const payload = parsePayload(await response.text());
-        if (!response.ok) throw new APIError(messageFromPayload(payload, `Request failed (${response.status})`), { status: response.status, payload, url: response.url || this.buildUrl(path), method: options.method || 'GET', response });
+        if (!response.ok) { const error = new APIError(messageFromPayload(payload, `HTTP ${response.status} request failure`), { status: response.status, payload, url: response.url || this.buildUrl(path), method: options.method || 'GET', response }); emitError(error); throw error; }
         return payload;
       } finally { clearTimeout(timer); }
     }
