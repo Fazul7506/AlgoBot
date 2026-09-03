@@ -5,8 +5,8 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.exceptions import APIException
-from rest_framework.authentication import SessionAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from core.api_authentication import BrowserSessionAuthentication
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
 from .serializers import *
 from .services import BrokerConnectionService, ExecutionEngine, SynchronizationService
@@ -27,7 +27,7 @@ class JWTAuthenticatedPermission(permissions.IsAuthenticated):
 class BrokerViewSet(viewsets.ReadOnlyModelViewSet):
     queryset=Broker.objects.all(); serializer_class=BrokerSerializer; permission_classes=[permissions.IsAuthenticated]
 class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=BrokerAccountSerializer; permission_classes=[JWTAuthenticatedPermission]; authentication_classes=[SessionAuthentication,JWTAuthentication]
+    serializer_class=BrokerAccountSerializer; permission_classes=[JWTAuthenticatedPermission]; authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self): return BrokerAccount.objects.filter(user=self.request.user).select_related('broker').order_by('broker__name','account_id')
     @decorators.action(detail=True,methods=['post'])
     def select(self,request,pk=None):
@@ -38,7 +38,10 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         if actual not in {'demo','real'}: return response.Response({'detail':'The broker has not confirmed this account type yet. Synchronize the account first.'},status=status.HTTP_409_CONFLICT)
         if requested and requested!=actual: return response.Response({'detail':f'Selected account is {actual}, not {requested}.'},status=status.HTTP_409_CONFLICT)
         if not account.is_connection_eligible: return response.Response({'detail':'The selected broker account is not connected and ready.'},status=status.HTTP_409_CONFLICT)
-        with transaction.atomic(): BrokerAccount.objects.filter(user=request.user,is_preferred=True).update(is_preferred=False); account.is_preferred=False; account.save(update_fields=['is_preferred'])
+        with transaction.atomic():
+            BrokerAccount.objects.filter(user=request.user,is_preferred=True).update(is_preferred=False)
+            account.is_preferred=True
+            account.save(update_fields=['is_preferred'])
         select_account(request,account); serialized=BrokerAccountSerializer(account,context={'request':request}).data
         return response.Response({'switch_enabled':True,'active_account':serialized,'account':serialized,'previous_account_id':None,'active_account_id':account.id})
     @decorators.action(detail=False,methods=['get'])
@@ -57,10 +60,10 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         except Exception as exc:logger.exception('broker_account_sync_unexpected_failure',extra={'account_id':account.pk});return response.Response({'detail':'Broker synchronization failed; the last known account data was preserved.','broker_status':'error','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
         return response.Response({'source':f'{synced.broker.broker_type}_authorize','account':BrokerAccountSerializer(synced,context={'request':request}).data,'broker_data':broker_data})
 class BrokerConnectionViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=BrokerConnectionSerializer; permission_classes=[permissions.IsAuthenticated]; authentication_classes=[SessionAuthentication,JWTAuthentication]
+    serializer_class=BrokerConnectionSerializer; permission_classes=[permissions.IsAuthenticated]; authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):return BrokerConnection.objects.filter(broker_account__user=self.request.user).select_related('broker','broker_account').order_by('-updated_at')
 class BrokerOrderViewSet(viewsets.ModelViewSet):
-    serializer_class=OrderSerializer; permission_classes=[permissions.IsAuthenticated]; authentication_classes=[SessionAuthentication,JWTAuthentication]
+    serializer_class=OrderSerializer; permission_classes=[permissions.IsAuthenticated]; authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):return Order.objects.filter(user=self.request.user)
     def create(self,request,*args,**kwargs):
         serializer=self.get_serializer(data=request.data);serializer.is_valid(raise_exception=True);data=dict(serializer.validated_data);account=data.get('account')
@@ -70,24 +73,24 @@ class BrokerOrderViewSet(viewsets.ModelViewSet):
         except (BrokerAuthenticationError,BrokerConnectionError,BrokerOrderError) as exc:return response.Response({'detail':str(exc),'status':'broker_error'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return response.Response(ExecutionReportSerializer(report).data,status=status.HTTP_201_CREATED)
 class ExecutionReportViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=ExecutionReportSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[SessionAuthentication,JWTAuthentication]
+    serializer_class=ExecutionReportSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):return ExecutionReport.objects.filter(order__user=self.request.user)
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=PositionSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[SessionAuthentication,JWTAuthentication]
+    serializer_class=PositionSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):return Position.objects.filter(account__user=self.request.user)
     @decorators.action(detail=False,methods=['get'])
     def open(self,request):return response.Response(self.get_serializer(self.get_queryset().filter(status='open'),many=True).data)
 class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=TradeReconciliationSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[SessionAuthentication,JWTAuthentication]
+    serializer_class=TradeReconciliationSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):return TradeReconciliation.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
 class BrokerHealthViewSet(viewsets.ViewSet):
-    permission_classes=[permissions.IsAuthenticated];authentication_classes=[SessionAuthentication,JWTAuthentication]
+    permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def list(self,request):
         accounts=list(BrokerAccount.objects.filter(user=request.user).select_related('broker').order_by('broker__name','account_id'));active=get_active_account(request.user,request=request)
-        return response.Response({'accounts':BrokerAccountSerializer(accounts,many=True,context={'request':request}).data,'connected':bool(active),'active_account_id':active.id if active else None,'preferred_account_id':None,'switch_enabled':settings.ENABLE_BROKER_ACCOUNT_SWITCH,'source':'broker_connections'})
+        return response.Response({'accounts':BrokerAccountSerializer(accounts,many=True,context={'request':request}).data,'connected':bool(active),'active_account_id':active.id if active else None,'preferred_account_id':active.id if active else None,'switch_enabled':settings.ENABLE_BROKER_ACCOUNT_SWITCH,'source':'broker_connections'})
 @decorators.api_view(['POST'])
 @decorators.permission_classes([JWTAuthenticatedPermission])
-@decorators.authentication_classes([SessionAuthentication,JWTAuthentication])
+@decorators.authentication_classes([BrowserSessionAuthentication,JWTAuthentication])
 def connect_broker(request):
     broker_id=request.data.get('broker_id') or request.data.get('broker');account_id=request.data.get('account_id')
     if not broker_id or not account_id:return response.Response({'detail':'broker_id and account_id are required.'},status=status.HTTP_400_BAD_REQUEST)
@@ -99,10 +102,11 @@ def connect_broker(request):
     except asyncio.TimeoutError:return response.Response({'detail':'Broker connection timed out while waiting for the provider.','status':'timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
     except Exception as exc:logger.exception('broker_connection_unexpected_failure',extra={'account_id':account.id});return response.Response({'detail':'Broker connection failed unexpectedly.','status':'error','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
     BrokerAccount.objects.filter(user=request.user,is_preferred=True).update(is_preferred=False)
+    account.is_preferred=True; account.save(update_fields=['is_preferred'])
     account.refresh_from_db();return response.Response({'connection':BrokerConnectionSerializer(connection).data,'account':BrokerAccountSerializer(account,context={'request':request}).data})
 @decorators.api_view(['POST'])
 @decorators.permission_classes([JWTAuthenticatedPermission])
-@decorators.authentication_classes([SessionAuthentication,JWTAuthentication])
+@decorators.authentication_classes([BrowserSessionAuthentication,JWTAuthentication])
 def disconnect_broker(request):
     broker_id=request.data.get('broker_id') or request.data.get('broker');account_id=request.data.get('account_id')
     if not broker_id or not account_id:return response.Response({'detail':'broker_id and account_id are required.'},status=status.HTTP_400_BAD_REQUEST)

@@ -16,6 +16,7 @@ class BillingHardeningTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="billing-user", password="pass12345")
         self.client.login(username="billing-user", password="pass12345")
+        self.api_headers = {"HTTP_ORIGIN": "http://testserver"}
 
     def test_provider_return_pages_are_public_and_direct_navigation_is_protected(self):
         self.client.logout()
@@ -89,7 +90,7 @@ class BillingHardeningTests(TestCase):
         subscription.expires_at = expiry
         subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at"])
 
-        response = self.client.post(reverse("billing_cancel_subscription"), data={}, content_type="application/json")
+        response = self.client.post(reverse("billing_cancel_subscription"), data={}, content_type="application/json", **self.api_headers)
         self.assertEqual(response.status_code, 200)
         subscription.refresh_from_db()
         self.assertFalse(subscription.recurring)

@@ -28,7 +28,7 @@ def _ensure_defaults(user):
 
 def _connection_destination(request):
     """Return the broker workspace, never the dashboard, after OAuth failure."""
-    return "broker_marketplace_page" if request.user.is_authenticated else "home"
+    return "broker_marketplace_page" if request.user.is_authenticated else "broker_connect_page"
 
 
 def _fail(request, message, event, **extra):
