@@ -17,4 +17,5 @@ Pillow>=11,<12
 numpy>=2,<3
 pandas>=2,<3
 scipy>=1.14,<2
+scikit-learn>=1.7,<2
 django-anymail>=13,<14
