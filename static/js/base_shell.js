@@ -27,7 +27,7 @@
 
   function removeToast(node) { if (!node || node.dataset.removing === 'true') return; node.dataset.removing='true'; node.classList.add('is-leaving'); window.setTimeout(() => node.remove(), 220); }
   function trimToastStack(target) { const nodes=[...target.querySelectorAll('.toast')]; while(nodes.length>MESSAGE_LIMIT) removeToast(nodes.shift()); }
-  function wireToast(node,lifetime=MESSAGE_TTL) { if(!node||node.dataset.toastBound==='true') return; node.dataset.toastBound='true'; node.querySelector('[data-toast-close]')?.addEventListener('click',event=>{event.preventDefault();removeToast(node);}); if(lifetime>0) window.setTimeout(()=>removeToast(node),lifetime); }
+  function wireToast(node,lifetime=MESSAGE_TTL) { if(!node||node.dataset.toastBound==='true')return; node.dataset.toastBound='true'; node.querySelector('[data-toast-close]')?.addEventListener('click',event=>{event.preventDefault();removeToast(node);}); if(lifetime>0)window.setTimeout(()=>removeToast(node),lifetime); }
   function ensureStack() { let target=stack(); if(target)return target; target=document.createElement('div'); target.id='django-message-stack'; target.className='toast-stack'; target.setAttribute('aria-live','polite'); target.setAttribute('aria-atomic','false'); document.body.appendChild(target); return target; }
   function showDjangoMessage(text,level='info') { if(!text||typeof text!=='string')return; const clean=text.replace(/\s+/g,' ').trim().slice(0,500); if(!clean||/^\s*[[{]/.test(clean))return; const normalizedLevel=['success','warning','error','info'].includes(level)?level:'info'; const target=ensureStack(); const recent=[...target.querySelectorAll('.toast')].slice(-1)[0]; if(recent?.dataset.messageText===clean&&recent?.dataset.toastLevel===normalizedLevel)return; const node=document.createElement('div'); node.className=`toast ${normalizedLevel}`; node.dataset.toastLevel=normalizedLevel; node.dataset.messageText=clean; node.setAttribute('role',normalizedLevel==='error'?'alert':'status'); const message=document.createElement('span'); message.className='toast-message'; message.textContent=clean; const button=document.createElement('button'); button.type='button'; button.className='toast-close'; button.dataset.toastClose='1'; button.setAttribute('aria-label','Close notification'); button.title='Close notification'; button.textContent='×'; node.append(message,button); target.appendChild(node); wireToast(node); trimToastStack(target); }
   window.AlgoBotMessage=showDjangoMessage;
@@ -43,14 +43,14 @@
   function syncActiveNavigation({anchor=false}={}) {
     const path=currentPath(); const links=navigationLinks(); let active=null; let activeLength=-1;
     links.forEach(link=>{const href=link.getAttribute('href'); const matched=routeMatches(path,href); link.classList.remove('active','is-current-page'); link.removeAttribute('aria-current'); if(matched&&href&&href.length>activeLength){active=link;activeLength=href.length;}});
-    if(active){active.classList.add('active','is-current-page');active.setAttribute('aria-current','page'); if(anchor){window.requestAnimationFrame(()=>{try{active.scrollIntoView({block:'nearest',inline:'nearest'});}catch(_){}});}}
+    if(active){active.classList.add('active','is-current-page');active.setAttribute('aria-current','page');if(anchor)window.requestAnimationFrame(()=>{try{active.scrollIntoView({block:'nearest',inline:'nearest'});}catch(_){}});}
     return active;
   }
 
   function bindSidebarScrollState(sidebar) {
     if(sidebar.dataset.scrollStateBound==='true')return; sidebar.dataset.scrollStateBound='true'; let lastKnownTop=Math.max(0,sidebar.scrollTop||0); let restoreTimer=null; let restoreObserver=null;
     const readPosition=()=>{try{const raw=sessionStorage.getItem(SIDEBAR_SCROLL_KEY);if(!raw)return null;const saved=JSON.parse(raw);if(!saved||typeof saved!=='object')return null;const top=Number(saved.top);if(!Number.isFinite(top)||top<0)return null;return{top,atBottom:saved.atBottom===true};}catch(_){return null;}};
-    const savePosition=()=>{const maxScroll=Math.max(0,sidebar.scrollHeight-sidebar.clientHeight);const top=Math.max(0,Math.min(lastKnownTop,maxScroll));const atBottom=maxScroll>0&&top>=Math.max(0,maxScroll-12);try{sessionStorage.setItem(SIDEBAR_SCROLL_KEY,JSON.stringify({top,atBottom}));}catch(_){} };
+    const savePosition=()=>{const maxScroll=Math.max(0,sidebar.scrollHeight-sidebar.clientHeight);const top=Math.max(0,Math.min(lastKnownTop,maxScroll));const atBottom=maxScroll>0&&top>=Math.max(0,maxScroll-12);try{sessionStorage.setItem(SIDEBAR_SCROLL_KEY,JSON.stringify({top,atBottom}));}catch(_){}};
     const applySavedPosition=saved=>{if(!saved)return false;const maxScroll=Math.max(0,sidebar.scrollHeight-sidebar.clientHeight);const target=saved.atBottom?maxScroll:Math.min(saved.top,maxScroll);sidebar.scrollTop=target;lastKnownTop=target;return sidebar.scrollTop===target;};
     const stopRestoreObserver=()=>{if(restoreObserver){restoreObserver.disconnect();restoreObserver=null;}if(restoreTimer){window.cancelAnimationFrame(restoreTimer);restoreTimer=null;}};
     const restorePosition=()=>{const saved=readPosition();if(!saved)return;stopRestoreObserver();const apply=()=>applySavedPosition(saved);apply();window.requestAnimationFrame(apply);window.requestAnimationFrame(()=>window.requestAnimationFrame(apply));let frames=0;const retry=()=>{apply();frames+=1;if(frames<30)restoreTimer=window.requestAnimationFrame(retry);else restoreTimer=null;};restoreTimer=window.requestAnimationFrame(retry);if(window.MutationObserver){restoreObserver=new MutationObserver(()=>apply());restoreObserver.observe(sidebar,{childList:true,subtree:true});window.setTimeout(stopRestoreObserver,1200);}};
@@ -62,8 +62,6 @@
   function bindNavigation() {
     const sidebar=$('#app-sidebar'); if(!sidebar||sidebar.dataset.navigationBound==='true')return; sidebar.dataset.navigationBound='true'; const backdrop=$('[data-sidebar-backdrop]');const mobile=$('[data-mobile-menu]');const toggle=$('[data-sidebar-toggle]');const shell=$('.app-shell');const storageKey='algobot.sidebar.collapsed';
     syncActiveNavigation({anchor:true}); bindSidebarScrollState(sidebar);
-    // Re-anchor when another script renders/replaces navigation nodes. This is
-    // deliberately scoped to the sidebar so it cannot react to page content.
     if(window.MutationObserver&&!sidebar.dataset.activeAnchorObserver){sidebar.dataset.activeAnchorObserver='true';const observer=new MutationObserver(()=>syncActiveNavigation({anchor:true}));observer.observe(sidebar,{childList:true,subtree:true});}
     const setMobileOpen=open=>{const next=!!open;sidebar.classList.toggle('is-open',next);if(backdrop)backdrop.hidden=!next;if(mobile){mobile.setAttribute('aria-expanded',String(next));mobile.setAttribute('aria-label',next?'Close navigation':'Open navigation');}document.body.classList.remove('mobile-nav-open');document.documentElement.classList.remove('mobile-nav-open');};
     setMobileOpen(false);
@@ -75,4 +73,5 @@
   function bindTheme(){const button=$('[data-theme-toggle]');if(!button||button.dataset.themeBound==='true')return;button.dataset.themeBound='true';const storageKey='algobot-theme';const apply=theme=>{document.documentElement.dataset.theme=theme;button.setAttribute('aria-pressed',String(theme==='light'));};let stored=null;try{stored=localStorage.getItem(storageKey);}catch(_){}if(stored==='light'||stored==='dark')apply(stored);button.addEventListener('click',()=>{const next=document.documentElement.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem(storageKey,next);}catch(_){}apply(next);});}
   function boot(){bindNavigation();bindTheme();bindApiMessages();if(window.AlgoBotBrokerState)window.AlgoBotBrokerState.subscribe(setBrokerStateAttribute);const target=stack();target?.querySelectorAll('.toast').forEach(node=>wireToast(node,MESSAGE_TTL));if(target)trimToastStack(target);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+  window.AlgoBotBaseShell=Object.freeze({syncActiveNavigation,showDjangoMessage});
 })();

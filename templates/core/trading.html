@@ -3,7 +3,7 @@
 {% block title %}Trading Terminal | AlgoBot{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/04-trading-shell.css' %}">{% endblock %}
 {% block content %}
-<main id="main-content" class="terminal-page algobot-shared-page" data-page="trading-terminal" data-api-root="/api/">
+<section id="terminal-page" class="terminal-page algobot-shared-page" data-page="trading-terminal" data-api-root="/api/">
   <header class="terminal-header"><div><p class="eyebrow">LIVE EXECUTION</p><h1>Trading Terminal</h1><div class="selected-strategy-banner" data-selected-strategy><span>Strategy</span><strong>Manual trading</strong></div></div><div class="terminal-status"><span class="status-pulse"></span><strong id="terminal-status">Broker account</strong><small data-terminal-account>No connected account</small></div></header>
   <section class="terminal-toolbar panel"><div class="field toolbar-symbol"><label for="symbol">Broker instrument</label><select id="symbol" data-symbol><option value="">Loading broker instruments…</option></select></div><div class="quote-box"><span>Bid</span><strong data-q="bid">Waiting for broker quote…</strong></div><div class="quote-box"><span>Ask / Last</span><strong data-q="ask">Waiting for broker quote…</strong></div><div class="quote-box"><span>AI</span><strong data-recommended>Not analysed</strong></div><button class="btn ghost toolbar-refresh" data-action="terminal-refresh" type="button">Refresh market</button></section>
   <div class="terminal-workspace">
@@ -13,7 +13,7 @@
   </div>
   <section class="panel ai-terminal-panel" data-ai-panel><div class="panel-head"><div><p class="eyebrow">AI INTELLIGENCE</p><h2>AI Decision Engine</h2></div><button class="btn ghost" type="button" data-ai-analyze>Analyse market</button></div><div class="ai-terminal-grid"><div><span>Prediction</span><strong data-ai-prediction>No analysis</strong></div><div><span>Recommendation</span><strong data-ai-recommendation>No analysis</strong></div><div><span>Confidence</span><strong data-ai-confidence-card>No analysis</strong></div><div><span>Regime</span><strong data-ai-regime>No analysis</strong></div><div class="ai-explanation" data-ai-explanation>Run analysis to request an AI decision.</div></div></section>
   <section class="workspace-grid three terminal-lower"><article class="panel"><div class="panel-head"><div><h2>Open positions</h2></div><a href="/performance/">Analytics</a></div><div class="mini-table" data-positions></div></article><article class="panel"><div class="panel-head"><div><h2>Strategy signals</h2></div><a href="/strategies/">Manage</a></div><div class="signal-feed" data-signals></div></article><article class="panel"><div class="panel-head"><div><h2>Recent orders</h2></div><a href="/monitoring/">Monitor</a></div><div class="mini-table" data-orders></div></article></section>
-</main>
+</section>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js" defer></script>
 <script src="{% static 'js/core/frontend_runtime_bootstrap.js' %}?v=20260903-csrf-free" defer></script>
 <script src="{% static 'js/broker_native_market.js' %}?v=20260829-brokernative5" defer></script>

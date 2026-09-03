@@ -1,4 +1,4 @@
-"""Live subscription entitlements and metering policy."""
+"""Authoritative subscription entitlements, metering and quota policy."""
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
@@ -17,10 +17,11 @@ PLAN_ENTITLEMENTS: Dict[str, PlanEntitlement] = {
     "PRO": PlanEntitlement("PRO","Pro",25000,300,25,500,2000,1000,5,25,250,True,True,"highest","priority"),
     "ENTERPRISE": PlanEntitlement("ENTERPRISE","Enterprise",-1,-1,-1,-1,-1,-1,-1,-1,-1,True,True,"dedicated","dedicated"),
 }
-FEATURE_LABELS={"api_calls":"Trading API calls","strategies":"active strategy configurations","backtests":"backtests","predictions":"AI predictions","orders":"orders","broker_accounts":"connected broker accounts","automations":"automation runs","live_orders":"live-money orders"}
+FEATURE_LABELS={"api_calls":"Execution API calls","strategies":"active strategy configurations","backtests":"backtests","predictions":"AI predictions","orders":"orders","broker_accounts":"connected broker accounts","automations":"automation runs","live_orders":"live-money orders"}
 EXECUTION_PATH_PREFIXES=("/api/orders/","/api/trading/execute/","/api/trades/execute/","/api/execution/")
 EXECUTION_METHODS=("POST","PUT","PATCH")
 RESETTABLE_METRICS={"api_calls","backtests","predictions","orders","automations","live_orders"}
+AUDIT_METRICS={"api_calls","backtests","predictions","orders","automations","live_orders"}
 
 def subscription_for(user):
     if not getattr(user,"is_authenticated",False): return None
@@ -31,7 +32,6 @@ def is_admin_user(user):
     return bool(getattr(user,"is_authenticated",False) and (getattr(user,"is_staff",False) or getattr(user,"is_superuser",False)))
 
 def effective_plan(user):
-    """Administrators permanently receive unrestricted Enterprise entitlements."""
     if not getattr(user,"is_authenticated",False): return PLAN_ENTITLEMENTS["FREE"]
     if is_admin_user(user): return PLAN_ENTITLEMENTS["ENTERPRISE"]
     subscription=subscription_for(user)
@@ -92,8 +92,8 @@ def entitlement_payload(user):
     items={}
     for metric in ("api_calls","strategies","backtests","predictions","orders","broker_accounts","automations","live_orders"):
         limit=limit_for(plan,metric); current=usage(user,metric)
-        item={"used":current,"limit":None if limit<0 else limit,"unlimited":limit<0,"remaining":None if limit<0 else max(0,limit-current)}
+        item={"used":current,"limit":None if limit<0 else limit,"unlimited":limit<0,"remaining":None if limit<0 else max(0,limit-current),"source":"audit_log" if metric in AUDIT_METRICS else "database"}
         if metric in RESETTABLE_METRICS: item.update({"reset_at":None if limit<0 else reset_at("day").isoformat(),"reset_window":None if limit<0 else "day"})
         else: item.update({"reset_at":None,"reset_window":None,"limit_type":"capacity"})
         items[metric]=item
-    return {"plan":plan.key,"name":plan.name,"active":True if admin else bool(subscription.is_active and (not subscription.expires_at or subscription.expires_at>timezone.now())),"expires_at":None if admin else (subscription.expires_at.isoformat() if subscription.expires_at else None),"recurring":False if admin else bool(subscription.recurring),"priority":plan.priority,"support":plan.support,"features":{"live_trading":plan.live_trading,"advanced_ai":plan.advanced_ai},"usage":items,"reset_at":None if admin else reset_at("day").isoformat(),"reset_policy":{"daily":"Every day at 00:00 UTC","minute":"Every minute; applies to the trading API-call burst limit","subscription":"Administrators have permanent Enterprise entitlements with no monthly renewal; paid user subscriptions fall back to FREE when expired","capacity":"Connected broker-account and active-strategy limits are capacity limits"}}
+    return {"plan":plan.key,"name":plan.name,"active":True if admin else bool(subscription.is_active and (not subscription.expires_at or subscription.expires_at>timezone.now())),"expires_at":None if admin else (subscription.expires_at.isoformat() if subscription.expires_at else None),"recurring":False if admin else bool(subscription.recurring),"priority":plan.priority,"support":plan.support,"features":{"live_trading":plan.live_trading,"advanced_ai":plan.advanced_ai},"usage":items,"reset_at":None if admin else reset_at("day").isoformat(),"reset_policy":{"daily":"Every day at 00:00 UTC","minute":"Every minute; applies to the execution API burst limit","subscription":"Administrators have permanent Enterprise entitlements with no monthly renewal; paid user subscriptions fall back to FREE when expired","capacity":"Connected broker-account and active-strategy limits are capacity limits","measurement":"Usage counters are derived from persisted audit events or database records; no synthetic usage is generated."}}

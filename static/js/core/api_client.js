@@ -1,6 +1,19 @@
 (() => {
   'use strict';
 
+  const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+  function readCookie(name) {
+    const prefix = `${name}=`;
+    return document.cookie.split(';').map(v => v.trim()).find(v => v.startsWith(prefix))?.slice(prefix.length) || '';
+  }
+
+  function csrfToken() {
+    const cookieToken = readCookie('csrftoken');
+    if (cookieToken) return decodeURIComponent(cookieToken);
+    return document.querySelector('meta[name="csrf-token"]')?.content || '';
+  }
+
   class APIClient {
     constructor({ baseURL = '', defaultHeaders = {}, timeout = 25000 } = {}) {
       this.baseURL = String(baseURL || '').replace(/\/+$/, '');
@@ -24,6 +37,12 @@
         ...this.defaultHeaders,
         ...(options.headers || {}),
       };
+      if (!SAFE_METHODS.has(method)) {
+        const token = csrfToken();
+        if (token && !Object.keys(headers).some(key => key.toLowerCase() === 'x-csrftoken')) {
+          headers['X-CSRFToken'] = token;
+        }
+      }
 
       const requestOptions = {
         ...options,
@@ -85,5 +104,5 @@
   }
 
   const apiClient = new APIClient({ baseURL: document.querySelector('meta[name="algobot-api-base"]')?.content || '' });
-  window.AlgoBotAPI = Object.freeze({ APIClient, apiClient });
+  window.AlgoBotAPI = Object.freeze({ APIClient, apiClient, csrfToken });
 })();
