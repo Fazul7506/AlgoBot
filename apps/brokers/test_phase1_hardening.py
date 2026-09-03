@@ -25,7 +25,7 @@ class TradingFoundationTests(TestCase):
             metadata={'auth': 'none'},
         )
 
-    def make_account(self, account_id, preferred=False, account_type='demo', broker=None):
+    def make_account(self, account_id, preferred=False, account_type='demo', broker=None, latency=50):
         broker = broker or self.paper
         account = BrokerAccount.objects.create(
             user=self.user,
@@ -38,18 +38,21 @@ class TradingFoundationTests(TestCase):
             broker=broker,
             broker_account=account,
             status='connected',
+            latency=latency,
             last_ping=timezone.now(),
             connected_at=timezone.now(),
         )
         return account
 
-    def test_global_selector_uses_preferred_connected_account(self):
-        first = self.make_account('PREF-1', preferred=True)
-        self.make_account('OTHER-1', preferred=False)
+    def test_global_selector_chooses_best_connected_account_without_preferred_semantics(self):
+        first = self.make_account('ACCOUNT-1', preferred=False, latency=80)
+        second = self.make_account('ACCOUNT-2', preferred=False, latency=20)
 
         selected = SmartOrderRouter().route(self.user)
 
-        self.assertEqual(selected.pk, first.pk)
+        self.assertEqual(selected.pk, second.pk)
+        self.assertFalse(first.is_preferred)
+        self.assertFalse(second.is_preferred)
 
     def test_environment_mismatch_is_rejected_before_order_creation(self):
         account = self.make_account('DEMO-1', preferred=True, account_type='demo')
