@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Monitoring | AlgoBot{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}">{% endblock %}
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}">{% endblock %}
 {% block content %}
 <main id="main-content" class="monitoring-workspace" data-monitoring-dashboard>
   <header class="page-heading"><div><p class="eyebrow">OPERATIONS</p><h1>Monitoring</h1></div><div class="monitoring-controls"><button class="btn ghost" type="button" data-monitoring-refresh>Refresh</button><a class="btn primary" href="/trading/">Trading terminal</a></div></header>
@@ -11,5 +11,4 @@
   <p class="monitoring-note">Last refresh: <span data-monitoring-updated>server-rendered</span></p>
 </main>
 {% endblock %}
-{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/monitoring.css' %}">{% endblock %}
 {% block extra_js %}<script src="{% static 'js/monitoring_dashboard.js' %}" defer></script>{% endblock %}
