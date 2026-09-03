@@ -31,6 +31,8 @@ class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
             equity=Decimal('100'),
             free_margin=Decimal('100'),
         )
+        account.set_access_token(f'test-token-{account_id}')
+        account.save(update_fields=['access_token'])
         BrokerConnection.objects.create(
             broker=self.broker,
             broker_account=account,
