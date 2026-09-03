@@ -12,6 +12,7 @@ from django.utils import timezone
 from . import constants as c
 from .exceptions import BrokerRoutingError, BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
+from core.billing_entitlements import check
 
 
 class BrokerRegistry:
@@ -40,7 +41,6 @@ class BrokerManager:
     def register_broker(self, broker_type, adapter_path, **metadata): BrokerRegistry().register(broker_type, adapter_path); return metadata
     def enable(self, broker): broker.status = 'active'; broker.save(update_fields=['status']); return broker
     def disable(self, broker): broker.status = 'disabled'; broker.save(update_fields=['status']); return broker
-    def select_default_account(self, user): return SmartOrderRouter().route(user, mode='priority')
     async def reconnect(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
         await BrokerConnectionService().disconnect(broker, account); return await BrokerConnectionService().connect(broker, account)
@@ -105,15 +105,13 @@ class MarketDataFreshnessService:
 
 
 class SmartOrderRouter:
-    def route(self, user, symbol=None, mode='priority', preferred_account=None):
+    def route(self, user, symbol=None, mode='latency'):
         qs = BrokerAccount.objects.select_related('broker').filter(user=user, status='active', broker__status='active')
-        if preferred_account: qs = qs.filter(pk=preferred_account.pk)
         candidates = [account for account in qs if account.is_connection_eligible]
         if not candidates: raise BrokerRoutingError('No active broker accounts are available')
-        if mode == 'priority': return sorted(candidates, key=lambda a: (not a.is_preferred, a.broker.name))[0]
         def score(account):
             conn = BrokerConnection.objects.filter(broker_account=account).order_by('-updated_at').first()
-            return (conn.latency if conn else 999999, not account.is_preferred, account.broker.name)
+            return (conn.latency if conn else 999999, account.broker.name, account.account_id)
         return sorted(candidates, key=score)[0]
 
 
@@ -296,7 +294,7 @@ class BrokerHealthService:
 
 
 class FailoverService:
-    def fallback_account(self, order): return SmartOrderRouter().route(order.user, order.symbol, preferred_account=None)
+    def fallback_account(self, order): return SmartOrderRouter().route(order.user, order.symbol)
 
 
 class AccountService:
