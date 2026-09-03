@@ -32,6 +32,13 @@ class ExecutionEngine:
         return account
 
     @staticmethod
+    async def _assert_authoritative_account_async(user, account):
+        if account is None or account.user_id != user.id: raise PermissionError('The selected broker account does not belong to this user')
+        eligible = await asyncio.to_thread(lambda: account.is_connection_eligible)
+        if not eligible: raise PermissionError('The selected broker account is not connected or its credentials are not usable')
+        return account
+
+    @staticmethod
     def _order_persistence_data(data):
         """Strip execution-only kwargs before constructing the Order model."""
         persisted = dict(data)
@@ -83,7 +90,7 @@ class ExecutionEngine:
         if order.status in {c.ORDER_STATUS_ACCEPTED, c.ORDER_STATUS_EXECUTED}: return order
         if order.status in {c.ORDER_STATUS_CANCELLED, c.ORDER_STATUS_FAILED}: raise PermissionError(f'Cannot execute order in {order.status} state')
         account = await asyncio.to_thread(BrokerAccount.objects.select_related('broker').get, pk=order.broker_account_id, user_id=order.user_id)
-        self._assert_authoritative_account(order.user, account)
+        await self._assert_authoritative_account_async(order.user, account)
         validation = getattr(order, 'validation_context', {}) or {}; consensus = validation.get('ai_consensus') or {}
         if validation.get('execution_mode') == 'strategy_auto':
             decision = str(consensus.get('decision', '')).lower(); confidence = float(consensus.get('confidence', 0) or 0)
