@@ -8,10 +8,6 @@
       this.timeout = timeout;
     }
 
-    getCsrfToken() {
-      return document.querySelector('meta[name="csrf-token"]')?.content || document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '';
-    }
-
     buildUrl(path) {
       if (!path) return this.baseURL || '/';
       if (/^https?:\/\//i.test(path)) return path;
@@ -29,14 +25,11 @@
         ...(options.headers || {}),
       };
 
-      if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && !headers['X-CSRFToken'] && !headers['X-CSRF-Token']) {
-        headers['X-CSRFToken'] = this.getCsrfToken();
-      }
-
       const requestOptions = {
         ...options,
         method,
         headers,
+        credentials: options.credentials || 'include',
         signal: controller.signal,
       };
 
