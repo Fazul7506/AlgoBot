@@ -35,11 +35,16 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         account=self.get_object()
         if str(account.status).lower() != 'active': return response.Response({'detail':'The selected broker account is not active.'},status=status.HTTP_409_CONFLICT)
         if not account.is_connection_eligible:return response.Response({'detail':'The selected broker account is not connected and ready.'},status=status.HTTP_409_CONFLICT)
-        actual=str((account.credentials or {}).get('account_type') or '').lower().strip(); requested=str(request.data.get('account_type') or '').lower().strip()
+        credentials=account.credentials or {}
+        actual=str(credentials.get('account_type') or '').lower().strip()
+        if not actual and isinstance(credentials.get('realtime'),dict): actual=str(credentials['realtime'].get('account_type') or '').lower().strip()
+        requested=str(request.data.get('account_type') or '').lower().strip()
+        if requested not in {'demo','real'}: requested=''
         if actual not in {'demo','real'}:return response.Response({'detail':'The broker has not confirmed this account type yet. Synchronize the account first.'},status=status.HTTP_409_CONFLICT)
         if requested and requested!=actual:return response.Response({'detail':f'Selected account is {actual}, not {requested}.'},status=status.HTTP_409_CONFLICT)
+        previous_id=request.session.get('active_broker_account_id')
         select_account(request,account); serialized=BrokerAccountSerializer(account,context={'request':request}).data
-        return response.Response({'switch_enabled':True,'active_account':serialized,'account':serialized,'previous_account_id':None,'active_account_id':account.id})
+        return response.Response({'switch_enabled':True,'active_account':serialized,'account':serialized,'previous_account_id':previous_id,'active_account_id':account.id})
     @decorators.action(detail=False,methods=['get'])
     def active(self,request):
         account=get_active_account(request.user,request=request)
