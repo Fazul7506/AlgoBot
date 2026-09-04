@@ -75,10 +75,13 @@
     if (!SAFE_METHODS.has(method) && isProtected) {
       if (!csrfToken()) await bootstrapCsrf();
       const token = csrfToken();
-      if (token && !headers.has('X-CSRFToken')) headers.set('X-CSRFToken', token);
+      if (token && (!headers.has('X-CSRFToken') || !headers.get('X-CSRFToken'))) headers.set('X-CSRFToken', token);
     }
 
-    let requestInit = { ...options, method, headers, credentials: options.credentials || 'include' };
+    // API requests are cross-origin in production, so never let a legacy
+    // same-origin option suppress the session/CSRF cookies on the API host.
+    const credentials = isProtected ? 'include' : (options.credentials || 'include');
+    let requestInit = { ...options, method, headers, credentials };
     if ((url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') && typeof requestInit.body === 'string') {
       try { const payload = JSON.parse(requestInit.body); payload.validation_context = { ...(payload.validation_context || {}), ...(window.__algobotAiOrderContext || {}) }; requestInit.body = JSON.stringify(payload); } catch (_) {}
     }
