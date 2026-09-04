@@ -4,7 +4,11 @@
 
   const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
   const nativeFetch = window.fetch.bind(window);
-  const apiBase = document.querySelector('meta[name="algobot-api-base"]')?.content || '';
+  const configuredApiBase = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
+  const defaultApiBase = window.location.hostname === 'algobot.dpdns.org' || window.location.hostname === 'www.algobot.dpdns.org'
+    ? 'https://api.algobot.dpdns.org'
+    : '';
+  const apiBase = (configuredApiBase || defaultApiBase).replace(/\/+$/, '');
   const aliases = {'/trading/order/': '/api/orders/', '/trading/preview/': '/api/orders/preview/', '/trading/ai/predict/': '/api/ai/predict/'};
   let bootstrappedCsrfToken = '';
 
@@ -14,14 +18,22 @@
     return item ? item.slice(prefix.length) : '';
   }
   function csrfToken() {
+    // When the API is a sibling subdomain, its CSRF cookie may be host-only.
+    // Prefer the token returned by the API bootstrap endpoint once available;
+    // otherwise use the normal page cookie/meta sources.
+    if (bootstrappedCsrfToken) return bootstrappedCsrfToken;
     const cookieToken = readCookie('csrftoken');
     if (cookieToken) return decodeURIComponent(cookieToken);
-    return document.querySelector('meta[name="csrf-token"]')?.content || bootstrappedCsrfToken || '';
+    return document.querySelector('meta[name="csrf-token"]')?.content || '';
   }
-  function resolveUrl(path) { return new URL(aliases[path] || path || '/', apiBase || window.location.origin); }
+  function resolveUrl(path) {
+    return new URL(aliases[path] || path || '/', apiBase || window.location.origin);
+  }
   function protectedTarget(url) {
     const origins = new Set([window.location.origin]);
-    if (apiBase) { try { origins.add(new URL(apiBase, window.location.origin).origin); } catch (_) {} }
+    if (apiBase) {
+      try { origins.add(new URL(apiBase, window.location.origin).origin); } catch (_) {}
+    }
     return origins.has(url.origin);
   }
   function parsePayload(text) { if (!text) return {}; try { return JSON.parse(text); } catch (_) { return { detail: text }; } }
@@ -50,8 +62,8 @@
     const response = await nativeFetch(csrfUrl.toString(), { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
     if (!response.ok) return false;
     const payload = parsePayload(await response.clone().text());
-    if (typeof payload.csrfToken === 'string') bootstrappedCsrfToken = payload.csrfToken;
-    return Boolean(csrfToken());
+    if (typeof payload.csrfToken === 'string' && payload.csrfToken) bootstrappedCsrfToken = payload.csrfToken;
+    return Boolean(bootstrappedCsrfToken || csrfToken());
   }
 
   async function guardedFetch(input, init = {}, retryCsrf = true) {
@@ -67,10 +79,13 @@
     if (!SAFE_METHODS.has(method) && isProtected) {
       if (!csrfToken()) await bootstrapCsrf();
       const token = csrfToken();
-      if (token && !headers.has('X-CSRFToken')) headers.set('X-CSRFToken', token);
+      if (token && (!headers.has('X-CSRFToken') || !headers.get('X-CSRFToken'))) headers.set('X-CSRFToken', token);
     }
 
-    let requestInit = { ...options, method, headers, credentials: options.credentials || 'include' };
+    // API requests are cross-origin in production, so never let a legacy
+    // same-origin option suppress the session/CSRF cookies on the API host.
+    const credentials = isProtected ? 'include' : (options.credentials || 'include');
+    let requestInit = { ...options, method, headers, credentials };
     if ((url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') && typeof requestInit.body === 'string') {
       try { const payload = JSON.parse(requestInit.body); payload.validation_context = { ...(payload.validation_context || {}), ...(window.__algobotAiOrderContext || {}) }; requestInit.body = JSON.stringify(payload); } catch (_) {}
     }
@@ -86,6 +101,7 @@
       if (retryCsrf && response.status === 403 && !SAFE_METHODS.has(method) && isProtected) {
         const payload = parsePayload(await response.clone().text());
         if (payload?.code === 'CSRF_FAILED') {
+          bootstrappedCsrfToken = '';
           await bootstrapCsrf();
           const refreshedToken = csrfToken();
           if (refreshedToken) {

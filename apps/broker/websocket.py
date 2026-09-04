@@ -1,1 +1,0 @@
-"""Broker app extension point."""

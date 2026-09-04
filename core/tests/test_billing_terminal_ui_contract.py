@@ -38,7 +38,17 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         from pathlib import Path
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
         guard = Path("static/js/core/api_execution_guard.js").read_text(encoding="utf-8")
-        self.assertIn("X-CSRFToken", client)
-        self.assertIn("credentials: options.credentials || 'include'", client)
+        self.assertIn("bootstrappedCsrfToken", client)
+        self.assertIn("credentials = isProtected ? 'include'", client)
+        self.assertIn("bootstrappedCsrfToken = ''", client)
         self.assertNotIn("window.fetch =", guard)
         self.assertIn("__algoBotApiExecutionGuard", guard)
+
+    def test_terminal_account_switch_uses_canonical_api_client(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        self.assertIn("const api=(u,o={},t=10000)=>window.AlgoBotFrontendData.request(u,o,t);", terminal)
+        self.assertIn("switchAuthoritativeAccount", terminal)
+        self.assertIn("/api/brokers/accounts/${encodeURIComponent(id)}/select/", terminal)
+        self.assertNotIn("same-origin", terminal)
+        self.assertNotIn("X-CSRFToken", terminal)
