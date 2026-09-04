@@ -14,7 +14,7 @@ from django.utils import timezone
 from .models import AIModel, ModelVersion, TrainingJob
 from .training_dataset import build_direction_dataset
 from .validation import walk_forward_validate
-from trading.ai.candlestick_features import FEATURE_NAMES
+from .candlestick_features import FEATURE_NAMES
 
 logger = logging.getLogger(__name__)
 FEATURES = tuple(FEATURE_NAMES) + ("ai_feedback_accuracy", "ai_feedback_mean_return", "ai_feedback_sample_count")
@@ -32,7 +32,7 @@ def normalize_timeframe(timeframe: str) -> str:
 def _model_dir() -> Path:
     configured = os.environ.get("AI_MODEL_DIR", "").strip()
     if getattr(settings, "DEBUG", False):
-        path = Path(configured or (Path(__file__).resolve().parents[2] / "trading" / "ai" / "models"))
+        path = Path(configured or (Path(__file__).resolve().parent / "models"))
     else:
         if not configured:
             raise RuntimeError("AI_MODEL_DIR must point to durable model storage in production")
@@ -87,7 +87,6 @@ class MarketModelTrainer:
             if aggregate["accuracy"] < min_accuracy:
                 logger.info("Candidate failed accuracy gate", extra={"symbol": symbol, "algorithm": algorithm, "accuracy": aggregate["accuracy"]})
                 continue
-            # Conservative promotion score: reward expectancy/profitability and penalize drawdown.
             score = (aggregate["accuracy"] * 0.30) + (aggregate["f1"] * 0.15) + (aggregate["sharpe"] * 0.20) + (aggregate["expectancy"] * 1000.0 * 0.20) + (min(aggregate["profit_factor"], 5.0) / 5.0 * 0.15)
             results.append((algorithm, factory, validation, float(score)))
 
