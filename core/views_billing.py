@@ -6,7 +6,6 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -16,6 +15,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core.models import Invoice, Payment, Subscription
+from core.services.payment_reconciler import PaymentReconciler
 from core.services.payment_service import PaymentService
 
 
@@ -84,26 +84,6 @@ def _subscription_snapshot(subscription):
     }
 
 
-def _activate(invoice, plan):
-    with transaction.atomic():
-        invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
-        subscription, _ = Subscription.objects.select_for_update().get_or_create(user=invoice.user)
-        renewed_at = timezone.now()
-        subscription.plan = plan["plan"]
-        subscription.price_cents = int(plan["price_cents"])
-        subscription.currency = plan["currency"].lower()
-        subscription.recurring = bool(plan["recurring"])
-        subscription.is_active = True
-        subscription.renewed_at = renewed_at
-        subscription.expires_at = renewed_at + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30))) if subscription.recurring else None
-        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "renewed_at", "expires_at"])
-        invoice.paid = True
-        invoice.metadata = {**(invoice.metadata or {}), "subscription_activated": True, "plan": plan["plan"]}
-        invoice.save(update_fields=["paid", "metadata"])
-        Payment.objects.filter(invoice=invoice).update(status="COMPLETED")
-        return invoice, subscription
-
-
 def _provider_state(result, provider):
     data = result or {}
     if provider == PaymentService.INTASEND and isinstance(data.get("invoice"), dict):
@@ -113,27 +93,11 @@ def _provider_state(result, provider):
     return str(data.get("state", "")).upper(), data
 
 
-def _persist_callback_payment(invoice, state, payload=None):
-    state = str(state or "").upper()
-    normalized = "COMPLETED" if state in {"COMPLETE", "COMPLETED", "COMPLETED_SUCCESS", "SUCCESS", "SUCCEEDED", "PAID"} else "FAILED" if state in {"FAILED", "FAILURE", "CANCELLED", "CANCELED", "INVALID", "REVERSED"} else "PENDING"
-    payload = payload or {}
-    external_id = invoice.external_id or payload.get("order_tracking_id") or payload.get("invoice_id")
-    payment = Payment.objects.filter(invoice=invoice).order_by("-created_at").first()
-    if payment is None:
-        payment = Payment.objects.create(user=invoice.user, invoice=invoice, external_id=external_id or None, amount_cents=invoice.amount_cents, currency=invoice.currency, status=normalized)
-    else:
-        payment.external_id = external_id or payment.external_id
-        payment.amount_cents = invoice.amount_cents
-        payment.currency = invoice.currency
-        payment.status = normalized
-        payment.save(update_fields=["external_id", "amount_cents", "currency", "status"])
-    return payment
-
-
 def _reconcile_invoice(invoice, provider):
     plan = _plan((invoice.metadata or {}).get("plan"))
     if not plan:
         return {"paid": False, "state": "INVALID_PLAN", "invoice": invoice, "subscription": None}
+
     service = PaymentService()
     provider = str(provider or (invoice.metadata or {}).get("provider") or service.provider).lower().strip()
     if provider == service.PESAPAL:
@@ -143,18 +107,38 @@ def _reconcile_invoice(invoice, provider):
         result = service.get_intasend_payment_status(invoice.external_id) if invoice.external_id else None
     else:
         return {"paid": False, "state": "UNSUPPORTED_PROVIDER", "invoice": invoice, "subscription": None}
+
     state, payload = _provider_state(result, provider)
-    success_states = {"COMPLETE", "COMPLETED", "COMPLETED_SUCCESS", "SUCCESS", "SUCCEEDED", "PAID"}
-    failed_states = {"FAILED", "FAILURE", "CANCELLED", "CANCELED", "INVALID", "REVERSED"}
-    if state in success_states:
-        invoice, subscription = _activate(invoice, plan)
-        _persist_callback_payment(invoice, state, payload)
-        return {"paid": True, "state": "COMPLETE", "invoice": invoice, "subscription": subscription, "provider_payload": payload}
-    if state in failed_states:
-        _persist_callback_payment(invoice, state, payload)
-        return {"paid": False, "state": "FAILED", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first(), "provider_payload": payload}
-    _persist_callback_payment(invoice, state or "PENDING", payload)
-    return {"paid": False, "state": "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first(), "provider_payload": payload}
+    metadata = {
+        **(invoice.metadata or {}),
+        "provider": provider,
+        "user_id": invoice.user_id,
+        "plan": plan["plan"],
+        "provider_status": payload,
+    }
+    if provider == service.PESAPAL:
+        metadata["merchant_reference"] = metadata.get("reference") or metadata.get("merchant_reference")
+        metadata["tracking_id"] = (invoice.metadata or {}).get("tracking_id") or invoice.external_id
+    normalized = PaymentReconciler.normalize_status(state)
+    external_id = invoice.external_id or metadata.get("tracking_id")
+    reconciled = PaymentReconciler.reconcile(
+        provider=provider,
+        external_id=external_id,
+        status=normalized,
+        amount=payload.get("amount") or payload.get("value") or payload.get("net_amount"),
+        currency=payload.get("currency") or invoice.currency,
+        metadata=metadata,
+    )
+    subscription = Subscription.objects.filter(user=invoice.user).first()
+    paid = normalized == "COMPLETED"
+    return {
+        "paid": paid,
+        "state": normalized,
+        "invoice": Invoice.objects.get(pk=invoice.pk),
+        "subscription": subscription,
+        "provider_payload": payload,
+        "reconciled": reconciled,
+    }
 
 
 def _find_callback_invoice(request, reference="", tracking_id=""):
