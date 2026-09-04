@@ -1,13 +1,13 @@
 """Repository hygiene audit for canonical source ownership.
 
-The audit is conservative: exact duplicate source/assets are hard failures,
-while likely-unreferenced files are reported for deliberate review. Django
-framework entrypoints and migration packages are not treated as ordinary dead
-files.
+Exact duplicate source/assets and known retired runtime references are hard
+failures. Dead-code reporting is conservative and understands Python imports,
+Django entrypoints, tests, management commands, and migrations.
 """
 
 from __future__ import annotations
 
+import ast
 import hashlib
 from collections import defaultdict
 from pathlib import Path
@@ -30,6 +30,10 @@ LEGACY_PATTERNS = (
     "apps.ai_engine.recommendation",
     "apps.ai_engine.regime",
 )
+FRAMEWORK_ENTRYPOINTS = {
+    "manage.py", "wsgi.py", "asgi.py", "apps.py", "admin.py", "models.py",
+    "urls.py", "consumers.py", "routing.py", "tasks.py",
+}
 
 
 def files_for(ext: str) -> list[Path]:
@@ -76,6 +80,56 @@ def report_duplicates() -> int:
     return failures
 
 
+def module_name(path: Path) -> str:
+    rel = path.relative_to(ROOT).with_suffix("")
+    return ".".join(rel.parts)
+
+
+def resolve_module(name: str) -> Path | None:
+    candidate = ROOT.joinpath(*name.split("."))
+    py = candidate.with_suffix(".py")
+    if py.exists():
+        return py
+    init = candidate / "__init__.py"
+    if init.exists():
+        return init
+    return None
+
+
+def resolve_import(source: Path, imported: str, level: int) -> Path | None:
+    current = module_name(source).split(".")
+    if source.name != "__init__.py":
+        current = current[:-1]
+    if level:
+        base = current[: max(0, len(current) - level + 1)]
+        name = ".".join(base + ([imported] if imported else []))
+    else:
+        name = imported
+    return resolve_module(name) if name else None
+
+
+def python_import_graph() -> dict[Path, set[Path]]:
+    graph: dict[Path, set[Path]] = {p: set() for p in files_for(".py")}
+    known = set(graph)
+    for source in graph:
+        try:
+            tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+        except (SyntaxError, OSError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            target = None
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    target = resolve_module(alias.name)
+                    if target in known:
+                        graph[source].add(target)
+            elif isinstance(node, ast.ImportFrom):
+                target = resolve_import(source, node.module or "", node.level)
+                if target in known:
+                    graph[source].add(target)
+    return graph
+
+
 def report_unreferenced() -> None:
     texts = load_text_files()
     print("LIKELY UNREFERENCED CANDIDATES (review before deletion):")
@@ -88,17 +142,15 @@ def report_unreferenced() -> None:
             if not any(token in text for other, text in texts.items() if other != path for token in (path.name, rel)):
                 print(f"  {rel}")
 
-    framework_entrypoints = {
-        "manage.py", "wsgi.py", "asgi.py", "apps.py", "admin.py", "models.py",
-        "migrations.py", "urls.py", "consumers.py", "routing.py", "serializers.py",
-    }
+    graph = python_import_graph()
+    referenced = {target for imports in graph.values() for target in imports}
     for path in files_for(".py"):
         rel = path.relative_to(ROOT).as_posix()
-        if path.name in framework_entrypoints or path.name == "__init__.py" or "migrations" in path.parts:
+        if path.name == "__init__.py" or "migrations" in path.parts:
             continue
-        module = rel[:-3].replace("/", ".")
-        tokens = (rel, module, path.name)
-        if not any(token in text for other, text in texts.items() if other != path for token in tokens):
+        if path.name in FRAMEWORK_ENTRYPOINTS or "tests" in path.parts or path.name.startswith("test_"):
+            continue
+        if path not in referenced:
             print(f"  {rel}")
 
 
