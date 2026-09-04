@@ -64,13 +64,7 @@ class DerivOAuthService:
         code_challenge: str,
         scope: Optional[str] = None,
     ) -> str:
-        """Build the documented Deriv OAuth parameters.
-
-        Legacy V1 app routing is deliberately opt-in. Accidentally sending a
-        legacy app_id alongside a new OAuth client can route the consent flow
-        through the wrong Deriv application surface, so production defaults to
-        the new OAuth client only.
-        """
+        """Build the documented Deriv OAuth parameters."""
         configured_scope = scope or getattr(settings, "DERIV_OAUTH_SCOPE", DEFAULT_SCOPE)
         query_params = {
             "response_type": "code",
@@ -81,12 +75,6 @@ class DerivOAuthService:
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
-
-        legacy_app_id = getattr(settings, "DERIV_LEGACY_APP_ID", "")
-        legacy_enabled = getattr(settings, "DERIV_ENABLE_LEGACY_APP_ROUTING", False)
-        if legacy_enabled and legacy_app_id:
-            query_params["app_id"] = legacy_app_id
-
         return f"{DERIV_AUTHORIZE_URL}?{urlencode(query_params)}"
 
     @staticmethod
