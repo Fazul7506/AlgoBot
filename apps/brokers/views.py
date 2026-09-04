@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, permissions, decorators, response, status
@@ -148,8 +147,8 @@ def connect_broker(request):
     try:
         connection=_run_bounded(BrokerConnectionService().connect(broker,account),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
         account.refresh_from_db()
-        all_accounts=_prepare_user_broker_accounts(request.user,broker,account)
-        connected_ids,failed_accounts=_run_bounded(_verify_user_broker_accounts(all_accounts,broker,account.pk),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
+        target_accounts=_prepare_user_broker_accounts(request.user,broker,account)
+        connected_ids,failed_accounts=_run_bounded(_verify_user_broker_accounts(target_accounts,broker,account.pk),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
     except BrokerAuthenticationError as exc:return response.Response({'detail':str(exc),'status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
     except BrokerConnectionError as exc:return response.Response({'detail':str(exc),'status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except BrokerRoutingError as exc:return response.Response({'detail':str(exc),'status':'blocked'},status=status.HTTP_409_CONFLICT)
@@ -157,7 +156,8 @@ def connect_broker(request):
     except Exception as exc:logger.exception('broker_connection_unexpected_failure',extra={'account_id':account.id});return response.Response({'detail':'Broker connection failed unexpectedly.','status':'error','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
     account.refresh_from_db()
     all_accounts=list(BrokerAccount.objects.filter(user=request.user,broker=broker).select_related('broker').order_by('id'))
-    payload={'connection':BrokerConnectionSerializer(connection).data,'account':BrokerAccountSerializer(account,context={'request':request}).data,'accounts':BrokerAccountSerializer(all_accounts,many=True,context={'request':request}).data,'connected_account_ids':connected_ids,'failed_accounts':failed_accounts,'all_accounts_ready':not failed_accounts and len(connected_ids)==len(all_accounts)}
+    target_ids={item.pk for item in target_accounts}
+    payload={'connection':BrokerConnectionSerializer(connection).data,'account':BrokerAccountSerializer(account,context={'request':request}).data,'accounts':BrokerAccountSerializer(all_accounts,many=True,context={'request':request}).data,'connected_account_ids':connected_ids,'failed_accounts':failed_accounts,'all_accounts_ready':not failed_accounts and set(connected_ids)==target_ids}
     if failed_accounts:
         return response.Response(payload,status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return response.Response(payload)
