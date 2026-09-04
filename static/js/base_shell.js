@@ -40,7 +40,27 @@
   function navigationLinks() { return [...document.querySelectorAll('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')]; }
   function routeMatches(path,href) { if(!href||href==='#')return false; try { const url=new URL(href,window.location.origin); const target=url.pathname.replace(/\/+$/,'')||'/'; if(target==='/')return path==='/'; return path===target||path.startsWith(`${target}/`); } catch(_){return false;} }
 
+  // Remove retired navigation entries at runtime as a defense against stale
+  // cached templates/deployments. Analysis is the canonical replacement.
+  function normalizeLegacyNavigation() {
+    const links = [...document.querySelectorAll('#app-sidebar nav a')];
+    links.forEach(link => {
+      const href = link.getAttribute('href') || '';
+      const label = (link.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      if (href === '/operations/mission-control/' || label === 'mission control') link.remove();
+    });
+    const research = [...document.querySelectorAll('#app-sidebar nav .sidebar-section')]
+      .find(section => /research/i.test(section.querySelector('h2')?.textContent || ''));
+    if (research && !research.querySelector('a[href="/analysis/"]')) {
+      const link = document.createElement('a');
+      link.href = '/analysis/';
+      link.innerHTML = '<span class="material-symbols-rounded">query_stats</span><span>Analysis</span>';
+      research.appendChild(link);
+    }
+  }
+
   function syncActiveNavigation({anchor=false}={}) {
+    normalizeLegacyNavigation();
     const path=currentPath(); const links=navigationLinks(); let active=null; let activeLength=-1;
     links.forEach(link=>{const href=link.getAttribute('href'); const matched=routeMatches(path,href); link.classList.remove('active','is-current-page'); link.removeAttribute('aria-current'); if(matched&&href&&href.length>activeLength){active=link;activeLength=href.length;}});
     if(active){active.classList.add('active','is-current-page');active.setAttribute('aria-current','page');if(anchor)window.requestAnimationFrame(()=>{try{active.scrollIntoView({block:'nearest',inline:'nearest'});}catch(_){}});}
@@ -50,7 +70,7 @@
   function bindSidebarScrollState(sidebar) {
     if(sidebar.dataset.scrollStateBound==='true')return; sidebar.dataset.scrollStateBound='true'; let lastKnownTop=Math.max(0,sidebar.scrollTop||0); let restoreTimer=null; let restoreObserver=null;
     const readPosition=()=>{try{const raw=sessionStorage.getItem(SIDEBAR_SCROLL_KEY);if(!raw)return null;const saved=JSON.parse(raw);if(!saved||typeof saved!=='object')return null;const top=Number(saved.top);if(!Number.isFinite(top)||top<0)return null;return{top,atBottom:saved.atBottom===true};}catch(_){return null;}};
-    const savePosition=()=>{const maxScroll=Math.max(0,sidebar.scrollHeight-sidebar.clientHeight);const top=Math.max(0,Math.min(lastKnownTop,maxScroll));const atBottom=maxScroll>0&&top>=Math.max(0,maxScroll-12);try{sessionStorage.setItem(SIDEBAR_SCROLL_KEY,JSON.stringify({top,atBottom}));}catch(_){}};
+    const savePosition=()=>{const maxScroll=Math.max(0,sidebar.scrollHeight-sidebar.clientHeight);const top=Math.max(0,Math.min(lastKnownTop,maxScroll));const atBottom=maxScroll>0&&top>=Math.max(0,maxScroll-12);try{sessionStorage.setItem(SIDEBAR_SCROLL_KEY,JSON.stringify({top,atBottom}));}catch(_){} };
     const applySavedPosition=saved=>{if(!saved)return false;const maxScroll=Math.max(0,sidebar.scrollHeight-sidebar.clientHeight);const target=saved.atBottom?maxScroll:Math.min(saved.top,maxScroll);sidebar.scrollTop=target;lastKnownTop=target;return sidebar.scrollTop===target;};
     const stopRestoreObserver=()=>{if(restoreObserver){restoreObserver.disconnect();restoreObserver=null;}if(restoreTimer){window.cancelAnimationFrame(restoreTimer);restoreTimer=null;}};
     const restorePosition=()=>{const saved=readPosition();if(!saved)return;stopRestoreObserver();const apply=()=>applySavedPosition(saved);apply();window.requestAnimationFrame(apply);window.requestAnimationFrame(()=>window.requestAnimationFrame(apply));let frames=0;const retry=()=>{apply();frames+=1;if(frames<30)restoreTimer=window.requestAnimationFrame(retry);else restoreTimer=null;};restoreTimer=window.requestAnimationFrame(retry);if(window.MutationObserver){restoreObserver=new MutationObserver(()=>apply());restoreObserver.observe(sidebar,{childList:true,subtree:true});window.setTimeout(stopRestoreObserver,1200);}};
@@ -61,6 +81,7 @@
 
   function bindNavigation() {
     const sidebar=$('#app-sidebar'); if(!sidebar||sidebar.dataset.navigationBound==='true')return; sidebar.dataset.navigationBound='true'; const backdrop=$('[data-sidebar-backdrop]');const mobile=$('[data-mobile-menu]');const toggle=$('[data-sidebar-toggle]');const shell=$('.app-shell');const storageKey='algobot.sidebar.collapsed';
+    normalizeLegacyNavigation();
     syncActiveNavigation({anchor:true}); bindSidebarScrollState(sidebar);
     if(window.MutationObserver&&!sidebar.dataset.activeAnchorObserver){sidebar.dataset.activeAnchorObserver='true';const observer=new MutationObserver(()=>syncActiveNavigation({anchor:true}));observer.observe(sidebar,{childList:true,subtree:true});}
     const setMobileOpen=open=>{const next=!!open;sidebar.classList.toggle('is-open',next);if(backdrop)backdrop.hidden=!next;if(mobile){mobile.setAttribute('aria-expanded',String(next));mobile.setAttribute('aria-label',next?'Close navigation':'Open navigation');}document.body.classList.remove('mobile-nav-open');document.documentElement.classList.remove('mobile-nav-open');};
