@@ -126,7 +126,7 @@ urlpatterns = [
     path("trade-history/", login_required(trade_history_page), name="trade_history_page"),
     path("trade-history/postmortems/", login_required(trade_postmortems), name="trade_postmortems"),
     path("automation/", login_required(lambda request: operations_center(request, "automation")), name="automation_page"),
-    path("operations/mission-control/", login_required(lambda request: operations_center(request, "mission-control")), name="mission_control"),
+    path("operations/mission-control/", RedirectView.as_view(url="/analysis/", permanent=False), name="mission_control_legacy_redirect"),
     path("operations/alerts/", RedirectView.as_view(url="/notifications/", permanent=False), name="alert_center"),
     path("operations/deployments/", login_required(lambda request: operations_center(request, "deployments")), name="deployment_center"),
     path("operations/audit/", login_required(lambda request: operations_center(request, "audit")), name="audit_center"),
