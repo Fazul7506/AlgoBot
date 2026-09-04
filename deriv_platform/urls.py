@@ -126,8 +126,6 @@ urlpatterns = [
     path("trade-history/", login_required(trade_history_page), name="trade_history_page"),
     path("trade-history/postmortems/", login_required(trade_postmortems), name="trade_postmortems"),
     path("automation/", login_required(lambda request: operations_center(request, "automation")), name="automation_page"),
-    path("operations/mission-control/", RedirectView.as_view(url="/analysis/", permanent=False), name="mission_control_legacy_redirect"),
-    path("operations/alerts/", RedirectView.as_view(url="/notifications/", permanent=False), name="alert_center"),
     path("operations/deployments/", login_required(lambda request: operations_center(request, "deployments")), name="deployment_center"),
     path("operations/audit/", login_required(lambda request: operations_center(request, "audit")), name="audit_center"),
     path("operations/security/", login_required(lambda request: operations_center(request, "security")), name="security_center"),
@@ -160,7 +158,7 @@ urlpatterns = [
     path("reset-password/<str:token>/", reset_password_page, name="reset_password_page"),
     path("verify-email/", verify_email_page, name="verify_email_page"),
 
-    # Canonical API surface. All browser/API clients use /api/; no legacy /api/v1/ or /data/ aliases.
+    # Canonical API surface. All browser/API clients use /api/.
     path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/register/", register, name="register"),
