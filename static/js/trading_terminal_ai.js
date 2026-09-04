@@ -6,7 +6,7 @@
 
   const $ = (s, r = document) => r.querySelector(s);
   const text = (s, value) => $(s)?.replaceChildren(document.createTextNode(String(value ?? '—')));
-  const api = (url, options = {}, timeout = 15000) => window.AlgoBotFrontendData?.request(url, options, timeout);
+  const api = (url, options = {}, timeout = 30000) => window.AlgoBotFrontendData?.request(url, options, timeout);
   let analysing = false;
 
   function show(message) { text('[data-ai-explanation]', message); }
@@ -61,7 +61,7 @@
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({symbol, timeframe: 'M1'})
-      }, 15000);
+      }, 30000);
       render(data);
       window.dispatchEvent(new CustomEvent('algobot:ai-analysis-updated', {detail: data}));
     } catch (error) {
@@ -73,8 +73,8 @@
       window.__algobotAiOrderContext = null;
       const code = String(error?.code || '').toUpperCase();
       const message = String(error?.message || 'AI analysis is temporarily unavailable.');
-      if (code === 'REQUEST_ABORTED') {
-        show('AI analysis was cancelled. No trade action was taken.');
+      if (code === 'REQUEST_ABORTED' || code === 'API_TIMEOUT') {
+        show('AI analysis timed out while waiting for broker data. No trade action was taken.');
       } else if (code === 'EDGE_CHALLENGE' || message.includes('<html') || message.includes('Just a moment')) {
         show('AI analysis is temporarily unavailable at the production edge. No trade action was taken.');
       } else {
@@ -103,8 +103,6 @@
     $('[data-ai-analyze]')?.addEventListener('click', () => analyse());
     window.addEventListener('algobot:market-symbol-changed', resetForSymbol);
     window.addEventListener('algobot:broker-contract-selected', () => {
-      // Contract capability updates are informational and must never trigger AI
-      // execution or a trade. The user explicitly chooses when to analyse.
       if (!analysing) show('Broker contract ready. Run Analyse market when needed.');
     });
   }
