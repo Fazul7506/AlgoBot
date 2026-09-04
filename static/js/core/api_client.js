@@ -51,7 +51,8 @@
   }
 
   async function bootstrapCsrf() {
-    const response = await nativeFetch('/api/csrf/', { method: 'GET', credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    const csrfUrl = new URL('/api/csrf/', apiBase || window.location.origin);
+    const response = await nativeFetch(csrfUrl.toString(), { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
     return response.ok && Boolean(csrfToken());
   }
 
@@ -73,7 +74,11 @@
 
     let requestInit = { ...options, method, headers, credentials: options.credentials || 'include' };
     if ((url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') && typeof requestInit.body === 'string') {
-      try { const payload = JSON.parse(requestInit.body); payload.validation_context = { ...(payload.validation_context || {}), ...(window.__algobotAiOrderContext || {}) }; requestInit.body = JSON.stringify(payload); } catch (_) {}
+      try {
+        const payload = JSON.parse(requestInit.body);
+        payload.validation_context = { ...(payload.validation_context || {}), ...(window.__algobotAiOrderContext || {}) };
+        requestInit.body = JSON.stringify(payload);
+      } catch (_) {}
     }
 
     const controller = new AbortController();
@@ -86,7 +91,15 @@
       const response = await nativeFetch(url.toString(), { ...requestInit, signal });
       if (retryCsrf && response.status === 403 && !SAFE_METHODS.has(method) && isProtected) {
         const payload = parsePayload(await response.clone().text());
-        if (payload?.code === 'CSRF_FAILED') { await bootstrapCsrf(); return guardedFetch(input, { ...options, headers: { ...Object.fromEntries(headers.entries()), 'X-CSRFToken': csrfToken() } }, false); }
+        if (payload?.code === 'CSRF_FAILED') {
+          await bootstrapCsrf();
+          const refreshedToken = csrfToken();
+          if (refreshedToken) {
+            const retryHeaders = new Headers(headers);
+            retryHeaders.set('X-CSRFToken', refreshedToken);
+            return guardedFetch(input, { ...options, headers: retryHeaders }, false);
+          }
+        }
       }
       return response;
     } catch (error) {
