@@ -30,7 +30,6 @@ SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_HTTPONLY = False
 CSRF_TRUSTED_ORIGINS = get_list_env("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"] if os.getenv("ALGO_API_BASE_URL") else [])
-CSRF_FAILURE_VIEW = "core.views_csrf.csrf_failure"
 
 INSTALLED_APPS = [
     "daphne", "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
@@ -52,10 +51,11 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware", "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware", "django.middleware.common.CommonMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware", "core.middleware.csrf.APIAwareCsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware", "apps.developer.middleware.DeveloperAPIMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware", "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "core.middleware.audit_middleware.AuditMiddleware", "core.middleware.plan_entitlement_middleware.PlanEntitlementMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware", "core.middleware.api_origin.APIOriginGuardMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware", "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.developer.middleware.DeveloperAPIMiddleware", "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware", "core.middleware.audit_middleware.AuditMiddleware",
+    "core.middleware.plan_entitlement_middleware.PlanEntitlementMiddleware",
 ]
 
 REST_FRAMEWORK = {
