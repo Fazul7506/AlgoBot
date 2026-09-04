@@ -45,6 +45,11 @@ class BrokerAccount(models.Model):
         if not access_token or access_token==self.access_token:return 'credentials_unavailable'
         return 'ready'
     @property
+    def account_type(self):
+        credentials=self.credentials or {}; value=credentials.get('account_type')
+        if not value and isinstance(credentials.get('realtime'),dict): value=credentials['realtime'].get('account_type')
+        value=str(value or '').lower().strip(); return value if value in {'demo','real'} else ''
+    @property
     def is_connected(self): return self.connections.filter(status='connected').exists()
     @property
     def is_connection_eligible(self): return self.status=='active' and self.broker.status=='active' and self.credential_status=='ready' and self.is_connected
