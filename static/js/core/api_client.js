@@ -18,9 +18,13 @@
     return item ? item.slice(prefix.length) : '';
   }
   function csrfToken() {
+    // When the API is a sibling subdomain, its CSRF cookie may be host-only.
+    // Prefer the token returned by the API bootstrap endpoint once available;
+    // otherwise use the normal page cookie/meta sources.
+    if (bootstrappedCsrfToken) return bootstrappedCsrfToken;
     const cookieToken = readCookie('csrftoken');
     if (cookieToken) return decodeURIComponent(cookieToken);
-    return document.querySelector('meta[name="csrf-token"]')?.content || bootstrappedCsrfToken || '';
+    return document.querySelector('meta[name="csrf-token"]')?.content || '';
   }
   function resolveUrl(path) {
     return new URL(aliases[path] || path || '/', apiBase || window.location.origin);
@@ -58,8 +62,8 @@
     const response = await nativeFetch(csrfUrl.toString(), { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
     if (!response.ok) return false;
     const payload = parsePayload(await response.clone().text());
-    if (typeof payload.csrfToken === 'string') bootstrappedCsrfToken = payload.csrfToken;
-    return Boolean(csrfToken());
+    if (typeof payload.csrfToken === 'string' && payload.csrfToken) bootstrappedCsrfToken = payload.csrfToken;
+    return Boolean(bootstrappedCsrfToken || csrfToken());
   }
 
   async function guardedFetch(input, init = {}, retryCsrf = true) {
@@ -97,6 +101,7 @@
       if (retryCsrf && response.status === 403 && !SAFE_METHODS.has(method) && isProtected) {
         const payload = parsePayload(await response.clone().text());
         if (payload?.code === 'CSRF_FAILED') {
+          bootstrappedCsrfToken = '';
           await bootstrapCsrf();
           const refreshedToken = csrfToken();
           if (refreshedToken) {
