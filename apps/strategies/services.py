@@ -34,7 +34,7 @@ class LiveMarketContextService:
             try: candles.append({'open': float(item['open']), 'high': float(item['high']), 'low': float(item['low']), 'close': float(item['close']), 'volume': float(item.get('volume', 0) or 0), 'epoch': int(item.get('epoch', 0) or 0)})
             except (KeyError, TypeError, ValueError): continue
         if len(candles) < 25: raise RuntimeError(f'Insufficient live broker candle history for {config.symbol} {config.timeframe}: {len(candles)} usable candles')
-        from trading.ai.features.simple_indicators import compute_basic_features
+        from apps.indicators.basic_features import compute_basic_features
         rows = compute_basic_features(candles); latest, current = rows[-1], candles[-1]; closes = [c['close'] for c in candles]
         trend = 'up' if latest.get('sma5') is not None and latest.get('sma20') is not None and latest['sma5'] > latest['sma20'] else 'down' if latest.get('sma5') is not None and latest.get('sma20') is not None and latest['sma5'] < latest['sma20'] else 'sideways'
         market_data = {'symbol': config.symbol, 'open': current['open'], 'high': current['high'], 'low': current['low'], 'close': current['close'], 'volume': current['volume'], 'epoch': current['epoch'], 'source': 'live_broker'}
