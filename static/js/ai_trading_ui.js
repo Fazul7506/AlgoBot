@@ -2,8 +2,10 @@
   if (window.__algoBotAIUI) return;
   window.__algoBotAIUI = true;
   const $ = (s, r = document) => r.querySelector(s);
-  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const esc = v => String(v ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
   const request = async (url, options = {}, timeout = 10000) => {
+    const canonical = window.AlgoBotFrontendData?.request;
+    if (canonical) return canonical(url, options, timeout);
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeout);
     try {
       const headers = {Accept:'application/json', ...(options.headers || {})};
@@ -50,5 +52,5 @@
     catch(e){$('[data-ai-explanation]')?.replaceChildren(document.createTextNode(`AI unavailable: ${e.message}`));renderAITradeActions({recommendation:'WAIT'},{payload:{source:'ai_unavailable'},confidence:0});}
     finally{if(button){button.disabled=false;button.textContent='Analyse market';}}
   }
-  window.addEventListener('DOMContentLoaded',()=>{if(!$('[data-ai-panel]'))return;$('[data-ai-analyze]')?.addEventListener('click',analyze);$('#symbol')?.addEventListener('change',()=>{$('[data-ai-explanation]')?.replaceChildren(document.createTextNode('Market changed. Run AI analysis for the selected broker market.'));const box=$('[data-ai-trade-actions]');if(box)box.innerHTML='<div class="ai-wait">Run AI analysis for the selected broker market.</div>';window.__algobotAiOrderContext=null;});},{once:true});
+  window.addEventListener('DOMContentLoaded',()=>{if(!$('[data-ai-panel]')||$('.terminal-page'))return;$('[data-ai-analyze]')?.addEventListener('click',analyze);$('#symbol')?.addEventListener('change',()=>{$('[data-ai-explanation]')?.replaceChildren(document.createTextNode('Market changed. Run AI analysis for the selected broker market.'));const box=$('[data-ai-trade-actions]');if(box)box.innerHTML='<div class="ai-wait">Run AI analysis for the selected broker market.</div>';window.__algobotAiOrderContext=null;});},{once:true});
 })();
