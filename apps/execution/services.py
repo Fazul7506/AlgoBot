@@ -202,7 +202,7 @@ class TradeReconciliationService:
 
 class TradeSynchronizationService:
     async def synchronize(self, broker_account):
-        adapter=BrokerRegistry().adapter_for_legacy_account(broker_account)
+        adapter = BrokerRegistry().adapter(broker_account.broker, broker_account)
         positions = await adapter.get_positions()
         orders = await adapter.get_orders()
         balance = await adapter.get_balance()
