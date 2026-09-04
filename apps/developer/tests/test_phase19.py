@@ -5,7 +5,7 @@ from apps.developer.models import APIKey, Webhook
 from apps.developer.services import APIKeyService, APIGatewayService, WebhookService
 
 
-class Phase19DeveloperPlatformTests(TestCase):
+class DeveloperPlatformTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="dev", password="pass12345")
         self.key, self.secret = APIKeyService().create(self.user, "read-key", ["read", "webhooks"])
@@ -24,7 +24,7 @@ class Phase19DeveloperPlatformTests(TestCase):
         response = self.client.get("/api/developer/keys/")
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/html", response["Content-Type"])
-        self.assertContains(response, 'data-django-response')
+        self.assertContains(response, "data-django-response")
         self.assertNotIn("application/json", response["Content-Type"].lower())
 
     def test_key_list_masks_secret_material(self):
@@ -119,7 +119,7 @@ class Phase19DeveloperPlatformTests(TestCase):
             self.assertEqual(self.client.get(url).status_code, 200)
         docs = self.client.get("/api/developer/docs/")
         self.assertEqual(docs.status_code, 200)
-        self.assertIn("/api/v1/developer/keys/{id}/delete/", self.payload(docs)["paths"])
+        self.assertIn("/api/developer/keys/{id}/delete/", self.payload(docs)["paths"])
         self.assertEqual(self.client.get("/api/developer/analytics/").status_code, 403)
 
         self.use_admin_key()
