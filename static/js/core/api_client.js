@@ -29,13 +29,11 @@
     try {
       const payload = JSON.parse(body);
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return body;
-      if (payload.account == null && payload.broker_account != null) payload.account = payload.broker_account;
-      delete payload.broker_account;
       const routing = payload.routing_context && typeof payload.routing_context === 'object' ? {...payload.routing_context} : {};
       const validation = payload.validation_context && typeof payload.validation_context === 'object' ? payload.validation_context : {};
       Object.assign(routing, validation);
       Object.assign(routing, window.__algobotAiOrderContext || {});
-      if (payload.account != null && routing.authoritative_account_id == null) routing.authoritative_account_id = payload.account;
+      if (payload.broker_account != null && routing.authoritative_account_id == null) routing.authoritative_account_id = payload.broker_account;
       if (payload.symbol && routing.underlying_symbol == null) routing.underlying_symbol = payload.symbol;
       if (payload.contract_type && routing.contract_type == null) routing.contract_type = payload.contract_type;
       if (payload.contract_type == null && routing.contract_type) payload.contract_type = routing.contract_type;
