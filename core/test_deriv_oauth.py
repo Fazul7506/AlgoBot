@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from apps.brokers.models import BrokerAccount
+from core.account_context import SESSION_KEY
 from core.models import BotSettings, Subscription, UserProfile
 from core.services.oauth_service import DerivOAuthService
 
@@ -24,11 +25,7 @@ class DerivOAuthTests(TestCase):
         session.save()
 
     def test_authorization_url_uses_only_current_oauth_parameters(self):
-        query = parse_qs(
-            urlparse(
-                DerivOAuthService.create_authorization_url("state", "challenge")
-            ).query
-        )
+        query = parse_qs(urlparse(DerivOAuthService.create_authorization_url("state", "challenge")).query)
         self.assertEqual(query["response_type"], ["code"])
         self.assertEqual(query["client_id"], ["app"])
         self.assertEqual(query["redirect_uri"], ["http://testserver/callback/"])
@@ -40,38 +37,20 @@ class DerivOAuthTests(TestCase):
 
     def test_callback_rejects_state_mismatch_without_restarting_oauth(self):
         self._oauth_session()
-        response = self.client.get(
-            reverse("callback"), {"state": "wrong", "code": "abc"}
-        )
+        response = self.client.get(reverse("callback"), {"state": "wrong", "code": "abc"})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("broker_connect_page"))
 
     def _mock_token_exchange(self, post):
         token_response = Mock()
         token_response.raise_for_status.return_value = None
-        token_response.json.return_value = {
-            "access_token": "token",
-            "refresh_token": "refresh",
-            "expires_in": 3600,
-        }
+        token_response.json.return_value = {"access_token": "token", "refresh_token": "refresh", "expires_in": 3600}
         post.return_value = token_response
 
     def _mock_account_response(self, get, accounts=None):
         accounts_response = Mock()
         accounts_response.raise_for_status.return_value = None
-        accounts_response.json.return_value = {
-            "data": accounts
-            if accounts is not None
-            else [
-                {
-                    "account_id": "DOT90004580",
-                    "balance": 10000,
-                    "currency": "USD",
-                    "account_type": "demo",
-                    "status": "active",
-                }
-            ]
-        }
+        accounts_response.json.return_value = {"data": accounts if accounts is not None else [{"account_id": "DOT90004580", "balance": 10000, "currency": "USD", "account_type": "demo", "status": "active"}]}
         get.return_value = accounts_response
 
     @patch("core.views_deriv_oauth_safe.requests.get")
@@ -80,20 +59,14 @@ class DerivOAuthTests(TestCase):
         self._oauth_session()
         self._mock_token_exchange(post)
         self._mock_account_response(get)
-        result = self.client.get(
-            reverse("callback"), {"state": "expected", "code": "abc"}
-        )
+        result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(result.status_code, 302)
         self.assertEqual(result.url, reverse("broker_marketplace_page"))
         user = User.objects.get(username="deriv_DOT90004580")
-        account = BrokerAccount.objects.get(
-            user=user, account_id="DOT90004580"
-        )
-        self.assertTrue(account.is_preferred)
+        account = BrokerAccount.objects.get(user=user, account_id="DOT90004580")
         self.assertEqual(account.status, "active")
-        self.assertEqual(
-            account.credentials.get("connection_health"), "not_checked"
-        )
+        self.assertEqual(account.credentials.get("connection_health"), "not_checked")
+        self.assertNotIn(SESSION_KEY, self.client.session)
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
         self.assertTrue(Subscription.objects.filter(user=user).exists())
         self.assertTrue(BotSettings.objects.filter(user=user).exists())
@@ -106,11 +79,7 @@ class DerivOAuthTests(TestCase):
         self._oauth_session()
         self._mock_token_exchange(post)
         self._mock_account_response(get, [])
-        result = self.client.get(
-            reverse("callback"), {"state": "expected", "code": "abc"}
-        )
+        result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(result.status_code, 302)
         self.assertEqual(result.url, reverse("broker_connect_page"))
-        self.assertFalse(
-            User.objects.filter(username__startswith="deriv_").exists()
-        )
+        self.assertFalse(User.objects.filter(username__startswith="deriv_").exists())
