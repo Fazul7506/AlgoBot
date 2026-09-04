@@ -36,5 +36,6 @@ jobs:
         run: python scripts/validate_templates.py
       - name: Compile Python
         run: python -m compileall -q .
+      # Keep canonical duplicate detection in the required CI path.
       - name: Repository hygiene audit
         run: python scripts/repository_hygiene.py
