@@ -16,7 +16,7 @@ class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='execution-account-boundary', password='test-pass')
         self.broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active', supports_live=True)
-        self.old_account = self._account('VRTC-OLD', preferred=True)
+        self.previous_account = self._account('VRTC-OLD', preferred=True)
         self.new_account = self._account('VRTC-NEW', preferred=False)
 
     def _account(self, account_id, preferred=False):
@@ -42,9 +42,9 @@ class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
         )
         return account
 
-    def test_execution_authority_is_not_derived_from_legacy_preferred_flag(self):
-        self.old_account.is_preferred = False
-        self.old_account.save(update_fields=['is_preferred'])
+    def test_execution_authority_is_not_derived_from_preferred_flag(self):
+        self.previous_account.is_preferred = False
+        self.previous_account.save(update_fields=['is_preferred'])
         self.new_account.is_preferred = True
         self.new_account.save(update_fields=['is_preferred'])
 
