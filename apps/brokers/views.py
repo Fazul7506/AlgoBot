@@ -21,44 +21,40 @@ def _run_bounded(coro,timeout=8.0):
     async def runner(): return await asyncio.wait_for(coro,timeout=timeout)
     return asyncio.run(runner())
 
-async def _connect_all_user_broker_accounts(user, broker, primary_account):
-    """Make broker-level authorization account-complete, not account-click dependent.
+def _prepare_user_broker_accounts(user, broker, primary_account):
+    """Prepare every existing account before async broker verification begins.
 
-    A successful OAuth authorization establishes the credential used to access the
-    broker's account set. Every existing account for that user/broker is therefore
-    verified through the broker and gets its own connected BrokerConnection row.
-    For Deriv, the OAuth credential is shared across the account set, so accounts
-    discovered after authorization inherit the encrypted credential from the
-    successfully authorized account before verification.
+    Django TestCase and SQLite can hold a transaction on the request thread. Keep
+    this account discovery and credential propagation synchronous so the async
+    broker verification loop never has to query or write the test transaction from
+    a second database connection.
     """
-    accounts = await sync_to_async(
-        lambda: list(
-            BrokerAccount.objects.filter(user=user, broker=broker, status__in=['active', 'disabled'])
-            .select_related('broker').order_by('id')
-        )
-    )()
-
-    shared_access_token = primary_account.access_token
-    shared_refresh_token = primary_account.refresh_token
-    shared_token_status = primary_account.token_status
-    shared_expires_at = primary_account.expires_at
-
+    accounts=list(BrokerAccount.objects.filter(user=user, broker=broker, status__in=['active','disabled']).select_related('broker').order_by('id'))
+    shared_access_token=primary_account.access_token
+    shared_refresh_token=primary_account.refresh_token
+    shared_token_status=primary_account.token_status
+    shared_expires_at=primary_account.expires_at
+    if broker.broker_type != 'deriv' or not shared_access_token:
+        return accounts
     for account in accounts:
-        if account.pk == primary_account.pk:
+        if account.pk == primary_account.pk or account.access_token == shared_access_token:
             continue
-        changed=[]
-        if broker.broker_type == 'deriv' and shared_access_token and account.access_token != shared_access_token:
-            account.access_token=shared_access_token; changed.append('access_token')
-            if shared_refresh_token: account.refresh_token=shared_refresh_token; changed.append('refresh_token')
-            account.token_status=shared_token_status; changed.append('token_status')
-            account.expires_at=shared_expires_at; changed.append('expires_at')
-        if changed:
-            await sync_to_async(account.save, thread_sensitive=True)(update_fields=changed)
+        account.access_token=shared_access_token
+        if shared_refresh_token: account.refresh_token=shared_refresh_token
+        account.token_status=shared_token_status
+        account.expires_at=shared_expires_at
+        account.save(update_fields=['access_token','refresh_token','token_status','expires_at'])
+    return accounts
 
+async def _verify_user_broker_accounts(accounts, broker, primary_account_id):
+    """Verify each non-primary account through the broker-authoritative service."""
     connected=[]
     failed=[]
     service=BrokerConnectionService()
     for account in accounts:
+        if account.pk == primary_account_id:
+            connected.append(account.pk)
+            continue
         try:
             await service.connect(broker, account)
             connected.append(account.pk)
@@ -151,7 +147,9 @@ def connect_broker(request):
     if limit>=0 and used>limit:return response.Response({'detail':f'Your {effective_plan(request.user).name} broker-account capacity is exceeded. Upgrade the plan to authorize all connected accounts.','code':'BROKER_ACCOUNT_LIMIT_REACHED','used':used,'limit':limit},status=status.HTTP_429_TOO_MANY_REQUESTS)
     try:
         connection=_run_bounded(BrokerConnectionService().connect(broker,account),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
-        connected_ids,failed_accounts=_run_bounded(_connect_all_user_broker_accounts(request.user,broker,account),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
+        account.refresh_from_db()
+        all_accounts=_prepare_user_broker_accounts(request.user,broker,account)
+        connected_ids,failed_accounts=_run_bounded(_verify_user_broker_accounts(all_accounts,broker,account.pk),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
     except BrokerAuthenticationError as exc:return response.Response({'detail':str(exc),'status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
     except BrokerConnectionError as exc:return response.Response({'detail':str(exc),'status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except BrokerRoutingError as exc:return response.Response({'detail':str(exc),'status':'blocked'},status=status.HTTP_409_CONFLICT)
@@ -174,5 +172,5 @@ def disconnect_broker(request):
     except BrokerAuthenticationError as exc:return response.Response({'detail':str(exc)},status=status.HTTP_401_UNAUTHORIZED)
     except BrokerConnectionError as exc:return response.Response({'detail':str(exc)},status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except BrokerRoutingError as exc:return response.Response({'detail':str(exc)},status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    except asyncio.TimeoutError:return response.Response({'detail':'Broker disconnection timed out.','status':'timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
+    except asyncio.TimeoutError:return response.Response({'detail':'Broker disconnection timed out.','status':status.HTTP_504_GATEWAY_TIMEOUT})
     return response.Response({'connection':BrokerConnectionSerializer(connection).data,'account':BrokerAccountSerializer(account,context={'request':request}).data})
