@@ -2,13 +2,11 @@
   if (window.__algoBotAIUI) return;
   window.__algoBotAIUI = true;
   const $ = (s, r = document) => r.querySelector(s);
-  const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '';
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const request = async (url, options = {}, timeout = 10000) => {
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeout);
     try {
       const headers = {Accept:'application/json', ...(options.headers || {})};
-      if (options.method && options.method !== 'GET') headers['X-CSRFToken'] = csrf();
       const r = await fetch(url, {credentials:'same-origin', ...options, headers, signal:controller.signal});
       const text = await r.text(); let data = {}; try { data = text ? JSON.parse(text) : {}; } catch (_) { data = {detail:text}; }
       if (!r.ok) throw new Error(data.detail || data.message || `Request failed (${r.status})`);
