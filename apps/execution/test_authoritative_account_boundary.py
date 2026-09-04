@@ -16,16 +16,15 @@ class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='execution-account-boundary', password='test-pass')
         self.broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active', supports_live=True)
-        self.previous_account = self._account('VRTC-OLD', preferred=True)
-        self.new_account = self._account('VRTC-NEW', preferred=False)
+        self.previous_account = self._account('VRTC-OLD')
+        self.new_account = self._account('VRTC-NEW')
 
-    def _account(self, account_id, preferred=False):
+    def _account(self, account_id):
         account = BrokerAccount.objects.create(
             user=self.user,
             broker=self.broker,
             account_id=account_id,
             status='active',
-            is_preferred=preferred,
             credentials={'account_type': 'demo'},
             balance=Decimal('100'),
             equity=Decimal('100'),
@@ -42,12 +41,7 @@ class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
         )
         return account
 
-    def test_execution_authority_is_not_derived_from_preferred_flag(self):
-        self.previous_account.is_preferred = False
-        self.previous_account.save(update_fields=['is_preferred'])
-        self.new_account.is_preferred = True
-        self.new_account.save(update_fields=['is_preferred'])
-
+    def test_execution_authority_is_not_derived_from_persistent_preference(self):
         order = Order.objects.create(
             user=self.user,
             broker_account=self.new_account,
@@ -73,7 +67,6 @@ class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
         account = self.new_account
         engine = ExecutionEngine()
         self.assertIs(engine._assert_authoritative_account(self.user, account), account)
-        self.assertFalse(account.is_preferred)
 
     def test_execution_rejects_account_from_another_user(self):
         other = get_user_model().objects.create_user(username='other-execution-user', password='test-pass')
