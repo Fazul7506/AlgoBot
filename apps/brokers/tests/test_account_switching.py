@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
+from django.contrib.sessions.middleware import SessionMiddleware
 
 from core.account_context import SESSION_KEY, get_active_account, select_account
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
@@ -40,10 +41,15 @@ class AccountSwitchingTests(TestCase):
             status='connected',
         )
 
-    def test_selection_is_session_scoped_and_switches_accounts(self):
-        request = self.client.request().wsgi_request
-        request.user = self.user
+    def _request(self):
+        request = RequestFactory().get('/api/brokers/accounts/active/')
+        SessionMiddleware(lambda _request: None).process_request(request)
         request.session.save()
+        request.user = self.user
+        return request
+
+    def test_selection_is_session_scoped_and_switches_accounts(self):
+        request = self._request()
 
         select_account(request, self.account_one)
         self.assertEqual(request.session[SESSION_KEY], self.account_one.pk)
