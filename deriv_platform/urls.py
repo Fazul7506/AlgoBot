@@ -13,17 +13,6 @@ from core.views_auth import (
 )
 from core.browser_views import browser_logout
 from trading.views.dashboard import DashboardViewSet
-from trading.views.market import (
-    MarketSymbolViewSet, PriceHistoryViewSet, MarketSnapshotViewSet,
-    TickDataViewSet, DataStreamSessionViewSet, MarketRegimeViewSet,
-)
-from trading.views.notifications import NotificationViewSet
-from trading.views.copy_trading import CopyTradingViewSet
-from trading.views.indicators import (
-    IndicatorValueViewSet, TechnicalSignalViewSet, IndicatorProfileViewSet,
-    IndicatorAlertViewSet, IndicatorDashboardViewSet,
-)
-from trading.strategies.strategy_api import StrategyViewSet
 from apps.market_data.web_views import market_catalogue
 from apps.market_data.signal_views import strategy_signals
 from core.views import (
@@ -72,24 +61,7 @@ def billing_cancel_dispatch(request):
 
 
 router = DefaultRouter()
-router.register(r"profile", UserProfileViewSet, basename="profile")
-router.register(r"bot-settings", BotSettingsViewSet, basename="bot-settings")
-router.register(r"subscription", SubscriptionViewSet, basename="subscription")
 router.register(r"dashboard", DashboardViewSet, basename="dashboard")
-router.register(r"notifications", NotificationViewSet, basename="notifications")
-router.register(r"market/symbols", MarketSymbolViewSet, basename="market-symbols")
-router.register(r"market/price-history", PriceHistoryViewSet, basename="market-price-history")
-router.register(r"market/snapshots", MarketSnapshotViewSet, basename="market-snapshots")
-router.register(r"market/ticks", TickDataViewSet, basename="market-ticks")
-router.register(r"market/streams", DataStreamSessionViewSet, basename="market-streams")
-router.register(r"market/regime", MarketRegimeViewSet, basename="market-regime")
-router.register(r"market/indicators", IndicatorValueViewSet, basename="indicators")
-router.register(r"market/signals", TechnicalSignalViewSet, basename="signals")
-router.register(r"market/indicator-profiles", IndicatorProfileViewSet, basename="indicator-profiles")
-router.register(r"market/indicator-alerts", IndicatorAlertViewSet, basename="indicator-alerts")
-router.register(r"market/indicator-dashboard", IndicatorDashboardViewSet, basename="indicator-dashboard")
-router.register(r"strategies", StrategyViewSet, basename="strategies")
-router.register(r"copy-trading", CopyTradingViewSet, basename="copy-trading")
 
 urlpatterns = [
     path("health/", include("apps.health.urls")),
@@ -158,7 +130,6 @@ urlpatterns = [
     path("reset-password/<str:token>/", reset_password_page, name="reset_password_page"),
     path("verify-email/", verify_email_page, name="verify_email_page"),
 
-    # Canonical API surface. All browser/API clients use /api/.
     path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/register/", register, name="register"),
