@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from trading.models.core import Signal
+from apps.strategies.models import Strategy, StrategySignal
 
 
 class Phase3MarketIntelligenceTests(TestCase):
@@ -14,10 +14,13 @@ class Phase3MarketIntelligenceTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
+    def _strategy(self, name):
+        return Strategy.objects.create(name=name, slug=name.lower().replace(' ', '-'), category='Momentum')
+
     def test_signal_lifecycle_exposes_active_and_expired_states(self):
-        active = Signal.objects.create(symbol='R_100', direction='BUY', confidence=0.8, strategy='Trend')
-        expired = Signal.objects.create(symbol='R_100', direction='SELL', confidence=0.6, strategy='MeanRev')
-        Signal.objects.filter(pk=expired.pk).update(created_at=timezone.now() - timedelta(minutes=10))
+        active = StrategySignal.objects.create(strategy=self._strategy('Trend'), symbol='R_100', signal='BUY', confidence=80)
+        expired = StrategySignal.objects.create(strategy=self._strategy('MeanRev'), symbol='R_100', signal='SELL', confidence=60)
+        StrategySignal.objects.filter(pk=expired.pk).update(timestamp=timezone.now() - timedelta(minutes=10))
         response = self.client.get('/api/market/signals/lifecycle/?symbol=R_100')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['count'], 2)
