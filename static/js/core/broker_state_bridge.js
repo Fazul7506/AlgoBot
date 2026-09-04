@@ -8,6 +8,10 @@
   const list=v=>Array.isArray(v)?v:(Array.isArray(v?.results)?v.results:(Array.isArray(v?.data)?v.data:[]));
   const csrf=()=>document.querySelector('meta[name="csrf-token"]')?.content||document.cookie.split(';').map(v=>v.trim()).find(v=>v.startsWith('csrftoken='))?.split('=').slice(1).join('=')||'';
   async function requestJson(url,options={},timeoutMs=25000){
+    const frontendData=window.AlgoBotFrontendData;
+    if(frontendData?.request){
+      try{return await frontendData.request(url,options,timeoutMs)}catch(error){if(error?.code==='API_TIMEOUT')error.code='BROKER_SYNC_TIMEOUT';throw error}
+    }
     const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),timeoutMs);
     try{const response=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json',...(options.headers||{})},cache:'no-store',signal:controller.signal,...options});let payload=null;try{payload=await response.json()}catch(_){}if(!response.ok){const e=new Error(payload?.detail||payload?.message||`Broker request failed (${response.status})`);e.status=response.status;e.payload=payload;throw e}return payload}catch(error){if(error?.name==='AbortError')error.code='BROKER_SYNC_TIMEOUT';throw error}finally{clearTimeout(timeout)}}
   async function refreshAccounts(store){
