@@ -5,7 +5,7 @@ from django.core.cache import cache
 from django.utils import timezone
 from .models import AIModel, ModelVersion, Prediction, FeatureVector, TrainingJob, AIRecommendation, MarketRegime, AnomalyEvent
 from .constants import CONFIDENCE_LABELS
-from trading.ai.candlestick_features import FEATURE_NAMES, extract_candlestick_features
+from .candlestick_features import FEATURE_NAMES, extract_candlestick_features
 log=logging.getLogger(__name__)
 
 def _num(v,default=0.0):
@@ -51,7 +51,7 @@ class ModelVersionService:
 class InferenceService:
     def _trained_ensemble(self,symbol,timeframe):
         try:
-            from trading.ai.ensemble import EnsemblePredictor; return EnsemblePredictor(symbol,timeframe)
+            from .ensemble_predictor import EnsemblePredictor; return EnsemblePredictor(symbol,timeframe)
         except Exception as exc:log.warning('AI ensemble unavailable',extra={'symbol':symbol,'error':str(exc)}); return None
     def infer(self,features,model=None,symbol=None,timeframe='M1'):
         ensemble=self._trained_ensemble(symbol,timeframe) if symbol else None
