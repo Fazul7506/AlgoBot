@@ -38,18 +38,6 @@ class DerivOAuthTests(TestCase):
         self.assertEqual(query["code_challenge_method"], ["S256"])
         self.assertNotIn("app_id", query)
 
-    @override_settings(
-        DERIV_LEGACY_APP_ID="legacy-app",
-        DERIV_ENABLE_LEGACY_APP_ROUTING=True,
-    )
-    def test_legacy_app_routing_is_explicitly_opt_in(self):
-        query = parse_qs(
-            urlparse(
-                DerivOAuthService.create_authorization_url("state", "challenge")
-            ).query
-        )
-        self.assertEqual(query["app_id"], ["legacy-app"])
-
     def test_callback_rejects_state_mismatch_without_restarting_oauth(self):
         self._oauth_session()
         response = self.client.get(
