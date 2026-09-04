@@ -99,7 +99,8 @@ def callback(request):
                 selected_broker_account = persisted
     if selected_broker_account is None:
         return _fail(request, "Deriv authorization succeeded, but AlgoBot could not persist the selected trading account. Your dashboard was not opened.", "deriv_oauth_selected_account_not_persisted")
-    select_account(request, selected_broker_account)
+    if selected_broker_account.is_connection_eligible:
+        select_account(request, selected_broker_account)
     DerivOAuthService.clear_oauth_session(request)
     logger.info("deriv_oauth_authorized_account_persisted", extra={"account_id":selected_account_id,"account_count":len(persisted_ids)})
     messages.success(request, f"Deriv account {selected_account_id} authorized. Broker connection verification is now available in Broker Management.")
