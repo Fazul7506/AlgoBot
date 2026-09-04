@@ -26,7 +26,7 @@ class PaymentService:
     PESAPAL = "pesapal"
 
     def __init__(self):
-        self.provider = str(getattr(settings, "PAYMENT_PROVIDER", self.INTASEND)).lower()
+        self.provider = str(getattr(settings, "PAYMENT_PROVIDER", self.INTASEND)).lower().strip()
         self.intasend_public_key = getattr(settings, "INTASEND_PUBLIC_KEY", "")
         self.intasend_secret_key = getattr(settings, "INTASEND_SECRET_KEY", "")
         self.intasend_webhook_challenge = getattr(settings, "INTASEND_WEBHOOK_CHALLENGE", "")
@@ -39,12 +39,7 @@ class PaymentService:
 
     def create_checkout_session(self, user, subscription_plan, provider: str | None = None):
         selected = str(provider or self.provider).lower().strip()
-        logger.info(
-            "Creating %s checkout for %s plan=%s",
-            selected,
-            getattr(user, "username", None),
-            subscription_plan,
-        )
+        logger.info("Creating %s checkout for %s plan=%s", selected, getattr(user, "username", None), subscription_plan)
         if selected == self.INTASEND:
             return self.create_intasend_checkout(user, subscription_plan)
         if selected == self.PESAPAL:
@@ -56,7 +51,11 @@ class PaymentService:
             return self._configuration_error("INTASEND_PUBLIC_KEY")
         amount, currency = self._amount_and_currency(subscription_plan)
         api_ref = self._reference("IS", user, subscription_plan)
-        redirect_url = self._callback_url("BILLING_SUCCESS_URL", "/billing/success/")
+        redirect_url = self._callback_url(
+            "BILLING_SUCCESS_URL",
+            "/billing/success/",
+            {"provider": self.INTASEND, "reference": api_ref},
+        )
         host_url = self._base_url()
         payload = {
             "amount": self._decimal_string(amount),
@@ -90,6 +89,9 @@ class PaymentService:
                 return {"url": "", "provider": self.INTASEND, "error": self._provider_error(data)}
             url = data.get("url") or data.get("checkout_url") or data.get("link") or ""
             invoice_id = data.get("invoice_id") or data.get("id") or data.get("checkout_id")
+            if not url:
+                logger.error("IntaSend checkout returned success without a checkout URL: %s", data)
+                return {"url": "", "provider": self.INTASEND, "error": "Payment provider returned no checkout URL"}
             return {
                 "provider": self.INTASEND,
                 "session_id": invoice_id or api_ref,
@@ -158,9 +160,12 @@ class PaymentService:
                 return {"url": "", "provider": self.PESAPAL, "error": self._provider_error(data)}
             url = data.get("redirect_url") or data.get("url") or ""
             tracking_id = data.get("order_tracking_id") or data.get("tracking_id")
+            if not url or not tracking_id:
+                logger.error("Pesapal checkout returned incomplete order data: %s", data)
+                return {"url": "", "provider": self.PESAPAL, "error": "Payment provider returned incomplete checkout data"}
             return {
                 "provider": self.PESAPAL,
-                "session_id": tracking_id or reference,
+                "session_id": tracking_id,
                 "order_tracking_id": tracking_id,
                 "reference": reference,
                 "url": url,
@@ -172,7 +177,6 @@ class PaymentService:
     def handle_webhook(self, payload: bytes | dict, sig_header: str = "", provider: str | None = None) -> Optional[dict]:
         """Compatibility entry point that delegates to the canonical reconciler."""
         from core.services.payment_reconciler import PaymentReconciler
-
         selected = str(provider or self.provider).lower().strip()
         if selected == self.INTASEND:
             return PaymentReconciler.handle_intasend_webhook(payload)
@@ -184,7 +188,6 @@ class PaymentService:
     def handle_pesapal_callback(self, order_tracking_id: str, merchant_reference: str = ""):
         """Compatibility entry point that delegates to the canonical reconciler."""
         from core.services.payment_reconciler import PaymentReconciler
-
         return PaymentReconciler.handle_pesapal_callback(order_tracking_id, merchant_reference)
 
     def get_pesapal_transaction_status(self, order_tracking_id: str) -> Optional[dict]:
@@ -232,7 +235,6 @@ class PaymentService:
 
     def create_invoice_record(self, user, amount_cents: int, currency: str = "KES"):
         from core.models import Invoice
-
         return Invoice.objects.create(user=user, amount_cents=amount_cents, currency=currency)
 
     def _pesapal_access_token(self) -> Optional[str]:
@@ -346,7 +348,6 @@ class PaymentService:
         if isinstance(payload, dict):
             return payload
         import json
-
         try:
             return json.loads(payload or b"{}")
         except (TypeError, ValueError):
