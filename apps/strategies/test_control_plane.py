@@ -19,7 +19,6 @@ class StrategyControlPlaneTests(TestCase):
             account_id='TEST-001',
             status='active',
             credentials={'account_type': 'demo'},
-            is_preferred=True,
         )
         self.strategy_a = Strategy.objects.create(name='Alpha', slug='alpha', category='Momentum')
         self.strategy_b = Strategy.objects.create(name='Beta', slug='beta', category='Momentum')
