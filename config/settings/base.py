@@ -17,7 +17,7 @@ DEBUG = get_bool_env("DEBUG", get_bool_env("DJANGO_DEBUG", True))
 ALLOW_LIVE_TRADING = get_bool_env("ALLOW_LIVE_TRADING", False)
 ENABLE_BROKER_ACCOUNT_SWITCH = get_bool_env("ENABLE_BROKER_ACCOUNT_SWITCH", True)
 
-ALLOWED_HOSTS = get_list_env("ALLOWED_HOSTS", ["127.0.0.1", "localhost", "testserver", "algobot.dpdns.org", "api.algobot.dpdns.org"])
+ALLOWED_HOSTS = get_list_env("ALLOWED_HOSTS", ["127.0.0.1", "localhost", "testserver", "algobot.dpdns.org", "www.algobot.dpdns.org", "api.algobot.dpdns.org"])
 TIME_ZONE = os.getenv("TIME_ZONE", "UTC")
 LANGUAGE_CODE = "en-us"
 USE_I18N = True
@@ -28,7 +28,9 @@ SESSION_COOKIE_SECURE = get_bool_env("SESSION_COOKIE_SECURE", False)
 CSRF_COOKIE_SECURE = get_bool_env("CSRF_COOKIE_SECURE", False)
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
-CSRF_TRUSTED_ORIGINS = get_list_env("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org"] if os.getenv("ALGO_API_BASE_URL") else [])
+CSRF_COOKIE_HTTPONLY = False
+CSRF_TRUSTED_ORIGINS = get_list_env("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"] if os.getenv("ALGO_API_BASE_URL") else [])
+CSRF_FAILURE_VIEW = "core.views_csrf.csrf_failure"
 
 INSTALLED_APPS = [
     "daphne", "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
@@ -50,7 +52,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware", "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware", "django.middleware.common.CommonMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware", "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware", "core.middleware.csrf.APIAwareCsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware", "apps.developer.middleware.DeveloperAPIMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware", "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.audit_middleware.AuditMiddleware", "core.middleware.plan_entitlement_middleware.PlanEntitlementMiddleware",
@@ -77,7 +79,7 @@ SIMPLE_JWT = {
 
 CORS_ALLOWED_ORIGINS = get_list_env(
     "CORS_ALLOWED_ORIGINS",
-    ["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:8000", "http://localhost:8000", "https://algobot.dpdns.org"]
+    ["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:8000", "http://localhost:8000", "https://algobot.dpdns.org", "https://www.algobot.dpdns.org"]
     if os.getenv("ALGO_API_BASE_URL")
     else ["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:8000", "http://localhost:8000"],
 )

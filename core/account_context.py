@@ -1,8 +1,8 @@
 """Authoritative user-selected broker account context.
 
 Selection belongs to the authenticated user's session, not to a broker-level
-preference. DEMO and REAL accounts are equally eligible; the broker's verified
-account type remains authoritative for execution safety.
+preference. Every connected account is independently authorized; session
+selection only chooses which already-authorized account the user is operating.
 """
 from apps.brokers.models import BrokerAccount
 

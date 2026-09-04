@@ -4,14 +4,13 @@ from .base import *  # noqa: F403,F401
 from .utils import env, env_bool, env_list, validate_required_settings
 
 DEBUG = False
-ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["algobot.dpdns.org", "api.algobot.dpdns.org"])
-CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org"])
-CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", ["https://algobot.dpdns.org"])
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["algobot.dpdns.org", "www.algobot.dpdns.org", "api.algobot.dpdns.org"])
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"])
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org"])
 CORS_ALLOW_CREDENTIALS = True
 BASE_URL = env("BASE_URL", "https://algobot.dpdns.org").rstrip("/")
 ALGO_API_BASE_URL = env("ALGO_API_BASE_URL", "https://api.algobot.dpdns.org").rstrip("/")
 
-# Render terminates TLS at its edge and forwards requests internally over HTTP.
 SECURE_SSL_REDIRECT = False
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_HSTS_SECONDS = int(env("SECURE_HSTS_SECONDS", "31536000"))
@@ -24,6 +23,7 @@ X_FRAME_OPTIONS = "DENY"
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", "Lax")
 SESSION_COOKIE_DOMAIN = env("SESSION_COOKIE_DOMAIN", ".algobot.dpdns.org")
@@ -57,8 +57,6 @@ validate_required_settings(
 if SECRET_KEY in {"django-insecure-local-development-only", "change-me"}:
     raise RuntimeError("Production SECRET_KEY must be explicitly configured.")
 
-# Payment callbacks bypass CSRF by design, so production must have provider
-# authentication configured. A missing challenge/credential is fail-closed.
 if PAYMENT_PROVIDER == "intasend":  # noqa: F405
     validate_required_settings(
         production=True,

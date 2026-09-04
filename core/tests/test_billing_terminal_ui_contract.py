@@ -9,6 +9,9 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("Custom pricing", template)
         self.assertIn("Usage is measured from persisted platform audit/database records", template)
         self.assertNotIn("filter(p=>p.plan!=='ENTERPRISE'||admin)", template)
+        self.assertNotIn("Contact sales", template)
+        self.assertIn('data-provider="intasend"', template)
+        self.assertIn('data-provider="pesapal"', template)
 
     def test_billing_backend_catalogue_includes_enterprise_without_ui_role_filtering(self):
         from pathlib import Path
@@ -17,7 +20,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('return Response({"plans": _plans()', billing)
         template = Path("templates/core/billing.html").read_text(encoding="utf-8")
         self.assertNotIn("p.plan!=='ENTERPRISE'||admin", template)
-        self.assertIn("if(name==='ENTERPRISE')", template)
+        self.assertNotIn("if(name==='ENTERPRISE')", template)
+        self.assertIn('data-checkout-plan="${esc(name)}"', template)
 
     def test_terminal_template_uses_canonical_shell_navigation(self):
         from pathlib import Path
@@ -30,11 +34,11 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("window.AlgoBotBaseShell?.syncActiveNavigation", frontend_shell)
         self.assertNotIn("link.href = '/analysis/'", frontend_shell)
 
-    def test_shared_api_clients_attach_csrf_to_mutations(self):
+    def test_shared_api_clients_centralize_csrf_on_mutations(self):
         from pathlib import Path
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
         guard = Path("static/js/core/api_execution_guard.js").read_text(encoding="utf-8")
         self.assertIn("X-CSRFToken", client)
-        self.assertIn("X-CSRFToken", guard)
         self.assertIn("credentials: options.credentials || 'include'", client)
-        self.assertIn("credentials: init.credentials || 'include'", guard)
+        self.assertNotIn("window.fetch =", guard)
+        self.assertIn("__algoBotApiExecutionGuard", guard)

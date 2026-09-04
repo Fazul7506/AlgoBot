@@ -48,12 +48,12 @@ class BrokerConnectionContractTests(APITestCase):
         self.assertEqual(response.data["credential_status"], "credentials_expired")
 
     @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
-    def test_switch_rejects_unconfirmed_account_type(self):
+    def test_switch_rejects_unconnected_unconfirmed_account(self):
         response = self.client.post(
             reverse("broker-accounts-select", args=[self.account.pk]),
             {"account_type": "demo"},
             format="json",
         )
         self.assertEqual(response.status_code, 409)
-        self.assertIn("confirmed", response.data["detail"])
+        self.assertIn("not connected", response.data["detail"])
         self.assertFalse(self.account.is_preferred)

@@ -6,11 +6,11 @@ class BrokerSerializer(serializers.ModelSerializer):
     class Meta: model=Broker; fields='__all__'
 
 class BrokerAccountSerializer(serializers.ModelSerializer):
-    broker=serializers.SerializerMethodField(); broker_name=serializers.CharField(source='broker.name',read_only=True); broker_account_id=serializers.CharField(source='account_id',read_only=True); account_type=serializers.SerializerMethodField(); avatar_url=serializers.SerializerMethodField(); display_name=serializers.SerializerMethodField(); branding=serializers.SerializerMethodField(); is_default=serializers.SerializerMethodField(); is_connected=serializers.SerializerMethodField(); credential_status=serializers.CharField(read_only=True); data_freshness=serializers.SerializerMethodField(); switch_enabled=serializers.SerializerMethodField(); equity=serializers.SerializerMethodField(); margin=serializers.SerializerMethodField(); free_margin=serializers.SerializerMethodField(); net_profit_loss=serializers.SerializerMethodField(); is_active=serializers.SerializerMethodField()
+    broker=serializers.SerializerMethodField(); broker_name=serializers.CharField(source='broker.name',read_only=True); broker_account_id=serializers.CharField(source='account_id',read_only=True); account_type=serializers.SerializerMethodField(); avatar_url=serializers.SerializerMethodField(); display_name=serializers.SerializerMethodField(); branding=serializers.SerializerMethodField(); is_connected=serializers.SerializerMethodField(); credential_status=serializers.CharField(read_only=True); data_freshness=serializers.SerializerMethodField(); switch_enabled=serializers.SerializerMethodField(); equity=serializers.SerializerMethodField(); margin=serializers.SerializerMethodField(); free_margin=serializers.SerializerMethodField(); net_profit_loss=serializers.SerializerMethodField(); is_active=serializers.SerializerMethodField()
     class Meta:
         model=BrokerAccount
-        fields=['id','user','broker','broker_name','broker_account_id','account_id','account_type','avatar_url','display_name','branding','currency','balance','equity','margin','free_margin','net_profit_loss','status','is_preferred','is_default','is_active','is_connected','credential_status','last_synced_at','data_freshness','switch_enabled','created_at']
-        read_only_fields=['user','balance','equity','margin','free_margin','net_profit_loss','last_synced_at','broker_account_id','account_type','avatar_url','display_name','branding','is_preferred','is_default','is_active','is_connected','data_freshness','switch_enabled']
+        fields=['id','user','broker','broker_name','broker_account_id','account_id','account_type','avatar_url','display_name','branding','currency','balance','equity','margin','free_margin','net_profit_loss','status','is_active','is_connected','credential_status','last_synced_at','data_freshness','switch_enabled','created_at']
+        read_only_fields=['user','balance','equity','margin','free_margin','net_profit_loss','last_synced_at','broker_account_id','account_type','avatar_url','display_name','branding','is_active','is_connected','data_freshness','switch_enabled']
     def _realtime(self,obj):
         value=(obj.credentials or {}).get('realtime') or {}; return value if isinstance(value,dict) else {}
     def _broker_metadata(self,obj):
@@ -25,7 +25,6 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
     def get_branding(self,obj):
         r,m=self._realtime(obj),self._broker_metadata(obj); t=self.get_account_type(obj); p=str(m.get('provider') or obj.broker.name); a=str(r.get('avatar_url') or m.get('avatar_url') or '')
         return {'provider':p,'powered_by':p,'country_code':str(r.get('country_code') or m.get('country_code') or '').upper(),'country_name':str(r.get('country_name') or m.get('country_name') or ''),'flag':str(r.get('flag') or m.get('flag') or ''),'avatar_url':a,'account_type':t,'label':f'{p} Demo Account' if t=='demo' else f'{p} Real Account' if t=='real' else f'{p} Account'}
-    def get_is_default(self,obj): return False
     def get_is_active(self,obj):
         request=self.context.get('request'); active=get_active_account(obj.user,request=request) if request else None; return bool(active and active.pk==obj.pk)
     def get_is_connected(self,obj): return obj.connections.filter(status='connected').exists()

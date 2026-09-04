@@ -31,6 +31,8 @@ class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
             equity=Decimal('100'),
             free_margin=Decimal('100'),
         )
+        account.set_access_token(f'test-token-{account_id}')
+        account.save(update_fields=['access_token'])
         BrokerConnection.objects.create(
             broker=self.broker,
             broker_account=account,
@@ -40,39 +42,47 @@ class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
         )
         return account
 
-    def test_queued_order_is_blocked_after_account_switch(self):
-        order = Order.objects.create(
-            user=self.user,
-            broker_account=self.old_account,
-            symbol='R_100',
-            direction='buy',
-            order_type='market',
-            stake=Decimal('1'),
-            status=ORDER_STATUS_QUEUED,
-        )
-
+    def test_execution_authority_is_not_derived_from_legacy_preferred_flag(self):
         self.old_account.is_preferred = False
         self.old_account.save(update_fields=['is_preferred'])
         self.new_account.is_preferred = True
         self.new_account.save(update_fields=['is_preferred'])
 
-        adapter = SimpleNamespace(place_order=AsyncMock())
-        with patch('apps.execution.engine.BrokerRegistry.adapter', return_value=adapter):
-            with self.assertRaisesRegex(PermissionError, 'no longer the active account'):
-                __import__('asyncio').run(ExecutionEngine().execute(order))
+        order = Order.objects.create(
+            user=self.user,
+            broker_account=self.new_account,
+            symbol='R_100',
+            direction='buy',
+            order_type='market',
+            stake=Decimal('1'),
+            status=ORDER_STATUS_QUEUED,
+            validation_context={'execution_mode': 'manual_command'},
+        )
 
-        adapter.place_order.assert_not_awaited()
+        adapter = SimpleNamespace(place_order=AsyncMock(return_value={'broker_order_id': 'BROKER-1'}))
+        with patch('apps.execution.engine.BrokerRegistry.adapter', return_value=adapter), \
+             patch('apps.risk.engine.RiskEngine.approve_or_raise'):
+            __import__('asyncio').run(ExecutionEngine().execute(order))
+
+        adapter.place_order.assert_awaited_once()
         order.refresh_from_db()
-        self.assertEqual(order.status, ORDER_STATUS_QUEUED)
+        self.assertEqual(order.status, 'executed')
+        self.assertEqual(order.broker_reference, 'BROKER-1')
 
-    def test_active_account_is_required_for_order_creation(self):
+    def test_explicit_connected_account_is_authoritative_for_order_creation(self):
+        account = self.new_account
         engine = ExecutionEngine()
-        with self.assertRaisesRegex(PermissionError, 'no longer the active account'):
-            engine.place_order(
-                self.user,
-                broker_account=self.new_account,
-                symbol='R_100',
-                direction='buy',
-                order_type='market',
-                stake=Decimal('1'),
-            )
+        self.assertIs(engine._assert_authoritative_account(self.user, account), account)
+        self.assertFalse(account.is_preferred)
+
+    def test_execution_rejects_account_from_another_user(self):
+        other = get_user_model().objects.create_user(username='other-execution-user', password='test-pass')
+        foreign = BrokerAccount.objects.create(
+            user=other,
+            broker=self.broker,
+            account_id='FOREIGN-1',
+            status='active',
+            credentials={'account_type': 'demo'},
+        )
+        with self.assertRaisesRegex(PermissionError, 'does not belong to this user'):
+            ExecutionEngine._assert_authoritative_account(self.user, foreign)

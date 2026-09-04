@@ -22,7 +22,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _safe_client_context(data):
         context = data.get('validation_context') or {}
-        return {'broker_source': context.get('broker_source') or 'connected_broker', 'contract_type': context.get('contract_type'), 'underlying_symbol': context.get('underlying_symbol') or data.get('symbol'), 'selected_strategy': context.get('selected_strategy') or data.get('strategy') or None, 'trigger': context.get('trigger') or 'terminal'}
+        return {'broker_source': context.get('broker_source') or 'connected_broker', 'contract_type': context.get('contract_type'), 'underlying_symbol': context.get('underlying_symbol') or data.get('symbol'), 'selected_strategy': context.get('selected_strategy') or data.get('strategy') or None, 'trigger': context.get('trigger') or 'manual_terminal_command', 'execution_mode': 'manual_command'}
     def create(self, request, *args, **kwargs):
         client_request_id = str(request.data.get('client_request_id') or '').strip()
         if client_request_id:
@@ -34,22 +34,22 @@ class OrderViewSet(viewsets.ModelViewSet):
             return response.Response({'status':'rejected','code':'ORDER_LIMIT_REACHED','detail':f'Your {plan.name} order allowance has been reached for today.','plan':plan.key,'used':used_orders,'limit':order_limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data); account = data.get('broker_account'); environment = self._environment(account); data['validation_context'] = self._safe_client_context(request.data)
-        strategy_selected = bool(str(data.get('strategy') or '').strip())
         if environment == 'real':
             allowed, used, limit = check_live_order(request.user)
             if not allowed: return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)): return response.Response({'status':'rejected','code':'LIVE_TRADING_DISABLED','detail':'Live-money trading is disabled by platform configuration.'}, status=status.HTTP_409_CONFLICT)
             try:
-                if strategy_selected: order = ExecutionEngine().place_consensus_order(request.user, timeframe='M1', context=None, risk_context={}, **data)
-                else: order = ExecutionEngine().place_order(request.user, **data)
+                # Terminal submission is always an explicit manual user command.
+                # Strategy/AI autonomous execution has a separate server-side path.
+                order = ExecutionEngine().place_order(request.user, **data)
             except PermissionError as exc: return response.Response({'status':'rejected','code':'ORDER_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
             except Exception as exc:
                 log.exception('Terminal live execution failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
                 return response.Response({'status':'rejected','code':'EXECUTION_UNAVAILABLE','detail':f'Broker execution could not be completed: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             return response.Response(self.get_serializer(order).data, status=status.HTTP_201_CREATED)
         try:
-            if strategy_selected: order = ExecutionEngine().place_consensus_order(request.user, timeframe='M1', context=None, risk_context={}, **data)
-            else: order = ExecutionEngine().place_order(request.user, **data)
+            # Demo/manual terminal orders follow the exact same explicit-command path.
+            order = ExecutionEngine().place_order(request.user, **data)
         except PermissionError as exc: return response.Response({'status':'rejected','code':'ORDER_RISK_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
         except Exception as exc:
             log.exception('Terminal demo execution failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
