@@ -129,7 +129,7 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     def open(self,request):return response.Response(self.get_serializer(self.get_queryset().filter(status='open'),many=True).data)
 class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=TradeReconciliationSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
-    def get_queryset(self):return TradeReconciliation.objects.filter(broker__broker_accounts__user=request.user).distinct()
+    def get_queryset(self):return TradeReconciliation.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
 class BrokerHealthViewSet(viewsets.ViewSet):
     permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def list(self,request):
