@@ -25,7 +25,6 @@ class OrderRoutingTests(TestCase):
             user=self.user,
             broker=broker,
             account_id='PAPER-1',
-            is_preferred=True,
             credentials={'account_type': 'demo'},
         )
         BrokerConnection.objects.create(broker=broker, broker_account=self.account, status='connected')
@@ -38,5 +37,5 @@ class OrderRoutingTests(TestCase):
         self.assertEqual(order.account, self.account)
         self.assertEqual(order.status, 'validated')
 
-    def test_smart_router_prefers_active_account(self):
+    def test_smart_router_selects_only_connected_account(self):
         self.assertEqual(SmartOrderRouter().route(self.user), self.account)
