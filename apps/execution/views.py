@@ -22,7 +22,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _safe_client_context(data):
         context = data.get('validation_context') or {}
-        return {'broker_source': context.get('broker_source') or 'connected_broker', 'contract_type': context.get('contract_type'), 'underlying_symbol': context.get('underlying_symbol') or data.get('symbol'), 'selected_strategy': context.get('selected_strategy') or data.get('strategy') or None, 'trigger': context.get('trigger') or 'manual_terminal_command', 'execution_mode': 'manual_command'}
+        return {'broker_source': context.get('broker_source') or 'connected_broker', 'contract_type': context.get('contract_type'), 'underlying_symbol': context.get('underlying_symbol') or data.get('symbol'), 'selected_strategy': context.get('selected_strategy') or data.get('strategy') or None, 'trigger': 'manual_terminal_command', 'execution_mode': 'manual_command'}
     def create(self, request, *args, **kwargs):
         client_request_id = str(request.data.get('client_request_id') or '').strip()
         if client_request_id:
@@ -38,21 +38,11 @@ class OrderViewSet(viewsets.ModelViewSet):
             allowed, used, limit = check_live_order(request.user)
             if not allowed: return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)): return response.Response({'status':'rejected','code':'LIVE_TRADING_DISABLED','detail':'Live-money trading is disabled by platform configuration.'}, status=status.HTTP_409_CONFLICT)
-            try:
-                # Terminal submission is always an explicit manual user command.
-                # Strategy/AI autonomous execution has a separate server-side path.
-                order = ExecutionEngine().place_order(request.user, **data)
-            except PermissionError as exc: return response.Response({'status':'rejected','code':'ORDER_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
-            except Exception as exc:
-                log.exception('Terminal live execution failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
-                return response.Response({'status':'rejected','code':'EXECUTION_UNAVAILABLE','detail':f'Broker execution could not be completed: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-            return response.Response(self.get_serializer(order).data, status=status.HTTP_201_CREATED)
         try:
-            # Demo/manual terminal orders follow the exact same explicit-command path.
             order = ExecutionEngine().place_order(request.user, **data)
-        except PermissionError as exc: return response.Response({'status':'rejected','code':'ORDER_RISK_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
+        except PermissionError as exc: return response.Response({'status':'rejected','code':'ORDER_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
         except Exception as exc:
-            log.exception('Terminal demo execution failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
+            log.exception('Terminal order execution failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
             return response.Response({'status':'rejected','code':'EXECUTION_UNAVAILABLE','detail':f'Broker execution could not be completed: {exc}','retryable':False}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return response.Response(self.get_serializer(order).data, status=status.HTTP_201_CREATED)
     @decorators.action(detail=False, methods=['post'])
@@ -74,23 +64,11 @@ class OrderViewSet(viewsets.ModelViewSet):
                 except Exception:
                     from apps.market_data.models import Tick
                     tick = Tick.objects.filter(symbol__symbol=data.get('symbol')).order_by('-epoch', '-received_at').first()
-                    if tick is None: raise ValueError(f'No persisted broker tick is available for {data.get("symbol")}.' )
+                    if tick is None: raise ValueError(f'No persisted broker tick is available for {data.get("symbol")}.')
                     age = max(0, (timezone.now() - tick.received_at).total_seconds()); max_age = int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30))
                     if age > max_age: raise ValueError(f'Market data is stale ({int(age)}s old; limit {max_age}s).')
                     quote = SimpleNamespace(last_price=tick.quote, bid=tick.bid, ask=tick.ask, spread=tick.spread, timestamp=tick.received_at)
             except Exception as exc: return response.Response({'status':'rejected','code':'MARKET_DATA_GATE_FAILED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
-            ai_gate = {'ai_verified':False,'ai_required':environment == 'real'}
-            if environment == 'real':
-                try:
-                    from apps.ai_engine.services import PredictionService, RecommendationService, ConsensusDecisionGate
-                    context = ExecutionEngine()._ai_market_context(account, data.get('symbol'), 'M1'); prediction = PredictionService().predict(data.get('symbol'), 'M1', context); recommendation = RecommendationService().recommend(data.get('symbol'), prediction)
-                    approved, reason = ConsensusDecisionGate().validate(prediction, data.get('direction'))
-                    if not approved: return response.Response({'status':'rejected','code':'AI_CONSENSUS_GATE_REJECTED','detail':reason}, status=status.HTTP_409_CONFLICT)
-                    consensus = prediction.payload.get('consensus', {}) if prediction.payload else {}
-                    ai_gate = {'ai_verified':True,'ai_required':True,'prediction_id':prediction.pk,'recommendation_id':recommendation.pk,'decision':consensus.get('decision',prediction.prediction),'confidence':consensus.get('confidence',prediction.confidence),'models_used':consensus.get('models_used',0)}
-                except Exception as exc:
-                    log.exception('Live pre-trade AI verification failed', extra={'symbol':data.get('symbol'),'account_id':account.id})
-                    return response.Response({'status':'rejected','code':'AI_ANALYSIS_UNAVAILABLE','detail':f'Live execution requires a fresh verified AI decision: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             stake = data.get('stake')
             try: stake_value = float(Decimal(str(stake)))
             except (InvalidOperation, TypeError, ValueError): stake_value = None
@@ -98,7 +76,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             if last_price is None: raise ValueError('The authoritative market snapshot has no last price.')
             timestamp = getattr(quote, 'timestamp', None)
             market = {'price':float(last_price),'bid':float(quote.bid) if quote.bid is not None else None,'ask':float(quote.ask) if quote.ask is not None else None,'spread':float(quote.spread or 0),'timestamp':timestamp.isoformat() if timestamp else None}
-            return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':data.get('symbol'),'direction':data.get('direction'),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':market,'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'fresh_market_data':True,**ai_gate}})
+            return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':data.get('symbol'),'direction':data.get('direction'),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':market,'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'fresh_market_data':True,'ai_verified':False,'ai_required':False}})
         except Exception:
             log.exception('Pre-trade preview failed', extra={'user_id':request.user.id,'symbol':request.data.get('symbol')})
             return response.Response({'status':'rejected','code':'PREVIEW_INTERNAL_ERROR','detail':'Pre-trade preview could not be completed safely. Check market/broker status and retry.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
