@@ -1,3 +1,51 @@
+:root {
+  --algobot-primary: #5eead4;
+  --algobot-primary-strong: #2dd4bf;
+  --algobot-surface: #0b1220;
+  --algobot-surface-alt: #111827;
+  --algobot-surface-soft: rgba(15, 23, 42, 0.88);
+  --algobot-border: rgba(148, 163, 184, 0.18);
+  --algobot-text: #e2e8f0;
+  --algobot-text-muted: #94a3b8;
+  --algobot-success: #22c55e;
+  --algobot-warning: #f59e0b;
+  --algobot-danger: #ef4444;
+  --algobot-focus: #7dd3fc;
+  --algobot-shadow: 0 24px 48px rgba(2, 6, 23, 0.32);
+  --algobot-radius-sm: 10px;
+  --algobot-radius-md: 14px;
+  --algobot-radius-lg: 18px;
+  --algobot-spacing-1: 4px;
+  --algobot-spacing-2: 8px;
+  --algobot-spacing-3: 12px;
+  --algobot-spacing-4: 16px;
+  --algobot-spacing-5: 20px;
+  --algobot-spacing-6: 24px;
+  --algobot-spacing-8: 32px;
+  --algobot-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+html { color-scheme: dark; scroll-behavior: smooth; }
+body { font-family: var(--algobot-font-sans); background: var(--algobot-surface); color: var(--algobot-text); line-height: 1.5; }
+img { max-width: 100%; display: block; }
+a { color: inherit; text-decoration: none; }
+button,input,select,textarea { font: inherit; }
+button,input,select,textarea,a { transition: background-color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease, transform 0.18s ease; }
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible { outline: 2px solid var(--algobot-focus); outline-offset: 2px; }
+.skip-link { position: absolute; left: -9999px; top: 0; z-index: 10000; padding: 12px 16px; border-radius: 0 0 12px 12px; background: var(--algobot-primary-strong); color: #062229; font-weight: 700; }
+.skip-link:focus { left: 12px; }
+.app-shell { min-height: 100vh; }
+.app-main { min-width: 0; width: 100%; }
+.surface-card { border: 1px solid var(--algobot-border); border-radius: var(--algobot-radius-md); background: rgba(15, 23, 42, 0.76); box-shadow: var(--algobot-shadow); }
+
+.app-shell { display: flex; min-height: 100vh; background: linear-gradient(180deg, rgba(11, 18, 32, 0.96) 0%, rgba(9, 14, 24, 1) 100%); }
+.app-shell > .app-sidebar { flex: 0 0 260px; width: 260px; min-width: 260px; }
+.app-shell > .app-main { flex: 1 1 auto; min-width: 0; }
+.app-shell.sidebar-collapsed > .app-sidebar { flex-basis: 84px; min-width: 84px; width: 84px; }
+.app-shell.sidebar-collapsed > .app-main { margin-left: 0; }
+.layout-grid { display: grid; gap: var(--algobot-spacing-4); }
+.layout-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.layout-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
 .app-sidebar { z-index: 1000; overscroll-behavior: contain; overflow-anchor: none; }
 .sidebar-header, .topbar-actions, .sidebar-user { min-width: 0; }
 .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -31,115 +79,26 @@
 .material-symbols-rounded { font-family: 'Material Symbols Rounded', sans-serif; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr; -webkit-font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased; font-feature-settings: 'liga'; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; width: 1em; min-width: 1em; height: 1em; overflow: hidden; vertical-align: middle; }
 [data-icons-fallback] .material-symbols-rounded { font-size: 0; }
 [data-icons-fallback] .material-symbols-rounded::before { content: '\00a0'; font-size: 24px; }
-
-/* Canonical active-page state. Navigation JS owns the .active class; CSS owns its presentation. */
-#app-sidebar nav a,
-#app-sidebar .sidebar-new-trade {
-  position: relative;
-  box-sizing: border-box;
-  transition: background-color .14s ease, color .14s ease, border-color .14s ease;
-}
-#app-sidebar nav a.active,
-#app-sidebar nav a[aria-current='page'],
-#app-sidebar .sidebar-new-trade.active,
-#app-sidebar .sidebar-new-trade[aria-current='page'] {
-  color: var(--text) !important;
-  background: color-mix(in srgb, var(--red) 14%, transparent) !important;
-  border-left: 2px solid var(--accent) !important;
-  box-shadow: inset 2px 0 0 var(--red), 0 0 0 1px color-mix(in srgb, var(--red) 10%, transparent);
-  font-weight: 700;
-}
-#app-sidebar nav a.active .material-symbols-rounded,
-#app-sidebar nav a[aria-current='page'] .material-symbols-rounded,
-#app-sidebar .sidebar-new-trade.active .material-symbols-rounded,
-#app-sidebar .sidebar-new-trade[aria-current='page'] .material-symbols-rounded {
-  color: var(--accent) !important;
-}
-#app-sidebar nav a:hover,
-#app-sidebar .sidebar-new-trade:hover { color: var(--text); }
-
-/* Keep the current route visible when navigation changes. */
-#app-sidebar nav a.active,
-#app-sidebar nav a[aria-current='page'],
-#app-sidebar .sidebar-new-trade.active,
-#app-sidebar .sidebar-new-trade[aria-current='page'] { scroll-margin-block: 72px; }
-
-/* Canonical Django message surface. Keep this isolated from page-level card styles. */
-#django-message-stack.toast-stack {
-  position: fixed;
-  top: max(72px, env(safe-area-inset-top) + 56px);
-  right: max(14px, env(safe-area-inset-right) + 10px);
-  z-index: 5000;
-  width: min(380px, calc(100vw - 28px));
-  max-width: calc(100vw - 28px);
-  max-height: min(70vh, 560px);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  padding: 0;
-  margin: 0;
-  pointer-events: none;
-  isolation: isolate;
-}
-#django-message-stack.toast-stack .toast {
-  pointer-events: auto;
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 10px;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  max-height: 140px;
-  overflow: auto;
-  margin: 0;
-  padding: 11px 10px 11px 13px;
-  border: 1px solid var(--ds-border, var(--line, #203653));
-  border-radius: 12px;
-  background: var(--ds-surface-2, var(--panel2, #10233d));
-  color: var(--ds-text, var(--text, #e7f0ff));
-  box-shadow: 0 14px 34px rgba(0,0,0,.28);
-  box-sizing: border-box;
-  font-size: 13px;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
+#app-sidebar nav a,#app-sidebar .sidebar-new-trade { position: relative; box-sizing: border-box; transition: background-color .14s ease, color .14s ease, border-color .14s ease; }
+#app-sidebar nav a.active,#app-sidebar nav a[aria-current='page'],#app-sidebar .sidebar-new-trade.active,#app-sidebar .sidebar-new-trade[aria-current='page'] { color: var(--text) !important; background: color-mix(in srgb, var(--red) 14%, transparent) !important; border-left: 2px solid var(--accent) !important; box-shadow: inset 2px 0 0 var(--red), 0 0 0 1px color-mix(in srgb, var(--red) 10%, transparent); font-weight: 700; }
+#app-sidebar nav a.active .material-symbols-rounded,#app-sidebar nav a[aria-current='page'] .material-symbols-rounded,#app-sidebar .sidebar-new-trade.active .material-symbols-rounded,#app-sidebar .sidebar-new-trade[aria-current='page'] .material-symbols-rounded { color: var(--accent) !important; }
+#app-sidebar nav a:hover,#app-sidebar .sidebar-new-trade:hover { color: var(--text); }
+#app-sidebar nav a.active,#app-sidebar nav a[aria-current='page'],#app-sidebar .sidebar-new-trade.active,#app-sidebar .sidebar-new-trade[aria-current='page'] { scroll-margin-block: 72px; }
+#django-message-stack.toast-stack { position: fixed; top: max(72px, env(safe-area-inset-top) + 56px); right: max(14px, env(safe-area-inset-right) + 10px); z-index: 5000; width: min(380px, calc(100vw - 28px)); max-width: calc(100vw - 28px); max-height: min(70vh, 560px); overflow: hidden; display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 0; margin: 0; pointer-events: none; isolation: isolate; }
+#django-message-stack.toast-stack .toast { pointer-events: auto; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 10px; width: 100%; min-width: 0; max-width: 100%; max-height: 140px; overflow: auto; margin: 0; padding: 11px 10px 11px 13px; border: 1px solid var(--ds-border, var(--line, #203653)); border-radius: 12px; background: var(--ds-surface-2, var(--panel2, #10233d)); color: var(--ds-text, var(--text, #e7f0ff)); box-shadow: 0 14px 34px rgba(0,0,0,.28); box-sizing: border-box; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
 #django-message-stack.toast-stack .toast-message { min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
 #django-message-stack.toast-stack .toast-close { flex: 0 0 auto; }
 #django-message-stack.toast-stack .toast.success { border-color: color-mix(in srgb, var(--ds-success, #33d69f) 52%, var(--ds-border, #203653)); }
 #django-message-stack.toast-stack .toast.warning { border-color: color-mix(in srgb, var(--ds-warning, #ffd166) 52%, var(--ds-border, #203653)); }
 #django-message-stack.toast-stack .toast.error { border-color: color-mix(in srgb, var(--ds-danger, #ff5c7a) 58%, var(--ds-border, #203653)); }
 #django-message-stack.toast-stack .toast.info { border-color: color-mix(in srgb, var(--ds-info, #29d3ff) 48%, var(--ds-border, #203653)); }
-
 .toast-close { border: 0; background: transparent; color: var(--muted); width: 26px; height: 26px; border-radius: 7px; cursor: pointer; font-size: 20px; line-height: 1; display: grid; place-items: center; }
 .toast-close:hover,.toast-close:focus-visible { background: rgba(148,163,184,.12); color: var(--text); outline: none; }
 .toast.is-leaving { animation: algobot-toast-out .16s ease-in both; }
 @keyframes algobot-toast-in { from { opacity: 0; transform: translate3d(0,-6px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
 @keyframes algobot-toast-out { from { opacity: 1; transform: translate3d(0,0,0); } to { opacity: 0; transform: translate3d(0,-4px,0); } }
-
-@media (min-width: 901px) {
-  .app-sidebar { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.38) transparent; }
-  .app-sidebar::-webkit-scrollbar { width: 7px; }
-  .app-sidebar::-webkit-scrollbar-track { background: transparent; }
-  .app-sidebar::-webkit-scrollbar-thumb { background: rgba(148,163,184,.38); border-radius: 999px; }
-  .app-sidebar::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.58); }
-}
-@media (max-width: 800px) {
-  #django-message-stack.toast-stack { top: max(60px, env(safe-area-inset-top) + 48px); right: max(10px, env(safe-area-inset-right) + 8px); width: min(380px, calc(100vw - 20px)); max-width: calc(100vw - 20px); }
-  #django-message-stack.toast-stack .toast { max-height: 120px; }
-  .mobile-menu-button { display: grid; place-items: center; }
-  .app-sidebar { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); transform: translate3d(-105%,0,0); transition: transform .22s ease; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
-  .app-sidebar.is-open { transform: translate3d(0,0,0); }
-  .app-sidebar.is-collapsed + .app-shell, .app-shell.sidebar-collapsed { margin-left: 0; }
-  .app-shell { margin-left: 0 !important; }
-  .topbar { padding-left: 68px; }
-  .sidebar-toggle { display: none; }
-  body.mobile-nav-open { overflow: auto !important; }
-}
-@media (prefers-reduced-motion: reduce) {
-  #django-message-stack.toast-stack .toast { animation: none !important; }
-  #app-sidebar nav a, #app-sidebar .sidebar-new-trade { transition: none !important; }
-}
+@media (min-width: 901px) { .app-sidebar { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.38) transparent; } .app-sidebar::-webkit-scrollbar { width: 7px; } .app-sidebar::-webkit-scrollbar-track { background: transparent; } .app-sidebar::-webkit-scrollbar-thumb { background: rgba(148,163,184,.38); border-radius: 999px; } .app-sidebar::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.58); } }
+@media (max-width: 1024px) { .layout-grid--three { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 768px) { .app-shell { display: block; } .app-shell > .app-sidebar { width: min(320px, 85vw); min-width: 0; } .layout-grid--two,.layout-grid--three { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { #django-message-stack.toast-stack { top: max(60px, env(safe-area-inset-top) + 48px); right: max(10px, env(safe-area-inset-right) + 8px); width: min(380px, calc(100vw - 20px)); max-width: calc(100vw - 20px); } #django-message-stack.toast-stack .toast { max-height: 120px; } .mobile-menu-button { display: grid; place-items: center; } .app-sidebar { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); transform: translate3d(-105%,0,0); transition: transform .22s ease; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; } .app-sidebar.is-open { transform: translate3d(0,0,0); } .app-sidebar.is-collapsed + .app-shell, .app-shell.sidebar-collapsed { margin-left: 0; } .app-shell { margin-left: 0 !important; } .topbar { padding-left: 68px; } .sidebar-toggle { display: none; } body.mobile-nav-open { overflow: auto !important; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } #django-message-stack.toast-stack .toast { animation: none !important; } #app-sidebar nav a, #app-sidebar .sidebar-new-trade { transition: none !important; } }
