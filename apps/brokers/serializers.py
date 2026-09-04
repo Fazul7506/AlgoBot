@@ -18,7 +18,9 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
     def get_broker(self,obj):
         m=self._broker_metadata(obj); return {'id':obj.broker_id,'name':obj.broker.name,'type':obj.broker.broker_type,'status':obj.broker.status,'avatar_url':str(m.get('avatar_url') or '')}
     def get_account_type(self,obj):
-        value=str((obj.credentials or {}).get('account_type') or '').lower(); return value if value in {'real','demo'} else 'unknown'
+        value=(obj.credentials or {}).get('account_type')
+        if not value:value=self._realtime(obj).get('account_type')
+        value=str(value or '').lower().strip(); return value if value in {'real','demo'} else 'unknown'
     def get_avatar_url(self,obj):
         r,m=self._realtime(obj),self._broker_metadata(obj); return str(r.get('avatar_url') or m.get('avatar_url') or '')
     def get_display_name(self,obj): return f'{obj.broker.name} · {obj.account_id}'
@@ -44,11 +46,8 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
 class BrokerConnectionSerializer(serializers.ModelSerializer):
     class Meta: model=BrokerConnection; fields='__all__'
 class OrderSerializer(serializers.ModelSerializer):
-    # Generic Django choices must not reject broker-native identifiers. The
-    # connected adapter validates the exact live contract before execution.
     contract_type=serializers.CharField(required=False,allow_blank=True,max_length=40)
-    class Meta:
-        model=Order; fields='__all__'; read_only_fields=['user','broker','status','submitted_at','executed_at','broker_order_id']
+    class Meta: model=Order; fields='__all__'; read_only_fields=['user','broker','status','submitted_at','executed_at','broker_order_id']
     def validate(self,attrs):
         attrs=super().validate(attrs); account=attrs.get('account'); request=self.context.get('request'); user=getattr(request,'user',None)
         if account is None:return attrs
