@@ -15,6 +15,4 @@ router.register('broker-health', BrokerHealthViewSet, basename='broker-health')
 urlpatterns = [
     path('brokers/connect/', connect_broker, name='broker-connect'),
     path('brokers/disconnect/', disconnect_broker, name='broker-disconnect'),
-    path('brokers/accounts/', BrokerAccountViewSet.as_view({'get': 'list'}), name='broker-accounts-list'),
-    path('brokers/accounts/<int:pk>/', BrokerAccountViewSet.as_view({'get': 'retrieve'}), name='broker-accounts-detail'),
 ] + router.urls
