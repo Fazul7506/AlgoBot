@@ -10,14 +10,12 @@
   async function requestJson(url,options={},timeoutMs=25000){
     const frontendData=window.AlgoBotFrontendData;
     if(frontendData?.request){
-      try{return await frontendData.request(url,options,timeoutMs)}catch(error){if(error?.code==='API_TIMEOUT')error.code='BROKER_SYNC_TIMEOUT';throw error}
+      try{return await frontendData.request(url,{notifyOnError:false,...options},timeoutMs)}catch(error){if(error?.code==='API_TIMEOUT')error.code='BROKER_SYNC_TIMEOUT';throw error}
     }
     const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),timeoutMs);
     try{const response=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json',...(options.headers||{})},cache:'no-store',signal:controller.signal,...options});let payload=null;try{payload=await response.json()}catch(_){}if(!response.ok){const e=new Error(payload?.detail||payload?.message||`Broker request failed (${response.status})`);e.status=response.status;e.payload=payload;throw e}return payload}catch(error){if(error?.name==='AbortError')error.code='BROKER_SYNC_TIMEOUT';throw error}finally{clearTimeout(timeout)}}
   async function refreshAccounts(store){
     const accounts=list(await requestJson('/api/brokers/accounts/')).filter(a=>a?.id); knownAccounts=accounts; window.AlgoBotBrokerAccounts=accounts.slice(); window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));
-    // A freshly confirmed user selection wins over a stale preferred-account
-    // snapshot. Do not silently revert the browser to Dashboard/default account.
     const requested=requestedAccountId&&accounts.find(a=>String(a.id)===String(requestedAccountId));
     const account=requested||accounts.find(a=>a.is_preferred||a.is_default)||accounts[0]||null;
     if(!account){if(!store.get().account)store.reset('backend-no-broker-account');return store.get().account||null}
@@ -35,8 +33,8 @@
   function syncFromBackend(accountId=null){const store=window.AlgoBotBrokerState;if(!store||document.body.dataset.authenticated!=='true')return Promise.resolve(store?.get?.().account||null);if(accountId)requestedAccountId=accountId;if(syncPromise)return syncPromise;syncPromise=(async()=>{try{const account=accountId?knownAccounts.find(a=>String(a.id)===String(accountId))||null:await refreshAccounts(store);return account?await verifyWithBroker(store,account):null}catch(error){const current=store.get();store.transition(current.account?store.STATES.DEGRADED:store.STATES.ERROR,{account:current.account,lastError:error.message},'backend-broker-account-error');return current.account||null}finally{syncPromise=null}})();return syncPromise}
   function schedule(){if(timer)clearInterval(timer);const start=()=>{if(!window.AlgoBotBrokerState){setTimeout(start,250);return}syncFromBackend();timer=setInterval(()=>syncFromBackend(),RETRY_INTERVAL_MS);setTimeout(()=>{if(timer)clearInterval(timer);timer=setInterval(()=>syncFromBackend(),HEALTH_REFRESH_MS)},RETRY_INTERVAL_MS*3)};start()}
   window.AlgoBotBrokerSync=syncFromBackend;
-  window.addEventListener('algobot:account-changed',event=>{if(window.AlgoBotBrokerState&&event.detail)window.AlgoBotBrokerState.setAccount(event.detail,'account-changed');if(event.detail?.id)requestedAccountId=event.detail.id;knownAccounts=knownAccounts.map(a=>String(a.id)===String(event.detail?.id)?event.detail:{...a,is_preferred:false});window.AlgoBotBrokerAccounts=knownAccounts.slice();window.dispatchEvent(new CustomEvent('algobot:account-selection-confirmed',{detail:event.detail}));});
-  window.addEventListener('algobot:account-synced',event=>{if(window.AlgoBotBrokerState&&event.detail)window.AlgoBotBrokerState.setAccount(event.detail,'account-synced');if(event.detail?.id)requestedAccountId=event.detail.id;knownAccounts=knownAccounts.map(a=>String(a.id)===String(event.detail?.id)?event.detail:a);window.AlgoBotBrokerAccounts=knownAccounts.slice()});
+  window.addEventListener('algobot:account-changed',event=>{if(window.AlgoBotBrokerState&&event.detail)window.AlgoBotBrokerState.setAccount(event.detail,'account-changed');if(event.detail?.id){requestedAccountId=event.detail.id;lastAccountId=String(event.detail.id);}knownAccounts=knownAccounts.map(a=>String(a.id)===String(event.detail?.id)?event.detail:{...a,is_preferred:false,is_active:false});window.AlgoBotBrokerAccounts=knownAccounts.slice();window.dispatchEvent(new CustomEvent('algobot:account-selection-confirmed',{detail:event.detail}));});
+  window.addEventListener('algobot:account-synced',event=>{if(window.AlgoBotBrokerState&&event.detail)window.AlgoBotBrokerState.setAccount(event.detail,'account-synced');if(event.detail?.id){requestedAccountId=event.detail.id;lastAccountId=String(event.detail.id)}knownAccounts=knownAccounts.map(a=>String(a.id)===String(event.detail?.id)?event.detail:a);window.AlgoBotBrokerAccounts=knownAccounts.slice()});
   window.addEventListener('algobot:account-sync-error',event=>{if(window.AlgoBotBrokerState){const s=window.AlgoBotBrokerState.get();window.AlgoBotBrokerState.transition(window.AlgoBotBrokerState.STATES.DEGRADED,{account:s.account,lastError:event.detail?.error?.message||'Broker connection failed; retrying.'},'account-sync-error')}});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule,{once:true});else schedule();
 })();
