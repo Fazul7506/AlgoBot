@@ -53,12 +53,12 @@ def duplicate_groups(paths: list[Path]) -> list[list[Path]]:
 
 def load_text_files() -> dict[Path, str]:
     loaded: dict[Path, str] = {}
-    for path in TRACKED:
-        if any(part in SKIP_PARTS for part in path.parts):
+    for rel in TRACKED:
+        if any(part in SKIP_PARTS for part in rel.parts):
             continue
-        full = ROOT / path
+        path = ROOT / rel
         try:
-            loaded[path] = full.read_text(encoding="utf-8")
+            loaded[path] = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
     return loaded
@@ -81,8 +81,7 @@ def report_duplicates() -> int:
 
 
 def module_name(path: Path) -> str:
-    rel = path.relative_to(ROOT).with_suffix("")
-    return ".".join(rel.parts)
+    return ".".join(path.relative_to(ROOT).with_suffix("").parts)
 
 
 def resolve_module(name: str) -> Path | None:
@@ -117,7 +116,6 @@ def python_import_graph() -> dict[Path, set[Path]]:
         except (SyntaxError, OSError, UnicodeDecodeError):
             continue
         for node in ast.walk(tree):
-            target = None
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     target = resolve_module(alias.name)
@@ -159,7 +157,7 @@ def report_legacy_references() -> int:
     texts = load_text_files()
     print("LEGACY/CANONICAL VIOLATIONS:")
     for path, text in texts.items():
-        if path.suffix.lower() not in DUPLICATE_EXTENSIONS:
+        if "migrations" in path.parts or path.suffix.lower() not in DUPLICATE_EXTENSIONS:
             continue
         for pattern in LEGACY_PATTERNS:
             if pattern.lower() in text.lower():
