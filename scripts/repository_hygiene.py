@@ -18,6 +18,7 @@ TRACKED = [Path(p) for p in subprocess.check_output(["git", "ls-files"], cwd=ROO
 SKIP_PARTS = {".git", "__pycache__", "node_modules", ".venv", "venv", "staticfiles"}
 DUPLICATE_EXTENSIONS = {".css", ".html", ".js", ".py"}
 RETIRED_RUNTIME_PATTERNS = (
+    "legacy",
     "mission-control",
     "alert_center",
     "/api/broker-accounts/",
@@ -164,9 +165,6 @@ def report_retired_runtime_references() -> int:
     for path, text in texts.items():
         if path == Path(__file__) or "migrations" in path.parts or path.suffix.lower() not in DUPLICATE_EXTENSIONS:
             continue
-        # The package being retired is intentionally scanned only for deletion
-        # completeness; references inside it do not block canonical runtime.
-        # References from every other source file remain hard failures.
         if "trading" in path.relative_to(ROOT).parts:
             continue
         for pattern in RETIRED_RUNTIME_PATTERNS:
