@@ -2,7 +2,8 @@
 
 The audit is conservative: exact duplicate source/assets are hard failures,
 while likely-unreferenced files are reported for deliberate review. Django
-framework entrypoints and migrations are never treated as ordinary dead files.
+framework entrypoints and migration packages are not treated as ordinary dead
+files.
 """
 
 from __future__ import annotations
@@ -49,7 +50,8 @@ def load_text_files() -> dict[Path, str]:
 def report_duplicates() -> int:
     failures = 0
     for ext in sorted(DUPLICATE_EXTENSIONS):
-        groups = duplicate_groups(files_for(ext))
+        paths = [p for p in files_for(ext) if p.name != "__init__.py"]
+        groups = duplicate_groups(paths)
         if not groups:
             print(f"OK duplicate scan {ext}: no exact duplicates")
             continue
@@ -88,7 +90,7 @@ def report_unreferenced() -> None:
 
 
 def report_migration_duplicates() -> int:
-    paths = [p for p in files_for(".py") if "migrations" in p.parts]
+    paths = [p for p in files_for(".py") if "migrations" in p.parts and p.name != "__init__.py"]
     groups = duplicate_groups(paths)
     if not groups:
         print("OK migration duplicate scan: no exact duplicate migration files")
