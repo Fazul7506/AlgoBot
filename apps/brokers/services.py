@@ -2,7 +2,6 @@ import asyncio
 import importlib
 import time
 from decimal import Decimal
-from types import SimpleNamespace
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
@@ -24,11 +23,6 @@ class BrokerRegistry:
             module, cls = target.rsplit('.', 1); target = getattr(importlib.import_module(module), cls); self.adapter_paths[broker_type] = target
         return target
     def adapter(self, broker, account=None): return self.get(broker.broker_type)(broker=broker, account=account, credentials=getattr(account, 'credentials', {}) or {})
-    def adapter_for_legacy_account(self, account):
-        broker_type = str(getattr(getattr(account, 'broker', None), 'slug', '') or getattr(getattr(account, 'broker', None), 'broker_type', '')).lower()
-        if broker_type not in self.adapter_paths: raise BrokerRoutingError(f'Unsupported broker type: {broker_type or "unknown"}')
-        broker = SimpleNamespace(broker_type=broker_type, name=getattr(getattr(account, 'broker', None), 'name', broker_type))
-        return self.get(broker_type)(broker=broker, account=account, credentials=getattr(account, 'credentials', {}) or {})
 
 
 class BrokerManager:
