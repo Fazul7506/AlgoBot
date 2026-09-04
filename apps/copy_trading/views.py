@@ -8,7 +8,7 @@ from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 
 from .models import CopyProvider, CopyFollower, CopySubscription, CopyTrade
-from .services import CopyTradingEngine, CopyRiskEngine, ProviderDiscoveryService
+from .services import CopyTradingEngine, ProviderDiscoveryService
 
 
 def _tenant(request):
