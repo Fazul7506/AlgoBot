@@ -1,9 +1,9 @@
 """Origin validation for browser-facing API mutations.
 
-Django's CSRF middleware remains available for normal HTML forms. API and data
-endpoints do not require a browser CSRF token; unsafe browser mutations must
-instead originate from an explicitly allowed AlgoBot origin. Bearer/API-key
-clients are allowed to omit Origin because they do not authenticate with the
+Django CSRF protection remains enabled for normal HTML forms. API and data
+endpoints do not require browser CSRF tokens; unsafe cookie-authenticated API
+mutations must originate from an explicitly allowed AlgoBot origin. Bearer and
+API-key clients can omit Origin because they do not authenticate with the
 browser session cookie.
 """
 
@@ -14,7 +14,7 @@ from django.http import JsonResponse
 
 
 class APIOriginGuardMiddleware:
-    """Protect cookie-authenticated API mutations without CSRF token plumbing."""
+    """Protect API mutations with origin validation instead of CSRF tokens."""
 
     API_PREFIXES = ("/api/", "/data/")
     SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
@@ -38,8 +38,9 @@ class APIOriginGuardMiddleware:
         return authorization.startswith("bearer ") or bool(api_key)
 
     def __call__(self, request):
-        if request.path.startswith(self.API_PREFIXES) and request.method.upper() not in self.SAFE_METHODS:
-            if not self._is_authenticated_api_client(request):
+        is_api = request.path.startswith(self.API_PREFIXES)
+        if is_api:
+            if request.method.upper() not in self.SAFE_METHODS and not self._is_authenticated_api_client(request):
                 origin = str(request.headers.get("Origin") or "").strip().rstrip("/")
                 referer = str(request.headers.get("Referer") or "").strip()
                 referer_origin = ""
@@ -51,11 +52,8 @@ class APIOriginGuardMiddleware:
                 if not origin:
                     origin = referer_origin
                 if not origin or origin not in allowed:
-                    return JsonResponse(
-                        {
-                            "detail": "API request origin is not allowed.",
-                            "code": "API_ORIGIN_FORBIDDEN",
-                        },
-                        status=403,
-                    )
+                    return JsonResponse({"detail":"API request origin is not allowed.","code":"API_ORIGIN_FORBIDDEN"}, status=403)
+            # API authentication and authorization remain authoritative. The
+            # API-origin check above replaces the browser token requirement.
+            request.csrf_processing_done = True
         return self.get_response(request)
