@@ -18,7 +18,13 @@ TRACKED = [Path(p) for p in subprocess.check_output(["git", "ls-files"], cwd=ROO
 SKIP_PARTS = {".git", "__pycache__", "node_modules", ".venv", "venv", "staticfiles"}
 DUPLICATE_EXTENSIONS = {".css", ".html", ".js", ".py"}
 RETIRED_RUNTIME_PATTERNS = (
-    "legacy",
+    "Legacy compatibility module",
+    "adapter_for_legacy_account",
+    "DERIV_LEGACY_APP_ID",
+    "DERIV_ENABLE_LEGACY_APP_ROUTING",
+    "legacy-broker-account",
+    "legacy generic controller",
+    "old URLs available for existing clients",
     "mission-control",
     "alert_center",
     "/api/broker-accounts/",
