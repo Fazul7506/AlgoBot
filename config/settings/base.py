@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     "rest_framework", "rest_framework_simplejwt", "corsheaders", "django_filters", "core",
     "apps.admin_portal", "apps.ai_engine", "apps.alerts", "apps.analysis", "apps.analytics",
     "apps.audit", "apps.automation", "apps.backtesting", "apps.brokers", "apps.community",
-    "apps.contracts", "apps.copy_trading", "apps.dashboard", "apps.deployment", "apps.deriv",
+    "apps.contracts", "apps.copy_trading", "apps.dashboard", "apps.deployment",
     "apps.developer", "apps.developer_api", "apps.enterprise", "apps.execution", "apps.feature_flags",
     "apps.feature_store", "apps.followers", "apps.health", "apps.indicators", "apps.journal",
     "apps.leaderboards", "apps.licensing", "apps.logging_system", "apps.market_data", "apps.marketplace",
@@ -118,6 +118,7 @@ CHANNEL_LAYERS = {"default": {"BACKEND": "channels_redis.core.RedisChannelLayer"
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
