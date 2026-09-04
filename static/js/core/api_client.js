@@ -5,11 +5,8 @@
   const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
   const nativeFetch = window.fetch.bind(window);
   const apiBase = document.querySelector('meta[name="algobot-api-base"]')?.content || '';
-  const aliases = {
-    '/trading/order/': '/api/orders/',
-    '/trading/preview/': '/api/orders/preview/',
-    '/trading/ai/predict/': '/api/ai/predict/',
-  };
+  const aliases = {'/trading/order/': '/api/orders/', '/trading/preview/': '/api/orders/preview/', '/trading/ai/predict/': '/api/ai/predict/'};
+  let bootstrappedCsrfToken = '';
 
   function readCookie(name) {
     const prefix = `${name}=`;
@@ -19,7 +16,7 @@
   function csrfToken() {
     const cookieToken = readCookie('csrftoken');
     if (cookieToken) return decodeURIComponent(cookieToken);
-    return document.querySelector('meta[name="csrf-token"]')?.content || '';
+    return document.querySelector('meta[name="csrf-token"]')?.content || bootstrappedCsrfToken || '';
   }
   function resolveUrl(path) { return new URL(aliases[path] || path || '/', apiBase || window.location.origin); }
   function protectedTarget(url) {
@@ -38,9 +35,7 @@
     if (typeof payload === 'object') return Object.entries(payload).filter(([k]) => !['code', 'status'].includes(k)).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : v}`).join('; ') || fallback;
     return fallback;
   }
-  function emitError(error) {
-    window.dispatchEvent(new CustomEvent('algobot:api-error', { detail: { url: error.url, method: error.method, status: error.status, code: error.code, message: error.message, retryable: error.retryable } }));
-  }
+  function emitError(error) { window.dispatchEvent(new CustomEvent('algobot:api-error', { detail: { url: error.url, method: error.method, status: error.status, code: error.code, message: error.message, retryable: error.retryable } })); }
 
   class APIError extends Error {
     constructor(message, { status = 0, payload = {}, url = '', method = 'GET', response = null, code } = {}) {
@@ -51,8 +46,12 @@
   }
 
   async function bootstrapCsrf() {
-    const response = await nativeFetch('/api/csrf/', { method: 'GET', credentials: 'same-origin', headers: { Accept: 'application/json' } });
-    return response.ok && Boolean(csrfToken());
+    const csrfUrl = new URL('/api/csrf/', apiBase || window.location.origin);
+    const response = await nativeFetch(csrfUrl.toString(), { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
+    if (!response.ok) return false;
+    const payload = parsePayload(await response.clone().text());
+    if (typeof payload.csrfToken === 'string') bootstrappedCsrfToken = payload.csrfToken;
+    return Boolean(csrfToken());
   }
 
   async function guardedFetch(input, init = {}, retryCsrf = true) {
@@ -86,13 +85,18 @@
       const response = await nativeFetch(url.toString(), { ...requestInit, signal });
       if (retryCsrf && response.status === 403 && !SAFE_METHODS.has(method) && isProtected) {
         const payload = parsePayload(await response.clone().text());
-        if (payload?.code === 'CSRF_FAILED') { await bootstrapCsrf(); return guardedFetch(input, { ...options, headers: { ...Object.fromEntries(headers.entries()), 'X-CSRFToken': csrfToken() } }, false); }
+        if (payload?.code === 'CSRF_FAILED') {
+          await bootstrapCsrf();
+          const refreshedToken = csrfToken();
+          if (refreshedToken) {
+            const retryHeaders = new Headers(headers); retryHeaders.set('X-CSRFToken', refreshedToken);
+            return guardedFetch(input, { ...options, headers: retryHeaders }, false);
+          }
+        }
       }
       return response;
     } catch (error) {
-      if (controller.signal.aborted && !callerSignal?.aborted) {
-        const timeout = new APIError(`API request timed out after ${timeoutMs}ms`, { code: 'API_TIMEOUT', url: url.toString(), method }); emitError(timeout); throw timeout;
-      }
+      if (controller.signal.aborted && !callerSignal?.aborted) { const timeout = new APIError(`API request timed out after ${timeoutMs}ms`, { code: 'API_TIMEOUT', url: url.toString(), method }); emitError(timeout); throw timeout; }
       const network = new APIError(error?.message || 'Network request failed', { code: 'NETWORK_ERROR', url: url.toString(), method }); emitError(network); throw network;
     } finally { clearTimeout(timer); }
   }
