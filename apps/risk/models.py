@@ -32,9 +32,8 @@ class RiskRule(models.Model):
 
 
 class RiskAssessment(models.Model):
-    # The project currently supports both the legacy execution order model and
-    # the canonical broker order model. Keep both relations explicit while the
-    # execution-domain consolidation is completed.
+    # The risk domain can record both canonical execution orders and broker
+    # adapter orders while the remaining broker-order internals are retired.
     trade = models.ForeignKey('execution.Order', on_delete=models.CASCADE, related_name='risk_assessments', null=True, blank=True)
     broker_trade = models.ForeignKey('brokers.Order', on_delete=models.CASCADE, related_name='risk_assessments', null=True, blank=True)
     risk_score = models.PositiveSmallIntegerField(default=0)
