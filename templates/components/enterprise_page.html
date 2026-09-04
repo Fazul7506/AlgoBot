@@ -1,11 +1,13 @@
-{# Shared shell for enterprise-grade module pages. #}
-<section class="enterprise-page" data-module="{{ module|default:'' }}" data-page-id="{{ page_id|default:'' }}" style="display:grid;gap:16px;padding-bottom:32px">
+{# Canonical shared shell for enterprise-grade module pages. #}
+<section class="enterprise-page" data-module="{{ module|default:'' }}" data-page="{{ page_id|default:'' }}" data-page-id="{{ page_id|default:'' }}" aria-labelledby="enterprise-page-title-{{ page_id|default:'workspace' }}" style="display:grid;gap:16px;padding-bottom:32px">
   <header style="display:grid;gap:6px">
     <p style="margin:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#94a3b8">{{ module|default:'ALGOBOT' }}</p>
-    <h1 style="margin:0;font-size:clamp(24px,3vw,34px)">{{ title|default:'Workspace' }}</h1>
+    <h1 id="enterprise-page-title-{{ page_id|default:'workspace' }}" style="margin:0;font-size:clamp(24px,3vw,34px)">{{ title|default:'Workspace' }}</h1>
   </header>
-  <div class="enterprise-page__workspace" style="border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.72);padding:18px;min-height:180px">
-    <strong>{{ title|default:'Workspace' }}</strong>
-    <p style="margin:8px 0 0;color:#94a3b8">Workspace is ready. Use the live module controls and data available on this page.</p>
+  <div class="enterprise-page-body" data-enterprise-workspace style="display:grid;gap:16px">
+    <div class="enterprise-page__workspace" style="border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.72);padding:18px;min-height:120px">
+      <strong>{{ title|default:'Workspace' }}</strong>
+      <p style="margin:8px 0 0;color:#94a3b8">Workspace is ready. Use the live module controls and data available on this page.</p>
+    </div>
   </div>
 </section>
