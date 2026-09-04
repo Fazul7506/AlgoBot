@@ -36,3 +36,5 @@ jobs:
         run: python scripts/validate_templates.py
       - name: Compile Python
         run: python -m compileall -q .
+      - name: Repository hygiene audit
+        run: python scripts/repository_hygiene.py
