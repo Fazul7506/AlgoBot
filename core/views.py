@@ -32,8 +32,6 @@ def backtesting_page(request): return render(request,'core/backtesting.html')
 @login_required
 def predictions_page(request): return render(request,'core/predictions.html')
 @login_required
-def performance_page(request): return render(request,'core/performance.html')
-@login_required
 def risk_page(request): return render(request,'core/risk.html')
 @login_required
 def orders_page(request): return render(request,'core/orders.html')
@@ -44,8 +42,6 @@ def signals_page(request): return render(request,'core/signals.html')
 
 @login_required
 def analysis_page(request): return render(request, 'core/analysis.html')
-@login_required
-def portfolio_page(request): return render(request,'core/portfolio.html')
 @login_required
 def billing_success_page(request): return render(request,'core/billing_success.html')
 @login_required
