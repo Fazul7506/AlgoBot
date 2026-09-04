@@ -40,27 +40,7 @@
   function navigationLinks() { return [...document.querySelectorAll('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')]; }
   function routeMatches(path,href) { if(!href||href==='#')return false; try { const url=new URL(href,window.location.origin); const target=url.pathname.replace(/\/+$/,'')||'/'; if(target==='/')return path==='/'; return path===target||path.startsWith(`${target}/`); } catch(_){return false;} }
 
-  // Remove retired navigation entries at runtime as a defense against stale
-  // cached templates/deployments. Analysis is the canonical replacement.
-  function normalizeLegacyNavigation() {
-    const links = [...document.querySelectorAll('#app-sidebar nav a')];
-    links.forEach(link => {
-      const href = link.getAttribute('href') || '';
-      const label = (link.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
-      if (href === '/operations/mission-control/' || label === 'mission control') link.remove();
-    });
-    const research = [...document.querySelectorAll('#app-sidebar nav .sidebar-section')]
-      .find(section => /research/i.test(section.querySelector('h2')?.textContent || ''));
-    if (research && !research.querySelector('a[href="/analysis/"]')) {
-      const link = document.createElement('a');
-      link.href = '/analysis/';
-      link.innerHTML = '<span class="material-symbols-rounded">query_stats</span><span>Analysis</span>';
-      research.appendChild(link);
-    }
-  }
-
   function syncActiveNavigation({anchor=false}={}) {
-    normalizeLegacyNavigation();
     const path=currentPath(); const links=navigationLinks(); let active=null; let activeLength=-1;
     links.forEach(link=>{const href=link.getAttribute('href'); const matched=routeMatches(path,href); link.classList.remove('active','is-current-page'); link.removeAttribute('aria-current'); if(matched&&href&&href.length>activeLength){active=link;activeLength=href.length;}});
     if(active){active.classList.add('active','is-current-page');active.setAttribute('aria-current','page');if(anchor)window.requestAnimationFrame(()=>{try{active.scrollIntoView({block:'nearest',inline:'nearest'});}catch(_){}});}
@@ -81,13 +61,12 @@
 
   function bindNavigation() {
     const sidebar=$('#app-sidebar'); if(!sidebar||sidebar.dataset.navigationBound==='true')return; sidebar.dataset.navigationBound='true'; const backdrop=$('[data-sidebar-backdrop]');const mobile=$('[data-mobile-menu]');const toggle=$('[data-sidebar-toggle]');const shell=$('.app-shell');const storageKey='algobot.sidebar.collapsed';
-    normalizeLegacyNavigation();
     syncActiveNavigation({anchor:true}); bindSidebarScrollState(sidebar);
     if(window.MutationObserver&&!sidebar.dataset.activeAnchorObserver){sidebar.dataset.activeAnchorObserver='true';const observer=new MutationObserver(()=>syncActiveNavigation({anchor:true}));observer.observe(sidebar,{childList:true,subtree:true});}
     const setMobileOpen=open=>{const next=!!open;sidebar.classList.toggle('is-open',next);if(backdrop)backdrop.hidden=!next;if(mobile){mobile.setAttribute('aria-expanded',String(next));mobile.setAttribute('aria-label',next?'Close navigation':'Open navigation');}document.body.classList.remove('mobile-nav-open');document.documentElement.classList.remove('mobile-nav-open');};
     setMobileOpen(false);
     document.addEventListener('click',event=>{const target=event.target?.closest?.('[data-mobile-menu]');if(target){event.preventDefault();event.stopPropagation();setMobileOpen(!sidebar.classList.contains('is-open'));return;}if(backdrop&&(event.target===backdrop||event.target?.closest?.('[data-sidebar-backdrop]'))){event.preventDefault();setMobileOpen(false);return;}if(sidebar.classList.contains('is-open')&&event.target?.closest?.('#app-sidebar nav a,#app-sidebar .sidebar-new-trade'))setMobileOpen(false);},true);
-    if(toggle){const setCollapsed=collapsed=>{if(window.innerWidth<=900)return;sidebar.classList.toggle('is-collapsed',!!collapsed);shell?.classList.toggle('sidebar-collapsed',!!collapsed);document.body.classList.toggle('sidebar-collapsed',!!collapsed);toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',collapsed?'Expand navigation':'Collapse navigation');const icon=toggle.querySelector('.material-symbols-rounded');if(icon)icon.textContent=collapsed?'left_panel_open':'left_panel_close';try{localStorage.setItem(storageKey,collapsed?'1':'0');}catch(_){}};try{if(window.innerWidth>900&&localStorage.getItem(storageKey)==='1')setCollapsed(true);}catch(_){}toggle.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();setCollapsed(!sidebar.classList.contains('is-collapsed'));syncActiveNavigation({anchor:true});});}
+    if(toggle){const setCollapsed=collapsed=>{if(window.innerWidth<=900)return;sidebar.classList.toggle('is-collapsed',!!collapsed);shell?.classList.toggle('sidebar-collapsed',!!collapsed);document.body.classList.toggle('sidebar-collapsed',!!collapsed);toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',collapsed?'Expand navigation':'Collapse navigation');const icon=toggle.querySelector('.material-symbols-rounded');if(icon)icon.textContent=collapsed?'left_panel_open':'left_panel_close';try{localStorage.setItem(storageKey,collapsed?'1':'0');}catch(_){} };try{if(window.innerWidth>900&&localStorage.getItem(storageKey)==='1')setCollapsed(true);}catch(_){}toggle.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();setCollapsed(!sidebar.classList.contains('is-collapsed'));syncActiveNavigation({anchor:true});});}
     document.addEventListener('keydown',event=>{if(event.key==='Escape')setMobileOpen(false);}); window.addEventListener('resize',()=>{if(window.innerWidth>900)setMobileOpen(false);syncActiveNavigation({anchor:false});});
   }
 
