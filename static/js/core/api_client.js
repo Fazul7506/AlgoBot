@@ -4,7 +4,11 @@
 
   const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
   const nativeFetch = window.fetch.bind(window);
-  const apiBase = document.querySelector('meta[name="algobot-api-base"]')?.content || '';
+  const configuredApiBase = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
+  const defaultApiBase = window.location.hostname === 'algobot.dpdns.org' || window.location.hostname === 'www.algobot.dpdns.org'
+    ? 'https://api.algobot.dpdns.org'
+    : '';
+  const apiBase = (configuredApiBase || defaultApiBase).replace(/\/+$/, '');
   const aliases = {'/trading/order/': '/api/orders/', '/trading/preview/': '/api/orders/preview/', '/trading/ai/predict/': '/api/ai/predict/'};
   let bootstrappedCsrfToken = '';
 
@@ -18,10 +22,14 @@
     if (cookieToken) return decodeURIComponent(cookieToken);
     return document.querySelector('meta[name="csrf-token"]')?.content || bootstrappedCsrfToken || '';
   }
-  function resolveUrl(path) { return new URL(aliases[path] || path || '/', apiBase || window.location.origin); }
+  function resolveUrl(path) {
+    return new URL(aliases[path] || path || '/', apiBase || window.location.origin);
+  }
   function protectedTarget(url) {
     const origins = new Set([window.location.origin]);
-    if (apiBase) { try { origins.add(new URL(apiBase, window.location.origin).origin); } catch (_) {} }
+    if (apiBase) {
+      try { origins.add(new URL(apiBase, window.location.origin).origin); } catch (_) {}
+    }
     return origins.has(url.origin);
   }
   function parsePayload(text) { if (!text) return {}; try { return JSON.parse(text); } catch (_) { return { detail: text }; } }
