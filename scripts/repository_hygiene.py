@@ -17,6 +17,19 @@ ROOT = Path(__file__).resolve().parents[1]
 TRACKED = [Path(p) for p in subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()]
 SKIP_PARTS = {".git", "__pycache__", "node_modules", ".venv", "venv", "staticfiles"}
 DUPLICATE_EXTENSIONS = {".css", ".html", ".js", ".py"}
+LEGACY_PATTERNS = (
+    "legacy",
+    "mission-control",
+    "alert_center",
+    "/api/broker-accounts/",
+    "normalizeLegacyNavigation",
+    "AlgoBotStateManager",
+    "apps.ai_engine.calibration",
+    "apps.ai_engine.confidence",
+    "apps.ai_engine.optimizer",
+    "apps.ai_engine.recommendation",
+    "apps.ai_engine.regime",
+)
 
 
 def files_for(ext: str) -> list[Path]:
@@ -89,6 +102,21 @@ def report_unreferenced() -> None:
             print(f"  {rel}")
 
 
+def report_legacy_references() -> int:
+    failures = 0
+    texts = load_text_files()
+    print("LEGACY/CANONICAL VIOLATIONS:")
+    for path, text in texts.items():
+        if path.suffix.lower() not in DUPLICATE_EXTENSIONS:
+            continue
+        for pattern in LEGACY_PATTERNS:
+            if pattern.lower() in text.lower():
+                print(f"  {path.relative_to(ROOT)} -> {pattern}")
+                failures += 1
+                break
+    return failures
+
+
 def report_migration_duplicates() -> int:
     paths = [p for p in files_for(".py") if "migrations" in p.parts and p.name != "__init__.py"]
     groups = duplicate_groups(paths)
@@ -106,7 +134,8 @@ if __name__ == "__main__":
     print("=== AlgoBot repository hygiene ===")
     duplicate_failures = report_duplicates()
     migration_failures = report_migration_duplicates()
+    legacy_failures = report_legacy_references()
     report_unreferenced()
-    if duplicate_failures or migration_failures:
+    if duplicate_failures or migration_failures or legacy_failures:
         raise SystemExit(1)
-    print("=== hygiene duplicate checks passed ===")
+    print("=== hygiene duplicate and canonical checks passed ===")
