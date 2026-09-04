@@ -29,10 +29,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('data-page="trading-terminal"', template)
         self.assertIn('data-api-root="/api/"', template)
         shell = Path("static/js/base_shell.js").read_text(encoding="utf-8")
-        frontend_shell = Path("static/js/core/frontend_shell.js").read_text(encoding="utf-8")
         self.assertIn("syncActiveNavigation", shell)
-        self.assertIn("window.AlgoBotBaseShell?.syncActiveNavigation", frontend_shell)
-        self.assertNotIn("link.href = '/analysis/'", frontend_shell)
+        self.assertNotIn("frontend_shell.js", str(Path("templates/base.html").read_text(encoding="utf-8")))
 
     def test_shared_api_clients_use_centralized_csrf_free_api_mutations(self):
         from pathlib import Path
