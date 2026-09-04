@@ -9,7 +9,7 @@ from django.db.models import Q
 
 from .data_pipeline import AIDataPipeline
 from .models import PredictionOutcome
-from trading.ai.candlestick_features import FEATURE_NAMES, feature_vector
+from .candlestick_features import FEATURE_NAMES, feature_vector
 
 
 @dataclass(frozen=True)
