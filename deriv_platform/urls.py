@@ -30,7 +30,8 @@ from core.views_deriv_oauth_safe import callback
 from core.views_payment import intasend_webhook, pesapal_webhook, pesapal_callback
 from core.views_billing import (
     billing_plans, billing_status, billing_checkout, billing_checkout_start,
-    billing_change_plan, billing_cancel, billing_success_page, billing_cancel_page,
+    billing_change_plan, billing_cancel, billing_reconcile,
+    billing_success_page, billing_cancel_page,
 )
 from core.views_operations_v2 import operations_center
 from core.views_portfolio_v2 import portfolio_center, performance_center, trade_postmortems
@@ -113,6 +114,7 @@ urlpatterns = [
     path("billing/checkout/", billing_checkout, name="billing_checkout"),
     path("billing/checkout/start/", billing_checkout_start, name="billing_checkout_start"),
     path("billing/change-plan/", billing_change_plan, name="billing_change_plan"),
+    path("billing/reconcile/", billing_reconcile, name="billing_reconcile"),
     path("billing/cancel/", billing_cancel_dispatch, name="billing_cancel_page"),
     path("billing/cancel-subscription/", billing_cancel, name="billing_cancel_subscription"),
     path("billing/success/", billing_success_dispatch, name="billing_success_page"),
