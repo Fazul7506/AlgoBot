@@ -52,11 +52,7 @@ def _safe_price(value):
 
 def _plans():
     currency = str(getattr(settings, "ALGOBOT_BILLING_CURRENCY", "KES")).upper()
-    configured = {
-        "BASIC": _safe_price(getattr(settings, "ALGOBOT_BASIC_PRICE_CENTS", None)),
-        "PRO": _safe_price(getattr(settings, "ALGOBOT_PRO_PRICE_CENTS", None)),
-        "ENTERPRISE": _safe_price(getattr(settings, "ALGOBOT_ENTERPRISE_PRICE_CENTS", None)),
-    }
+    configured = {"BASIC": _safe_price(getattr(settings, "ALGOBOT_BASIC_PRICE_CENTS", None)), "PRO": _safe_price(getattr(settings, "ALGOBOT_PRO_PRICE_CENTS", None)), "ENTERPRISE": _safe_price(getattr(settings, "ALGOBOT_ENTERPRISE_PRICE_CENTS", None))}
     plans = [{"plan": "FREE", "price_cents": 0, "currency": currency, "recurring": False, "configured": True}]
     for name, price in configured.items():
         plans.append({"plan": name, "price_cents": price, "currency": currency, "recurring": True, "configured": price is not None and price >= 0})
@@ -74,14 +70,7 @@ def _subscription_snapshot(subscription):
     if expired and subscription.is_active:
         subscription.is_active = False
         subscription.save(update_fields=["is_active"])
-    return {
-        "plan": subscription.plan,
-        "price_cents": subscription.price_cents,
-        "currency": subscription.currency,
-        "is_active": bool(subscription.is_active and not expired),
-        "recurring": bool(subscription.recurring and subscription.is_active and not expired),
-        "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None,
-    }
+    return {"plan": subscription.plan, "price_cents": subscription.price_cents, "currency": subscription.currency, "is_active": bool(subscription.is_active and not expired), "recurring": bool(subscription.recurring and subscription.is_active and not expired), "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None}
 
 
 def _provider_state(result, provider):
@@ -97,7 +86,6 @@ def _reconcile_invoice(invoice, provider):
     plan = _plan((invoice.metadata or {}).get("plan"))
     if not plan:
         return {"paid": False, "state": "INVALID_PLAN", "invoice": invoice, "subscription": None}
-
     service = PaymentService()
     provider = str(provider or (invoice.metadata or {}).get("provider") or service.provider).lower().strip()
     if provider == service.PESAPAL:
@@ -107,38 +95,16 @@ def _reconcile_invoice(invoice, provider):
         result = service.get_intasend_payment_status(invoice.external_id) if invoice.external_id else None
     else:
         return {"paid": False, "state": "UNSUPPORTED_PROVIDER", "invoice": invoice, "subscription": None}
-
-    state, payload = _provider_state(result, provider)
-    metadata = {
-        **(invoice.metadata or {}),
-        "provider": provider,
-        "user_id": invoice.user_id,
-        "plan": plan["plan"],
-        "provider_status": payload,
-    }
+    provider_state, payload = _provider_state(result, provider)
+    metadata = {**(invoice.metadata or {}), "provider": provider, "user_id": invoice.user_id, "plan": plan["plan"], "provider_status": payload}
     if provider == service.PESAPAL:
         metadata["merchant_reference"] = metadata.get("reference") or metadata.get("merchant_reference")
         metadata["tracking_id"] = (invoice.metadata or {}).get("tracking_id") or invoice.external_id
-    normalized = PaymentReconciler.normalize_status(state)
+    normalized = PaymentReconciler.normalize_status(provider_state)
     external_id = invoice.external_id or metadata.get("tracking_id")
-    reconciled = PaymentReconciler.reconcile(
-        provider=provider,
-        external_id=external_id,
-        status=normalized,
-        amount=payload.get("amount") or payload.get("value") or payload.get("net_amount"),
-        currency=payload.get("currency") or invoice.currency,
-        metadata=metadata,
-    )
+    reconciled = PaymentReconciler.reconcile(provider=provider, external_id=external_id, status=normalized, amount=payload.get("amount") or payload.get("value") or payload.get("net_amount"), currency=payload.get("currency") or invoice.currency, metadata=metadata)
     subscription = Subscription.objects.filter(user=invoice.user).first()
-    paid = normalized == "COMPLETED"
-    return {
-        "paid": paid,
-        "state": normalized,
-        "invoice": Invoice.objects.get(pk=invoice.pk),
-        "subscription": subscription,
-        "provider_payload": payload,
-        "reconciled": reconciled,
-    }
+    return {"paid": normalized == "COMPLETED", "state": provider_state or normalized, "invoice": Invoice.objects.get(pk=invoice.pk), "subscription": subscription, "provider_payload": payload, "reconciled": reconciled}
 
 
 def _find_callback_invoice(request, reference="", tracking_id=""):
@@ -177,20 +143,15 @@ def billing_cancel_page(request):
 
 def _checkout(request, plan_name, provider=None):
     plan = _plan(plan_name)
-    if not plan:
-        return None, "Unknown subscription plan."
-    if plan["plan"] == "FREE":
-        return None, "FREE does not require payment."
-    if not plan["configured"]:
-        return None, f"{plan['plan']} is not configured for checkout yet."
+    if not plan: return None, "Unknown subscription plan."
+    if plan["plan"] == "FREE": return None, "FREE does not require payment."
+    if not plan["configured"]: return None, f"{plan['plan']} is not configured for checkout yet."
     selected = str(provider or getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower().strip()
-    if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL}:
-        return None, "Unsupported payment provider."
+    if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL}: return None, "Unsupported payment provider."
     invoice = Invoice.objects.create(user=request.user, amount_cents=plan["price_cents"], currency=plan["currency"], metadata={"plan": plan["plan"], "provider": selected, "state": "checkout_created"})
     result = RequestBoundPaymentService(request).create_checkout_session(request.user, CheckoutPlan(plan=plan["plan"], price_cents=plan["price_cents"], currency=plan["currency"], recurring=plan["recurring"]), provider=selected)
     if not result.get("url"):
-        invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": result.get("error") or "provider_checkout_failed"}
-        invoice.save(update_fields=["metadata"])
+        invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": result.get("error") or "provider_checkout_failed"}; invoice.save(update_fields=["metadata"])
         return None, "We couldn't start your payment. Please try again."
     external_id = result.get("invoice_id") or result.get("order_tracking_id") or result.get("session_id") or ""
     invoice.external_id = external_id or None
@@ -201,19 +162,16 @@ def _checkout(request, plan_name, provider=None):
 
 @login_required
 def billing_checkout_start(request):
-    if request.method != "GET":
-        return redirect("billing_page")
+    if request.method != "GET": return redirect("billing_page")
     url, error = _checkout(request, request.GET.get("plan", ""), request.GET.get("provider") or None)
-    if url:
-        return HttpResponseRedirect(url)
+    if url: return HttpResponseRedirect(url)
     messages.error(request, error or "We couldn't start your payment. Please try again.")
     return redirect("billing_page")
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def billing_plans(request):
-    return Response({"plans": _plans(), "provider": str(getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower()})
+def billing_plans(request): return Response({"plans": _plans(), "provider": str(getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower()})
 
 
 @api_view(["GET"])
@@ -234,8 +192,7 @@ def billing_status(request):
 def billing_checkout(request):
     plan_name = str(request.data.get("plan") or "").upper().strip()
     url, error = _checkout(request, plan_name, request.data.get("provider"))
-    if error:
-        return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    if error: return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return Response({"url": url, "plan": plan_name, "payment_required": True})
 
 
@@ -244,25 +201,16 @@ def billing_checkout(request):
 def billing_change_plan(request):
     requested = str(request.data.get("plan") or "").upper().strip()
     plan = _plan(requested)
-    if not plan:
-        return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
+    if not plan: return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
     subscription, _ = Subscription.objects.get_or_create(user=request.user)
     current_active = subscription.is_active and (not subscription.expires_at or subscription.expires_at > timezone.now())
-    if subscription.plan == plan["plan"] and current_active:
-        return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
+    if subscription.plan == plan["plan"] and current_active: return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
     if plan["plan"] == "FREE":
-        subscription.plan = "FREE"
-        subscription.price_cents = 0
-        subscription.currency = plan["currency"].lower()
-        subscription.recurring = False
-        subscription.is_active = True
-        subscription.expires_at = None
-        subscription.renewed_at = timezone.now()
+        subscription.plan = "FREE"; subscription.price_cents = 0; subscription.currency = plan["currency"].lower(); subscription.recurring = False; subscription.is_active = True; subscription.expires_at = None; subscription.renewed_at = timezone.now()
         subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at"])
         return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
     url, error = _checkout(request, requested, request.data.get("provider"))
-    if error:
-        return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    if error: return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return Response({"url": url, "plan": requested, "payment_required": True})
 
 
@@ -270,14 +218,11 @@ def billing_change_plan(request):
 @permission_classes([IsAuthenticated])
 def billing_reconcile(request):
     invoice = Invoice.objects.filter(user=request.user, pk=request.data.get("invoice_id")).first()
-    if not invoice:
-        return Response({"detail": "Invoice not found."}, status=status.HTTP_404_NOT_FOUND)
+    if not invoice: return Response({"detail": "Invoice not found."}, status=status.HTTP_404_NOT_FOUND)
     provider = str((invoice.metadata or {}).get("provider") or getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower()
     result = _reconcile_invoice(invoice, provider)
-    if result["state"] == "INVALID_PLAN":
-        return Response({"detail": "The invoice is not associated with a configured plan."}, status=status.HTTP_409_CONFLICT)
-    if result["state"] == "UNSUPPORTED_PROVIDER":
-        return Response({"detail": "Unsupported payment provider."}, status=status.HTTP_400_BAD_REQUEST)
+    if result["state"] == "INVALID_PLAN": return Response({"detail": "The invoice is not associated with a configured plan."}, status=status.HTTP_409_CONFLICT)
+    if result["state"] == "UNSUPPORTED_PROVIDER": return Response({"detail": "Unsupported payment provider."}, status=status.HTTP_400_BAD_REQUEST)
     return Response({"paid": result["paid"], "state": result["state"], "invoice_id": invoice.id, "subscription": getattr(result.get("subscription"), "plan", Subscription.objects.get(user=request.user).plan)})
 
 
@@ -286,12 +231,9 @@ def billing_reconcile(request):
 def billing_cancel(request):
     """Stop future renewal while preserving access through the paid cycle."""
     subscription, _ = Subscription.objects.get_or_create(user=request.user)
-    if subscription.plan == "FREE":
-        return Response({"status": "already_free", "plan": "FREE", "expires_at": None})
-    if not subscription.is_active:
-        return Response({"status": "already_cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None})
+    if subscription.plan == "FREE": return Response({"status": "already_free", "plan": "FREE", "expires_at": None})
+    if not subscription.is_active: return Response({"status": "already_cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None})
     subscription.recurring = False
-    if not subscription.expires_at:
-        subscription.expires_at = timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30)))
+    if not subscription.expires_at: subscription.expires_at = timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30)))
     subscription.save(update_fields=["recurring", "expires_at"])
     return Response({"status": "cancelled_at_period_end", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat()})
