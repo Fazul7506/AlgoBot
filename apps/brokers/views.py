@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, permissions, decorators, response, status
@@ -30,10 +31,12 @@ async def _connect_all_user_broker_accounts(user, broker, primary_account):
     discovered after authorization inherit the encrypted credential from the
     successfully authorized account before verification.
     """
-    accounts = await asyncio.to_thread(lambda: list(
-        BrokerAccount.objects.filter(user=user, broker=broker, status__in=['active', 'disabled'])
-        .select_related('broker').order_by('id')
-    ))
+    accounts = await sync_to_async(
+        lambda: list(
+            BrokerAccount.objects.filter(user=user, broker=broker, status__in=['active', 'disabled'])
+            .select_related('broker').order_by('id')
+        )
+    )()
 
     shared_access_token = primary_account.access_token
     shared_refresh_token = primary_account.refresh_token
@@ -50,7 +53,7 @@ async def _connect_all_user_broker_accounts(user, broker, primary_account):
             account.token_status=shared_token_status; changed.append('token_status')
             account.expires_at=shared_expires_at; changed.append('expires_at')
         if changed:
-            await asyncio.to_thread(account.save, update_fields=changed)
+            await sync_to_async(account.save, thread_sensitive=True)(update_fields=changed)
 
     connected=[]
     failed=[]
@@ -62,7 +65,7 @@ async def _connect_all_user_broker_accounts(user, broker, primary_account):
         except (BrokerAuthenticationError, BrokerConnectionError, BrokerRoutingError) as exc:
             failed.append({'account_id':account.account_id,'error':str(exc)})
         except Exception as exc:
-            logger.exception('broker_account_autoconnect_failed',extra={'account_id':account.pk,'broker_id':broker.pk})
+            logger.exception('broker_account_autoconnect_failed',extra={'account_id':account.account_id,'broker_id':broker.pk})
             failed.append({'account_id':account.account_id,'error':'Broker account verification failed'})
     return connected, failed
 
@@ -131,7 +134,7 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     def open(self,request):return response.Response(self.get_serializer(self.get_queryset().filter(status='open'),many=True).data)
 class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=TradeReconciliationSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
-    def get_queryset(self):return TradeReconciliation.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
+    def get_queryset(self):return TradeReconciliation.objects.filter(broker__broker_accounts__user=request.user).distinct()
 class BrokerHealthViewSet(viewsets.ViewSet):
     permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def list(self,request):
