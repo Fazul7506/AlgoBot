@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import MarketSymbol
-from trading.models.core import Signal
+from apps.strategies.models import StrategySignal
 
 SNAPSHOT_FRESHNESS_SECONDS = 30
 SIGNAL_ACTIVE_SECONDS = 300
@@ -27,17 +27,21 @@ def _fresh(snapshot, now):
     return age <= SNAPSHOT_FRESHNESS_SECONDS, age
 
 
+def _signal_direction(signal):
+    return str(getattr(signal, "signal", "") or "").upper()
+
+
 def _signal_confluence(signals):
-    directions = Counter(s.direction for s in signals if s.direction in {"BUY", "SELL"})
+    directions = Counter(_signal_direction(s) for s in signals if _signal_direction(s) in {"BUY", "SELL"})
     if not directions:
         return None, 0, 0, 0.0, []
     dominant, dominant_count = directions.most_common(1)[0]
     opposing = directions.get("SELL" if dominant == "BUY" else "BUY", 0)
     total = dominant_count + opposing
     agreement = dominant_count / total if total else 0.0
-    confidences = [max(0.0, min(1.0, float(s.confidence or 0))) for s in signals if s.direction in {"BUY", "SELL"}]
+    confidences = [max(0.0, min(1.0, float(s.confidence or 0) / 100.0)) for s in signals if _signal_direction(s) in {"BUY", "SELL"}]
     confidence = sum(confidences) / len(confidences) if confidences else 0.0
-    timeframes = sorted({str(s.timeframe).strip() for s in signals if str(s.timeframe).strip()})
+    timeframes = sorted({str(getattr(s.configuration, "timeframe", "")).strip() for s in signals if getattr(s, "configuration", None) and str(getattr(s.configuration, "timeframe", "")).strip()})
     return dominant, dominant_count, opposing, agreement * confidence, timeframes
 
 
@@ -52,7 +56,7 @@ def market_intelligence(request):
     if symbol_filter:
         symbols = symbols.filter(symbol=symbol_filter)
     symbol_values = list(symbols.values_list("symbol", flat=True))
-    signals = Signal.objects.filter(symbol__in=symbol_values).order_by("-created_at")
+    signals = StrategySignal.objects.filter(symbol__in=symbol_values).select_related("strategy", "configuration").order_by("-timestamp")
     signals_by_symbol = {}
     for signal in signals:
         signals_by_symbol.setdefault(signal.symbol, []).append(signal)
@@ -117,26 +121,26 @@ def market_intelligence(request):
 def signal_lifecycle(request):
     """Expose deterministic signal lifecycle state from persisted strategy signals."""
     symbol = str(request.query_params.get("symbol") or "").strip()
-    qs = Signal.objects.all().order_by("-created_at")
+    qs = StrategySignal.objects.select_related("strategy", "configuration").all().order_by("-timestamp")
     if symbol:
         qs = qs.filter(symbol=symbol)
     now = timezone.now()
     data = []
     for signal in qs[:_limit(request, 100, 100)]:
-        age_seconds = max(0, int((now - signal.created_at).total_seconds()))
-        lifecycle = "executed" if signal.was_executed else ("active" if age_seconds <= SIGNAL_ACTIVE_SECONDS else "expired")
+        age_seconds = max(0, int((now - signal.timestamp).total_seconds()))
+        lifecycle = "active" if age_seconds <= SIGNAL_ACTIVE_SECONDS else "expired"
         data.append({
             "id": signal.id,
             "symbol": signal.symbol,
-            "direction": signal.direction,
+            "direction": _signal_direction(signal),
             "confidence": signal.confidence,
-            "strategy": signal.strategy,
-            "timeframe": signal.timeframe,
-            "market_regime": signal.market_regime,
-            "created_at": signal.created_at.isoformat(),
+            "strategy": signal.strategy.name,
+            "timeframe": signal.configuration.timeframe if signal.configuration else "",
+            "market_regime": "",
+            "created_at": signal.timestamp.isoformat(),
             "age_seconds": age_seconds,
             "lifecycle": lifecycle,
-            "was_executed": signal.was_executed,
+            "was_executed": False,
         })
     return Response({
         "status": "ok",
