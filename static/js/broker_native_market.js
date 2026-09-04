@@ -33,6 +33,22 @@
     }
   }
 
+  function setPreparedDirection(direction) {
+    const normalized = String(direction || '').toUpperCase();
+    if (!['BUY', 'SELL'].includes(normalized)) return;
+    const buttons = [
+      $('[data-direct-buy]'),
+      $('[data-direct-sell]'),
+    ].filter(Boolean);
+    buttons.forEach(button => {
+      const active = String(button.dataset.direction || '').toUpperCase() === normalized;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    window.__algobotPreparedManualDirection = normalized;
+    window.dispatchEvent(new CustomEvent('algobot:broker-direction-prepared', {detail:{direction:normalized}}));
+  }
+
   function renderContracts(payload) {
     const root = payload?.contracts_for || payload?.data?.contracts_for || payload;
     const raw = Array.isArray(payload) ? payload : (payload?.contracts || payload?.available || root?.available || []);
@@ -71,9 +87,9 @@
     const selected = contracts.find(c => String(c.contract_type) === String(type));
     if (!selected) return;
 
-    const direction = directionFor(selected.contract_type);
-    const button = document.querySelector(`[data-direction="${direction}"]`);
-    if (button) button.click();
+    // IMPORTANT: never call button.click() here. Those buttons are real
+    // execution controls. Capability refresh must only prepare UI state.
+    setPreparedDirection(directionFor(selected.contract_type));
 
     const category = selected.contract_category || selected.contract_type || 'Broker contract';
     const label = $('[data-broker-trade-type]');
@@ -131,9 +147,6 @@
     if ($('[data-broker-trade-type]')) $('[data-broker-trade-type]').textContent = 'Loading';
     setStatus('Loading broker-supported contracts…');
 
-    // Use the authenticated Django endpoint first. It is broker-authoritative,
-    // works even when browser WebSockets are restricted, and is already backed
-    // by Deriv's public contracts_for API. The browser WebSocket is fallback.
     try {
       const payload = await api(`/api/market/broker-capabilities/?symbol=${encodeURIComponent(symbol)}`, {}, 12000);
       if (requestId !== capabilitiesRequest) return;
@@ -171,9 +184,6 @@
     symbol?.addEventListener('change', () => loadCapabilities(symbol.value));
     contract?.addEventListener('change', () => applyContract(contract.value));
 
-    // Do not monkey-patch AlgoBotFrontendData.request here. The shared runtime
-    // deliberately freezes its API object; the broker-native routes are now
-    // first-class endpoints, so a request bridge is neither needed nor safe.
     window.addEventListener('algobot:broker-symbols-loaded', triggerCurrentSymbol);
     window.addEventListener('algobot:market-symbol-changed', triggerCurrentSymbol);
     window.addEventListener('algobot:account-synced', triggerCurrentSymbol);
