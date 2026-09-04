@@ -3,7 +3,7 @@ from django.http import Http404
 
 from core.views_user_modules import (
     automation_workspace, bot_runtime_workspace,
-    audit_workspace, security_workspace, alert_workspace,
+    audit_workspace, security_workspace,
 )
 
 
@@ -15,7 +15,6 @@ def operations_center(request, module="automation"):
         "deployments": bot_runtime_workspace,
         "audit": audit_workspace,
         "security": security_workspace,
-        "alerts": alert_workspace,
     }
     handler = handlers.get(module)
     if not handler:
