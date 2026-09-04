@@ -6,7 +6,7 @@ from rest_framework.exceptions import ValidationError
 from .models import Backtest, BacktestStatistics
 from .serializers import BacktestSerializer, BacktestStatisticsSerializer
 from .services import ParameterOptimizationService, ReplayService
-from trading.models.core import Strategy as StrategyModel
+from apps.strategies.models import Strategy as StrategyModel
 from apps.market_data.models import MarketSymbol
 from core.billing_entitlements import check, effective_plan
 
