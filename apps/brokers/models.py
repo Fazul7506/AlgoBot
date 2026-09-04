@@ -24,11 +24,10 @@ class Broker(models.Model):
 
 class BrokerAccount(models.Model):
     TOKEN_STATUS_CHOICES=[('active','Active'),('expired','Expired'),('revoked','Revoked'),('refreshing','Refreshing')]
-    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='multi_broker_accounts'); broker=models.ForeignKey(Broker,on_delete=models.CASCADE,related_name='broker_accounts'); account_id=models.CharField(max_length=120); currency=models.CharField(max_length=12,default='USD'); balance=models.DecimalField(max_digits=20,decimal_places=8,default=0); equity=models.DecimalField(max_digits=20,decimal_places=8,default=0); margin=models.DecimalField(max_digits=20,decimal_places=8,default=0); free_margin=models.DecimalField(max_digits=20,decimal_places=8,default=0); status=models.CharField(max_length=24,choices=choices(c.ACCOUNT_STATUSES),default='active'); is_preferred=models.BooleanField(default=False); credentials=models.JSONField(default=dict,blank=True); access_token=models.TextField(blank=True); refresh_token=models.TextField(blank=True); token_status=models.CharField(max_length=20,choices=TOKEN_STATUS_CHOICES,default='active',db_index=True); expires_at=models.DateTimeField(null=True,blank=True,db_index=True); last_refresh=models.DateTimeField(null=True,blank=True); last_synced_at=models.DateTimeField(null=True,blank=True); created_at=models.DateTimeField(auto_now_add=True)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='multi_broker_accounts'); broker=models.ForeignKey(Broker,on_delete=models.CASCADE,related_name='broker_accounts'); account_id=models.CharField(max_length=120); currency=models.CharField(max_length=12,default='USD'); balance=models.DecimalField(max_digits=20,decimal_places=8,default=0); equity=models.DecimalField(max_digits=20,decimal_places=8,default=0); margin=models.DecimalField(max_digits=20,decimal_places=8,default=0); free_margin=models.DecimalField(max_digits=20,decimal_places=8,default=0); status=models.CharField(max_length=24,choices=choices(c.ACCOUNT_STATUSES),default='active'); credentials=models.JSONField(default=dict,blank=True); access_token=models.TextField(blank=True); refresh_token=models.TextField(blank=True); token_status=models.CharField(max_length=20,choices=TOKEN_STATUS_CHOICES,default='active',db_index=True); expires_at=models.DateTimeField(null=True,blank=True,db_index=True); last_refresh=models.DateTimeField(null=True,blank=True); last_synced_at=models.DateTimeField(null=True,blank=True); created_at=models.DateTimeField(auto_now_add=True)
     class Meta:
         unique_together=[('broker','account_id')]
-        indexes=[models.Index(fields=['user','status']),models.Index(fields=['broker','is_preferred']),models.Index(fields=['user','token_status'])]
-        constraints=[models.UniqueConstraint(fields=['user'],condition=Q(is_preferred=True),name='unique_preferred_broker_account_per_user')]
+        indexes=[models.Index(fields=['user','status']),models.Index(fields=['user','token_status'])]
     def __str__(self): return f'{self.broker.broker_type}:{self.account_id}'
     def set_access_token(self,token): self.access_token=CredentialEncryptionService().encrypt(token or '')
     def get_access_token(self): return CredentialEncryptionService().decrypt(self.access_token) or '' if self.access_token else ''
@@ -47,7 +46,7 @@ class BrokerAccount(models.Model):
     @property
     def account_type(self):
         credentials=self.credentials or {}; value=credentials.get('account_type')
-        if not value and isinstance(credentials.get('realtime'),dict): value=credentials['realtime'].get('account_type')
+        if not value and isinstance(credentials.get('realtime'),dict): value=credentials['realtime']['account_type']
         value=str(value or '').lower().strip(); return value if value in {'demo','real'} else ''
     @property
     def is_connected(self): return self.connections.filter(status='connected').exists()
