@@ -7,9 +7,9 @@
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeout);
     try {
       const headers = {Accept:'application/json', ...(options.headers || {})};
-      const r = await fetch(url, {credentials:'same-origin', ...options, headers, signal:controller.signal});
+      const r = await fetch(url, {credentials:'include', ...options, headers, signal:controller.signal});
       const text = await r.text(); let data = {}; try { data = text ? JSON.parse(text) : {}; } catch (_) { data = {detail:text}; }
-      if (!r.ok) throw new Error(data.detail || data.message || `Request failed (${r.status})`);
+      if (!r.ok) { const error = new Error(data.detail || data.message || `Request failed (${r.status})`); error.status = r.status; error.code = data.code; throw error; }
       return data;
     } catch (e) { if (e.name === 'AbortError') throw new Error('AI analysis timed out'); throw e; }
     finally { clearTimeout(timer); }
@@ -28,7 +28,7 @@
     if(!actionable){box.innerHTML=`<div class="ai-wait">AI trade gate: ${esc(source==='no_trained_model'?'No trained model available':`${rec} at ${confidence.toFixed(1)}% confidence — waiting for ≥65% actionable confidence.`)}</div>`;return;}
     const label=rec==='BUY'?'BUY with AI signal':'SELL with AI signal';
     box.innerHTML=`<button type="button" class="ai-action ${rec==='BUY'?'ai-buy':'ai-sell'}" data-ai-direction="${rec}">${esc(label)}</button><small>Trained-model confidence ${confidence.toFixed(1)}%. Final broker/risk validation still applies.</small>`;
-    $('[data-ai-direction]',box)?.addEventListener('click',()=>{const target=document.querySelector(`[data-direction="${rec}"]`);target?.click();window.__algobotAiOrderContext={ai_assisted:true,timeframe:$('#timeframe')?.value||'M1',minimum_ai_confidence:65,ai_decision:{recommendation:rec,confidence}};const form=$('[data-order-form]');if(form)form.requestSubmit();});
+    $('[data-ai-direction]',box)?.addEventListener('click',()=>{window.__algobotAiOrderContext={ai_assisted:true,timeframe:$('#timeframe')?.value||'M1',minimum_ai_confidence:65,ai_decision:{recommendation:rec,confidence}};const target=document.querySelector(`[data-direction="${rec}"]`);target?.click();});
   }
   const render=result=>{
     const prediction=result.prediction||{},recommendation=result.recommendation||{},regime=result.regime||{},explanation=result.explainability||{};
