@@ -51,9 +51,6 @@ class StrategyService:
         from apps.market_data.models import Candle
         qs = Candle.objects.filter(symbol__symbol=symbol, timeframe=timeframe).order_by('epoch')
         if start_date is not None:
-            qs = qs.filter(created_at__gte=start_date) if hasattr(Candle, 'created_at') else qs
-        # Canonical candles are timestamped by epoch; use the epoch range only when dates are supplied.
-        if start_date is not None:
             qs = qs.filter(epoch__gte=int(start_date.timestamp()))
         if end_date is not None:
             qs = qs.filter(epoch__lte=int(end_date.timestamp()))
@@ -76,42 +73,20 @@ class StrategyService:
         trades = []
         equity = [1000.0]
         for index in range(min_history, len(candles) - 1):
-            current = candles[index]
-            indicators = rows[index]
-            market_data = {
-                'symbol': symbol,
-                'open': float(current['open']),
-                'high': float(current['high']),
-                'low': float(current['low']),
-                'close': float(current['close']),
-                'volume': float(current['volume'] or 0),
-                'epoch': int(current['epoch']),
-            }
+            current = candles[index]; indicators = rows[index]
+            market_data = {'symbol': symbol, 'open': float(current['open']), 'high': float(current['high']), 'low': float(current['low']), 'close': float(current['close']), 'volume': float(current['volume'] or 0), 'epoch': int(current['epoch'])}
             closes = [float(c['close']) for c in candles[:index + 1]]
             trend = 'up' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] > indicators['sma20'] else 'down' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] < indicators['sma20'] else 'sideways'
             indicator_data = {**indicators, 'trend': trend, 'rsi': LiveMarketContextService._rsi(closes)}
             strategy = strategy_cls(configuration=config, market_data=market_data, indicator_data=indicator_data)
-            strategy.initialize()
-            result = strategy.execute()
-            signal = str(result.get('signal') or 'HOLD').upper()
-            if signal not in {'BUY', 'SELL'}:
-                continue
+            strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or 'HOLD').upper()
+            if signal not in {'BUY', 'SELL'}: continue
             entry = float(candles[index]['close']); exit_price = float(candles[index + 1]['close'])
             profit = 1.0 if (signal == 'BUY' and exit_price > entry) or (signal == 'SELL' and exit_price < entry) else -1.0
             trades.append({'index': index + 1, 'signal': signal, 'entry_price': entry, 'exit_price': exit_price, 'profit': profit, 'entry_epoch': int(candles[index]['epoch']), 'exit_epoch': int(candles[index + 1]['epoch'])})
             equity.append(equity[-1] + profit)
-        profits = [trade['profit'] for trade in trades]
-        wins = sum(p > 0 for p in profits); losses = sum(p < 0 for p in profits); total_profit = float(sum(profits))
-        gross_profit = sum(p for p in profits if p > 0); gross_loss = abs(sum(p for p in profits if p < 0))
-        return {
-            'total_trades': len(profits), 'wins': wins, 'losses': losses,
-            'win_rate': (wins / len(profits) * 100) if profits else 0,
-            'expectancy': (sum(profits) / len(profits)) if profits else 0,
-            'sharpe_ratio': 0, 'sortino_ratio': 0, 'max_drawdown': max((max(equity[:i + 1]) - equity[i]) for i in range(len(equity))),
-            'profit_factor': (gross_profit / gross_loss) if gross_loss else (float('inf') if gross_profit else 0),
-            'total_profit': total_profit, 'roi': total_profit / 1000 * 100,
-            'equity_curve': equity, 'trades': trades,
-        }
+        profits = [trade['profit'] for trade in trades]; wins = sum(p > 0 for p in profits); losses = sum(p < 0 for p in profits); total_profit = float(sum(profits)); gross_profit = sum(p for p in profits if p > 0); gross_loss = abs(sum(p for p in profits if p < 0)); drawdown = max((max(equity[:i + 1]) - equity[i]) for i in range(len(equity))) if equity else 0
+        return {'total_trades': len(profits), 'wins': wins, 'losses': losses, 'win_rate': (wins / len(profits) * 100) if profits else 0, 'expectancy': (sum(profits) / len(profits)) if profits else 0, 'sharpe_ratio': 0, 'sortino_ratio': 0, 'max_drawdown': drawdown, 'profit_factor': (gross_profit / gross_loss) if gross_loss else (float('inf') if gross_profit else 0), 'total_profit': total_profit, 'roi': total_profit / 1000 * 100, 'equity_curve': equity, 'trades': trades}
 
 
 class StrategyExecutionService:
@@ -123,8 +98,7 @@ class StrategyExecutionService:
         if signal not in {'BUY', 'SELL'}: return None
         account = getattr(config, 'broker_account', None)
         if account is None: return None
-        parameters = config.parameters or {}
-        stake = parameters.get('stake')
+        parameters = config.parameters or {}; stake = parameters.get('stake')
         if stake in (None, '', 0, '0', 0.0): return {'status': 'skipped', 'reason': 'strategy_stake_not_configured'}
         allowed, used, limit = check(config.user, 'orders')
         if not allowed: return {'status': 'blocked', 'reason': 'ORDER_LIMIT_REACHED', 'used': used, 'limit': limit}
@@ -152,8 +126,7 @@ class StrategyExecutionService:
                 try:
                     from apps.ai_engine.services import PredictionService, RecommendationService
                     ai_context = {'market_data': market_data, 'indicators': indicator_data, 'strategy': {'confidence': result.get('confidence', 0)}, 'risk': (config.parameters or {}).get('risk', {}), 'candles': handoff.get('candles', [])}
-                    prediction = PredictionService().predict(config.symbol, config.timeframe, ai_context); recommendation = RecommendationService().recommend(config.symbol, prediction); ai_consensus = (prediction.payload or {}).get('consensus') or {}
-                    result = {**result, 'strategy_signal': result['signal'], 'strategy_confidence': result.get('confidence', 0), 'signal': recommendation.recommendation if recommendation.recommendation in {'BUY', 'SELL'} else 'HOLD', 'confidence': recommendation.confidence, 'ai_consensus': ai_consensus, 'ai_prediction_id': prediction.pk, 'ai_recommendation_id': recommendation.pk, 'market_data_handoff': {k: v for k, v in handoff.items() if k != 'candles'}}
+                    prediction = PredictionService().predict(config.symbol, config.timeframe, ai_context); recommendation = RecommendationService().recommend(config.symbol, prediction); ai_consensus = (prediction.payload or {}).get('consensus') or {}; result = {**result, 'strategy_signal': result['signal'], 'strategy_confidence': result.get('confidence', 0), 'signal': recommendation.recommendation if recommendation.recommendation in {'BUY', 'SELL'} else 'HOLD', 'confidence': recommendation.confidence, 'ai_consensus': ai_consensus, 'ai_prediction_id': prediction.pk, 'ai_recommendation_id': recommendation.pk, 'market_data_handoff': {k: v for k, v in handoff.items() if k != 'candles'}}
                 except Exception as exc:
                     ai_error = f'{exc.__class__.__name__}: {exc}'; log.warning('AI enhancement unavailable; preserving strategy result', extra={'strategy': config.strategy.slug, 'error': ai_error})
             result['ai_enabled'] = ai_enabled; result['ai_consensus'] = ai_consensus
