@@ -4,6 +4,7 @@ from .models import Strategy, StrategyConfiguration, StrategyExecution, Strategy
 from .serializers import StrategySerializer, StrategyExecutionSerializer, StrategyPerformanceSerializer, StrategySignalSerializer, StrategyConfigurationSerializer
 from .engine import StrategyEngine
 from .services import StrategyService
+from core.account_context import get_active_account
 
 
 class StrategyViewSet(viewsets.ModelViewSet):
@@ -19,28 +20,17 @@ class StrategyViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=False, methods=['get'])
     def available(self, request):
         StrategyService().sync_catalog()
-        configured = {
-            (cfg.strategy_id, cfg.symbol, cfg.timeframe): cfg
-            for cfg in self._user_configs().filter(strategy__enabled=True)
-        }
+        configured = {(cfg.strategy_id, cfg.symbol, cfg.timeframe): cfg for cfg in self._user_configs().filter(strategy__enabled=True)}
         payload = []
         for strategy in self.get_queryset():
             configs = [cfg for (strategy_id, _symbol, _timeframe), cfg in configured.items() if strategy_id == strategy.id]
-            payload.append({
-                **StrategySerializer(strategy, context={'request': request}).data,
-                'configured': bool(configs),
-                'configurations': StrategyConfigurationSerializer(configs, many=True).data,
-            })
+            payload.append({**StrategySerializer(strategy, context={'request': request}).data, 'configured': bool(configs), 'configurations': StrategyConfigurationSerializer(configs, many=True).data})
         return response.Response({'status': 'success', 'strategies': payload})
 
     @decorators.action(detail=False, methods=['get'])
     def current(self, request):
         config = self._user_configs().filter(is_active=True, enabled=True, strategy__enabled=True).first()
-        return response.Response({
-            'active': bool(config),
-            'configuration': StrategyConfigurationSerializer(config).data if config else None,
-            'strategy': StrategySerializer(config.strategy).data if config else None,
-        })
+        return response.Response({'active': bool(config), 'configuration': StrategyConfigurationSerializer(config).data if config else None, 'strategy': StrategySerializer(config.strategy).data if config else None})
 
     @decorators.action(detail=True, methods=['post'])
     def switch(self, request, pk=None):
@@ -98,27 +88,15 @@ class StrategyViewSet(viewsets.ModelViewSet):
             if account is None:
                 return response.Response({'detail': 'Broker account not found for this user.'}, status=404)
         else:
-            # Research/configuration records may exist before a broker is connected.
-            # When available, bind the user's preferred account automatically.
-            account = BrokerAccount.objects.filter(user=request.user, is_preferred=True).first()
+            account = get_active_account(request.user, request=request)
         if make_active and account is None:
-            return response.Response({'detail': 'An active strategy requires a broker account.'}, status=409)
+            return response.Response({'detail': 'An active strategy requires an active broker account.'}, status=409)
         with transaction.atomic():
             if make_active:
                 StrategyConfiguration.objects.select_for_update().filter(user=request.user, is_active=True).update(is_active=False)
             configuration, _ = StrategyConfiguration.objects.update_or_create(
-                strategy=strategy,
-                user=request.user,
-                symbol=symbol,
-                timeframe=timeframe,
-                defaults={
-                    'criteria': criteria,
-                    'parameters': parameters,
-                    'risk_profile': risk_profile,
-                    'schedule': schedule,
-                    'broker_account': account,
-                    'is_active': make_active,
-                },
+                strategy=strategy, user=request.user, symbol=symbol, timeframe=timeframe,
+                defaults={'criteria': criteria, 'parameters': parameters, 'risk_profile': risk_profile, 'schedule': schedule, 'broker_account': account, 'is_active': make_active},
             )
         return response.Response({'status': 'success', 'message': 'Strategy configuration saved. No live order was placed.', 'configuration': StrategyConfigurationSerializer(configuration).data})
 
@@ -144,14 +122,7 @@ class StrategyViewSet(viewsets.ModelViewSet):
         if isinstance(criteria, dict) and not criteria:
             warnings.append('No criteria supplied; strategy defaults will be used.')
         warnings.append('Validation is research-only. Live execution remains behind broker and risk gates.')
-        return response.Response({
-            'status': 'valid' if not errors else 'invalid',
-            'strategy': strategy.slug,
-            'errors': errors,
-            'warnings': warnings,
-            'ready_for_backtest': not errors,
-            'ready_for_live_trade': False,
-        }, status=200 if not errors else 400)
+        return response.Response({'status': 'valid' if not errors else 'invalid', 'strategy': strategy.slug, 'errors': errors, 'warnings': warnings, 'ready_for_backtest': not errors, 'ready_for_live_trade': False}, status=200 if not errors else 400)
 
     @decorators.action(detail=False, methods=['post'])
     def run(self, request):
