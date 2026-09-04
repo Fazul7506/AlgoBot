@@ -46,7 +46,7 @@ class BrokerAccount(models.Model):
     @property
     def account_type(self):
         credentials=self.credentials or {}; value=credentials.get('account_type')
-        if not value and isinstance(credentials.get('realtime'),dict): value=credentials['realtime']['account_type']
+        if not value and isinstance(credentials.get('realtime'),dict): value=credentials['realtime'].get('account_type')
         value=str(value or '').lower().strip(); return value if value in {'demo','real'} else ''
     @property
     def is_connected(self): return self.connections.filter(status='connected').exists()
