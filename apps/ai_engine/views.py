@@ -12,6 +12,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from apps.brokers.models import BrokerAccount
 from apps.brokers.services import BrokerRegistry
 from apps.market_data.models import Candle, MarketSnapshot, MarketSymbol, Tick
+from core.account_context import get_active_account
 from .models import AIModel, AIRecommendation, AnomalyEvent, FeatureVector, MarketRegime, ModelVersion, Prediction, PredictionOutcome, TrainingJob
 from .serializers import AIModelSerializer, AIRecommendationSerializer, AnomalyEventSerializer, FeatureVectorSerializer, MarketRegimeSerializer, ModelVersionSerializer, PredictionSerializer, TrainingJobSerializer
 from .services import AIEngine, ExplainabilityService, FeatureStoreService, TrainingService
@@ -151,7 +152,12 @@ def _discover_symbol(request):
     return MarketSymbol.objects.filter(is_active=True, is_tradable=True).values_list("symbol", flat=True).first()
 
 
-def _connected_account(user):
+def _connected_account(user, request=None):
+    """Resolve the account selected in the authenticated user's session."""
+    if request is not None:
+        active = get_active_account(user, request=request)
+        if active:
+            return active
     return BrokerAccount.objects.filter(user=user, status="active", broker__status="active").select_related("broker").order_by("-is_preferred", "-id").first()
 
 
@@ -200,7 +206,7 @@ def predict(request):
         symbol = _discover_symbol(request)
         if not symbol:
             return response.Response({"detail": "No active broker market is available. Connect a broker and synchronize markets first.", "code": "NO_ACTIVE_MARKET"}, status=status.HTTP_409_CONFLICT)
-        account = _connected_account(request.user)
+        account = _connected_account(request.user, request=request)
         if not account:
             return response.Response({"detail": "Connect a broker before requesting AI analysis.", "code": "NO_CONNECTED_BROKER"}, status=status.HTTP_409_CONFLICT)
         timeframe = str(request.data.get("timeframe") or "M1").upper()
