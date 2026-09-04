@@ -26,7 +26,7 @@ def _account(user):
     return (
         BrokerAccount.objects.filter(user=user, status="active", broker__status="active")
         .select_related("broker")
-        .order_by("-is_preferred", "-id")
+        .order_by("-id")
         .first()
     )
 
