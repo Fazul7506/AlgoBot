@@ -1,1 +1,0 @@
-# Copy trading module scaffold.
