@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from types import SimpleNamespace
 from django.utils import timezone
 from .registry import registry
 from .repositories import StrategyRepository, StrategyExecutionRepository, StrategySignalRepository, StrategyPerformanceRepository
@@ -45,6 +46,73 @@ class LiveMarketContextService:
 class StrategyService:
     def sync_catalog(self): return [StrategyRepository().create_or_update_catalog(cls) for cls in registry.all().values()]
 
+    @staticmethod
+    def _historic_candles(symbol, timeframe='M1', start_date=None, end_date=None):
+        from apps.market_data.models import Candle
+        qs = Candle.objects.filter(symbol__symbol=symbol, timeframe=timeframe).order_by('epoch')
+        if start_date is not None:
+            qs = qs.filter(created_at__gte=start_date) if hasattr(Candle, 'created_at') else qs
+        # Canonical candles are timestamped by epoch; use the epoch range only when dates are supplied.
+        if start_date is not None:
+            qs = qs.filter(epoch__gte=int(start_date.timestamp()))
+        if end_date is not None:
+            qs = qs.filter(epoch__lte=int(end_date.timestamp()))
+        return list(qs.values('open', 'high', 'low', 'close', 'volume', 'epoch'))
+
+    @staticmethod
+    def run_backtest(strategy_record, symbol, timeframe='M1', start_date=None, end_date=None, min_history=20):
+        """Run historical strategy evaluation entirely through canonical app models."""
+        if start_date is not None and end_date is not None and end_date <= start_date:
+            raise ValueError('end_date must be later than start_date')
+        candles = StrategyService._historic_candles(symbol, timeframe, start_date, end_date)
+        if len(candles) <= min_history:
+            raise ValueError('Insufficient canonical candle history for the selected symbol, timeframe and date range')
+        from apps.indicators.basic_features import compute_basic_features
+        rows = compute_basic_features(candles)
+        strategy_cls = registry.get(getattr(strategy_record, 'slug', '') or str(getattr(strategy_record, 'name', '')).lower().replace(' ', '_'))
+        if strategy_cls is None:
+            raise ValueError('Selected strategy is not registered in the canonical strategy registry')
+        config = SimpleNamespace(criteria={}, parameters={})
+        trades = []
+        equity = [1000.0]
+        for index in range(min_history, len(candles) - 1):
+            current = candles[index]
+            indicators = rows[index]
+            market_data = {
+                'symbol': symbol,
+                'open': float(current['open']),
+                'high': float(current['high']),
+                'low': float(current['low']),
+                'close': float(current['close']),
+                'volume': float(current['volume'] or 0),
+                'epoch': int(current['epoch']),
+            }
+            closes = [float(c['close']) for c in candles[:index + 1]]
+            trend = 'up' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] > indicators['sma20'] else 'down' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] < indicators['sma20'] else 'sideways'
+            indicator_data = {**indicators, 'trend': trend, 'rsi': LiveMarketContextService._rsi(closes)}
+            strategy = strategy_cls(configuration=config, market_data=market_data, indicator_data=indicator_data)
+            strategy.initialize()
+            result = strategy.execute()
+            signal = str(result.get('signal') or 'HOLD').upper()
+            if signal not in {'BUY', 'SELL'}:
+                continue
+            entry = float(candles[index]['close']); exit_price = float(candles[index + 1]['close'])
+            profit = 1.0 if (signal == 'BUY' and exit_price > entry) or (signal == 'SELL' and exit_price < entry) else -1.0
+            trades.append({'index': index + 1, 'signal': signal, 'entry_price': entry, 'exit_price': exit_price, 'profit': profit, 'entry_epoch': int(candles[index]['epoch']), 'exit_epoch': int(candles[index + 1]['epoch'])})
+            equity.append(equity[-1] + profit)
+        profits = [trade['profit'] for trade in trades]
+        wins = sum(p > 0 for p in profits); losses = sum(p < 0 for p in profits); total_profit = float(sum(profits))
+        gross_profit = sum(p for p in profits if p > 0); gross_loss = abs(sum(p for p in profits if p < 0))
+        return {
+            'total_trades': len(profits), 'wins': wins, 'losses': losses,
+            'win_rate': (wins / len(profits) * 100) if profits else 0,
+            'expectancy': (sum(profits) / len(profits)) if profits else 0,
+            'sharpe_ratio': 0, 'sortino_ratio': 0, 'max_drawdown': max((max(equity[:i + 1]) - equity[i]) for i in range(len(equity))),
+            'profit_factor': (gross_profit / gross_loss) if gross_loss else (float('inf') if gross_profit else 0),
+            'total_profit': total_profit, 'roi': total_profit / 1000 * 100,
+            'equity_curve': equity, 'trades': trades,
+        }
+
 
 class StrategyExecutionService:
     def _auto_execute_if_allowed(self, config, result):
@@ -57,45 +125,23 @@ class StrategyExecutionService:
         if account is None: return None
         parameters = config.parameters or {}
         stake = parameters.get('stake')
-        if stake in (None, '', 0, '0', 0.0):
-            return {'status': 'skipped', 'reason': 'strategy_stake_not_configured'}
+        if stake in (None, '', 0, '0', 0.0): return {'status': 'skipped', 'reason': 'strategy_stake_not_configured'}
         allowed, used, limit = check(config.user, 'orders')
         if not allowed: return {'status': 'blocked', 'reason': 'ORDER_LIMIT_REACHED', 'used': used, 'limit': limit}
         environment = str((account.credentials or {}).get('account_type') or '').lower().strip()
         if environment == 'real':
             allowed_live, used_live, limit_live = check_live_order(config.user)
             if not allowed_live: return {'status': 'blocked', 'reason': 'LIVE_ORDER_LIMIT_REACHED', 'used': used_live, 'limit': limit_live}
-            if not bool(getattr(__import__('django.conf', fromlist=['settings']).settings, 'ALLOW_LIVE_TRADING', False)):
-                return {'status': 'blocked', 'reason': 'LIVE_TRADING_DISABLED'}
+            if not bool(getattr(__import__('django.conf', fromlist=['settings']).settings, 'ALLOW_LIVE_TRADING', False)): return {'status': 'blocked', 'reason': 'LIVE_TRADING_DISABLED'}
         try:
             from apps.execution.engine import ExecutionEngine
-            order = ExecutionEngine().place_consensus_order(
-                config.user,
-                symbol=config.symbol,
-                timeframe=config.timeframe,
-                context=None,
-                risk_context=(parameters.get('risk') or {}),
-                broker_account=account,
-                direction=signal.lower(),
-                order_type=str(parameters.get('order_type') or 'market'),
-                contract_type=str(parameters.get('contract_type') or ''),
-                stake=stake,
-                strategy=config.strategy.slug,
-                validation_context={
-                    'trigger': 'strategy_scheduler',
-                    'execution_mode': 'strategy_auto',
-                    'strategy_configuration_id': config.id,
-                    'criteria': result.get('criteria') or {},
-                },
-            )
+            order = ExecutionEngine().place_consensus_order(config.user, symbol=config.symbol, timeframe=config.timeframe, context=None, risk_context=(parameters.get('risk') or {}), broker_account=account, direction=signal.lower(), order_type=str(parameters.get('order_type') or 'market'), contract_type=str(parameters.get('contract_type') or ''), stake=stake, strategy=config.strategy.slug, validation_context={'trigger': 'strategy_scheduler', 'execution_mode': 'strategy_auto', 'strategy_configuration_id': config.id, 'criteria': result.get('criteria') or {}})
             return {'status': 'queued', 'order_id': order.id, 'execution_mode': 'strategy_auto'}
         except Exception as exc:
-            log.exception('Strategy autonomous order was blocked', extra={'strategy': config.strategy.slug, 'configuration_id': config.id})
-            return {'status': 'blocked', 'reason': str(exc)}
+            log.exception('Strategy autonomous order was blocked', extra={'strategy': config.strategy.slug, 'configuration_id': config.id}); return {'status': 'blocked', 'reason': str(exc)}
 
     def run_configuration(self, config, market_data=None, indicator_data=None):
-        start = time.perf_counter()
-        execution = StrategyExecutionRepository().create(strategy=config.strategy, configuration=config, symbol=config.symbol, timeframe=config.timeframe, status='running')
+        start = time.perf_counter(); execution = StrategyExecutionRepository().create(strategy=config.strategy, configuration=config, symbol=config.symbol, timeframe=config.timeframe, status='running')
         try:
             if market_data is None or indicator_data is None: market_data, indicator_data, handoff = LiveMarketContextService().build(config)
             else: handoff = {'source': 'caller_supplied', 'timeframe': config.timeframe}
