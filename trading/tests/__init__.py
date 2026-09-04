@@ -1,1 +1,0 @@
-# trading tests package
