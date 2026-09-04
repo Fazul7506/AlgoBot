@@ -172,5 +172,5 @@ def disconnect_broker(request):
     except BrokerAuthenticationError as exc:return response.Response({'detail':str(exc)},status=status.HTTP_401_UNAUTHORIZED)
     except BrokerConnectionError as exc:return response.Response({'detail':str(exc)},status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except BrokerRoutingError as exc:return response.Response({'detail':str(exc)},status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    except asyncio.TimeoutError:return response.Response({'detail':'Broker disconnection timed out.','status':status.HTTP_504_GATEWAY_TIMEOUT})
+    except asyncio.TimeoutError:return response.Response({'detail':'Broker disconnection timed out.','status':'timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
     return response.Response({'connection':BrokerConnectionSerializer(connection).data,'account':BrokerAccountSerializer(account,context={'request':request}).data})
