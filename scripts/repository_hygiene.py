@@ -17,8 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TRACKED = [Path(p) for p in subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()]
 SKIP_PARTS = {".git", "__pycache__", "node_modules", ".venv", "venv", "staticfiles"}
 DUPLICATE_EXTENSIONS = {".css", ".html", ".js", ".py"}
-LEGACY_PATTERNS = (
-    "legacy",
+RETIRED_RUNTIME_PATTERNS = (
     "mission-control",
     "alert_center",
     "/api/broker-accounts/",
@@ -29,6 +28,12 @@ LEGACY_PATTERNS = (
     "apps.ai_engine.optimizer",
     "apps.ai_engine.recommendation",
     "apps.ai_engine.regime",
+    "trading.ai.",
+    "trading.models.",
+    "trading.services.",
+    "trading.strategies.",
+    "from trading import",
+    "import trading",
 )
 FRAMEWORK_ENTRYPOINTS = {
     "manage.py", "wsgi.py", "asgi.py", "apps.py", "admin.py", "models.py",
@@ -152,14 +157,14 @@ def report_unreferenced() -> None:
             print(f"  {rel}")
 
 
-def report_legacy_references() -> int:
+def report_retired_runtime_references() -> int:
     failures = 0
     texts = load_text_files()
-    print("LEGACY/CANONICAL VIOLATIONS:")
+    print("RETIRED/CANONICAL RUNTIME VIOLATIONS:")
     for path, text in texts.items():
-        if "migrations" in path.parts or path.suffix.lower() not in DUPLICATE_EXTENSIONS:
+        if path == Path(__file__) or "migrations" in path.parts or path.suffix.lower() not in DUPLICATE_EXTENSIONS:
             continue
-        for pattern in LEGACY_PATTERNS:
+        for pattern in RETIRED_RUNTIME_PATTERNS:
             if pattern.lower() in text.lower():
                 print(f"  {path.relative_to(ROOT)} -> {pattern}")
                 failures += 1
@@ -184,8 +189,8 @@ if __name__ == "__main__":
     print("=== AlgoBot repository hygiene ===")
     duplicate_failures = report_duplicates()
     migration_failures = report_migration_duplicates()
-    legacy_failures = report_legacy_references()
+    retired_failures = report_retired_runtime_references()
     report_unreferenced()
-    if duplicate_failures or migration_failures or legacy_failures:
+    if duplicate_failures or migration_failures or retired_failures:
         raise SystemExit(1)
     print("=== hygiene duplicate and canonical checks passed ===")
