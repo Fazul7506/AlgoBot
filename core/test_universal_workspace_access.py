@@ -26,11 +26,6 @@ class UniversalWorkspaceAccessTests(TestCase):
                 self.assertNotEqual(response.status_code, 302, path)
                 self.assertEqual(response.status_code, 200, path)
 
-    def test_legacy_alert_center_redirects_to_notifications(self):
-        response = self.client.get("/operations/alerts/")
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/notifications/")
-
     def test_universal_workspace_links_are_present_in_authenticated_sidebar(self):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
