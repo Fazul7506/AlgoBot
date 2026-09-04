@@ -18,9 +18,6 @@
     return item ? item.slice(prefix.length) : '';
   }
   function csrfToken() {
-    // When the API is a sibling subdomain, its CSRF cookie may be host-only.
-    // Prefer the token returned by the API bootstrap endpoint once available;
-    // otherwise use the normal page cookie/meta sources.
     if (bootstrappedCsrfToken) return bootstrappedCsrfToken;
     const cookieToken = readCookie('csrftoken');
     if (cookieToken) return decodeURIComponent(cookieToken);
@@ -49,17 +46,9 @@
   }
   function emitError(error) { window.dispatchEvent(new CustomEvent('algobot:api-error', { detail: { url: error.url, method: error.method, status: error.status, code: error.code, message: error.message, retryable: error.retryable } })); }
 
-  class APIError extends Error {
-    constructor(message, { status = 0, payload = {}, url = '', method = 'GET', response = null, code } = {}) {
-      super(message); this.name = 'APIError'; this.status = status; this.payload = payload; this.url = url; this.method = method; this.response = response;
-      this.code = code || payload?.code || (status ? `HTTP_${status}` : 'NETWORK_ERROR');
-      this.retryable = status === 408 || status === 429 || status >= 500 || status === 0;
-    }
-  }
-
   async function bootstrapCsrf() {
     const csrfUrl = new URL('/api/csrf/', apiBase || window.location.origin);
-    const response = await nativeFetch(csrfUrl.toString(), { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
+    const response = await nativeFetch(csrfUrl.toString(), { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!response.ok) return false;
     const payload = parsePayload(await response.clone().text());
     if (typeof payload.csrfToken === 'string' && payload.csrfToken) bootstrappedCsrfToken = payload.csrfToken;
@@ -77,13 +66,14 @@
     const isProtected = protectedTarget(url);
 
     if (!SAFE_METHODS.has(method) && isProtected) {
-      if (!csrfToken()) await bootstrapCsrf();
+      const apiOrigin = apiBase ? new URL(apiBase, window.location.origin).origin : window.location.origin;
+      if (apiOrigin !== window.location.origin && !bootstrappedCsrfToken) {
+        try { await bootstrapCsrf(); } catch (_) {}
+      }
       const token = csrfToken();
       if (token && (!headers.has('X-CSRFToken') || !headers.get('X-CSRFToken'))) headers.set('X-CSRFToken', token);
     }
 
-    // API requests are cross-origin in production, so never let a legacy
-    // same-origin option suppress the session/CSRF cookies on the API host.
     const credentials = isProtected ? 'include' : (options.credentials || 'include');
     let requestInit = { ...options, method, headers, credentials };
     if ((url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') && typeof requestInit.body === 'string') {
@@ -102,12 +92,9 @@
         const payload = parsePayload(await response.clone().text());
         if (payload?.code === 'CSRF_FAILED') {
           bootstrappedCsrfToken = '';
-          await bootstrapCsrf();
-          const refreshedToken = csrfToken();
-          if (refreshedToken) {
-            const retryHeaders = new Headers(headers); retryHeaders.set('X-CSRFToken', refreshedToken);
-            return guardedFetch(input, { ...options, headers: retryHeaders }, false);
-          }
+          try { await bootstrapCsrf(); } catch (_) {}
+          const retryHeaders = new Headers(headers); retryHeaders.set('X-CSRFToken', csrfToken());
+          return guardedFetch(input, { ...options, headers: retryHeaders }, false);
         }
       }
       return response;
@@ -117,8 +104,13 @@
     } finally { clearTimeout(timer); }
   }
 
-  window.fetch = guardedFetch;
-  window.__algoBotApiClientFetch = true;
+  class APIError extends Error {
+    constructor(message, { status = 0, payload = {}, url = '', method = 'GET', response = null, code } = {}) {
+      super(message); this.name = 'APIError'; this.status = status; this.payload = payload; this.url = url; this.method = method; this.response = response;
+      this.code = code || payload?.code || (status ? `HTTP_${status}` : 'NETWORK_ERROR');
+      this.retryable = status === 408 || status === 429 || status >= 500 || status === 0;
+    }
+  }
 
   class APIClient {
     constructor({ baseURL = apiBase, defaultHeaders = {}, timeout = 25000 } = {}) { this.baseURL = String(baseURL || '').replace(/\/+$/, ''); this.defaultHeaders = { Accept: 'application/json', ...defaultHeaders }; this.timeout = timeout; }
@@ -140,5 +132,7 @@
   }
 
   const apiClient = new APIClient();
+  window.fetch = guardedFetch;
+  window.__algoBotApiClientFetch = true;
   window.AlgoBotAPI = Object.freeze({ APIClient, APIError, apiClient, csrfToken });
 })();
