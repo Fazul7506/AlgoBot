@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from apps.brokers.models import BrokerAccount, BrokerConnection
+from core.account_context import SESSION_KEY
 
 
 class BrowserOAuthFlowTests(TestCase):
@@ -52,7 +53,7 @@ class BrowserOAuthFlowTests(TestCase):
     @patch("core.views_deriv_oauth_safe.DerivOAuthService.validate_token_response", return_value=(True, None))
     @patch("core.views_deriv_oauth_safe.DerivOAuthService.validate_pkce", return_value=(True, None))
     @patch("core.views_deriv_oauth_safe.DerivOAuthService.validate_state", return_value=(True, None))
-    def test_oauth_persists_selected_account_and_returns_to_broker_management(
+    def test_oauth_persists_selected_account_without_selecting_unready_connection(
         self, validate_state, validate_pkce, validate_token, exchange, verify_account
     ):
         exchange.return_value = (True, {"access_token": "verified-token", "refresh_token": "refresh-token", "expires_in": 3600}, None)
@@ -72,5 +73,5 @@ class BrowserOAuthFlowTests(TestCase):
         self.assertEqual(response["Location"], "/brokers/marketplace/")
         account = BrokerAccount.objects.get(account_id="CR1234567")
         self.assertEqual(account.status, "active")
-        self.assertTrue(account.is_preferred)
+        self.assertNotIn(SESSION_KEY, self.client.session)
         self.assertFalse(BrokerConnection.objects.filter(broker_account=account, status="connected").exists())
