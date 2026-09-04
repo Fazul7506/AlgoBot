@@ -5,7 +5,7 @@ from apps.brokers.adapters.deriv import DerivAdapter
 
 
 class DerivChartHistoryRequestTests(IsolatedAsyncioTestCase):
-    async def test_tick_history_does_not_send_legacy_invalid_subscribe_zero(self):
+    async def test_tick_history_does_not_send_invalid_subscribe_zero(self):
         adapter = DerivAdapter()
         adapter._request = AsyncMock(return_value={"history": {"times": [100], "prices": [123.45]}})
 
