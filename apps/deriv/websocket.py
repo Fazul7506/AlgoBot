@@ -2,8 +2,8 @@
 
 Authenticated account/trading sockets are created by the broker adapter via
 Deriv's REST OTP endpoint. This engine intentionally stays on the public market
-channel so a stale legacy authorize call cannot turn a market-data connection
-into a 401 loop.
+channel so an account authorization call cannot turn a market-data connection
+into an authentication loop.
 """
 import asyncio, json, logging, time, uuid
 from collections import deque
