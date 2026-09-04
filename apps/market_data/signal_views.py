@@ -1,7 +1,7 @@
 from django.core.cache import cache
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from trading.models.core import Signal
+from apps.strategies.models import StrategySignal
 
 
 SIGNALS_CACHE_KEY = "algobot:strategy_signals:v1"
@@ -10,12 +10,7 @@ SIGNALS_CACHE_TTL = 10
 
 @login_required
 def strategy_signals(request):
-    """Fast authenticated read-only strategy-signal feed.
-
-    Signals are backend records and do not require a broker round-trip. Keep
-    this endpoint independent from broker/account synchronization so a Deriv
-    latency issue cannot block the Signals page.
-    """
+    """Fast authenticated read-only canonical strategy-signal feed."""
     try:
         limit = min(max(int(request.GET.get("limit", 50)), 1), 100)
     except (TypeError, ValueError):
@@ -24,18 +19,20 @@ def strategy_signals(request):
     cache_key = f"{SIGNALS_CACHE_KEY}:{limit}"
     payload = cache.get(cache_key)
     if payload is None:
-        rows = list(
-            Signal.objects.order_by("-created_at")[:limit].values(
-                "id",
-                "symbol",
-                "direction",
-                "confidence",
-                "market_regime",
-                "strategy",
-                "was_executed",
-                "created_at",
-            )
-        )
+        signals = StrategySignal.objects.select_related("strategy", "configuration").order_by("-timestamp")[:limit]
+        rows = [
+            {
+                "id": signal.id,
+                "symbol": signal.symbol,
+                "direction": signal.signal,
+                "confidence": signal.confidence,
+                "market_regime": "",
+                "strategy": signal.strategy.name,
+                "was_executed": False,
+                "created_at": signal.timestamp,
+            }
+            for signal in signals
+        ]
         payload = {
             "status": "success",
             "count": len(rows),
