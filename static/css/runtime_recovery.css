@@ -1,13 +1,13 @@
-/* Final shell invariants. Loaded last so legacy/page CSS cannot disable the document viewport. */
+/* Final shell invariants. Loaded last so page CSS cannot disable the document viewport. */
 html { min-height:100%; overflow-x:hidden; overflow-y:auto !important; -webkit-overflow-scrolling:touch; touch-action:pan-y; }
 body { min-height:100vh; margin:0; overflow-x:hidden; overflow-y:auto !important; -webkit-overflow-scrolling:touch; touch-action:pan-y; position:relative; }
 .app-shell { min-height:100vh; position:relative; z-index:1; pointer-events:auto; }
 .app-shell main { min-width:0; min-height:calc(100vh - 64px); overflow:visible !important; position:relative; z-index:1; pointer-events:auto; }
 .app-shell main a,.app-shell main button,.app-shell main input,.app-shell main select,.app-shell main textarea { pointer-events:auto; touch-action:manipulation; }
 /*
- * The shell has a fixed header and account area.  Scrolling the whole aside
+ * The shell has a fixed header and account area. Scrolling the whole aside
  * moves neither reliably on iOS nor in Chromium when one of the page styles
- * establishes a nested scroll container.  Keep the shell itself clipped and
+ * establishes a nested scroll container. Keep the shell itself clipped and
  * make the navigation list the one, explicit scroll container instead.
  */
 .app-sidebar {
