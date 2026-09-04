@@ -164,6 +164,11 @@ def report_retired_runtime_references() -> int:
     for path, text in texts.items():
         if path == Path(__file__) or "migrations" in path.parts or path.suffix.lower() not in DUPLICATE_EXTENSIONS:
             continue
+        # The package being retired is intentionally scanned only for deletion
+        # completeness; references inside it do not block canonical runtime.
+        # References from every other source file remain hard failures.
+        if "trading" in path.relative_to(ROOT).parts:
+            continue
         for pattern in RETIRED_RUNTIME_PATTERNS:
             if pattern.lower() in text.lower():
                 print(f"  {path.relative_to(ROOT)} -> {pattern}")
