@@ -89,10 +89,6 @@ class ExecutionEngine:
     async def execute(self, order):
         if order.status in {c.ORDER_STATUS_ACCEPTED, c.ORDER_STATUS_EXECUTED}: return order
         if order.status in {c.ORDER_STATUS_CANCELLED, c.ORDER_STATUS_FAILED}: raise PermissionError(f'Cannot execute order in {order.status} state')
-
-        # Every ORM operation in this async boundary must run off the event
-        # loop. In particular, model.save() is a synchronous Django ORM call
-        # and raises SynchronousOnlyOperation when invoked directly here.
         account = await asyncio.to_thread(BrokerAccount.objects.select_related('broker').get, pk=order.broker_account_id, user_id=order.user_id)
         await self._assert_authoritative_account_async(order.user, account)
         validation = getattr(order, 'validation_context', {}) or {}; consensus = validation.get('ai_consensus') or {}
@@ -101,17 +97,13 @@ class ExecutionEngine:
             if decision not in {'buy','sell'} or decision != str(order.direction).lower() or confidence < 65.0 or int(consensus.get('models_used', 0) or 0) < 1: raise PermissionError('Strategy ensemble consensus validation failed at execution boundary')
         from apps.risk.engine import RiskEngine
         RiskEngine().approve_or_raise(order, validation.get('risk_context') or validation)
-        start=time.perf_counter()
-
-        order.status=c.ORDER_STATUS_SENT
+        start=time.perf_counter(); order.status=c.ORDER_STATUS_SENT
         await asyncio.to_thread(order.save, update_fields=['status','updated_at'])
-
         adapter=BrokerRegistry().adapter(account.broker, account)
         broker_order=SimpleNamespace(symbol=order.symbol,stake=order.stake,quantity=order.stake,direction=order.direction,order_type=order.order_type,price=order.price,contract_type=getattr(order,'contract_type',None),routing_context=validation)
-        response=await adapter.place_order(broker_order)
-        order.broker_response=response or {}; order.broker_reference=str((response or {}).get('broker_order_id') or (response or {}).get('contract_id') or (response or {}).get('order_id','')); order.status=c.ORDER_STATUS_EXECUTED
+        response=await adapter.place_order(broker_order); order.broker_response=response or {}; order.broker_reference=str((response or {}).get('broker_order_id') or (response or {}).get('contract_id') or (response or {}).get('order_id','')); order.status=c.ORDER_STATUS_EXECUTED
         await asyncio.to_thread(order.save, update_fields=['broker_response','broker_reference','status','updated_at'])
-        ExecutionLogRepository().log(order,'OrderExecuted','success','Broker accepted order',(time.perf_counter()-start)*1000,response); return order
+        await ExecutionLogRepository().alog(order,'OrderExecuted','success','Broker accepted order',(time.perf_counter()-start)*1000,response); return order
 
     def retry(self, order): return ExecutionQueueService().enqueue(order, queue_type='retry')
     def close_position(self, position, exit_price): return PositionService().close_position(position, exit_price)
