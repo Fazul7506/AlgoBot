@@ -52,29 +52,13 @@ class CopyTradingEngine:
         )
         return follower
 
-    def stop(self, subject):
-        """Stop either a CopyFollower or a legacy StrategySubscription.
-
-        The codebase currently exposes both the Phase-17 follower model and the
-        older strategy-subscription model. Keep the lifecycle operation
-        backwards-compatible while making the authoritative state explicit.
-        """
-        from .models import CopyFollower, StrategySubscription
-
-        if isinstance(subject, StrategySubscription):
-            subject.status = "paused"
-            subject.save(update_fields=["status"])
-            return subject
-
-        if isinstance(subject, CopyFollower):
-            subject.status = "stopped"
-            subject.save(update_fields=["status"])
-            CopySubscription.objects.filter(follower=subject).update(status="cancelled")
-            return subject
-
-        raise TypeError(
-            "CopyTradingEngine.stop() expects CopyFollower or StrategySubscription"
-        )
+    def stop(self, follower):
+        if not isinstance(follower, CopyFollower):
+            raise TypeError("CopyTradingEngine.stop() expects CopyFollower")
+        follower.status = "stopped"
+        follower.save(update_fields=["status"])
+        CopySubscription.objects.filter(follower=follower).update(status="cancelled")
+        return follower
 
     def simulate_signal(self, follower, dry_run=True):
         provider = follower.provider
@@ -146,5 +130,3 @@ class RiskScalingService:
 class AnalyticsService:
     def roi(self, profit, capital):
         return Decimal("0") if not capital else Decimal(str(profit)) / Decimal(str(capital))
-
-
