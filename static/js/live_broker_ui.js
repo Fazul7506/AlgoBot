@@ -9,8 +9,6 @@
   let accounts = [], terminalSyncBusy = false;
 
   function ensureMaterialSymbols() {
-    // The base template owns the single, preconnected Material Symbols
-    // stylesheet.  Do not inject a competing font URL after page load.
     document.documentElement.classList.add('material-symbols-ready');
   }
 
@@ -79,7 +77,7 @@
     styles();
     const side = $('.sidebar-user');
     if (!side) return;
-    side.querySelectorAll('[data-top-account],.algobot-top-account,.sidebar-account-duplicate,[data-duplicate-account],[data-legacy-account-card],.legacy-broker-account,.broker-account-duplicate').forEach(n => n.remove());
+    side.querySelectorAll('[data-top-account],.algobot-top-account,.sidebar-account-duplicate,[data-duplicate-account],.broker-account-duplicate').forEach(n => n.remove());
     let accountNode = $('[data-sidebar-account]', side);
     if (!accountNode) {
       accountNode = document.createElement('div');
@@ -88,7 +86,6 @@
       side.insertBefore(accountNode, side.firstChild);
     }
     side.querySelectorAll('[data-sidebar-account]').forEach((n, i) => { if (i > 0) n.remove(); });
-    // Keep the single account card and logout as siblings; never nest logout inside the card.
     placeLogout();
   }
 
@@ -136,8 +133,6 @@
   }
 
   async function syncAccounts() {
-    // broker_state_bridge is the only account API client.  Reading its
-    // published snapshot keeps the shell, dashboard, and terminal in lockstep.
     const canonical = window.AlgoBotBrokerAccounts;
     const selected = window.AlgoBotBrokerState?.get?.().account;
     accounts = (Array.isArray(canonical) ? canonical : (selected ? [selected] : accounts))
