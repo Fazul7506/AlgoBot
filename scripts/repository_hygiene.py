@@ -1,34 +1,25 @@
 """Repository hygiene audit for canonical source ownership.
 
-The audit is intentionally conservative: it reports exact duplicate assets and
-likely unreferenced source files, but does not delete framework-discovered
-Django entrypoints or migrations automatically.
+The audit is conservative: exact duplicate source/assets are hard failures,
+while likely-unreferenced files are reported for deliberate review. Django
+framework entrypoints and migrations are never treated as ordinary dead files.
 """
 
 from __future__ import annotations
 
 import hashlib
-import os
-import subprocess
 from collections import defaultdict
 from pathlib import Path
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-TRACKED = subprocess.check_output(
-    ["git", "ls-files"], cwd=ROOT, text=True
-).splitlines()
-
-SKIP_PARTS = {".git", "__pycache__", "node_modules", ".venv", "venv"}
+TRACKED = [Path(p) for p in subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()]
+SKIP_PARTS = {".git", "__pycache__", "node_modules", ".venv", "venv", "staticfiles"}
 DUPLICATE_EXTENSIONS = {".css", ".html", ".js", ".py"}
 
 
 def files_for(ext: str) -> list[Path]:
-    return [
-        ROOT / p
-        for p in TRACKED
-        if Path(p).suffix.lower() == ext
-        and not any(part in SKIP_PARTS for part in Path(p).parts)
-    ]
+    return [ROOT / p for p in TRACKED if p.suffix.lower() == ext and not any(part in SKIP_PARTS for part in p.parts)]
 
 
 def digest(path: Path) -> str:
@@ -42,26 +33,17 @@ def duplicate_groups(paths: list[Path]) -> list[list[Path]]:
     return [group for group in by_hash.values() if len(group) > 1]
 
 
-def git_references(token: str, excluding: Path) -> bool:
-    result = subprocess.run(
-        ["git", "grep", "-F", "--", token],
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    if result.returncode not in (0, 1):
-        return False
-    # A token can occur only in its own filename/path and still be reported by
-    # git grep; callers separately guard against that false positive.
-    result = subprocess.run(
-        ["git", "grep", "-l", "-F", "--", token],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    return any(Path(line.strip()) != excluding for line in result.stdout.splitlines())
+def load_text_files() -> dict[Path, str]:
+    loaded: dict[Path, str] = {}
+    for path in TRACKED:
+        if any(part in SKIP_PARTS for part in path.parts):
+            continue
+        full = ROOT / path
+        try:
+            loaded[path] = full.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+    return loaded
 
 
 def report_duplicates() -> int:
@@ -80,32 +62,28 @@ def report_duplicates() -> int:
 
 
 def report_unreferenced() -> None:
+    texts = load_text_files()
     print("LIKELY UNREFERENCED CANDIDATES (review before deletion):")
+
     for ext in (".css", ".html", ".js"):
         for path in files_for(ext):
             rel = path.relative_to(ROOT).as_posix()
-            basename = path.name
-            if basename in {"base.html"}:
+            if path.name == "base.html":
                 continue
-            if not git_references(basename, path):
+            if not any(token in text for other, text in texts.items() if other != path for token in (path.name, rel)):
                 print(f"  {rel}")
 
     framework_entrypoints = {
-        "manage.py", "wsgi.py", "asgi.py", "apps.py", "admin.py",
-        "models.py", "migrations.py", "urls.py", "consumers.py",
-        "routing.py", "serializers.py",
+        "manage.py", "wsgi.py", "asgi.py", "apps.py", "admin.py", "models.py",
+        "migrations.py", "urls.py", "consumers.py", "routing.py", "serializers.py",
     }
     for path in files_for(".py"):
         rel = path.relative_to(ROOT).as_posix()
-        if path.name in framework_entrypoints or path.name == "__init__.py":
-            continue
-        if "migrations" in path.parts:
+        if path.name in framework_entrypoints or path.name == "__init__.py" or "migrations" in path.parts:
             continue
         module = rel[:-3].replace("/", ".")
-        if module.endswith(".__init__"):
-            continue
-        tokens = {rel, module, path.name}
-        if not any(git_references(token, path) for token in tokens):
+        tokens = (rel, module, path.name)
+        if not any(token in text for other, text in texts.items() if other != path for token in tokens):
             print(f"  {rel}")
 
 
