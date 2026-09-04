@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase, override_settings
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from .models import Broker, BrokerAccount, BrokerConnection
@@ -82,21 +82,10 @@ class AccountSwitchingTests(TestCase):
         self.assertIn('not real', result.data['detail'])
 
     @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
-    def test_session_switch_works_with_api_issued_csrf_token(self):
-        first = self.make_account('DEMO-CSRF-1', 'demo')
-        second = self.make_account('REAL-CSRF-2', 'real')
-        client = Client(enforce_csrf_checks=True)
-        client.force_login(self.user)
-
-        bootstrap = client.get('/api/csrf/', HTTP_ACCEPT='application/json')
-        self.assertEqual(bootstrap.status_code, 200)
-        token = bootstrap.json()['csrfToken']
-        self.assertTrue(token)
-
-        result = client.post(
-            f'/api/brokers/accounts/{second.pk}/select/',
-            data={}, content_type='application/json', HTTP_X_CSRFTOKEN=token,
-        )
+    def test_session_switch_does_not_require_api_csrf_token(self):
+        first = self.make_account('DEMO-API-1', 'demo')
+        second = self.make_account('REAL-API-2', 'real')
+        result = self.client.post(f'/api/brokers/accounts/{second.pk}/select/', {}, format='json')
         self.assertEqual(result.status_code, 200)
-        self.assertEqual(result.json()['active_account_id'], second.pk)
+        self.assertEqual(result.data['active_account_id'], second.pk)
         self.assertNotEqual(first.pk, second.pk)

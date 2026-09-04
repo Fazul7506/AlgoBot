@@ -9,6 +9,7 @@ from apps.trading.models import Position
 from apps.contracts.models import Contract
 from .serializers import OrderSerializer, PositionSerializer, ContractSerializer, ExecutionLogSerializer, ReconciliationEventSerializer
 from .engine import ExecutionEngine
+from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
 from core.billing_entitlements import check, check_live_order, effective_plan
 
 log = logging.getLogger(__name__)
@@ -21,10 +22,10 @@ class OrderViewSet(viewsets.ModelViewSet):
     def _environment(account): return str((account.credentials or {}).get('account_type') or '').lower().strip() if account else ''
     @staticmethod
     def _safe_client_context(data):
-        context = data.get('validation_context') or {}
-        return {'broker_source': context.get('broker_source') or 'connected_broker', 'contract_type': context.get('contract_type'), 'underlying_symbol': context.get('underlying_symbol') or data.get('symbol'), 'selected_strategy': context.get('selected_strategy') or data.get('strategy') or None, 'trigger': 'manual_terminal_command', 'execution_mode': 'manual_command'}
+        context = data.get('routing_context') or data.get('validation_context') or {}
+        return {'broker_source': context.get('broker_source') or 'connected_broker', 'contract_type': context.get('contract_type') or data.get('contract_type'), 'underlying_symbol': context.get('underlying_symbol') or data.get('symbol'), 'selected_strategy': context.get('selected_strategy') or data.get('strategy') or None, 'trigger': 'manual_terminal_command', 'execution_mode': 'manual_command', 'signal_id': context.get('signal_id')}
     def create(self, request, *args, **kwargs):
-        client_request_id = str(request.data.get('client_request_id') or '').strip()
+        client_request_id = str(request.data.get('client_request_id') or request.data.get('client_order_id') or '').strip()
         if client_request_id:
             existing = Order.objects.filter(user=request.user, client_request_id=client_request_id).first()
             if existing: return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
@@ -39,11 +40,20 @@ class OrderViewSet(viewsets.ModelViewSet):
             if not allowed: return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)): return response.Response({'status':'rejected','code':'LIVE_TRADING_DISABLED','detail':'Live-money trading is disabled by platform configuration.'}, status=status.HTTP_409_CONFLICT)
         try:
-            order = ExecutionEngine().place_order(request.user, **data)
+            order = ExecutionEngine().place_manual_order(request.user, **data)
         except PermissionError as exc: return response.Response({'status':'rejected','code':'ORDER_GATE_REJECTED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
+        except BrokerAuthenticationError as exc:
+            log.warning('Terminal broker authentication failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
+            return response.Response({'status':'unknown','code':'BROKER_AUTHENTICATION_FAILED','detail':str(exc),'retryable':False,'reconcile_required':True}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except BrokerConnectionError as exc:
+            log.warning('Terminal broker connection failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
+            return response.Response({'status':'unknown','code':'BROKER_EXECUTION_STATE_UNKNOWN','detail':str(exc),'retryable':False,'reconcile_required':True}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except BrokerOrderError as exc:
+            log.info('Terminal order rejected by broker', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
+            return response.Response({'status':'rejected','code':'BROKER_ORDER_REJECTED','detail':str(exc),'retryable':False}, status=status.HTTP_409_CONFLICT)
         except Exception as exc:
             log.exception('Terminal order execution failed', extra={'user_id':request.user.id,'account_id':getattr(account,'id',None)})
-            return response.Response({'status':'rejected','code':'EXECUTION_UNAVAILABLE','detail':f'Broker execution could not be completed: {exc}','retryable':False}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return response.Response({'status':'unknown','code':'EXECUTION_UNAVAILABLE','detail':'Broker execution could not be confirmed. Reconcile the order before retrying.','retryable':False,'reconcile_required':True}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return response.Response(self.get_serializer(order).data, status=status.HTTP_201_CREATED)
     @decorators.action(detail=False, methods=['post'])
     def preview(self, request):

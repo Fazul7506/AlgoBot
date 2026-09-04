@@ -14,6 +14,7 @@ from apps.execution.signal_validation import SignalValidationService
 from apps.execution.tasks import process_execution_queue
 from .serializers import OrderSerializer
 from .views import OrderViewSet
+from .engine import ExecutionEngine
 
 
 class OrderSerializerRegressionTests(APITestCase):
@@ -34,6 +35,29 @@ class OrderSerializerRegressionTests(APITestCase):
         self.assertEqual(result.status_code, 503)
         self.assertEqual(result.data['code'], 'PREVIEW_INTERNAL_ERROR')
         self.assertEqual(result.data['status'], 'rejected')
+
+    def test_manual_terminal_order_executes_immediately_without_queue(self):
+        user = SimpleNamespace(id=1)
+        account = SimpleNamespace(id=7, user_id=1, is_connection_eligible=True)
+        order = SimpleNamespace(status='validated', user=user, broker_account_id=7)
+        engine = ExecutionEngine()
+        with patch.object(engine, '_assert_authoritative_account', return_value=account), \
+             patch('apps.execution.engine.OrderService.create_order', return_value=order), \
+             patch('apps.execution.engine.OrderValidationService.validate'), \
+             patch('apps.risk.engine.RiskEngine.approve_or_raise'), \
+             patch.object(engine, 'execute', new=AsyncMock(return_value=order)) as execute, \
+             patch('apps.execution.engine.ExecutionQueueService.enqueue') as enqueue:
+            result = engine.place_manual_order(
+                user,
+                broker_account=account,
+                symbol='R_100',
+                direction='buy',
+                order_type='market',
+                stake='1',
+            )
+        self.assertIs(result, order)
+        execute.assert_awaited_once_with(order)
+        enqueue.assert_not_called()
 
 
 class ExecutionQueueTaskTests(TestCase):

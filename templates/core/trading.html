@@ -3,7 +3,7 @@
 {% block title %}Trading Terminal | AlgoBot{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/04-trading-shell.css' %}">{% endblock %}
 {% block content %}
-<section id="terminal-page" class="terminal-page algobot-shared-page" data-page="trading-terminal" data-api-root="/api/">
+<section id="terminal-page" class="terminal-page algobot-shared-page" data-page="trading-terminal" data-api-root="/api/" data-manual-execution="direct">
   <header class="terminal-header"><div><p class="eyebrow">LIVE EXECUTION</p><h1>Trading Terminal</h1><div class="selected-strategy-banner" data-selected-strategy><span>Strategy</span><strong>Manual trading</strong></div></div><div class="terminal-status"><span class="status-pulse"></span><strong id="terminal-status">Broker account</strong><small data-terminal-account>No connected account</small></div></header>
   <section class="terminal-toolbar panel"><div class="field toolbar-symbol"><label for="symbol">Broker instrument</label><select id="symbol" data-symbol><option value="">Loading broker instruments…</option></select></div><div class="quote-box"><span>Bid</span><strong data-q="bid">Waiting for broker quote…</strong></div><div class="quote-box"><span>Ask / Last</span><strong data-q="ask">Waiting for broker quote…</strong></div><div class="quote-box"><span>AI</span><strong data-recommended>Not analysed</strong></div><button class="btn ghost toolbar-refresh" data-action="terminal-refresh" type="button">Refresh market</button></section>
   <div class="terminal-workspace">
@@ -17,7 +17,7 @@
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js" defer></script>
 <script src="{% static 'js/core/frontend_runtime_bootstrap.js' %}?v=20260903-csrf-free" defer></script>
 <script src="{% static 'js/broker_native_market.js' %}?v=20260904-manual-safe1" defer></script>
-<script src="{% static 'js/trading_terminal.js' %}?v=20260904-execution-contract1" defer></script>
+<script src="{% static 'js/trading_terminal.js' %}?v=20260904-execution-direct2" defer></script>
 <script src="{% static 'js/trading_terminal_ai.js' %}?v=20260904-manual-ai1" defer></script>
 <script src="{% static 'js/terminal_market_status.js' %}?v=20260829-v3" defer></script>
 <script src="{% static 'js/deriv_pro_chart.js' %}?v=20260829-prochart3" defer></script>

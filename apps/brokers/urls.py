@@ -1,7 +1,6 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 from .views import BrokerViewSet, BrokerAccountViewSet, BrokerConnectionViewSet, BrokerOrderViewSet, ExecutionReportViewSet, PositionViewSet, TradeReconciliationViewSet, BrokerHealthViewSet, connect_broker, disconnect_broker
-from core.views_csrf import csrf_token_view
 
 router = DefaultRouter()
 router.register('brokers', BrokerViewSet, basename='brokers')
@@ -14,7 +13,6 @@ router.register('reconciliation', TradeReconciliationViewSet, basename='reconcil
 router.register('broker-health', BrokerHealthViewSet, basename='broker-health')
 
 urlpatterns = [
-    path('csrf/', csrf_token_view, name='csrf-token'),
     path('brokers/connect/', connect_broker, name='broker-connect'),
     path('brokers/disconnect/', disconnect_broker, name='broker-disconnect'),
     path('brokers/accounts/', BrokerAccountViewSet.as_view({'get': 'list'}), name='broker-accounts-list'),
