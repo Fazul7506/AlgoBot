@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     "apps.optimization", "apps.organizations", "apps.paper_trading", "apps.portfolio", "apps.providers",
     "apps.rbac", "apps.referrals", "apps.reports", "apps.risk", "apps.signals", "apps.simulation",
     "apps.smart_money", "apps.strategies", "apps.subscriptions", "apps.support", "apps.tenants",
-    "apps.trading", "apps.training", "apps.usage", "apps.workspace", "trading.apps.TradingConfig",
+    "apps.trading", "apps.training", "apps.usage", "apps.workspace",
 ]
 
 MIDDLEWARE = [
@@ -73,8 +73,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1), "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True, "BLACKLIST_AFTER_ROTATION": True, "ALGORITHM": "HS256", "SIGNING_KEY": SECRET_KEY,
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1), "REFRESH_TOKEN_LIFETIME": timedelta(days=7), "ROTATE_REFRESH_TOKENS": True, "BLACKLIST_AFTER_ROTATION": True, "ALGORITHM": "HS256", "SIGNING_KEY": SECRET_KEY,
 }
 
 CORS_ALLOWED_ORIGINS = get_list_env(
