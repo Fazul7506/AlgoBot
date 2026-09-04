@@ -115,6 +115,6 @@ jobs:
       - name: Verify required production entrypoints
         run: |
           test -f manage.py
+          test -f Procfile
           test -f templates/base.html
-          test -f templates/broker/connect_broker.html
           test -f static/js/icon_runtime_guard.js

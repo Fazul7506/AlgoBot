@@ -9,9 +9,9 @@ from .models import MarketSymbol, Tick, Candle, MarketSnapshot, MarketStatistics
 from .serializers import MarketSymbolSerializer, TickSerializer, CandleSerializer, MarketSnapshotSerializer, MarketStatisticsSerializer
 from .deriv_sync import fetch_tick, sync_active_symbols
 from .services import MarketDataService
-from apps.brokers.models import BrokerAccount
 from apps.brokers.services import BrokerRegistry
 from apps.brokers.exceptions import BrokerConnectionError, BrokerAuthenticationError, BrokerOrderError
+from core.account_context import get_active_account
 
 
 def _limit(request, default=500, maximum=1000):
@@ -21,8 +21,8 @@ def _limit(request, default=500, maximum=1000):
     except (TypeError, ValueError): return default
 
 
-def _connected_account(user):
-    return BrokerAccount.objects.filter(user=user, status="active", broker__status="active").select_related("broker").order_by("-is_preferred", "-id").first()
+def _connected_account(user, request=None):
+    return get_active_account(user, request=request)
 
 
 def _last_known_tick(symbol):
@@ -103,7 +103,7 @@ def snapshot(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def sync_symbols(request):
-    account = _connected_account(request.user)
+    account = _connected_account(request.user, request=request)
     if not account: return Response({"status":"error","code":"NO_CONNECTED_BROKER","detail":"Connect a broker before synchronizing its market universe."}, status=status.HTTP_409_CONFLICT)
     if account.broker.broker_type != "deriv": return Response({"status":"error","code":"BROKER_MARKET_SYNC_UNSUPPORTED","detail":f"Market synchronization is not implemented for {account.broker.name} yet."}, status=status.HTTP_409_CONFLICT)
     try:
@@ -118,7 +118,7 @@ def sync_symbols(request):
 def broker_tick(request):
     symbol = str((request.data.get("symbol") if request.method == "POST" else request.query_params.get("symbol")) or "").strip()
     if not symbol: return Response({"detail":"symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
-    account = _connected_account(request.user)
+    account = _connected_account(request.user, request=request)
     if not account: return Response({"detail":"Connect a broker before requesting live broker quotes."}, status=status.HTTP_409_CONFLICT)
     if not MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists(): return Response({"detail":"The requested symbol is not in the current broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
@@ -136,7 +136,7 @@ def broker_tick(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def broker_chart_capabilities(request):
-    account = _connected_account(request.user)
+    account = _connected_account(request.user, request=request)
     if not account: return Response({"detail":"Connect a broker before loading chart capabilities."}, status=status.HTTP_409_CONFLICT)
     try:
         adapter = BrokerRegistry().adapter(account.broker, account)
@@ -161,7 +161,7 @@ def broker_chart_history(request):
     granularity = request.query_params.get("granularity")
     if not symbol: return Response({"detail":"symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
     if mode not in {"ticks", "candles"}: return Response({"detail":"mode must be ticks or candles"}, status=status.HTTP_400_BAD_REQUEST)
-    account = _connected_account(request.user)
+    account = _connected_account(request.user, request=request)
     if not account: return Response({"detail":"Connect a broker before loading live chart history."}, status=status.HTTP_409_CONFLICT)
     market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True, is_tradable=True).first()
     if not market_symbol: return Response({"detail":"The requested symbol is not in the active broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)

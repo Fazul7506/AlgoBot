@@ -25,13 +25,12 @@ class TradingFoundationTests(TestCase):
             metadata={'auth': 'none'},
         )
 
-    def make_account(self, account_id, preferred=False, account_type='demo', broker=None, latency=50):
+    def make_account(self, account_id, account_type='demo', broker=None, latency=50):
         broker = broker or self.paper
         account = BrokerAccount.objects.create(
             user=self.user,
             broker=broker,
             account_id=account_id,
-            is_preferred=preferred,
             credentials={'account_type': account_type},
         )
         BrokerConnection.objects.create(
@@ -45,17 +44,18 @@ class TradingFoundationTests(TestCase):
         return account
 
     def test_global_selector_chooses_best_connected_account_without_preferred_semantics(self):
-        first = self.make_account('ACCOUNT-1', preferred=False, latency=80)
-        second = self.make_account('ACCOUNT-2', preferred=False, latency=20)
+        first = self.make_account('ACCOUNT-1', latency=80)
+        second = self.make_account('ACCOUNT-2', latency=20)
 
         selected = SmartOrderRouter().route(self.user)
 
         self.assertEqual(selected.pk, second.pk)
-        self.assertFalse(first.is_preferred)
-        self.assertFalse(second.is_preferred)
+        self.assertNotIn('is_preferred', [field.name for field in BrokerAccount._meta.fields])
+        self.assertNotIn('is_preferred', first.__dict__)
+        self.assertNotIn('is_preferred', second.__dict__)
 
     def test_environment_mismatch_is_rejected_before_order_creation(self):
-        account = self.make_account('DEMO-1', preferred=True, account_type='demo')
+        account = self.make_account('DEMO-1', account_type='demo')
 
         with self.assertRaisesMessage(BrokerRoutingError, 'Execution environment mismatch'):
             OrderManagementSystem().create(
@@ -77,7 +77,7 @@ class TradingFoundationTests(TestCase):
             supports_live=True,
             metadata={'auth': 'oauth'},
         )
-        account = self.make_account('REAL-1', preferred=True, account_type='real', broker=live_broker)
+        account = self.make_account('REAL-1', account_type='real', broker=live_broker)
         account.set_access_token('ci-live-test-token')
         account.save(update_fields=['access_token'])
 

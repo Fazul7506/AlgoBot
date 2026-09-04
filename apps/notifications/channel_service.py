@@ -141,9 +141,8 @@ def _account_report(user):
         connection = next((item for item in account.connections.all() if item.status == "connected"), None)
         broker_name = account.broker.name or account.broker.broker_type.title()
         state = "CONNECTED" if connection else "NOT CONNECTED"
-        preferred = " • preferred" if account.is_preferred else ""
         lines.extend([
-            f"{index}. {broker_name} — {account.account_id}{preferred}",
+            f"{index}. {broker_name} — {account.account_id}",
             f"   Status: {state} / {account.status}",
             f"   Balance: {_format_money(account.balance, account.currency)}",
             f"   Equity: {_format_money(account.equity, account.currency)}",

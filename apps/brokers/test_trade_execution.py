@@ -21,7 +21,6 @@ class CanonicalTradeExecutionTests(TransactionTestCase):
             broker=self.broker,
             account_id="VRTC123",
             status="active",
-            is_preferred=True,
             credentials={"account_type": "demo"},
             balance=Decimal("100"),
             equity=Decimal("100"),

@@ -21,8 +21,7 @@ class AccountSwitchingTests(TestCase):
     def make_account(self, account_id, account_type='demo', connected=True, status='active'):
         account = BrokerAccount.objects.create(
             user=self.user, broker=self.broker, account_id=account_id,
-            is_preferred=False, status=status,
-            credentials={'account_type': account_type},
+            status=status, credentials={'account_type': account_type},
         )
         if connected:
             BrokerConnection.objects.create(
@@ -32,23 +31,18 @@ class AccountSwitchingTests(TestCase):
         return account
 
     @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
-    def test_switch_changes_session_active_account_without_preferred_account(self):
+    def test_switch_changes_session_active_account(self):
         first = self.make_account('DEMO-1', 'demo')
         second = self.make_account('REAL-2', 'real')
         result = self.client.post(f'/api/brokers/accounts/{second.pk}/select/', {}, format='json')
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.data['active_account_id'], second.pk)
-        first.refresh_from_db(); second.refresh_from_db()
-        self.assertFalse(first.is_preferred); self.assertFalse(second.is_preferred)
-        self.assertEqual(BrokerAccount.objects.filter(user=self.user, is_preferred=True).count(), 0)
         result = self.client.get('/api/brokers/accounts/active/')
         self.assertEqual(result.data['active_account_id'], second.pk)
         result = self.client.post(f'/api/brokers/accounts/{first.pk}/select/', {}, format='json')
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.data['active_account_id'], first.pk)
         self.assertEqual(self.client.get('/api/brokers/accounts/active/').data['active_account_id'], first.pk)
-        first.refresh_from_db(); second.refresh_from_db()
-        self.assertFalse(first.is_preferred); self.assertFalse(second.is_preferred)
 
     @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
     def test_demo_and_real_accounts_are_equally_selectable(self):

@@ -32,10 +32,9 @@ class BrokerAccountAdmin(admin.ModelAdmin):
         "balance",
         "status",
         "token_status",
-        "is_preferred",
         "last_synced_at",
     ]
-    list_filter = ["broker", "status", "token_status", "is_preferred", "currency"]
+    list_filter = ["broker", "status", "token_status", "currency"]
     search_fields = ["account_id", "user__username", "user__email", "broker__name"]
     readonly_fields = ["created_at", "last_synced_at", "last_refresh"]
     list_per_page = 50
