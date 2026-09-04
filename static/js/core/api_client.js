@@ -55,6 +55,35 @@
     return Boolean(bootstrappedCsrfToken || csrfToken());
   }
 
+  function normalizeOrderPayload(body) {
+    if (typeof body !== 'string') return body;
+    try {
+      const payload = JSON.parse(body);
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return body;
+
+      // The broker API model calls the foreign key `account`. Older terminal
+      // code used `broker_account`, which DRF correctly rejected with HTTP 400.
+      if (payload.account == null && payload.broker_account != null) payload.account = payload.broker_account;
+      delete payload.broker_account;
+
+      // ExecutionEngine consumes routing_context. Never send the frontend-only
+      // validation_context key to OrderSerializer (it is not a model field).
+      const routing = payload.routing_context && typeof payload.routing_context === 'object' ? {...payload.routing_context} : {};
+      const validation = payload.validation_context && typeof payload.validation_context === 'object' ? payload.validation_context : {};
+      Object.assign(routing, validation);
+      Object.assign(routing, window.__algobotAiOrderContext || {});
+      if (payload.account != null && routing.authoritative_account_id == null) routing.authoritative_account_id = payload.account;
+      if (payload.symbol && routing.underlying_symbol == null) routing.underlying_symbol = payload.symbol;
+      if (payload.contract_type && routing.contract_type == null) routing.contract_type = payload.contract_type;
+      if (payload.contract_type == null && routing.contract_type) payload.contract_type = routing.contract_type;
+      payload.routing_context = routing;
+      delete payload.validation_context;
+      return JSON.stringify(payload);
+    } catch (_) {
+      return body;
+    }
+  }
+
   async function guardedFetch(input, init = {}, retryCsrf = true) {
     const options = init;
     const raw = typeof input === 'string' ? input : input?.url || '';
@@ -76,8 +105,8 @@
 
     const credentials = isProtected ? 'include' : (options.credentials || 'include');
     let requestInit = { ...options, method, headers, credentials };
-    if ((url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') && typeof requestInit.body === 'string') {
-      try { const payload = JSON.parse(requestInit.body); payload.validation_context = { ...(payload.validation_context || {}), ...(window.__algobotAiOrderContext || {}) }; requestInit.body = JSON.stringify(payload); } catch (_) {}
+    if (url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') {
+      requestInit.body = normalizeOrderPayload(requestInit.body);
     }
 
     const controller = new AbortController();
@@ -100,6 +129,13 @@
       return response;
     } catch (error) {
       if (controller.signal.aborted && !callerSignal?.aborted) { const timeout = new APIError(`API request timed out after ${timeoutMs}ms`, { code: 'API_TIMEOUT', url: url.toString(), method }); emitError(timeout); throw timeout; }
+      if (callerSignal?.aborted) {
+        const reason = callerSignal.reason;
+        const message = reason?.message || 'Request was cancelled.';
+        const cancelled = new APIError(message, { code: 'REQUEST_ABORTED', url: url.toString(), method });
+        cancelled.retryable = false;
+        throw cancelled;
+      }
       const network = new APIError(error?.message || 'Network request failed', { code: 'NETWORK_ERROR', url: url.toString(), method }); emitError(network); throw network;
     } finally { clearTimeout(timer); }
   }
