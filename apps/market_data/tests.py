@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.brokers.models import Broker, BrokerAccount
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from .models import Candle, MarketSymbol, Tick
 
 
@@ -15,7 +15,8 @@ class BrokerTickApiTests(TestCase):
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(username="market-test", password="test-pass")
         self.broker = Broker.objects.create(name="Deriv", broker_type="deriv", status="active", supports_live=True)
-        BrokerAccount.objects.create(user=self.user, broker=self.broker, account_id="VRTC123", status="active")
+        self.account = BrokerAccount.objects.create(user=self.user, broker=self.broker, account_id="VRTC123", status="active")
+        BrokerConnection.objects.create(broker=self.broker, broker_account=self.account, status="connected")
         MarketSymbol.objects.create(symbol="TEST", display_name="Test", market="Derived Indices", is_active=True, is_tradable=True)
         self.client.force_authenticate(self.user)
 
