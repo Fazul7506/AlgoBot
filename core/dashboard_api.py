@@ -1,6 +1,5 @@
 from datetime import timedelta
 
-from django.db.models import Avg, Sum
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -32,37 +31,25 @@ class DashboardViewSet(viewsets.ViewSet):
             .order_by("-is_preferred", "-last_synced_at", "-id")
             .first()
         )
-        orders = Order.objects.filter(user=request.user)
-        closed = orders.filter(status=Order.STATUS_EXECUTED) if hasattr(Order, "STATUS_EXECUTED") else orders.none()
-        wins = closed.filter(broker_response__profit__gt=0).count()
-        return Response(
-            {
-                "status": "success",
-                "data": {
-                    "account": {
-                        "account_id": account.account_id if account else None,
-                        "broker": account.broker.name if account else None,
-                        "currency": account.currency if account else None,
-                        "balance": account.balance if account else None,
-                        "equity": account.equity if account else None,
-                        "last_synced_at": account.last_synced_at if account else None,
-                        "email": request.user.email,
-                        "username": request.user.username,
-                        "registered_date": request.user.date_joined.isoformat(),
-                    },
-                    "trading_stats": {
-                        "total_trades": closed.count(),
-                        "open_trades": orders.filter(status="executed").count(),
-                        "wins": wins,
-                        "losses": max(0, closed.count() - wins),
-                        "win_rate": round((wins / closed.count() * 100) if closed.exists() else 0, 2),
-                        "total_pnl": 0,
-                        "avg_pnl_per_trade": 0,
-                    },
-                },
+        executed = Order.objects.filter(user=request.user, status="executed")
+        return Response({"status": "success", "data": {
+            "account": {
+                "account_id": account.account_id if account else None,
+                "broker": account.broker.name if account else None,
+                "currency": account.currency if account else None,
+                "balance": account.balance if account else None,
+                "equity": account.equity if account else None,
+                "last_synced_at": account.last_synced_at if account else None,
+                "email": request.user.email,
+                "username": request.user.username,
+                "registered_date": request.user.date_joined.isoformat(),
             },
-            status=status.HTTP_200_OK,
-        )
+            "trading_stats": {
+                "total_trades": executed.count(), "open_trades": executed.count(),
+                "wins": 0, "losses": 0, "win_rate": 0,
+                "total_pnl": 0, "avg_pnl_per_trade": 0,
+            },
+        }}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get"])
     def active_trades(self, request):
@@ -74,7 +61,10 @@ class DashboardViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["get"])
     def trade_history(self, request):
-        days = max(1, int(request.query_params.get("days", 30)))
+        try:
+            days = max(1, int(request.query_params.get("days", 30)))
+        except (TypeError, ValueError):
+            days = 30
         start = timezone.now() - timedelta(days=days)
         rows = Order.objects.filter(user=request.user, created_at__gte=start).order_by("-created_at")[: self._limit(request)]
         return Response({"status": "success", "total": len(rows), "count": len(rows), "data": [
@@ -86,15 +76,9 @@ class DashboardViewSet(viewsets.ViewSet):
     def performance_summary(self, request):
         orders = Order.objects.filter(user=request.user)
         return Response({"status": "success", "data": {
-            "total_trades": orders.count(),
-            "winning_trades": 0,
-            "losing_trades": 0,
-            "win_rate": 0,
-            "total_profit": 0,
-            "average_profit": 0,
-            "sharpe_ratio": 0,
-            "best_trade": 0,
-            "worst_trade": 0,
+            "total_trades": orders.count(), "winning_trades": 0, "losing_trades": 0,
+            "win_rate": 0, "total_profit": 0, "average_profit": 0, "sharpe_ratio": 0,
+            "best_trade": 0, "worst_trade": 0,
         }})
 
     @action(detail=False, methods=["get"])
@@ -105,16 +89,8 @@ class DashboardViewSet(viewsets.ViewSet):
             qs = qs.filter(symbol=symbol)
         rows = qs[: self._limit(request)]
         return Response({"status": "success", "count": len(rows), "data": [
-            {
-                "id": row.id,
-                "symbol": row.symbol,
-                "direction": row.signal,
-                "confidence": row.confidence,
-                "market_regime": "",
-                "strategy": row.strategy.name,
-                "was_executed": False,
-                "created_at": row.timestamp,
-            }
+            {"id": row.id, "symbol": row.symbol, "direction": row.signal, "confidence": row.confidence,
+             "market_regime": "", "strategy": row.strategy.name, "was_executed": False, "created_at": row.timestamp}
             for row in rows
         ]})
 
@@ -122,7 +98,8 @@ class DashboardViewSet(viewsets.ViewSet):
     def notifications(self, request):
         rows = Notification.objects.filter(user=request.user).order_by("-created_at")[: self._limit(request, 20)]
         return Response({"status": "success", "count": len(rows), "data": [
-            {"id": row.id, "alert_type": row.category, "message": row.message, "channels": [row.channel], "delivered_channels": [row.channel] if row.status == "sent" else [], "status": row.status, "created_at": row.created_at}
+            {"id": row.id, "alert_type": row.category, "message": row.message, "channels": [row.channel],
+             "delivered_channels": [row.channel] if row.status == "sent" else [], "status": row.status, "created_at": row.created_at}
             for row in rows
         ]})
 
@@ -130,9 +107,6 @@ class DashboardViewSet(viewsets.ViewSet):
     def performance_metrics(self, request):
         orders = Order.objects.filter(user=request.user)
         return Response({"status": "success", "data": {
-            "total_trades": orders.count(),
-            "net_profit": 0,
-            "win_rate": 0,
-            "max_drawdown": 0,
-            "sharpe_ratio": 0,
+            "total_trades": orders.count(), "net_profit": 0, "win_rate": 0,
+            "max_drawdown": 0, "sharpe_ratio": 0,
         }})
