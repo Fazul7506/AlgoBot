@@ -23,7 +23,6 @@ RETIRED_RUNTIME_PATTERNS = (
     "DERIV_LEGACY_APP_ID",
     "DERIV_ENABLE_LEGACY_APP_ROUTING",
     "legacy-broker-account",
-    "legacy generic controller",
     "old URLs available for existing clients",
     "mission-control",
     "alert_center",
