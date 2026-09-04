@@ -21,9 +21,6 @@ def _clean_route(route: str) -> str:
     if not route.startswith("/"):
         route = "/" + route
     route = re.sub(r"//+", "/", route)
-    # Django commonly names object URL parameters `pk`; expose the stable
-    # public API spelling `id` in the generated OpenAPI contract without
-    # changing the executable Django route or its view signature.
     route = re.sub(r"\{pk\}", "{id}", route)
     return route
 
@@ -116,7 +113,7 @@ def build_contract() -> dict:
     paths = {}
     for raw_route, pattern in _walk(get_resolver().url_patterns):
         route = _clean_route(raw_route)
-        if not route.startswith("/api/v1/") or route.endswith("/docs/") or route.endswith("/status/"):
+        if not route.startswith("/api/developer/") or route.endswith("/docs/") or route.endswith("/status/"):
             continue
         operation, methods = _operation(pattern)
         path_item = paths.setdefault(route, {})
@@ -129,7 +126,7 @@ def build_contract() -> dict:
             "version": "v1",
             "description": "Authoritative contract generated from registered, executable AlgoBot API routes.",
         },
-        "servers": [{"url": "/api/v1"}],
+        "servers": [{"url": "/api/developer"}],
         "security": [{"ApiKeyAuth": []}, {"BearerAuth": []}],
         "components": {
             "securitySchemes": {
