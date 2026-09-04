@@ -42,7 +42,7 @@ INSTALLED_APPS = [
     "apps.developer", "apps.developer_api", "apps.enterprise", "apps.execution", "apps.feature_flags",
     "apps.feature_store", "apps.followers", "apps.health", "apps.indicators", "apps.journal",
     "apps.leaderboards", "apps.licensing", "apps.logging_system", "apps.market_data", "apps.marketplace",
-    "apps.metrics", "apps.ml_models", "apps.monitoring", "apps.notifications", "apps.observability",
+    "apps.metrics", "apps.monitoring", "apps.notifications", "apps.observability",
     "apps.optimization", "apps.organizations", "apps.paper_trading", "apps.portfolio", "apps.providers",
     "apps.rbac", "apps.referrals", "apps.reports", "apps.risk", "apps.signals", "apps.simulation",
     "apps.smart_money", "apps.strategies", "apps.subscriptions", "apps.support", "apps.tenants",
