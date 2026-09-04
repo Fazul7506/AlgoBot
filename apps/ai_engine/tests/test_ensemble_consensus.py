@@ -1,6 +1,6 @@
 import unittest
 
-from trading.ai.ensemble import EnsemblePredictor
+from apps.ai_engine.ensemble_predictor import EnsemblePredictor
 
 
 class EnsembleConsensusTests(unittest.TestCase):
