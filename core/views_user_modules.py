@@ -2,14 +2,13 @@
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
 from django.shortcuts import render
 
-from apps.automation.models import ApprovalRequest, ScheduledTask, Workflow, WorkflowExecution
+from apps.automation.models import ScheduledTask, Workflow, WorkflowExecution
 from apps.brokers.models import BrokerAccount
 from apps.deployment.models import BackupRecord, ClusterStatus, DeploymentRecord
 from apps.developer.models import APIKey
-from apps.monitoring.models import Alert, AuditLog, Incident
+from apps.monitoring.models import AuditLog
 from core.models import Subscription
 
 
@@ -90,23 +89,5 @@ def security_workspace(request):
             "keys_count": keys.filter(status="active").count(),
             "subscription": subscription,
             "checks": checks,
-        },
-    )
-
-
-@login_required
-def alert_workspace(request):
-    # user=NULL denotes a system-wide alert; user-owned alerts are isolated.
-    alerts = Alert.objects.filter(Q(user=request.user) | Q(user__isnull=True)).order_by("-created_at")
-    incidents = Incident.objects.filter(assigned_to=request.user).order_by("-started_at")[:20]
-    open_count = alerts.filter(status__in=["open", "acknowledged"]).count()
-    return render(
-        request,
-        "core/alert_center.html",
-        {
-            "alerts": alerts[:50],
-            "incidents": incidents,
-            "account": _account(request),
-            "open_count": open_count,
         },
     )
