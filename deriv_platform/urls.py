@@ -79,7 +79,6 @@ urlpatterns = [
     path("strategies/", login_required(strategies_page), name="strategies_page"),
     path("strategies/builder/", login_required(strategy_builder_page), name="strategy_builder_page"),
     path("trading/", login_required(trading_page), name="trading_page"),
-    path("trading/", include("apps.execution.browser_urls")),
     path("trading/ai/", include("apps.ai_engine.browser_urls")),
     path("backtesting/", login_required(backtesting_page), name="backtesting_page"),
     path("predictions/", login_required(predictions_page), name="predictions_page"),
