@@ -71,6 +71,7 @@ class PaymentReconciler:
     @classmethod
     def reconcile(cls, *, provider, external_id, status, amount=None, currency="KES", metadata=None):
         metadata = metadata if isinstance(metadata, dict) else {}
+        provider = str(provider or "").strip().lower()
         external_id = str(external_id or "").strip()
         if not external_id:
             return None
@@ -85,6 +86,10 @@ class PaymentReconciler:
         with transaction.atomic():
             invoice = Invoice.objects.select_for_update().filter(external_id=external_id).first()
             if not invoice:
+                reference = metadata.get("api_ref") or metadata.get("reference") or metadata.get("merchant_reference")
+                if reference:
+                    invoice = Invoice.objects.select_for_update().filter(metadata__reference=reference, user=user).first()
+            if not invoice:
                 invoice = Invoice.objects.create(
                     user=user,
                     external_id=external_id,
@@ -96,6 +101,12 @@ class PaymentReconciler:
             elif invoice.user_id != user.id:
                 return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "invoice_owner_mismatch"}
 
+            expected_amount = int(invoice.amount_cents or 0)
+            if amount_minor and expected_amount and amount_minor != expected_amount:
+                return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "amount_mismatch", "expected_amount_cents": expected_amount, "received_amount_cents": amount_minor}
+
+            if not invoice.external_id:
+                invoice.external_id = external_id
             if plan_key and not (invoice.metadata or {}).get("plan"):
                 invoice.metadata = {**(invoice.metadata or {}), "plan": plan_key}
             invoice.metadata = {**(invoice.metadata or {}), "provider": provider, "payment": metadata}
@@ -106,7 +117,7 @@ class PaymentReconciler:
             payment = Payment.objects.select_for_update().filter(external_id=external_id).first()
             was_completed = bool(payment and (payment.status == "COMPLETED" or invoice.paid))
             if not payment:
-                payment = Payment.objects.create(user=user, invoice=invoice, external_id=external_id, amount_cents=amount_minor, currency=currency, status="PENDING")
+                payment = Payment.objects.create(user=user, invoice=invoice, external_id=external_id, amount_cents=amount_minor or invoice.amount_cents, currency=currency, status="PENDING")
             elif payment.user_id != user.id:
                 return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "payment_owner_mismatch"}
 
@@ -118,11 +129,11 @@ class PaymentReconciler:
 
             if normalized == "COMPLETED":
                 invoice.paid = True
-                invoice.save(update_fields=["paid", "amount_cents", "currency", "metadata"])
+                invoice.save(update_fields=["external_id", "paid", "amount_cents", "currency", "metadata"])
                 if not was_completed:
                     cls._activate_subscription_and_referral(user, invoice, plan_key)
             else:
-                invoice.save(update_fields=["amount_cents", "currency", "metadata"])
+                invoice.save(update_fields=["external_id", "amount_cents", "currency", "metadata"])
 
         return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "payment_id": payment.id}
 
