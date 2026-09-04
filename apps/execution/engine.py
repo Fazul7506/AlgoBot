@@ -48,7 +48,7 @@ class ExecutionEngine:
         return persisted, priority, risk_context
 
     def place_order(self, user, **data):
-        """Legacy queued order path used by non-terminal callers."""
+        """Queued order path used by non-terminal callers."""
         account = self._assert_authoritative_account(user, data.get('broker_account'))
         persisted, priority, risk_context = self._order_persistence_data(data)
         persisted['validation_context'] = {**persisted.get('validation_context', {}), 'execution_mode': 'manual_command'}
