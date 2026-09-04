@@ -15,7 +15,7 @@ class BrokerTickApiTests(TestCase):
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(username="market-test", password="test-pass")
         self.broker = Broker.objects.create(name="Deriv", broker_type="deriv", status="active", supports_live=True)
-        BrokerAccount.objects.create(user=self.user, broker=self.broker, account_id="VRTC123", status="active", is_preferred=True)
+        BrokerAccount.objects.create(user=self.user, broker=self.broker, account_id="VRTC123", status="active")
         MarketSymbol.objects.create(symbol="TEST", display_name="Test", market="Derived Indices", is_active=True, is_tradable=True)
         self.client.force_authenticate(self.user)
 
