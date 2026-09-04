@@ -197,7 +197,9 @@ def risk_settings(request):
         follower.max_trade_stake = Decimal(str(data.get("max_trade_stake", follower.max_trade_stake)))
         follower.max_concurrent_trades = int(data.get("max_concurrent_trades", follower.max_concurrent_trades))
         follower.pause_on_loss_streak = int(data.get("pause_on_loss_streak", follower.pause_on_loss_streak))
-        follower.copy_multiplier = multiplier
+        follower.copy_multiplier = Decimal(str(data.get("copy_multiplier", follower.copy_multiplier)))
+        if follower.copy_multiplier <= 0:
+            return JsonResponse({"error": "Copy multiplier must be greater than zero."}, status=400)
     except (InvalidOperation, ValueError, TypeError):
         return JsonResponse({"error": "Invalid risk settings."}, status=400)
     follower.save()
