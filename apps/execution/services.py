@@ -1,6 +1,7 @@
 import asyncio, time
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
+from django.db.models import Avg
 from django.utils import timezone
 from asgiref.sync import sync_to_async
 from apps.brokers.services import BrokerRegistry
@@ -206,11 +207,24 @@ class TradeSynchronizationService:
         orders = await adapter.get_orders()
         balance = await adapter.get_balance()
         reconciliation = await TradeReconciliationService().compare(broker_account, positions, orders, balance)
-        # Preserve the existing response keys while adding an explicit reconciliation report.
         return {'positions': positions, 'orders': orders, 'balance': balance, 'reconciliation': reconciliation}
 
 class ExecutionMonitoringService:
-    def dashboard(self): return {'queue_size': ExecutionQueue.objects.exclude(status__in=[c.QUEUE_STATUS_DONE,c.QUEUE_STATUS_CANCELLED]).count(), 'pending_orders': Order.objects.filter(status__in=[c.ORDER_STATUS_DRAFT,c.ORDER_STATUS_VALIDATED,c.ORDER_STATUS_QUEUED]).count(), 'average_latency': 0}
+    def dashboard(self):
+        queue_size = ExecutionQueue.objects.exclude(
+            status__in=[c.QUEUE_STATUS_DONE, c.QUEUE_STATUS_CANCELLED]
+        ).count()
+        pending_orders = Order.objects.filter(
+            status__in=[c.ORDER_STATUS_DRAFT, c.ORDER_STATUS_VALIDATED, c.ORDER_STATUS_QUEUED]
+        ).count()
+        average_latency = ExecutionLog.objects.filter(
+            latency__isnull=False
+        ).aggregate(value=Avg('latency'))['value'] or 0
+        return {
+            'queue_size': queue_size,
+            'pending_orders': pending_orders,
+            'average_latency': float(average_latency),
+        }
 
 class ExecutionAnalyticsService:
     def summary(self): return {'orders': Order.objects.count(), 'executed': Order.objects.filter(status=c.ORDER_STATUS_EXECUTED).count(), 'failed': Order.objects.filter(status=c.ORDER_STATUS_FAILED).count()}
