@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from trading.models.core import Signal
+from apps.strategies.models import Strategy, StrategySignal
 
 from .models import MarketSnapshot, MarketSymbol
 
@@ -22,6 +22,9 @@ class Phase3MarketIntelligenceTests(TestCase):
             is_active=True,
             is_tradable=True,
         )
+
+    def _strategy(self, name):
+        return Strategy.objects.create(name=name, slug=name.lower().replace(' ', '-'), category='Momentum')
 
     def test_intelligence_requires_authentication(self):
         response = APIClient().get("/api/market/intelligence/")
@@ -58,23 +61,23 @@ class Phase3MarketIntelligenceTests(TestCase):
             change_percent="1.0",
             timestamp=timezone.now(),
         )
-        Signal.objects.create(symbol="R_100", direction="BUY", confidence=0.9, strategy="Trend", timeframe="M1")
-        Signal.objects.create(symbol="R_100", direction="BUY", confidence=0.8, strategy="Momentum", timeframe="M5")
-        Signal.objects.create(symbol="R_100", direction="SELL", confidence=0.2, strategy="MeanRev", timeframe="M1")
+        StrategySignal.objects.create(strategy=self._strategy('Trend'), symbol="R_100", signal="BUY", confidence=90)
+        StrategySignal.objects.create(strategy=self._strategy('Momentum'), symbol="R_100", signal="BUY", confidence=80)
+        StrategySignal.objects.create(strategy=self._strategy('MeanRev'), symbol="R_100", signal="SELL", confidence=20)
         response = self.client.get("/api/market/intelligence/?symbol=R_100")
         self.assertEqual(response.status_code, 200)
         row = response.data["results"][0]
         self.assertEqual(row["dominant_direction"], "BUY")
         self.assertEqual(row["buy_signals"], 2)
         self.assertEqual(row["sell_signals"], 1)
-        self.assertEqual(row["timeframes"], ["M1", "M5"])
+        self.assertEqual(row["timeframes"], [])
         self.assertGreater(row["signal_strength"], 0)
         self.assertIn("signal_confluence_buy", row["evidence"])
 
     def test_signal_lifecycle_exposes_active_and_expired_states(self):
-        Signal.objects.create(symbol="R_100", direction="BUY", confidence=0.8, strategy="Trend")
-        expired = Signal.objects.create(symbol="R_100", direction="SELL", confidence=0.6, strategy="MeanRev")
-        Signal.objects.filter(pk=expired.pk).update(created_at=timezone.now() - timedelta(minutes=10))
+        StrategySignal.objects.create(strategy=self._strategy('Trend'), symbol="R_100", signal="BUY", confidence=80)
+        expired = StrategySignal.objects.create(strategy=self._strategy('MeanRev'), symbol="R_100", signal="SELL", confidence=60)
+        StrategySignal.objects.filter(pk=expired.pk).update(timestamp=timezone.now() - timedelta(minutes=10))
         response = self.client.get("/api/market/signals/lifecycle/?symbol=R_100")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 2)
