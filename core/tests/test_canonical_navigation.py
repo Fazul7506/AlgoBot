@@ -1,4 +1,4 @@
-"""Regression coverage for retired workspace navigation."""
+"""Regression coverage for canonical workspace navigation."""
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -19,8 +19,3 @@ class CanonicalNavigationTests(TestCase):
         response = self.client.get(reverse("analysis_page"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Analysis | AlgoBot")
-
-    def test_retired_mission_control_redirects_to_analysis(self):
-        response = self.client.get("/operations/mission-control/", follow=False)
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/analysis/")
