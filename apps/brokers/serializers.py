@@ -44,6 +44,9 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
 class BrokerConnectionSerializer(serializers.ModelSerializer):
     class Meta: model=BrokerConnection; fields='__all__'
 class OrderSerializer(serializers.ModelSerializer):
+    # Generic Django choices must not reject broker-native identifiers. The
+    # connected adapter validates the exact live contract before execution.
+    contract_type=serializers.CharField(required=False,allow_blank=True,max_length=40)
     class Meta:
         model=Order; fields='__all__'; read_only_fields=['user','broker','status','submitted_at','executed_at','broker_order_id']
     def validate(self,attrs):
