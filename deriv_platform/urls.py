@@ -12,7 +12,7 @@ from core.views_auth import (
     UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet,
 )
 from core.browser_views import browser_logout
-from trading.views.dashboard import DashboardViewSet
+from core.dashboard_api import DashboardViewSet
 from apps.market_data.web_views import market_catalogue
 from apps.market_data.signal_views import strategy_signals
 from core.views import (
@@ -129,7 +129,6 @@ urlpatterns = [
     path("forgot-password/", forgot_password_page, name="forgot_password_page"),
     path("reset-password/<str:token>/", reset_password_page, name="reset_password_page"),
     path("verify-email/", verify_email_page, name="verify_email_page"),
-
     path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/register/", register, name="register"),
@@ -151,7 +150,6 @@ urlpatterns = [
     path("api/", include("apps.deployment.urls")),
     path("api/strategy-signals/", strategy_signals, name="strategy_signals"),
     path("api/", include(router.urls)),
-
     path("webhooks/intasend/", intasend_webhook, name="intasend_webhook"),
     path("webhooks/pesapal/", pesapal_webhook, name="pesapal_webhook"),
     path("payments/pesapal/callback/", pesapal_callback, name="pesapal_callback"),
