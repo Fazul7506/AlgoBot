@@ -15,9 +15,57 @@ from core.account_context import select_account, get_active_account
 logger=logging.getLogger(__name__)
 BROKER_CONNECT_TIMEOUT_SECONDS=30.0
 BROKER_SYNC_TIMEOUT_SECONDS=15.0
+
 def _run_bounded(coro,timeout=8.0):
     async def runner(): return await asyncio.wait_for(coro,timeout=timeout)
     return asyncio.run(runner())
+
+async def _connect_all_user_broker_accounts(user, broker, primary_account):
+    """Make broker-level authorization account-complete, not account-click dependent.
+
+    A successful OAuth authorization establishes the credential used to access the
+    broker's account set. Every existing account for that user/broker is therefore
+    verified through the broker and gets its own connected BrokerConnection row.
+    For Deriv, the OAuth credential is shared across the account set, so accounts
+    discovered after authorization inherit the encrypted credential from the
+    successfully authorized account before verification.
+    """
+    accounts = await asyncio.to_thread(lambda: list(
+        BrokerAccount.objects.filter(user=user, broker=broker, status__in=['active', 'disabled'])
+        .select_related('broker').order_by('id')
+    ))
+
+    shared_access_token = primary_account.access_token
+    shared_refresh_token = primary_account.refresh_token
+    shared_token_status = primary_account.token_status
+    shared_expires_at = primary_account.expires_at
+
+    for account in accounts:
+        if account.pk == primary_account.pk:
+            continue
+        changed=[]
+        if broker.broker_type == 'deriv' and shared_access_token and account.access_token != shared_access_token:
+            account.access_token=shared_access_token; changed.append('access_token')
+            if shared_refresh_token: account.refresh_token=shared_refresh_token; changed.append('refresh_token')
+            account.token_status=shared_token_status; changed.append('token_status')
+            account.expires_at=shared_expires_at; changed.append('expires_at')
+        if changed:
+            await asyncio.to_thread(account.save, update_fields=changed)
+
+    connected=[]
+    failed=[]
+    service=BrokerConnectionService()
+    for account in accounts:
+        try:
+            await service.connect(broker, account)
+            connected.append(account.pk)
+        except (BrokerAuthenticationError, BrokerConnectionError, BrokerRoutingError) as exc:
+            failed.append({'account_id':account.account_id,'error':str(exc)})
+        except Exception as exc:
+            logger.exception('broker_account_autoconnect_failed',extra={'account_id':account.pk,'broker_id':broker.pk})
+            failed.append({'account_id':account.account_id,'error':'Broker account verification failed'})
+    return connected, failed
+
 class JWTAuthenticationRequired(APIException):
     status_code=status.HTTP_401_UNAUTHORIZED; default_detail='Authentication credentials were not provided.'; default_code='not_authenticated'
 class JWTAuthenticatedPermission(permissions.IsAuthenticated):
@@ -98,13 +146,20 @@ def connect_broker(request):
     broker=get_object_or_404(Broker,pk=broker_id);account=get_object_or_404(BrokerAccount,pk=account_id,user=request.user,broker=broker)
     allowed,used,limit=check(request.user,'broker_accounts',amount=0)
     if limit>=0 and used>limit:return response.Response({'detail':f'Your {effective_plan(request.user).name} broker-account capacity is exceeded. Upgrade the plan to authorize all connected accounts.','code':'BROKER_ACCOUNT_LIMIT_REACHED','used':used,'limit':limit},status=status.HTTP_429_TOO_MANY_REQUESTS)
-    try:connection=_run_bounded(BrokerConnectionService().connect(broker,account),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
+    try:
+        connection=_run_bounded(BrokerConnectionService().connect(broker,account),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
+        connected_ids,failed_accounts=_run_bounded(_connect_all_user_broker_accounts(request.user,broker,account),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
     except BrokerAuthenticationError as exc:return response.Response({'detail':str(exc),'status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
     except BrokerConnectionError as exc:return response.Response({'detail':str(exc),'status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except BrokerRoutingError as exc:return response.Response({'detail':str(exc),'status':'blocked'},status=status.HTTP_409_CONFLICT)
     except asyncio.TimeoutError:return response.Response({'detail':'Broker connection timed out while waiting for the provider.','status':'timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
     except Exception as exc:logger.exception('broker_connection_unexpected_failure',extra={'account_id':account.id});return response.Response({'detail':'Broker connection failed unexpectedly.','status':'error','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
-    account.refresh_from_db();return response.Response({'connection':BrokerConnectionSerializer(connection).data,'account':BrokerAccountSerializer(account,context={'request':request}).data})
+    account.refresh_from_db()
+    all_accounts=list(BrokerAccount.objects.filter(user=request.user,broker=broker).select_related('broker').order_by('id'))
+    payload={'connection':BrokerConnectionSerializer(connection).data,'account':BrokerAccountSerializer(account,context={'request':request}).data,'accounts':BrokerAccountSerializer(all_accounts,many=True,context={'request':request}).data,'connected_account_ids':connected_ids,'failed_accounts':failed_accounts,'all_accounts_ready':not failed_accounts and len(connected_ids)==len(all_accounts)}
+    if failed_accounts:
+        return response.Response(payload,status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return response.Response(payload)
 @decorators.api_view(['POST'])
 @decorators.permission_classes([JWTAuthenticatedPermission])
 @decorators.authentication_classes([BrowserSessionAuthentication,JWTAuthentication])
