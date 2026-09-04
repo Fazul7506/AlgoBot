@@ -1,13 +1,17 @@
-from unittest.mock import patch
+import asyncio
+from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
-from django.test import SimpleTestCase
+from django.test import TestCase, SimpleTestCase
 from rest_framework.test import APITestCase, APIRequestFactory, force_authenticate
 
 from apps.brokers.exceptions import BrokerConnectionError, BrokerOrderError
+from apps.brokers.models import Broker, BrokerAccount
 from apps.execution.deriv_views import DerivTradingActionView
+from apps.execution.models import ExecutionQueue, Order
 from apps.execution.signal_validation import SignalValidationService
+from apps.execution.tasks import process_execution_queue
 from .serializers import OrderSerializer
 from .views import OrderViewSet
 
@@ -30,6 +34,24 @@ class OrderSerializerRegressionTests(APITestCase):
         self.assertEqual(result.status_code, 503)
         self.assertEqual(result.data['code'], 'PREVIEW_INTERNAL_ERROR')
         self.assertEqual(result.data['status'], 'rejected')
+
+
+class ExecutionQueueTaskTests(TestCase):
+    def test_celery_task_name_matches_beat_schedule(self):
+        self.assertEqual(process_execution_queue.name, 'apps.execution.process_execution_queue')
+
+    def test_queued_order_is_claimed_and_completed(self):
+        user = get_user_model().objects.create_user(username='queue-regression', password='test-password')
+        broker = Broker.objects.create(name='Queue Broker', broker_type='paper', status='active', supports_live=False)
+        account = BrokerAccount.objects.create(user=user, broker=broker, account_id='QUEUE', status='active', credentials={'account_type': 'demo'})
+        order = Order.objects.create(user=user, broker_account=account, symbol='R_10', direction='buy', order_type='market', stake='1', status='queued')
+        queue = ExecutionQueue.objects.create(order=order, status='pending')
+        with patch('apps.execution.tasks.ExecutionEngine.execute', new=AsyncMock(return_value=order)) as execute:
+            result = process_execution_queue.run(batch_size=1)
+        execute.assert_awaited_once()
+        queue.refresh_from_db()
+        self.assertEqual(queue.status, 'done')
+        self.assertEqual(result['succeeded'], 1)
 
 
 class SignalValidationServiceTests(SimpleTestCase):
