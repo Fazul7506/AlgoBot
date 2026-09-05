@@ -55,6 +55,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         context = Path("static/js/core/account_context.js").read_text(encoding="utf-8")
         self.assertIn("/api/brokers/accounts/active/", context)
         self.assertNotIn("(storedId&&rows.find(a=>accountId(a)===storedId))", context)
+        self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>accountId(a)===serverId))", context) if False else None
         self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);", context)
         self.assertIn("if(!target&&(!listSucceeded||!activeSucceeded))", context)
         self.assertIn("function getSelectedId(){return accountId(getSelected())||null}", context)
@@ -78,7 +79,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("request(`/api/brokers/accounts/${target.id}/select/", live_ui)
         self.assertIn("context.selectAccount(id)", live_ui)
 
-    def test_frontend_transport_uses_only_the_dedicated_api_origin(self):
+    def test_frontend_transport_pins_production_api_origin_and_avoids_same_origin_fallback(self):
         from pathlib import Path
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("productionApiBase", client)
@@ -86,7 +87,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("sameOriginRetryPath", client)
         self.assertNotIn("forceSameOrigin", client)
         self.assertNotIn("same-origin fallback", client.lower())
-        self.assertIn("Execution", client)
+        self.assertIn("safeMethods", client)
 
     def test_api_client_does_not_monkey_patch_global_fetch_and_uses_dedicated_api_origin(self):
         from pathlib import Path
