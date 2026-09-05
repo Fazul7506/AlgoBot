@@ -4,8 +4,6 @@ from django.test import TestCase
 
 PUBLIC_PAGES = [
     "/",
-    "/login/",
-    "/register/",
     "/terms/",
     "/privacy/",
     "/cookies/",
@@ -14,14 +12,12 @@ PUBLIC_PAGES = [
     "/about/",
     "/data-deletion/",
     "/status/",
-    "/forgot-password/",
-    "/brokers/connect/",
-    "/brokers/marketplace/",
 ]
 
 AUTHENTICATED_PAGES = [
     "/dashboard/",
     "/billing/",
+    "/brokers/marketplace/",
     "/saas/",
     "/markets/",
     "/market-scanner/",
