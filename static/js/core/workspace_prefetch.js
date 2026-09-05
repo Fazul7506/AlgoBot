@@ -2,6 +2,11 @@
  * Keeps broker-backed GET data warm across same-tab page navigation without
  * inventing data. Cached values are account-scoped and short-lived; network
  * revalidation is always performed in the background after a cache hit.
+ *
+ * The trading terminal owns its own bootstrap because it has live market,
+ * contract and execution state. Prefetching those same resources globally
+ * creates duplicate requests and account-switch races, so the terminal is
+ * deliberately excluded here.
  */
 (() => {
   'use strict';
@@ -9,6 +14,7 @@
   window.__algoBotWorkspacePrefetch = true;
 
   const data = () => window.AlgoBotFrontendData;
+  const isTradingTerminal = () => document.body?.dataset?.algobotPage === 'trading-terminal' || !!document.querySelector('.terminal-page[data-page="trading-terminal"]');
   const accountId = () => window.AlgoBotAccountContext?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id || 'none';
   const keyFor = url => `algobot:workspace-cache:v1:${accountId()}:${url}`;
   const safeGet = /^\/api\/(brokers\/accounts(?:\/|$)|market\/(?:catalogue|broker-capabilities|ticks\/broker|snapshots)|ticks\/latest|positions\/open|orders\/|dashboard\/(?:account_overview|signals)|signals\/|strategies\/)/;
@@ -33,9 +39,9 @@
       sessionStorage.setItem(keyFor(url), JSON.stringify({at: Date.now(), payload}));
     } catch (_) {}
   };
-  const clearAccount = () => {
+  const clearAccount = previousId => {
     try {
-      const prefix = `algobot:workspace-cache:v1:${accountId()}:`;
+      const prefix = `algobot:workspace-cache:v1:${previousId || accountId()}:`;
       for (let i = sessionStorage.length - 1; i >= 0; i--) {
         const k = sessionStorage.key(i);
         if (k?.startsWith(prefix)) sessionStorage.removeItem(k);
@@ -50,12 +56,10 @@
     const wrapped = async (url, options = {}, timeout = 25000) => {
       const method = String(options.method || 'GET').toUpperCase();
       const raw = String(url || '').split('#')[0];
-      if (method !== 'GET' || !safeGet.test(raw)) return originalRequest(url, options, timeout);
+      if (isTradingTerminal() || method !== 'GET' || !safeGet.test(raw)) return originalRequest(url, options, timeout);
 
       const cached = read(raw);
       if (cached !== null) {
-        // Revalidate without delaying first paint. The next page navigation and
-        // any explicit refresh will consume the new broker-backed value.
         void originalRequest(url, {...options, notifyOnError: false}, timeout)
           .then(payload => { write(raw, payload); window.dispatchEvent(new CustomEvent('algobot:workspace-cache-updated', {detail:{url:raw}})); })
           .catch(() => {});
@@ -71,6 +75,7 @@
   }
 
   function prefetch() {
+    if (isTradingTerminal()) return;
     const api = data();
     if (!api?.request) return;
     const paths = [
@@ -82,10 +87,6 @@
       ['/api/dashboard/account_overview/', 8000]
     ];
     paths.forEach(([url, timeout]) => {
-      if (read(url) !== null) {
-        void api.request(url, {notifyOnError:false}, timeout).then(payload => write(url, payload)).catch(() => {});
-        return;
-      }
       void api.request(url, {notifyOnError:false}, timeout).then(payload => write(url, payload)).catch(() => {});
     });
   }
@@ -96,9 +97,14 @@
       setTimeout(install, 50);
     }
     const start = () => setTimeout(prefetch, 0);
-    window.addEventListener('algobot:account-changed', () => { clearAccount(); start(); });
-    window.addEventListener('algobot:account-synced', () => { clearAccount(); start(); });
-    window.addEventListener('algobot:account-context-changed', () => { clearAccount(); start(); });
+    const resetCacheForSwitch = event => {
+      const previousId = event.detail?.previousAccountId || event.detail?.previous?.id || null;
+      if (previousId) clearAccount(previousId);
+      start();
+    };
+    window.addEventListener('algobot:account-changed', resetCacheForSwitch);
+    window.addEventListener('algobot:account-synced', resetCacheForSwitch);
+    window.addEventListener('algobot:account-context-changed', resetCacheForSwitch);
     start();
   }
 
