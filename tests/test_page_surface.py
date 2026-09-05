@@ -22,14 +22,14 @@ NON_HTML_PREFIXES = (
     "/api/", "/health/", "/analytics/export/", "/analytics/markets/",
     "/webhooks/", "/billing/checkout/", "/billing/change-plan/",
     "/billing/cancel-subscription/", "/billing/reconcile/",
+    "/billing/entitlements/", "/billing/plans/", "/billing/status/",
 )
 NON_HTML_EXACT = {"/api"}
 
 
 def static_browser_routes():
-    """Discover parameter-free browser routes; APIs/exports/health endpoints are excluded."""
+    """Discover parameter-free browser routes; APIs/data endpoints are excluded."""
     routes = set()
-
     def walk(patterns, prefix=""):
         for entry in patterns:
             if isinstance(entry, URLResolver):
@@ -42,7 +42,6 @@ def static_browser_routes():
                 if "<" in full or full in NON_HTML_EXACT or full.startswith(NON_HTML_PREFIXES):
                     continue
                 routes.add(full)
-
     walk(get_resolver().url_patterns)
     return sorted(routes)
 
@@ -50,14 +49,12 @@ def static_browser_routes():
 class BrowserPageSurfaceTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = get_user_model().objects.create_user(
-            username="page-surface-test", password="test-pass"
-        )
+        cls.user = get_user_model().objects.create_user(username="page-surface-test", password="test-pass")
 
     def assert_html_response(self, path, response):
         self.assertLess(response.status_code, 500, f"{path} returned {response.status_code}: {response.content[:500]!r}")
-        content_type = response.headers.get("Content-Type", "").lower()
         if response.status_code == 200:
+            content_type = response.headers.get("Content-Type", "").lower()
             self.assertIn("text/html", content_type, f"{path} did not render HTML")
             self.assertIn(b"<", response.content)
 
