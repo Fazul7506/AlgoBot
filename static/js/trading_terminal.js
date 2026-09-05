@@ -10,7 +10,8 @@
   // All terminal API traffic goes through the shared service facade so account
   // headers, transport, timeout, retry and error lifecycle are identical to the
   // dashboard and every other authenticated workspace.
-  const api=(u,o={},t=10000)=>window.AlgoBotServices?.request?.('trading',u,o,t)||window.AlgoBotFrontendData.request(u,o,t);
+  const canonicalApi=(u,o={},t=10000)=>window.AlgoBotFrontendData.request(u,o,t);
+  const api=(u,o={},t=10000)=>window.AlgoBotServices?.request?.('trading',u,o,t)||canonicalApi(u,o,t);
   // Account selection is owned by the canonical account context. Keep the
   // authoritative endpoint shape explicit here for UI-contract validation and
   // future diagnostics; no second account-selection implementation is created.
