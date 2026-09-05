@@ -6,9 +6,9 @@
   const definitions = Object.freeze({
     dashboard: { paths: ['/dashboard/'], module: 'dashboard.js' },
     trading: { paths: ['/trading/'], module: 'trading_terminal.js' },
-    market-data: { paths: ['/markets/', '/market-scanner/'], module: 'market_watch.js' },
+    'market-data': { paths: ['/markets/', '/market-scanner/'], module: 'market_watch.js' },
     orders: { paths: ['/orders/'], module: 'orders.js' },
-    trade-history: { paths: ['/trade-history/'], module: 'trade_history.js' },
+    'trade-history': { paths: ['/trade-history/'], module: 'trade_history.js' },
     positions: { paths: ['/positions/'], module: 'positions.js' },
     signals: { paths: ['/signals/'], module: 'signals.js' },
     strategies: { paths: ['/strategies/'], module: 'strategy_builder.js' },
