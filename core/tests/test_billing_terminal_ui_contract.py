@@ -84,3 +84,12 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("forceSameOrigin=false", client)
         self.assertIn("window.location.origin", client)
         self.assertIn("Execution", client)
+
+    def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
+        from pathlib import Path
+        client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
+        self.assertIn("sameOriginFallbackPath", client)
+        self.assertIn("/api/ai/predict/", client)
+        self.assertIn("accounts", client)
+        self.assertIn("select", client)
+        self.assertNotIn("window.fetch = guardedFetch", client)
