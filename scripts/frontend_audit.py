@@ -107,7 +107,9 @@ def main() -> int:
         for path in js_files:
             result = subprocess.run([node, "--check", str(path)], cwd=ROOT, text=True, capture_output=True)
             if result.returncode:
-                detail = (result.stderr or result.stdout).strip().splitlines()[-1] if (result.stderr or result.stdout) else "syntax error"
+                raw = (result.stderr or result.stdout).strip()
+                lines = [line for line in raw.splitlines() if line.strip()]
+                detail = " | ".join(lines[:8]) if lines else "syntax error"
                 findings.append(f"ERROR JavaScript parse failure: {path.relative_to(ROOT)} -> {detail}")
     else:
         findings.append("WARN node is unavailable; JavaScript syntax validation was skipped.")
