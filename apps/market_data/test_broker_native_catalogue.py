@@ -49,3 +49,36 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
         self.assertEqual(response.json()["source"], "cached_broker_catalogue")
         self.assertEqual(response.json()["account_id"], "VRTC-CATALOGUE")
         self.assertEqual(response.json()["symbols"][0]["symbol"], "TEST")
+
+    
+    @patch(
+        "apps.market_data.broker_native._public_deriv",
+        side_effect=RuntimeError("provider unavailable"),
+    )
+    @patch(
+        "apps.market_data.broker_native.cache.get",
+    )
+    def test_capabilities_serves_last_verified_catalogue_on_transient_provider_failure(self, cache_get, _request):
+        cache_get.side_effect = [
+            None,
+            {
+                "symbol": "TEST",
+                "contracts": [
+                    {
+                        "contract_type": "CALL",
+                        "contract_category": "callput",
+                        "expiry_type": "intraday",
+                        "underlying_symbol": "TEST",
+                    }
+                ],
+                "contract_types": ["CALL"],
+                "trade_types": ["callput"],
+            },
+        ]
+
+        response = self.client.get("/api/market/broker-capabilities/?symbol=TEST")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["stale"])
+        self.assertEqual(response.json()["source"], "cached_broker_capabilities")
+        self.assertEqual(response.json()["contracts"][0]["contract_type"], "CALL")
