@@ -11,6 +11,10 @@
   // The Django application is the canonical authenticated API origin.
   const apiBase=configuredApiBase.replace(/\/+$/,'');
   const nativeFetch=window.fetch.bind(window),safeMethods=new Set(['GET','HEAD','OPTIONS']);
+  // Account selection is idempotent. It may safely fall back to the Django
+  // origin when the optional dedicated API hostname is unreachable. Execution
+  // POSTs are deliberately excluded because a timeout can leave a trade unknown.
+  const sameOriginRetryPath=path=>/^\/api\/brokers\/accounts\/[^/]+\/select\/$/.test(path);
   const resolveUrl=url=>/^https?:\/\//i.test(url)?url:`${apiBase}${url.startsWith('/')?url:`/${url}`}`;
   const normalizeEndpoint=url=>url==='/api/market/snapshots/all_snapshots/'?'/api/market/snapshots/?page_size=8':url;
   const isCloudflareChallenge=(response,text)=>{if(!response||!text)return false;const body=String(text).toLowerCase();return[400,403,429,503,520,521,522,524].includes(response.status)&&(body.includes('just a moment')||body.includes('challenge-platform')||body.includes('cf_chl_opt')||body.includes('cf_chl-')||body.includes('challenges.cloudflare.com')||body.includes('enable javascript and cookies to continue')||(body.includes('cloudflare')&&String(response.headers?.get('content-type')||'').toLowerCase().includes('text/html')))};
@@ -48,12 +52,38 @@
     const retry=()=>request(rawUrl,{...options,notifyOnError:true},timeout);
     const promise=(async()=>{
       let controller=new AbortController(),timer=setTimeout(()=>controller.abort(),Math.max(1000,timeout)),result,firstError=null;
-      try{result=await fetchOnce(url,options,controller)}catch(error){
-        firstError=error;
-        if(!result && apiBase && !/^https?:\/\//i.test(url) && safeMethods.has(method)){
-          try{controller=new AbortController();clearTimeout(timer);timer=setTimeout(()=>controller.abort(),Math.max(1000,timeout));result=await fetchOnce(url,options,controller)}catch(fallbackError){firstError=fallbackError;result=null}
+      try{
+        result=await fetchOnce(url,options,controller);
+        const fallbackAllowed=apiBase && !/^https?:\/\//i.test(url) && (safeMethods.has(method)||sameOriginRetryPath(url));
+        const edgeOrServerFailure=result?.response && (isCloudflareChallenge(result.response,result.text)||result.response.status>=500);
+        if(fallbackAllowed && edgeOrServerFailure){
+          try{
+            controller=new AbortController();
+            clearTimeout(timer);
+            timer=setTimeout(()=>controller.abort(),Math.max(1000,timeout));
+            const fallback=await fetchOnce(url,options,controller,true);
+            if(!isCloudflareChallenge(fallback.response,fallback.text) && fallback.response.ok) result=fallback;
+          }catch(_){}
         }
-        if(!result){const e=new Error(firstError?.name==='AbortError'?'Backend request timed out':(firstError?.message||'Network request failed'));e.code=firstError?.name==='AbortError'?'API_TIMEOUT':'NETWORK_ERROR';e.status=0;e.retryable=safeMethods.has(method);notifyApiError(options,{url:rawUrl,method,status:0,code:e.code,message:e.message,retryable:e.retryable,retry});throw e}
+      }catch(error){
+        firstError=error;
+        const fallbackAllowed=apiBase && !/^https?:\/\//i.test(url) && (safeMethods.has(method)||sameOriginRetryPath(url));
+        if(!result && fallbackAllowed){
+          try{
+            controller=new AbortController();
+            clearTimeout(timer);
+            timer=setTimeout(()=>controller.abort(),Math.max(1000,timeout));
+            result=await fetchOnce(url,options,controller,true);
+          }catch(fallbackError){firstError=fallbackError;result=null}
+        }
+        if(!result){
+          const e=new Error(firstError?.name==='AbortError'?'Backend request timed out':(firstError?.message||'Network request failed'));
+          e.code=firstError?.name==='AbortError'?'API_TIMEOUT':'NETWORK_ERROR';
+          e.status=0;
+          e.retryable=safeMethods.has(method)||sameOriginRetryPath(url);
+          notifyApiError(options,{url:rawUrl,method,status:0,code:e.code,message:e.message,retryable:e.retryable,retry});
+          throw e;
+        }
       }finally{clearTimeout(timer)}
       const{response,text}=result,parsed=parsePayload(response,text),payload=parsed?.django?parsed.payload:parsed;
       if(!response.ok){const error=new Error(parsed?.django?parsed.message||statusMessage(response.status,payload):statusMessage(response.status,payload));error.status=response.status;error.code=payload.code||(isCloudflareChallenge(response,text)?'EDGE_CHALLENGE':'API_ERROR');error.isEdgeChallenge=error.code==='EDGE_CHALLENGE';error.retryable=safeMethods.has(method)&&response.status>=500;notifyApiError(options,{url:rawUrl,method,status:response.status,code:error.code,message:error.message,retryable:error.retryable,edgeChallenge:error.isEdgeChallenge,retry});throw error}
