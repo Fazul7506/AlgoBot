@@ -41,8 +41,8 @@ class AccountSwitchingTests(TestCase):
             status='connected',
         )
 
-    def _request(self):
-        request = RequestFactory().get('/api/brokers/accounts/active/')
+    def _request(self, path='/api/brokers/accounts/active/'):
+        request = RequestFactory().get(path)
         SessionMiddleware(lambda _request: None).process_request(request)
         request.session.save()
         request.user = self.user
@@ -57,6 +57,12 @@ class AccountSwitchingTests(TestCase):
 
         select_account(request, self.account_two)
         self.assertEqual(request.session[SESSION_KEY], self.account_two.pk)
+        self.assertEqual(get_active_account(self.user, request=request), self.account_two)
+
+    def test_query_parameter_can_select_an_account_on_normal_django_request(self):
+        request = self._request(
+            f'/api/brokers/accounts/active/?account_id={self.account_two.pk}'
+        )
         self.assertEqual(get_active_account(self.user, request=request), self.account_two)
 
     def test_account_has_no_persistent_preference_field(self):
