@@ -1,21 +1,84 @@
-(() => {
-  const page = document.querySelector('[data-page="core-model-lab"]');
+(function () {
+  'use strict';
+  var page = document.querySelector('[data-page="core-model-lab"]');
   if (!page) return;
-  const esc = v => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const list = v => Array.isArray(v) ? v : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : []));
-  const getJSON = async url => { const r=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json'}}); const t=await r.text(); let d={}; try{d=t?JSON.parse(t):{};}catch{d={detail:t};} if(!r.ok) throw new Error(d.detail||d.message||`Request failed (${r.status})`); return d; };
-  const root = page.querySelector('.model-lab');
-  const render = async () => {
-    const [models,jobs] = await Promise.allSettled([getJSON('/api/ai/models/'),getJSON('/api/ai/training-jobs/')]);
-    const ms=models.status==='fulfilled'?list(models.value):[];
-    const js=jobs.status==='fulfilled'?list(jobs.value):[];
-    const set=(q,v)=>{const e=root.querySelector(q);if(e)e.textContent=v;};
-    set('[data-model-count]',ms.length); set('[data-active-count]',ms.filter(m=>['active','production'].includes(String(m.status||'').toLowerCase())).length); set('[data-job-count]',js.length); set('[data-validated-count]',ms.filter(m=>Number(m.accuracy||0)>0 && Number(m.f1_score||0)>0).length);
-    const body=root.querySelector('[data-models]');
-    body.innerHTML=ms.length?ms.slice(0,100).map(m=>`<tr><td>${esc(m.name)}</td><td>v${esc(m.version)}</td><td>${esc(m.algorithm)}</td><td><span class="badge">${esc(m.status)}</span></td><td>${Number(m.accuracy||0).toFixed(2)}%</td><td>${Number(m.f1_score||0).toFixed(2)}%</td><td>${Number(m.auc||0).toFixed(2)}%</td></tr>`).join(''):'<tr><td colspan="7">No registered models.</td></tr>';
-    const jobsBox=root.querySelector('[data-jobs]');
-    jobsBox.innerHTML=js.length?js.slice(0,20).map(j=>`<div class="job"><strong>${esc(j.status)}</strong><div class="muted">${esc(j.started_at||j.completed_at||'Not started')}</div><div>Metrics: ${esc(JSON.stringify(j.metrics||{}))}</div></div>`).join(''):'<div class="muted">No training jobs recorded.</div>';
-  };
-  root.querySelector('[data-model-train]')?.addEventListener('click',async e=>{const out=root.querySelector('[data-train-result]');e.currentTarget.disabled=true;out.className='result';out.textContent='Starting authenticated training job…';try{const r=await fetch('/api/ai/train/',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken:document.cookie.match(/(?:^|; )csrftoken=([^;]+)/)?.[1]||''},body:JSON.stringify({mode:'manual'})});const t=await r.text();let d={};try{d=t?JSON.parse(t):{};}catch{d={detail:t};}if(!r.ok)throw new Error(d.detail||'Training request failed');out.textContent=`Training job created: ${d.id??'accepted'} · status ${d.status??'pending'}`;await render();}catch(err){out.className='result error';out.textContent=err.message;}finally{e.currentTarget.disabled=false;}});
-  render().catch(err=>{root.querySelector('[data-models]').innerHTML=`<tr><td colspan="7">AI registry unavailable: ${esc(err.message)}</td></tr>`;});
+  var root = page.querySelector('.model-lab');
+  if (!root) return;
+
+  function esc(value) {
+    return String(value == null ? '—' : value).replace(/[&<>"']/g, function (char) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char];
+    });
+  }
+  function list(value) {
+    if (Array.isArray(value)) return value;
+    if (value && Array.isArray(value.results)) return value.results;
+    if (value && Array.isArray(value.data)) return value.data;
+    return [];
+  }
+  function requestJSON(url, options) {
+    return fetch(url, options || {credentials: 'same-origin', headers: {Accept: 'application/json'}}).then(function (response) {
+      return response.text().then(function (text) {
+        var data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (error) { data = {detail: text}; }
+        if (!response.ok) throw new Error(data.detail || data.message || ('Request failed (' + response.status + ')'));
+        return data;
+      });
+    });
+  }
+  function setText(selector, value) {
+    var node = root.querySelector(selector);
+    if (node) node.textContent = value;
+  }
+  function render() {
+    return Promise.allSettled([
+      requestJSON('/api/ai/models/'),
+      requestJSON('/api/ai/training-jobs/')
+    ]).then(function (results) {
+      var models = results[0].status === 'fulfilled' ? list(results[0].value) : [];
+      var jobs = results[1].status === 'fulfilled' ? list(results[1].value) : [];
+      setText('[data-model-count]', models.length);
+      setText('[data-active-count]', models.filter(function (model) { return ['active', 'production'].indexOf(String(model.status || '').toLowerCase()) >= 0; }).length);
+      setText('[data-job-count]', jobs.length);
+      setText('[data-validated-count]', models.filter(function (model) { return Number(model.accuracy || 0) > 0 && Number(model.f1_score || 0) > 0; }).length);
+
+      var body = root.querySelector('[data-models]');
+      if (body) {
+        body.innerHTML = models.length ? models.slice(0, 100).map(function (model) {
+          return '<tr><td>' + esc(model.name) + '</td><td>v' + esc(model.version) + '</td><td>' + esc(model.algorithm) + '</td><td><span class="badge">' + esc(model.status) + '</span></td><td>' + Number(model.accuracy || 0).toFixed(2) + '%</td><td>' + Number(model.f1_score || 0).toFixed(2) + '%</td><td>' + Number(model.auc || 0).toFixed(2) + '%</td></tr>';
+        }).join('') : '<tr><td colspan="7">No registered models.</td></tr>';
+      }
+      var jobsBox = root.querySelector('[data-jobs]');
+      if (jobsBox) {
+        jobsBox.innerHTML = jobs.length ? jobs.slice(0, 20).map(function (job) {
+          return '<div class="job"><strong>' + esc(job.status) + '</strong><div class="muted">' + esc(job.started_at || job.completed_at || 'Not started') + '</div><div>Metrics: ' + esc(JSON.stringify(job.metrics || {})) + '</div></div>';
+        }).join('') : '<div class="muted">No training jobs recorded.</div>';
+      }
+    });
+  }
+
+  var trainButton = root.querySelector('[data-model-train]');
+  if (trainButton) {
+    trainButton.addEventListener('click', function () {
+      var output = root.querySelector('[data-train-result]');
+      trainButton.disabled = true;
+      if (output) { output.className = 'result'; output.textContent = 'Starting authenticated training job…'; }
+      requestJSON('/api/ai/train/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', Accept: 'application/json'},
+        body: JSON.stringify({mode: 'manual'})
+      }).then(function (data) {
+        if (output) output.textContent = 'Training job created: ' + (data.id || 'accepted') + ' · status ' + (data.status || 'pending');
+        return render();
+      }).catch(function (error) {
+        if (output) { output.className = 'result error'; output.textContent = error.message; }
+      }).finally(function () { trainButton.disabled = false; });
+    });
+  }
+
+  render().catch(function (error) {
+    var body = root.querySelector('[data-models]');
+    if (body) body.innerHTML = '<tr><td colspan="7">AI registry unavailable: ' + esc(error.message) + '</td></tr>';
+  });
 })();
