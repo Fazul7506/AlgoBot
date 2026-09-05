@@ -32,13 +32,12 @@
       window.AlgoBotBrokerAccounts=rows.slice();
       const serverSelected=activeSucceeded?(activeResult.value?.active_account||activeResult.value?.account||null):null;
       const serverId=accountId(serverSelected);
-      // The backend remains authoritative whenever it responds. The stored
-      // account snapshot is only a degraded-transport hint when both reads
-      // fail; every later API request still carries the account ID and the
-      // backend revalidates ownership/connection state.
-      let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||
-        (rememberedId&&rows.find(a=>accountId(a)===String(rememberedId)))||
-        rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
+      // A successful backend response is authoritative. Local storage is used
+      // only for degraded transport recovery after an account read fails.
+      let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
+      if(!target&&(!listSucceeded||!activeSucceeded)){
+        target=(rememberedId&&rows.find(a=>accountId(a)===String(rememberedId)))||null;
+      }
       if(!target&&(!listSucceeded||!activeSucceeded)&&rememberedSnapshot&&accountId(rememberedSnapshot)===String(rememberedId||rememberedSnapshot.id)){
         target=rememberedSnapshot;
         accounts=[rememberedSnapshot];
