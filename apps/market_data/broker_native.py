@@ -19,7 +19,6 @@ from apps.brokers.models import BrokerAccount
 from core.account_context import get_active_account
 from .deriv_sync import _request
 from .models import MarketSymbol
-from .serializers import MarketSymbolSerializer
 
 CATALOGUE_CACHE = "algobot:broker:deriv:active-symbols"
 CAPABILITIES_CACHE_PREFIX = "algobot:broker:deriv:contracts-for:"
