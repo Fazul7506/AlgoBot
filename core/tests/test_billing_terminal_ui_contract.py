@@ -55,7 +55,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         context = Path("static/js/core/account_context.js").read_text(encoding="utf-8")
         self.assertIn("/api/brokers/accounts/active/", context)
         self.assertNotIn("(storedId&&rows.find(a=>accountId(a)===storedId))", context)
-        self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find", context)
+        self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);", context)
         self.assertIn("function getSelectedId(){return accountId(getSelected())||null}", context)
 
     def test_sidebar_and_terminal_ai_use_canonical_account_context(self):
