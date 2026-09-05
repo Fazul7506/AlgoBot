@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Account access | AlgoBot{% endblock %}
+{% block content %}
+<section class="algobot-shared-page enterprise-hero" aria-labelledby="auth-gateway-title">
+  <div>
+    <p class="eyebrow">ALGOBOT ACCOUNT</p>
+    <h1 id="auth-gateway-title">Secure broker account access</h1>
+    <p class="hero-copy">AlgoBot uses the configured broker authentication gateway for account access. The gateway is currently unavailable, but the page itself is healthy and ready for the broker configuration to be restored.</p>
+    {% if auth_gateway_error %}<div class="alert error" role="alert">{{ auth_gateway_error }}</div>{% endif %}
+    <div class="hero-actions"><a class="btn primary" href="/">Return home</a><a class="btn ghost" href="/status/">System status</a></div>
+  </div>
+</section>
+{% endblock %}
