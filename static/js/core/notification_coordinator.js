@@ -15,8 +15,8 @@
     'data connection issue failed to fetch'
   ]);
   let observer = null;
-  let lastToast = '';
-  let lastToastAt = 0;
+  let lastSignature = '';
+  let lastAt = 0;
 
   const normalize = value => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
   const isGeneric = value => {
@@ -25,35 +25,31 @@
   };
 
   function removeDuplicateGenericToasts(root = document) {
-    const nodes = [...root.querySelectorAll?.('.toast-stack .toast, #django-message-stack .toast') || []];
-    const railVisible = !!document.querySelector('.algobot-recovery-rail:not([hidden])');
+    const nodes = [...(root.querySelectorAll?.('.toast-stack .toast, #django-message-stack .toast') || [])];
+    const seen = new Set();
     nodes.forEach(node => {
       const text = normalize(node.textContent);
-      if (railVisible && isGeneric(text)) node.remove();
+      if (isGeneric(text)) {
+        node.remove();
+        return;
+      }
+      if (text && seen.has(text)) node.remove();
+      else if (text) seen.add(text);
     });
-  }
-
-  function bindStack(stack) {
-    if (!stack || stack.dataset.notificationCoordinator === 'true') return;
-    stack.dataset.notificationCoordinator = 'true';
-    stack.addEventListener('DOMNodeInserted', () => removeDuplicateGenericToasts(stack));
   }
 
   function startObserver() {
     if (observer || !document.body) return;
     observer = new MutationObserver(mutations => {
+      let relevant = false;
       for (const mutation of mutations) {
         mutation.addedNodes?.forEach(node => {
-          if (node.nodeType !== 1) return;
-          if (node.matches?.('.toast-stack, #django-message-stack')) bindStack(node);
-          if (node.matches?.('.toast, .algobot-recovery-rail') || node.querySelector?.('.toast, .algobot-recovery-rail')) {
-            removeDuplicateGenericToasts(document);
-          }
+          if (node.nodeType === 1 && (node.matches?.('.toast, .toast-stack, #django-message-stack, .algobot-recovery-rail') || node.querySelector?.('.toast, .algobot-recovery-rail'))) relevant = true;
         });
       }
+      if (relevant) removeDuplicateGenericToasts(document);
     });
     observer.observe(document.body, {childList:true, subtree:true});
-    bindStack(document.querySelector('#django-message-stack'));
     removeDuplicateGenericToasts(document);
   }
 
@@ -61,9 +57,9 @@
     const detail = event.detail || {};
     const signature = `${normalize(detail.code)}|${normalize(detail.url)}|${Number(detail.status || 0)}|${normalize(detail.message)}`;
     const now = Date.now();
-    if (signature === lastToast && now - lastToastAt < 1500) return;
-    lastToast = signature;
-    lastToastAt = now;
+    if (signature === lastSignature && now - lastAt < 1500) return;
+    lastSignature = signature;
+    lastAt = now;
     window.setTimeout(() => removeDuplicateGenericToasts(document), 0);
   });
 
