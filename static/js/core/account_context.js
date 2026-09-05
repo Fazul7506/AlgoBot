@@ -25,6 +25,15 @@
     selected=account;if(persist)storageSet(account.id);publish(reason);return account;
   }
 
+  async function confirmServerSelection(target){
+    const request=canonical();
+    if(!request||!target?.id)return null;
+    const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
+    if(!['demo','real'].includes(requestedType))return null;
+    const result=await request(`/api/brokers/accounts/${encodeURIComponent(target.id)}/select/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account_type:requestedType}),notifyOnError:false},8000);
+    return result?.active_account||result?.account||null;
+  }
+
   async function load(force=false){
     if(busy&&!force)return busy;
     const request=canonical();if(!request)return selected;
@@ -33,14 +42,18 @@
       accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
       const storedId=storageGet();
       const target=(storedId&&rows.find(a=>accountId(a)===storedId))||rows.find(a=>a.is_preferred||a.is_default||a.is_active)||rows[0]||null;
-      if(!target){selected=null;window.AlgoBotBrokerState?.reset('no-connected-broker-account');return null}
-      if(storedId&&accountId(target)===storedId){
-        try{
-          const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
-          const result=await request(`/api/brokers/accounts/${encodeURIComponent(target.id)}/select/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account_type:requestedType}),notifyOnError:false},8000);
-          const confirmed=result?.active_account||result?.account;
-          if(confirmed?.id){accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_preferred:false,is_active:false});window.AlgoBotBrokerAccounts=accounts.slice();return setSelected(confirmed,'account-context-hydrated',true)}
-        }catch(_){storageSet(null)}
+      if(!target){selected=null;storageSet(null);window.AlgoBotBrokerState?.reset('no-connected-broker-account');return null}
+      try{
+        const confirmed=await confirmServerSelection(target);
+        if(confirmed?.id){
+          accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_preferred:false,is_active:false});
+          window.AlgoBotBrokerAccounts=accounts.slice();
+          return setSelected(confirmed,'account-context-hydrated',true);
+        }
+      }catch(error){
+        // A failed reconciliation must not destroy a valid local selection. The
+        // service layer reports the error; page data remains account-isolated.
+        window.dispatchEvent(new CustomEvent('algobot:account-context-reconcile-failed',{detail:{accountId:target.id,error}}));
       }
       return setSelected(target,'account-context-hydrated',true);
     })().finally(()=>{busy=null});
@@ -52,13 +65,10 @@
     const target=accounts.find(a=>accountId(a)===String(id));
     if(!target)throw new Error('The selected broker account is no longer available. Refresh the account list.');
     if(target.switch_enabled===false)throw new Error('Broker account switching is disabled by platform configuration.');
-    const request=canonical();if(!request)throw new Error('The account API is not ready.');
-    const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
-    if(!['demo','real'].includes(requestedType))throw new Error('Synchronize the broker account before switching to it.');
-    const result=await request(`/api/brokers/accounts/${encodeURIComponent(target.id)}/select/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account_type:requestedType})},8000);
-    const confirmed=result?.active_account||result?.account;
+    const confirmed=await confirmServerSelection(target);
     if(!confirmed?.id||accountId(confirmed)!==accountId(target))throw new Error('Broker did not confirm the selected account.');
-    accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_preferred:false,is_active:false});window.AlgoBotBrokerAccounts=accounts.slice();
+    accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_preferred:false,is_active:false});
+    window.AlgoBotBrokerAccounts=accounts.slice();
     return setSelected(confirmed,'account-switch',true);
   }
 
@@ -67,13 +77,23 @@
   function getAccounts(){return accounts.slice()}
   window.AlgoBotAccountContext=Object.freeze({load,refresh:()=>load(true),selectAccount,getSelected,getSelectedId,getAccounts});
 
-  // Capture the existing UI button before legacy page-specific onclick handlers run.
-  // This leaves rendering/layout code in place while guaranteeing one selection authority.
+  // Compatibility for legacy account controls. Explicit target IDs always win;
+  // an unspecified switch control toggles to the next available account.
   document.addEventListener('click',event=>{
     const switchButton=event.target?.closest?.('[data-account-switch]');
-    if(switchButton){event.preventDefault();event.stopImmediatePropagation();const id=switchButton.dataset.accountId||switchButton.dataset.accountTarget;const accountsNow=getAccounts();const currentId=getSelectedId();const target=accountsNow.find(a=>accountId(a)!==String(currentId));if(target)selectAccount(target.id).catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})));}
+    if(switchButton){
+      event.preventDefault();event.stopImmediatePropagation();
+      const explicit=switchButton.dataset.accountId||switchButton.dataset.accountTarget;
+      const currentId=getSelectedId();
+      const target=explicit?accounts.find(a=>accountId(a)===String(explicit)):accounts.find(a=>accountId(a)!==String(currentId));
+      if(target)selectAccount(target.id).catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})));
+      return;
+    }
     const gridButton=event.target?.closest?.('[data-select]');
-    if(gridButton){event.preventDefault();event.stopImmediatePropagation();selectAccount(gridButton.dataset.select).catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})));}
+    if(gridButton){
+      event.preventDefault();event.stopImmediatePropagation();
+      selectAccount(gridButton.dataset.select).catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})));
+    }
   },true);
 
   window.addEventListener('algobot:backend-accounts-loaded',event=>{
