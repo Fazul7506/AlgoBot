@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}SaaS Control Center | AlgoBot{% endblock %}
+{% block mobile_title %}SaaS{% endblock %}
+{% block extra_css %}
+<style>
+.saas-page{max-width:1500px;margin:0 auto;padding:24px}.saas-hero{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:18px}.saas-hero h1{margin:4px 0}.saas-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:16px}.saas-card{padding:18px;border:1px solid var(--border-subtle,rgba(255,255,255,.08));border-radius:14px;background:var(--card-bg,#111827)}.saas-card span,.saas-card small{display:block;opacity:.58;font-size:11px}.saas-card strong{display:block;font-size:20px;margin:5px 0}.saas-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:14px}.saas-panel{padding:18px;border:1px solid var(--border-subtle,rgba(255,255,255,.08));border-radius:14px;background:var(--card-bg,#111827);margin-bottom:14px}.saas-panel h2{margin:0 0 12px}.saas-list{display:grid;gap:8px}.saas-row{display:flex;justify-content:space-between;gap:12px;padding:11px;border-radius:9px;background:rgba(255,255,255,.035)}.saas-actions{display:flex;gap:8px;flex-wrap:wrap}.saas-error{padding:12px;border-radius:9px;background:rgba(239,68,68,.12)}@media(max-width:900px){.saas-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.saas-layout{grid-template-columns:1fr}.saas-hero{flex-direction:column}}@media(max-width:560px){.saas-grid{grid-template-columns:1fr}.saas-page{padding:14px}}
+</style>
+{% endblock %}
+{% block content %}
+<section class="saas-page" data-saas-page>
+  <header class="saas-hero"><div><p class="eyebrow">PLATFORM · WORKSPACE</p><h1>SaaS Control Center</h1><p class="muted">Workspace, subscription and quota state from the AlgoBot backend.</p></div><div class="saas-actions"><a class="btn ghost" href="/billing/">Billing</a><a class="btn primary" href="/workspace/automation/">Workspace</a></div></header>
+  <section class="saas-grid" aria-label="SaaS summary">
+    <article class="saas-card"><span>Workspace</span><strong data-saas-tenant>Loading…</strong><small data-saas-tenant-status>Checking tenant state</small></article>
+    <article class="saas-card"><span>Subscription</span><strong data-saas-plan>Loading…</strong><small data-saas-renewal>Checking plan</small></article>
+    <article class="saas-card"><span>License</span><strong data-saas-license>Loading…</strong><small data-saas-limits>Checking limits</small></article>
+  </section>
+  <div class="saas-layout">
+    <main>
+      <section class="saas-panel"><h2>Organizations & workspaces</h2><div class="saas-list" data-saas-organizations><div class="empty-state">Loading organizations…</div></div></section>
+      <section class="saas-panel"><h2>Usage & quotas</h2><div class="saas-list" data-saas-usage><div class="empty-state">Loading usage…</div></div></section>
+    </main>
+    <aside>
+      <section class="saas-panel"><h2>Platform modules</h2><div class="saas-list"><a class="saas-row" href="/trading/"><span>Trading</span><b>Open</b></a><a class="saas-row" href="/backtesting/"><span>Backtesting</span><b>Open</b></a><a class="saas-row" href="/portfolio/"><span>Portfolio</span><b>Open</b></a><a class="saas-row" href="/developer/"><span>Developer</span><b>Open</b></a></div></section>
+      <section class="saas-panel"><h2>Backend state</h2><div class="saas-row"><span>API</span><b data-saas-api>Checking…</b></div></section>
+    </aside>
+  </div>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'js/core/frontend_runtime_bootstrap.js' %}?v=20260903-csrf-free" defer></script>
+<script>
+(() => {
+  'use strict';
+  const page=document.querySelector('[data-saas-page]'); if(!page)return;
+  const esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const get=async url=>{const response=await window.AlgoBotFrontendData.request(url,{},9000);return response||{}};
+  const set=(selector,value)=>{const node=page.querySelector(selector);if(node)node.textContent=value};
+  const render=async()=>{try{const data=await get('/api/tenants/dashboard/');const tenant=data.tenant||data.workspace||null;set('[data-saas-api]','Online');set('[data-saas-tenant]',tenant?.name||'No tenant');set('[data-saas-tenant-status]',tenant?.status||'No workspace attached');const subscription=tenant?.subscription||data.subscription||{};set('[data-saas-plan]',subscription.plan||'No plan');set('[data-saas-renewal]',subscription.renewal_date?`Renewal ${subscription.renewal_date}`:'No renewal date');const license=tenant?.license||data.license||{};set('[data-saas-license]',license.active?'Active':'Not issued');set('[data-saas-limits]',license.max_users?`${license.max_users} users · ${license.max_brokers||0} brokers · ${license.max_strategies||0} strategies`:'Limits unavailable');const orgs=tenant?.organizations||data.organizations||[];const orgNode=page.querySelector('[data-saas-organizations]');if(orgNode)orgNode.innerHTML=orgs.length?orgs.map(org=>`<div class="saas-row"><span><b>${esc(org.name)}</b><small>${esc(org.country||'')}</small></span><b>${Array.isArray(org.workspaces)?org.workspaces.length:0} workspaces</b></div>`).join(''):'<div class="empty-state">No organizations are attached to this tenant.</div>';const usage=tenant?.usage||data.usage||[];const usageNode=page.querySelector('[data-saas-usage]');if(usageNode)usageNode.innerHTML=usage.length?usage.map(item=>`<div class="saas-row"><span>${esc(String(item.metric||'usage').replaceAll('_',' '))}</span><b>${esc(item.usage)} / ${esc(item.quota??'∞')}</b></div>`).join(''):'<div class="empty-state">No usage metrics are currently available.</div>'}catch(error){set('[data-saas-api]','Unavailable');const node=page.querySelector('[data-saas-organizations]');if(node)node.innerHTML=`<div class="saas-error">SaaS backend data is temporarily unavailable. ${esc(error.message||'Retry shortly.')}</div>`}};
+  render();
+})();
+</script>
+{% endblock %}
