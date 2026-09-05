@@ -5,14 +5,14 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from apps.execution.models import Order
+from apps.brokers.models import Order
 from apps.notifications.models import Notification
 from apps.strategies.models import StrategySignal
 from core.account_context import get_active_account
 
 
 class DashboardViewSet(viewsets.ViewSet):
-    """Canonical dashboard API backed by the application's real model fields."""
+    """Canonical dashboard API backed by the application's real broker models."""
 
     permission_classes = [permissions.IsAuthenticated]
 
@@ -27,7 +27,7 @@ class DashboardViewSet(viewsets.ViewSet):
     def _orders_for_account(user, account):
         if not account:
             return Order.objects.none()
-        return Order.objects.filter(user=user, broker_account=account)
+        return Order.objects.filter(user=user, account=account)
 
     @action(detail=False, methods=["get"])
     def account_overview(self, request):
@@ -107,7 +107,7 @@ class DashboardViewSet(viewsets.ViewSet):
                         "status": row.status,
                         "strategy": row.strategy,
                         "created_at": row.created_at,
-                        "broker_reference": row.broker_reference,
+                        "broker_reference": row.broker_order_id,
                     }
                     for row in rows
                 ],
