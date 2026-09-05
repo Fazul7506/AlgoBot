@@ -7,7 +7,7 @@ from core.dashboard_api import DashboardViewSet
 
 
 class DashboardAccountOverviewTests(TestCase):
-    def test_account_overview_works_with_normal_django_query_parameters(self):
+    def test_account_overview_uses_broker_account_relation(self):
         user = get_user_model().objects.create_user(
             username="dashboard-regression",
             email="dashboard-regression@example.com",
@@ -28,14 +28,11 @@ class DashboardAccountOverviewTests(TestCase):
             equity="100.00",
         )
 
-        request = APIRequestFactory().get(
-            "/api/dashboard/account_overview/?limit=20",
-        )
+        request = APIRequestFactory().get("/api/dashboard/account_overview/")
         force_authenticate(request, user=user)
-        view = DashboardViewSet.as_view({"get": "account_overview"})
+        response = DashboardViewSet.as_view({"get": "account_overview"})(request)
 
-        result = view(request)
-
-        self.assertEqual(result.status_code, 200)
-        self.assertEqual(result.data["data"]["account"]["account_id"], account.account_id)
-        self.assertEqual(result.data["data"]["account"]["currency"], "USD")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["account"]["account_id"], account.account_id)
+        self.assertEqual(response.data["data"]["account"]["currency"], "USD")
+        self.assertEqual(response.data["data"]["trading_stats"]["total_trades"], 0)
