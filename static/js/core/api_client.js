@@ -24,11 +24,9 @@
   }
   function emitError(error) { window.dispatchEvent(new CustomEvent('algobot:api-error', { detail: { url: error.url, method: error.method, status: error.status, code: error.code, message: error.message, retryable: error.retryable } })); }
   const sameOriginFallbackPath = path => /^\/api\/brokers\/accounts\/[^/]+\/select\/$/.test(path) || /^\/api\/ai\/predict\/$/.test(path);
-  const edgeFailure = (response, text) => {
-    const body = String(text || '').toLowerCase();
+  const edgeFailure = response => {
     const contentType = String(response?.headers?.get('content-type') || '').toLowerCase();
-    return [403,429,500,502,503,504,520,521,522,524].includes(Number(response?.status)) &&
-      (body.includes('just a moment') || body.includes('challenge-platform') || body.includes('challenges.cloudflare.com') || (body.includes('cloudflare') && contentType.includes('text/html')));
+    return [403,429,500,502,503,504,520,521,522,524].includes(Number(response?.status)) && contentType.includes('text/html');
   };
 
   function normalizeOrderPayload(body) {
@@ -92,7 +90,7 @@
         const network = new APIError(error?.message || 'Network request failed', {code:'NETWORK_ERROR',url:url.toString(),method});
         emitError(network); throw network;
       }
-      if (sameOriginFallbackPath(raw) && apiBase && edgeFailure(response, '')) {
+      if (sameOriginFallbackPath(raw) && apiBase && edgeFailure(response)) {
         try {
           const fallback = await nativeFetch(new URL(raw, window.location.origin).toString(), {...options, method, body, headers, credentials:'same-origin'});
           if (fallback.ok) response = fallback;
@@ -123,6 +121,7 @@
   }
 
   const apiClient = new APIClient();
-  // Do not monkey-patch window.fetch. Shared transport already owns timeout and cancellation.\n  window.__algoBotApiClientFetch = true;
+  // Do not monkey-patch window.fetch. Shared transport already owns timeout and cancellation.
+  window.__algoBotApiClientFetch = true;
   window.AlgoBotAPI = Object.freeze({APIClient,APIError,apiClient});
 })();
