@@ -25,37 +25,46 @@
     selected=account;if(persist)storageSet(account.id);publish(reason);return account;
   }
 
-  async function confirmServerSelection(target){
-    const request=canonical();
-    if(!request||!target?.id)return null;
-    const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
-    if(!['demo','real'].includes(requestedType))return null;
-    const result=await request(`/api/brokers/accounts/${encodeURIComponent(target.id)}/select/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account_type:requestedType}),notifyOnError:false},8000);
-    return result?.active_account||result?.account||null;
-  }
-
   async function load(force=false){
     if(busy&&!force)return busy;
     const request=canonical();if(!request)return selected;
     busy=(async()=>{
       const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},10000)).filter(a=>a?.id);
       accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
-      const storedId=storageGet();
-      const target=(storedId&&rows.find(a=>accountId(a)===storedId))||rows.find(a=>a.is_preferred||a.is_default||a.is_active)||rows[0]||null;
-      if(!target){selected=null;storageSet(null);window.AlgoBotBrokerState?.reset('no-connected-broker-account');return null}
+
+      // The server session is authoritative. Hydration must never silently POST
+      // a stale localStorage choice back to the server, because that can make
+      // one page show a different account from the dashboard.
+      let serverSelected=null;
       try{
-        const confirmed=await confirmServerSelection(target);
-        if(confirmed?.id){
-          accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_preferred:false,is_active:false});
-          window.AlgoBotBrokerAccounts=accounts.slice();
-          return setSelected(confirmed,'account-context-hydrated',true);
-        }
-      }catch(error){
-        // A failed reconciliation must not destroy a valid local selection. The
-        // service layer reports the error; page data remains account-isolated.
-        window.dispatchEvent(new CustomEvent('algobot:account-context-reconcile-failed',{detail:{accountId:target.id,error}}));
+        const active=await request('/api/brokers/accounts/active/',{notifyOnError:false},8000);
+        serverSelected=active?.active_account||active?.account||null;
+      }catch(_){
+        // The account list remains usable when the active-account read is
+        // temporarily unavailable; do not mutate the server selection here.
       }
-      return setSelected(target,'account-context-hydrated',true);
+
+      const serverId=accountId(serverSelected);
+      const storedId=storageGet();
+      const target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||
+        (storedId&&rows.find(a=>accountId(a)===storedId))||
+        rows.find(a=>a.is_default||a.is_active||a.is_preferred)||rows[0]||null;
+
+      if(!target){
+        selected=null;storageSet(null);window.AlgoBotBrokerState?.reset('no-connected-broker-account');
+        window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));
+        return null;
+      }
+
+      // Prefer the authoritative serialized account from /active/ when it is
+      // available so all shared consumers receive identical broker state.
+      const hydrated=serverSelected&&accountId(serverSelected)===accountId(target)
+        ? serverSelected
+        : target;
+      accounts=accounts.map(a=>accountId(a)===accountId(hydrated)?{...a,...hydrated,is_active:true}:{...a,is_active:false,is_preferred:false});
+      if(!accounts.some(a=>accountId(a)===accountId(hydrated)))accounts=[hydrated,...accounts];
+      window.AlgoBotBrokerAccounts=accounts.slice();
+      return setSelected(hydrated,'account-context-hydrated',true);
     })().finally(()=>{busy=null});
     return busy;
   }
@@ -65,7 +74,12 @@
     const target=accounts.find(a=>accountId(a)===String(id));
     if(!target)throw new Error('The selected broker account is no longer available. Refresh the account list.');
     if(target.switch_enabled===false)throw new Error('Broker account switching is disabled by platform configuration.');
-    const confirmed=await confirmServerSelection(target);
+    const request=canonical();
+    if(!request)throw new Error('The broker account service is not ready.');
+    const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
+    const payload=['demo','real'].includes(requestedType)?{account_type:requestedType}:{};
+    const confirmedResponse=await request(`/api/brokers/accounts/${encodeURIComponent(target.id)}/select/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)},8000);
+    const confirmed=confirmedResponse?.active_account||confirmedResponse?.account;
     if(!confirmed?.id||accountId(confirmed)!==accountId(target))throw new Error('Broker did not confirm the selected account.');
     accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_preferred:false,is_active:false});
     window.AlgoBotBrokerAccounts=accounts.slice();

@@ -15,9 +15,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from apps.brokers.models import BrokerAccount
 from core.account_context import get_active_account
 from .deriv_sync import _request
+from .models import MarketSymbol
 
 CATALOGUE_CACHE = "algobot:broker:deriv:active-symbols"
 CAPABILITIES_CACHE_PREFIX = "algobot:broker:deriv:contracts-for:"
@@ -48,6 +48,27 @@ def _normalise_symbol(item):
     }
 
 
+def _cached_database_catalogue():
+    rows = MarketSymbol.objects.filter(
+        broker="deriv", is_active=True, is_tradable=True
+    ).order_by("market", "symbol")
+    return [
+        {
+            "symbol": row.symbol,
+            "display_name": row.display_name,
+            "market": row.market,
+            "sub_market": row.sub_market,
+            "symbol_type": "",
+            "pip_size": row.pip_size,
+            "is_active": row.is_active,
+            "is_tradable": row.is_tradable,
+            "exchange_is_open": True,
+            "is_trading_suspended": False,
+        }
+        for row in rows
+    ]
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def catalogue(request):
@@ -63,11 +84,15 @@ def catalogue(request):
             raw = response.get("active_symbols") or []
             payload = [_normalise_symbol(item) for item in raw if isinstance(item, dict) and item.get("underlying_symbol")]
             payload = [item for item in payload if item["is_active"]]
-            cache.set(CATALOGUE_CACHE, payload, timeout=30)
-        if not payload:
-            raise RuntimeError("Deriv returned no active tradable instruments")
-        return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,"symbols":payload,"count":len(payload),"stale":False})
+            if payload:
+                cache.set(CATALOGUE_CACHE, payload, timeout=30)
+        if payload:
+            return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,"symbols":payload,"count":len(payload),"stale":False})
+        raise RuntimeError("Deriv returned no active tradable instruments")
     except Exception as exc:
+        cached = _cached_database_catalogue()
+        if cached:
+            return Response({"status":"stale","source":"cached_broker_catalogue","broker":account.broker.name,"account_id":account.account_id,"symbols":cached,"count":len(cached),"stale":True,"detail":"Live broker catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
         return Response({"status":"error","code":"BROKER_CATALOGUE_UNAVAILABLE","detail":str(exc),"source":"connected_broker"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 

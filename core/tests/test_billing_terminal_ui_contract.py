@@ -43,7 +43,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
     def test_terminal_account_switch_uses_canonical_api_client(self):
         from pathlib import Path
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
-        self.assertIn("const api=(u,o={},t=10000)=>window.AlgoBotFrontendData.request(u,o,t);", terminal)
+        self.assertIn("const canonicalApi=(u,o={},t=10000)=>window.AlgoBotFrontendData.request(u,o,t);", terminal)
+        self.assertIn("window.AlgoBotServices?.request?.('trading'", terminal)
         self.assertIn("switchAuthoritativeAccount", terminal)
         self.assertIn("/api/brokers/accounts/${encodeURIComponent(id)}/select/", terminal)
         self.assertNotIn("same-origin", terminal)

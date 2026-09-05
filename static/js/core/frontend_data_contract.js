@@ -26,7 +26,11 @@
     const targetOrigin=new URL(target,window.location.origin).origin;
     const sameOrigin=targetOrigin===window.location.origin;
     const selectedId=brokerState()?.get?.()?.account?.id;
-    if(sameOrigin && selectedId && !headers.has('X-Algobot-Account-ID')) headers.set('X-Algobot-Account-ID',String(selectedId));
+    // The account context is part of the canonical request contract on both the
+    // Django web origin and an explicitly configured API origin. Without this,
+    // a cross-origin API host can see the user's session but not the selected
+    // account context, producing the terminal-only "no connected account" state.
+    if(selectedId && !headers.has('X-Algobot-Account-ID')) headers.set('X-Algobot-Account-ID',String(selectedId));
     const crossOrigin=!sameOrigin;
     const response=await nativeFetch(target,{credentials:crossOrigin?'include':'same-origin',...options,headers,cache:'no-store',signal:controller.signal});
     return{response,text:await response.text()};

@@ -1,6 +1,6 @@
 /* Live connected-broker market capability bridge.
  * Transport, timeout, account context and error reporting are centralized in
- * AlgoBotFrontendData. This module only renders broker-specific capabilities.
+ * AlgoBotServices. This module only renders broker-specific capabilities.
  */
 (() => {
   'use strict';
@@ -10,7 +10,7 @@
   const $=(s,r=document)=>r.querySelector(s);
   const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
   const list=v=>window.AlgoBotFrontendData?.list?.(v)||[];
-  const api=(url,options={},timeout=12000)=>window.AlgoBotFrontendData?.request?.(url,options,timeout);
+  const api=(url,options={},timeout=12000)=>window.AlgoBotServices?.request?.('market-data',url,options,timeout)||window.AlgoBotFrontendData?.request?.(url,options,timeout);
   let contracts=[],capabilitiesRequest=0;
 
   const directionFor=type=>/PUT|FALL|LOWER|MULTDOWN|DIGITUNDER|NOTOUCH|TURBOSSHORT|RUNLOW|EXPIRYMISS/i.test(String(type||''))?'SELL':'BUY';
