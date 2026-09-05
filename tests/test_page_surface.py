@@ -2,21 +2,10 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import URLPattern, URLResolver, get_resolver
 
-
 PUBLIC_PAGES = [
-    "/",
-    "/login/",
-    "/register/",
-    "/terms/",
-    "/privacy/",
-    "/cookies/",
-    "/licensing/",
-    "/contact/",
-    "/about/",
-    "/data-deletion/",
-    "/status/",
+    "/", "/login/", "/register/", "/terms/", "/privacy/", "/cookies/",
+    "/licensing/", "/contact/", "/about/", "/data-deletion/", "/status/",
 ]
-
 AUTHENTICATED_PAGES = [
     "/dashboard/", "/billing/", "/billing/success/", "/billing/cancel/",
     "/brokers/marketplace/", "/saas/", "/markets/", "/market-scanner/",
@@ -29,28 +18,30 @@ AUTHENTICATED_PAGES = [
     "/developer/", "/developer/keys/", "/smart-money/", "/smart-money/heatmap/",
     "/analysis/", "/workspace/automation/", "/workspace/automation/workflow-templates/",
 ]
+NON_HTML_PREFIXES = (
+    "/api/", "/health/", "/analytics/export/", "/analytics/markets/",
+    "/webhooks/", "/billing/checkout/", "/billing/change-plan/",
+    "/billing/cancel-subscription/", "/billing/reconcile/",
+)
+NON_HTML_EXACT = {"/api"}
 
 
 def static_browser_routes():
-    """Discover every parameter-free, non-API GET route from Django URLconf."""
+    """Discover parameter-free browser routes; APIs/exports/health endpoints are excluded."""
     routes = set()
 
     def walk(patterns, prefix=""):
         for entry in patterns:
             if isinstance(entry, URLResolver):
                 route = str(getattr(entry.pattern, "_route", ""))
-                if route and "<" not in route:
+                if "<" not in route:
                     walk(entry.url_patterns, prefix + route)
             elif isinstance(entry, URLPattern):
                 route = str(getattr(entry.pattern, "_route", ""))
-                full = (prefix + route).replace("//", "/")
-                if "<" in full or full.startswith("/api/") or "api/" in full.split("/", 2)[0:1]:
+                full = "/" + (prefix + route).strip("/") + "/" if (prefix + route).strip("/") else "/"
+                if "<" in full or full in NON_HTML_EXACT or full.startswith(NON_HTML_PREFIXES):
                     continue
-                callback = getattr(entry, "callback", None)
-                methods = getattr(callback, "actions", None) or getattr(callback, "http_method_names", None)
-                if methods is not None and "get" not in [str(m).lower() for m in methods]:
-                    continue
-                routes.add("/" + full.strip("/") + "/" if full.strip("/") else "/")
+                routes.add(full)
 
     walk(get_resolver().url_patterns)
     return sorted(routes)
@@ -84,7 +75,7 @@ class BrowserPageSurfaceTests(TestCase):
     def test_every_static_django_browser_route_is_smoke_tested(self):
         self.client.force_login(self.user)
         routes = static_browser_routes()
-        self.assertGreaterEqual(len(routes), len(PUBLIC_PAGES) + len(AUTHENTICATED_PAGES) - 5)
+        self.assertGreaterEqual(len(routes), len(AUTHENTICATED_PAGES) + len(PUBLIC_PAGES) - 5)
         for path in routes:
             with self.subTest(path=path):
                 self.assert_html_response(path, self.client.get(path))
