@@ -26,7 +26,6 @@
     const targetOrigin=new URL(target,window.location.origin).origin;
     const sameOrigin=targetOrigin===window.location.origin;
     const selectedId=brokerState()?.get?.()?.account?.id;
-    // Same-origin requests can carry an explicit account header without a CORS preflight.
     if(sameOrigin && selectedId && !headers.has('X-Algobot-Account-ID')) headers.set('X-Algobot-Account-ID',String(selectedId));
     const crossOrigin=!sameOrigin;
     const response=await nativeFetch(target,{credentials:crossOrigin?'include':'same-origin',...options,headers,cache:'no-store',signal:controller.signal});
@@ -42,6 +41,7 @@
       if(inflight.has(key))return inflight.get(key);
       const recent=cache.get(key);if(recent&&Date.now()-recent.at<=GET_CACHE_MS)return recent.payload;
     }
+    const retry=()=>request(rawUrl,{...options,notifyOnError:true},timeout);
     const promise=(async()=>{
       let controller=new AbortController(),timer=setTimeout(()=>controller.abort(),Math.max(1000,timeout)),result,firstError=null;
       try{result=await fetchOnce(url,options,controller)}catch(error){
@@ -49,10 +49,10 @@
         if(!result && apiBase && !/^https?:\/\//i.test(url) && safeMethods.has(method)){
           try{controller=new AbortController();clearTimeout(timer);timer=setTimeout(()=>controller.abort(),Math.max(1000,timeout));result=await fetchOnce(url,options,controller)}catch(fallbackError){firstError=fallbackError;result=null}
         }
-        if(!result){const e=new Error(firstError?.name==='AbortError'?'Backend request timed out':(firstError?.message||'Network request failed'));e.code=firstError?.name==='AbortError'?'API_TIMEOUT':'NETWORK_ERROR';e.status=0;e.retryable=safeMethods.has(method);notifyApiError(options,{url:rawUrl,method,status:0,code:e.code,message:e.message,retryable:e.retryable});throw e}
+        if(!result){const e=new Error(firstError?.name==='AbortError'?'Backend request timed out':(firstError?.message||'Network request failed'));e.code=firstError?.name==='AbortError'?'API_TIMEOUT':'NETWORK_ERROR';e.status=0;e.retryable=safeMethods.has(method);notifyApiError(options,{url:rawUrl,method,status:0,code:e.code,message:e.message,retryable:e.retryable,retry});throw e}
       }finally{clearTimeout(timer)}
       const{response,text}=result,parsed=parsePayload(response,text),payload=parsed?.django?parsed.payload:parsed;
-      if(!response.ok){const error=new Error(parsed?.django?parsed.message||statusMessage(response.status,payload):statusMessage(response.status,payload));error.status=response.status;error.code=payload.code||(isCloudflareChallenge(response,text)?'EDGE_CHALLENGE':'API_ERROR');error.isEdgeChallenge=error.code==='EDGE_CHALLENGE';error.retryable=safeMethods.has(method)&&response.status>=500;notifyApiError(options,{url:rawUrl,method,status:response.status,code:error.code,message:error.message,retryable:error.retryable,edgeChallenge:error.isEdgeChallenge});throw error}
+      if(!response.ok){const error=new Error(parsed?.django?parsed.message||statusMessage(response.status,payload):statusMessage(response.status,payload));error.status=response.status;error.code=payload.code||(isCloudflareChallenge(response,text)?'EDGE_CHALLENGE':'API_ERROR');error.isEdgeChallenge=error.code==='EDGE_CHALLENGE';error.retryable=safeMethods.has(method)&&response.status>=500;notifyApiError(options,{url:rawUrl,method,status:response.status,code:error.code,message:error.message,retryable:error.retryable,edgeChallenge:error.isEdgeChallenge,retry});throw error}
       if(method==='GET')cache.set(key,{payload,at:Date.now()});
       return payload;
     })();
