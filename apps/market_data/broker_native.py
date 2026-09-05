@@ -16,19 +16,15 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from apps.brokers.models import BrokerAccount
+from core.account_context import get_active_account
 from .deriv_sync import _request
 
 CATALOGUE_CACHE = "algobot:broker:deriv:active-symbols"
 CAPABILITIES_CACHE_PREFIX = "algobot:broker:deriv:contracts-for:"
 
 
-def _account(user):
-    return (
-        BrokerAccount.objects.filter(user=user, status="active", broker__status="active")
-        .select_related("broker")
-        .order_by("-id")
-        .first()
-    )
+def _account(user, request=None):
+    return get_active_account(user, request=request)
 
 
 def _public_deriv(payload):
@@ -55,7 +51,7 @@ def _normalise_symbol(item):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def catalogue(request):
-    account = _account(request.user)
+    account = _account(request.user, request=request)
     if not account:
         return Response({"detail": "Connect a broker before loading its market catalogue."}, status=status.HTTP_409_CONFLICT)
     if account.broker.broker_type != "deriv":
@@ -87,7 +83,7 @@ def capabilities(request):
     frontend timeout expired.
     """
     symbol = str(request.query_params.get("symbol") or "").strip()
-    account = _account(request.user)
+    account = _account(request.user, request=request)
     if not account:
         return Response({"detail": "Connect a broker before loading trading capabilities."}, status=status.HTTP_409_CONFLICT)
     if not symbol:
