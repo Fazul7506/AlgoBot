@@ -4,10 +4,10 @@
 
   const nativeFetch = window.fetch.bind(window);
   const configuredApiBase = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
-  const defaultApiBase = window.location.hostname === 'algobot.dpdns.org' || window.location.hostname === 'www.algobot.dpdns.org'
-    ? 'https://api.algobot.dpdns.org'
-    : '';
-  const apiBase = (configuredApiBase || defaultApiBase).replace(/\/+$/, '');
+  // Browser requests must remain same-origin unless the deployment explicitly
+  // supplies an API origin. This prevents authenticated pages from silently
+  // switching to a second origin and producing generic "Failed to fetch" errors.
+  const apiBase = configuredApiBase.replace(/\/+$/, '');
   const aliases = {'/trading/order/': '/api/orders/', '/trading/preview/': '/api/orders/preview/', '/trading/ai/predict/': '/api/ai/predict/'};
 
   function resolveUrl(path) { return new URL(aliases[path] || path || '/', apiBase || window.location.origin); }
@@ -33,6 +33,8 @@
       const validation = payload.validation_context && typeof payload.validation_context === 'object' ? payload.validation_context : {};
       Object.assign(routing, validation);
       Object.assign(routing, window.__algobotAiOrderContext || {});
+      const selectedId = window.AlgoBotAccountContext?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id;
+      if (selectedId != null && routing.authoritative_account_id == null) routing.authoritative_account_id = selectedId;
       if (payload.broker_account != null && routing.authoritative_account_id == null) routing.authoritative_account_id = payload.broker_account;
       if (payload.symbol && routing.underlying_symbol == null) routing.underlying_symbol = payload.symbol;
       if (payload.contract_type && routing.contract_type == null) routing.contract_type = payload.contract_type;
@@ -51,6 +53,8 @@
     const headers = new Headers((typeof input === 'object' && input?.headers) || {});
     new Headers(options.headers || {}).forEach((value, key) => headers.set(key, value));
     headers.set('Accept', headers.get('Accept') || 'application/json');
+    const selectedId = window.AlgoBotAccountContext?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id;
+    if (selectedId != null && !headers.has('X-Algobot-Account-ID')) headers.set('X-Algobot-Account-ID', String(selectedId));
     let body = options.body;
     if (url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') body = normalizeOrderPayload(body);
     const controller = new AbortController();
@@ -83,13 +87,10 @@
     constructor({baseURL=apiBase,defaultHeaders={},timeout=25000}={}) { this.baseURL=String(baseURL||'').replace(/\/+$/,''); this.defaultHeaders={Accept:'application/json',...defaultHeaders}; this.timeout=timeout; }
     buildUrl(path) { if (!path) return this.baseURL||'/'; if (/^https?:\/\//i.test(path)) return path; return `${this.baseURL}${path.startsWith('/')?path:`/${path}`}`; }
     async request(path, options={}) {
-      const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), this.timeout);
-      try {
-        const response = await guardedFetch(this.buildUrl(path), {...options, headers:{...this.defaultHeaders,...(options.headers||{})}, signal:options.signal||controller.signal, __algoTimeoutMs:this.timeout});
-        const payload = parsePayload(await response.text());
-        if (!response.ok) { const error = new APIError(messageFromPayload(payload, `HTTP ${response.status} request failure`), {status:response.status,payload,url:response.url||this.buildUrl(path),method:options.method||'GET',response}); emitError(error); throw error; }
-        return payload;
-      } finally { clearTimeout(timer); }
+      const response = await guardedFetch(this.buildUrl(path), {...options, headers:{...this.defaultHeaders,...(options.headers||{})}, __algoTimeoutMs:options.__algoTimeoutMs||this.timeout});
+      const payload = parsePayload(await response.text());
+      if (!response.ok) { const error = new APIError(messageFromPayload(payload, `HTTP ${response.status} request failure`), {status:response.status,payload,url:response.url||this.buildUrl(path),method:options.method||'GET',response}); emitError(error); throw error; }
+      return payload;
     }
     get(path, options={}) { return this.request(path,{...options,method:'GET'}); }
     post(path,payload,options={}) { return this.request(path,{...options,method:'POST',body:JSON.stringify(payload||{}),headers:{'Content-Type':'application/json',...(options.headers||{})}}); }
