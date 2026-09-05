@@ -23,7 +23,6 @@ AUTHENTICATED_PAGES = [
     "/saas/",
     "/markets/",
     "/market-scanner/",
-    "/market-catalogue/",
     "/strategies/",
     "/strategies/builder/",
     "/trading/",
