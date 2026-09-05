@@ -74,7 +74,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 except Exception:
                     from apps.market_data.models import Tick
                     tick = Tick.objects.filter(symbol__symbol=data.get('symbol')).order_by('-epoch', '-received_at').first()
-                    if tick is None: raise ValueError(f'No persisted broker tick is available for {data.get("symbol")}.' )
+                    if tick is None: raise ValueError(f'No persisted broker tick is available for {data.get("symbol")}.')
                     age = max(0, (timezone.now() - tick.received_at).total_seconds()); max_age = int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30))
                     if age > max_age: raise ValueError(f'Market data is stale ({int(age)}s old; limit {max_age}s).')
                     quote = SimpleNamespace(last_price=tick.quote, bid=tick.bid, ask=tick.ask, spread=tick.spread, timestamp=tick.received_at)
