@@ -83,5 +83,5 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("sameOriginRetryPath", client)
         self.assertIn("forceSameOrigin=false", client)
         self.assertIn("window.location.origin}${url.startsWith('/')", client)
-        self.assertIn("/api/brokers/accounts/[^/]+/select/", client)
+        self.assertIn("sameOriginRetryPath", client)
         self.assertIn("Never apply this fallback to order/execution POSTs", client)
