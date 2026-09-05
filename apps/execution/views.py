@@ -74,7 +74,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 except Exception:
                     from apps.market_data.models import Tick
                     tick = Tick.objects.filter(symbol__symbol=data.get('symbol')).order_by('-epoch', '-received_at').first()
-                    if tick is None: raise ValueError(f'No persisted broker tick is available for {data.get("symbol")}.')
+                    if tick is None: raise ValueError(f'No persisted broker tick is available for {data.get("symbol")}.' )
                     age = max(0, (timezone.now() - tick.received_at).total_seconds()); max_age = int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30))
                     if age > max_age: raise ValueError(f'Market data is stale ({int(age)}s old; limit {max_age}s).')
                     quote = SimpleNamespace(last_price=tick.quote, bid=tick.bid, ask=tick.ask, spread=tick.spread, timestamp=tick.received_at)
@@ -114,7 +114,7 @@ class ExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
 class ReconciliationEventViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ReconciliationEventSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self):
-        qs=ReconciliationEvent.objects.filter(user=self.request.user).select_related('broker_account','reviewed_by'); status_value=self.request.query_params.get('status'); broker_account=self.request.query_params.get('broker_account')
+        qs=ReconciliationEvent.objects.filter(user=self.request.user).select_related('broker_account','reviewed_by'); status_value=self.request.GET.get('status'); broker_account=self.request.GET.get('broker_account')
         if status_value in {ReconciliationEvent.STATUS_OPEN,ReconciliationEvent.STATUS_REVIEWED}: qs=qs.filter(status=status_value)
         if broker_account and broker_account.isdigit(): qs=qs.filter(broker_account_id=int(broker_account))
         return qs
