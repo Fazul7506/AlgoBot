@@ -26,8 +26,13 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False
-SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", "Lax")
-CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", "Lax")
+# The production UI and API live on separate hostnames.  On registries that
+# treat the parent zone as a public suffix, the two hostnames are cross-site
+# for SameSite purposes, so Lax would silently omit the authenticated session
+# from browser API requests.  None is safe here because the cookie is Secure,
+# scoped to the AlgoBot domain, and API access remains protected by CORS/auth.
+SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", "None")
+CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", "None")
 SESSION_COOKIE_DOMAIN = env("SESSION_COOKIE_DOMAIN", ".algobot.dpdns.org")
 CSRF_COOKIE_DOMAIN = env("CSRF_COOKIE_DOMAIN", ".algobot.dpdns.org")
 
