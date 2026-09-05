@@ -4,13 +4,24 @@
 
   const nativeFetch = window.fetch.bind(window);
   const configuredApiBase = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
-  // Browser requests must remain same-origin unless the deployment explicitly
-  // supplies an API origin. This prevents authenticated pages from silently
-  // switching to a second origin and producing generic "Failed to fetch" errors.
-  const apiBase = configuredApiBase.replace(/\/+$/, '');
+  const productionApiBase = ['algobot.dpdns.org', 'www.algobot.dpdns.org'].includes(window.location.hostname)
+    ? 'https://api.algobot.dpdns.org'
+    : '';
+  // Production browser API traffic must never fall back to the web/page origin.
+  const apiBase = (configuredApiBase || productionApiBase || window.location.origin).replace(/\/+$/, '');
   const aliases = {'/trading/order/': '/api/orders/', '/trading/preview/': '/api/orders/preview/', '/trading/ai/predict/': '/api/ai/predict/'};
 
-  function resolveUrl(path) { return new URL(aliases[path] || path || '/', apiBase || window.location.origin); }
+  function resolveUrl(path) {
+    const raw = String(aliases[path] || path || '/');
+    if (/^https?:\/\//i.test(raw)) {
+      const absolute = new URL(raw, window.location.origin);
+      if (productionApiBase && ['algobot.dpdns.org', 'www.algobot.dpdns.org'].includes(absolute.hostname)) {
+        return new URL(`${absolute.pathname}${absolute.search}${absolute.hash}`, productionApiBase);
+      }
+      return absolute;
+    }
+    return new URL(raw, `${apiBase}/`);
+  }
   function parsePayload(text) { if (!text) return {}; try { return JSON.parse(text); } catch (_) { return { detail: text }; } }
   function messageFromPayload(payload, fallback) {
     if (!payload) return fallback;
@@ -23,11 +34,6 @@
     return fallback;
   }
   function emitError(error) { window.dispatchEvent(new CustomEvent('algobot:api-error', { detail: { url: error.url, method: error.method, status: error.status, code: error.code, message: error.message, retryable: error.retryable } })); }
-  const sameOriginFallbackPath = path => /^\/api\/brokers\/accounts\/[^/]+\/select\/$/.test(path) || /^\/api\/ai\/predict\/$/.test(path);
-  const edgeFailure = response => {
-    const contentType = String(response?.headers?.get('content-type') || '').toLowerCase();
-    return [403,429,500,502,503,504,520,521,522,524].includes(Number(response?.status)) && contentType.includes('text/html');
-  };
 
   function normalizeOrderPayload(body) {
     if (typeof body !== 'string') return body;
@@ -69,34 +75,20 @@
     const signal = callerSignal && typeof AbortSignal.any === 'function' ? AbortSignal.any([callerSignal, controller.signal]) : controller.signal;
     if (callerSignal?.aborted) controller.abort(callerSignal.reason);
     try {
-      let response;
       try {
-        response = await nativeFetch(url.toString(), {...options, method, body, headers, credentials: options.credentials || 'include', signal});
+        return await nativeFetch(url.toString(), {...options, method, body, headers, credentials: options.credentials || 'include', signal});
       } catch (error) {
         if (controller.signal.aborted && !callerSignal?.aborted) {
           const timeout = new APIError('API request timed out after ' + timeoutMs + 'ms', {code:'API_TIMEOUT',url:url.toString(),method});
-          if (sameOriginFallbackPath(raw) && apiBase) {
-            try { return await nativeFetch(new URL(raw, window.location.origin).toString(), {...options, method, body, headers, credentials:'same-origin'}); } catch (_) {}
-          }
           emitError(timeout); throw timeout;
         }
         if (callerSignal?.aborted) {
           const cancelled = new APIError(callerSignal.reason?.message || 'Request was cancelled.', {code:'REQUEST_ABORTED',url:url.toString(),method});
           cancelled.retryable = false; throw cancelled;
         }
-        if (sameOriginFallbackPath(raw) && apiBase) {
-          try { return await nativeFetch(new URL(raw, window.location.origin).toString(), {...options, method, body, headers, credentials:'same-origin'}); } catch (_) {}
-        }
         const network = new APIError(error?.message || 'Network request failed', {code:'NETWORK_ERROR',url:url.toString(),method});
         emitError(network); throw network;
       }
-      if (sameOriginFallbackPath(raw) && apiBase && edgeFailure(response)) {
-        try {
-          const fallback = await nativeFetch(new URL(raw, window.location.origin).toString(), {...options, method, body, headers, credentials:'same-origin'});
-          if (fallback.ok) response = fallback;
-        } catch (_) {}
-      }
-      return response;
     } finally { clearTimeout(timer); }
   }
 
@@ -106,7 +98,7 @@
 
   class APIClient {
     constructor({baseURL=apiBase,defaultHeaders={},timeout=25000}={}) { this.baseURL=String(baseURL||'').replace(/\/+$/,''); this.defaultHeaders={Accept:'application/json',...defaultHeaders}; this.timeout=timeout; }
-    buildUrl(path) { if (!path) return this.baseURL||'/'; if (/^https?:\/\//i.test(path)) return path; return `${this.baseURL}${path.startsWith('/')?path:`/${path}`}`; }
+    buildUrl(path) { return resolveUrl(path).toString(); }
     async request(path, options={}) {
       const response = await guardedFetch(this.buildUrl(path), {...options, headers:{...this.defaultHeaders,...(options.headers||{})}, __algoTimeoutMs:options.__algoTimeoutMs||this.timeout});
       const payload = parsePayload(await response.text());
@@ -121,7 +113,6 @@
   }
 
   const apiClient = new APIClient();
-  // Do not monkey-patch window.fetch. Shared transport already owns timeout and cancellation.
   window.__algoBotApiClientFetch = true;
-  window.AlgoBotAPI = Object.freeze({APIClient,APIError,apiClient});
+  window.AlgoBotAPI = Object.freeze({APIClient,APIError,apiClient,apiBase});
 })();

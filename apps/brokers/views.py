@@ -58,6 +58,14 @@ class BrokerViewSet(viewsets.ReadOnlyModelViewSet):
 class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=BrokerAccountSerializer;permission_classes=[JWTAuthenticatedPermission];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):return BrokerAccount.objects.filter(user=self.request.user).select_related('broker').order_by('broker__name','account_id')
+    def finalize_response(self,request, response_obj,*args,**kwargs):
+        response_obj=super().finalize_response(request,response_obj,*args,**kwargs)
+        # Account-scoped responses must never be cached or shared between
+        # sessions/accounts by a CDN, browser cache, or reverse proxy.
+        response_obj['Cache-Control']='private, no-store, max-age=0'
+        response_obj['Pragma']='no-cache'
+        response_obj['Vary']='Cookie, X-Algobot-Account-ID'
+        return response_obj
     @decorators.action(detail=True,methods=['post'])
     def select(self,request,pk=None):
         if not settings.ENABLE_BROKER_ACCOUNT_SWITCH:return response.Response({'detail':'Broker account switching is disabled by platform configuration.'},status=status.HTTP_403_FORBIDDEN)
