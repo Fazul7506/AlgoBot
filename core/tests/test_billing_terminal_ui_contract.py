@@ -49,3 +49,22 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("/api/brokers/accounts/${encodeURIComponent(id)}/select/", terminal)
         self.assertNotIn("same-origin", terminal)
         self.assertNotIn("X-CSRFToken", terminal)
+
+    def test_account_context_never_lets_stale_local_storage_override_server_state(self):
+        from pathlib import Path
+        context = Path("static/js/core/account_context.js").read_text(encoding="utf-8")
+        self.assertIn("/api/brokers/accounts/active/", context)
+        self.assertNotIn("(storedId&&rows.find(a=>accountId(a)===storedId))", context)
+        self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find", context)
+        self.assertIn("function getSelectedId(){return accountId(getSelected())||null}", context)
+
+    def test_sidebar_and_terminal_ai_use_canonical_account_context(self):
+        from pathlib import Path
+        sidebar = Path("static/js/sidebar_account_switch.js").read_text(encoding="utf-8")
+        ai = Path("static/js/trading_terminal_ai.js").read_text(encoding="utf-8")
+        self.assertIn("window.AlgoBotAccountContext", sidebar)
+        self.assertIn("await context().selectAccount(id)", sidebar)
+        self.assertNotIn("api(`/api/brokers/accounts/${encodeURIComponent(id)}/select/`", sidebar)
+        self.assertIn("window.AlgoBotServices?.request?.('ai'", ai)
+        self.assertIn("const selectedAccount=()=>window.AlgoBotAccountContext?.getSelected?.()||null;", ai)
+        self.assertIn("notifyOnError:false", ai)
