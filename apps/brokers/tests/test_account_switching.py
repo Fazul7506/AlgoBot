@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 from django.contrib.sessions.middleware import SessionMiddleware
 
-from core.account_context import SESSION_KEY, get_active_account, select_account
+from core.account_context import REQUEST_HEADER, SESSION_KEY, get_active_account, select_account
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 
 
@@ -64,6 +64,14 @@ class AccountSwitchingTests(TestCase):
             f'/api/brokers/accounts/active/?account_id={self.account_two.pk}'
         )
         self.assertEqual(get_active_account(self.user, request=request), self.account_two)
+
+    def test_request_header_can_select_an_account_without_replacing_session(self):
+        request = self._request()
+        select_account(request, self.account_one)
+        request.META[REQUEST_HEADER] = str(self.account_two.pk)
+
+        self.assertEqual(get_active_account(self.user, request=request), self.account_two)
+        self.assertEqual(request.session[SESSION_KEY], self.account_one.pk)
 
     def test_account_has_no_persistent_preference_field(self):
         self.assertNotIn('is_preferred', [field.name for field in BrokerAccount._meta.fields])
