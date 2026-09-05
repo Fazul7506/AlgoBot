@@ -12,11 +12,10 @@ permissions:
 jobs:
   templates:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       DJANGO_ENV: development
       SECRET_KEY: ci-template-validation-secret
-      DEBUG: "True"
       PYTHONDONTWRITEBYTECODE: "1"
 
     steps:
@@ -36,6 +35,10 @@ jobs:
         run: python scripts/validate_templates.py
       - name: Compile Python
         run: python -m compileall -q .
+      - name: Frontend asset and syntax audit
+        run: python scripts/frontend_audit.py
+      - name: Browser page-surface smoke tests
+        run: python manage.py test tests.test_page_surface apps.market_data.test_catalogue --verbosity=1
       # Keep canonical duplicate detection in the required CI path.
       - name: Repository hygiene audit
         run: python scripts/repository_hygiene.py
