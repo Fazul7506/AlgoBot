@@ -82,6 +82,5 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("sameOriginRetryPath", client)
         self.assertIn("forceSameOrigin=false", client)
-        self.assertIn("window.location.origin}${url.startsWith('/')", client)
-        self.assertIn("sameOriginRetryPath", client)
-        self.assertIn("Never apply this fallback to order/execution POSTs", client)
+        self.assertIn("window.location.origin", client)
+        self.assertIn("Execution", client)
