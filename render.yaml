@@ -27,8 +27,10 @@ services:
         value: .algobot.dpdns.org
       - key: SESSION_COOKIE_SECURE
         value: "true"
+      - key: SESSION_COOKIE_SAMESITE
+        value: "None"
       - key: CSRF_COOKIE_SAMESITE
-        value: Lax
+        value: "None"
     buildCommand: pip install -r requirements/base.txt && DJANGO_ENV=production python manage.py collectstatic --noinput
     startCommand: DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && python manage.py set_telegram_webhook && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
     healthCheckPath: /health/
