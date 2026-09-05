@@ -76,7 +76,13 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
             },
         ]
 
-        response = self.client.get("/api/market/broker-capabilities/?symbol=TEST")
+        from apps.market_data.broker_native import capabilities
+        previous_throttles = capabilities.cls.throttle_classes
+        capabilities.cls.throttle_classes = []
+        try:
+            response = self.client.get("/api/market/broker-capabilities/?symbol=TEST")
+        finally:
+            capabilities.cls.throttle_classes = previous_throttles
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["stale"])
