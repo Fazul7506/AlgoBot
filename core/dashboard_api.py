@@ -18,7 +18,7 @@ class DashboardViewSet(viewsets.ViewSet):
 
     @staticmethod
     def _limit(request,default=50,maximum=100):
-        try:return min(max(int(request.query_params.get('limit',default)),1),maximum)
+        try:return min(max(int(request.GET.get('limit',default)),1),maximum)
         except (TypeError,ValueError):return default
 
     @action(detail=False,methods=['get'])
@@ -34,7 +34,7 @@ class DashboardViewSet(viewsets.ViewSet):
 
     @action(detail=False,methods=['get'])
     def trade_history(self,request):
-        try:days=max(1,int(request.query_params.get('days',30)))
+        try:days=max(1,int(request.GET.get('days',30)))
         except (TypeError,ValueError):days=30
         start=timezone.now()-timedelta(days=days);account=get_active_account(request.user,request=request);qs=Order.objects.filter(user=request.user,created_at__gte=start,account=account) if account else Order.objects.none();rows=qs.order_by('-created_at')[:self._limit(request)]
         return Response({'status':'success','total':len(rows),'count':len(rows),'data':[{'id':row.id,'symbol':row.symbol,'stake':row.stake,'direction':row.direction,'status':row.status,'strategy':row.strategy,'created_at':row.created_at,'broker_reference':row.broker_reference} for row in rows]})
@@ -46,7 +46,7 @@ class DashboardViewSet(viewsets.ViewSet):
 
     @action(detail=False,methods=['get'])
     def signals(self,request):
-        symbol=str(request.query_params.get('symbol') or '').strip();qs=StrategySignal.objects.select_related('strategy','configuration').order_by('-timestamp');
+        symbol=str(request.GET.get('symbol') or '').strip();qs=StrategySignal.objects.select_related('strategy','configuration').order_by('-timestamp');
         if symbol:qs=qs.filter(symbol=symbol)
         rows=qs[:self._limit(request)]
         return Response({'status':'success','count':len(rows),'data':[{'id':row.id,'symbol':row.symbol,'direction':row.signal,'confidence':row.confidence,'market_regime':'','strategy':row.strategy.name,'was_executed':False,'created_at':row.timestamp} for row in rows]})
