@@ -21,8 +21,8 @@
     <button class="btn ghost" data-market-refresh type="button">Refresh catalogue</button>
   </section>
   <div class="market-category-row" data-market-categories aria-label="Market categories"></div>
-  <section class="market-grid deriv-market-grid" data-market-list><div class="market-empty">Connect a broker to load the active market catalogue.</div></section>
+  <section class="market-grid deriv-market-grid" data-market-list><div class="market-empty">Loading broker market catalogue…</div></section>
 </section>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/market_scanner.css' %}">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/market_watch.js' %}" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/core/public_market_data.js' %}?v=20260905-public-market1" defer></script><script src="{% static 'js/market_watch.js' %}?v=20260905-market-fallback1" defer></script>{% endblock %}
