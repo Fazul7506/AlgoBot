@@ -74,6 +74,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         live_ui = Path("static/js/live_broker_ui.js").read_text(encoding="utf-8")
         self.assertIn("Account selection is owned exclusively by core/account_context.js.", live_ui)
         self.assertNotIn("switchButton.onclick = () => selectAccount", live_ui)
+        self.assertNotIn("request(`/api/brokers/accounts/${target.id}/select/", live_ui)
+        self.assertIn("context.selectAccount(id)", live_ui)
 
     def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):
         from pathlib import Path
