@@ -6,118 +6,83 @@
   'use strict';
   if (window.AlgoBotAccountContext) return;
 
-  const STORAGE_KEY = 'algobot:selected-account-id:v1';
-  const list = value => Array.isArray(value) ? value : (Array.isArray(value?.results) ? value.results : (Array.isArray(value?.accounts) ? value.accounts : []));
-  let accounts = [];
-  let selected = null;
-  let busy = null;
+  const STORAGE_KEY='algobot:selected-account-id:v1';
+  const list=value=>Array.isArray(value)?value:(Array.isArray(value?.results)?value.results:(Array.isArray(value?.accounts)?value.accounts:[]));
+  let accounts=[],selected=null,busy=null;
+  const storageGet=()=>{try{return localStorage.getItem(STORAGE_KEY)}catch(_){return null}};
+  const storageSet=id=>{try{id==null?localStorage.removeItem(STORAGE_KEY):localStorage.setItem(STORAGE_KEY,String(id))}catch(_){}};
+  const accountId=a=>a?.id==null?null:String(a.id);
+  const canonical=()=>window.AlgoBotFrontendData?.request;
 
-  const storageGet = () => { try { return localStorage.getItem(STORAGE_KEY); } catch (_) { return null; } };
-  const storageSet = id => { try { id == null ? localStorage.removeItem(STORAGE_KEY) : localStorage.setItem(STORAGE_KEY, String(id)); } catch (_) {} };
-  const accountId = a => a?.id == null ? null : String(a.id);
-  const canonical = () => window.AlgoBotFrontendData?.request;
-
-  function setSelected(account, reason = 'account-selected', persist = true) {
-    if (!account?.id) return null;
-    selected = account;
-    if (persist) storageSet(account.id);
-    window.AlgoBotBrokerState?.setAccount(account, reason);
-    window.dispatchEvent(new CustomEvent('algobot:account-context-changed', {detail:{account, reason}}));
-    window.dispatchEvent(new CustomEvent('algobot:account-changed', {detail:account}));
-    return account;
+  function publish(reason){
+    window.AlgoBotBrokerState?.setAccount(selected,reason);
+    window.dispatchEvent(new CustomEvent('algobot:account-context-changed',{detail:{account:selected,reason}}));
+    window.dispatchEvent(new CustomEvent('algobot:account-changed',{detail:selected}));
+    window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));
+  }
+  function setSelected(account,reason='account-selected',persist=true){
+    if(!account?.id)return null;
+    selected=account;if(persist)storageSet(account.id);publish(reason);return account;
   }
 
-  async function load(force = false) {
-    if (busy && !force) return busy;
-    const request = canonical();
-    if (!request) return selected;
-    busy = (async () => {
-      const rows = list(await request('/api/brokers/accounts/', {notifyOnError:false}, 10000)).filter(a => a?.id);
-      accounts = rows;
-      window.AlgoBotBrokerAccounts = rows.slice();
-      const storedId = storageGet();
-      const target = (storedId && rows.find(a => accountId(a) === storedId))
-        || rows.find(a => a.is_preferred || a.is_default || a.is_active)
-        || rows[0]
-        || null;
-      if (!target) {
-        selected = null;
-        window.AlgoBotBrokerState?.reset('no-connected-broker-account');
-        return null;
+  async function load(force=false){
+    if(busy&&!force)return busy;
+    const request=canonical();if(!request)return selected;
+    busy=(async()=>{
+      const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},10000)).filter(a=>a?.id);
+      accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
+      const storedId=storageGet();
+      const target=(storedId&&rows.find(a=>accountId(a)===storedId))||rows.find(a=>a.is_preferred||a.is_default||a.is_active)||rows[0]||null;
+      if(!target){selected=null;window.AlgoBotBrokerState?.reset('no-connected-broker-account');return null}
+      if(storedId&&accountId(target)===storedId){
+        try{
+          const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
+          const result=await request(`/api/brokers/accounts/${encodeURIComponent(target.id)}/select/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account_type:requestedType}),notifyOnError:false},8000);
+          const confirmed=result?.active_account||result?.account;
+          if(confirmed?.id){accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_preferred:false,is_active:false});window.AlgoBotBrokerAccounts=accounts.slice();return setSelected(confirmed,'account-context-hydrated',true)}
+        }catch(_){storageSet(null)}
       }
-      if (storedId && accountId(target) === storedId) {
-        try {
-          const result = await request(`/api/brokers/accounts/${encodeURIComponent(target.id)}/select/`, {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({account_type: String(target.account_type || target.credentials?.account_type || '').toLowerCase()}) ,
-            notifyOnError:false
-          }, 8000);
-          const confirmed = result?.active_account || result?.account;
-          if (confirmed?.id) {
-            accounts = accounts.map(a => accountId(a) === accountId(confirmed) ? confirmed : {...a, is_preferred:false, is_active:false});
-            window.AlgoBotBrokerAccounts = accounts.slice();
-            setSelected(confirmed, 'account-context-hydrated', true);
-            return confirmed;
-          }
-        } catch (_) {
-          storageSet(null);
-        }
-      }
-      setSelected(target, 'account-context-hydrated', true);
-      return target;
-    })().finally(() => { busy = null; });
+      return setSelected(target,'account-context-hydrated',true);
+    })().finally(()=>{busy=null});
     return busy;
   }
 
-  async function selectAccount(id) {
-    const target = accounts.find(a => accountId(a) === String(id));
-    if (!target) throw new Error('The selected broker account is no longer available. Refresh the account list.');
-    if (target.switch_enabled === false) throw new Error('Broker account switching is disabled by platform configuration.');
-    const request = canonical();
-    if (!request) throw new Error('The account API is not ready.');
-    const requestedType = String(target.account_type || target.credentials?.account_type || '').toLowerCase();
-    if (!['demo','real'].includes(requestedType)) throw new Error('Synchronize the broker account before switching to it.');
-    if (busy) await busy.catch(() => {});
-    const result = await request(`/api/brokers/accounts/${encodeURIComponent(target.id)}/select/`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({account_type:requestedType})
-    }, 8000);
-    const confirmed = result?.active_account || result?.account;
-    if (!confirmed?.id || accountId(confirmed) !== accountId(target)) throw new Error('Broker did not confirm the selected account.');
-    accounts = accounts.map(a => accountId(a) === accountId(confirmed) ? confirmed : {...a, is_preferred:false, is_active:false});
-    window.AlgoBotBrokerAccounts = accounts.slice();
-    setSelected(confirmed, 'account-switch', true);
-    return confirmed;
+  async function selectAccount(id){
+    if(busy)await busy.catch(()=>{});
+    const target=accounts.find(a=>accountId(a)===String(id));
+    if(!target)throw new Error('The selected broker account is no longer available. Refresh the account list.');
+    if(target.switch_enabled===false)throw new Error('Broker account switching is disabled by platform configuration.');
+    const request=canonical();if(!request)throw new Error('The account API is not ready.');
+    const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
+    if(!['demo','real'].includes(requestedType))throw new Error('Synchronize the broker account before switching to it.');
+    const result=await request(`/api/brokers/accounts/${encodeURIComponent(target.id)}/select/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account_type:requestedType})},8000);
+    const confirmed=result?.active_account||result?.account;
+    if(!confirmed?.id||accountId(confirmed)!==accountId(target))throw new Error('Broker did not confirm the selected account.');
+    accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_preferred:false,is_active:false});window.AlgoBotBrokerAccounts=accounts.slice();
+    return setSelected(confirmed,'account-switch',true);
   }
 
-  function getSelected() { return selected || window.AlgoBotBrokerState?.get?.().account || null; }
-  function getSelectedId() { return accountId(getSelected()) || storageGet(); }
-  function getAccounts() { return accounts.slice(); }
+  function getSelected(){return selected||window.AlgoBotBrokerState?.get?.().account||null}
+  function getSelectedId(){return accountId(getSelected())||storageGet()}
+  function getAccounts(){return accounts.slice()}
+  window.AlgoBotAccountContext=Object.freeze({load,refresh:()=>load(true),selectAccount,getSelected,getSelectedId,getAccounts});
 
-  window.AlgoBotAccountContext = Object.freeze({load, refresh:() => load(true), selectAccount, getSelected, getSelectedId, getAccounts});
+  // Capture the existing UI button before legacy page-specific onclick handlers run.
+  // This leaves rendering/layout code in place while guaranteeing one selection authority.
+  document.addEventListener('click',event=>{
+    const switchButton=event.target?.closest?.('[data-account-switch]');
+    if(switchButton){event.preventDefault();event.stopImmediatePropagation();const id=switchButton.dataset.accountId||switchButton.dataset.accountTarget;const accountsNow=getAccounts();const currentId=getSelectedId();const target=accountsNow.find(a=>accountId(a)!==String(currentId));if(target)selectAccount(target.id).catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})));}
+    const gridButton=event.target?.closest?.('[data-select]');
+    if(gridButton){event.preventDefault();event.stopImmediatePropagation();selectAccount(gridButton.dataset.select).catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})));}
+  },true);
 
-  window.addEventListener('algobot:backend-accounts-loaded', event => {
-    const rows = list(event.detail).filter(a => a?.id);
-    if (rows.length) accounts = rows;
-    const id = storageGet();
-    if (id) {
-      const target = accounts.find(a => accountId(a) === id);
-      if (target) setSelected(target, 'backend-accounts-rehydrated', false);
-    }
+  window.addEventListener('algobot:backend-accounts-loaded',event=>{
+    const rows=list(event.detail).filter(a=>a?.id);if(rows.length)accounts=rows;
+    const id=storageGet(),target=id&&accounts.find(a=>accountId(a)===id);if(target&&accountId(selected)!==id)setSelected(target,'backend-accounts-rehydrated',false);
   });
-  window.addEventListener('algobot:account-synced', event => {
-    if (!event.detail?.id) return;
-    const id = accountId(event.detail);
-    accounts = accounts.map(a => accountId(a) === id ? event.detail : a);
-    if (getSelectedId() === id) setSelected(event.detail, 'account-synced', true);
-  });
+  window.addEventListener('algobot:account-synced',event=>{if(!event.detail?.id)return;const id=accountId(event.detail);accounts=accounts.map(a=>accountId(a)===id?event.detail:a);if(getSelectedId()===id)setSelected(event.detail,'account-synced',true)});
+  window.addEventListener('algobot:account-context-error',event=>{const message=event.detail?.message||'Broker account selection is temporarily unavailable.';window.dispatchEvent(new CustomEvent('algobot:api-error',{detail:{code:'ACCOUNT_CONTEXT_ERROR',status:0,message,retryable:true}}))});
 
-  const boot = () => {
-    if (document.body.dataset.authenticated === 'true') load().catch(error => {
-      window.dispatchEvent(new CustomEvent('algobot:account-context-error', {detail:error}));
-    });
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true}); else boot();
+  const boot=()=>{if(document.body.dataset.authenticated==='true')load().catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error}))) };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
