@@ -27,7 +27,11 @@ def connected_accounts(user):
 def _requested_id(request):
     if request is None:
         return None
-    return request.META.get(REQUEST_HEADER) or request.query_params.get(REQUEST_PARAM)
+    # This module is shared by normal Django HttpRequest/WSGI views and DRF
+    # requests. Django HttpRequest exposes GET; DRF also exposes the same query
+    # data through GET while adding query_params on its Request wrapper. Using
+    # GET here keeps the authoritative resolver valid for both request types.
+    return request.META.get(REQUEST_HEADER) or request.GET.get(REQUEST_PARAM)
 
 
 def get_active_account(user, request=None, broker_type=None):
