@@ -23,10 +23,10 @@
   const statusMessage=(status,payload)=>payload?.detail||payload?.message||({401:'Your session has expired. Sign in again.',403:'You are not authorized to perform this action.',404:'The requested API endpoint was not found.',405:'The API endpoint does not accept this HTTP method.',409:'The requested operation conflicts with the current account state.',429:'The request limit or plan quota has been reached.',500:'The server encountered an internal error.',502:'The broker/API gateway returned an invalid response.',503:'The backend service is temporarily unavailable.',504:'The backend service timed out.'}[status]||`HTTP ${status} request failure`);
   const notifyApiError=(options,detail)=>{if(options?.notifyOnError===false)return;window.dispatchEvent(new CustomEvent('algobot:api-error',{detail}))};
 
-  async function fetchOnce(url,options,controller){
+  async function fetchOnce(url,options,controller,forceSameOrigin=false){
     const method=(options.method||'GET').toUpperCase();
     const headers=new Headers({Accept:'application/json, text/html',...(options.headers||{})});
-    const target=resolveUrl(url);
+    const target=forceSameOrigin && !/^https?:\/\//i.test(url) ? `${window.location.origin}${url.startsWith('/')?url:`/${url}`}` : resolveUrl(url);
     const targetOrigin=new URL(target,window.location.origin).origin;
     const sameOrigin=targetOrigin===window.location.origin;
     const selectedId=brokerState()?.get?.()?.account?.id;
