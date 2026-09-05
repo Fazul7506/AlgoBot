@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}API Keys | Developer | AlgoBot{% endblock %}
+{% block mobile_title %}API Keys{% endblock %}
+{% block extra_css %}
+<style>
+.api-keys-page{max-width:1450px;margin:0 auto;padding:24px}.api-keys-hero{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:16px}.api-keys-hero h1{margin:4px 0}.api-key-panel{padding:18px;border:1px solid var(--border-subtle,rgba(255,255,255,.08));border-radius:14px;background:var(--card-bg,#111827)}.api-key-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px}.api-key-list{display:grid;gap:10px}.api-key-row{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(130px,.7fr) minmax(120px,.5fr) auto;gap:12px;align-items:center;padding:13px;border-radius:10px;background:rgba(255,255,255,.035)}.api-key-row small,.api-key-row span{display:block;opacity:.62;font-size:11px}.api-key-actions{display:flex;gap:6px;justify-content:flex-end}.api-key-result{margin-top:12px;padding:12px;border-radius:10px;background:rgba(34,197,94,.1);white-space:pre-wrap;word-break:break-word}.api-key-error{background:rgba(239,68,68,.1)}@media(max-width:800px){.api-keys-hero,.api-key-toolbar{flex-direction:column;align-items:flex-start}.api-key-row{grid-template-columns:1fr}.api-key-actions{justify-content:flex-start}}
+</style>
+{% endblock %}
+{% block content %}
+<section class="api-keys-page" data-api-keys-page>
+  <header class="api-keys-hero"><div><p class="eyebrow">DEVELOPER · ACCESS CONTROL</p><h1>API Keys</h1><p class="muted">Create, rotate and revoke developer credentials without exposing secrets in URLs.</p></div><a class="btn ghost" href="/developer/">Developer portal</a></header>
+  <section class="api-key-panel"><div class="api-key-toolbar"><div><h2>Credentials</h2><p class="muted">Secrets are displayed only at creation or rotation time.</p></div><button class="btn primary" type="button" data-api-key-create>Create API key</button></div><div class="api-key-list" data-api-key-list><div class="empty-state">Loading API keys…</div></div><div class="api-key-result" data-api-key-result hidden></div></section>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script>
+(() => {
+  'use strict';
+  const page=document.querySelector('[data-api-keys-page]');if(!page)return;
+  const list=page.querySelector('[data-api-key-list]'),result=page.querySelector('[data-api-key-result]');
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const request=async(url,options={})=>{const response=await window.AlgoBotFrontendData.request(url,{...options,notifyOnError:false},10000);return response};
+  const show=(message,error=false)=>{result.hidden=false;result.classList.toggle('api-key-error',error);result.textContent=message};
+  const render=rows=>{const items=Array.isArray(rows)?rows:(Array.isArray(rows?.results)?rows.results:[]);list.innerHTML=items.length?items.map(key=>`<article class="api-key-row"><div><strong>${esc(key.name||'API key')}</strong><small>${esc(key.key||key.prefix||'Key hidden')}</small></div><div><span>Status</span><strong>${esc(key.status||'active')}</strong></div><div><span>Created</span><strong>${esc(key.created_at||'—')}</strong></div><div class="api-key-actions"><button class="btn ghost small" type="button" data-rotate="${esc(key.id)}">Rotate</button><button class="btn ghost small" type="button" data-revoke="${esc(key.id)}">Revoke</button></div></article>`).join(''):'<div class="empty-state">No API keys are currently visible to this account.</div>'};
+  async function load(){try{render(await request('/api/developer/keys/'))}catch(error){list.innerHTML=`<div class="api-key-error">Developer key service unavailable: ${esc(error.message||'Access denied or backend unavailable.')}</div>`}}
+  async function mutate(action,id){try{const response=await request(`/api/developer/keys/${encodeURIComponent(id)}/${action}/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});const payload=response||{};if(payload.secret)show(`API key: ${payload.key||'created'}\nSecret: ${payload.secret}\n\n${payload.warning||'Store this secret securely.'}`);else show(`API key ${action} completed.`);await load()}catch(error){show(error.message||`API key ${action} failed.`,true)}}
+  page.addEventListener('click',event=>{const rotate=event.target.closest('[data-rotate]'),revoke=event.target.closest('[data-revoke]');if(rotate)mutate('rotate',rotate.dataset.rotate);if(revoke&&confirm('Revoke this API key?'))mutate('revoke',revoke.dataset.revoke)});
+  page.querySelector('[data-api-key-create]')?.addEventListener('click',async()=>{const name=prompt('API key name','AlgoBot integration');if(!name)return;try{const response=await request('/api/developer/keys/create/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,permissions:[]})});show(`API key: ${response?.key||'created'}\nSecret: ${response?.secret||'not returned'}\n\n${response?.warning||'Store this secret securely.'}`);await load()}catch(error){show(error.message||'API key creation failed.',true)}});
+  load();
+})();
+</script>
+{% endblock %}
