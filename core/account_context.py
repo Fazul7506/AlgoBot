@@ -34,6 +34,11 @@ def _requested_id(request):
     return request.META.get(REQUEST_HEADER) or request.GET.get(REQUEST_PARAM)
 
 
+def _session(request):
+    """Return a session mapping when session middleware is installed."""
+    return getattr(request, "session", None) if request is not None else None
+
+
 def get_active_account(user, request=None, broker_type=None):
     """Resolve the authenticated user's explicitly requested/session account."""
     qs = connected_accounts(user)
@@ -46,7 +51,8 @@ def get_active_account(user, request=None, broker_type=None):
         if selected:
             return selected
 
-    selected_id = request.session.get(SESSION_KEY) if request is not None else None
+    session = _session(request)
+    selected_id = session.get(SESSION_KEY) if session is not None else None
     if selected_id:
         selected = qs.filter(pk=selected_id).first()
         if selected:
@@ -67,11 +73,17 @@ def select_account(request, account):
         raise ValueError("Account does not belong to the authenticated user.")
     if not account.is_connection_eligible:
         raise ValueError("The selected broker account is not connected and ready.")
-    request.session[SESSION_KEY] = account.pk
-    request.session.modified = True
+    session = _session(request)
+    if session is None:
+        raise ValueError("Account selection requires an authenticated browser session.")
+    session[SESSION_KEY] = account.pk
+    session.modified = True
     return account
 
 
 def clear_selected_account(request):
-    request.session.pop(SESSION_KEY, None)
-    request.session.modified = True
+    session = _session(request)
+    if session is None:
+        return
+    session.pop(SESSION_KEY, None)
+    session.modified = True
