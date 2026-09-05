@@ -8,7 +8,7 @@ Actual order execution remains authenticated and broker/risk gated.
 from __future__ import annotations
 
 import asyncio
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from django.core.cache import cache
 from django.db import transaction
@@ -38,6 +38,36 @@ def _public_deriv(payload):
     return asyncio.run(_request(payload))
 
 
+def _market_label(value, sub_market=""):
+    raw = str(value or "").strip().lower().replace("-", "_")
+    sub = str(sub_market or "").strip().lower()
+    if raw in {"synthetic_index", "synthetic_indices", "derived", "derived_indices", "basket_index", "basket_indices"}:
+        if "boom" in sub:
+            return "Boom"
+        if "crash" in sub:
+            return "Crash"
+        if "jump" in sub:
+            return "Jump Indices"
+        if "volatility" in sub or "random" in sub:
+            return "Volatility Indices"
+        return "Derived Indices"
+    if raw in {"forex", "forex_indices"}:
+        return "Forex"
+    if raw in {"cryptocurrency", "crypto"}:
+        return "Crypto"
+    if raw in {"commodities", "commodity"}:
+        return "Commodities"
+    if raw in {"indices", "stock_index", "stock_indices"}:
+        return "Stock Indices"
+    if raw in {"jump", "jump_indices"}:
+        return "Jump Indices"
+    if raw in {"boom", "boom_indices"}:
+        return "Boom"
+    if raw in {"crash", "crash_indices"}:
+        return "Crash"
+    return "Derived Indices"
+
+
 def _normalise_symbol(item):
     symbol = str(item.get("underlying_symbol") or "").strip()
     suspended = bool(item.get("is_trading_suspended", False))
@@ -47,11 +77,13 @@ def _normalise_symbol(item):
         pip_size = max(0, min(12, int(pip_size))) if pip_size is not None else 2
     except (TypeError, ValueError):
         pip_size = 2
+    sub_market = str(item.get("submarket") or item.get("subgroup") or "")
     return {
         "symbol": symbol,
         "display_name": str(item.get("underlying_symbol_name") or symbol),
         "market": str(item.get("market") or ""),
-        "sub_market": str(item.get("submarket") or item.get("subgroup") or ""),
+        "sub_market": sub_market,
+        "market_label": _market_label(item.get("market"), sub_market),
         "symbol_type": str(item.get("underlying_symbol_type") or ""),
         "pip_size": pip_size,
         # A market can remain in the catalogue while its exchange is closed.
@@ -72,15 +104,13 @@ def _persist_catalogue(payload):
         symbol = str(item.get("symbol") or "").strip()
         if not symbol or len(symbol) > 40:
             continue
-        market = str(item.get("market") or "Derived Indices")[:80]
-        sub_market = str(item.get("sub_market") or "")[:120]
         rows.append(
             MarketSymbol(
                 symbol=symbol,
                 broker="deriv",
                 display_name=str(item.get("display_name") or symbol)[:160],
-                market=market,
-                sub_market=sub_market,
+                market=str(item.get("market_label") or _market_label(item.get("market")))[:80],
+                sub_market=str(item.get("sub_market") or "")[:120],
                 pip_size=int(item.get("pip_size") or 2),
                 tick_size=Decimal("0"),
                 is_active=bool(item.get("is_active", True)),
@@ -200,14 +230,7 @@ def catalogue(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def capabilities(request):
-    """Return fast broker-authoritative contract capabilities for the selected symbol.
-
-    Capability discovery is deliberately decoupled from authenticated execution:
-    Deriv's public ``contracts_for`` response is sufficient to populate the
-    terminal selector. This avoids the extra OAuth/OTP WebSocket handshake that
-    previously caused the UI to sit on "Loading broker contracts…" until the
-    frontend timeout expired.
-    """
+    """Return fast broker-authoritative contract capabilities for the selected symbol."""
     symbol = str(request.query_params.get("symbol") or "").strip()
     account = _account(request.user, request=request)
     if not account:
