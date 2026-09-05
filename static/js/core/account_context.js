@@ -3,38 +3,54 @@
   'use strict';
   if (window.AlgoBotAccountContext) return;
   const STORAGE_KEY='algobot:selected-account-id:v1';
+  const STORAGE_ACCOUNT_KEY='algobot:selected-account-snapshot:v1';
   const list=value=>Array.isArray(value)?value:(Array.isArray(value?.results)?value.results:(Array.isArray(value?.accounts)?value.accounts:[]));
   let accounts=[],selected=null,busy=null;
   const storageGet=()=>{try{return localStorage.getItem(STORAGE_KEY)}catch(_){return null}};
   const storageSet=id=>{try{id==null?localStorage.removeItem(STORAGE_KEY):localStorage.setItem(STORAGE_KEY,String(id))}catch(_){}};
+  const snapshotGet=()=>{try{const raw=localStorage.getItem(STORAGE_ACCOUNT_KEY);const value=raw?JSON.parse(raw):null;return value&&value.id?value:null}catch(_){return null}};
+  const snapshotSet=account=>{try{if(account?.id)localStorage.setItem(STORAGE_ACCOUNT_KEY,JSON.stringify({id:account.id,broker:account.broker,broker_name:account.broker_name,broker_account_id:account.broker_account_id,account_id:account.account_id,account_type:account.account_type,currency:account.currency,is_connected:account.is_connected,switch_enabled:account.switch_enabled}));else localStorage.removeItem(STORAGE_ACCOUNT_KEY)}catch(_){}};
   const accountId=a=>a?.id==null?null:String(a.id);
   const canonical=()=>window.AlgoBotFrontendData?.request;
   function publish(reason){window.AlgoBotBrokerState?.setAccount(selected,reason);window.dispatchEvent(new CustomEvent('algobot:account-context-changed',{detail:{account:selected,reason}}));window.dispatchEvent(new CustomEvent('algobot:account-changed',{detail:selected}));window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}))}
-  function setSelected(account,reason='account-selected',persist=true){if(!account?.id)return null;selected=account;if(persist)storageSet(account.id);publish(reason);return account}
+  function setSelected(account,reason='account-selected',persist=true){if(!account?.id)return null;selected=account;if(persist){storageSet(account.id);snapshotSet(account)}publish(reason);return account}
   async function load(force=false){
     if(busy&&!force)return busy;const request=canonical();if(!request)return selected;
     busy=(async()=>{
       const rememberedId=storageGet();
-      const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},10000)).filter(a=>a?.id);accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
-      let serverSelected=null,activeRequestFailed=false;
-      try{
-        const activeOptions={notifyOnError:false};
-        if(rememberedId)activeOptions.headers={'X-Algobot-Account-ID':String(rememberedId)};
-        const active=await request('/api/brokers/accounts/active/',activeOptions,8000);
-        serverSelected=active?.active_account||active?.account||null;
-      }catch(_){activeRequestFailed=true}
+      const rememberedSnapshot=snapshotGet();
+      const activeOptions={notifyOnError:false};
+      if(rememberedId)activeOptions.headers={'X-Algobot-Account-ID':String(rememberedId)};
+      const [accountsResult,activeResult]=await Promise.allSettled([
+        request('/api/brokers/accounts/',{notifyOnError:false},10000),
+        request('/api/brokers/accounts/active/',activeOptions,8000),
+      ]);
+      const listSucceeded=accountsResult.status==='fulfilled';
+      const activeSucceeded=activeResult.status==='fulfilled';
+      const rows=listSucceeded?list(accountsResult.value).filter(a=>a?.id):[];
+      accounts=rows;
+      window.AlgoBotBrokerAccounts=rows.slice();
+      const serverSelected=activeSucceeded?(activeResult.value?.active_account||activeResult.value?.account||null):null;
       const serverId=accountId(serverSelected);
-      // The backend remains authoritative. A remembered account is only used
-      // as a recovery hint when the active-account read itself is unavailable;
-      // the next API request still sends the account header and the backend
-      // revalidates it against the authenticated user's connected accounts.
+      // The backend remains authoritative whenever it responds. The stored
+      // account snapshot is only a degraded-transport hint when both reads
+      // fail; every later API request still carries the account ID and the
+      // backend revalidates ownership/connection state.
       let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||
-        (activeRequestFailed&&rememberedId&&rows.find(a=>accountId(a)===String(rememberedId)))||
+        (rememberedId&&rows.find(a=>accountId(a)===String(rememberedId)))||
         rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
-      if(!target){selected=null;storageSet(null);window.AlgoBotBrokerState?.reset('no-connected-broker-account');window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));return null}
+      if(!target&&(!listSucceeded||!activeSucceeded)&&rememberedSnapshot&&accountId(rememberedSnapshot)===String(rememberedId||rememberedSnapshot.id)){
+        target=rememberedSnapshot;
+        accounts=[rememberedSnapshot];
+        window.AlgoBotBrokerAccounts=accounts.slice();
+      }
+      if(!target){selected=null;storageSet(null);snapshotSet(null);window.AlgoBotBrokerState?.reset('no-connected-broker-account');window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));if(!listSucceeded&&accountsResult.reason)throw accountsResult.reason;if(!activeSucceeded&&activeResult.reason)throw activeResult.reason;return null}
       const hydrated=serverSelected&&accountId(serverSelected)===accountId(target)?serverSelected:target;
       accounts=accounts.map(a=>accountId(a)===accountId(hydrated)?{...a,...hydrated,is_active:true}:{...a,is_active:false,is_preferred:false});
-      if(!accounts.some(a=>accountId(a)===accountId(hydrated)))accounts=[hydrated,...accounts];window.AlgoBotBrokerAccounts=accounts.slice();return setSelected(hydrated,activeRequestFailed?'account-context-recovered':'account-context-hydrated',true);
+      if(!accounts.some(a=>accountId(a)===accountId(hydrated)))accounts=[hydrated,...accounts];
+      window.AlgoBotBrokerAccounts=accounts.slice();
+      const degraded=!listSucceeded||!activeSucceeded;
+      return setSelected(hydrated,degraded?'account-context-degraded':(activeSucceeded?'account-context-hydrated':'account-context-recovered'),true);
     })().finally(()=>{busy=null});return busy;
   }
   async function selectAccount(id){
