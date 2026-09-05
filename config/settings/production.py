@@ -2,11 +2,13 @@
 
 from .base import *  # noqa: F403,F401
 from .utils import env, env_bool, env_list, validate_required_settings
+from corsheaders.defaults import default_headers
 
 DEBUG = False
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["algobot.dpdns.org", "www.algobot.dpdns.org", "api.algobot.dpdns.org"])
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"])
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org"])
+CORS_ALLOW_HEADERS = (*default_headers, "x-algobot-account-id")
 CORS_ALLOW_CREDENTIALS = True
 BASE_URL = env("BASE_URL", "https://algobot.dpdns.org").rstrip("/")
 ALGO_API_BASE_URL = env("ALGO_API_BASE_URL", "https://api.algobot.dpdns.org").rstrip("/")
@@ -70,9 +72,9 @@ elif PAYMENT_PROVIDER == "pesapal":  # noqa: F405
     validate_required_settings(
         production=True,
         values={
-            "PESAPAL_CONSUMER_KEY": PESAPAL_CONSUMER_KEY,  # noqa: F405
-            "PESAPAL_CONSUMER_SECRET": PESAPAL_CONSUMER_SECRET,  # noqa: F405
-            "PESAPAL_NOTIFICATION_ID": PESAPAL_NOTIFICATION_ID,  # noqa: F405
+            "INTASEND_PUBLIC_KEY": INTASEND_PUBLIC_KEY,  # noqa: F405
+            "INTASEND_SECRET_KEY": INTASEND_SECRET_KEY,  # noqa: F405
+            "INTASEND_NOTIFICATION_ID": INTASEND_NOTIFICATION_ID,  # noqa: F405
         },
     )
 
