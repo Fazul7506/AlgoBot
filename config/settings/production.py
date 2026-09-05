@@ -72,9 +72,9 @@ elif PAYMENT_PROVIDER == "pesapal":  # noqa: F405
     validate_required_settings(
         production=True,
         values={
-            "INTASEND_PUBLIC_KEY": INTASEND_PUBLIC_KEY,  # noqa: F405
-            "INTASEND_SECRET_KEY": INTASEND_SECRET_KEY,  # noqa: F405
-            "INTASEND_NOTIFICATION_ID": INTASEND_NOTIFICATION_ID,  # noqa: F405
+            "PESAPAL_CONSUMER_KEY": PESAPAL_CONSUMER_KEY,  # noqa: F405
+            "PESAPAL_CONSUMER_SECRET": PESAPAL_CONSUMER_SECRET,  # noqa: F405
+            "PESAPAL_NOTIFICATION_ID": PESAPAL_NOTIFICATION_ID,  # noqa: F405
         },
     )
 
