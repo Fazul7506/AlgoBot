@@ -21,7 +21,7 @@
       return response.text().then(function (text) {
         var data = {};
         try { data = text ? JSON.parse(text) : {}; } catch (error) { data = {detail: text}; }
-        if (!response.ok) throw new Error(data.detail || data.message || ('Request failed (' + response.status + ')'));
+        if (!response.ok) throw new Error(data.detail || data.message || ('Model Lab API request returned HTTP ' + response.status));
         return data;
       });
     });
