@@ -34,6 +34,7 @@
     return fallback;
   }
   function emitError(error) { window.dispatchEvent(new CustomEvent('algobot:api-error', { detail: { url: error.url, method: error.method, status: error.status, code: error.code, message: error.message, retryable: error.retryable } })); }
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
   function normalizeOrderPayload(body) {
     if (typeof body !== 'string') return body;
@@ -74,9 +75,35 @@
     const timer = setTimeout(() => controller.abort(new Error('API request timeout')), timeoutMs);
     const signal = callerSignal && typeof AbortSignal.any === 'function' ? AbortSignal.any([callerSignal, controller.signal]) : controller.signal;
     if (callerSignal?.aborted) controller.abort(callerSignal.reason);
+    const retryableRead = ['GET', 'HEAD', 'OPTIONS'].includes(method);
+
+    async function doFetch() {
+      let lastError = null;
+      const attempts = retryableRead ? 3 : 1;
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        if (callerSignal?.aborted) {
+          const cancelled = new APIError(callerSignal.reason?.message || 'Request was cancelled.', {code:'REQUEST_ABORTED',url:url.toString(),method});
+          cancelled.retryable = false;
+          throw cancelled;
+        }
+        try {
+          return await nativeFetch(url.toString(), {...options, method, body, headers, credentials: options.credentials || 'include', signal});
+        } catch (error) {
+          lastError = error;
+          if (callerSignal?.aborted) break;
+          if (attempt < attempts - 1) {
+            // Only retry idempotent reads. Never retry an order/execution request.
+            await wait(250 * (attempt + 1));
+            continue;
+          }
+        }
+      }
+      throw lastError || new Error('Network request failed');
+    }
+
     try {
       try {
-        return await nativeFetch(url.toString(), {...options, method, body, headers, credentials: options.credentials || 'include', signal});
+        return await doFetch();
       } catch (error) {
         if (controller.signal.aborted && !callerSignal?.aborted) {
           const timeout = new APIError('API request timed out after ' + timeoutMs + 'ms', {code:'API_TIMEOUT',url:url.toString(),method});
