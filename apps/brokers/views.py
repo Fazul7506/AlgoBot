@@ -105,7 +105,9 @@ class BrokerOrderViewSet(viewsets.ModelViewSet):
             data['account']=account
         try:report=ExecutionEngine().submit(request.user,**data)
         except BrokerRoutingError as exc:return response.Response({'detail':str(exc),'status':'blocked'},status=status.HTTP_409_CONFLICT)
-        except (BrokerAuthenticationError,BrokerConnectionError,BrokerOrderError) as exc:return response.Response({'detail':str(exc),'status':'broker_error'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except BrokerAuthenticationError as exc:return response.Response({'detail':str(exc),'status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
+        except BrokerConnectionError as exc:return response.Response({'detail':str(exc),'status':'broker_execution_state_unknown','code':'BROKER_EXECUTION_STATE_UNKNOWN'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except BrokerOrderError as exc:return response.Response({'detail':str(exc),'status':'rejected','code':'BROKER_ORDER_REJECTED'},status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         return response.Response(ExecutionReportSerializer(report).data,status=status.HTTP_201_CREATED)
 class ExecutionReportViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ExecutionReportSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]

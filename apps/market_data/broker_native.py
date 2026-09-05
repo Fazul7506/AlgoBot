@@ -21,6 +21,9 @@ from .models import MarketSymbol
 
 CATALOGUE_CACHE = "algobot:broker:deriv:active-symbols"
 CAPABILITIES_CACHE_PREFIX = "algobot:broker:deriv:contracts-for:"
+CAPABILITIES_STALE_PREFIX = "algobot:broker:deriv:contracts-for:stale:"
+CAPABILITIES_CACHE_SECONDS = 300
+CAPABILITIES_STALE_SECONDS = 86400
 
 
 def _account(user, request=None):
@@ -148,9 +151,22 @@ def capabilities(request):
                 "trade_types": sorted({c["contract_category"] for c in contracts if c["contract_category"]}),
                 "timeframe_capability": {"granularity": "broker_defined_integer_seconds", "minimum_seconds": 1},
             }
-            cache.set(cache_key, payload, timeout=30)
+            cache.set(cache_key, payload, timeout=CAPABILITIES_CACHE_SECONDS)
+            cache.set(f"{CAPABILITIES_STALE_PREFIX}{symbol}", payload, timeout=CAPABILITIES_STALE_SECONDS)
         if not payload.get("contracts"):
             return Response({"detail": "Deriv reports no contracts for this instrument.", "symbol": symbol}, status=status.HTTP_409_CONFLICT)
         return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,**payload})
     except Exception as exc:
+        stale = cache.get(f"{CAPABILITIES_STALE_PREFIX}{symbol}")
+        if isinstance(stale, dict) and stale.get("contracts"):
+            return Response({
+                "status": "stale",
+                "code": "BROKER_CAPABILITIES_STALE",
+                "detail": "Live broker capability refresh is temporarily unavailable; serving the last verified broker contract catalogue.",
+                "source": "cached_broker_capabilities",
+                "broker": account.broker.name,
+                "account_id": account.account_id,
+                "stale": True,
+                **stale,
+            })
         return Response({"status":"error","code":"BROKER_CAPABILITIES_UNAVAILABLE","detail":str(exc),"source":"connected_broker","symbol":symbol}, status=status.HTTP_503_SERVICE_UNAVAILABLE)

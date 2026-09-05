@@ -55,7 +55,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         context = Path("static/js/core/account_context.js").read_text(encoding="utf-8")
         self.assertIn("/api/brokers/accounts/active/", context)
         self.assertNotIn("(storedId&&rows.find(a=>accountId(a)===storedId))", context)
-        self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find", context)
+        self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);", context)
         self.assertIn("function getSelectedId(){return accountId(getSelected())||null}", context)
 
     def test_sidebar_and_terminal_ai_use_canonical_account_context(self):
@@ -68,3 +68,19 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("window.AlgoBotServices?.request?.('ai'", ai)
         self.assertIn("const selectedAccount=()=>window.AlgoBotAccountContext?.getSelected?.()||null;", ai)
         self.assertIn("notifyOnError:false", ai)
+
+    def test_live_broker_ui_does_not_register_a_second_account_selection_handler(self):
+        from pathlib import Path
+        live_ui = Path("static/js/live_broker_ui.js").read_text(encoding="utf-8")
+        self.assertIn("Account selection is owned exclusively by core/account_context.js.", live_ui)
+        self.assertNotIn("switchButton.onclick = () => selectAccount", live_ui)
+        self.assertNotIn("request(`/api/brokers/accounts/${target.id}/select/", live_ui)
+        self.assertIn("context.selectAccount(id)", live_ui)
+
+    def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):
+        from pathlib import Path
+        client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
+        self.assertIn("sameOriginRetryPath", client)
+        self.assertIn("forceSameOrigin=false", client)
+        self.assertIn("window.location.origin", client)
+        self.assertIn("Execution", client)

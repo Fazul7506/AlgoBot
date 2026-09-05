@@ -90,22 +90,14 @@
   }
 
   async function selectAccount(id) {
-    const target = accounts.find(a => String(a.id) === String(id));
-    if (!target || target.switch_enabled !== true) return;
-    const buttons = document.querySelectorAll('[data-account-switch]');
-    buttons.forEach(b => b.disabled = true);
-    try {
-      const r = await request(`/api/brokers/accounts/${target.id}/select/`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({account_type:typeOf(target)})}, 5000);
-      if (r.account) {
-        accounts = accounts.map(a => a.id === r.account.id ? r.account : {...a, is_preferred:false});
-        render();
-        window.dispatchEvent(new CustomEvent('algobot:account-changed', {detail:r.account}));
-      }
-    } catch (e) {
-      buttons.forEach(b => { b.title = e.message; b.disabled = false; });
-    }
+    // Compatibility API only: the canonical account context owns the mutation.
+    const context = window.AlgoBotAccountContext;
+    if (!context?.selectAccount) throw new Error('Broker account context is not ready.');
+    const account = await context.selectAccount(id);
+    accounts = context.getAccounts?.() || accounts;
+    render();
+    return account;
   }
-
   function render() {
     mount();
     const a = current();
@@ -127,8 +119,11 @@
       global.classList.toggle('connected', ok); global.classList.toggle('error', !ok);
       global.innerHTML = `<i></i><span>${safe(a ? `${a.broker?.name || a.broker_name || 'Broker'} · ${a.broker_account_id || a.account_id} · ${t.toUpperCase()}` : 'No connected broker account')}</span>`;
     }
+    // Account selection is owned exclusively by core/account_context.js.
+    // This module is render-only; attaching another click handler here creates
+    // duplicate POST /select requests and races the canonical account state.
     const switchButton = $('[data-account-switch]');
-    if (switchButton) switchButton.onclick = () => selectAccount(opposite?.id);
+    if (switchButton) switchButton.removeAttribute('data-live-broker-selection-handler');
     placeLogout();
   }
 
