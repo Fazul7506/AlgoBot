@@ -8,10 +8,12 @@ Actual order execution remains authenticated and broker/risk gated.
 from __future__ import annotations
 
 import asyncio
+from decimal import Decimal, InvalidOperation
 
 from django.core.cache import cache
+from django.db import transaction
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -27,6 +29,8 @@ CAPABILITIES_STALE_SECONDS = 86400
 
 
 def _account(user, request=None):
+    if not getattr(user, "is_authenticated", False):
+        return None
     return get_active_account(user, request=request)
 
 
@@ -36,24 +40,78 @@ def _public_deriv(payload):
 
 def _normalise_symbol(item):
     symbol = str(item.get("underlying_symbol") or "").strip()
+    suspended = bool(item.get("is_trading_suspended", False))
+    exchange_open = bool(item.get("exchange_is_open", True))
+    pip_size = item.get("pip_size")
+    try:
+        pip_size = max(0, min(12, int(pip_size))) if pip_size is not None else 2
+    except (TypeError, ValueError):
+        pip_size = 2
     return {
         "symbol": symbol,
         "display_name": str(item.get("underlying_symbol_name") or symbol),
         "market": str(item.get("market") or ""),
         "sub_market": str(item.get("submarket") or item.get("subgroup") or ""),
         "symbol_type": str(item.get("underlying_symbol_type") or ""),
-        "pip_size": item.get("pip_size"),
-        "is_active": bool(item.get("exchange_is_open", True)) and not bool(item.get("is_trading_suspended", False)),
-        "is_tradable": bool(item.get("exchange_is_open", True)) and not bool(item.get("is_trading_suspended", False)),
-        "exchange_is_open": bool(item.get("exchange_is_open", True)),
-        "is_trading_suspended": bool(item.get("is_trading_suspended", False)),
+        "pip_size": pip_size,
+        # A market can remain in the catalogue while its exchange is closed.
+        # ``is_active`` means the broker still publishes the instrument;
+        # ``is_tradable`` carries the current exchange-open state.
+        "is_active": not suspended,
+        "is_tradable": exchange_open and not suspended,
+        "exchange_is_open": exchange_open,
+        "is_trading_suspended": suspended,
         "trade_count": item.get("trade_count"),
     }
 
 
+def _persist_catalogue(payload):
+    """Persist the last broker-authoritative catalogue for outage recovery."""
+    rows = []
+    for item in payload:
+        symbol = str(item.get("symbol") or "").strip()
+        if not symbol or len(symbol) > 40:
+            continue
+        market = str(item.get("market") or "Derived Indices")[:80]
+        sub_market = str(item.get("sub_market") or "")[:120]
+        rows.append(
+            MarketSymbol(
+                symbol=symbol,
+                broker="deriv",
+                display_name=str(item.get("display_name") or symbol)[:160],
+                market=market,
+                sub_market=sub_market,
+                pip_size=int(item.get("pip_size") or 2),
+                tick_size=Decimal("0"),
+                is_active=bool(item.get("is_active", True)),
+                is_tradable=bool(item.get("is_tradable", True)),
+            )
+        )
+    if not rows:
+        return 0
+    with transaction.atomic():
+        MarketSymbol.objects.bulk_create(
+            rows,
+            update_conflicts=True,
+            update_fields=[
+                "broker",
+                "display_name",
+                "market",
+                "sub_market",
+                "pip_size",
+                "tick_size",
+                "is_active",
+                "is_tradable",
+            ],
+            unique_fields=["symbol"],
+            batch_size=500,
+        )
+    return len(rows)
+
+
 def _cached_database_catalogue():
     rows = MarketSymbol.objects.filter(
-        broker="deriv", is_active=True, is_tradable=True
+        broker="deriv", is_active=True
     ).order_by("market", "symbol")
     return [
         {
@@ -65,7 +123,7 @@ def _cached_database_catalogue():
             "pip_size": row.pip_size,
             "is_active": row.is_active,
             "is_tradable": row.is_tradable,
-            "exchange_is_open": True,
+            "exchange_is_open": row.is_tradable,
             "is_trading_suspended": False,
         }
         for row in rows
@@ -73,30 +131,70 @@ def _cached_database_catalogue():
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def catalogue(request):
-    account = _account(request.user, request=request)
-    if not account:
-        return Response({"detail": "Connect a broker before loading its market catalogue."}, status=status.HTTP_409_CONFLICT)
-    if account.broker.broker_type != "deriv":
-        return Response({"detail": f"Live market catalogue is not implemented for {account.broker.name} yet."}, status=status.HTTP_409_CONFLICT)
+    """Return the public Deriv instrument catalogue.
+
+    Instrument discovery is public broker metadata and must not depend on a
+    selected account. Account authentication remains required for execution,
+    account data, and private broker capabilities. This prevents the Markets
+    and Trading pages from showing an outage merely because account context is
+    temporarily unavailable.
+    """
+    account = _account(getattr(request, "user", None), request=request)
     try:
         payload = cache.get(CATALOGUE_CACHE)
         if payload is None:
             response = _public_deriv({"active_symbols": "brief"})
             raw = response.get("active_symbols") or []
-            payload = [_normalise_symbol(item) for item in raw if isinstance(item, dict) and item.get("underlying_symbol")]
+            if not isinstance(raw, list):
+                raise RuntimeError("Deriv returned an invalid active_symbols payload")
+            payload = [
+                _normalise_symbol(item)
+                for item in raw
+                if isinstance(item, dict) and item.get("underlying_symbol")
+            ]
             payload = [item for item in payload if item["is_active"]]
             if payload:
                 cache.set(CATALOGUE_CACHE, payload, timeout=30)
+                try:
+                    _persist_catalogue(payload)
+                except Exception:
+                    # Database persistence is an outage-recovery enhancement;
+                    # a healthy live broker response must not fail because the
+                    # cache database is temporarily read-only/unavailable.
+                    pass
         if payload:
-            return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,"symbols":payload,"count":len(payload),"stale":False})
-        raise RuntimeError("Deriv returned no active tradable instruments")
+            return Response({
+                "status": "ok",
+                "source": "connected_broker_catalogue" if account else "public_broker_catalogue",
+                "broker": account.broker.name if account else "Deriv",
+                "account_id": account.account_id if account else None,
+                "symbols": payload,
+                "count": len(payload),
+                "stale": False,
+            })
+        raise RuntimeError("Deriv returned no active broker instruments")
     except Exception as exc:
         cached = _cached_database_catalogue()
         if cached:
-            return Response({"status":"stale","source":"cached_broker_catalogue","broker":account.broker.name,"account_id":account.account_id,"symbols":cached,"count":len(cached),"stale":True,"detail":"Live broker catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
-        return Response({"status":"error","code":"BROKER_CATALOGUE_UNAVAILABLE","detail":str(exc),"source":"connected_broker"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({
+                "status": "stale",
+                "source": "cached_broker_catalogue",
+                "broker": account.broker.name if account else "Deriv",
+                "account_id": account.account_id if account else None,
+                "symbols": cached,
+                "count": len(cached),
+                "stale": True,
+                "detail": "Live broker catalogue refresh is temporarily unavailable; serving the last known broker catalogue.",
+            })
+        return Response({
+            "status": "error",
+            "code": "BROKER_CATALOGUE_UNAVAILABLE",
+            "detail": "The broker market catalogue is temporarily unavailable.",
+            "source": "connected_broker" if account else "public_broker_catalogue",
+            "error_type": exc.__class__.__name__,
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 @api_view(["GET"])
@@ -155,7 +253,7 @@ def capabilities(request):
             cache.set(f"{CAPABILITIES_STALE_PREFIX}{symbol}", payload, timeout=CAPABILITIES_STALE_SECONDS)
         if not payload.get("contracts"):
             return Response({"detail": "Deriv reports no contracts for this instrument.", "symbol": symbol}, status=status.HTTP_409_CONFLICT)
-        return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,**payload})
+        return Response({"status":"ok","source":"connected_broker","broker": account.broker.name,"account_id":account.account_id,**payload})
     except Exception as exc:
         stale = cache.get(f"{CAPABILITIES_STALE_PREFIX}{symbol}")
         if isinstance(stale, dict) and stale.get("contracts"):
