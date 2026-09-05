@@ -68,3 +68,16 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("window.AlgoBotServices?.request?.('ai'", ai)
         self.assertIn("const selectedAccount=()=>window.AlgoBotAccountContext?.getSelected?.()||null;", ai)
         self.assertIn("notifyOnError:false", ai)
+
+    def test_live_broker_ui_does_not_register_a_second_account_selection_handler(self):
+        from pathlib import Path
+        live_ui = Path("static/js/live_broker_ui.js").read_text(encoding="utf-8")
+        self.assertIn("Account selection is owned exclusively by core/account_context.js.", live_ui)
+        self.assertNotIn("switchButton.onclick = () => selectAccount", live_ui)
+
+    def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):
+        from pathlib import Path
+        client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
+        self.assertIn("sameOriginRetryPath", client)
+        self.assertIn("/api/brokers/accounts/[^/]+/select/", client)
+        self.assertIn("Never apply this fallback to order/execution POSTs", client)
