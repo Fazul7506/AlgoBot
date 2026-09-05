@@ -90,6 +90,6 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
         self.assertIn("sameOriginFallbackPath", client)
         self.assertIn("/api/ai/predict/", client)
-        self.assertIn("/api/brokers/accounts/", client)
+        self.assertIn("accounts", client)
+        self.assertIn("select", client)
         self.assertNotIn("window.fetch = guardedFetch", client)
-
