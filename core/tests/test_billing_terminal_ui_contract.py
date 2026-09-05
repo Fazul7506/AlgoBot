@@ -50,12 +50,13 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("same-origin", terminal)
         self.assertNotIn("X-CSRFToken", terminal)
 
-    def test_account_context_never_lets_stale_local_storage_override_server_state(self):
+    def test_account_context_keeps_server_state_authoritative_and_uses_storage_only_for_degraded_transport(self):
         from pathlib import Path
         context = Path("static/js/core/account_context.js").read_text(encoding="utf-8")
         self.assertIn("/api/brokers/accounts/active/", context)
         self.assertNotIn("(storedId&&rows.find(a=>accountId(a)===storedId))", context)
         self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);", context)
+        self.assertIn("if(!target&&(!listSucceeded||!activeSucceeded))", context)
         self.assertIn("function getSelectedId(){return accountId(getSelected())||null}", context)
 
     def test_sidebar_and_terminal_ai_use_canonical_account_context(self):
@@ -77,19 +78,22 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("request(`/api/brokers/accounts/${target.id}/select/", live_ui)
         self.assertIn("context.selectAccount(id)", live_ui)
 
-    def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):
+    def test_frontend_transport_uses_only_the_dedicated_api_origin(self):
         from pathlib import Path
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
-        self.assertIn("sameOriginRetryPath", client)
-        self.assertIn("forceSameOrigin=false", client)
-        self.assertIn("window.location.origin", client)
+        self.assertIn("productionApiBase", client)
+        self.assertIn("https://api.algobot.dpdns.org", client)
+        self.assertNotIn("sameOriginRetryPath", client)
+        self.assertNotIn("forceSameOrigin", client)
+        self.assertNotIn("same-origin fallback", client.lower())
         self.assertIn("Execution", client)
 
-    def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
+    def test_api_client_does_not_monkey_patch_global_fetch_and_uses_dedicated_api_origin(self):
         from pathlib import Path
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
-        self.assertIn("sameOriginFallbackPath", client)
+        self.assertIn("productionApiBase", client)
         self.assertIn("/api/ai/predict/", client)
         self.assertIn("accounts", client)
         self.assertIn("select", client)
         self.assertNotIn("window.fetch = guardedFetch", client)
+        self.assertNotIn("same-origin fallback", client.lower())
