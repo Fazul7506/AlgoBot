@@ -7,7 +7,10 @@
   const list=v=>window.AlgoBotFrontendData?.list(v)||[];
   const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
   const money=v=>Number.isFinite(Number(v))?Number(v).toLocaleString(undefined,{maximumFractionDigits:8}):'Unavailable';
-  const api=(u,o={},t=10000)=>window.AlgoBotFrontendData.request(u,o,t);
+  // All terminal API traffic goes through the shared service facade so account
+  // headers, transport, timeout, retry and error lifecycle are identical to the
+  // dashboard and every other authenticated workspace.
+  const api=(u,o={},t=10000)=>window.AlgoBotServices?.request?.('trading',u,o,t)||window.AlgoBotFrontendData.request(u,o,t);
   // Account selection is owned by the canonical account context. Keep the
   // authoritative endpoint shape explicit here for UI-contract validation and
   // future diagnostics; no second account-selection implementation is created.
@@ -15,7 +18,7 @@
   const switchAuthoritativeAccount=id=>{void authoritativeAccountSelectPath(id);return window.AlgoBotAccountContext.selectAccount(id)};
   let accounts=[],symbols=[],direction='BUY',busy=false,activeAccountId=null,directExecutionBusy=false;
   const requestedParams=new URLSearchParams(location.search),requestedStrategy=requestedParams.get('strategy')||'',requestedDirection=String(requestedParams.get('direction')||'').toUpperCase(),requestedSignalId=requestedParams.get('signal_id')||'';
-  const selectedAccount=()=>window.AlgoBotAccountContext?.getSelected?.()||accounts.find(a=>String(a.id)===String(activeAccountId))||null;
+  const selectedAccount=()=>window.AlgoBotAccountContext?.getSelected?.()||accounts.find(a=>String(a.id)===String(activeAccountId))||window.AlgoBotBrokerState?.get?.()?.account||null;
   const brokerReady=()=>!!selectedAccount();
   const result=(m,s='info')=>{const n=$('[data-order-result]');if(n){n.hidden=false;n.dataset.state=s;n.textContent=m}};
   const renderRows=(selector,rows,empty,format)=>{const n=$(selector);if(n)n.innerHTML=rows.length?rows.map(format).join(''):`<div class="empty-state">${esc(empty)}</div>`};
