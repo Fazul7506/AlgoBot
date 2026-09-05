@@ -23,7 +23,7 @@ jobs:
           python-version: '3.13'
 
       - name: Run frontend hygiene audit
-        run: python scripts/frontend_audit.py
+        run: python scripts/frontend_audit.py | tee frontend-audit-report.txt
 
       - name: Validate Django templates
         run: |
@@ -35,3 +35,11 @@ jobs:
           python manage.py collectstatic --noinput --clear
           test -f staticfiles/css/base_shell.css
           test -f staticfiles/js/base_shell.js
+
+      - name: Upload frontend audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: algobot-frontend-hardening-report
+          path: frontend-audit-report.txt
+          if-no-files-found: ignore
