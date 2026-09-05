@@ -1,8 +1,6 @@
 /* Terminal market-data truth indicator.
- *
- * Observational only: backend remains authoritative for order/risk execution.
- * Transient quote failures are shown as RETRYING/STALE instead of a persistent
- * red ERROR, while preserving the last verified quote state.
+ * The chart/watchdog is the primary live-feed owner. The HTTP request is only
+ * a fallback when the visible quote has actually gone stale.
  */
 (() => {
   'use strict';
@@ -15,6 +13,7 @@
   let retryTimer = null;
   let requestInFlight = false;
   let lastGoodAt = 0;
+  let lastQuoteMutation = Date.now();
   let consecutiveFailures = 0;
 
   function ensurePanel() {
@@ -40,10 +39,8 @@
     if (stateNode) stateNode.textContent = state.toUpperCase();
     if (detailNode) detailNode.textContent = detail || '';
     const root = $('.terminal-page');
-    if (root) {
-      root.dataset.marketDataState = state;
-      root.dispatchEvent(new CustomEvent('algobot:market-data-state', {detail: {state, detail}}));
-    }
+    if (root) root.dataset.marketDataState = state;
+    if (root) root.dispatchEvent(new CustomEvent('algobot:market-data-state', {detail: {state, detail}}));
   }
 
   function formatAge(epoch) {
@@ -57,57 +54,61 @@
   function scheduleRetry() {
     if (retryTimer) clearTimeout(retryTimer);
     const delay = Math.min(30000, 2000 * Math.pow(2, Math.min(consecutiveFailures - 1, 3)));
-    retryTimer = window.setTimeout(() => { retryTimer = null; refresh(); }, delay);
+    retryTimer = window.setTimeout(() => { retryTimer = null; refresh(true); }, delay);
   }
 
-  async function refresh() {
+  async function refresh(force = false) {
     if (requestInFlight) return;
     const symbol = String($('#symbol')?.value || '').trim();
     const account = $('#account')?.value;
     if (!symbol) { setState('waiting', 'Select a broker instrument'); return; }
     if (!account) { setState('waiting', 'Connect a broker account'); return; }
+    if (!force && Date.now() - lastQuoteMutation < 5000) {
+      setState('live', 'live broker quote · chart stream');
+      return;
+    }
 
     requestInFlight = true;
     try {
-      const payload = await api(`/api/market/ticks/broker/?symbol=${encodeURIComponent(symbol)}`, {notifyOnError:false}, 15000);
+      const payload = await api(`/api/market/ticks/broker/?symbol=${encodeURIComponent(symbol)}`, {notifyOnError:false}, 6000);
       const quote = payload?.quote ?? payload?.price ?? payload?.bid ?? payload?.ask;
       if (quote == null) throw new Error('Broker returned no usable quote');
       consecutiveFailures = 0;
       lastGoodAt = Date.now();
+      lastQuoteMutation = Date.now();
       const stale = payload?.stale === true;
       const source = payload?.source === 'live_broker_quote' ? 'live broker quote' : 'last known broker quote';
       setState(stale ? 'stale' : 'live', `${source} · ${formatAge(payload?.epoch)}`);
+      $('[data-q="bid"]')?.replaceChildren(document.createTextNode(Number(quote).toLocaleString(undefined,{maximumFractionDigits:8})));
+      $('[data-q="ask"]')?.replaceChildren(document.createTextNode(Number(quote).toLocaleString(undefined,{maximumFractionDigits:8})));
     } catch (error) {
       consecutiveFailures += 1;
       const age = lastGoodAt ? Math.round((Date.now() - lastGoodAt) / 1000) : null;
-      if (age != null && age <= 120) {
-        setState('stale', `Quote refresh delayed · last verified quote ${age}s ago · retrying`);
-      } else {
-        setState('retrying', consecutiveFailures > 2 ? 'Broker quote unavailable · retrying automatically' : 'Quote refresh delayed · retrying');
-      }
+      if (age != null && age <= 120) setState('stale', `Quote refresh delayed · last verified quote ${age}s ago · retrying`);
+      else setState('retrying', consecutiveFailures > 2 ? 'Broker quote unavailable · retrying automatically' : 'Quote refresh delayed · retrying');
       scheduleRetry();
       window.dispatchEvent(new CustomEvent('algobot:market-data-refresh-failed', {detail: {
         symbol, code: error?.code || 'MARKET_REFRESH_ERROR', message: error?.message || 'Broker quote unavailable', consecutiveFailures
       }}));
-    } finally {
-      requestInFlight = false;
-    }
+    } finally { requestInFlight = false; }
   }
 
   function boot() {
     if (!$('.terminal-page')) return;
     ensurePanel();
-    $('#symbol')?.addEventListener('change', refresh);
-    $('#account')?.addEventListener('change', refresh);
-    window.addEventListener('algobot:broker-symbols-loaded', refresh);
-    window.addEventListener('algobot:account-synced', refresh);
-    window.addEventListener('algobot:market-symbol-changed', refresh);
-    refresh();
-    timer = window.setInterval(refresh, 10000);
-    window.addEventListener('pagehide', () => {
-      if (timer) window.clearInterval(timer);
-      if (retryTimer) window.clearTimeout(retryTimer);
-    }, {once: true});
+    const bid = $('[data-q="bid"]'), ask = $('[data-q="ask"]');
+    const observer = new MutationObserver(() => { lastQuoteMutation = Date.now(); if (lastGoodAt && Date.now() - lastGoodAt > 2000) lastGoodAt = Date.now(); setState('live', 'live broker quote · chart stream'); });
+    if (bid) observer.observe(bid, {childList:true, characterData:true, subtree:true});
+    if (ask) observer.observe(ask, {childList:true, characterData:true, subtree:true});
+    $('#symbol')?.addEventListener('change', () => { lastQuoteMutation = Date.now(); refresh(true); });
+    $('#account')?.addEventListener('change', () => { lastQuoteMutation = Date.now(); refresh(true); });
+    window.addEventListener('algobot:broker-symbols-loaded', () => refresh(true));
+    window.addEventListener('algobot:account-synced', () => refresh(true));
+    window.addEventListener('algobot:market-symbol-changed', () => refresh(true));
+    window.addEventListener('algobot:market-watchdog-tick', event => { lastQuoteMutation = Date.now(); lastGoodAt = Date.now(); consecutiveFailures = 0; setState('live', `live broker quote · ${event.detail?.symbol || 'chart watchdog'}`); });
+    refresh(true);
+    timer = window.setInterval(() => refresh(false), 10000);
+    window.addEventListener('pagehide', () => { if (timer) window.clearInterval(timer); if (retryTimer) window.clearTimeout(retryTimer); observer.disconnect(); }, {once:true});
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once: true});
