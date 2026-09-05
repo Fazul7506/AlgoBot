@@ -1,11 +1,11 @@
 from django.urls import path
-from . import api, views, scanner_api, data_center_api, intelligence_api
+from . import api, views, scanner_api, data_center_api, intelligence_api, public_catalogue
 from . import broker_native
 
 app_name = "market_data"
 urlpatterns = [
-    path("markets/", api.markets, name="markets"),
-    path("markets/symbols/", api.symbols, name="symbols"),
+    path("markets/", public_catalogue.markets, name="markets"),
+    path("markets/symbols/", public_catalogue.symbols, name="symbols"),
     path("markets/symbols/sync/", api.sync_symbols, name="sync_symbols"),
     path("markets/symbol/<str:symbol>/", api.symbol_detail, name="symbol_detail_api"),
     path("market/catalogue/", broker_native.catalogue, name="broker_catalogue"),
@@ -24,7 +24,7 @@ urlpatterns = [
     path("market/ticks/broker/", api.broker_tick, name="market_broker_tick"),
     path("market/chart/capabilities/", api.broker_chart_capabilities, name="market_chart_capabilities"),
     path("market/chart/history/", api.broker_chart_history, name="market_chart_history"),
-    path("market/symbols/", api.symbols, name="market_symbols_canonical"),
+    path("market/symbols/", public_catalogue.symbols, name="market_symbols_canonical"),
     path("market/snapshots/", api.snapshot, name="market_snapshots_canonical"),
     path("market/ticks/", api.tick_history, name="market_ticks_canonical"),
     path("market/price-history/", api.candle_history, name="market_price_history_canonical"),
