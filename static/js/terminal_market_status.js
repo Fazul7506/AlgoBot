@@ -10,7 +10,7 @@
   window.__algoBotTerminalMarketStatus = true;
 
   const $ = (selector, root = document) => root.querySelector(selector);
-  const api = (url, options = {}, timeout = 15000) => window.AlgoBotFrontendData?.request?.(url, options, timeout);
+  const api = (url, options = {}, timeout = 15000) => window.AlgoBotServices?.request?.('market-data', url, options, timeout) || window.AlgoBotFrontendData?.request?.(url, options, timeout);
   let timer = null;
   let retryTimer = null;
   let requestInFlight = false;
@@ -69,7 +69,7 @@
 
     requestInFlight = true;
     try {
-      const payload = await api(`/api/market/ticks/broker/?symbol=${encodeURIComponent(symbol)}`, {}, 15000);
+      const payload = await api(`/api/market/ticks/broker/?symbol=${encodeURIComponent(symbol)}`, {notifyOnError:false}, 15000);
       const quote = payload?.quote ?? payload?.price ?? payload?.bid ?? payload?.ask;
       if (quote == null) throw new Error('Broker returned no usable quote');
       consecutiveFailures = 0;
@@ -80,8 +80,6 @@
     } catch (error) {
       consecutiveFailures += 1;
       const age = lastGoodAt ? Math.round((Date.now() - lastGoodAt) / 1000) : null;
-      // Do not turn a transient timeout/network hiccup into a permanent ERROR.
-      // The absence of a fresh quote must never be treated as permission to trade.
       if (age != null && age <= 120) {
         setState('stale', `Quote refresh delayed · last verified quote ${age}s ago · retrying`);
       } else {
@@ -105,7 +103,6 @@
     window.addEventListener('algobot:account-synced', refresh);
     window.addEventListener('algobot:market-symbol-changed', refresh);
     refresh();
-    // Normal polling is deliberately slower; failures use exponential backoff.
     timer = window.setInterval(refresh, 10000);
     window.addEventListener('pagehide', () => {
       if (timer) window.clearInterval(timer);
