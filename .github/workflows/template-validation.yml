@@ -36,7 +36,7 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q .
       - name: Frontend asset and syntax audit
-        run: python scripts/frontend_audit.py | tee frontend-audit-report.txt
+        run: python scripts/frontend_audit.py --strict | tee frontend-audit-report.txt
       - name: Browser page-surface smoke tests
         run: |
           set -o pipefail
@@ -50,6 +50,5 @@ jobs:
             frontend-audit-report.txt
             page-surface-report.txt
           if-no-files-found: ignore
-      # Keep canonical duplicate detection in the required CI path.
       - name: Repository hygiene audit
         run: python scripts/repository_hygiene.py
