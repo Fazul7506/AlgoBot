@@ -3,21 +3,11 @@
 {% block title %}Signal Intelligence | AlgoBot{% endblock %}
 {% block content %}
 <section class="data-page panel signal-workspace" data-data-page="signals-page">
-  <header class="page-heading">
-    <div><p class="eyebrow">Trading intelligence</p><h1>Signal Intelligence</h1><p>Inspect strategy-generated opportunities without bypassing risk or execution controls.</p></div>
-    <div class="page-actions"><a class="btn" href="/markets/">Markets</a><a class="btn primary" href="/trading/">Open trading terminal</a></div>
-  </header>
-  <div class="kpi-grid compact signal-kpis">
-    <article class="kpi-card"><span>Signals</span><strong data-record-count>—</strong></article>
-    <article class="kpi-card"><span>Avg confidence</span><strong data-page-confidence>—</strong></article>
-    <article class="kpi-card"><span>Executed</span><strong data-page-executed>—</strong></article>
-    <article class="kpi-card"><span>Feed status</span><strong data-page-status>Loading</strong></article>
-  </div>
-  <section class="panel signal-controls">
-    <div class="panel-head"><div><h2>Broker signal feed</h2><p>Review current backend signals, then prepare a BUY or SELL contract in the terminal for broker and risk validation.</p></div><input type="search" data-page-search placeholder="Search signals…" aria-label="Search signals"></div>
-  </section>
+  <header class="page-heading"><div><p class="eyebrow">Trading intelligence</p><h1>Signal Intelligence</h1><p>Every signal is shown with its evidence, confirmation state, risk gate and data freshness. Unconfirmed setups are never presented as executable trades.</p></div><div class="page-actions"><a class="btn" href="/markets/">Markets</a><a class="btn primary" href="/trading/">Open trading terminal</a></div></header>
+  <div class="kpi-grid compact signal-kpis"><article class="kpi-card"><span>Signals</span><strong data-record-count>—</strong></article><article class="kpi-card"><span>Avg confidence</span><strong data-page-confidence>—</strong></article><article class="kpi-card"><span>Executed</span><strong data-page-executed>—</strong></article><article class="kpi-card"><span>Feed status</span><strong data-page-status>Loading</strong></article></div>
+  <section class="panel signal-controls"><div class="panel-head"><div><h2>Broker signal feed</h2><p>SETUP DETECTED means wait. CONFIRMED SIGNAL means the backend entry condition is met. NO TRADE means confirmation or risk checks failed.</p></div><input type="search" data-page-search placeholder="Search signals…" aria-label="Search signals"></div></section>
   <section class="signal-grid" data-signal-grid></section>
-  <section class="panel"><div class="panel-head"><div><h2>Signal records</h2><p>Raw backend records remain available for audit and inspection.</p></div></div><div class="table-wrap"><table class="enterprise-table" data-page-table><thead></thead><tbody><tr><td>Loading…</td></tr></tbody></table></div></section>
+  <section class="panel"><div class="panel-head"><div><h2>Signal records</h2><p>Backend records remain available for audit and inspection.</p></div></div><div class="table-wrap"><table class="enterprise-table" data-page-table><thead></thead><tbody><tr><td>Loading…</td></tr></tbody></table></div></section>
 </section>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals.css' %}">{% endblock %}
