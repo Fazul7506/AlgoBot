@@ -29,60 +29,56 @@ class DashboardViewSet(viewsets.ViewSet):
             return Order.objects.none()
         return Order.objects.filter(user=user, account=account)
 
+    @staticmethod
+    def _signal_payload(row):
+        """Expose the stored signal evidence without inventing market facts."""
+        metadata = row.metadata if isinstance(row.metadata, dict) else {}
+        return {
+            "id": row.id,
+            "symbol": row.symbol,
+            "direction": metadata.get("direction") or row.signal,
+            "signal": row.signal,
+            "confidence": row.confidence,
+            "market_regime": metadata.get("market_regime") or metadata.get("regime") or "",
+            "strategy": row.strategy.name,
+            "strategy_slug": row.strategy.slug,
+            "contract_type": metadata.get("contract_type") or metadata.get("contract") or "",
+            "timeframe": row.configuration.timeframe if row.configuration else metadata.get("timeframe") or "",
+            "display_name": metadata.get("display_name") or metadata.get("instrument_name") or "",
+            "entry_price": row.entry_price,
+            "stop_loss": row.stop_loss,
+            "take_profit": row.take_profit,
+            "entry_condition": metadata.get("entry_condition") or metadata.get("trigger_condition") or "",
+            "trigger_status": metadata.get("trigger_status") or metadata.get("status") or "",
+            "confirmation": metadata.get("confirmation") or metadata.get("confirmation_sequence") or "",
+            "sequence": metadata.get("sequence") or metadata.get("digit_sequence") or metadata.get("price_sequence") or "",
+            "technical_confluence": metadata.get("technical_confluence") or metadata.get("ta_confluence") or "",
+            "price_action": metadata.get("price_action") or "",
+            "support_resistance": metadata.get("support_resistance") or "",
+            "volatility_check": metadata.get("volatility_check") or "",
+            "trend_momentum": metadata.get("trend_momentum") or metadata.get("momentum_confirmation") or "",
+            "risk_assessment": metadata.get("risk_assessment") or metadata.get("risk_gate") or "",
+            "acceptance_reason": metadata.get("acceptance_reason") or metadata.get("reason") or "",
+            "rejection_reason": metadata.get("rejection_reason") or "",
+            "data_freshness": metadata.get("data_freshness") or metadata.get("freshness") or "",
+            "broker_available": metadata.get("broker_available"),
+            "backtest": metadata.get("backtest") or metadata.get("backtest_evidence") or "",
+            "model": metadata.get("model") or metadata.get("model_version") or "",
+            "was_executed": bool(metadata.get("was_executed", False)),
+            "created_at": row.timestamp,
+        }
+
     @action(detail=False, methods=["get"])
     def account_overview(self, request):
         account = get_active_account(request.user, request=request)
         orders = self._orders_for_account(request.user, account)
-        return Response(
-            {
-                "status": "success",
-                "data": {
-                    "account": {
-                        "id": account.id if account else None,
-                        "account_id": account.account_id if account else None,
-                        "broker": account.broker.name if account else None,
-                        "currency": account.currency if account else None,
-                        "balance": account.balance if account else None,
-                        "equity": account.equity if account else None,
-                        "last_synced_at": account.last_synced_at if account else None,
-                        "email": request.user.email,
-                        "username": request.user.username,
-                        "registered_date": request.user.date_joined.isoformat(),
-                    },
-                    "trading_stats": {
-                        "total_trades": orders.count(),
-                        "open_trades": orders.filter(status="executed").count(),
-                        "wins": 0,
-                        "losses": 0,
-                        "win_rate": 0,
-                        "total_pnl": 0,
-                        "avg_pnl_per_trade": 0,
-                    },
-                },
-            },
-            status=status.HTTP_200_OK,
-        )
+        return Response({"status": "success", "data": {"account": {"id": account.id if account else None, "account_id": account.account_id if account else None, "broker": account.broker.name if account else None, "currency": account.currency if account else None, "balance": account.balance if account else None, "equity": account.equity if account else None, "last_synced_at": account.last_synced_at if account else None, "email": request.user.email, "username": request.user.username, "registered_date": request.user.date_joined.isoformat()}, "trading_stats": {"total_trades": orders.count(), "open_trades": orders.filter(status="executed").count(), "wins": 0, "losses": 0, "win_rate": 0, "total_pnl": 0, "avg_pnl_per_trade": 0}}}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get"])
     def active_trades(self, request):
         account = get_active_account(request.user, request=request)
         rows = self._orders_for_account(request.user, account).filter(status="executed")[: self._limit(request)]
-        return Response(
-            {
-                "status": "success",
-                "count": len(rows),
-                "data": [
-                    {
-                        "id": row.id,
-                        "symbol": row.symbol,
-                        "stake": row.stake,
-                        "strategy": row.strategy,
-                        "created_at": row.created_at,
-                    }
-                    for row in rows
-                ],
-            }
-        )
+        return Response({"status": "success", "count": len(rows), "data": [{"id": row.id, "symbol": row.symbol, "stake": row.stake, "strategy": row.strategy, "created_at": row.created_at} for row in rows]})
 
     @action(detail=False, methods=["get"])
     def trade_history(self, request):
@@ -93,47 +89,13 @@ class DashboardViewSet(viewsets.ViewSet):
         start = timezone.now() - timedelta(days=days)
         account = get_active_account(request.user, request=request)
         rows = self._orders_for_account(request.user, account).filter(created_at__gte=start)[: self._limit(request)]
-        return Response(
-            {
-                "status": "success",
-                "total": len(rows),
-                "count": len(rows),
-                "data": [
-                    {
-                        "id": row.id,
-                        "symbol": row.symbol,
-                        "stake": row.stake,
-                        "direction": row.direction,
-                        "status": row.status,
-                        "strategy": row.strategy,
-                        "created_at": row.created_at,
-                        "broker_reference": row.broker_order_id,
-                    }
-                    for row in rows
-                ],
-            }
-        )
+        return Response({"status": "success", "total": len(rows), "count": len(rows), "data": [{"id": row.id, "symbol": row.symbol, "stake": row.stake, "direction": row.direction, "status": row.status, "strategy": row.strategy, "created_at": row.created_at, "broker_reference": row.broker_order_id} for row in rows]})
 
     @action(detail=False, methods=["get"])
     def performance_summary(self, request):
         account = get_active_account(request.user, request=request)
         orders = self._orders_for_account(request.user, account)
-        return Response(
-            {
-                "status": "success",
-                "data": {
-                    "total_trades": orders.count(),
-                    "winning_trades": 0,
-                    "losing_trades": 0,
-                    "win_rate": 0,
-                    "total_profit": 0,
-                    "average_profit": 0,
-                    "sharpe_ratio": 0,
-                    "best_trade": 0,
-                    "worst_trade": 0,
-                },
-            }
-        )
+        return Response({"status": "success", "data": {"total_trades": orders.count(), "winning_trades": 0, "losing_trades": 0, "win_rate": 0, "total_profit": 0, "average_profit": 0, "sharpe_ratio": 0, "best_trade": 0, "worst_trade": 0}})
 
     @action(detail=False, methods=["get"])
     def signals(self, request):
@@ -142,61 +104,15 @@ class DashboardViewSet(viewsets.ViewSet):
         if symbol:
             qs = qs.filter(symbol=symbol)
         rows = qs[: self._limit(request)]
-        return Response(
-            {
-                "status": "success",
-                "count": len(rows),
-                "data": [
-                    {
-                        "id": row.id,
-                        "symbol": row.symbol,
-                        "direction": row.signal,
-                        "confidence": row.confidence,
-                        "market_regime": "",
-                        "strategy": row.strategy.name,
-                        "was_executed": False,
-                        "created_at": row.timestamp,
-                    }
-                    for row in rows
-                ],
-            }
-        )
+        return Response({"status": "success", "count": len(rows), "data": [self._signal_payload(row) for row in rows]})
 
     @action(detail=False, methods=["get"])
     def notifications(self, request):
         rows = Notification.objects.filter(user=request.user).order_by("-created_at")[: self._limit(request, 20)]
-        return Response(
-            {
-                "status": "success",
-                "count": len(rows),
-                "data": [
-                    {
-                        "id": row.id,
-                        "alert_type": row.category,
-                        "message": row.message,
-                        "channels": [row.channel],
-                        "delivered_channels": [row.channel] if row.status == "sent" else [],
-                        "status": row.status,
-                        "created_at": row.created_at,
-                    }
-                    for row in rows
-                ],
-            }
-        )
+        return Response({"status": "success", "count": len(rows), "data": [{"id": row.id, "alert_type": row.category, "message": row.message, "channels": [row.channel], "delivered_channels": [row.channel] if row.status == "sent" else [], "status": row.status, "created_at": row.created_at} for row in rows]})
 
     @action(detail=False, methods=["get"])
     def performance_metrics(self, request):
         account = get_active_account(request.user, request=request)
         orders = self._orders_for_account(request.user, account)
-        return Response(
-            {
-                "status": "success",
-                "data": {
-                    "total_trades": orders.count(),
-                    "net_profit": 0,
-                    "win_rate": 0,
-                    "max_drawdown": 0,
-                    "sharpe_ratio": 0,
-                },
-            }
-        )
+        return Response({"status": "success", "data": {"total_trades": orders.count(), "net_profit": 0, "win_rate": 0, "max_drawdown": 0, "sharpe_ratio": 0}})
