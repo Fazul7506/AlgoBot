@@ -11,7 +11,7 @@
   const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
   const list=v=>window.AlgoBotFrontendData?.list?.(v)||[];
   const api=(url,options={},timeout=12000)=>window.AlgoBotServices?.request?.('market-data',url,options,timeout)||window.AlgoBotFrontendData?.request?.(url,options,timeout);
-  let contracts=[],capabilitiesRequest=0;
+  let contracts=[],capabilitiesRequest=0,capabilitiesInFlight=null,capabilitiesSymbol='',capabilitiesRetryTimer=null;
 
   const directionFor=type=>/PUT|FALL|LOWER|MULTDOWN|DIGITUNDER|NOTOUCH|TURBOSSHORT|RUNLOW|EXPIRYMISS/i.test(String(type||''))?'SELL':'BUY';
   const setStatus=message=>$('[data-contract-status]')?.replaceChildren(document.createTextNode(String(message||'')));
@@ -25,9 +25,52 @@
     const previous=select.value;select.innerHTML=contracts.map(c=>`<option value="${esc(c.contract_type)}">${esc(c.contract_type+(c.contract_category?` · ${c.contract_category}`:''))}</option>`).join('');select.disabled=false;select.value=contracts.some(c=>c.contract_type===previous)?previous:contracts[0].contract_type;applyContract(select.value);setStatus(`${contracts.length} broker-supported contract type${contracts.length===1?'':'s'}`);
   }
   function applyContract(type){const selected=contracts.find(c=>String(c.contract_type)===String(type));if(!selected)return;setPreparedDirection(directionFor(selected.contract_type));const label=$('[data-broker-trade-type]');if(label)label.textContent=selected.contract_category||selected.contract_type||'Broker contract';window.__algobotSelectedBrokerContract=selected;window.__algobotAiOrderContext={...(window.__algobotAiOrderContext||{}),broker_source:'connected_broker',contract_type:selected.contract_type,contract_category:selected.contract_category||'',expiry_type:selected.expiry_type||'',underlying_symbol:selected.underlying_symbol||$('#symbol')?.value||'',sentiment:selected.sentiment||'',market:selected.market||'',submarket:selected.submarket||''};window.dispatchEvent(new CustomEvent('algobot:broker-contract-selected',{detail:selected}))}
-  async function loadCapabilities(symbol){const requestId=++capabilitiesRequest,select=$('[data-contract-type]');if(!select||!symbol)return;select.disabled=true;select.innerHTML='<option value="">Loading broker contracts…</option>';if($('[data-broker-trade-type]'))$('[data-broker-trade-type]').textContent='Loading';setStatus('Loading broker-supported contracts…');try{const payload=await api(`/api/market/broker-capabilities/?symbol=${encodeURIComponent(symbol)}`,{notifyOnError:false},12000);if(requestId!==capabilitiesRequest)return;renderContracts(payload)}catch(error){if(requestId!==capabilitiesRequest)return;contracts=[];select.innerHTML='<option value="">Broker contracts unavailable</option>';select.disabled=true;if($('[data-broker-trade-type]'))$('[data-broker-trade-type]').textContent='Unavailable';setStatus(error?.message||'Broker capability request failed')}}
+  async function loadCapabilities(symbol, retryAttempt=0){
+     const normalized=String(symbol||'').trim();
+     const requestId=++capabilitiesRequest;
+     const select=$('[data-contract-type]');
+     if(!select||!normalized)return;
+     if(capabilitiesRetryTimer){clearTimeout(capabilitiesRetryTimer);capabilitiesRetryTimer=null}
+     if(capabilitiesInFlight && capabilitiesSymbol===normalized){
+       try{return await capabilitiesInFlight}catch(_){return}
+     }
+     if(capabilitiesInFlight && capabilitiesSymbol!==normalized) capabilitiesInFlight=null;
+     capabilitiesSymbol=normalized;
+     select.disabled=true;
+     select.innerHTML='<option value="">Loading broker contracts…</option>';
+     if($('[data-broker-trade-type]'))$('[data-broker-trade-type]').textContent='Loading';
+     setStatus('Loading broker-supported contracts…');
+     capabilitiesInFlight=(async()=>{
+       try{
+         const payload=await api(`/api/market/broker-capabilities/?symbol=${encodeURIComponent(normalized)}`,{notifyOnError:false},12000);
+         if(requestId===capabilitiesRequest) renderContracts(payload);
+         return payload;
+       }catch(error){
+         if(requestId!==capabilitiesRequest)return null;
+         if(error?.code==='REQUEST_ABORTED'||/signal.*aborted|request.*aborted/i.test(error?.message||'')) {
+           setStatus('Broker capability request was cancelled; retrying…');
+           capabilitiesRetryTimer=setTimeout(()=>{capabilitiesRetryTimer=null;void loadCapabilities(normalized, retryAttempt)},250);
+           return null;
+         }
+         if(retryAttempt<2 && ['NETWORK_ERROR','API_TIMEOUT','SERVICE_TIMEOUT'].includes(String(error?.code||''))){
+           setStatus('Broker capability connection delayed; retrying…');
+           capabilitiesRetryTimer=setTimeout(()=>{capabilitiesRetryTimer=null;void loadCapabilities(normalized,retryAttempt+1)},Math.min(3000,750*(retryAttempt+1)));
+           return null;
+         }
+         contracts=[];
+         select.innerHTML='<option value="">Broker contracts unavailable</option>';
+         select.disabled=true;
+         if($('[data-broker-trade-type]'))$('[data-broker-trade-type]').textContent='Unavailable';
+         setStatus('Broker contracts are temporarily unavailable. Use Retry or refresh the broker connection.');
+         return null;
+       }finally{
+         capabilitiesInFlight=null;
+       }
+     })();
+     return await capabilitiesInFlight;
+   }
   const currentSymbol=()=>String($('#symbol')?.value||'').trim();
   const triggerCurrentSymbol=()=>{const symbol=currentSymbol();if(symbol)void loadCapabilities(symbol)};
-  function boot(){if(!$('.terminal-page'))return;const symbol=$('#symbol'),contract=$('[data-contract-type]');symbol?.addEventListener('change',()=>loadCapabilities(symbol.value));contract?.addEventListener('change',()=>applyContract(contract.value));window.addEventListener('algobot:broker-symbols-loaded',triggerCurrentSymbol);window.addEventListener('algobot:market-symbol-changed',triggerCurrentSymbol);window.addEventListener('algobot:account-changed',triggerCurrentSymbol);window.addEventListener('algobot:account-synced',triggerCurrentSymbol);if(currentSymbol())triggerCurrentSymbol()}
+  function boot(){if(!$('.terminal-page'))return;const symbol=$('#symbol'),contract=$('[data-contract-type]');symbol?.addEventListener('change',()=>loadCapabilities(symbol.value));contract?.addEventListener('change',()=>applyContract(contract.value));window.addEventListener('algobot:broker-symbols-loaded',triggerCurrentSymbol);window.addEventListener('algobot:market-symbol-changed',triggerCurrentSymbol);window.addEventListener('algobot:account-changed',triggerCurrentSymbol);window.addEventListener('algobot:account-synced',triggerCurrentSymbol);window.addEventListener('pagehide',()=>{capabilitiesRequest++;if(capabilitiesRetryTimer)clearTimeout(capabilitiesRetryTimer);capabilitiesRetryTimer=null;capabilitiesInFlight=null},{once:true});if(currentSymbol())triggerCurrentSymbol()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
