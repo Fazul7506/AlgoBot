@@ -22,6 +22,10 @@
   }
 
   function show(detail) {
+    // Page-level controllers own ordinary transport retries. Do not cover the
+    // trading workspace with a generic "Failed to fetch" overlay for an
+    // expected background cancellation/network blip.
+    if (['REQUEST_ABORTED','NETWORK_ERROR','API_TIMEOUT','SERVICE_TIMEOUT'].includes(String(detail.code||''))) return;
     const node = ensureRail();
     const title = node.querySelector('[data-recovery-title]');
     const message = node.querySelector('[data-recovery-message]');
