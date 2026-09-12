@@ -12,6 +12,7 @@
   let timer = null;
   let retryTimer = null;
   let requestInFlight = false;
+  let lifecycleToken = 0;
   let lastGoodAt = 0;
   let lastQuoteMutation = Date.now();
   let consecutiveFailures = 0;
@@ -51,16 +52,18 @@
     return `updated ${Math.floor(seconds / 60)}m ago`;
   }
 
-  function scheduleRetry() {
+  function scheduleRetry(token = lifecycleToken) {
     if (retryTimer) clearTimeout(retryTimer);
     const delay = Math.min(30000, 2000 * Math.pow(2, Math.min(consecutiveFailures - 1, 3)));
-    retryTimer = window.setTimeout(() => { retryTimer = null; refresh(true); }, delay);
+    retryTimer = window.setTimeout(() => { retryTimer = null; if (token === lifecycleToken && document.visibilityState === 'visible') refresh(true); }, delay);
   }
 
   async function refresh(force = false) {
     if (requestInFlight) return;
+    const token = lifecycleToken;
     const symbol = String($('#symbol')?.value || '').trim();
     const account = $('#account')?.value;
+    if (token !== lifecycleToken) return;
     if (!symbol) { setState('waiting', 'Select a broker instrument'); return; }
     if (!account) { setState('waiting', 'Connect a broker account'); return; }
     if (!force && Date.now() - lastQuoteMutation < 5000) {
@@ -86,7 +89,7 @@
       const age = lastGoodAt ? Math.round((Date.now() - lastGoodAt) / 1000) : null;
       if (age != null && age <= 120) setState('stale', `Quote refresh delayed · last verified quote ${age}s ago · retrying`);
       else setState('retrying', consecutiveFailures > 2 ? 'Broker quote unavailable · retrying automatically' : 'Quote refresh delayed · retrying');
-      scheduleRetry();
+      scheduleRetry(token);
       window.dispatchEvent(new CustomEvent('algobot:market-data-refresh-failed', {detail: {
         symbol, code: error?.code || 'MARKET_REFRESH_ERROR', message: error?.message || 'Broker quote unavailable', consecutiveFailures
       }}));
@@ -108,7 +111,12 @@
     window.addEventListener('algobot:market-watchdog-tick', event => { lastQuoteMutation = Date.now(); lastGoodAt = Date.now(); consecutiveFailures = 0; setState('live', `live broker quote · ${event.detail?.symbol || 'chart watchdog'}`); });
     refresh(true);
     timer = window.setInterval(() => refresh(false), 10000);
-    window.addEventListener('pagehide', () => { if (timer) window.clearInterval(timer); if (retryTimer) window.clearTimeout(retryTimer); observer.disconnect(); }, {once:true});
+    window.addEventListener('pagehide', () => { lifecycleToken++; if (timer) window.clearInterval(timer); if (retryTimer) window.clearTimeout(retryTimer); observer.disconnect(); }, {once:true});
+    document.addEventListener('visibilitychange', () => {
+      lifecycleToken++;
+      if (document.hidden) { if (retryTimer) window.clearTimeout(retryTimer); retryTimer=null; }
+      else refresh(true);
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once: true});
