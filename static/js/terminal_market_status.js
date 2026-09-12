@@ -100,7 +100,12 @@
     if (!$('.terminal-page')) return;
     ensurePanel();
     const bid = $('[data-q="bid"]'), ask = $('[data-q="ask"]');
-    const observer = new MutationObserver(() => { lastQuoteMutation = Date.now(); if (lastGoodAt && Date.now() - lastGoodAt > 2000) lastGoodAt = Date.now(); setState('live', 'live broker quote · chart stream'); });
+    const observer = new MutationObserver(() => {
+      // DOM mutation is not proof of a fresh broker tick. Only the broker
+      // response/watchdog below may advance lastGoodAt, otherwise stale data
+      // can incorrectly report "live" or "0s ago".
+      lastQuoteMutation = Date.now();
+    });
     if (bid) observer.observe(bid, {childList:true, characterData:true, subtree:true});
     if (ask) observer.observe(ask, {childList:true, characterData:true, subtree:true});
     $('#symbol')?.addEventListener('change', () => { lastQuoteMutation = Date.now(); refresh(true); });
