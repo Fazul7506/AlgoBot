@@ -21,7 +21,7 @@ class AnalyticsSmokeTests(TestCase):
         MarketSymbol.objects.create(
             symbol="R_100",
             display_name="Volatility 100",
-            market="synthetic_index",
+            market="Volatility Indices",
         )
         response = self.client.get(reverse("analytics-dashboard"))
         self.assertEqual(response.status_code, 200)
@@ -35,7 +35,7 @@ class AnalyticsSmokeTests(TestCase):
         MarketSymbol.objects.create(
             symbol="R_100",
             display_name="Volatility 100",
-            market="synthetic_index",
+            market="Volatility Indices",
         )
         with patch.object(
             views.MarketSymbol.objects,
@@ -51,7 +51,7 @@ class AnalyticsSmokeTests(TestCase):
         market = MarketSymbol.objects.create(
             symbol="R_100",
             display_name="Volatility 100",
-            market="synthetic_index",
+            market="Volatility Indices",
         )
         with patch.object(
             views,
