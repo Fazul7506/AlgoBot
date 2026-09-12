@@ -36,8 +36,24 @@
     const sameOrigin=targetOrigin===window.location.origin;
     const selectedId=brokerState()?.get?.()?.account?.id;
     if(selectedId&&!headers.has('X-Algobot-Account-ID'))headers.set('X-Algobot-Account-ID',String(selectedId));
-    const response=await nativeFetch(target,{credentials:sameOrigin?'same-origin':'include',...options,headers,cache:'no-store',signal:controller.signal});
-    return{response,text:await response.text()};
+    const requestInit={credentials:sameOrigin?'same-origin':'include',...options,headers,cache:'no-store',signal:controller.signal};
+    try {
+      const response=await nativeFetch(target,requestInit);
+      return{response,text:await response.text()};
+    } catch (error) {
+      // Production may expose the API on a sibling hostname. If that origin
+      // is unreachable, retry the exact endpoint through the page origin.
+      // This preserves the same authenticated Django session and removes a
+      // second point of failure without inventing or substituting data.
+      if (!sameOrigin && error?.name !== 'AbortError' && !controller.signal.aborted) {
+        const fallback=new URL(rawUrl,window.location.origin);
+        const fallbackOrigin=fallback.origin;
+        if (fallbackOrigin===window.location.origin) throw error;
+        const fallbackResponse=await nativeFetch(fallback.toString(),{...requestInit,credentials:'same-origin'});
+        return{response:fallbackResponse,text:await fallbackResponse.text()};
+      }
+      throw error;
+    }
   }
 
   async function request(rawUrl,options={},timeout=25000){
