@@ -33,7 +33,13 @@
     if (typeof payload === 'object') return Object.entries(payload).filter(([k]) => !['code', 'status'].includes(k)).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : v}`).join('; ') || fallback;
     return fallback;
   }
-  function emitError(error) { window.dispatchEvent(new CustomEvent('algobot:api-error', { detail: { url: error.url, method: error.method, status: error.status, code: error.code, message: error.message, retryable: error.retryable } })); }
+  function emitError(error, options = {}) {
+    if (options?.notifyOnError === false) return;
+    window.dispatchEvent(new CustomEvent('algobot:api-error', { detail: {
+      url: error.url, method: error.method, status: error.status, code: error.code,
+      message: error.message, retryable: error.retryable
+    } }));
+  }
 
   function normalizeOrderPayload(body) {
     if (typeof body !== 'string') return body;
@@ -80,14 +86,14 @@
       } catch (error) {
         if (controller.signal.aborted && !callerSignal?.aborted) {
           const timeout = new APIError('API request timed out after ' + timeoutMs + 'ms', {code:'API_TIMEOUT',url:url.toString(),method});
-          emitError(timeout); throw timeout;
+          emitError(timeout, options); throw timeout;
         }
         if (callerSignal?.aborted) {
           const cancelled = new APIError(callerSignal.reason?.message || 'Request was cancelled.', {code:'REQUEST_ABORTED',url:url.toString(),method});
           cancelled.retryable = false; throw cancelled;
         }
         const network = new APIError(error?.message || 'Network request failed', {code:'NETWORK_ERROR',url:url.toString(),method});
-        emitError(network); throw network;
+        emitError(network, options); throw network;
       }
     } finally { clearTimeout(timer); }
   }
@@ -102,7 +108,7 @@
     async request(path, options={}) {
       const response = await guardedFetch(this.buildUrl(path), {...options, headers:{...this.defaultHeaders,...(options.headers||{})}, __algoTimeoutMs:options.__algoTimeoutMs||this.timeout});
       const payload = parsePayload(await response.text());
-      if (!response.ok) { const error = new APIError(messageFromPayload(payload, `HTTP ${response.status} request failure`), {status:response.status,payload,url:response.url||this.buildUrl(path),method:options.method||'GET',response}); emitError(error); throw error; }
+      if (!response.ok) { const error = new APIError(messageFromPayload(payload, `HTTP ${response.status} request failure`), {status:response.status,payload,url:response.url||this.buildUrl(path),method:options.method||'GET',response}); emitError(error, options); throw error; }
       return payload;
     }
     get(path, options={}) { return this.request(path,{...options,method:'GET'}); }
