@@ -1,27 +1,76 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
-from trading.models import PortfolioSnapshot, Trade
+from apps.analytics import views
+from apps.market_data.models import MarketSymbol
 
 
 class AnalyticsSmokeTests(TestCase):
     def setUp(self):
-        self.user = get_user_model().objects.create_user(username="analytics-smoke", password="test-pass-123")
-
-    def test_dashboard_renders_with_real_models(self):
-        PortfolioSnapshot.objects.create(user=self.user, balance=1000, equity=1005)
+        self.user = get_user_model().objects.create_user(
+            username="analytics-smoke", password="test-pass-123"
+        )
         self.client.force_login(self.user)
+        cache.clear()
+
+    def test_dashboard_renders_single_page_controller_and_embedded_markets(self):
+        MarketSymbol.objects.create(
+            symbol="R_100",
+            display_name="Volatility 100",
+            market="synthetic_index",
+        )
         response = self.client.get(reverse("analytics-dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Trading Analytics")
-
-    def test_export_is_user_scoped(self):
-        Trade.objects.create(user=self.user, symbol="R_75", contract_type="CALL", entry_price=100, stake=10)
-        other = get_user_model().objects.create_user(username="analytics-other", password="test-pass-123")
-        Trade.objects.create(user=other, symbol="R_100", contract_type="PUT", entry_price=100, stake=20)
-        self.client.force_login(self.user)
-        response = self.client.get(reverse("analytics-export"))
         body = response.content.decode()
-        self.assertIn("R_75", body)
-        self.assertNotIn("R_100", body)
+        self.assertEqual(body.count('data-page-controller="analysis-v2"'), 1)
+        self.assertEqual(body.count('id="main-content"'), 1)
+        self.assertIn('id="analysis-markets-data"', body)
+        self.assertIn("R_100", body)
+
+    def test_analysis_markets_cache_is_reused(self):
+        MarketSymbol.objects.create(
+            symbol="R_100",
+            display_name="Volatility 100",
+            market="synthetic_index",
+        )
+        with patch.object(
+            views.MarketSymbol.objects,
+            "filter",
+            wraps=views.MarketSymbol.objects.filter,
+        ) as query:
+            first = views._analysis_markets()
+            second = views._analysis_markets()
+        self.assertEqual(first, second)
+        self.assertEqual(query.call_count, 1)
+
+    def test_analysis_data_cache_avoids_recalculation(self):
+        market = MarketSymbol.objects.create(
+            symbol="R_100",
+            display_name="Volatility 100",
+            market="synthetic_index",
+        )
+        with patch.object(
+            views,
+            "analyze_candles",
+            return_value={"status": "ok", "candles": 0},
+        ) as analyze:
+            first = self.client.get(
+                reverse("analysis-data"),
+                {"symbol": market.symbol, "timeframe": "M1", "limit": 300},
+            )
+            second = self.client.get(
+                reverse("analysis-data"),
+                {"symbol": market.symbol, "timeframe": "M1", "limit": 300},
+            )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(analyze.call_count, 1)
+
+    def test_analysis_market_endpoint_is_user_authenticated(self):
+        response = self.client.get(reverse("analysis-markets"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["markets"], [])
