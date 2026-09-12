@@ -46,7 +46,7 @@
       // This preserves the same authenticated Django session and removes a
       // second point of failure without inventing or substituting data.
       if (!sameOrigin && error?.name !== 'AbortError' && !controller.signal.aborted) {
-        const fallback=new URL(rawUrl,window.location.origin);
+        const fallback=new URL(url,window.location.origin);
         const fallbackOrigin=fallback.origin;
         if (fallbackOrigin===window.location.origin) throw error;
         const fallbackResponse=await nativeFetch(fallback.toString(),{...requestInit,credentials:'same-origin'});
