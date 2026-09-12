@@ -28,6 +28,15 @@ def _order_profit(order):
         return 0.0
 
 
+def _analysis_markets():
+    cache_key = "algobot:analysis:markets:v1"
+    markets = cache.get(cache_key)
+    if markets is None:
+        markets = list(MarketSymbol.objects.filter(is_active=True, is_tradable=True).values("symbol", "display_name", "market", "sub_market").order_by("market", "symbol"))
+        cache.set(cache_key, markets, 60)
+    return markets
+
+
 def _analytics_context(user):
     cache_key = f"algobot:analytics:v2:{user.pk}"
     cached = cache.get(cache_key)
@@ -67,6 +76,7 @@ def _analytics_context(user):
         }
         for item in performance
     ]
+    markets = _analysis_markets()
     context = {
         "total_trades": trades.count(),
         "closed_trades": wins + losses,
@@ -78,6 +88,7 @@ def _analytics_context(user):
         "net_pnl": sum(profits),
         "equity_curve": equity_curve,
         "strategy_distribution": strategy_distribution,
+        "analysis_markets_json": json.dumps(markets),
     }
     cache.set(cache_key, context, ANALYTICS_CACHE_SECONDS)
     return context
@@ -104,7 +115,7 @@ def analysis_data(request):
     if cached is not None:
         return JsonResponse(cached)
 
-    market = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
+    market = MarketSymbol.objects.filter(symbol=symbol, is_active=True, is_tradable=True).only("id", "symbol").first()
     if not market:
         return JsonResponse({"status": "error", "message": "Unknown or inactive market symbol."}, status=404)
     candles = list(
@@ -135,16 +146,7 @@ def analysis_data(request):
 
 @login_required
 def analysis_markets(request):
-    cache_key = "algobot:analysis:markets:v1"
-    markets = cache.get(cache_key)
-    if markets is None:
-        markets = list(
-            MarketSymbol.objects.filter(is_active=True, is_tradable=True)
-            .values("symbol", "display_name", "market", "sub_market")
-            .order_by("market", "symbol")
-        )
-        cache.set(cache_key, markets, 60)
-    return JsonResponse({"markets": markets})
+    return JsonResponse({"markets": _analysis_markets()})
 
 
 @login_required
