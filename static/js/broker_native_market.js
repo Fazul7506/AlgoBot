@@ -27,13 +27,13 @@
   function applyContract(type){const selected=contracts.find(c=>String(c.contract_type)===String(type));if(!selected)return;setPreparedDirection(directionFor(selected.contract_type));const label=$('[data-broker-trade-type]');if(label)label.textContent=selected.contract_category||selected.contract_type||'Broker contract';window.__algobotSelectedBrokerContract=selected;window.__algobotAiOrderContext={...(window.__algobotAiOrderContext||{}),broker_source:'connected_broker',contract_type:selected.contract_type,contract_category:selected.contract_category||'',expiry_type:selected.expiry_type||'',underlying_symbol:selected.underlying_symbol||$('#symbol')?.value||'',sentiment:selected.sentiment||'',market:selected.market||'',submarket:selected.submarket||''};window.dispatchEvent(new CustomEvent('algobot:broker-contract-selected',{detail:selected}))}
   async function loadCapabilities(symbol, retryAttempt=0){
      const normalized=String(symbol||'').trim();
-     const requestId=++capabilitiesRequest;
      const select=$('[data-contract-type]');
      if(!select||!normalized)return;
      if(capabilitiesRetryTimer){clearTimeout(capabilitiesRetryTimer);capabilitiesRetryTimer=null}
      if(capabilitiesInFlight && capabilitiesSymbol===normalized){
        try{return await capabilitiesInFlight}catch(_){return}
      }
+     const requestId=++capabilitiesRequest;
      if(capabilitiesInFlight && capabilitiesSymbol!==normalized) capabilitiesInFlight=null;
      capabilitiesSymbol=normalized;
      select.disabled=true;
