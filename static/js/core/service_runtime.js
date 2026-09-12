@@ -22,7 +22,7 @@
   const reset=()=>{active.clear();delete document.documentElement.dataset.algobotBusy;emit('algobot:services-account-reset')};
   window.addEventListener('algobot:account-changed',reset);window.addEventListener('algobot:account-context-changed',reset);
   window.addEventListener('algobot:recoverable-error',event=>{const d=event.detail||{};document.querySelectorAll('[data-global-error]').forEach(el=>{el.textContent=d.message||'The service is temporarily unavailable. Please try again.';el.hidden=false});document.querySelectorAll('[data-service-retry]').forEach(el=>{el.hidden=!d.retryable;el.dataset.retryService=d.service||''})});
-  const installNotificationCoordinator=()=>{if(window.__algoBotNotificationCoordinator||!document.head)return;const script=document.createElement('script');script.src='/static/js/core/notification_coordinator.js?v=20260905-notify1';script.async=true;document.head.appendChild(script)};
+  const installNotificationCoordinator=()=>{if(window.__algoBotNotificationCoordinator||!document.head)return;const script=document.createElement('script');script.src='/static/js/core/notification_coordinator.js?v=20260912-notify2';script.async=true;document.head.appendChild(script)};
   installNotificationCoordinator();
-  emit('algobot:service-runtime-ready',{version:7});
+  emit('algobot:service-runtime-ready',{version:8});
 })();
