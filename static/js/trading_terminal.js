@@ -26,7 +26,33 @@
   function renderSelectedStrategy(){const h=$('[name="strategy"]'),b=$('[data-selected-strategy] strong'),v=requestedStrategy.trim();if(h)h.value=v;if(b)b.textContent=v||'Manual trading';if(requestedDirection==='BUY'||requestedDirection==='SELL'){direction=requestedDirection;const button=document.querySelector(`[data-direct-${requestedDirection.toLowerCase()}]`);button?.setAttribute('aria-label',`Submit ${requestedDirection} contract from broker signal ${requestedSignalId||'selected signal'}`)}}
   function renderAccount(a){const st=$('#terminal-status'),note=$('[data-terminal-account]'),risk=$('[data-risk-check]');if(!a){if(st)st.textContent='Broker account required';if(note)note.textContent='No connected account';if(risk)risk.textContent='Connect broker first';return}const broker=a.broker?.name||a.broker_name||'Broker';if(st)st.textContent=`${broker} account`;if(note)note.textContent=`Account: ${a.broker_account_id||a.account_id||a.loginid||a.id}`;if(risk)risk.textContent=a.is_connected===false?'Broker verification required':'Pre-trade checks active'}
   function renderAccounts(rows){accounts=list(rows).filter(a=>a?.id);const s=$('#account');const central=window.AlgoBotAccountContext?.getSelected?.();const current=central?.id||activeAccountId||accounts.find(a=>a.is_active||a.is_preferred)?.id||accounts[0]?.id||null;activeAccountId=current;if(!s)return;if(!accounts.length){activeAccountId=null;s.innerHTML='<option value="">No connected broker account</option>';renderAccount(null);return}s.innerHTML=accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.broker?.name||a.broker_name||'Broker')} · ${esc(a.broker_account_id||a.account_id)} · ${esc(a.account_type&&a.account_type!=='unknown'?a.account_type.toUpperCase():'')} · ${esc(a.currency||'')}</option>`).join('');s.value=String(activeAccountId||'');renderAccount(selectedAccount())}
-  async function loadAccounts(){try{if(window.AlgoBotAccountContext){await window.AlgoBotAccountContext.load();accounts=window.AlgoBotAccountContext.getAccounts();const a=window.AlgoBotAccountContext.getSelected();activeAccountId=a?.id??null;renderAccounts(accounts);return a}const rows=await api('/api/brokers/accounts/',{},9000);renderAccounts(rows);return selectedAccount()}catch(e){accounts=[];renderAccounts([]);result(`Broker accounts unavailable: ${e.message||'request failed'}`,'error');return null}}
+  async function loadAccounts(){
+  try{
+    if(window.AlgoBotAccountContext){
+      await window.AlgoBotAccountContext.load();
+      accounts=window.AlgoBotAccountContext.getAccounts();
+      const a=window.AlgoBotAccountContext.getSelected()||window.AlgoBotBrokerState?.get?.()?.account||null;
+      activeAccountId=a?.id??null;
+      if(a&&!accounts.some(x=>String(x.id)===String(a.id)))accounts=[a,...accounts];
+      renderAccounts(accounts);
+      return a;
+    }
+    const rows=await api('/api/brokers/accounts/',{},9000);
+    renderAccounts(rows);
+    return selectedAccount();
+  }catch(e){
+    const recovered=window.AlgoBotAccountContext?.getSelected?.()||window.AlgoBotBrokerState?.get?.()?.account||null;
+    if(recovered){
+      activeAccountId=recovered.id;
+      if(!accounts.some(x=>String(x.id)===String(recovered.id)))accounts=[recovered,...accounts];
+      renderAccounts(accounts);
+      return recovered;
+    }
+    renderAccounts([]);
+    result('Broker account data is temporarily unavailable. Retrying…','error');
+    return null;
+  }
+}
   async function switchAccount(id){if(!id||String(id)===String(activeAccountId))return selectedAccount();const previous=activeAccountId;const s=$('#account');if(s)s.disabled=true;result('Switching broker account…','pending');try{const a=await switchAuthoritativeAccount(id);activeAccountId=a.id;accounts=window.AlgoBotAccountContext.getAccounts();if(s)s.value=String(a.id);renderAccount(a);result(`Active account: ${a.broker_account_id||a.account_id||a.id}`,'success');await Promise.all([loadSymbols(),loadQuote(),loadRecords(),loadSignals()]);return a}catch(e){activeAccountId=previous;if(s)s.value=previous?String(previous):'';renderAccount(selectedAccount());result(`Account switch rejected: ${e.message||'request failed'}`,'error');return null}finally{if(s)s.disabled=false}}
   function renderWatchlist(filter=''){const n=$('[data-watchlist]');if(!n)return;const q=String(filter).trim().toLowerCase(),rows=symbols.filter(r=>!q||String(r.symbol||'').toLowerCase().includes(q)||String(r.display_name||'').toLowerCase().includes(q)),cur=$('#symbol')?.value,c=$('[data-watchlist-count]');if(c)c.textContent=String(symbols.length);n.innerHTML=rows.length?rows.slice(0,100).map(r=>`<button type="button" class="watchlist-row ${r.symbol===cur?'active':''}" data-watch-symbol="${esc(r.symbol)}"><span><strong>${esc(r.display_name||r.symbol)}</strong></span><b>›</b></button>`).join(''):'<div class="empty-state">No matching instruments.</div>';n.querySelectorAll('[data-watch-symbol]').forEach(b=>b.addEventListener('click',()=>selectSymbol(b.dataset.watchSymbol)))}
   function selectSymbol(symbol){const s=$('#symbol');if(!s||!symbols.some(r=>r.symbol===symbol))return;s.value=symbol;s.dispatchEvent(new Event('change',{bubbles:true}));renderWatchlist($('[data-watchlist-search]')?.value||'')}
