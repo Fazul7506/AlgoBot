@@ -30,7 +30,7 @@ class PaymentService:
         self.intasend_public_key = getattr(settings, "INTASEND_PUBLIC_KEY", "")
         self.intasend_secret_key = getattr(settings, "INTASEND_SECRET_KEY", "")
         self.intasend_webhook_challenge = getattr(settings, "INTASEND_WEBHOOK_CHALLENGE", "")
-        self.intasend_base_url = getattr(settings, "INTASEND_API_BASE_URL", "https://api.intasend.com").rstrip("/")
+        self.intasend_base_url = str(getattr(settings, "INTASEND_API_BASE_URL", "https://api.intasend.com") or "https://api.intasend.com").strip().rstrip("/")
         self.pesapal_consumer_key = getattr(settings, "PESAPAL_CONSUMER_KEY", "")
         self.pesapal_consumer_secret = getattr(settings, "PESAPAL_CONSUMER_SECRET", "")
         self.pesapal_notification_id = getattr(settings, "PESAPAL_NOTIFICATION_ID", "")
@@ -85,7 +85,7 @@ class PaymentService:
             )
             data = self._json_or_error(response)
             if not response.ok:
-                logger.error("IntaSend checkout failed: %s", data)
+                logger.error("IntaSend checkout failed status=%s body=%s", response.status_code, data)
                 return {"url": "", "provider": self.INTASEND, "error": self._provider_error(data)}
             url = data.get("url") or data.get("checkout_url") or data.get("link") or ""
             invoice_id = data.get("invoice_id") or data.get("id") or data.get("checkout_id")
@@ -101,7 +101,7 @@ class PaymentService:
             }
         except requests.RequestException as exc:
             logger.exception("IntaSend checkout request failed")
-            return {"url": "", "provider": self.INTASEND, "error": str(exc)}
+            return {"url": "", "provider": self.INTASEND, "error": "Payment provider is temporarily unreachable. Please try again."}
 
     def create_pesapal_checkout(self, user, subscription_plan):
         if not self.pesapal_consumer_key:
@@ -172,7 +172,7 @@ class PaymentService:
             }
         except requests.RequestException as exc:
             logger.exception("Pesapal checkout request failed")
-            return {"url": "", "provider": self.PESAPAL, "error": str(exc)}
+            return {"url": "", "provider": self.PESAPAL, "error": "Payment provider is temporarily unreachable. Please try again."}
 
     def handle_webhook(self, payload: bytes | dict, sig_header: str = "", provider: str | None = None) -> Optional[dict]:
         """Compatibility entry point that delegates to the canonical reconciler."""
