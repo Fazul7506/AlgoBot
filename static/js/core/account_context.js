@@ -17,12 +17,17 @@
       const rememberedId=storageGet();
       const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},10000)).filter(a=>a?.id);accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
       let serverSelected=null,activeRequestFailed=false;
-      try{
-        const activeOptions={notifyOnError:false};
-        if(rememberedId)activeOptions.headers={'X-Algobot-Account-ID':String(rememberedId)};
-        const active=await request('/api/brokers/accounts/active/',activeOptions,8000);
-        serverSelected=active?.active_account||active?.account||null;
-      }catch(_){activeRequestFailed=true}
+      // The account list already carries the server-authoritative active/preferred
+      // flags. Only make the second active-account call when the list cannot
+      // establish a safe target. This removes a blocking request from every page.
+      const listedActive=rows.find(a=>a.is_active===true||a.is_preferred===true||a.is_default===true);
+      if(listedActive) serverSelected=listedActive;
+      else if(rows.length>1 && rememberedId){
+        try{
+          const active=await request('/api/brokers/accounts/active/',{notifyOnError:false,headers:{'X-Algobot-Account-ID':String(rememberedId)}},5000);
+          serverSelected=active?.active_account||active?.account||null;
+        }catch(_){activeRequestFailed=true}
+      }
       const serverId=accountId(serverSelected);
       // The backend remains authoritative. A remembered account is only used
       // as a recovery hint when the active-account read itself is unavailable;
@@ -47,6 +52,12 @@
   document.addEventListener('click',event=>{const b=event.target?.closest?.('[data-account-switch]');if(b){event.preventDefault();event.stopImmediatePropagation();const explicit=b.dataset.accountId||b.dataset.accountTarget,current=getSelectedId(),target=explicit?accounts.find(a=>accountId(a)===String(explicit)):accounts.find(a=>accountId(a)!==String(current));if(target)selectAccount(target.id).catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})));return}const g=event.target?.closest?.('[data-select]');if(g){event.preventDefault();event.stopImmediatePropagation();selectAccount(g.dataset.select).catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error}))) }},true);
   window.addEventListener('algobot:backend-accounts-loaded',event=>{const rows=list(event.detail).filter(a=>a?.id);if(rows.length)accounts=rows;if(selected&&accounts.some(a=>accountId(a)===accountId(selected)))return;if(!selected){const target=accounts.find(a=>a.is_active===true||a.is_default===true||a.is_preferred===true);if(target)setSelected(target,'backend-accounts-rehydrated',false)}});
   window.addEventListener('algobot:account-synced',event=>{if(!event.detail?.id)return;const id=accountId(event.detail);accounts=accounts.map(a=>accountId(a)===id?event.detail:a);if(getSelectedId()===id)setSelected(event.detail,'account-synced',true)});
-  window.addEventListener('algobot:account-context-error',event=>{const message=event.detail?.message||'Broker account selection is temporarily unavailable.';window.dispatchEvent(new CustomEvent('algobot:api-error',{detail:{code:'ACCOUNT_CONTEXT_ERROR',status:0,message,retryable:true}}))});
+  window.addEventListener('algobot:account-context-error',event=>{
+    const message=event.detail?.message||'Broker account selection is temporarily unavailable.';
+    // Account-context failures are rendered by the account-aware page/shell.
+    // Do not turn a recoverable bootstrap failure into a global "Failed to fetch"
+    // overlay that obscures the workspace.
+    window.dispatchEvent(new CustomEvent('algobot:account-state-unavailable',{detail:{message,retryable:true}}));
+  });
   const boot=()=>{if(document.body.dataset.authenticated==='true')load().catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})))};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
