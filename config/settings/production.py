@@ -7,7 +7,7 @@ from corsheaders.defaults import default_headers
 DEBUG = False
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["algobot.dpdns.org", "www.algobot.dpdns.org", "api.algobot.dpdns.org"])
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"])
-CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org"])
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"])
 CORS_ALLOW_HEADERS = (*default_headers, "x-algobot-account-id")
 CORS_ALLOW_CREDENTIALS = True
 BASE_URL = env("BASE_URL", "https://algobot.dpdns.org").rstrip("/")
