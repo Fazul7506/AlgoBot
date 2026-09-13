@@ -7,7 +7,7 @@
   const list=value=>Array.isArray(value)?value:(Array.isArray(value?.results)?value.results:(Array.isArray(value?.data)?value.data:(Array.isArray(value?.accounts)?value.accounts:[])));
   const inflight=new Map(),cache=new Map(),GET_CACHE_MS=1200;
   const configuredApiBase=(document.querySelector('meta[name="algobot-api-base"]')?.content||'').trim();
-  const productionApiBase='';
+  const productionApiBase='https://api.algobot.dpdns.org';
   // The web origin renders pages; the dedicated API origin owns all browser API traffic.
   const apiBase=(configuredApiBase||productionApiBase||window.location.origin).replace(/\/+$/,'');
   const nativeFetch=window.fetch.bind(window),safeMethods=new Set(['GET','HEAD','OPTIONS']);
@@ -37,23 +37,8 @@
     const selectedId=brokerState()?.get?.()?.account?.id;
     if(selectedId&&!headers.has('X-Algobot-Account-ID'))headers.set('X-Algobot-Account-ID',String(selectedId));
     const requestInit={credentials:sameOrigin?'same-origin':'include',...options,headers,cache:'no-store',signal:controller.signal};
-    try {
-      const response=await nativeFetch(target,requestInit);
-      return{response,text:await response.text()};
-    } catch (error) {
-      // Production may expose the API on a sibling hostname. If that origin
-      // is unreachable, retry the exact endpoint through the page origin.
-      // This preserves the same authenticated Django session and removes a
-      // second point of failure without inventing or substituting data.
-      if (!sameOrigin && error?.name !== 'AbortError' && !controller.signal.aborted) {
-        const fallback=new URL(url,window.location.origin);
-        const fallbackOrigin=fallback.origin;
-        if (fallbackOrigin===window.location.origin) throw error;
-        const fallbackResponse=await nativeFetch(fallback.toString(),{...requestInit,credentials:'same-origin'});
-        return{response:fallbackResponse,text:await fallbackResponse.text()};
-      }
-      throw error;
-    }
+    const response=await nativeFetch(target,requestInit);
+    return{response,text:await response.text()};
   }
 
   async function request(rawUrl,options={},timeout=25000){
