@@ -270,6 +270,15 @@ class DerivAdapter(BrokerAdapter):
             proposal_payload["barrier"] = str(routing["barrier"])
         if routing.get("multiplier") is not None:
             proposal_payload["multiplier"] = float(routing["multiplier"])
+        if requested_contract == "ACCU":
+            growth_rate = routing.get("growth_rate", 0.01)
+            try:
+                growth_rate = float(growth_rate)
+            except (TypeError, ValueError):
+                growth_rate = 0.01
+            if growth_rate not in {0.01, 0.02, 0.03, 0.04, 0.05}:
+                raise BrokerOrderError("Deriv accumulator growth rate must be 1%, 2%, 3%, 4% or 5%")
+            proposal_payload["growth_rate"] = growth_rate
         proposal_response = await self._request(proposal_payload, authenticated=True)
         proposal = proposal_response.get("proposal") or {}
         proposal_id = proposal.get("id")
