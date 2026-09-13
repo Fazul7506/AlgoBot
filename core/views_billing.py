@@ -149,7 +149,10 @@ def _checkout(request, plan_name, provider=None):
     selected = str(provider or getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower().strip()
     if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL}: return None, "Unsupported payment provider."
     invoice = Invoice.objects.create(user=request.user, amount_cents=plan["price_cents"], currency=plan["currency"], metadata={"plan": plan["plan"], "provider": selected, "state": "checkout_created"})
-    result = RequestBoundPaymentService(request).create_checkout_session(request.user, CheckoutPlan(plan=plan["plan"], price_cents=plan["price_cents"], currency=plan["currency"], recurring=plan["recurring"]), provider=selected)
+    try:
+        result = RequestBoundPaymentService(request).create_checkout_session(request.user, CheckoutPlan(plan=plan["plan"], price_cents=plan["price_cents"], currency=plan["currency"], recurring=plan["recurring"]), provider=selected)
+    except Exception:
+        result = {"url": "", "error": "Payment provider is temporarily unavailable."}
     if not result.get("url"):
         invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": result.get("error") or "provider_checkout_failed"}; invoice.save(update_fields=["metadata"])
         return None, "We couldn't start your payment. Please try again."
