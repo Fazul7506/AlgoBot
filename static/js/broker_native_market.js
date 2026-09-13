@@ -11,7 +11,7 @@
   const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
   const list=v=>window.AlgoBotFrontendData?.list?.(v)||[];
   const api=(url,options={},timeout=12000)=>window.AlgoBotServices?.request?.('market-data',url,options,timeout)||window.AlgoBotFrontendData?.request?.(url,options,timeout);
-  let contracts=[],capabilitiesRequest=0,capabilitiesInFlight=null,capabilitiesSymbol='',capabilitiesRetryTimer=null;
+  let contracts=[],capabilitiesRequest=0,capabilitiesInFlight=null,capabilitiesSymbol='';
 
   const directionFor=type=>/PUT|FALL|LOWER|MULTDOWN|DIGITUNDER|NOTOUCH|TURBOSSHORT|RUNLOW|EXPIRYMISS/i.test(String(type||''))?'SELL':'BUY';
   const setStatus=message=>$('[data-contract-status]')?.replaceChildren(document.createTextNode(String(message||'')));
@@ -29,7 +29,6 @@
      const normalized=String(symbol||'').trim();
      const select=$('[data-contract-type]');
      if(!select||!normalized)return;
-     if(capabilitiesRetryTimer){clearTimeout(capabilitiesRetryTimer);capabilitiesRetryTimer=null}
      if(capabilitiesInFlight && capabilitiesSymbol===normalized){
        try{return await capabilitiesInFlight}catch(_){return}
      }
@@ -48,13 +47,11 @@
        }catch(error){
          if(requestId!==capabilitiesRequest)return null;
          if(error?.code==='REQUEST_ABORTED'||/signal.*aborted|request.*aborted/i.test(error?.message||'')) {
-           setStatus('Broker capability request was cancelled; retrying…');
-           capabilitiesRetryTimer=setTimeout(()=>{capabilitiesRetryTimer=null;void loadCapabilities(normalized, retryAttempt)},250);
+           setStatus('Broker capability request was cancelled. Use Refresh market to try again.');
            return null;
          }
-         if(retryAttempt<2 && ['NETWORK_ERROR','API_TIMEOUT','SERVICE_TIMEOUT'].includes(String(error?.code||''))){
-           setStatus('Broker capability connection delayed; retrying…');
-           capabilitiesRetryTimer=setTimeout(()=>{capabilitiesRetryTimer=null;void loadCapabilities(normalized,retryAttempt+1)},Math.min(3000,750*(retryAttempt+1)));
+         if(['NETWORK_ERROR','API_TIMEOUT','SERVICE_TIMEOUT'].includes(String(error?.code||''))) {
+           setStatus('Broker capability connection delayed. Use Refresh market to try again.');
            return null;
          }
          contracts=[];
@@ -71,6 +68,6 @@
    }
   const currentSymbol=()=>String($('#symbol')?.value||'').trim();
   const triggerCurrentSymbol=()=>{const symbol=currentSymbol();if(symbol)void loadCapabilities(symbol)};
-  function boot(){if(!$('.terminal-page'))return;const symbol=$('#symbol'),contract=$('[data-contract-type]');symbol?.addEventListener('change',()=>loadCapabilities(symbol.value));contract?.addEventListener('change',()=>applyContract(contract.value));window.addEventListener('algobot:broker-symbols-loaded',triggerCurrentSymbol);window.addEventListener('algobot:market-symbol-changed',triggerCurrentSymbol);window.addEventListener('algobot:account-changed',triggerCurrentSymbol);window.addEventListener('algobot:account-synced',triggerCurrentSymbol);window.addEventListener('pagehide',()=>{capabilitiesRequest++;if(capabilitiesRetryTimer)clearTimeout(capabilitiesRetryTimer);capabilitiesRetryTimer=null;capabilitiesInFlight=null},{once:true});if(currentSymbol())triggerCurrentSymbol()}
+  function boot(){if(!$('.terminal-page'))return;const symbol=$('#symbol'),contract=$('[data-contract-type]');symbol?.addEventListener('change',()=>loadCapabilities(symbol.value));contract?.addEventListener('change',()=>applyContract(contract.value));window.addEventListener('algobot:broker-symbols-loaded',triggerCurrentSymbol);window.addEventListener('algobot:market-symbol-changed',triggerCurrentSymbol);window.addEventListener('algobot:account-changed',triggerCurrentSymbol);window.addEventListener('algobot:account-synced',triggerCurrentSymbol);window.addEventListener('pagehide',()=>{capabilitiesRequest++;capabilitiesInFlight=null},{once:true});if(currentSymbol())triggerCurrentSymbol()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
