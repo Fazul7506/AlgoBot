@@ -189,7 +189,9 @@
     window.AlgoBotBrokerUI = {getAccounts:() => accounts, getCurrentAccount:current, syncAccounts, syncSelectedAccount, updateTerminalAccount, selectAccount};
     const symbol = await discoverSymbol();
     if (symbol) { const el = $('[data-symbol]'); if (el && el.value !== symbol) el.value = symbol; }
-    setInterval(() => { if (document.visibilityState === 'visible') syncAccounts(); }, 30000);
+    // Account state is synchronized by the canonical account context. Do not
+    // run a background interval here; it causes needless requests and can race
+    // account selection. Explicit broker/account actions trigger synchronization.
   }
   window.addEventListener('algobot:backend-accounts-loaded', event => {
     accounts = list(event.detail).filter(a => a?.id && a?.broker_account_id);
