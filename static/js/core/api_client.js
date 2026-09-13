@@ -4,9 +4,9 @@
 
   const nativeFetch = window.fetch.bind(window);
   const configuredApiBase = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
-  const productionApiBase = '';
+  const productionApiBase = 'https://api.algobot.dpdns.org';
   // Production browser API traffic must never fall back to the web/page origin.
-  const apiBase = (configuredApiBase || productionApiBase || window.location.origin).replace(/\/+$/, '');
+  const apiBase = (configuredApiBase || ((window.location.hostname === 'algobot.dpdns.org' || window.location.hostname === 'www.algobot.dpdns.org') ? productionApiBase : '') || window.location.origin).replace(/\/+$/, '');
   const aliases = {'/trading/order/': '/api/orders/', '/trading/preview/': '/api/orders/preview/', '/trading/ai/predict/': '/api/ai/predict/'};
 
   function resolveUrl(path) {
