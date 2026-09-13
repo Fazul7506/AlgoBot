@@ -51,43 +51,19 @@
     return `updated ${Math.floor(seconds / 60)}m ago`;
   }
 
-  async function refresh(force = false) {
-    if (requestInFlight) return;
-    const token = lifecycleToken;
+  function refresh(force = false) {
+    if (lifecycleToken < 0) return;
     const symbol = String($('#symbol')?.value || '').trim();
     const account = $('#account')?.value;
-    if (token !== lifecycleToken) return;
     if (!symbol) { setState('waiting', 'Select a broker instrument'); return; }
     if (!account) { setState('waiting', 'Connect a broker account'); return; }
-    if (!force && Date.now() - lastQuoteMutation < 5000) {
-      setState('live', 'live broker quote · chart stream');
-      return;
-    }
-
-    requestInFlight = true;
-    try {
-      const payload = await api(`/api/market/ticks/broker/?symbol=${encodeURIComponent(symbol)}`, {notifyOnError:false}, 6000);
-      const quote = payload?.quote ?? payload?.price ?? payload?.bid ?? payload?.ask;
-      if (quote == null) throw new Error('Broker returned no usable quote');
-      consecutiveFailures = 0;
-      lastGoodAt = Date.now();
-      lastQuoteMutation = Date.now();
-      const stale = payload?.stale === true;
-      const source = payload?.source === 'live_broker_quote' ? 'live broker quote' : 'last known broker quote';
-      setState(stale ? 'stale' : 'live', `${source} · ${formatAge(payload?.epoch)}`);
-      $('[data-q="bid"]')?.replaceChildren(document.createTextNode(Number(quote).toLocaleString(undefined,{maximumFractionDigits:8})));
-      $('[data-q="ask"]')?.replaceChildren(document.createTextNode(Number(quote).toLocaleString(undefined,{maximumFractionDigits:8})));
-    } catch (error) {
-      consecutiveFailures += 1;
-      const age = lastGoodAt ? Math.round((Date.now() - lastGoodAt) / 1000) : null;
-      if (age != null && age <= 120) setState('stale', `Quote refresh delayed · last verified quote ${age}s ago · use Refresh market`);
-      else setState('retrying', consecutiveFailures > 2 ? 'Broker quote unavailable · broker quote unavailable — use Refresh market' : 'Quote refresh delayed · retrying');
-      // No automatic retry loop. The live chart/broker stream owns realtime updates;
-      // the user can explicitly use Refresh market when a broker request fails.
-      window.dispatchEvent(new CustomEvent('algobot:market-data-refresh-failed', {detail: {
-        symbol, code: error?.code || 'MARKET_REFRESH_ERROR', message: error?.message || 'Broker quote unavailable', consecutiveFailures
-      }}));
-    } finally { requestInFlight = false; }
+    // Realtime broker WebSocket events are authoritative for the visible quote.
+    // Do not issue a parallel HTTP quote request: it races the stream and can
+    // produce misleading Failed to fetch / retrying states.
+    const age = lastGoodAt ? Math.max(0, Math.round((Date.now() - lastGoodAt) / 1000)) : null;
+    if (age != null && age <= 10) setState('live', 'live broker quote · updated just now');
+    else if (age != null) setState('stale', `Quote stream has not produced a verified tick for ${age}s · use Refresh market`);
+    else setState('waiting', 'Waiting for live broker quote…');
   }
 
   function boot() {
@@ -95,10 +71,7 @@
     ensurePanel();
     const bid = $('[data-q="bid"]'), ask = $('[data-q="ask"]');
     const observer = new MutationObserver(() => {
-      // DOM mutation is not proof of a fresh broker tick. Only the broker
-      // response/watchdog below may advance lastGoodAt, otherwise stale data
-      // can incorrectly report "live" or "0s ago".
-      lastQuoteMutation = Date.now();
+      // Quote DOM mutations are visual updates only; broker events advance freshness.
     });
     if (bid) observer.observe(bid, {childList:true, characterData:true, subtree:true});
     if (ask) observer.observe(ask, {childList:true, characterData:true, subtree:true});
@@ -107,7 +80,7 @@
     window.addEventListener('algobot:broker-symbols-loaded', () => refresh(true));
     window.addEventListener('algobot:account-synced', () => refresh(true));
     window.addEventListener('algobot:market-symbol-changed', () => refresh(true));
-    window.addEventListener('algobot:market-watchdog-tick', event => { lastQuoteMutation = Date.now(); lastGoodAt = Date.now(); consecutiveFailures = 0; setState('live', `live broker quote · ${event.detail?.symbol || 'chart watchdog'}`); });
+    window.addEventListener('algobot:market-watchdog-tick', event => { lastQuoteMutation = Date.now(); lastGoodAt = Date.now(); consecutiveFailures = 0; setState('live', `live broker quote · ${event.detail?.symbol || 'broker stream'}`); });
     refresh(true);
     window.addEventListener('pagehide', () => { lifecycleToken++; observer.disconnect(); }, {once:true});
     document.addEventListener('visibilitychange', () => {
