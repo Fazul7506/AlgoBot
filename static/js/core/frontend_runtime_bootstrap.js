@@ -38,14 +38,7 @@
 
   async function request(url, options = {}, timeout = 25000) {
     if (!url) throw new Error('No API endpoint configured');
-    let result = await requestOnce(url, options, timeout);
-    const method = String(options.method || 'GET').toUpperCase();
-    if (isCloudflareChallenge(result.response, result.text) && apiBase && !/^https?:\/\//i.test(url) && ['GET','HEAD','OPTIONS'].includes(method)) {
-      try {
-        const fallback = await requestOnce(url, options, timeout, true);
-        if (!isCloudflareChallenge(fallback.response, fallback.text)) result = fallback;
-      } catch (_) {}
-    }
+    const result = await requestOnce(url, options, timeout);
     const {response,text} = result;
     const payload = parse(response,text);
     if (!response.ok) {
