@@ -4,9 +4,7 @@
 
   const nativeFetch = window.fetch.bind(window);
   const configuredApiBase = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
-  const productionApiBase = ['algobot.dpdns.org', 'www.algobot.dpdns.org'].includes(window.location.hostname)
-    ? 'https://api.algobot.dpdns.org'
-    : '';
+  const productionApiBase = '';
   // Production browser API traffic must never fall back to the web/page origin.
   const apiBase = (configuredApiBase || productionApiBase || window.location.origin).replace(/\/+$/, '');
   const aliases = {'/trading/order/': '/api/orders/', '/trading/preview/': '/api/orders/preview/', '/trading/ai/predict/': '/api/ai/predict/'};
@@ -92,35 +90,6 @@
           if (callerSignal?.aborted) {
             const cancelled = new APIError(callerSignal.reason?.message || 'Request was cancelled.', {code:'REQUEST_ABORTED',url:url.toString(),method});
             cancelled.retryable = false; throw cancelled;
-          }
-
-          // The production API hostname is optional transport infrastructure,
-          // not a second application. If it is unreachable, retry the exact
-          // authenticated request on the page origin. Only transport failures
-          // trigger this fallback; real HTTP responses are authoritative.
-          const pageOrigin = window.location.origin;
-          const targetOrigin = url.origin;
-          const webHost = window.location.hostname;
-          const dedicatedApi = targetOrigin !== pageOrigin &&
-            (targetOrigin === 'https://api.algobot.dpdns.org' || targetOrigin === 'https://api.algobot.dpdns.org:443') &&
-            ['algobot.dpdns.org','www.algobot.dpdns.org'].includes(webHost);
-          if (dedicatedApi && !controller.signal.aborted) {
-            try {
-              const fallbackUrl = new URL(url.pathname + url.search + url.hash, pageOrigin);
-              return await nativeFetch(fallbackUrl.toString(), {
-                ...options, method, body, headers,
-                credentials: 'same-origin', signal
-              });
-            } catch (fallbackError) {
-              if (controller.signal.aborted && !callerSignal?.aborted) {
-                const timeout = new APIError('API request timed out after ' + timeoutMs + 'ms', {code:'API_TIMEOUT',url:url.toString(),method});
-                emitError(timeout, options); throw timeout;
-              }
-              if (callerSignal?.aborted) {
-                const cancelled = new APIError(callerSignal.reason?.message || 'Request was cancelled.', {code:'REQUEST_ABORTED',url:url.toString(),method});
-                cancelled.retryable = false; throw cancelled;
-              }
-            }
           }
 
           const network = new APIError(error?.message || 'Network request failed', {code:'NETWORK_ERROR',url:url.toString(),method});
