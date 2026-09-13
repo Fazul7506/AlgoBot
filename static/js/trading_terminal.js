@@ -49,7 +49,7 @@
       return recovered;
     }
     renderAccounts([]);
-    result('Broker account data is temporarily unavailable. Retrying…','error');
+    result('Broker account data is temporarily unavailable. Use Refresh market or reconnect the broker.','error');
     return null;
   }
 }
