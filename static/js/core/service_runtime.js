@@ -18,7 +18,16 @@
   const request=async(name,url,options={},timeout=25000)=>{const service=name||inferService(url),id=accountId(),headers=new Headers(options.headers||{});headers.set('Accept',headers.get('Accept')||'application/json');if(id&&!headers.has('X-Algobot-Account-ID'))headers.set('X-Algobot-Account-ID',id);try{return await window.AlgoBotAPI?.apiClient?.request?.(url,{...options,headers,__algoTimeoutMs:timeout})??await window.AlgoBotFrontendData.request(url,{...options,headers},timeout)}catch(error){recordError({service,url,method:options.method||'GET',status:error?.status||0,code:error?.code||'NETWORK_ERROR',message:error?.message||'Network request failed.',retryable:error?.retryable??true});throw error}};
   const snapshot=()=>({accountId:accountId(),services:[...registry.values()].map(v=>({...v})),loading:Object.fromEntries(active),errors:errors.slice(-20)});
   window.AlgoBotServiceRuntime=Object.freeze({register,begin,end,run,withTimeout,request,cancel,isRetryable:retryable,recordError,recentErrors:n=>errors.slice(-Math.max(1,n||20)),snapshot,accountId});
-  window.addEventListener('algobot:api-error',event=>{const entry=recordError(event.detail||{});if(!entry.deduped)window.dispatchEvent(new CustomEvent('algobot:recoverable-error',{detail:entry}))});
+  window.addEventListener('algobot:api-error',event=>{
+    const detail=event.detail||{};
+    const entry=recordError(detail);
+    // Page controllers own transient network/timeout/cancellation recovery.
+    // Do not promote those expected transport events into the global workspace
+    // error rail; real HTTP/application failures still remain globally visible.
+    const code=String(entry.code||'').toUpperCase();
+    const transient=['REQUEST_ABORTED','NETWORK_ERROR','API_TIMEOUT','SERVICE_TIMEOUT'].includes(code);
+    if(!entry.deduped&&!transient)window.dispatchEvent(new CustomEvent('algobot:recoverable-error',{detail:entry}));
+  });
   const reset=()=>{active.clear();delete document.documentElement.dataset.algobotBusy;emit('algobot:services-account-reset')};
   window.addEventListener('algobot:account-changed',reset);window.addEventListener('algobot:account-context-changed',reset);
   window.addEventListener('algobot:recoverable-error',event=>{const d=event.detail||{};document.querySelectorAll('[data-global-error]').forEach(el=>{el.textContent=d.message||'The service is temporarily unavailable. Please try again.';el.hidden=false});document.querySelectorAll('[data-service-retry]').forEach(el=>{el.hidden=!d.retryable;el.dataset.retryService=d.service||''})});
