@@ -73,6 +73,12 @@ class BillingPaymentFlowTests(TestCase):
         self.assertFalse(invoice.paid)
         self.assertFalse(Payment.objects.filter(external_id="PROVIDER-INVOICE-2").exists())
 
+    def test_provider_http_errors_are_safe_and_actionable(self):
+        self.assertIn("payment credentials", PaymentService._checkout_http_error(PaymentService.INTASEND, 401, {}))
+        self.assertIn("merchant configuration", PaymentService._checkout_http_error(PaymentService.INTASEND, 400, {}))
+        self.assertIn("temporarily unavailable", PaymentService._checkout_http_error(PaymentService.PESAPAL, 503, {}))
+        self.assertNotIn("secret", PaymentService._checkout_http_error(PaymentService.PESAPAL, 401, {"error": "secret-value"}))
+
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_test",
         BILLING_SUCCESS_URL="https://algobot.dpdns.org/billing/success/",
