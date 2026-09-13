@@ -13,7 +13,6 @@
   let lastQuoteMutation = Date.now();
   let lastSymbol = '';
   let ws = null;
-  let timer = null;
   let fallbackTimer = null;
   let active = false;
 
@@ -37,29 +36,10 @@
     ws.onopen=()=>{try{ws.send(JSON.stringify({ticks:symbol,subscribe:1,req_id:Date.now()}))}catch(_){} };
     ws.onmessage=e=>{try{const d=JSON.parse(e.data);if(d.msg_type==='tick'&&!d.error&&d.tick?.quote!=null)updateQuote(d.tick.quote)}catch(_) {}};
     ws.onerror=()=>{};
-    ws.onclose=()=>{ws=null;active=false;if(document.visibilityState==='visible'&&String($('#symbol')?.value||'')===symbol) scheduleFallback(symbol)};
+    ws.onclose=()=>{ws=null;active=false;};
   };
-  const scheduleFallback = symbol => {
-    clearTimeout(fallbackTimer);
-    fallbackTimer=setTimeout(async()=>{
-      if(document.visibilityState!=='visible'||String($('#symbol')?.value||'')!==symbol||Date.now()-lastQuoteMutation<5000)return;
-      try {
-        const api=window.AlgoBotServices?.request||window.AlgoBotFrontendData?.request;
-        if(!api)return;
-        const data=await api('/api/market/ticks/broker/?symbol='+encodeURIComponent(symbol),{notifyOnError:false},5000);
-        const quote=data?.quote??data?.price??data?.bid??data?.ask;
-        if(quote!=null)updateQuote(quote);
-      } catch (_) {}
-      if(document.visibilityState==='visible'&&Date.now()-lastQuoteMutation>=5000) scheduleFallback(symbol);
-    },3000);
-  };
-  const evaluate = () => {
-    const symbol=String($('#symbol')?.value||'').trim();
-    if(!symbol){close();return;}
-    if(symbol!==lastSymbol){close();lastSymbol=symbol;lastQuoteMutation=Date.now();return;}
-    if(document.visibilityState!=='visible'){close();return;}
-    if(Date.now()-lastQuoteMutation>=5000){connect(symbol);scheduleFallback(symbol);}
-  };
+
+
   function boot(){
     if(!$('.terminal-page'))return;
     const bid=$('[data-q="bid"]'),ask=$('[data-q="ask"]');
@@ -69,8 +49,7 @@
     $('#symbol')?.addEventListener('change',()=>{close();lastSymbol='';lastQuoteMutation=Date.now()});
     window.addEventListener('algobot:account-changed',()=>{close();lastQuoteMutation=Date.now()});
     window.addEventListener('algobot:account-synced',()=>{close();lastQuoteMutation=Date.now()});
-    timer=window.setInterval(evaluate,1000);
-    window.addEventListener('pagehide',()=>{clearInterval(timer);close();observer.disconnect()},{once:true});
+    window.addEventListener('pagehide',()=>{close();observer.disconnect()},{once:true});
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
