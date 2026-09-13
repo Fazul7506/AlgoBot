@@ -42,7 +42,7 @@
       else{const d=await request({ticks_history:state.symbol,end:'latest',count:500,style:'ticks'});state.points=normalizeTicks(d.history);state.candles=[];state.current=null;}
       draw(true);connect();
     }catch(e){
-      try{const q=new URLSearchParams({symbol:state.symbol,mode:state.type,limit:'500',granularity:String(state.tf)});const d=await window.AlgoBotFrontendData.request(`/api/market/chart/history/?${q}`,{},12000);if(state.type==='candles'){state.candles=normalizeCandles(d.items);state.points=[];}else{state.points=(d.items||[]).map(x=>({time:epoch(x.epoch??x.time),price:Number(x.quote??x.price)})).filter(x=>x.time&&Number.isFinite(x.price)).slice(-500);}draw(true);connect();}catch(f){text('[data-chart-loading]',`Live broker chart unavailable: ${f.message||e.message}`);}
+      try{const q=new URLSearchParams({symbol:state.symbol,mode:state.type,limit:'500',granularity:String(state.tf)});const d=await window.AlgoBotFrontendData.request(`/api/market/chart/history/?${q}`,{},12000);if(state.type==='candles'){state.candles=normalizeCandles(d.items);state.points=[];}else{state.points=(d.items||[]).map(x=>({time:epoch(x.epoch??x.time),price:Number(x.quote??x.price)})).filter(x=>x.time&&Number.isFinite(x.price)).slice(-500);}draw(true);connect();}catch(f){const raw=String(f?.message||e?.message||'');const cancelled=/abort|signal/i.test(raw);text('[data-chart-loading]',cancelled?'Live broker chart request was cancelled. Waiting for the live Deriv stream…':'Live broker chart temporarily unavailable. Use Refresh market to retry.');}
     }
   }
 
