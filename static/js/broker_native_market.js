@@ -12,6 +12,9 @@
   const list=v=>window.AlgoBotFrontendData?.list?.(v)||[];
   const api=(url,options={},timeout=12000)=>window.AlgoBotServices?.request?.('market-data',url,options,timeout)||window.AlgoBotFrontendData?.request?.(url,options,timeout);
   let contracts=[],capabilitiesRequest=0,capabilitiesInFlight=null,capabilitiesSymbol='';
+  const capabilitiesCacheKey=symbol=>'algobot:broker-capabilities:v2:'+String(window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'none')+':'+symbol;
+  const readCapabilitiesCache=symbol=>{try{const item=JSON.parse(sessionStorage.getItem(capabilitiesCacheKey(symbol))||'null');return item?.payload||null}catch(_){return null}};
+  const writeCapabilitiesCache=(symbol,payload)=>{try{sessionStorage.setItem(capabilitiesCacheKey(symbol),JSON.stringify({at:Date.now(),payload}))}catch(_){} };
 
   const directionFor=type=>/PUT|FALL|LOWER|MULTDOWN|DIGITUNDER|NOTOUCH|TURBOSSHORT|RUNLOW|EXPIRYMISS/i.test(String(type||''))?'SELL':'BUY';
   const setStatus=message=>$('[data-contract-status]')?.replaceChildren(document.createTextNode(String(message||'')));
@@ -35,14 +38,13 @@
      const requestId=++capabilitiesRequest;
      if(capabilitiesInFlight && capabilitiesSymbol!==normalized) capabilitiesInFlight=null;
      capabilitiesSymbol=normalized;
-     select.disabled=true;
-     select.innerHTML='<option value="">Loading broker contracts…</option>';
-     if($('[data-broker-trade-type]'))$('[data-broker-trade-type]').textContent='Loading';
-     setStatus('Loading broker-supported contracts…');
+     const cached=readCapabilitiesCache(normalized);
+     if(cached){renderContracts(cached);setStatus('Broker contracts loaded from the last verified broker snapshot.');}
+     else {select.disabled=true;select.innerHTML='<option value="">Loading broker contracts…</option>';if($('[data-broker-trade-type]'))$('[data-broker-trade-type]').textContent='Loading';setStatus('Loading broker-supported contracts…');}
      capabilitiesInFlight=(async()=>{
        try{
          const payload=await api(`/api/market/broker-capabilities/?symbol=${encodeURIComponent(normalized)}`,{notifyOnError:false},12000);
-         if(requestId===capabilitiesRequest) renderContracts(payload);
+         if(requestId===capabilitiesRequest){writeCapabilitiesCache(normalized,payload);renderContracts(payload);}
          return payload;
        }catch(error){
          if(requestId!==capabilitiesRequest)return null;
@@ -54,6 +56,8 @@
            setStatus('Broker capability connection delayed. Use Refresh market to try again.');
            return null;
          }
+         const cachedPayload=readCapabilitiesCache(normalized);
+         if(cachedPayload){renderContracts(cachedPayload);setStatus('Using the last verified broker contract snapshot. Use Refresh market to revalidate.');return null;}
          contracts=[];
          select.innerHTML='<option value="">Broker contracts unavailable</option>';
          select.disabled=true;
