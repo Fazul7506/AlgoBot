@@ -10,7 +10,6 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const api = (url, options = {}, timeout = 15000) => window.AlgoBotServices?.request?.('market-data', url, options, timeout) || window.AlgoBotFrontendData?.request?.(url, options, timeout);
   let timer = null;
-  let retryTimer = null;
   let requestInFlight = false;
   let lifecycleToken = 0;
   let lastGoodAt = 0;
@@ -52,12 +51,6 @@
     return `updated ${Math.floor(seconds / 60)}m ago`;
   }
 
-  function scheduleRetry(token = lifecycleToken) {
-    if (retryTimer) clearTimeout(retryTimer);
-    const delay = Math.min(30000, 2000 * Math.pow(2, Math.min(consecutiveFailures - 1, 3)));
-    retryTimer = window.setTimeout(() => { retryTimer = null; if (token === lifecycleToken && document.visibilityState === 'visible') refresh(true); }, delay);
-  }
-
   async function refresh(force = false) {
     if (requestInFlight) return;
     const token = lifecycleToken;
@@ -87,9 +80,10 @@
     } catch (error) {
       consecutiveFailures += 1;
       const age = lastGoodAt ? Math.round((Date.now() - lastGoodAt) / 1000) : null;
-      if (age != null && age <= 120) setState('stale', `Quote refresh delayed · last verified quote ${age}s ago · retrying`);
-      else setState('retrying', consecutiveFailures > 2 ? 'Broker quote unavailable · retrying automatically' : 'Quote refresh delayed · retrying');
-      scheduleRetry(token);
+      if (age != null && age <= 120) setState('stale', `Quote refresh delayed · last verified quote ${age}s ago · use Refresh market`);
+      else setState('retrying', consecutiveFailures > 2 ? 'Broker quote unavailable · broker quote unavailable — use Refresh market' : 'Quote refresh delayed · retrying');
+      // No automatic retry loop. The live chart/broker stream owns realtime updates;
+      // the user can explicitly use Refresh market when a broker request fails.
       window.dispatchEvent(new CustomEvent('algobot:market-data-refresh-failed', {detail: {
         symbol, code: error?.code || 'MARKET_REFRESH_ERROR', message: error?.message || 'Broker quote unavailable', consecutiveFailures
       }}));
@@ -115,12 +109,10 @@
     window.addEventListener('algobot:market-symbol-changed', () => refresh(true));
     window.addEventListener('algobot:market-watchdog-tick', event => { lastQuoteMutation = Date.now(); lastGoodAt = Date.now(); consecutiveFailures = 0; setState('live', `live broker quote · ${event.detail?.symbol || 'chart watchdog'}`); });
     refresh(true);
-    timer = window.setInterval(() => refresh(false), 10000);
-    window.addEventListener('pagehide', () => { lifecycleToken++; if (timer) window.clearInterval(timer); if (retryTimer) window.clearTimeout(retryTimer); observer.disconnect(); }, {once:true});
+    window.addEventListener('pagehide', () => { lifecycleToken++; observer.disconnect(); }, {once:true});
     document.addEventListener('visibilitychange', () => {
       lifecycleToken++;
-      if (document.hidden) { if (retryTimer) window.clearTimeout(retryTimer); retryTimer=null; }
-      else refresh(true);
+      if (document.hidden) return;
     });
   }
 
