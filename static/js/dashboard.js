@@ -182,13 +182,15 @@
 
   async function load() {
     if (loading) return;
-    loading = true; const generation = ++refreshGeneration; if (refreshTimer) window.clearTimeout(refreshTimer);
+    loading = true; const generation = ++refreshGeneration; if (refreshTimer) { window.clearTimeout(refreshTimer); refreshTimer = null; }
     const accountPromise = loadAccount();
     try { const result = await loadCollections(); if (generation === refreshGeneration) renderCollections(result); }
     catch (error) { const message = error?.message || 'Dashboard backend request failed'; ['[data-dashboard-positions]','[data-dashboard-orders]','[data-dashboard-markets]','[data-dashboard-signals]','[data-dashboard-activity]'].forEach(selector => setHtml(selector, empty(message))); }
     finally {
       await accountPromise; loading = false;
-      if (!document.hidden) refreshTimer = window.setTimeout(load, 60000);
+      // No automatic page/data reload loop. The dashboard loads once and live broker
+      // changes arrive through the portfolio WebSocket; use the explicit Refresh action for a snapshot refresh.
+      refreshTimer = null;
       connectPortfolioStream();
     }
   }
@@ -206,7 +208,7 @@
   function boot() {
     $('[data-dashboard-refresh]')?.addEventListener('click', load);
     $('[data-dashboard-kill-switch]')?.addEventListener('click', activateKillSwitch);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) window.clearTimeout(refreshTimer); else { if (!loading) load(); connectPortfolioStream(); } });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { if (refreshTimer) window.clearTimeout(refreshTimer); refreshTimer = null; } else { connectPortfolioStream(); } });
     window.addEventListener('algobot:account-synced', event => { if (event.detail) { renderAccount(event.detail); renderBroker(event.detail); } connectPortfolioStream(); });
     window.addEventListener('algobot:account-changed', event => { if (event.detail) { liveAccount = event.detail; renderAccount(event.detail); renderBroker(event.detail); } if (!loading) load(); });
     connectPortfolioStream();
