@@ -7,7 +7,7 @@
   const list=value=>Array.isArray(value)?value:(Array.isArray(value?.results)?value.results:(Array.isArray(value?.data)?value.data:(Array.isArray(value?.accounts)?value.accounts:[])));
   const inflight=new Map(),cache=new Map(),GET_CACHE_MS=1200;
   const configuredApiBase=(document.querySelector('meta[name="algobot-api-base"]')?.content||'').trim();
-  const productionApiBase=['algobot.dpdns.org','www.algobot.dpdns.org'].includes(window.location.hostname)?'https://api.algobot.dpdns.org':'';
+  const productionApiBase='';
   // The web origin renders pages; the dedicated API origin owns all browser API traffic.
   const apiBase=(configuredApiBase||productionApiBase||window.location.origin).replace(/\/+$/,'');
   const nativeFetch=window.fetch.bind(window),safeMethods=new Set(['GET','HEAD','OPTIONS']);
