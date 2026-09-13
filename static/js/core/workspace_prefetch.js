@@ -35,7 +35,7 @@
   };
   const clearAccount = () => {
     try {
-      const prefix = `algobot:workspace-cache:v1:${accountId()}:`;
+      const prefix = 'algobot:workspace-cache:v1:';
       for (let i = sessionStorage.length - 1; i >= 0; i--) {
         const k = sessionStorage.key(i);
         if (k?.startsWith(prefix)) sessionStorage.removeItem(k);
@@ -53,14 +53,7 @@
       if (method !== 'GET' || !safeGet.test(raw)) return originalRequest(url, options, timeout);
 
       const cached = read(raw);
-      if (cached !== null) {
-        // Revalidate without delaying first paint. The next page navigation and
-        // any explicit refresh will consume the new broker-backed value.
-        void originalRequest(url, {...options, notifyOnError: false}, timeout)
-          .then(payload => { write(raw, payload); window.dispatchEvent(new CustomEvent('algobot:workspace-cache-updated', {detail:{url:raw}})); })
-          .catch(() => {});
-        return cached;
-      }
+      if (cached !== null) return cached;
       const payload = await originalRequest(url, options, timeout);
       write(raw, payload);
       return payload;
@@ -72,22 +65,19 @@
 
   function prefetch() {
     const api = data();
-    if (!api?.request) return;
-    const paths = [
-      ['/api/brokers/accounts/', 9000],
-      ['/api/market/catalogue/', 12000],
-      ['/api/positions/open/', 8000],
-      ['/api/orders/?limit=8', 8000],
-      ['/api/dashboard/signals/?limit=8', 8000],
-      ['/api/dashboard/account_overview/', 8000]
-    ];
-    paths.forEach(([url, timeout]) => {
-      if (read(url) !== null) {
-        void api.request(url, {notifyOnError:false}, timeout).then(payload => write(url, payload)).catch(() => {});
-        return;
-      }
-      void api.request(url, {notifyOnError:false}, timeout).then(payload => write(url, payload)).catch(() => {});
-    });
+    if (!api?.request || document.visibilityState !== 'visible') return;
+    // Never prefetch the Trading Terminal: it owns these resources and loads
+    // them in the correct account/symbol order. Prefetching here caused a
+    // duplicate request storm and made the terminal appear slow/unreliable.
+    const path = window.location.pathname;
+    if (path === '/trading/' || path.startsWith('/trading/')) return;
+    // Keep global navigation light: warm only the account list. Page controllers
+    // request their own data once they are mounted.
+    const url = '/api/brokers/accounts/';
+    if (read(url) !== null) return;
+    void api.request(url, {notifyOnError:false}, 7000)
+      .then(payload => write(url, payload))
+      .catch(() => {});
   }
 
   function boot() {
