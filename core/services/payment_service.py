@@ -86,7 +86,7 @@ class PaymentService:
             data = self._json_or_error(response)
             if not response.ok:
                 logger.error("IntaSend checkout failed status=%s body=%s", response.status_code, data)
-                return {"url": "", "provider": self.INTASEND, "error": self._provider_error(data)}
+                return {"url": "", "provider": self.INTASEND, "error": self._checkout_http_error(self.INTASEND, response.status_code, data)}
             url = data.get("url") or data.get("checkout_url") or data.get("link") or ""
             invoice_id = data.get("invoice_id") or data.get("id") or data.get("checkout_id")
             if not url:
@@ -156,8 +156,8 @@ class PaymentService:
             )
             data = self._json_or_error(response)
             if not response.ok:
-                logger.error("Pesapal order failed: %s", data)
-                return {"url": "", "provider": self.PESAPAL, "error": self._provider_error(data)}
+                logger.error("Pesapal order failed status=%s body=%s", response.status_code, data)
+                return {"url": "", "provider": self.PESAPAL, "error": self._checkout_http_error(self.PESAPAL, response.status_code, data)}
             url = data.get("redirect_url") or data.get("url") or ""
             tracking_id = data.get("order_tracking_id") or data.get("tracking_id")
             if not url or not tracking_id:
@@ -342,6 +342,19 @@ class PaymentService:
     def _configuration_error(variable):
         logger.error("Payment configuration missing: %s", variable)
         return {"url": "", "error": f"Missing payment configuration: {variable}"}
+
+    @classmethod
+    def _checkout_http_error(cls, provider, status_code, data):
+        name = "IntaSend" if provider == cls.INTASEND else "Pesapal"
+        if status_code in {401, 403}:
+            return f"{name} rejected the payment credentials. Check the configured production API credentials."
+        if status_code == 400:
+            return f"{name} rejected the checkout request. Check the merchant configuration and callback settings."
+        if status_code == 404:
+            return f"{name} checkout endpoint was not found. Check the configured payment API URL."
+        if status_code >= 500:
+            return f"{name} is temporarily unavailable. Please try again."
+        return f"{name} could not create the checkout (HTTP {status_code}). Please try again."
 
     @staticmethod
     def _parse_payload(payload):
