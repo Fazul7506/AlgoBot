@@ -127,9 +127,42 @@ class BillingPaymentFlowTests(TestCase):
         self.assertNotIn("&", payload["redirect_url"])
         self.assertNotIn("provider=", payload["redirect_url"])
         self.assertIn(f"reference=IS-{self.user.id}-BASIC-", payload["redirect_url"])
+
+    @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test", INTASEND_API_BASE_URL="https://sandbox.intasend.com")
+    @patch("core.services.payment_service.requests.post")
+    def test_intasend_omits_unconfigured_merchant_tariffs(self, post):
+        response = Mock()
+        response.ok = True
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
+        post.return_value = response
+
+        PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
+
+        payload = post.call_args.kwargs["json"]
+        self.assertNotIn("mobile_tarrif", payload)
+        self.assertNotIn("card_tarrif", payload)
+
+    @override_settings(
+        INTASEND_PUBLIC_KEY="ISPubKey_test",
+        INTASEND_API_BASE_URL="https://sandbox.intasend.com",
+        INTASEND_MOBILE_TARIFF="MOBILE-PAYS",
+        INTASEND_CARD_TARIFF="CARD-PAYS",
+    )
+    @patch("core.services.payment_service.requests.post")
+    def test_intasend_sends_configured_merchant_tariffs(self, post):
+        response = Mock()
+        response.ok = True
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
+        post.return_value = response
+
+        PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["mobile_tarrif"], "MOBILE-PAYS")
+        self.assertEqual(payload["card_tarrif"], "CARD-PAYS")
+
     @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test_example", INTASEND_API_BASE_URL="https://api.intasend.com")
     def test_intasend_rejects_test_key_on_live_api_endpoint(self):
         result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
         self.assertEqual(result["url"], "")
         self.assertIn("sandbox API URL", result["error"])
-

@@ -31,6 +31,8 @@ class PaymentService:
         self.intasend_secret_key = getattr(settings, "INTASEND_SECRET_KEY", "")
         self.intasend_webhook_challenge = getattr(settings, "INTASEND_WEBHOOK_CHALLENGE", "")
         self.intasend_base_url = str(getattr(settings, "INTASEND_API_BASE_URL", "https://api.intasend.com") or "https://api.intasend.com").strip().rstrip("/")
+        self.intasend_mobile_tariff = str(getattr(settings, "INTASEND_MOBILE_TARIFF", "") or "").strip()
+        self.intasend_card_tariff = str(getattr(settings, "INTASEND_CARD_TARIFF", "") or "").strip()
         self.pesapal_consumer_key = getattr(settings, "PESAPAL_CONSUMER_KEY", "")
         self.pesapal_consumer_secret = getattr(settings, "PESAPAL_CONSUMER_SECRET", "")
         self.pesapal_notification_id = getattr(settings, "PESAPAL_NOTIFICATION_ID", "")
@@ -77,8 +79,11 @@ class PaymentService:
             "channel": "WEBSITE",
             "host": host_url,
             "redirect_url": redirect_url,
-            "mobile_tarrif": "BUSINESS-PAYS",
-            "card_tarrif": "BUSINESS-PAYS",
+            # Tariffs are merchant-specific.  Do not force BUSINESS-PAYS (or
+            # any other value) because unprovisioned tariffs cause IntaSend to
+            # reject the entire checkout request.
+            "mobile_tarrif": self.intasend_mobile_tariff or None,
+            "card_tarrif": self.intasend_card_tariff or None,
         }
         self._drop_none(payload)
         try:
