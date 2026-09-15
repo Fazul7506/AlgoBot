@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timezone as dt_timezone
 from decimal import Decimal, InvalidOperation
 from typing import Mapping, Optional
 from urllib.parse import urlencode, urlsplit, urlunsplit
@@ -98,14 +99,45 @@ class PaymentService:
                 timeout=self.timeout,
             )
             data = self._json_or_error(response)
+            request_id = self._provider_request_id(response)
             if not response.ok:
-                logger.error("IntaSend checkout failed status=%s body=%s", response.status_code, data)
-                return {"url": "", "provider": self.INTASEND, "error": self._checkout_http_error(self.INTASEND, response.status_code, data)}
+                classification = self._classify_provider_failure(response.status_code, data)
+                self._log_provider_diagnostic(
+                    provider=self.INTASEND,
+                    endpoint=self._endpoint_for_log(self.intasend_base_url, "/api/v1/checkout/"),
+                    method="POST",
+                    status_code=response.status_code,
+                    request_id=request_id,
+                    merchant_reference=api_ref,
+                    plan=getattr(subscription_plan, "plan", ""),
+                    currency=currency,
+                    amount=amount,
+                    recurring=bool(getattr(subscription_plan, "recurring", False)),
+                    payload=payload,
+                    response=data,
+                    classification=classification,
+                )
+                return {"url": "", "provider": self.INTASEND, "error": self._checkout_http_error(self.INTASEND, response.status_code, data), "error_classification": classification}
             url = data.get("url") or data.get("checkout_url") or data.get("link") or ""
             invoice_id = data.get("invoice_id") or data.get("id") or data.get("checkout_id")
             if not self._is_checkout_url(url):
                 logger.error("IntaSend checkout returned success without a checkout URL: %s", data)
                 return {"url": "", "provider": self.INTASEND, "error": "Payment provider returned no checkout URL"}
+            self._log_provider_diagnostic(
+                provider=self.INTASEND,
+                endpoint=self._endpoint_for_log(self.intasend_base_url, "/api/v1/checkout/"),
+                method="POST",
+                status_code=response.status_code,
+                request_id=request_id,
+                merchant_reference=api_ref,
+                plan=getattr(subscription_plan, "plan", ""),
+                currency=currency,
+                amount=amount,
+                recurring=bool(getattr(subscription_plan, "recurring", False)),
+                payload=payload,
+                response={"checkout_url_present": True, "invoice_id_present": bool(invoice_id)},
+                classification="success",
+            )
             return {
                 "provider": self.INTASEND,
                 "session_id": invoice_id or api_ref,
@@ -113,9 +145,42 @@ class PaymentService:
                 "reference": api_ref,
                 "url": url,
             }
+        except requests.Timeout as exc:
+            self._log_provider_diagnostic(
+                provider=self.INTASEND,
+                endpoint=self._endpoint_for_log(self.intasend_base_url, "/api/v1/checkout/"),
+                method="POST",
+                status_code=None,
+                request_id=None,
+                merchant_reference=api_ref,
+                plan=getattr(subscription_plan, "plan", ""),
+                currency=currency,
+                amount=amount,
+                recurring=bool(getattr(subscription_plan, "recurring", False)),
+                payload=payload,
+                response=None,
+                classification="timeout/network failure",
+                exception=exc,
+            )
+            return {"url": "", "provider": self.INTASEND, "error": "Payment provider is temporarily unavailable. Please try again.", "error_classification": "timeout/network failure"}
         except requests.RequestException as exc:
-            logger.exception("IntaSend checkout request failed")
-            return {"url": "", "provider": self.INTASEND, "error": "Payment provider is temporarily unreachable. Please try again."}
+            self._log_provider_diagnostic(
+                provider=self.INTASEND,
+                endpoint=self._endpoint_for_log(self.intasend_base_url, "/api/v1/checkout/"),
+                method="POST",
+                status_code=None,
+                request_id=None,
+                merchant_reference=api_ref,
+                plan=getattr(subscription_plan, "plan", ""),
+                currency=currency,
+                amount=amount,
+                recurring=bool(getattr(subscription_plan, "recurring", False)),
+                payload=payload,
+                response=None,
+                classification="timeout/network failure",
+                exception=exc,
+            )
+            return {"url": "", "provider": self.INTASEND, "error": "Payment provider is temporarily unavailable. Please try again.", "error_classification": "timeout/network failure"}
 
     def create_pesapal_checkout(self, user, subscription_plan):
         if not self.pesapal_consumer_key:
@@ -351,13 +416,96 @@ class PaymentService:
         return timeout
 
     def _intasend_environment_error(self):
-        key = str(self.intasend_public_key or "").lower()
-        base = str(self.intasend_base_url or "").lower()
-        if "_test" in key and "sandbox.intasend.com" not in base:
+        key = str(self.intasend_public_key or "").strip().lower()
+        base_host = (urlsplit(str(self.intasend_base_url or "")).hostname or "").lower()
+        is_sandbox = base_host == "sandbox.intasend.com" or base_host.endswith(".sandbox.intasend.com")
+        is_live = base_host in {"api.intasend.com", "payment.intasend.com"} or (base_host.endswith(".intasend.com") and not is_sandbox)
+        key_environment = "sandbox" if "test" in key else "live" if "live" in key else "unknown"
+        if key_environment == "sandbox" and not is_sandbox:
             return "IntaSend test credentials require the IntaSend sandbox API URL."
-        if "_live" in key and "sandbox.intasend.com" in base:
-            return "IntaSend live credentials cannot be used with the IntaSend sandbox API URL."
+        if key_environment == "live" and not is_live:
+            return "IntaSend live credentials require the IntaSend live API URL."
+        if base_host and not (is_sandbox or is_live):
+            return "IntaSend API URL is not a recognized live or sandbox endpoint."
         return ""
+
+    @staticmethod
+    def _provider_request_id(response):
+        headers = getattr(response, "headers", {}) or {}
+        for name in ("X-Request-ID", "X-Correlation-ID", "X-Request-Id", "Request-ID", "request-id"):
+            value = headers.get(name)
+            if value:
+                return str(value)[:200]
+        return ""
+
+    @staticmethod
+    def _endpoint_for_log(base_url, path):
+        parsed = urlsplit(str(base_url or "").strip())
+        hostname = (parsed.hostname or "").lower() or "invalid"
+        return f"{hostname}{path}"
+
+    @staticmethod
+    def _provider_environment(endpoint):
+        host = (urlsplit(endpoint if "://" in str(endpoint) else f"https://{endpoint}").hostname or "").lower()
+        if host == "sandbox.intasend.com" or host.endswith(".sandbox.intasend.com"):
+            return "sandbox"
+        if host in {"api.intasend.com", "payment.intasend.com"} or (host.endswith(".intasend.com") and host != "sandbox.intasend.com"):
+            return "live"
+        return "unknown"
+
+    @staticmethod
+    def _classify_provider_failure(status_code, data):
+        if status_code in {401, 403}:
+            return "configuration/authentication failure"
+        if status_code in {400, 422}:
+            return "malformed request"
+        if status_code is not None and 400 <= status_code < 500:
+            return "provider rejected request"
+        if status_code is not None and status_code >= 500:
+            return "provider unavailable"
+        return "unknown provider failure"
+
+    @classmethod
+    def _sanitize_diagnostic_value(cls, key, value):
+        sensitive = ("secret", "token", "password", "authorization", "api_key", "access_key", "credential")
+        if any(part in str(key).lower() for part in sensitive):
+            return "[REDACTED]"
+        if key in {"email", "first_name", "last_name", "phone_number"}:
+            return "[REDACTED]" if value else None
+        if isinstance(value, str):
+            return value[:300]
+        if isinstance(value, dict):
+            return {str(k): cls._sanitize_diagnostic_value(str(k), v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [cls._sanitize_diagnostic_value(str(key), v) for v in value[:10]]
+        return value
+
+    @classmethod
+    def _log_provider_diagnostic(
+        cls, *, provider, endpoint, method, status_code, request_id,
+        merchant_reference, plan, currency, amount, recurring, payload,
+        response, classification, exception=None,
+    ):
+        diagnostic = {
+            "provider": provider,
+            "environment": cls._provider_environment(endpoint),
+            "endpoint": endpoint,
+            "method": method,
+            "http_status": status_code,
+            "request_id": request_id or None,
+            "checkout_merchant_reference": merchant_reference or None,
+            "plan": str(plan or "").upper(),
+            "currency": str(currency or "").upper(),
+            "amount": cls._decimal_string(amount) if amount is not None else None,
+            "recurring": bool(recurring),
+            "sanitized_payload": cls._sanitize_diagnostic_value("payload", payload),
+            "sanitized_provider_response": cls._sanitize_diagnostic_value("response", response or {}),
+            "timestamp": datetime.now(dt_timezone.utc).isoformat(),
+            "exception_error_classification": classification,
+        }
+        if exception is not None:
+            diagnostic["exception"] = type(exception).__name__
+        logger.error("payment_provider_diagnostic=%s", diagnostic)
 
     @staticmethod
     def _is_checkout_url(value):

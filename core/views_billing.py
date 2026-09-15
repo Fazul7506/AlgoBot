@@ -26,6 +26,7 @@ class CheckoutPlan:
     price_cents: int
     currency: str = "KES"
     recurring: bool = True
+    reference: str = ""
 
 
 class RequestBoundPaymentService(PaymentService):
@@ -149,34 +150,111 @@ def billing_cancel_page(request):
 
 def _checkout(request, plan_name, provider=None):
     plan = _plan(plan_name)
-    if not plan: return None, "Unknown subscription plan."
-    if plan["plan"] == "FREE": return None, "FREE does not require payment."
-    if not plan["configured"]: return None, f"{plan['plan']} is not configured for checkout yet."
+    if not plan:
+        return None, "Unknown subscription plan."
+    if plan["plan"] == "FREE":
+        return None, "FREE does not require payment."
+    if not plan["configured"]:
+        return None, f"{plan['plan']} is not configured for checkout yet."
     selected = str(provider or getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower().strip()
-    if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL}: return None, "Unsupported payment provider."
-    invoice = Invoice.objects.create(user=request.user, amount_cents=plan["price_cents"], currency=plan["currency"], metadata={"plan": plan["plan"], "provider": selected, "state": "checkout_created"})
+    if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL}:
+        return None, "Unsupported payment provider."
+
+    # Reuse an unresolved checkout invoice for this exact user/plan/provider.
+    # This prevents a browser retry from creating a second internal invoice.
+    existing = (
+        Invoice.objects.filter(
+            user=request.user,
+            paid=False,
+            amount_cents=plan["price_cents"],
+            currency=plan["currency"],
+            metadata__plan=plan["plan"],
+            metadata__provider=selected,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    metadata = dict(existing.metadata or {}) if existing else {}
+    if existing and metadata.get("state") == "checkout_open" and metadata.get("checkout_url"):
+        return str(metadata["checkout_url"]), None
+
+    invoice = existing or Invoice.objects.create(
+        user=request.user,
+        amount_cents=plan["price_cents"],
+        currency=plan["currency"],
+        metadata={"plan": plan["plan"], "provider": selected},
+    )
+    reference = str(metadata.get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request.user, plan["plan"]))
+    invoice.metadata = {
+        **metadata,
+        "plan": plan["plan"],
+        "provider": selected,
+        "state": "checkout_attempting",
+        "reference": reference,
+        "attempt_count": int(metadata.get("attempt_count") or 0) + 1,
+    }
+    invoice.save(update_fields=["metadata"])
+
     try:
-        result = RequestBoundPaymentService(request).create_checkout_session(request.user, CheckoutPlan(plan=plan["plan"], price_cents=plan["price_cents"], currency=plan["currency"], recurring=plan["recurring"]), provider=selected)
-    except Exception:
-        result = {"url": "", "error": "Payment provider is temporarily unavailable."}
+        result = RequestBoundPaymentService(request).create_checkout_session(
+            request.user,
+            CheckoutPlan(
+                plan=plan["plan"],
+                price_cents=plan["price_cents"],
+                currency=plan["currency"],
+                recurring=plan["recurring"],
+                reference=reference,
+            ),
+            provider=selected,
+        )
+    except Exception as exc:
+        result = {"url": "", "error": "Payment provider is temporarily unavailable.", "error_classification": "unknown provider failure"}
+        invoice.metadata = {
+            **(invoice.metadata or {}),
+            "state": "checkout_failed",
+            "error": type(exc).__name__,
+            "error_classification": "unknown provider failure",
+        }
+        invoice.save(update_fields=["metadata"])
+
     checkout_url = result.get("url") if isinstance(result, dict) else ""
     parsed_checkout_url = urlparse(str(checkout_url))
     if not isinstance(result, dict) or parsed_checkout_url.scheme not in {"http", "https"} or not parsed_checkout_url.netloc:
         error = result.get("error") if isinstance(result, dict) else "invalid_provider_response"
-        invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": error or "provider_checkout_failed"}; invoice.save(update_fields=["metadata"])
-        return None, "We couldn't start your payment. Please try again."
+        classification = result.get("error_classification") if isinstance(result, dict) else "unknown provider failure"
+        invoice.metadata = {
+            **(invoice.metadata or {}),
+            "state": "checkout_failed",
+            "error": error or "provider_checkout_failed",
+            "error_classification": classification,
+        }
+        invoice.save(update_fields=["metadata"])
+        return None, "Payment provider could not start checkout. No subscription was activated. Please try again."
+
     external_id = result.get("invoice_id") or result.get("order_tracking_id") or result.get("session_id") or ""
     invoice.external_id = external_id or None
-    invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_open", "reference": result.get("reference"), "tracking_id": result.get("order_tracking_id"), "session_id": result.get("session_id")}
+    invoice.metadata = {
+        **(invoice.metadata or {}),
+        "state": "checkout_open",
+        "reference": result.get("reference") or reference,
+        "tracking_id": result.get("order_tracking_id"),
+        "session_id": result.get("session_id"),
+        "checkout_url": checkout_url,
+        "error": "",
+        "error_classification": "",
+    }
     try:
         invoice.save(update_fields=["external_id", "metadata"])
     except IntegrityError:
-        # Never attach a checkout to another account if the provider
-        # unexpectedly reuses an external identifier.
         invoice.external_id = None
-        invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": "duplicate_provider_reference"}
+        invoice.metadata = {
+            **(invoice.metadata or {}),
+            "state": "checkout_failed",
+            "error": "duplicate_provider_reference",
+            "error_classification": "provider rejected request",
+        }
         invoice.save(update_fields=["external_id", "metadata"])
-        return None, "We couldn't start your payment. Please try again."
+        return None, "Payment provider could not start checkout. No subscription was activated. Please try again."
     return checkout_url, None
 
 
@@ -185,7 +263,7 @@ def billing_checkout_start(request):
     if request.method != "GET": return redirect("billing_page")
     url, error = _checkout(request, request.GET.get("plan", ""), request.GET.get("provider") or None)
     if url: return HttpResponseRedirect(url)
-    messages.error(request, error or "We couldn't start your payment. Please try again.")
+    messages.error(request, error or "Payment provider could not start checkout. No subscription was activated. Please try again.")
     return redirect("billing_page")
 
 
