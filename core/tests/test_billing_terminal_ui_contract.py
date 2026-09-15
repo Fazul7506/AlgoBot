@@ -13,6 +13,15 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('data-provider="intasend"', template)
         self.assertIn('data-provider="pesapal"', template)
 
+    def test_intasend_badge_is_limited_to_intasend_billing_surfaces(self):
+        from pathlib import Path
+
+        badge_include = '{% include "core/partials/intasend_trust_badge.html" %}'
+        self.assertIn(badge_include, Path("templates/core/billing.html").read_text(encoding="utf-8"))
+        success = Path("templates/core/billing_success.html").read_text(encoding="utf-8")
+        self.assertIn('{% if provider == "intasend" %}' + badge_include + "{% endif %}", success)
+        self.assertNotIn(badge_include, Path("templates/core/billing_cancel.html").read_text(encoding="utf-8"))
+
     def test_billing_backend_catalogue_includes_enterprise_without_ui_role_filtering(self):
         from pathlib import Path
         billing = Path("core/views_billing.py").read_text(encoding="utf-8")
