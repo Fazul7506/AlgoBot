@@ -123,5 +123,6 @@ class BillingPaymentFlowTests(TestCase):
 
         self.assertEqual(result["url"], "https://checkout.example/pay")
         payload = post.call_args.kwargs["json"]
-        self.assertIn("provider=intasend", payload["redirect_url"])
+        self.assertNotIn("&", payload["redirect_url"])
+        self.assertNotIn("provider=", payload["redirect_url"])
         self.assertIn(f"reference=IS-{self.user.id}-BASIC-", payload["redirect_url"])
