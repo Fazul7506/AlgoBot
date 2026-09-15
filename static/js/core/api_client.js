@@ -8,6 +8,20 @@
   // Production browser API traffic must never fall back to the web/page origin.
   const apiBase = (configuredApiBase || ((window.location.hostname === 'algobot.dpdns.org' || window.location.hostname === 'www.algobot.dpdns.org') ? productionApiBase : '') || window.location.origin).replace(/\/+$/, '');
   const aliases = {'/trading/order/': '/api/orders/', '/trading/preview/': '/api/orders/preview/', '/trading/ai/predict/': '/api/ai/predict/'};
+  const safeFallbackMethods = new Set(['GET','HEAD','OPTIONS']);
+  // Fallbacks are advisory and same-origin only. Mutating endpoints, including account select and AI prediction, never retry elsewhere.
+  const sameOriginFallbackPath = (path, method='GET') => {
+    const verb = String(method || 'GET').toUpperCase();
+    if (!safeFallbackMethods.has(verb)) return null;
+    const raw = String(path || '/');
+    if (!raw.startsWith('/api/')) return null;
+    return new URL(raw, window.location.origin).toString();
+  };
+  const advisoryFallbackEndpoints = Object.freeze({
+    accounts: '/api/brokers/accounts/',
+    select: '/api/brokers/accounts/{id}/select/',
+    aiPredict: '/api/ai/predict/'
+  });
 
   function resolveUrl(path) {
     const raw = String(aliases[path] || path || '/');
@@ -120,6 +134,9 @@
   }
 
   const apiClient = new APIClient();
+  // Keep these capabilities discoverable to callers without monkey-patching global fetch.
+  apiClient.sameOriginFallbackPath = sameOriginFallbackPath;
+  apiClient.advisoryFallbackEndpoints = advisoryFallbackEndpoints;
   window.__algoBotApiClientFetch = true;
   window.AlgoBotAPI = Object.freeze({APIClient,APIError,apiClient,apiBase});
 })();
