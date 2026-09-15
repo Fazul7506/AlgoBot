@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import uuid
 from decimal import Decimal, InvalidOperation
-from typing import Optional
+from typing import Mapping, Optional
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import requests
@@ -35,7 +35,9 @@ class PaymentService:
         self.pesapal_consumer_secret = getattr(settings, "PESAPAL_CONSUMER_SECRET", "")
         self.pesapal_notification_id = getattr(settings, "PESAPAL_NOTIFICATION_ID", "")
         self.pesapal_base_url = getattr(settings, "PESAPAL_API_BASE_URL", "https://pay.pesapal.com/v3").rstrip("/")
-        self.timeout = int(getattr(settings, "PAYMENT_HTTP_TIMEOUT", 20))
+        # A malformed deployment value must not make every checkout fail
+        # before a request reaches the selected provider.
+        self.timeout = self._request_timeout(getattr(settings, "PAYMENT_HTTP_TIMEOUT", 20))
 
     def create_checkout_session(self, user, subscription_plan, provider: str | None = None):
         selected = str(provider or self.provider).lower().strip()
@@ -89,7 +91,7 @@ class PaymentService:
                 return {"url": "", "provider": self.INTASEND, "error": self._checkout_http_error(self.INTASEND, response.status_code, data)}
             url = data.get("url") or data.get("checkout_url") or data.get("link") or ""
             invoice_id = data.get("invoice_id") or data.get("id") or data.get("checkout_id")
-            if not url:
+            if not self._is_checkout_url(url):
                 logger.error("IntaSend checkout returned success without a checkout URL: %s", data)
                 return {"url": "", "provider": self.INTASEND, "error": "Payment provider returned no checkout URL"}
             return {
@@ -160,7 +162,7 @@ class PaymentService:
                 return {"url": "", "provider": self.PESAPAL, "error": self._checkout_http_error(self.PESAPAL, response.status_code, data)}
             url = data.get("redirect_url") or data.get("url") or ""
             tracking_id = data.get("order_tracking_id") or data.get("tracking_id")
-            if not url or not tracking_id:
+            if not self._is_checkout_url(url) or not tracking_id:
                 logger.error("Pesapal checkout returned incomplete order data: %s", data)
                 return {"url": "", "provider": self.PESAPAL, "error": "Payment provider returned incomplete checkout data"}
             return {
@@ -319,9 +321,27 @@ class PaymentService:
     @staticmethod
     def _json_or_error(response):
         try:
-            return response.json()
+            data = response.json()
+            return data if isinstance(data, Mapping) else {"error": "Unexpected provider response"}
         except ValueError:
-            return {"error": response.text[:500]}
+            return {"error": str(getattr(response, "text", ""))[:500]}
+
+    @staticmethod
+    def _request_timeout(value):
+        try:
+            timeout = int(value)
+        except (TypeError, ValueError):
+            logger.warning("Invalid PAYMENT_HTTP_TIMEOUT; using 20 seconds")
+            return 20
+        if timeout <= 0:
+            logger.warning("Non-positive PAYMENT_HTTP_TIMEOUT; using 20 seconds")
+            return 20
+        return timeout
+
+    @staticmethod
+    def _is_checkout_url(value):
+        parsed = urlsplit(str(value or "").strip())
+        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
     @staticmethod
     def _provider_error(data):

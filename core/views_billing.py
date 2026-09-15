@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import IntegrityError
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -55,7 +56,7 @@ def _plans():
     configured = {"BASIC": _safe_price(getattr(settings, "ALGOBOT_BASIC_PRICE_CENTS", None)), "PRO": _safe_price(getattr(settings, "ALGOBOT_PRO_PRICE_CENTS", None)), "ENTERPRISE": _safe_price(getattr(settings, "ALGOBOT_ENTERPRISE_PRICE_CENTS", None))}
     plans = [{"plan": "FREE", "price_cents": 0, "currency": currency, "recurring": False, "configured": True}]
     for name, price in configured.items():
-        plans.append({"plan": name, "price_cents": price, "currency": currency, "recurring": True, "configured": price is not None and price >= 0})
+        plans.append({"plan": name, "price_cents": price, "currency": currency, "recurring": True, "configured": price is not None and price > 0})
     return plans
 
 
@@ -153,14 +154,25 @@ def _checkout(request, plan_name, provider=None):
         result = RequestBoundPaymentService(request).create_checkout_session(request.user, CheckoutPlan(plan=plan["plan"], price_cents=plan["price_cents"], currency=plan["currency"], recurring=plan["recurring"]), provider=selected)
     except Exception:
         result = {"url": "", "error": "Payment provider is temporarily unavailable."}
-    if not result.get("url"):
-        invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": result.get("error") or "provider_checkout_failed"}; invoice.save(update_fields=["metadata"])
+    checkout_url = result.get("url") if isinstance(result, dict) else ""
+    parsed_checkout_url = urlparse(str(checkout_url))
+    if not isinstance(result, dict) or parsed_checkout_url.scheme not in {"http", "https"} or not parsed_checkout_url.netloc:
+        error = result.get("error") if isinstance(result, dict) else "invalid_provider_response"
+        invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": error or "provider_checkout_failed"}; invoice.save(update_fields=["metadata"])
         return None, "We couldn't start your payment. Please try again."
     external_id = result.get("invoice_id") or result.get("order_tracking_id") or result.get("session_id") or ""
     invoice.external_id = external_id or None
     invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_open", "reference": result.get("reference"), "tracking_id": result.get("order_tracking_id"), "session_id": result.get("session_id")}
-    invoice.save(update_fields=["external_id", "metadata"])
-    return result["url"], None
+    try:
+        invoice.save(update_fields=["external_id", "metadata"])
+    except IntegrityError:
+        # Never attach a checkout to another account if the provider
+        # unexpectedly reuses an external identifier.
+        invoice.external_id = None
+        invoice.metadata = {**(invoice.metadata or {}), "state": "checkout_failed", "error": "duplicate_provider_reference"}
+        invoice.save(update_fields=["external_id", "metadata"])
+        return None, "We couldn't start your payment. Please try again."
+    return checkout_url, None
 
 
 @login_required

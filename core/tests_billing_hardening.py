@@ -113,6 +113,12 @@ class BillingHardeningTests(TestCase):
         self.assertFalse(response.json()["subscription"]["is_active"])
         self.assertFalse(Subscription.objects.get(user=self.user).is_active)
 
+    @override_settings(ALGOBOT_PRO_PRICE_CENTS="0")
+    def test_zero_price_paid_plan_is_not_sent_to_a_provider(self):
+        response = self.client.post(reverse("billing_checkout"), {"plan": "PRO"}, format="json", **self.api_headers)
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("not configured", response.json()["detail"])
+
     @override_settings(BILLING_SUCCESS_URL="https://algobot.dpdns.org/billing/success/", BILLING_CANCEL_URL="https://algobot.dpdns.org/billing/cancel/", PESAPAL_CALLBACK_URL="https://algobot.dpdns.org/payments/pesapal/callback/")
     def test_explicit_provider_callback_urls_are_used(self):
         service = PaymentService()
