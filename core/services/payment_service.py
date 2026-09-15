@@ -59,7 +59,13 @@ class PaymentService:
             logger.error("IntaSend environment configuration mismatch: %s", environment_error)
             return {"url": "", "provider": self.INTASEND, "error": environment_error}
         amount, currency = self._amount_and_currency(subscription_plan)
-        api_ref = self._reference("IS", user, subscription_plan)
+        # The billing view creates an internal reference before it persists the
+        # invoice.  Reusing it here is essential: IntaSend returns this value
+        # in its webhook/redirect payload, and generating another value would
+        # leave a successful payment unable to be matched to that invoice.
+        api_ref = str(getattr(subscription_plan, "reference", "") or "").strip()
+        if not api_ref:
+            api_ref = self._reference("IS", user, subscription_plan)
         # IntaSend's redirect_url validator rejects '&' in query strings.
         # Keep the callback to one safe query parameter and infer the provider
         # from the IS- reference prefix on the success page.
@@ -369,7 +375,11 @@ class PaymentService:
         if configured:
             parsed = urlsplit(configured)
             if parsed.scheme in {"http", "https"} and parsed.netloc and not any(ch.isspace() for ch in configured):
-                base = urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
+                # Preserve the configured path verbatim.  In particular,
+                # Django's canonical billing callback routes end in a slash;
+                # removing it makes hosted payment providers hit a redirect
+                # instead of the callback endpoint configured by the merchant.
+                base = urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", "", ""))
             else:
                 logger.error("Invalid %s payment callback URL; falling back to BASE_URL", setting_name)
                 base = f"{self._base_url()}{default_path}"
