@@ -125,3 +125,42 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(service._callback_url("BILLING_SUCCESS_URL", "/billing/success/", {"provider": "intasend", "reference": "IS-1-BASIC-X"}), "https://algobot.dpdns.org/billing/success?provider=intasend&reference=IS-1-BASIC-X")
         self.assertEqual(service._callback_url("BILLING_CANCEL_URL", "/billing/cancel/"), "https://algobot.dpdns.org/billing/cancel")
         self.assertEqual(service._callback_url("PESAPAL_CALLBACK_URL", "/payments/pesapal/callback/"), "https://algobot.dpdns.org/payments/pesapal/callback")
+
+    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
+    def test_failed_checkout_does_not_activate_subscription(self, create_checkout):
+        create_checkout.return_value = {
+            "url": "",
+            "error": "IntaSend is temporarily unavailable. Please try again.",
+            "error_classification": "provider unavailable",
+        }
+        response = self.client.get(reverse("billing_checkout_start") + "?plan=BASIC&provider=intasend")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("billing_page"))
+        invoice = Invoice.objects.get(user=self.user)
+        self.assertFalse(invoice.paid)
+        self.assertEqual(invoice.metadata["state"], "checkout_failed")
+        self.assertEqual(invoice.metadata["error_classification"], "provider unavailable")
+        self.assertFalse(Payment.objects.filter(invoice=invoice).exists())
+        self.assertEqual(Subscription.objects.get(user=self.user).plan, "FREE")
+
+    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
+    def test_retry_reuses_failed_invoice_instead_of_creating_duplicates(self, create_checkout):
+        create_checkout.side_effect = [
+            {"url": "", "error": "provider failure", "error_classification": "provider unavailable"},
+            {"url": "https://checkout.example/pay", "invoice_id": "IS-RETRY-1", "reference": "IS-RETRY-REF"},
+        ]
+        first = self.client.get(reverse("billing_checkout_start") + "?plan=BASIC&provider=intasend")
+        self.assertEqual(first.status_code, 302)
+        self.assertEqual(Invoice.objects.filter(user=self.user, metadata__plan="BASIC").count(), 1)
+
+        second = self.client.get(reverse("billing_checkout_start") + "?plan=BASIC&provider=intasend")
+        self.assertEqual(second.status_code, 302)
+        self.assertEqual(second.url, "https://checkout.example/pay")
+        self.assertEqual(Invoice.objects.filter(user=self.user, metadata__plan="BASIC").count(), 1)
+        invoice = Invoice.objects.get(user=self.user, metadata__plan="BASIC")
+        self.assertEqual(invoice.external_id, "IS-RETRY-1")
+        self.assertEqual(invoice.metadata["state"], "checkout_open")
+        self.assertEqual(create_checkout.call_count, 2)
+
