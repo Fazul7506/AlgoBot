@@ -26,6 +26,11 @@ INTASEND_PUBLIC_KEY = os.getenv("INTASEND_PUBLIC_KEY", "").strip()
 INTASEND_SECRET_KEY = os.getenv("INTASEND_SECRET_KEY", "").strip()
 INTASEND_WEBHOOK_CHALLENGE = os.getenv("INTASEND_WEBHOOK_CHALLENGE", "").strip()
 INTASEND_API_BASE_URL = os.getenv("INTASEND_API_BASE_URL", "https://api.intasend.com").strip()
+# Leave checkout tariffs unset unless IntaSend has explicitly enabled and
+# supplied a tariff for this merchant account.  Supplying a made-up tariff can
+# cause IntaSend to reject an otherwise valid checkout request.
+INTASEND_MOBILE_TARIFF = os.getenv("INTASEND_MOBILE_TARIFF", "").strip()
+INTASEND_CARD_TARIFF = os.getenv("INTASEND_CARD_TARIFF", "").strip()
 PESAPAL_CONSUMER_KEY = os.getenv("PESAPAL_CONSUMER_KEY", "").strip()
 PESAPAL_CONSUMER_SECRET = os.getenv("PESAPAL_CONSUMER_SECRET", "").strip()
 PESAPAL_NOTIFICATION_ID = os.getenv("PESAPAL_NOTIFICATION_ID", "").strip()
