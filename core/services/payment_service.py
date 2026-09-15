@@ -51,6 +51,10 @@ class PaymentService:
     def create_intasend_checkout(self, user, subscription_plan):
         if not self.intasend_public_key:
             return self._configuration_error("INTASEND_PUBLIC_KEY")
+        environment_error = self._intasend_environment_error()
+        if environment_error:
+            logger.error("IntaSend environment configuration mismatch: %s", environment_error)
+            return {"url": "", "provider": self.INTASEND, "error": environment_error}
         amount, currency = self._amount_and_currency(subscription_plan)
         api_ref = self._reference("IS", user, subscription_plan)
         # IntaSend's redirect_url validator rejects '&' in query strings.
@@ -340,6 +344,15 @@ class PaymentService:
             logger.warning("Non-positive PAYMENT_HTTP_TIMEOUT; using 20 seconds")
             return 20
         return timeout
+
+    def _intasend_environment_error(self):
+        key = str(self.intasend_public_key or "").lower()
+        base = str(self.intasend_base_url or "").lower()
+        if "_test" in key and "sandbox.intasend.com" not in base:
+            return "IntaSend test credentials require the IntaSend sandbox API URL."
+        if "_live" in key and "sandbox.intasend.com" in base:
+            return "IntaSend live credentials cannot be used with the IntaSend sandbox API URL."
+        return ""
 
     @staticmethod
     def _is_checkout_url(value):
