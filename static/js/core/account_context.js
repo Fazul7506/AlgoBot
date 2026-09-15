@@ -33,9 +33,7 @@
       // as a recovery hint when the active-account read itself is unavailable;
       // the next API request still sends the account header and the backend
       // revalidates it against the authenticated user's connected accounts.
-      let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||
-        (activeRequestFailed&&rememberedId&&rows.find(a=>accountId(a)===String(rememberedId)))||
-        rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
+      let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
       if(!target){selected=null;storageSet(null);window.AlgoBotBrokerState?.reset('no-connected-broker-account');window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));return null}
       const hydrated=serverSelected&&accountId(serverSelected)===accountId(target)?serverSelected:target;
       accounts=accounts.map(a=>accountId(a)===accountId(hydrated)?{...a,...hydrated,is_active:true}:{...a,is_active:false,is_preferred:false});
