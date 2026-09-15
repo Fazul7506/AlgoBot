@@ -15,6 +15,7 @@
       {% if subscription %}<div><span>Plan</span><strong>{{ subscription.plan }}</strong></div>{% endif %}
     </div>
     <div class="callback-actions"><a class="btn primary" href="/billing/">Open billing</a><a class="btn ghost" href="/dashboard/">Return to dashboard</a></div>
+    {% if provider == "intasend" %}{% include "core/partials/intasend_trust_badge.html" %}{% endif %}
   </article>
 </section>
 {% endblock %}
