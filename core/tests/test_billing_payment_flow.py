@@ -166,3 +166,138 @@ class BillingPaymentFlowTests(TestCase):
         result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
         self.assertEqual(result["url"], "")
         self.assertIn("sandbox API URL", result["error"])
+
+    @override_settings(
+        INTASEND_PUBLIC_KEY="ISPubKey_live_example",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
+    )
+    @patch("core.services.payment_service.requests.post")
+    def test_intasend_http_500_is_classified_and_sanitized(self, post):
+        response = Mock()
+        response.ok = False
+        response.status_code = 500
+        response.headers = {"X-Request-ID": "req-500"}
+        response.json.return_value = {"error": "provider failure", "secret_key": "ISSecretKey_live_DO_NOT_LOG"}
+        post.return_value = response
+
+        with patch("core.services.payment_service.logger.error") as log_error:
+            result = PaymentService().create_intasend_checkout(
+                self.user,
+                CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+            )
+
+        self.assertEqual(result["error_classification"], "provider unavailable")
+        self.assertIn("temporarily unavailable", result["error"])
+        diagnostic = str(log_error.call_args)
+        self.assertIn("req-500", diagnostic)
+        self.assertIn('"amount": "500.00"', diagnostic)
+        self.assertIn('"currency": "KES"', diagnostic)
+        self.assertNotIn("ISSecretKey_live_DO_NOT_LOG", diagnostic)
+        self.assertNotIn("X-IntaSend-Public-API-Key", diagnostic)
+
+    @override_settings(
+        INTASEND_PUBLIC_KEY="ISPubKey_live_example",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
+    )
+    @patch("core.services.payment_service.requests.post")
+    def test_intasend_http_400_and_422_are_classified_as_malformed_request(self, post):
+        for status_code in (400, 422):
+            response = Mock()
+            response.ok = False
+            response.status_code = status_code
+            response.headers = {}
+            response.json.return_value = {"detail": "invalid checkout payload"}
+            post.return_value = response
+            result = PaymentService().create_intasend_checkout(
+                self.user,
+                CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+            )
+            self.assertEqual(result["error_classification"], "malformed request")
+
+    @override_settings(
+        INTASEND_PUBLIC_KEY="ISPubKey_live_example",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
+    )
+    @patch("core.services.payment_service.requests.post")
+    def test_intasend_timeout_is_classified_without_retrying_post(self, post):
+        from requests import Timeout
+        post.side_effect = Timeout("timeout")
+        result = PaymentService().create_intasend_checkout(
+            self.user,
+            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+        )
+        self.assertEqual(result["error_classification"], "timeout/network failure")
+        self.assertEqual(post.call_count, 1)
+
+    @override_settings(
+        INTASEND_PUBLIC_KEY="ISPubKey_live_example",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
+    )
+    @patch("core.services.payment_service.requests.post")
+    def test_intasend_basic_50000_kes_payload_uses_major_units_and_supported_fields(self, post):
+        response = Mock()
+        response.ok = True
+        response.status_code = 201
+        response.headers = {}
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
+        post.return_value = response
+
+        result = PaymentService().create_intasend_checkout(
+            self.user,
+            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+        )
+        self.assertEqual(result["url"], "https://checkout.example/pay")
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["amount"], "500.00")
+        self.assertEqual(payload["currency"], "KES")
+        self.assertEqual(payload["channel"], "WEBSITE")
+        self.assertTrue(payload["redirect_url"].startswith("https://"))
+        self.assertNotIn("recurring", payload)
+        self.assertNotIn("mobile_tarrif", payload)
+        self.assertNotIn("card_tarrif", payload)
+        self.assertEqual(post.call_args.args[0], "https://api.intasend.com/api/v1/checkout/")
+
+    @override_settings(
+        INTASEND_PUBLIC_KEY="ISPubKey_live_example",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
+    )
+    @patch("core.services.payment_service.requests.post")
+    def test_intasend_authentication_uses_public_key_header_only_for_checkout(self, post):
+        response = Mock()
+        response.ok = True
+        response.status_code = 201
+        response.headers = {}
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
+        post.return_value = response
+        PaymentService().create_intasend_checkout(
+            self.user,
+            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+        )
+        headers = post.call_args.kwargs["headers"]
+        self.assertIn("X-IntaSend-Public-API-Key", headers)
+        self.assertNotIn("Authorization", headers)
+
+    @override_settings(
+        INTASEND_PUBLIC_KEY="ISPubKey_live_example",
+        INTASEND_API_BASE_URL="https://sandbox.intasend.com",
+    )
+    def test_intasend_live_key_sandbox_endpoint_is_configuration_failure(self):
+        result = PaymentService().create_intasend_checkout(
+            self.user,
+            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+        )
+        self.assertEqual(result["url"], "")
+        self.assertIn("live credentials", result["error"])
+
+    @override_settings(
+        INTASEND_PUBLIC_KEY="ISPubKey_test_example",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
+    )
+    def test_intasend_test_key_live_endpoint_is_configuration_failure(self):
+        result = PaymentService().create_intasend_checkout(
+            self.user,
+            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+        )
+        self.assertEqual(result["url"], "")
+        self.assertIn("sandbox API URL", result["error"])
+
