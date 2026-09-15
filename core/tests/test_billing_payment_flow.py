@@ -102,7 +102,7 @@ class BillingPaymentFlowTests(TestCase):
         url, error = _checkout(request, "BASIC", "intasend")
 
         self.assertIsNone(url)
-        self.assertIn("couldn't start", error)
+        self.assertIn("Payment provider could not start checkout", error)
         create_checkout.assert_called_once()
 
     @override_settings(
@@ -190,7 +190,7 @@ class BillingPaymentFlowTests(TestCase):
         self.assertIn("temporarily unavailable", result["error"])
         diagnostic = str(log_error.call_args)
         self.assertIn("req-500", diagnostic)
-        self.assertIn('"amount": "500.00"', diagnostic)
+        self.assertIn("'amount': '500.00'", diagnostic)
         self.assertIn('"currency": "KES"', diagnostic)
         self.assertNotIn("ISSecretKey_live_DO_NOT_LOG", diagnostic)
         self.assertNotIn("X-IntaSend-Public-API-Key", diagnostic)
