@@ -1,0 +1,11 @@
+{# Official IntaSend security badge. Render only on IntaSend payment surfaces. #}
+<a class="intasend-trust-badge" href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" aria-label="Learn about IntaSend payment security">
+  <img src="https://intasend-prod-static.s3.amazonaws.com/img/trust-badges/intasend-trust-badge-with-mpesa-hr-light.png" width="375" alt="IntaSend Secure Payments (PCI-DSS Compliant)" loading="lazy">
+  <strong>Secured by IntaSend Payments</strong>
+</a>
+<style>
+.intasend-trust-badge{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;color:var(--muted-text,#8e96a3);text-decoration:none;font-size:.8rem;margin:14px auto 4px;max-width:100%;}
+.intasend-trust-badge img{display:block;width:min(375px,100%);height:auto;}
+.intasend-trust-badge strong{font-weight:700;}
+.intasend-trust-badge:focus-visible{outline:2px solid var(--accent,#7c3aed);outline-offset:4px;border-radius:6px;}
+</style>
