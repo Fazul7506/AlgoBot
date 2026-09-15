@@ -53,10 +53,13 @@ class PaymentService:
             return self._configuration_error("INTASEND_PUBLIC_KEY")
         amount, currency = self._amount_and_currency(subscription_plan)
         api_ref = self._reference("IS", user, subscription_plan)
+        # IntaSend's redirect_url validator rejects '&' in query strings.
+        # Keep the callback to one safe query parameter and infer the provider
+        # from the IS- reference prefix on the success page.
         redirect_url = self._callback_url(
             "BILLING_SUCCESS_URL",
             "/billing/success/",
-            {"provider": self.INTASEND, "reference": api_ref},
+            {"reference": api_ref},
         )
         host_url = self._base_url()
         payload = {
