@@ -128,6 +128,28 @@ class BillingPaymentFlowTests(TestCase):
         self.assertNotIn("provider=", payload["redirect_url"])
         self.assertIn(f"reference=IS-{self.user.id}-BASIC-", payload["redirect_url"])
 
+    @override_settings(
+        INTASEND_PUBLIC_KEY="ISPubKey_test",
+        INTASEND_API_BASE_URL="https://sandbox.intasend.com",
+    )
+    @patch("core.services.payment_service.requests.post")
+    def test_intasend_checkout_reuses_the_persisted_invoice_reference(self, post):
+        response = Mock()
+        response.ok = True
+        response.headers = {}
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
+        post.return_value = response
+        reference = f"IS-{self.user.id}-BASIC-invoice-ref"
+
+        result = PaymentService().create_intasend_checkout(
+            self.user,
+            CheckoutPlan(plan="BASIC", price_cents=99900, currency="KES", reference=reference),
+        )
+
+        self.assertEqual(result["reference"], reference)
+        self.assertEqual(post.call_args.kwargs["json"]["api_ref"], reference)
+        self.assertIn(f"reference={reference}", post.call_args.kwargs["json"]["redirect_url"])
+
     @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test", INTASEND_API_BASE_URL="https://sandbox.intasend.com")
     @patch("core.services.payment_service.requests.post")
     def test_intasend_omits_unconfigured_merchant_tariffs(self, post):
@@ -300,4 +322,3 @@ class BillingPaymentFlowTests(TestCase):
         )
         self.assertEqual(result["url"], "")
         self.assertIn("sandbox API URL", result["error"])
-

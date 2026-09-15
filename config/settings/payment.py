@@ -17,10 +17,13 @@ ALGOBOT_SUBSCRIPTION_PERIOD_DAYS = int(os.getenv("ALGOBOT_SUBSCRIPTION_PERIOD_DA
 
 # Explicit application return URLs. Provider checkout URLs are dynamic and
 # must be created per invoice/amount; they should never be stored as env vars.
-BILLING_SUCCESS_URL = os.getenv("BILLING_SUCCESS_URL", "").strip().rstrip("/")
-BILLING_CANCEL_URL = os.getenv("BILLING_CANCEL_URL", "").strip().rstrip("/")
-PESAPAL_CALLBACK_URL = os.getenv("PESAPAL_CALLBACK_URL", "").strip().rstrip("/")
-PESAPAL_CANCELLATION_URL = os.getenv("PESAPAL_CANCELLATION_URL", "").strip().rstrip("/")
+# Keep configured callback paths exactly as supplied.  The trailing slash is
+# meaningful for Django callback routes and prevents an avoidable redirect
+# from a hosted payment provider.
+BILLING_SUCCESS_URL = os.getenv("BILLING_SUCCESS_URL", "").strip()
+BILLING_CANCEL_URL = os.getenv("BILLING_CANCEL_URL", "").strip()
+PESAPAL_CALLBACK_URL = os.getenv("PESAPAL_CALLBACK_URL", "").strip()
+PESAPAL_CANCELLATION_URL = os.getenv("PESAPAL_CANCELLATION_URL", "").strip()
 
 INTASEND_PUBLIC_KEY = os.getenv("INTASEND_PUBLIC_KEY", "").strip()
 INTASEND_SECRET_KEY = os.getenv("INTASEND_SECRET_KEY", "").strip()
