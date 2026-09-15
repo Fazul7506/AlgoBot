@@ -191,7 +191,7 @@ class BillingPaymentFlowTests(TestCase):
         diagnostic = str(log_error.call_args)
         self.assertIn("req-500", diagnostic)
         self.assertIn("'amount': '500.00'", diagnostic)
-        self.assertIn('"currency": "KES"', diagnostic)
+        self.assertIn("'currency': 'KES'", diagnostic)
         self.assertNotIn("ISSecretKey_live_DO_NOT_LOG", diagnostic)
         self.assertNotIn("X-IntaSend-Public-API-Key", diagnostic)
 
