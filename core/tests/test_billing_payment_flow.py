@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from core.models import Invoice, Payment, Subscription
 from core.services.payment_reconciler import PaymentReconciler
 from core.services.payment_service import PaymentService
-from core.views_billing import CheckoutPlan
+from core.views_billing import CheckoutPlan, _checkout
 
 
 class BillingPaymentFlowTests(TestCase):
@@ -78,6 +78,32 @@ class BillingPaymentFlowTests(TestCase):
         self.assertIn("merchant configuration", PaymentService._checkout_http_error(PaymentService.INTASEND, 400, {}))
         self.assertIn("temporarily unavailable", PaymentService._checkout_http_error(PaymentService.PESAPAL, 503, {}))
         self.assertNotIn("secret", PaymentService._checkout_http_error(PaymentService.PESAPAL, 401, {"error": "secret-value"}))
+
+    @override_settings(PAYMENT_HTTP_TIMEOUT="not-a-number")
+    def test_invalid_timeout_does_not_break_payment_service_initialization(self):
+        self.assertEqual(PaymentService().timeout, 20)
+
+    @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test")
+    @patch("core.services.payment_service.requests.post")
+    def test_unexpected_provider_json_does_not_raise_or_return_a_checkout_url(self, post):
+        response = Mock()
+        response.ok = True
+        response.json.return_value = ["unexpected"]
+        post.return_value = response
+
+        result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
+
+        self.assertEqual(result["url"], "")
+        self.assertIn("no checkout URL", result["error"])
+
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session", return_value={"url": "javascript:alert(1)"})
+    def test_checkout_rejects_non_http_provider_redirects(self, create_checkout):
+        request = Mock(user=self.user)
+        url, error = _checkout(request, "BASIC", "intasend")
+
+        self.assertIsNone(url)
+        self.assertIn("couldn't start", error)
+        create_checkout.assert_called_once()
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_test",
