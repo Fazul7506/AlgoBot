@@ -124,6 +124,11 @@ def _find_callback_invoice(request, reference="", tracking_id=""):
 def billing_success_page(request):
     provider = str(request.GET.get("provider", "")).lower().strip()
     reference = str(request.GET.get("reference") or request.GET.get("OrderMerchantReference") or "").strip()
+    # IntaSend only permits a restricted character set in redirect_url and
+    # rejects query strings containing '&'. Infer IntaSend from our reference
+    # prefix when the callback contains the single safe reference parameter.
+    if not provider and reference.upper().startswith("IS-"):
+        provider = PaymentService.INTASEND
     tracking_id = str(request.GET.get("tracking_id") or request.GET.get("OrderTrackingId") or "").strip()
     invoice = _find_callback_invoice(request, reference, tracking_id)
     result = None
