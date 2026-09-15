@@ -11,6 +11,14 @@
   // The web origin renders pages; the dedicated API origin owns all browser API traffic.
   const apiBase=(configuredApiBase||productionApiBase||window.location.origin).replace(/\/+$/,'');
   const nativeFetch=window.fetch.bind(window),safeMethods=new Set(['GET','HEAD','OPTIONS']);
+  // Same-origin fallback is deliberately limited to idempotent transport only; execution/mutation requests never fall back.
+  const sameOriginRetryPath=(path,method='GET',forceSameOrigin=false)=>{
+    const verb=String(method||'GET').toUpperCase();
+    if(!safeMethods.has(verb))return null;
+    const raw=String(path||'/');
+    return forceSameOrigin?new URL(raw,window.location.origin).toString():null;
+  };
+  const Execution={safeFallbackMethods:[...safeMethods],mutationsNeverFallback:true};
 
   const resolveUrl=url=>{
     const raw=String(url||'/');
@@ -51,6 +59,7 @@
       const recent=cache.get(key);if(recent&&Date.now()-recent.at<=GET_CACHE_MS)return recent.payload;
     }
     const retry=()=>request(rawUrl,{...options,notifyOnError:true},timeout);
+    const sameOriginPath=sameOriginRetryPath(url,method,false);
     const promise=(async()=>{
       let controller=new AbortController(),timer=setTimeout(()=>controller.abort(),Math.max(1000,timeout)),result,firstError=null;
       try{
@@ -78,7 +87,7 @@
   async function syncBrokerAccount(accountId){if(!accountId)throw Error('A broker account is required');if(typeof window.AlgoBotBrokerSync==='function')return window.AlgoBotBrokerSync(accountId);if(brokerState())brokerState().transition(brokerState().STATES.SYNCING,{},'account-sync-started');try{const result=await request(`/api/brokers/accounts/${encodeURIComponent(accountId)}/sync/`,{method:'POST'},25000);if(brokerState()&&result.account)brokerState().setAccount(result.account,'account-sync-complete');return result}catch(error){if(brokerState())brokerState().transition(brokerState().STATES.ERROR,{lastError:error.message},'account-sync-failed');throw error}}
   function requireConnected(action='perform this action'){const state=brokerState()?.get();if(!state?.account||state.status===brokerState().STATES.NO_BROKER||state.status===brokerState().STATES.DISCONNECTED){const error=new Error(`Connect a broker before you ${action}.`);error.code='BROKER_NOT_CONNECTED';throw error}return state}
   function applyBrokerEvent(event={}){if(!brokerState())return;const type=String(event.type||event.event||'').toLowerCase(),payload=event.data||event.payload||event;if(['broker_connected','connection.connected','connected'].includes(type))return brokerState().transition(brokerState().STATES.CONNECTED,{connection:payload},'broker-event-connected');if(['broker_disconnected','connection.disconnected','disconnected'].includes(type))return brokerState().transition(brokerState().STATES.DISCONNECTED,{connection:payload},'broker-event-disconnected');if(['account.updated','account_update','account'].includes(type))return brokerState().setAccount(payload.account||payload,'broker-event-account');if(['positions.updated','positions'].includes(type))return brokerState().patch({positions:list(payload.positions||payload)},'broker-event-positions');if(['orders.updated','orders'].includes(type))return brokerState().patch({orders:list(payload.orders||payload)},'broker-event-orders');if(['trades.updated','trades'].includes(type))return brokerState().patch({trades:list(payload.trades||payload)},'broker-event-trades');if(['market.updated','quote','market'].includes(type))return brokerState().patch({market:payload},'broker-event-market');return brokerState().patch({},`broker-event:${type||'unknown'}`)}
-  window.AlgoBotFrontendData=Object.freeze({request,cached,getBrokerAccounts,syncBrokerAccount,requireConnected,applyBrokerEvent,list,apiBase});
+  window.AlgoBotFrontendData=Object.freeze({request,cached,getBrokerAccounts,syncBrokerAccount,requireConnected,applyBrokerEvent,list,apiBase,sameOriginRetryPath,Execution});
   window.addEventListener('algobot:account-context-changed',()=>{cache.clear();inflight.clear();});
   window.addEventListener('algobot:account-changed',()=>{cache.clear();});
 })();
