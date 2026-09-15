@@ -83,7 +83,7 @@ class BillingPaymentFlowTests(TestCase):
     def test_invalid_timeout_does_not_break_payment_service_initialization(self):
         self.assertEqual(PaymentService().timeout, 20)
 
-    @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test")
+    @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test", INTASEND_API_BASE_URL="https://sandbox.intasend.com")
     @patch("core.services.payment_service.requests.post")
     def test_unexpected_provider_json_does_not_raise_or_return_a_checkout_url(self, post):
         response = Mock()
@@ -107,6 +107,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_test",
+        INTASEND_API_BASE_URL="https://sandbox.intasend.com",
         BILLING_SUCCESS_URL="https://algobot.dpdns.org/billing/success/",
     )
     @patch("core.services.payment_service.requests.post")
@@ -126,3 +127,9 @@ class BillingPaymentFlowTests(TestCase):
         self.assertNotIn("&", payload["redirect_url"])
         self.assertNotIn("provider=", payload["redirect_url"])
         self.assertIn(f"reference=IS-{self.user.id}-BASIC-", payload["redirect_url"])
+    @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test_example", INTASEND_API_BASE_URL="https://api.intasend.com")
+    def test_intasend_rejects_test_key_on_live_api_endpoint(self):
+        result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
+        self.assertEqual(result["url"], "")
+        self.assertIn("sandbox API URL", result["error"])
+
