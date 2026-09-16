@@ -12,6 +12,8 @@ class BacktestSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         if self.instance:
+            if self.instance.status != 'pending':
+                raise serializers.ValidationError({'status': 'Only pending backtests can be edited.'})
             immutable = {'strategy', 'symbol', 'timeframe', 'mode', 'parameters'}
             changed = immutable.intersection(attrs)
             if changed:
