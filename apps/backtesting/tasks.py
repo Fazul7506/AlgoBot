@@ -1,7 +1,7 @@
 import importlib
 import logging
 import os
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime, timezone as dt_timezone, timedelta
 from decimal import Decimal, InvalidOperation
 
 log = logging.getLogger(__name__)
@@ -116,6 +116,80 @@ def _persist_statistics(backtest, result):
     )
 
 
+def _warmup_start(backtest, minimum_history=20):
+    """Return the timestamp of the oldest warm-up observation before start."""
+    from apps.market_data.models import Candle, Tick
+
+    start_epoch = int(backtest.start_date.timestamp())
+    if str(backtest.mode).lower() == 'tick':
+        epochs = list(
+            Tick.objects.filter(symbol__symbol=backtest.symbol, epoch__lt=start_epoch)
+            .order_by('-epoch', '-id')
+            .values_list('epoch', flat=True)[:minimum_history]
+        )
+    else:
+        epochs = list(
+            Candle.objects.filter(symbol__symbol=backtest.symbol, timeframe=backtest.timeframe, epoch__lt=start_epoch)
+            .order_by('-epoch', '-id')
+            .values_list('epoch', flat=True)[:minimum_history]
+        )
+    if len(epochs) < minimum_history:
+        raise ValueError(
+            f'Insufficient historical warm-up data before the selected start: '
+            f'found {len(epochs)}, need {minimum_history}.'
+        )
+    return datetime.fromtimestamp(min(epochs), tz=dt_timezone.utc)
+
+
+def _window_result(result, start_epoch, end_epoch):
+    """Remove warm-up trades and recompute research metrics for the exact window."""
+    trades = []
+    for trade in result.get('trades', []) or []:
+        try:
+            entry = int(float(trade.get('entry_epoch')))
+            exit_epoch = int(float(trade.get('exit_epoch')))
+        except (TypeError, ValueError):
+            continue
+        if entry >= start_epoch and exit_epoch <= end_epoch:
+            trades.append(trade)
+
+    profits = [float(trade.get('profit', trade.get('pnl', 0)) or 0) for trade in trades]
+    wins = sum(p > 0 for p in profits)
+    losses = sum(p < 0 for p in profits)
+    total_profit = float(sum(profits))
+    gross_profit = float(sum(p for p in profits if p > 0))
+    gross_loss = float(abs(sum(p for p in profits if p < 0)))
+    expectancy = total_profit / len(profits) if profits else 0.0
+    profit_factor = gross_profit / gross_loss if gross_loss else (float('inf') if gross_profit else 0.0)
+    equity = [1000.0]
+    for profit in profits:
+        equity.append(equity[-1] + profit)
+    max_drawdown = max((max(equity[:i + 1]) - equity[i] for i in range(len(equity))), default=0.0)
+
+    return {
+        **result,
+        'trades': trades,
+        'total_trades': len(trades),
+        'wins': wins,
+        'losses': losses,
+        'win_rate': (wins / len(trades) * 100) if trades else 0.0,
+        'loss_rate': (losses / len(trades) * 100) if trades else 0.0,
+        'expectancy': expectancy,
+        'gross_profit': gross_profit,
+        'gross_loss': gross_loss,
+        'profit_factor': profit_factor,
+        'total_profit': total_profit,
+        'roi': total_profit / 1000 * 100,
+        'max_drawdown': max_drawdown,
+        'sharpe_ratio': 0,
+        'sortino_ratio': 0,
+        'equity_curve': equity,
+        'evaluation_start_epoch': start_epoch,
+        'evaluation_end_epoch': end_epoch,
+        'warmup_trade_count': int(result.get('total_trades', 0) or 0) - len(trades),
+    }
+
+
 @_task
 def execute_backtest(backtest_id):
     from django.db import transaction
@@ -143,10 +217,19 @@ def execute_backtest(backtest_id):
     try:
         backtest.status = 'running'
         backtest.save(update_fields=['status', 'updated_at'])
-        result = StrategyService.run_backtest(strategy, symbol=backtest.symbol, timeframe=backtest.timeframe, start_date=backtest.start_date, end_date=backtest.end_date, mode=backtest.mode)
-        result = result if isinstance(result, dict) else {}
-        confidence = _strategy_confidence(result)
-        result['strategy_confidence'] = confidence
+        evaluation_start_epoch = int(backtest.start_date.timestamp())
+        evaluation_end_epoch = int(backtest.end_date.timestamp())
+        calculation_start = _warmup_start(backtest)
+        result = StrategyService.run_backtest(
+            strategy,
+            symbol=backtest.symbol,
+            timeframe=backtest.timeframe,
+            start_date=calculation_start,
+            end_date=backtest.end_date,
+            mode=backtest.mode,
+        )
+        result = _window_result(result if isinstance(result, dict) else {}, evaluation_start_epoch, evaluation_end_epoch)
+        result['strategy_confidence'] = _strategy_confidence(result)
         result['research_training'] = {'eligible': bool(result.get('total_trades', 0)), 'purpose': 'ai_training_research_only', 'live_authority': False, 'source': 'completed_historical_backtest'}
         with transaction.atomic():
             trade_count = _persist_trades(backtest, result)
