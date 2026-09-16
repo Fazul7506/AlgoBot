@@ -102,21 +102,21 @@ class StrategyService:
                 trades.append({'index': index + 1, 'signal': signal, 'mode': mode, 'entry_price': quote, 'exit_price': next_quote, 'profit': profit, 'entry_epoch': int(current['epoch']), 'exit_epoch': int(nxt['epoch'])})
                 equity.append(equity[-1] + profit)
         else:
-            for index in range(min_history, len(candles) - 1):
-            current = candles[index]; indicators = rows[index]
-            market_data = {'symbol': symbol, 'open': float(current['open']), 'high': float(current['high']), 'low': float(current['low']), 'close': float(current['close']), 'volume': float(current['volume'] or 0), 'epoch': int(current['epoch'])}
-            closes = [float(c['close']) for c in candles[:index + 1]]
-            trend = 'up' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] > indicators['sma20'] else 'down' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] < indicators['sma20'] else 'sideways'
-            indicator_data = {**indicators, 'trend': trend, 'rsi': LiveMarketContextService._rsi(closes)}
-            strategy = strategy_cls(configuration=config, market_data=market_data, indicator_data=indicator_data)
-            strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or 'HOLD').upper()
-            if signal not in {'BUY', 'SELL'}: continue
-            next_candle = candles[index + 1]
-            entry = float(current['close'])
-            exit_price = float(next_candle['close'])
-            profit = 1.0 if (signal == 'BUY' and exit_price > entry) or (signal == 'SELL' and exit_price < entry) else -1.0
-            trades.append({'index': index + 1, 'signal': signal, 'mode': mode, 'entry_price': entry, 'exit_price': exit_price, 'profit': profit, 'entry_epoch': int(current['epoch']), 'exit_epoch': int(next_candle['epoch'])})
-            equity.append(equity[-1] + profit)
+                for index in range(min_history, len(candles) - 1):
+                current = candles[index]; indicators = rows[index]
+                market_data = {'symbol': symbol, 'open': float(current['open']), 'high': float(current['high']), 'low': float(current['low']), 'close': float(current['close']), 'volume': float(current['volume'] or 0), 'epoch': int(current['epoch'])}
+                closes = [float(c['close']) for c in candles[:index + 1]]
+                trend = 'up' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] > indicators['sma20'] else 'down' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] < indicators['sma20'] else 'sideways'
+                indicator_data = {**indicators, 'trend': trend, 'rsi': LiveMarketContextService._rsi(closes)}
+                strategy = strategy_cls(configuration=config, market_data=market_data, indicator_data=indicator_data)
+                strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or 'HOLD').upper()
+                if signal not in {'BUY', 'SELL'}: continue
+                next_candle = candles[index + 1]
+                entry = float(current['close'])
+                exit_price = float(next_candle['close'])
+                profit = 1.0 if (signal == 'BUY' and exit_price > entry) or (signal == 'SELL' and exit_price < entry) else -1.0
+                trades.append({'index': index + 1, 'signal': signal, 'mode': mode, 'entry_price': entry, 'exit_price': exit_price, 'profit': profit, 'entry_epoch': int(current['epoch']), 'exit_epoch': int(next_candle['epoch'])})
+                equity.append(equity[-1] + profit)
         profits = [trade['profit'] for trade in trades]; wins = sum(p > 0 for p in profits); losses = sum(p < 0 for p in profits); total_profit = float(sum(profits)); gross_profit = sum(p for p in profits if p > 0); gross_loss = abs(sum(p for p in profits if p < 0)); drawdown = max((max(equity[:i + 1]) - equity[i]) for i in range(len(equity))) if equity else 0
         return {'mode': mode, 'total_trades': len(profits), 'wins': wins, 'losses': losses, 'win_rate': (wins / len(profits) * 100) if profits else 0, 'expectancy': (sum(profits) / len(profits)) if profits else 0, 'sharpe_ratio': 0, 'sortino_ratio': 0, 'max_drawdown': drawdown, 'profit_factor': (gross_profit / gross_loss) if gross_loss else (float('inf') if gross_profit else 0), 'total_profit': total_profit, 'roi': total_profit / 1000 * 100, 'equity_curve': equity, 'trades': trades}
 
