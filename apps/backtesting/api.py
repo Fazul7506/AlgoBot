@@ -5,10 +5,10 @@ from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.decorators import permission_classes
 from rest_framework.exceptions import ValidationError
 from .models import Backtest, BacktestStatistics
-from .serializers import BacktestSerializer, BacktestStatisticsSerializer, BacktestTradeSerializer
+from .serializers import BacktestSerializer, BacktestStatisticsSerializer, BacktestTradeSerializer, canonical_timeframe
 from .services import ParameterOptimizationService, ReplayService
 from apps.strategies.models import Strategy as StrategyModel
-from apps.market_data.models import MarketSymbol
+from apps.market_data.models import MarketSymbol, Candle, Tick
 from apps.market_data.constants import TIMEFRAMES
 from core.billing_entitlements import check, effective_plan
 
@@ -41,17 +41,23 @@ class BacktestViewSet(viewsets.ModelViewSet):
         if not allowed:
             plan = effective_plan(self.request.user)
             raise ValidationError({'detail': f'Your {plan.name} backtest allowance has been reached for today.', 'code': 'BACKTEST_LIMIT_REACHED', 'plan': plan.key, 'used': used, 'limit': limit})
+
         data = self.request.data
         start_date = parse_datetime(str(data.get('start_date') or ''))
         end_date = parse_datetime(str(data.get('end_date') or ''))
         if not start_date or not end_date:
             raise ValidationError({'date_range': 'Valid start_date and end_date are required.'})
-        if timezone.is_naive(start_date): start_date = timezone.make_aware(start_date)
-        if timezone.is_naive(end_date): end_date = timezone.make_aware(end_date)
+        if timezone.is_naive(start_date):
+            start_date = timezone.make_aware(start_date)
+        if timezone.is_naive(end_date):
+            end_date = timezone.make_aware(end_date)
         if end_date <= start_date:
             raise ValidationError({'date_range': 'End date/time must be later than start date/time.'})
+        if end_date > timezone.now():
+            raise ValidationError({'end_date': 'Backtests are historical only; end date/time cannot be in the future.'})
+
         symbol = str(data.get('symbol') or '').strip().upper()
-        timeframe = str(data.get('timeframe') or '').strip().upper()
+        timeframe = canonical_timeframe(data.get('timeframe'))
         strategy_id = data.get('strategy_id')
         strategy_ref = str(data.get('strategy') or data.get('strategy_slug') or '').strip()
         if not symbol or not timeframe or not (strategy_id or strategy_ref):
@@ -61,6 +67,7 @@ class BacktestViewSet(viewsets.ModelViewSet):
             raise ValidationError({'symbol': 'The selected instrument is not in the active broker market catalogue.'})
         if timeframe not in TIMEFRAMES:
             raise ValidationError({'timeframe': f'The selected timeframe is not supported by AlgoBot. Supported values: {", ".join(TIMEFRAMES.keys())}.'})
+
         strategy = None
         if strategy_id:
             try:
@@ -71,9 +78,21 @@ class BacktestViewSet(viewsets.ModelViewSet):
             strategy = StrategyModel.objects.filter(slug__iexact=strategy_ref, enabled=True).first() or StrategyModel.objects.filter(name__iexact=strategy_ref, enabled=True).first()
         if not strategy:
             raise ValidationError({'strategy': 'Selected strategy does not exist in the enabled strategy catalog.'})
+
         mode = str(data.get('mode') or 'candle_close').strip().lower()
         if mode not in {'candle_close', 'tick'}:
             raise ValidationError({'mode': 'Execution mode must be candle_close or tick.'})
+
+        start_epoch = int(start_date.timestamp())
+        end_epoch = int(end_date.timestamp())
+        if mode == 'tick':
+            history_count = Tick.objects.filter(symbol=market, epoch__gte=start_epoch, epoch__lte=end_epoch).count()
+        else:
+            history_count = Candle.objects.filter(symbol=market, timeframe=timeframe, epoch__gte=start_epoch, epoch__lte=end_epoch).count()
+        if history_count <= 20:
+            source = 'ticks' if mode == 'tick' else f'{timeframe} candles'
+            raise ValidationError({'date_range': f'Insufficient broker historical data in the exact selected interval ({history_count} {source}; at least 21 are required). Choose an older or wider interval with available data.'})
+
         with transaction.atomic():
             user_model = self.request.user.__class__
             user_model.objects.select_for_update().get(pk=self.request.user.pk)
