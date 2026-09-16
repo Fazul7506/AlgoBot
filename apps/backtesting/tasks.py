@@ -123,7 +123,7 @@ def execute_backtest(backtest_id):
     try:
         backtest.status = 'running'
         backtest.save(update_fields=['status', 'updated_at'])
-        result = StrategyService.run_backtest(strategy, symbol=backtest.symbol, timeframe=backtest.timeframe, start_date=backtest.start_date, end_date=backtest.end_date)
+        result = StrategyService.run_backtest(strategy, symbol=backtest.symbol, timeframe=backtest.timeframe, start_date=backtest.start_date, end_date=backtest.end_date, mode=backtest.mode)
         result = result if isinstance(result, dict) else {}
         confidence = _strategy_confidence(result)
         result['strategy_confidence'] = confidence
