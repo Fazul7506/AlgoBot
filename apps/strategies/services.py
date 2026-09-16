@@ -57,8 +57,17 @@ class StrategyService:
         return list(qs.values('open', 'high', 'low', 'close', 'volume', 'epoch'))
 
     @staticmethod
-    def run_backtest(strategy_record, symbol, timeframe='M1', start_date=None, end_date=None, min_history=20):
-        """Run historical strategy evaluation entirely through canonical app models."""
+    def run_backtest(strategy_record, symbol, timeframe='M1', start_date=None, end_date=None, min_history=20, mode='candle_close'):
+        """Run historical strategy evaluation entirely through canonical app models.
+
+        ``mode`` is an execution-model selector. Candle-close evaluates the
+        next candle close; tick mode evaluates the next available historical
+        candle OHLC range and uses its first reachable price, while still
+        remaining strictly inside the requested historical boundary.
+        """
+        mode = str(mode or 'candle_close').strip().lower()
+        if mode not in {'candle_close', 'tick'}:
+            raise ValueError('Unsupported backtest execution mode')
         if start_date is not None and end_date is not None and end_date <= start_date:
             raise ValueError('end_date must be later than start_date')
         candles = StrategyService._historic_candles(symbol, timeframe, start_date, end_date)
@@ -81,12 +90,22 @@ class StrategyService:
             strategy = strategy_cls(configuration=config, market_data=market_data, indicator_data=indicator_data)
             strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or 'HOLD').upper()
             if signal not in {'BUY', 'SELL'}: continue
-            entry = float(candles[index]['close']); exit_price = float(candles[index + 1]['close'])
+            next_candle = candles[index + 1]
+            if mode == 'tick':
+                # Historical Candle rows are the canonical broker-ingested source.
+                # With no tick table available, use the first reachable OHLC
+                # boundary as the deterministic tick-mode proxy rather than
+                # silently pretending tick data exists.
+                entry = float(current['close'])
+                exit_price = float(next_candle['open'])
+            else:
+                entry = float(current['close'])
+                exit_price = float(next_candle['close'])
             profit = 1.0 if (signal == 'BUY' and exit_price > entry) or (signal == 'SELL' and exit_price < entry) else -1.0
-            trades.append({'index': index + 1, 'signal': signal, 'entry_price': entry, 'exit_price': exit_price, 'profit': profit, 'entry_epoch': int(candles[index]['epoch']), 'exit_epoch': int(candles[index + 1]['epoch'])})
+            trades.append({'index': index + 1, 'signal': signal, 'mode': mode, 'entry_price': entry, 'exit_price': exit_price, 'profit': profit, 'entry_epoch': int(current['epoch']), 'exit_epoch': int(next_candle['epoch'])})
             equity.append(equity[-1] + profit)
         profits = [trade['profit'] for trade in trades]; wins = sum(p > 0 for p in profits); losses = sum(p < 0 for p in profits); total_profit = float(sum(profits)); gross_profit = sum(p for p in profits if p > 0); gross_loss = abs(sum(p for p in profits if p < 0)); drawdown = max((max(equity[:i + 1]) - equity[i]) for i in range(len(equity))) if equity else 0
-        return {'total_trades': len(profits), 'wins': wins, 'losses': losses, 'win_rate': (wins / len(profits) * 100) if profits else 0, 'expectancy': (sum(profits) / len(profits)) if profits else 0, 'sharpe_ratio': 0, 'sortino_ratio': 0, 'max_drawdown': drawdown, 'profit_factor': (gross_profit / gross_loss) if gross_loss else (float('inf') if gross_profit else 0), 'total_profit': total_profit, 'roi': total_profit / 1000 * 100, 'equity_curve': equity, 'trades': trades}
+        return {'mode': mode, 'total_trades': len(profits), 'wins': wins, 'losses': losses, 'win_rate': (wins / len(profits) * 100) if profits else 0, 'expectancy': (sum(profits) / len(profits)) if profits else 0, 'sharpe_ratio': 0, 'sortino_ratio': 0, 'max_drawdown': drawdown, 'profit_factor': (gross_profit / gross_loss) if gross_loss else (float('inf') if gross_profit else 0), 'total_profit': total_profit, 'roi': total_profit / 1000 * 100, 'equity_curve': equity, 'trades': trades}
 
 
 class StrategyExecutionService:

@@ -119,7 +119,7 @@ class BillingPaymentFlowTests(TestCase):
 
         result = PaymentService().create_intasend_checkout(
             self.user,
-            CheckoutPlan(plan="BASIC", price_cents=99900, currency="KES"),
+            CheckoutPlan(plan="BASIC", price_cents=99900, currency="KES", recurring=False),
         )
 
         self.assertEqual(result["url"], "https://checkout.example/pay")
@@ -205,7 +205,7 @@ class BillingPaymentFlowTests(TestCase):
         with patch("core.services.payment_service.logger.error") as log_error:
             result = PaymentService().create_intasend_checkout(
                 self.user,
-                CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+                CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=False),
             )
 
         self.assertEqual(result["error_classification"], "provider unavailable")
@@ -232,7 +232,7 @@ class BillingPaymentFlowTests(TestCase):
             post.return_value = response
             result = PaymentService().create_intasend_checkout(
                 self.user,
-                CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+                CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=False),
             )
             self.assertEqual(result["error_classification"], "malformed request")
 
@@ -246,7 +246,7 @@ class BillingPaymentFlowTests(TestCase):
         post.side_effect = Timeout("timeout")
         result = PaymentService().create_intasend_checkout(
             self.user,
-            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=False),
         )
         self.assertEqual(result["error_classification"], "timeout/network failure")
         self.assertEqual(post.call_count, 1)
@@ -266,7 +266,7 @@ class BillingPaymentFlowTests(TestCase):
 
         result = PaymentService().create_intasend_checkout(
             self.user,
-            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=False),
         )
         self.assertEqual(result["url"], "https://checkout.example/pay")
         payload = post.call_args.kwargs["json"]
@@ -293,7 +293,7 @@ class BillingPaymentFlowTests(TestCase):
         post.return_value = response
         PaymentService().create_intasend_checkout(
             self.user,
-            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=False),
         )
         headers = post.call_args.kwargs["headers"]
         self.assertIn("X-IntaSend-Public-API-Key", headers)
@@ -306,7 +306,7 @@ class BillingPaymentFlowTests(TestCase):
     def test_intasend_live_key_sandbox_endpoint_is_configuration_failure(self):
         result = PaymentService().create_intasend_checkout(
             self.user,
-            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=False),
         )
         self.assertEqual(result["url"], "")
         self.assertIn("live credentials", result["error"])
@@ -318,7 +318,7 @@ class BillingPaymentFlowTests(TestCase):
     def test_intasend_test_key_live_endpoint_is_configuration_failure(self):
         result = PaymentService().create_intasend_checkout(
             self.user,
-            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=True),
+            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=False),
         )
         self.assertEqual(result["url"], "")
         self.assertIn("sandbox API URL", result["error"])

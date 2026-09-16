@@ -52,6 +52,9 @@ class PaymentService:
         return {"url": "", "provider": selected, "error": "Unsupported payment provider"}
 
     def create_intasend_checkout(self, user, subscription_plan):
+        if bool(getattr(subscription_plan, "recurring", False)):
+            return self.create_intasend_subscription(user, subscription_plan)
+
         if not self.intasend_public_key:
             return self._configuration_error("INTASEND_PUBLIC_KEY")
         environment_error = self._intasend_environment_error()
@@ -185,6 +188,136 @@ class PaymentService:
                 response=None,
                 classification="timeout/network failure",
                 exception=exc,
+            )
+            return {"url": "", "provider": self.INTASEND, "error": "Payment provider is temporarily unavailable. Please try again.", "error_classification": "timeout/network failure"}
+
+    def create_intasend_subscription(self, user, subscription_plan):
+        """Create a real IntaSend recurring subscription and return its setup URL."""
+        if not self.intasend_secret_key:
+            return self._configuration_error("INTASEND_SECRET_KEY")
+        if not self.intasend_public_key:
+            return self._configuration_error("INTASEND_PUBLIC_KEY")
+        environment_error = self._intasend_environment_error()
+        if environment_error:
+            return {"url": "", "provider": self.INTASEND, "error": environment_error, "error_classification": "configuration/authentication failure"}
+
+        amount, currency = self._amount_and_currency(subscription_plan)
+        reference = str(getattr(subscription_plan, "reference", "") or self._reference("IS", user, subscription_plan)).strip()
+        headers = {
+            "Authorization": f"Bearer {self.intasend_secret_key}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        base = self.intasend_base_url
+        customer_payload = {
+            "email": getattr(user, "email", "") or "",
+            "first_name": getattr(user, "first_name", "") or getattr(user, "username", "Customer"),
+            "last_name": getattr(user, "last_name", "") or "",
+            "reference": f"{reference}-CUSTOMER",
+            "country": "KE" if currency.upper() == "KES" else "",
+        }
+        plan_name = f"AlgoBot-{str(getattr(subscription_plan, 'plan', 'PLAN')).upper()}"[:32]
+        plan_payload = {
+            "name": plan_name,
+            "frequency": 1,
+            "frequency_unit": "M",
+            "billing_cycles": 0,
+            "currency": currency.upper(),
+            "amount": self._decimal_string(amount),
+            "reference": reference,
+            "redirect_url": self._callback_url("BILLING_SUCCESS_URL", "/billing/success/", {"reference": reference}),
+        }
+        try:
+            customer_response = requests.post(
+                f"{base}/api/v1/subscriptions-customers/",
+                json=customer_payload, headers=headers, timeout=self.timeout,
+            )
+            customer_data = self._json_or_error(customer_response)
+            if not customer_response.ok:
+                self._log_provider_diagnostic(
+                    provider=self.INTASEND, endpoint=self._endpoint_for_log(base, "/api/v1/subscriptions-customers/"),
+                    method="POST", status_code=customer_response.status_code,
+                    request_id=self._provider_request_id(customer_response), merchant_reference=reference,
+                    plan=getattr(subscription_plan, "plan", ""), currency=currency, amount=amount,
+                    recurring=True, payload=customer_payload, response=customer_data,
+                    classification=self._classify_provider_failure(customer_response.status_code, customer_data),
+                )
+                return {"url": "", "provider": self.INTASEND, "error": self._checkout_http_error(self.INTASEND, customer_response.status_code, customer_data), "error_classification": self._classify_provider_failure(customer_response.status_code, customer_data)}
+
+            customer_id = customer_data.get("customer_id") or customer_data.get("id")
+            if not customer_id:
+                return {"url": "", "provider": self.INTASEND, "error": "IntaSend returned no subscription customer ID.", "error_classification": "malformed provider response"}
+
+            plan_response = requests.post(
+                f"{base}/api/v1/subscriptions-plans/",
+                json=plan_payload, headers=headers, timeout=self.timeout,
+            )
+            plan_data = self._json_or_error(plan_response)
+            if not plan_response.ok:
+                self._log_provider_diagnostic(
+                    provider=self.INTASEND, endpoint=self._endpoint_for_log(base, "/api/v1/subscriptions-plans/"),
+                    method="POST", status_code=plan_response.status_code,
+                    request_id=self._provider_request_id(plan_response), merchant_reference=reference,
+                    plan=getattr(subscription_plan, "plan", ""), currency=currency, amount=amount,
+                    recurring=True, payload=plan_payload, response=plan_data,
+                    classification=self._classify_provider_failure(plan_response.status_code, plan_data),
+                )
+                return {"url": "", "provider": self.INTASEND, "error": self._checkout_http_error(self.INTASEND, plan_response.status_code, plan_data), "error_classification": self._classify_provider_failure(plan_response.status_code, plan_data)}
+
+            plan_id = plan_data.get("plan_id") or plan_data.get("id")
+            if not plan_id:
+                return {"url": "", "provider": self.INTASEND, "error": "IntaSend returned no subscription plan ID.", "error_classification": "malformed provider response"}
+
+            subscribe_payload = {
+                "customer_id": customer_id,
+                "plan_id": plan_id,
+                "reference": reference,
+                "start_date": datetime.now(dt_timezone.utc).date().isoformat(),
+                "redirect_url": self._callback_url("BILLING_SUCCESS_URL", "/billing/success/", {"reference": reference}),
+            }
+            subscribe_response = requests.post(
+                f"{base}/api/v1/subscriptions/",
+                json=subscribe_payload, headers=headers, timeout=self.timeout,
+            )
+            subscribe_data = self._json_or_error(subscribe_response)
+            request_id = self._provider_request_id(subscribe_response)
+            if not subscribe_response.ok:
+                classification = self._classify_provider_failure(subscribe_response.status_code, subscribe_data)
+                self._log_provider_diagnostic(
+                    provider=self.INTASEND, endpoint=self._endpoint_for_log(base, "/api/v1/subscriptions/"),
+                    method="POST", status_code=subscribe_response.status_code, request_id=request_id,
+                    merchant_reference=reference, plan=getattr(subscription_plan, "plan", ""),
+                    currency=currency, amount=amount, recurring=True, payload=subscribe_payload,
+                    response=subscribe_data, classification=classification,
+                )
+                return {"url": "", "provider": self.INTASEND, "error": self._checkout_http_error(self.INTASEND, subscribe_response.status_code, subscribe_data), "error_classification": classification}
+
+            setup_url = subscribe_data.get("setup_url") or subscribe_data.get("url")
+            subscription_id = subscribe_data.get("subscription_id") or subscribe_data.get("id")
+            if not self._is_checkout_url(setup_url) or not subscription_id:
+                return {"url": "", "provider": self.INTASEND, "error": "IntaSend returned incomplete subscription checkout data.", "error_classification": "malformed provider response"}
+
+            self._log_provider_diagnostic(
+                provider=self.INTASEND, endpoint=self._endpoint_for_log(base, "/api/v1/subscriptions/"),
+                method="POST", status_code=subscribe_response.status_code, request_id=request_id,
+                merchant_reference=reference, plan=getattr(subscription_plan, "plan", ""),
+                currency=currency, amount=amount, recurring=True,
+                payload=subscribe_payload,
+                response={"setup_url_present": True, "subscription_id_present": True},
+                classification="success",
+            )
+            return {
+                "provider": self.INTASEND, "session_id": subscription_id,
+                "invoice_id": subscription_id, "reference": reference, "url": setup_url,
+                "subscription_id": subscription_id, "provider_plan_id": plan_id, "provider_customer_id": customer_id,
+            }
+        except requests.RequestException as exc:
+            self._log_provider_diagnostic(
+                provider=self.INTASEND, endpoint=self._endpoint_for_log(base, "/api/v1/subscriptions/"),
+                method="POST", status_code=None, request_id=None, merchant_reference=reference,
+                plan=getattr(subscription_plan, "plan", ""), currency=currency, amount=amount,
+                recurring=True, payload={"reference": reference}, response=None,
+                classification="timeout/network failure", exception=exc,
             )
             return {"url": "", "provider": self.INTASEND, "error": "Payment provider is temporarily unavailable. Please try again.", "error_classification": "timeout/network failure"}
 

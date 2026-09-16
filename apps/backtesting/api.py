@@ -5,7 +5,7 @@ from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.decorators import permission_classes
 from rest_framework.exceptions import ValidationError
 from .models import Backtest, BacktestStatistics
-from .serializers import BacktestSerializer, BacktestStatisticsSerializer
+from .serializers import BacktestSerializer, BacktestStatisticsSerializer, BacktestTradeSerializer
 from .services import ParameterOptimizationService, ReplayService
 from apps.strategies.models import Strategy as StrategyModel
 from apps.market_data.models import MarketSymbol
@@ -63,8 +63,20 @@ class BacktestViewSet(viewsets.ModelViewSet):
         strategy = StrategyModel.objects.filter(name__iexact=strategy_name).first()
         if not strategy:
             raise ValidationError({'strategy': 'Selected strategy does not exist in the strategy catalog.'})
-        backtest = serializer.save(user=self.request.user, strategy=strategy.name, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date, mode=str(data.get('mode') or 'candle_close'), status='pending')
-        self._queue(backtest)
+        mode = str(data.get('mode') or 'candle_close').strip().lower()
+        if mode not in {'candle_close', 'tick'}:
+            raise ValidationError({'mode': 'Execution mode must be candle_close or tick.'})
+        with transaction.atomic():
+            user_model = self.request.user.__class__
+            user_model.objects.select_for_update().get(pk=self.request.user.pk)
+            duplicate = Backtest.objects.filter(
+                user=self.request.user, strategy=strategy.name, symbol=symbol, timeframe=timeframe,
+                start_date=start_date, end_date=end_date, mode=mode, status__in=['pending', 'running']
+            ).first()
+            if duplicate:
+                raise ValidationError({'detail': 'An identical backtest is already queued or running.', 'code': 'DUPLICATE_BACKTEST', 'id': duplicate.pk})
+            backtest = serializer.save(user=self.request.user, strategy=strategy.name, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date, mode=mode, status='pending')
+            self._queue(backtest)
 
     def perform_update(self, serializer):
         instance = self.get_object()
@@ -84,6 +96,38 @@ class BacktestViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
         instance = self.get_queryset().get(pk=serializer.instance.pk)
         return response.Response(self.get_serializer(instance).data, status=status.HTTP_202_ACCEPTED, headers=self.get_success_headers(serializer.data))
+
+    @decorators.action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        backtest = self.get_object()
+        if backtest.status not in {'pending', 'running'}:
+            raise ValidationError({'status': 'Only pending or running backtests can be cancelled.'})
+        backtest.status = 'cancelled'
+        backtest.result_snapshot = {**(backtest.result_snapshot or {}), 'status': 'cancelled', 'error': 'Cancelled by user.'}
+        backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+        return response.Response(self.get_serializer(backtest).data)
+
+    @decorators.action(detail=True, methods=['post'])
+    def retry(self, request, pk=None):
+        backtest = self.get_object()
+        if backtest.status not in {'failed', 'cancelled'}:
+            raise ValidationError({'status': 'Only failed or cancelled backtests can be retried.'})
+        with transaction.atomic():
+            backtest.status = 'pending'
+            backtest.result_snapshot = {}
+            backtest.result_version += 1
+            backtest.save(update_fields=['status', 'result_snapshot', 'result_version', 'updated_at'])
+            self._queue(backtest)
+        return response.Response(self.get_serializer(backtest).data, status=status.HTTP_202_ACCEPTED)
+
+    @decorators.action(detail=True, methods=['get'])
+    def results(self, request, pk=None):
+        backtest = self.get_object()
+        data = self.get_serializer(backtest).data
+        data['trades'] = BacktestTradeSerializer(backtest.trades.all(), many=True).data
+        statistics = getattr(backtest, 'statistics', None)
+        data['statistics'] = BacktestStatisticsSerializer(statistics).data if statistics else None
+        return response.Response(data)
 
 
 class StatisticsViewSet(viewsets.ReadOnlyModelViewSet):
