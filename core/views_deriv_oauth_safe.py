@@ -76,7 +76,11 @@ def callback(request):
             user = User.objects.create(username=f"deriv_{selected_account_id}", first_name="Deriv")
             user.set_unusable_password()
             user.save(update_fields=["password"])
-    auth_login(request, user)
+    # Explicitly bind the OAuth user to Django's browser session backend.
+    # This prevents the post-OAuth session from becoming anonymous and causing
+    # the broker API to return an authentication-credentials error.
+    auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    request.session.save()
     _ensure_defaults(user)
     expires_in = int(token_data.get("expires_in", 3600))
     expires_at = DerivOAuthService.parse_token_expiry(expires_in)
