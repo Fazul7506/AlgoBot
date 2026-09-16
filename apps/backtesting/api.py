@@ -97,6 +97,38 @@ class BacktestViewSet(viewsets.ModelViewSet):
         instance = self.get_queryset().get(pk=serializer.instance.pk)
         return response.Response(self.get_serializer(instance).data, status=status.HTTP_202_ACCEPTED, headers=self.get_success_headers(serializer.data))
 
+    @decorators.action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        backtest = self.get_object()
+        if backtest.status not in {'pending', 'running'}:
+            raise ValidationError({'status': 'Only pending or running backtests can be cancelled.'})
+        backtest.status = 'cancelled'
+        backtest.result_snapshot = {**(backtest.result_snapshot or {}), 'status': 'cancelled', 'error': 'Cancelled by user.'}
+        backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+        return response.Response(self.get_serializer(backtest).data)
+
+    @decorators.action(detail=True, methods=['post'])
+    def retry(self, request, pk=None):
+        backtest = self.get_object()
+        if backtest.status not in {'failed', 'cancelled'}:
+            raise ValidationError({'status': 'Only failed or cancelled backtests can be retried.'})
+        with transaction.atomic():
+            backtest.status = 'pending'
+            backtest.result_snapshot = {}
+            backtest.result_version += 1
+            backtest.save(update_fields=['status', 'result_snapshot', 'result_version', 'updated_at'])
+            self._queue(backtest)
+        return response.Response(self.get_serializer(backtest).data, status=status.HTTP_202_ACCEPTED)
+
+    @decorators.action(detail=True, methods=['get'])
+    def results(self, request, pk=None):
+        backtest = self.get_object()
+        data = self.get_serializer(backtest).data
+        data['trades'] = BacktestTradeSerializer(backtest.trades.all(), many=True).data
+        statistics = getattr(backtest, 'statistics', None)
+        data['statistics'] = BacktestStatisticsSerializer(statistics).data if statistics else None
+        return response.Response(data)
+
 
 class StatisticsViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BacktestStatisticsSerializer
