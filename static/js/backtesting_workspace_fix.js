@@ -1,25 +1,311 @@
 (() => {
 'use strict';
-const $=(s,r=document)=>r.querySelector(s),form=$('[data-backtest-form]'),table=$('[data-backtest-table]');
-if(!form||!table)return;
-const request=async(url,options={},timeout=15000)=>{if(window.AlgoBotFrontendData?.request)return window.AlgoBotFrontendData.request(url,options,timeout);const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);try{const r=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json',...(options.headers||{})},signal:c.signal,...options}),txt=await r.text();let d={};try{d=txt?JSON.parse(txt):{}}catch{d={detail:txt}}if(!r.ok)throw new Error(d.detail||d.message||Object.values(d).flat().join(' ')||`Request failed (${r.status})`);return d}finally{clearTimeout(t)}};
-const arr=v=>Array.isArray(v)?v:(v?.results||v?.data||v?.items||v?.markets||v?.strategies||[]),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-const csrf=()=>decodeURIComponent((document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1]||'');
-let rows=[];const strategy=form.elements.strategy_id,symbol=form.elements.symbol,timeframe=form.elements.timeframe;
-const state=m=>{table.innerHTML=`<tbody><tr><td colspan="11" class="backtest-loading-row">${esc(m)}</td></tr></tbody>`};
-function options(el,items,placeholder){el.innerHTML=`<option value="">${esc(placeholder)}</option>`;items.forEach(x=>{const o=document.createElement('option');o.value=x.value;o.textContent=x.label;el.appendChild(o)})}
-function marketValue(m){return String(m.symbol||m.name||m.code||m.instrument||m.market_symbol||'').trim()}
-function marketTimes(m){return m.supported_timeframes||m.timeframes||m.available_timeframes||m.intervals||[]}
-async function loadCatalog(){const [ss0,mm0]=await Promise.all([request('/api/strategies/available/'),request('/api/markets/?tradeable=true&page_size=1000')]);const ss=arr(ss0.strategies||ss0).filter(x=>x.enabled!==false).map(x=>({value:String(x.id),label:`${x.name||x.slug||'Strategy'}${x.version?` v${x.version}`:''}`}));const ms=arr(mm0.markets||mm0).filter(x=>x.is_active!==false).map(x=>{const v=marketValue(x);return {value:v,label:`${x.display_name||x.name||v} — ${v}`,raw:x}}).filter(x=>x.value);options(strategy,ss,'Select strategy from catalog…');options(symbol,ms,'Select broker instrument…');symbol._marketMeta=ms.reduce((a,x)=>(a[x.value]=x.raw,a),{});hydrateFromQuery()}
-function refreshTimeframes(preferred){const m=symbol._marketMeta?.[symbol.value],vs=Array.isArray(marketTimes(m))?marketTimes(m).map(x=>typeof x==='object'?(x.value||x.name||x.code):x).map(String).map(x=>x.trim()).filter(Boolean):[];options(timeframe,[...new Set(vs)].map(v=>({value:v,label:v})),vs.length?'Select broker-supported timeframe…':'No broker timeframe data available');timeframe.value=preferred&&vs.includes(preferred)?preferred:(vs[0]||'');updateRangeNote()}
-symbol.addEventListener('change',()=>refreshTimeframes());
-function hydrateFromQuery(){const q=new URLSearchParams(location.search),sid=q.get('strategy_id'),sy=q.get('symbol'),tf=q.get('timeframe');if(sid&&[...strategy.options].some(o=>o.value===sid))strategy.value=sid;if(sy&&[...symbol.options].some(o=>o.value===sy))symbol.value=sy;refreshTimeframes(tf)}
-function updateRangeNote(){const s=form.elements.start_date?.value,e=form.elements.end_date?.value,n=$('[data-backtest-range]');if(n)n.textContent=s&&e?`Historical boundary: ${s} → ${e}. Only broker data inside this exact interval will be evaluated.`:'Choose a broker instrument, timeframe, and exact historical interval.'}
-['start_date','end_date'].forEach(k=>form.elements[k]?.addEventListener('input',updateRangeNote));
-function render(){const keys=[['strategy','Strategy'],['symbol','Symbol'],['timeframe','Timeframe'],['start_date','Start'],['end_date','End'],['status','Status'],['net_profit','Net profit'],['total_trades','Trades'],['strategy_confidence','Confidence'],['created_at','Created']];table.innerHTML=`<thead><tr>${keys.map(x=>`<th>${x[1]}</th>`).join('')}<th>Options</th></tr></thead><tbody></tbody>`;const b=$('tbody',table);b.innerHTML=rows.length?rows.map(x=>{const r=x.result_snapshot?.result||x.result_snapshot||{},net=r.net_profit??r.total_profit??'—',trades=r.total_trades??(Array.isArray(r.trades)?r.trades.length:'—'),conf=r.strategy_confidence!=null?`${r.strategy_confidence}%`:'—';return `<tr data-search="${esc(`${x.strategy||''} ${x.symbol||''}`.toLowerCase())}">${keys.map(k=>{let v=x[k[0]];if(k[0]==='net_profit')v=net;if(k[0]==='total_trades')v=trades;if(k[0]==='strategy_confidence')v=conf;return `<td>${esc(v??'—')}</td>`}).join('')}<td class="backtest-actions"><button type="button" class="btn ghost" data-results="${esc(x.id)}">View Results</button>${String(x.status).toLowerCase()==='pending'?`<button type="button" class="btn ghost" data-edit="${esc(x.id)}">Edit</button>`:''}${['pending','running'].includes(String(x.status).toLowerCase())?`<button type="button" class="btn ghost" data-cancel="${esc(x.id)}">Cancel</button>`:''}${['failed','cancelled'].includes(String(x.status).toLowerCase())?`<button type="button" class="btn ghost" data-retry="${esc(x.id)}">Retry</button>`:''}<button type="button" class="btn danger" data-delete="${esc(x.id)}">Delete</button></td></tr>`}).join(''):'<tr><td colspan="11">No backtests yet. Configure a saved strategy and run your first research job.</td></tr>';const set=(s,v)=>{const e=$(s);if(e)e.textContent=v};set('[data-backtest-count]',rows.length);set('[data-backtest-completed]',rows.filter(x=>String(x.status).toLowerCase()==='completed').length);set('[data-backtest-running]',rows.filter(x=>['running','pending'].includes(String(x.status).toLowerCase())).length);set('[data-backtest-failed]',rows.filter(x=>['failed','cancelled'].includes(String(x.status).toLowerCase())).length)}
-async function load(){try{rows=arr(await request('/api/backtests/'));render()}catch(e){state(`Unable to load backtest history: ${e.message}`)}}
-async function poll(id){for(let i=0;i<900;i++){const item=await request(`/api/backtests/${encodeURIComponent(id)}/`);rows=[item,...rows.filter(x=>String(x.id)!==String(id))];render();if(['completed','failed','cancelled'].includes(String(item.status).toLowerCase()))return item;await new Promise(r=>setTimeout(r,2000))}throw Error('Worker timeout; use Refresh to check the saved job.')}
-form.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget,s=new Date(f.elements.start_date.value),n=new Date(f.elements.end_date.value);if(!strategy.value||!symbol.value||!timeframe.value)return state('Select strategy, broker instrument, and supported timeframe.');if(!Number.isFinite(s.getTime())||!Number.isFinite(n.getTime())||n<=s)return state('End date/time must be later than start date/time.');const b=f.querySelector('button[type=submit]');if(b){b.disabled=true;b.textContent='Submitting…'}try{const payload=Object.fromEntries(new FormData(f).entries());payload.strategy=strategy.options[strategy.selectedIndex].textContent.replace(/\s+v\S+$/,'').trim();delete payload.strategy_id;const result=await request('/api/backtests/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(payload)});if(!result.id)throw Error('Server did not return a backtest job id.');state(`Backtest queued for ${payload.start_date} → ${payload.end_date}.`);const done=await poll(result.id);state(String(done.status).toLowerCase()==='completed'?'Backtest completed; results loaded below.':`Backtest ${done.status}; recorded details loaded below.`);await load()}catch(x){state(`Backtest failed: ${x.message||'request failed'}`)}finally{if(b){b.disabled=false;b.textContent='Run backtest'}}});
-table.addEventListener('click',async e=>{const edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]'),results=e.target.closest('[data-results]'),cancel=e.target.closest('[data-cancel]'),retry=e.target.closest('[data-retry]');if(!edit&&!del&&!results&&!cancel&&!retry)return;const id=(edit||del||results||cancel||retry).dataset.edit||(edit||del||results||cancel||retry).dataset.delete||(edit||del||results||cancel||retry).dataset.results||(edit||del||results||cancel||retry).dataset.cancel||(edit||del||results||cancel||retry).dataset.retry,x=rows.find(r=>String(r.id)===String(id));if(!x)return;if(results){try{const detail=await request(`/api/backtests/${encodeURIComponent(id)}/results/`);state(JSON.stringify(detail.result_snapshot||detail.statistics||detail));}catch(err){state(`Results failed: ${err.message}`)}return;}if(cancel){if(!confirm('Cancel this backtest?'))return;try{await request(`/api/backtests/${encodeURIComponent(id)}/cancel/`,{method:'POST',headers:{'X-CSRFToken':csrf()}});await load()}catch(err){state(`Cancel failed: ${err.message}`)}return;}if(retry){try{await request(`/api/backtests/${encodeURIComponent(id)}/retry/`,{method:'POST',headers:{'X-CSRFToken':csrf()}});await load();await poll(id)}catch(err){state(`Retry failed: ${err.message}`)}return;}if(del){if(!confirm('Delete this backtest and its recorded results?'))return;try{await request(`/api/backtests/${encodeURIComponent(id)}/`,{method:'DELETE',headers:{'X-CSRFToken':csrf()}});await load()}catch(err){state(`Delete failed: ${err.message}`)}return}const start=prompt('Start date/time (YYYY-MM-DDTHH:MM)',String(x.start_date||'').slice(0,16)),end=prompt('End date/time (YYYY-MM-DDTHH:MM)',String(x.end_date||'').slice(0,16));if(!start||!end)return;if(new Date(end)<=new Date(start))return state('End date/time must be later than start date/time.');try{await request(`/api/backtests/${encodeURIComponent(id)}/`,{method:'PATCH',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({start_date:start,end_date:end})});await load()}catch(err){state(`Edit failed: ${err.message}`)}});
-$('[data-backtest-search]')?.addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();table.querySelectorAll('[data-search]').forEach(r=>r.hidden=!r.dataset.search.includes(q))});$('[data-backtest-refresh]')?.addEventListener('click',load);loadCatalog().catch(e=>state(`Unable to load broker/strategy catalog: ${e.message}`));load();
+
+const $ = (selector, root = document) => root.querySelector(selector);
+const form = $('[data-backtest-form]');
+const table = $('[data-backtest-table]');
+if (!form || !table) return;
+
+const strategy = form.elements.strategy_id;
+const symbol = form.elements.symbol;
+const timeframe = form.elements.timeframe;
+const DEFAULT_TIMEFRAMES = ['tick','1s','5s','15s','30s','1m','2m','5m','10m','15m','30m','1h','4h','1d'];
+let rows = [];
+let marketMeta = {};
+let catalogueTimeframes = [];
+
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+  '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
+}[char]));
+
+const csrf = () => decodeURIComponent((document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) || [])[1] || '');
+
+async function request(url, options = {}, timeout = 15000) {
+  if (window.AlgoBotFrontendData?.request) return window.AlgoBotFrontendData.request(url, options, timeout);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, {
+      credentials: 'same-origin',
+      headers: {Accept: 'application/json', ...(options.headers || {})},
+      signal: controller.signal,
+      ...options,
+    });
+    const text = await response.text();
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; } catch { data = {detail: text}; }
+    if (!response.ok) {
+      const detail = data.detail || data.message || Object.values(data).flat().join(' ') || `Request failed (${response.status})`;
+      throw new Error(detail);
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function list(value, keys = []) {
+  if (Array.isArray(value)) return value;
+  for (const key of keys) if (Array.isArray(value?.[key])) return value[key];
+  return [];
+}
+
+function setOptions(element, items, placeholder) {
+  element.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>`;
+  for (const item of items) {
+    const option = document.createElement('option');
+    option.value = String(item.value);
+    option.textContent = item.label;
+    element.appendChild(option);
+  }
+}
+
+function normaliseTimeframes(value) {
+  return [...new Set(list(value).map(item => {
+    if (item && typeof item === 'object') return item.value || item.name || item.code || item.timeframe;
+    return item;
+  }).map(item => String(item ?? '').trim()).filter(Boolean))];
+}
+
+function marketValue(item) {
+  return String(item?.symbol || item?.name || item?.code || item?.instrument || item?.market_symbol || '').trim();
+}
+
+function updateRangeNote() {
+  const start = form.elements.start_date?.value;
+  const end = form.elements.end_date?.value;
+  const note = $('[data-backtest-range]');
+  if (note) note.textContent = start && end
+    ? `Historical boundary: ${start} → ${end}. Only broker data inside this exact interval will be evaluated.`
+    : 'Choose a broker instrument, timeframe, and exact historical interval.';
+}
+
+function refreshTimeframes(preferred = '') {
+  const market = marketMeta[symbol.value];
+  const marketFrames = normaliseTimeframes(market?.supported_timeframes || market?.timeframes || market?.available_timeframes);
+  const frames = marketFrames.length ? marketFrames : (catalogueTimeframes.length ? catalogueTimeframes : DEFAULT_TIMEFRAMES);
+  setOptions(timeframe, frames.map(value => ({value, label: value})), 'Select broker-supported timeframe…');
+  timeframe.value = preferred && frames.includes(preferred) ? preferred : (frames[0] || '');
+  updateRangeNote();
+}
+
+async function loadStrategies() {
+  const payload = await request('/api/strategies/available/');
+  const items = list(payload?.strategies, ['results','data','items']);
+  const options = items.filter(item => item?.enabled !== false).map(item => ({
+    value: String(item.id),
+    label: `${item.name || item.slug || 'Strategy'}${item.version ? ` v${item.version}` : ''}`,
+  })).filter(item => item.value && item.value !== 'undefined');
+  setOptions(strategy, options, 'Select strategy from catalog…');
+  return options;
+}
+
+async function loadBrokerCatalogue() {
+  let payload;
+  try {
+    payload = await request('/api/market/broker-catalogue/');
+  } catch (primaryError) {
+    // The legacy authenticated catalogue endpoint is a safe fallback when the
+    // connected-broker endpoint is temporarily unavailable.
+    payload = await request('/market-catalogue/');
+  }
+
+  const items = list(payload?.symbols, ['results','data','items','markets']);
+  const options = items.map(item => {
+    const value = marketValue(item);
+    return {
+      value,
+      label: `${item?.display_name || item?.name || value} — ${value}`,
+      raw: item,
+    };
+  }).filter(item => item.value);
+
+  marketMeta = {};
+  for (const item of options) marketMeta[item.value] = item.raw;
+  catalogueTimeframes = normaliseTimeframes(payload?.supported_timeframes);
+  setOptions(symbol, options, 'Select broker instrument…');
+  refreshTimeframes();
+  hydrateFromQuery();
+  return options;
+}
+
+function hydrateFromQuery() {
+  const query = new URLSearchParams(window.location.search);
+  const strategyId = query.get('strategy_id');
+  const selectedSymbol = query.get('symbol');
+  const selectedTimeframe = query.get('timeframe');
+  if (strategyId && [...strategy.options].some(option => option.value === strategyId)) strategy.value = strategyId;
+  if (selectedSymbol && [...symbol.options].some(option => option.value === selectedSymbol)) symbol.value = selectedSymbol;
+  refreshTimeframes(selectedTimeframe || '');
+}
+
+function render() {
+  const columns = [
+    ['strategy','Strategy'], ['symbol','Symbol'], ['timeframe','Timeframe'],
+    ['start_date','Start'], ['end_date','End'], ['status','Status'],
+    ['net_profit','Net profit'], ['total_trades','Trades'],
+    ['strategy_confidence','Confidence'], ['created_at','Created'],
+  ];
+  table.innerHTML = `<thead><tr>${columns.map(column => `<th>${column[1]}</th>`).join('')}<th>Options</th></tr></thead><tbody></tbody>`;
+  const body = $('tbody', table);
+  body.innerHTML = rows.length ? rows.map(item => {
+    const result = item.result_snapshot?.result || item.result_snapshot || {};
+    const net = result.net_profit ?? result.total_profit ?? '—';
+    const trades = result.total_trades ?? (Array.isArray(result.trades) ? result.trades.length : '—');
+    const confidence = result.strategy_confidence != null ? `${result.strategy_confidence}%` : '—';
+    const status = String(item.status || '').toLowerCase();
+    return `<tr data-search="${escapeHtml(`${item.strategy || ''} ${item.symbol || ''}`.toLowerCase())}">
+      ${columns.map(([key]) => {
+        let value = item[key];
+        if (key === 'net_profit') value = net;
+        if (key === 'total_trades') value = trades;
+        if (key === 'strategy_confidence') value = confidence;
+        return `<td>${escapeHtml(value ?? '—')}</td>`;
+      }).join('')}
+      <td class="backtest-actions">
+        <button type="button" class="btn ghost" data-results="${escapeHtml(item.id)}">View Results</button>
+        ${status === 'pending' ? '<button type="button" class="btn ghost" data-edit="'+escapeHtml(item.id)+'">Edit</button>' : ''}
+        ${['pending','running'].includes(status) ? '<button type="button" class="btn ghost" data-cancel="'+escapeHtml(item.id)+'">Cancel</button>' : ''}
+        ${['failed','cancelled'].includes(status) ? '<button type="button" class="btn ghost" data-retry="'+escapeHtml(item.id)+'">Retry</button>' : ''}
+        <button type="button" class="btn danger" data-delete="${escapeHtml(item.id)}">Delete</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="11">No backtests yet. Configure a saved strategy and run your first research job.</td></tr>';
+
+  const set = (selector, value) => { const element = $(selector); if (element) element.textContent = value; };
+  set('[data-backtest-count]', rows.length);
+  set('[data-backtest-completed]', rows.filter(item => String(item.status).toLowerCase() === 'completed').length);
+  set('[data-backtest-running]', rows.filter(item => ['running','pending'].includes(String(item.status).toLowerCase())).length);
+  set('[data-backtest-failed]', rows.filter(item => ['failed','cancelled'].includes(String(item.status).toLowerCase())).length);
+}
+
+function showMessage(message) {
+  table.innerHTML = `<tbody><tr><td colspan="11" class="backtest-loading-row">${escapeHtml(message)}</td></tr></tbody>`;
+}
+
+async function loadHistory() {
+  try {
+    rows = list(await request('/api/backtests/'), ['results','data','items']);
+    render();
+  } catch (error) {
+    showMessage(`Unable to load backtest history: ${error.message}`);
+  }
+}
+
+async function poll(id) {
+  for (let attempt = 0; attempt < 900; attempt += 1) {
+    const item = await request(`/api/backtests/${encodeURIComponent(id)}/`);
+    rows = [item, ...rows.filter(row => String(row.id) !== String(id))];
+    render();
+    if (['completed','failed','cancelled'].includes(String(item.status).toLowerCase())) return item;
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  throw new Error('Worker timeout; use Refresh to check the saved job.');
+}
+
+symbol.addEventListener('change', () => refreshTimeframes());
+['start_date','end_date'].forEach(name => form.elements[name]?.addEventListener('input', updateRangeNote));
+
+form.addEventListener('submit', async event => {
+  event.preventDefault();
+  const start = new Date(form.elements.start_date.value);
+  const end = new Date(form.elements.end_date.value);
+  if (!strategy.value || !symbol.value || !timeframe.value) {
+    showMessage('Select strategy, broker instrument, and supported timeframe.');
+    return;
+  }
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
+    showMessage('End date/time must be later than start date/time.');
+    return;
+  }
+
+  const button = form.querySelector('button[type="submit"]');
+  if (button) { button.disabled = true; button.textContent = 'Submitting…'; }
+  try {
+    const payload = Object.fromEntries(new FormData(form).entries());
+    payload.strategy = strategy.options[strategy.selectedIndex].textContent.replace(/\s+v\S+$/, '').trim();
+    delete payload.strategy_id;
+    const result = await request('/api/backtests/', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken':csrf()},
+      body: JSON.stringify(payload),
+    });
+    if (!result.id) throw new Error('Server did not return a backtest job id.');
+    showMessage(`Backtest queued for ${payload.start_date} → ${payload.end_date}.`);
+    const done = await poll(result.id);
+    showMessage(String(done.status).toLowerCase() === 'completed' ? 'Backtest completed; results loaded below.' : `Backtest ${done.status}; recorded details loaded below.`);
+    await loadHistory();
+  } catch (error) {
+    showMessage(`Backtest failed: ${error.message || 'request failed'}`);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Run backtest'; }
+  }
+});
+
+table.addEventListener('click', async event => {
+  const target = event.target.closest('[data-edit],[data-delete],[data-results],[data-cancel],[data-retry]');
+  if (!target) return;
+  const id = target.dataset.edit || target.dataset.delete || target.dataset.results || target.dataset.cancel || target.dataset.retry;
+  const item = rows.find(row => String(row.id) === String(id));
+  if (!item) return;
+
+  try {
+    if (target.dataset.results) {
+      const detail = await request(`/api/backtests/${encodeURIComponent(id)}/results/`);
+      showMessage(JSON.stringify(detail.result_snapshot || detail.statistics || detail));
+      return;
+    }
+    if (target.dataset.cancel) {
+      if (!window.confirm('Cancel this backtest?')) return;
+      await request(`/api/backtests/${encodeURIComponent(id)}/cancel/`, {method:'POST', headers:{'X-CSRFToken':csrf()}});
+      await loadHistory();
+      return;
+    }
+    if (target.dataset.retry) {
+      await request(`/api/backtests/${encodeURIComponent(id)}/retry/`, {method:'POST', headers:{'X-CSRFToken':csrf()}});
+      await loadHistory();
+      await poll(id);
+      return;
+    }
+    if (target.dataset.delete) {
+      if (!window.confirm('Delete this backtest and its recorded results?')) return;
+      await request(`/api/backtests/${encodeURIComponent(id)}/`, {method:'DELETE', headers:{'X-CSRFToken':csrf()}});
+      await loadHistory();
+      return;
+    }
+
+    const start = window.prompt('Start date/time (YYYY-MM-DDTHH:MM)', String(item.start_date || '').slice(0,16));
+    const end = window.prompt('End date/time (YYYY-MM-DDTHH:MM)', String(item.end_date || '').slice(0,16));
+    if (!start || !end || new Date(end) <= new Date(start)) {
+      showMessage('End date/time must be later than start date/time.');
+      return;
+    }
+    await request(`/api/backtests/${encodeURIComponent(id)}/`, {
+      method:'PATCH',
+      headers:{'Content-Type':'application/json', 'X-CSRFToken':csrf()},
+      body:JSON.stringify({start_date:start, end_date:end}),
+    });
+    await loadHistory();
+  } catch (error) {
+    showMessage(`Backtest action failed: ${error.message || 'request failed'}`);
+  }
+});
+
+$('[data-backtest-search]')?.addEventListener('input', event => {
+  const query = event.target.value.trim().toLowerCase();
+  table.querySelectorAll('[data-search]').forEach(row => { row.hidden = !row.dataset.search.includes(query); });
+});
+$('[data-backtest-refresh]')?.addEventListener('click', loadHistory);
+
+(async () => {
+  // Load each catalog independently so a transient broker failure cannot erase
+  // the strategy selector or leave the whole form unusable.
+  const results = await Promise.allSettled([loadStrategies(), loadBrokerCatalogue(), loadHistory()]);
+  const catalogueResult = results[1];
+  if (catalogueResult?.status === 'rejected') {
+    setOptions(symbol, [], 'Broker catalogue unavailable — connect and refresh');
+    setOptions(timeframe, DEFAULT_TIMEFRAMES.map(value => ({value, label:value})), 'Select timeframe…');
+    showMessage(`Unable to load broker/strategy catalog: ${catalogueResult.reason?.message || 'broker catalogue request failed'}`);
+  }
+})();
 })();
