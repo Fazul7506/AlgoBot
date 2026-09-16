@@ -91,7 +91,7 @@ class BillingPaymentFlowTests(TestCase):
         response.json.return_value = ["unexpected"]
         post.return_value = response
 
-        result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
+        result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
 
         self.assertEqual(result["url"], "")
         self.assertIn("no checkout URL", result["error"])
@@ -143,7 +143,7 @@ class BillingPaymentFlowTests(TestCase):
 
         result = PaymentService().create_intasend_checkout(
             self.user,
-            CheckoutPlan(plan="BASIC", price_cents=99900, currency="KES", reference=reference),
+            CheckoutPlan(plan="BASIC", price_cents=99900, currency="KES", reference=reference, recurring=False),
         )
 
         self.assertEqual(result["reference"], reference)
@@ -158,7 +158,7 @@ class BillingPaymentFlowTests(TestCase):
         response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
         post.return_value = response
 
-        PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
+        PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
 
         payload = post.call_args.kwargs["json"]
         self.assertNotIn("mobile_tarrif", payload)
@@ -177,7 +177,7 @@ class BillingPaymentFlowTests(TestCase):
         response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
         post.return_value = response
 
-        PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
+        PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
 
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["mobile_tarrif"], "MOBILE-PAYS")
@@ -185,7 +185,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test_example", INTASEND_API_BASE_URL="https://api.intasend.com")
     def test_intasend_rejects_test_key_on_live_api_endpoint(self):
-        result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
+        result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
         self.assertEqual(result["url"], "")
         self.assertIn("sandbox API URL", result["error"])
 
