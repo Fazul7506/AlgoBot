@@ -68,7 +68,7 @@ class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
         from apps.market_data.deriv_sync import fetch_tick
         from apps.market_data.services import MarketDataService
         from apps.market_data.models import Tick
-        account = BrokerAccount.objects.filter(user=self.scope["user"], status="active", broker__status="active", is_preferred=True).select_related("broker").first()
+        account = self._account_queryset(BrokerAccount).first()
         if not account: return None
         cache_key = f"algobot:realtime:broker-quote:{account.pk}:{account.broker.broker_type}:{symbol}"
         cached = cache.get(cache_key)
@@ -82,6 +82,15 @@ class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
         if not tick: return None
         payload = {"symbol": symbol, "price": float(tick.quote), "bid": float(tick.bid) if tick.bid is not None else None, "ask": float(tick.ask) if tick.ask is not None else None, "timestamp": tick.received_at.timestamp() if tick.received_at else float(tick.epoch), "epoch": tick.epoch, "account_id": account.id, "broker_account_id": account.account_id}
         cache.set(cache_key, payload, 1); return payload
+
+    def _account_queryset(self, BrokerAccount):
+        qs = BrokerAccount.objects.filter(user=self.scope["user"], status="active", broker__status="active").select_related("broker")
+        session = self.scope.get("session")
+        selected_id = session.get("active_broker_account_id") if session is not None else None
+        if selected_id:
+            selected = qs.filter(pk=selected_id)
+            if selected.exists(): return selected
+        return qs.order_by("-last_synced_at", "-id")
 
 
 class MarketDataConsumer(AuthenticatedStateConsumer): resource = "market-data"
@@ -110,8 +119,8 @@ class PortfolioConsumer(AuthenticatedStateConsumer):
             except (TypeError, ValueError):
                 await self.send_json({"type": "account.switch.rejected", "error": {"code": "ACCOUNT_REQUIRED", "message": "A valid account_id is required."}}); return
             account = await self.get_account(requested_id)
-            if not account or not account.is_preferred:
-                await self.send_json({"type": "account.switch.rejected", "error": {"code": "ACCOUNT_NOT_ACTIVE", "message": "The requested account is not the authoritative active account."}}); return
+            if not account:
+                await self.send_json({"type": "account.switch.rejected", "error": {"code": "ACCOUNT_NOT_AVAILABLE", "message": "The requested account is not available to the authenticated user."}}); return
             await self._switch_broker_stream(account); return
         await super().receive_json(content, **kwargs)
 
@@ -207,7 +216,13 @@ class PortfolioConsumer(AuthenticatedStateConsumer):
     @database_sync_to_async
     def selected_account(self):
         from apps.brokers.models import BrokerAccount
-        return BrokerAccount.objects.filter(user=self.scope["user"], status="active", broker__status="active", is_preferred=True).select_related("broker").first()
+        qs = BrokerAccount.objects.filter(user=self.scope["user"], status="active", broker__status="active").select_related("broker")
+        session = self.scope.get("session")
+        selected_id = session.get("active_broker_account_id") if session is not None else None
+        if selected_id:
+            selected = qs.filter(pk=selected_id).first()
+            if selected: return selected
+        return qs.order_by("-last_synced_at", "-id").first()
 
     @database_sync_to_async
     def get_account(self, account_id):
@@ -217,12 +232,12 @@ class PortfolioConsumer(AuthenticatedStateConsumer):
     @database_sync_to_async
     def is_current_broker_account(self, broker_account_id):
         from apps.brokers.models import BrokerAccount
-        return BrokerAccount.objects.filter(pk=self.account_id, user=self.scope["user"], account_id=str(broker_account_id), is_preferred=True, status="active").exists()
+        return BrokerAccount.objects.filter(pk=self.account_id, user=self.scope["user"], account_id=str(broker_account_id), status="active").exists()
 
     @database_sync_to_async
     def update_account_realtime(self, account_id, balance, currency, equity, available_margin):
         from apps.brokers.models import BrokerAccount, BrokerConnection
-        account = BrokerAccount.objects.filter(pk=self.account_id, user=self.scope["user"], is_preferred=True, status="active").first()
+        account = BrokerAccount.objects.filter(pk=self.account_id, user=self.scope["user"], status="active").first()
         if not account or account.id != account_id: return
         if balance is not None: account.balance = balance
         if currency: account.currency = str(currency)
@@ -236,7 +251,7 @@ class PortfolioConsumer(AuthenticatedStateConsumer):
     @database_sync_to_async
     def update_unrealized(self, unrealized_pnl):
         from apps.brokers.models import BrokerAccount, BrokerConnection
-        account = BrokerAccount.objects.filter(pk=self.account_id, user=self.scope["user"], is_preferred=True, status="active").first()
+        account = BrokerAccount.objects.filter(pk=self.account_id, user=self.scope["user"], status="active").first()
         if not account: return
         try: equity = float(account.balance) + float(unrealized_pnl)
         except (TypeError, ValueError): equity = None
