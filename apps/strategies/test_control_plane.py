@@ -4,9 +4,11 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 from io import StringIO
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.brokers.models import Broker, BrokerAccount
 from .models import Strategy, StrategyConfiguration
+from .views import StrategyViewSet
 
 
 class StrategyControlPlaneTests(TestCase):
@@ -59,3 +61,46 @@ class StrategyControlPlaneTests(TestCase):
         )
         self.config_a.refresh_from_db()
         self.assertEqual(self.config_a.criteria, {'rsi_min': 35, 'rsi_max': 65})
+
+    def test_available_reports_configured_and_running_states(self):
+        request = APIRequestFactory().get('/api/strategies/available/')
+        force_authenticate(request, user=self.user)
+        response = StrategyViewSet.as_view({'get': 'available'})(request)
+        self.assertEqual(response.status_code, 200)
+        payload = response.data
+        self.assertEqual(payload['configured_count'], 2)
+        self.assertEqual(payload['running_count'], 1)
+        alpha = next(item for item in payload['strategies'] if item['slug'] == 'alpha')
+        beta = next(item for item in payload['strategies'] if item['slug'] == 'beta')
+        self.assertTrue(alpha['configured'])
+        self.assertTrue(alpha['running'])
+        self.assertTrue(beta['configured'])
+        self.assertFalse(beta['running'])
+
+    def test_disconnect_preserves_configuration_and_clears_running_state(self):
+        request = APIRequestFactory().post(
+            f'/api/strategies/{self.strategy_a.pk}/disconnect/',
+            {'configuration_id': self.config_a.pk},
+            format='json',
+        )
+        force_authenticate(request, user=self.user)
+        response = StrategyViewSet.as_view({'post': 'disconnect'})(request, pk=self.strategy_a.pk)
+        self.assertEqual(response.status_code, 200)
+        self.config_a.refresh_from_db()
+        self.assertFalse(self.config_a.is_active)
+        self.assertTrue(self.config_a.enabled)
+        self.assertEqual(self.config_a.symbol, 'R_100')
+
+    def test_switch_moves_running_state_to_another_configuration(self):
+        request = APIRequestFactory().post(
+            f'/api/strategies/{self.strategy_b.pk}/switch/',
+            {'configuration_id': self.config_b.pk},
+            format='json',
+        )
+        force_authenticate(request, user=self.user)
+        response = StrategyViewSet.as_view({'post': 'switch'})(request, pk=self.strategy_b.pk)
+        self.assertEqual(response.status_code, 200)
+        self.config_a.refresh_from_db()
+        self.config_b.refresh_from_db()
+        self.assertFalse(self.config_a.is_active)
+        self.assertTrue(self.config_b.is_active)

@@ -17,20 +17,38 @@ class StrategyViewSet(viewsets.ModelViewSet):
     def _user_configs(self):
         return StrategyConfiguration.objects.filter(user=self.request.user).select_related('strategy', 'broker_account', 'broker_account__broker')
 
+    def _configuration_payload(self, config):
+        return StrategyConfigurationSerializer(config, context={'request': self.request}).data if config else None
+
     @decorators.action(detail=False, methods=['get'])
     def available(self, request):
         StrategyService().sync_catalog()
-        configured = {(cfg.strategy_id, cfg.symbol, cfg.timeframe): cfg for cfg in self._user_configs().filter(strategy__enabled=True)}
+        configs = self._user_configs().filter(strategy__enabled=True).order_by('-is_active', '-updated_at')
+        by_strategy = {}
+        for cfg in configs:
+            by_strategy.setdefault(cfg.strategy_id, []).append(cfg)
         payload = []
         for strategy in self.get_queryset():
-            configs = [cfg for (strategy_id, _symbol, _timeframe), cfg in configured.items() if strategy_id == strategy.id]
-            payload.append({**StrategySerializer(strategy, context={'request': request}).data, 'configured': bool(configs), 'configurations': StrategyConfigurationSerializer(configs, many=True).data})
-        return response.Response({'status': 'success', 'strategies': payload})
+            strategy_configs = by_strategy.get(strategy.id, [])
+            active = next((cfg for cfg in strategy_configs if cfg.is_active and cfg.enabled), None)
+            payload.append({
+                **StrategySerializer(strategy, context={'request': request}).data,
+                'configured': bool(strategy_configs),
+                'running': bool(active),
+                'active_configuration': self._configuration_payload(active),
+                'configurations': StrategyConfigurationSerializer(strategy_configs, many=True, context={'request': request}).data,
+            })
+        return response.Response({
+            'status': 'success',
+            'strategies': payload,
+            'configured_count': sum(bool(v) for v in by_strategy.values()),
+            'running_count': sum(1 for configs_for_strategy in by_strategy.values() if any(c.is_active and c.enabled for c in configs_for_strategy)),
+        })
 
     @decorators.action(detail=False, methods=['get'])
     def current(self, request):
         config = self._user_configs().filter(is_active=True, enabled=True, strategy__enabled=True).first()
-        return response.Response({'active': bool(config), 'configuration': StrategyConfigurationSerializer(config).data if config else None, 'strategy': StrategySerializer(config.strategy).data if config else None})
+        return response.Response({'active': bool(config), 'configuration': self._configuration_payload(config), 'strategy': StrategySerializer(config.strategy).data if config else None})
 
     @decorators.action(detail=True, methods=['post'])
     def switch(self, request, pk=None):
@@ -46,7 +64,19 @@ class StrategyViewSet(viewsets.ModelViewSet):
             StrategyConfiguration.objects.select_for_update().filter(user=request.user, is_active=True).update(is_active=False)
             config.is_active = True
             config.save(update_fields=['is_active', 'updated_at'])
-        return response.Response({'status': 'success', 'message': 'Current strategy switched.', 'configuration': StrategyConfigurationSerializer(config).data})
+        return response.Response({'status': 'success', 'message': 'Current strategy switched.', 'configuration': self._configuration_payload(config)})
+
+    @decorators.action(detail=True, methods=['post'])
+    def disconnect(self, request, pk=None):
+        strategy = self.get_object()
+        config_id = request.data.get('configuration_id')
+        qs = self._user_configs().filter(strategy=strategy)
+        config = qs.filter(pk=config_id).first() if config_id else qs.filter(is_active=True).order_by('-updated_at').first()
+        if not config:
+            return response.Response({'detail': 'No configuration is connected for this strategy.'}, status=status.HTTP_404_NOT_FOUND)
+        config.is_active = False
+        config.save(update_fields=['is_active', 'updated_at'])
+        return response.Response({'status': 'success', 'message': 'Strategy disconnected. Its configuration was preserved and can be reconnected later.', 'configuration': self._configuration_payload(config)})
 
     @decorators.action(detail=False, methods=['post'])
     def criteria(self, request):
@@ -59,7 +89,7 @@ class StrategyViewSet(viewsets.ModelViewSet):
             return response.Response({'detail': 'No strategy configuration selected.'}, status=status.HTTP_409_CONFLICT)
         config.criteria = criteria
         config.save(update_fields=['criteria', 'updated_at'])
-        return response.Response({'status': 'success', 'criteria': config.criteria, 'configuration': StrategyConfigurationSerializer(config).data})
+        return response.Response({'status': 'success', 'criteria': config.criteria, 'configuration': self._configuration_payload(config)})
 
     @decorators.action(detail=True, methods=['post'])
     def configure(self, request, pk=None):
@@ -98,7 +128,7 @@ class StrategyViewSet(viewsets.ModelViewSet):
                 strategy=strategy, user=request.user, symbol=symbol, timeframe=timeframe,
                 defaults={'criteria': criteria, 'parameters': parameters, 'risk_profile': risk_profile, 'schedule': schedule, 'broker_account': account, 'is_active': make_active},
             )
-        return response.Response({'status': 'success', 'message': 'Strategy configuration saved. No live order was placed.', 'configuration': StrategyConfigurationSerializer(configuration).data})
+        return response.Response({'status': 'success', 'message': 'Strategy configuration saved. No live order was placed.', 'configuration': self._configuration_payload(configuration)})
 
     @decorators.action(detail=True, methods=['post'])
     def validate_config(self, request, pk=None):
