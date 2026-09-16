@@ -1,16 +1,21 @@
+import logging
+
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.decorators import permission_classes
 from rest_framework.exceptions import ValidationError
-from .models import Backtest, BacktestStatistics
+from .models import Backtest, BacktestClusterJob, BacktestStatistics
 from .serializers import BacktestSerializer, BacktestStatisticsSerializer, BacktestTradeSerializer, canonical_timeframe
 from .services import ParameterOptimizationService, ReplayService
 from apps.strategies.models import Strategy as StrategyModel
 from apps.market_data.models import MarketSymbol, Candle, Tick
 from apps.market_data.constants import TIMEFRAMES
 from core.billing_entitlements import check, effective_plan
+
+log = logging.getLogger(__name__)
 
 
 class BacktestViewSet(viewsets.ModelViewSet):
@@ -21,20 +26,61 @@ class BacktestViewSet(viewsets.ModelViewSet):
         return Backtest.objects.filter(user=self.request.user)
 
     def _queue(self, backtest):
+        """Create a durable queue record and publish without holding a DB lock.
+
+        Publishing a Celery message inside the create/update transaction can
+        block the HTTP request on a dead Redis connection. It also lets a fast
+        worker observe an uncommitted Backtest row. Persist first, then publish.
+        """
         from .tasks import execute_backtest
-        if not hasattr(execute_backtest, 'delay'):
+
+        BacktestClusterJob.objects.update_or_create(
+            backtest=backtest,
+            defaults={
+                'priority': 5,
+                'worker_id': '',
+                'attempts': 0,
+                'status': 'pending',
+                'scheduled_at': timezone.now(),
+                'locked_at': None,
+            },
+        )
+
+        if not getattr(settings, 'USE_CELERY', True) or not hasattr(execute_backtest, 'apply_async'):
+            detail = 'Backtest worker is not configured. Start the Celery worker before running historical tests.'
             backtest.status = 'failed'
             backtest.result_snapshot = {
                 'status': 'failed',
-                'error': 'Backtest worker is not configured. Start the Celery worker before running historical tests.',
+                'code': 'BACKTEST_WORKER_UNAVAILABLE',
+                'error': detail,
                 'start_date': backtest.start_date.isoformat(),
                 'end_date': backtest.end_date.isoformat(),
             }
             backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
-            return
-        backtest.status = 'running'
+            BacktestClusterJob.objects.filter(backtest=backtest).update(status='failed', locked_at=None)
+            return False
+
+        backtest.status = 'pending'
         backtest.save(update_fields=['status', 'updated_at'])
-        execute_backtest.delay(backtest.pk)
+        try:
+            # Do not use Celery's publisher retry loop on an interactive HTTP
+            # request. The broker connection itself is bounded in settings.
+            execute_backtest.apply_async(args=(backtest.pk,), retry=False)
+            return True
+        except Exception as exc:
+            detail = f'{exc.__class__.__name__}: {exc}'
+            log.exception('Unable to publish backtest job', extra={'backtest_id': backtest.pk})
+            backtest.status = 'failed'
+            backtest.result_snapshot = {
+                'status': 'failed',
+                'code': 'BACKTEST_QUEUE_UNAVAILABLE',
+                'error': detail,
+                'start_date': backtest.start_date.isoformat(),
+                'end_date': backtest.end_date.isoformat(),
+            }
+            backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+            BacktestClusterJob.objects.filter(backtest=backtest).update(status='failed', locked_at=None)
+            return False
 
     def perform_create(self, serializer):
         allowed, used, limit = check(self.request.user, 'backtests')
@@ -103,7 +149,8 @@ class BacktestViewSet(viewsets.ModelViewSet):
             if duplicate:
                 raise ValidationError({'detail': 'An identical backtest is already queued or running.', 'code': 'DUPLICATE_BACKTEST', 'id': duplicate.pk})
             backtest = serializer.save(user=self.request.user, strategy=strategy.name, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date, mode=mode, status='pending')
-            self._queue(backtest)
+
+        self._queue(backtest)
 
     def perform_update(self, serializer):
         instance = self.get_object()
@@ -115,7 +162,7 @@ class BacktestViewSet(viewsets.ModelViewSet):
             )
             backtest.trades.all().delete()
             BacktestStatistics.objects.filter(backtest=backtest).delete()
-            self._queue(backtest)
+        self._queue(backtest)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -132,6 +179,7 @@ class BacktestViewSet(viewsets.ModelViewSet):
         backtest.status = 'cancelled'
         backtest.result_snapshot = {**(backtest.result_snapshot or {}), 'status': 'cancelled', 'error': 'Cancelled by user.'}
         backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+        BacktestClusterJob.objects.filter(backtest=backtest, status__in=['pending', 'running']).update(status='cancelled', locked_at=None)
         return response.Response(self.get_serializer(backtest).data)
 
     @decorators.action(detail=True, methods=['post'])
@@ -144,7 +192,7 @@ class BacktestViewSet(viewsets.ModelViewSet):
             backtest.result_snapshot = {}
             backtest.result_version += 1
             backtest.save(update_fields=['status', 'result_snapshot', 'result_version', 'updated_at'])
-            self._queue(backtest)
+        self._queue(backtest)
         return response.Response(self.get_serializer(backtest).data, status=status.HTTP_202_ACCEPTED)
 
     @decorators.action(detail=True, methods=['get'])

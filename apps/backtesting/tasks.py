@@ -1,6 +1,10 @@
 import importlib
+import logging
+import os
 from datetime import datetime, timezone as dt_timezone
 from decimal import Decimal, InvalidOperation
+
+log = logging.getLogger(__name__)
 
 
 def _celery_app():
@@ -46,6 +50,12 @@ def _trade_datetime(value):
         return datetime.fromtimestamp(float(value), tz=dt_timezone.utc)
     except (TypeError, ValueError, OverflowError, OSError):
         return None
+
+
+def _cluster_update(backtest_id, **fields):
+    from .models import BacktestClusterJob
+    if fields:
+        BacktestClusterJob.objects.filter(backtest_id=backtest_id).update(**fields)
 
 
 def _persist_trades(backtest, result):
@@ -109,16 +119,26 @@ def _persist_statistics(backtest, result):
 @_task
 def execute_backtest(backtest_id):
     from django.db import transaction
+    from django.db.models import F
+    from django.utils import timezone
     from .models import Backtest
     from apps.strategies.models import Strategy as StrategyModel
     from apps.strategies.services import StrategyService
 
     backtest = Backtest.objects.get(pk=backtest_id)
+    _cluster_update(
+        backtest_id,
+        status='running',
+        worker_id=os.getenv('HOSTNAME', 'celery-worker')[:120],
+        locked_at=timezone.now(),
+        attempts=F('attempts') + 1,
+    )
     strategy = StrategyModel.objects.filter(name__iexact=backtest.strategy).first()
     if not strategy:
         backtest.status = 'failed'
-        backtest.result_snapshot = {'status': 'failed', 'error': 'Strategy no longer exists in the strategy catalog.', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat()}
+        backtest.result_snapshot = {'status': 'failed', 'code': 'STRATEGY_NOT_FOUND', 'error': 'Strategy no longer exists in the strategy catalog.', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat()}
         backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+        _cluster_update(backtest_id, status='failed', locked_at=None)
         return backtest.id
     try:
         backtest.status = 'running'
@@ -135,11 +155,14 @@ def execute_backtest(backtest_id):
             backtest.status = 'completed'
             backtest.result_snapshot = {'status': 'completed', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat(), 'strategy': strategy.name, 'symbol': backtest.symbol, 'timeframe': backtest.timeframe, 'result': result}
             backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+            _cluster_update(backtest_id, status='completed', locked_at=None)
         return backtest.id
     except Exception as exc:
         backtest.status = 'failed'
-        backtest.result_snapshot = {'status': 'failed', 'error': str(exc), 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat()}
+        backtest.result_snapshot = {'status': 'failed', 'code': 'BACKTEST_EXECUTION_FAILED', 'error': f'{exc.__class__.__name__}: {exc}', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat()}
         backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+        _cluster_update(backtest_id, status='failed', locked_at=None)
+        log.exception('Backtest worker failed', extra={'backtest_id': backtest_id})
         raise
 
 
