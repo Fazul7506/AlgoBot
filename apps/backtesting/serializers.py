@@ -5,12 +5,19 @@ from .models import Backtest, BacktestTrade, BacktestStatistics
 
 
 class BacktestSerializer(serializers.ModelSerializer):
+    # Research handoff identifiers are write-only routing hints. The persisted
+    # Backtest keeps the canonical strategy name for historical reproducibility.
+    strategy_id = serializers.IntegerField(required=False, write_only=True)
+    strategy_slug = serializers.CharField(required=False, write_only=True, allow_blank=True)
+
     class Meta:
         model = Backtest
         fields = '__all__'
         read_only_fields = ('user', 'status', 'result_snapshot', 'result_version')
 
     def validate(self, attrs):
+        attrs.pop('strategy_id', None)
+        attrs.pop('strategy_slug', None)
         if self.instance:
             if self.instance.status != 'pending':
                 raise serializers.ValidationError({'status': 'Only pending backtests can be edited.'})

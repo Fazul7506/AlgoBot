@@ -5,6 +5,7 @@ from .serializers import StrategySerializer, StrategyExecutionSerializer, Strate
 from .engine import StrategyEngine
 from .services import StrategyService
 from core.account_context import get_active_account
+from core.billing_entitlements import effective_plan
 
 
 class StrategyViewSet(viewsets.ModelViewSet):
@@ -30,11 +31,14 @@ class StrategyViewSet(viewsets.ModelViewSet):
         payload = []
         for strategy in self.get_queryset():
             strategy_configs = by_strategy.get(strategy.id, [])
-            active = next((cfg for cfg in strategy_configs if cfg.is_active and cfg.enabled), None)
+            active = next((cfg for cfg in strategy_configs if cfg.is_active), None)
+            running = bool(active and active.enabled)
             payload.append({
                 **StrategySerializer(strategy, context={'request': request}).data,
                 'configured': bool(strategy_configs),
-                'running': bool(active),
+                'connected': bool(active),
+                'running': running,
+                'paused': bool(active and not active.enabled),
                 'active_configuration': self._configuration_payload(active),
                 'configurations': StrategyConfigurationSerializer(strategy_configs, many=True, context={'request': request}).data,
             })
@@ -42,29 +46,37 @@ class StrategyViewSet(viewsets.ModelViewSet):
             'status': 'success',
             'strategies': payload,
             'configured_count': sum(bool(v) for v in by_strategy.values()),
+            'connected_count': sum(1 for configs_for_strategy in by_strategy.values() if any(c.is_active for c in configs_for_strategy)),
             'running_count': sum(1 for configs_for_strategy in by_strategy.values() if any(c.is_active and c.enabled for c in configs_for_strategy)),
         })
 
     @decorators.action(detail=False, methods=['get'])
     def current(self, request):
-        config = self._user_configs().filter(is_active=True, enabled=True, strategy__enabled=True).first()
-        return response.Response({'active': bool(config), 'configuration': self._configuration_payload(config), 'strategy': StrategySerializer(config.strategy).data if config else None})
+        config = self._user_configs().filter(is_active=True, strategy__enabled=True).first()
+        return response.Response({
+            'active': bool(config),
+            'running': bool(config and config.enabled),
+            'paused': bool(config and not config.enabled),
+            'configuration': self._configuration_payload(config),
+            'strategy': StrategySerializer(config.strategy).data if config else None,
+        })
 
     @decorators.action(detail=True, methods=['post'])
     def switch(self, request, pk=None):
         strategy = self.get_object()
         config_id = request.data.get('configuration_id')
-        qs = self._user_configs().filter(strategy=strategy, enabled=True)
+        qs = self._user_configs().filter(strategy=strategy)
         config = qs.filter(pk=config_id).first() if config_id else qs.order_by('-updated_at').first()
         if not config:
-            return response.Response({'detail': 'No enabled configuration exists for this strategy. Configure it before switching.'}, status=status.HTTP_409_CONFLICT)
+            return response.Response({'detail': 'No saved configuration exists for this strategy. Configure it before switching.'}, status=status.HTTP_409_CONFLICT)
         if not config.broker_account_id:
             return response.Response({'detail': 'The strategy configuration has no broker account. Select an active broker account first.'}, status=status.HTTP_409_CONFLICT)
         with transaction.atomic():
             StrategyConfiguration.objects.select_for_update().filter(user=request.user, is_active=True).update(is_active=False)
             config.is_active = True
-            config.save(update_fields=['is_active', 'updated_at'])
-        return response.Response({'status': 'success', 'message': 'Current strategy switched.', 'configuration': self._configuration_payload(config)})
+            config.enabled = True
+            config.save(update_fields=['is_active', 'enabled', 'updated_at'])
+        return response.Response({'status': 'success', 'message': 'Current strategy switched and connected.', 'configuration': self._configuration_payload(config)})
 
     @decorators.action(detail=True, methods=['post'])
     def disconnect(self, request, pk=None):
@@ -73,10 +85,10 @@ class StrategyViewSet(viewsets.ModelViewSet):
         qs = self._user_configs().filter(strategy=strategy)
         config = qs.filter(pk=config_id).first() if config_id else qs.filter(is_active=True).order_by('-updated_at').first()
         if not config:
-            return response.Response({'detail': 'No configuration is connected for this strategy.'}, status=status.HTTP_404_NOT_FOUND)
+            return response.Response({'detail': 'No saved configuration exists for this strategy.'}, status=status.HTTP_404_NOT_FOUND)
         config.is_active = False
         config.save(update_fields=['is_active', 'updated_at'])
-        return response.Response({'status': 'success', 'message': 'Strategy disconnected. Its configuration was preserved and can be reconnected later.', 'configuration': self._configuration_payload(config)})
+        return response.Response({'status': 'success', 'message': 'Strategy disconnected. Its saved configuration remains available for later use.', 'configuration': self._configuration_payload(config)})
 
     @decorators.action(detail=False, methods=['post'])
     def criteria(self, request):
@@ -121,6 +133,23 @@ class StrategyViewSet(viewsets.ModelViewSet):
             account = get_active_account(request.user, request=request)
         if make_active and account is None:
             return response.Response({'detail': 'An active strategy requires an active broker account.'}, status=409)
+
+        existing = StrategyConfiguration.objects.filter(
+            strategy=strategy, user=request.user, symbol=symbol, timeframe=timeframe
+        ).first()
+        if make_active and not (existing and existing.is_active):
+            plan = effective_plan(request.user)
+            active_count = StrategyConfiguration.objects.filter(user=request.user, is_active=True).count()
+            if plan.strategies >= 0 and active_count >= plan.strategies:
+                return response.Response({
+                    'detail': f'Your {plan.name} plan allows {plan.strategies} active strategy connection(s). Disconnect another strategy before connecting this one.',
+                    'code': 'STRATEGY_CAPACITY_REACHED',
+                    'metric': 'strategies',
+                    'used': active_count,
+                    'limit': plan.strategies,
+                    'plan': plan.key,
+                }, status=status.HTTP_409_CONFLICT)
+
         with transaction.atomic():
             if make_active:
                 StrategyConfiguration.objects.select_for_update().filter(user=request.user, is_active=True).update(is_active=False)
@@ -143,14 +172,14 @@ class StrategyViewSet(viewsets.ModelViewSet):
             errors.append('Broker symbol is required.')
         if timeframe not in {'M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'}:
             errors.append(f'Unsupported timeframe: {timeframe}.')
-        if not isinstance(parameters, dict):
-            errors.append('Parameter grid must be a JSON object.')
-        if not isinstance(criteria, dict):
-            errors.append('Criteria must be a JSON object.')
         if isinstance(parameters, dict) and not parameters:
             warnings.append('No parameter overrides supplied; strategy defaults will be used.')
+        elif not isinstance(parameters, dict):
+            errors.append('Parameter grid must be a JSON object.')
         if isinstance(criteria, dict) and not criteria:
             warnings.append('No criteria supplied; strategy defaults will be used.')
+        elif not isinstance(criteria, dict):
+            errors.append('Criteria must be a JSON object.')
         warnings.append('Validation is research-only. Live execution remains behind broker and risk gates.')
         return response.Response({'status': 'valid' if not errors else 'invalid', 'strategy': strategy.slug, 'errors': errors, 'warnings': warnings, 'ready_for_backtest': not errors, 'ready_for_live_trade': False}, status=200 if not errors else 400)
 
@@ -161,21 +190,23 @@ class StrategyViewSet(viewsets.ModelViewSet):
         StrategyService().sync_catalog()
         configs = self._user_configs().filter(enabled=True, is_active=True, strategy__enabled=True)
         if not configs.exists():
-            return response.Response({'detail': 'No active strategy configuration exists. Configure and switch a strategy first.', 'executions': []}, status=200)
+            return response.Response({'status': 'idle', 'detail': 'No running strategy is connected. Use a configured strategy or connect one first.', 'executions': []}, status=200)
         executions = StrategyEngine().run(configurations=configs)
-        return response.Response(StrategyExecutionSerializer(executions, many=True).data)
+        return response.Response({'status': 'success', 'detail': f'Engine evaluated {len(executions)} active strategy configuration(s).', 'executions': StrategyExecutionSerializer(executions, many=True).data})
 
     @decorators.action(detail=False, methods=['post'])
     def pause(self, request):
         ids = request.data.get('ids', [])
-        qs = self._user_configs().filter(strategy_id__in=ids) if ids else self._user_configs().filter(enabled=True)
-        return response.Response({'paused': qs.update(enabled=False)})
+        qs = self._user_configs().filter(strategy_id__in=ids) if ids else self._user_configs().filter(is_active=True)
+        count = qs.update(enabled=False)
+        return response.Response({'status': 'paused', 'detail': f'Paused {count} connected strategy configuration(s).', 'paused': count})
 
     @decorators.action(detail=False, methods=['post'])
     def stop(self, request):
         ids = request.data.get('ids', [])
-        qs = self._user_configs().filter(strategy_id__in=ids) if ids else self._user_configs().filter(enabled=True)
-        return response.Response({'stopped': qs.update(enabled=False, is_active=False)})
+        qs = self._user_configs().filter(strategy_id__in=ids) if ids else self._user_configs().filter(is_active=True)
+        count = qs.update(enabled=False, is_active=False)
+        return response.Response({'status': 'stopped', 'detail': f'Stopped and disconnected {count} strategy configuration(s).', 'stopped': count})
 
     @decorators.action(detail=False, methods=['get'])
     def performance(self, request):

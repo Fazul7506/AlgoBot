@@ -50,19 +50,27 @@ class BacktestViewSet(viewsets.ModelViewSet):
         if timezone.is_naive(end_date): end_date = timezone.make_aware(end_date)
         if end_date <= start_date:
             raise ValidationError({'date_range': 'End date/time must be later than start date/time.'})
-        symbol = str(data.get('symbol') or '').strip()
-        timeframe = str(data.get('timeframe') or '').strip()
-        strategy_name = str(data.get('strategy') or '').strip()
-        if not symbol or not timeframe or not strategy_name:
+        symbol = str(data.get('symbol') or '').strip().upper()
+        timeframe = str(data.get('timeframe') or '').strip().upper()
+        strategy_id = data.get('strategy_id')
+        strategy_ref = str(data.get('strategy') or data.get('strategy_slug') or '').strip()
+        if not symbol or not timeframe or not (strategy_id or strategy_ref):
             raise ValidationError({'detail': 'strategy, symbol, timeframe, start_date and end_date are required.'})
         market = MarketSymbol.objects.filter(symbol=symbol, is_active=True, is_tradable=True).first()
         if not market:
             raise ValidationError({'symbol': 'The selected instrument is not in the active broker market catalogue.'})
         if timeframe not in TIMEFRAMES:
-            raise ValidationError({'timeframe': 'The selected timeframe is not supported by AlgoBot.'})
-        strategy = StrategyModel.objects.filter(name__iexact=strategy_name).first()
+            raise ValidationError({'timeframe': f'The selected timeframe is not supported by AlgoBot. Supported values: {", ".join(TIMEFRAMES.keys())}.'})
+        strategy = None
+        if strategy_id:
+            try:
+                strategy = StrategyModel.objects.filter(pk=int(strategy_id), enabled=True).first()
+            except (TypeError, ValueError):
+                strategy = None
+        if strategy is None and strategy_ref:
+            strategy = StrategyModel.objects.filter(slug__iexact=strategy_ref, enabled=True).first() or StrategyModel.objects.filter(name__iexact=strategy_ref, enabled=True).first()
         if not strategy:
-            raise ValidationError({'strategy': 'Selected strategy does not exist in the strategy catalog.'})
+            raise ValidationError({'strategy': 'Selected strategy does not exist in the enabled strategy catalog.'})
         mode = str(data.get('mode') or 'candle_close').strip().lower()
         if mode not in {'candle_close', 'tick'}:
             raise ValidationError({'mode': 'Execution mode must be candle_close or tick.'})

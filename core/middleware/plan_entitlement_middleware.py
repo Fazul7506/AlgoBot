@@ -18,8 +18,10 @@ class PlanEntitlementMiddleware:
     def _feature_metric(cls,request):
         method=request.method.upper()
         if method not in EXECUTION_METHODS: return None
-        if request.path.startswith("/api/strategies/") and method=="POST":
-            return "backtests" if any(action in request.path for action in cls.BACKTEST_ACTIONS) else "strategies"
+        # Strategy configuration capacity is enforced by the configure action,
+        # where the request can distinguish an active connection from a saved
+        # inactive configuration. Switch/disconnect/pause/stop/run are lifecycle
+        # controls and must never consume a strategy-capacity slot by themselves.
         for candidate,prefixes in cls.FEATURE_PATHS:
             if any(request.path.startswith(prefix) for prefix in prefixes): return candidate
         return None
