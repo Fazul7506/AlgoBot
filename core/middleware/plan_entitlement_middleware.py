@@ -11,6 +11,7 @@ def rate_limit_response_data(user, metric, window, current, limit):
 class PlanEntitlementMiddleware:
     FEATURE_PATHS=(("backtests",("/api/backtesting/",)),("predictions",("/api/ai/","/api/predictions/")),("orders",("/api/orders/",)),("automations",("/api/automation/",)))
     BACKTEST_ACTIONS=("/backtest","/compare","/optimize")
+    STRATEGY_CAPACITY_ACTIONS=("/configure/",)
     @staticmethod
     def _is_execution_request(request):
         return request.method.upper() in EXECUTION_METHODS and any(request.path.startswith(prefix) for prefix in EXECUTION_PATH_PREFIXES)
@@ -19,7 +20,11 @@ class PlanEntitlementMiddleware:
         method=request.method.upper()
         if method not in EXECUTION_METHODS: return None
         if request.path.startswith("/api/strategies/") and method=="POST":
-            return "backtests" if any(action in request.path for action in cls.BACKTEST_ACTIONS) else "strategies"
+            # Only creation/activation of a strategy configuration consumes
+            # strategy capacity. Switch, disconnect, validate, run, pause and
+            # stop are control-plane operations on already persisted state.
+            if "/configure/" in request.path: return "strategies"
+            return None
         for candidate,prefixes in cls.FEATURE_PATHS:
             if any(request.path.startswith(prefix) for prefix in prefixes): return candidate
         return None

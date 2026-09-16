@@ -6,6 +6,7 @@ from django.utils import timezone
 from core.models import AuditLog, Subscription
 from core.billing_entitlements import PLAN_ENTITLEMENTS, effective_plan, entitlement_payload, usage, reset_at
 from core.middleware.plan_entitlement_middleware import PlanEntitlementMiddleware
+from apps.strategies.models import Strategy, StrategyConfiguration
 
 
 class BillingEntitlementTests(TestCase):
@@ -59,6 +60,27 @@ class BillingEntitlementTests(TestCase):
         AuditLog.objects.create(user=self.user, path='/api/trades/execute/', method='PUT', status_code=200)
         AuditLog.objects.create(user=self.user, path='/api/positions/open/', method='POST', status_code=200)
         self.assertEqual(usage(self.user, 'api_calls'), 3)
+
+    def test_strategy_capacity_counts_only_active_executable_configurations(self):
+        strategy = Strategy.objects.create(name='Quota Strategy', slug='quota-strategy', category='trend')
+        StrategyConfiguration.objects.create(strategy=strategy, user=self.user, symbol='R_100', timeframe='M1', enabled=True, is_active=False)
+        StrategyConfiguration.objects.create(strategy=strategy, user=self.user, symbol='R_50', timeframe='M1', enabled=False, is_active=False)
+        StrategyConfiguration.objects.create(strategy=strategy, user=self.user, symbol='R_25', timeframe='M5', enabled=True, is_active=True)
+        self.assertEqual(usage(self.user, 'strategies'), 1)
+
+    def test_middleware_does_not_quota_strategy_control_plane_actions(self):
+        middleware = PlanEntitlementMiddleware(lambda req: __import__('django.http').http.HttpResponse('ok'))
+        for path in (
+            '/api/strategies/run/', '/api/strategies/pause/', '/api/strategies/stop/',
+            '/api/strategies/1/switch/', '/api/strategies/1/disconnect/',
+            '/api/strategies/1/validate_config/', '/api/strategies/criteria/',
+        ):
+            request = RequestFactory().post(path, data='{}', content_type='application/json')
+            request.user = self.user
+            with patch('core.middleware.plan_entitlement_middleware.check') as check:
+                response = middleware(request)
+            self.assertEqual(response.status_code, 200, path)
+            check.assert_not_called()
 
     def test_middleware_does_not_gate_read_only_or_non_execution_api_requests(self):
         called = {'value': False}

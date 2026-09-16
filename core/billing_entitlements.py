@@ -70,7 +70,10 @@ def usage(user, metric, window="day"):
     if metric == "strategies":
         try:
             from apps.strategies.models import StrategyConfiguration
-            return StrategyConfiguration.objects.filter(user=user, enabled=True).count()
+            # Strategy entitlement is a concurrent capacity, not a daily request counter.
+            # Saved/inactive configurations remain reusable and do not consume capacity;
+            # only configurations currently connected/selected consume a slot.
+            return StrategyConfiguration.objects.filter(user=user, enabled=True, is_active=True, strategy__enabled=True).count()
         except Exception: return 0
     return 0
 
