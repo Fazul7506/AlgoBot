@@ -16,19 +16,16 @@
     const request=canonical();
     if(!request)return selected;
     busy=(async()=>{
-      const rememberedId=storageGet();
       const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},10000)).filter(a=>a?.id);
       accounts=rows;
       window.AlgoBotBrokerAccounts=rows.slice();
       let serverSelected=null;
       let activeRequestFailed=false;
 
-      // The server's active session/header selection is authoritative. The
-      // account list is only the set of accounts the user is allowed to use;
-      // it is not ordered by a removed persistent "preferred" field.
+      // Server session state is authoritative. localStorage is a display/cache
+      // hint only and is never sent as an account-selection header.
       try{
-        const headers=rememberedId?{'X-Algobot-Account-ID':String(rememberedId)}:{};
-        const active=await request('/api/brokers/accounts/active/',{notifyOnError:false,headers},5000);
+        const active=await request('/api/brokers/accounts/active/',{notifyOnError:false},5000);
         serverSelected=active?.active_account||active?.account||null;
       }catch(_){activeRequestFailed=true}
 
