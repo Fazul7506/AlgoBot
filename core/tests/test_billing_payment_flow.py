@@ -177,7 +177,7 @@ class BillingPaymentFlowTests(TestCase):
         response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
         post.return_value = response
 
-        PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
+        PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
 
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["mobile_tarrif"], "MOBILE-PAYS")
