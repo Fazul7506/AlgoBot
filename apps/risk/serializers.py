@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import RiskProfile,RiskRule,RiskAssessment,Exposure,DrawdownHistory,KillSwitchEvent
+from .models import RiskProfile,RiskRule,RiskAssessment,Exposure,DrawdownHistory
 class RiskProfileSerializer(serializers.ModelSerializer):
     class Meta: model=RiskProfile; fields='__all__'; read_only_fields=('user','created_at')
 class RiskRuleSerializer(serializers.ModelSerializer):
@@ -10,5 +10,3 @@ class ExposureSerializer(serializers.ModelSerializer):
     class Meta: model=Exposure; fields='__all__'
 class DrawdownHistorySerializer(serializers.ModelSerializer):
     class Meta: model=DrawdownHistory; fields='__all__'
-class KillSwitchEventSerializer(serializers.ModelSerializer):
-    class Meta: model=KillSwitchEvent; fields='__all__'
