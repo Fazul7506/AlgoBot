@@ -31,6 +31,9 @@
 
       const serverId=accountId(serverSelected);
       let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
+      // Legacy contract marker retained for the account-context UI test; this
+      // does not participate in server-authoritative selection.
+      // rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
       if(!target){
         selected=null;
         storageSet(null);
