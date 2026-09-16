@@ -9,6 +9,7 @@ from .serializers import BacktestSerializer, BacktestStatisticsSerializer, Backt
 from .services import ParameterOptimizationService, ReplayService
 from apps.strategies.models import Strategy as StrategyModel
 from apps.market_data.models import MarketSymbol
+from apps.market_data.constants import TIMEFRAMES
 from core.billing_entitlements import check, effective_plan
 
 
@@ -57,9 +58,8 @@ class BacktestViewSet(viewsets.ModelViewSet):
         market = MarketSymbol.objects.filter(symbol=symbol, is_active=True, is_tradable=True).first()
         if not market:
             raise ValidationError({'symbol': 'The selected instrument is not in the active broker market catalogue.'})
-        supported = [str(x).strip() for x in (market.supported_timeframes or [])]
-        if timeframe not in supported:
-            raise ValidationError({'timeframe': 'The selected timeframe is not supported by this broker instrument.'})
+        if timeframe not in TIMEFRAMES:
+            raise ValidationError({'timeframe': 'The selected timeframe is not supported by AlgoBot.'})
         strategy = StrategyModel.objects.filter(name__iexact=strategy_name).first()
         if not strategy:
             raise ValidationError({'strategy': 'Selected strategy does not exist in the strategy catalog.'})
