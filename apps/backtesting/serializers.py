@@ -40,6 +40,12 @@ class BacktestSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('user', 'status', 'result_snapshot', 'result_version')
 
+    def to_internal_value(self, data):
+        normalized = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'timeframe' in normalized:
+            normalized['timeframe'] = canonical_timeframe(normalized.get('timeframe'))
+        return super().to_internal_value(normalized)
+
     def validate(self, attrs):
         attrs.pop('strategy_id', None)
         attrs.pop('strategy_slug', None)
