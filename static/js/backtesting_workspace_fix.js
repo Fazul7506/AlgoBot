@@ -13,6 +13,7 @@ const DEFAULT_TIMEFRAMES = ['tick','1s','5s','15s','30s','1m','2m','5m','10m','1
 let rows = [];
 let marketMeta = {};
 let catalogueTimeframes = [];
+let strategyCatalog = [];
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
@@ -56,6 +57,8 @@ function setOptions(element, items, placeholder) {
     const option = document.createElement('option');
     option.value = String(item.value);
     option.textContent = item.label;
+    if (item.slug) option.dataset.slug = String(item.slug);
+    if (item.name) option.dataset.name = String(item.name);
     element.appendChild(option);
   }
 }
@@ -91,12 +94,15 @@ function refreshTimeframes(preferred = '') {
 
 async function loadStrategies() {
   const payload = await request('/api/strategies/available/');
-  const items = list(payload?.strategies, ['results','data','items']);
-  const options = items.filter(item => item?.enabled !== false).map(item => ({
+  strategyCatalog = list(payload?.strategies, ['results','data','items']).filter(item => item?.enabled !== false);
+  const options = strategyCatalog.map(item => ({
     value: String(item.id),
     label: `${item.name || item.slug || 'Strategy'}${item.version ? ` v${item.version}` : ''}`,
+    slug: item.slug,
+    name: item.name,
   })).filter(item => item.value && item.value !== 'undefined');
   setOptions(strategy, options, 'Select strategy from catalog…');
+  hydrateStrategySelection();
   return options;
 }
 
@@ -105,8 +111,6 @@ async function loadBrokerCatalogue() {
   try {
     payload = await request('/api/market/broker-catalogue/');
   } catch (primaryError) {
-    // The legacy authenticated catalogue endpoint is a safe fallback when the
-    // connected-broker endpoint is temporarily unavailable.
     payload = await request('/market-catalogue/');
   }
 
@@ -129,14 +133,35 @@ async function loadBrokerCatalogue() {
   return options;
 }
 
+function hydrateStrategySelection() {
+  const query = new URLSearchParams(window.location.search);
+  const requested = String(query.get('strategy_id') || query.get('strategy') || '').trim().toLowerCase();
+  if (!requested) return;
+  const match = strategyCatalog.find(item => [item.id, item.slug, item.name].some(value => String(value ?? '').trim().toLowerCase() === requested));
+  if (match) strategy.value = String(match.id);
+}
+
 function hydrateFromQuery() {
   const query = new URLSearchParams(window.location.search);
-  const strategyId = query.get('strategy_id');
   const selectedSymbol = query.get('symbol');
   const selectedTimeframe = query.get('timeframe');
-  if (strategyId && [...strategy.options].some(option => option.value === strategyId)) strategy.value = strategyId;
   if (selectedSymbol && [...symbol.options].some(option => option.value === selectedSymbol)) symbol.value = selectedSymbol;
   refreshTimeframes(selectedTimeframe || '');
+}
+
+async function hydrateFromStrategyCenter() {
+  if (new URLSearchParams(window.location.search).has('strategy') || new URLSearchParams(window.location.search).has('strategy_id')) return;
+  try {
+    const payload = await request('/api/strategies/current/', {}, 10000);
+    const config = payload?.configuration;
+    if (!config) return;
+    const match = strategyCatalog.find(item => String(item.id) === String(payload?.strategy?.id) || String(item.slug).toLowerCase() === String(payload?.strategy?.slug || '').toLowerCase());
+    if (match) strategy.value = String(match.id);
+    if (config.symbol && [...symbol.options].some(option => option.value === String(config.symbol))) symbol.value = String(config.symbol);
+    refreshTimeframes(config.timeframe || '');
+  } catch (_) {
+    // Backtesting remains usable from its own catalog even if no current strategy is configured.
+  }
 }
 
 function render() {
@@ -223,7 +248,10 @@ form.addEventListener('submit', async event => {
   if (button) { button.disabled = true; button.textContent = 'Submitting…'; }
   try {
     const payload = Object.fromEntries(new FormData(form).entries());
-    payload.strategy = strategy.options[strategy.selectedIndex].textContent.replace(/\s+v\S+$/, '').trim();
+    const selectedOption = strategy.options[strategy.selectedIndex];
+    const selectedStrategy = strategyCatalog.find(item => String(item.id) === String(strategy.value));
+    payload.strategy = selectedStrategy?.name || selectedOption?.dataset.name || selectedOption?.textContent?.replace(/\s+v\S+$/, '').trim();
+    payload.strategy_id = strategy.value;
     delete payload.strategy_id;
     const result = await request('/api/backtests/', {
       method: 'POST',
@@ -298,9 +326,8 @@ $('[data-backtest-search]')?.addEventListener('input', event => {
 $('[data-backtest-refresh]')?.addEventListener('click', loadHistory);
 
 (async () => {
-  // Load each catalog independently so a transient broker failure cannot erase
-  // the strategy selector or leave the whole form unusable.
   const results = await Promise.allSettled([loadStrategies(), loadBrokerCatalogue(), loadHistory()]);
+  await hydrateFromStrategyCenter();
   const catalogueResult = results[1];
   if (catalogueResult?.status === 'rejected') {
     setOptions(symbol, [], 'Broker catalogue unavailable — connect and refresh');
