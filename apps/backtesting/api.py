@@ -5,7 +5,7 @@ from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.decorators import permission_classes
 from rest_framework.exceptions import ValidationError
 from .models import Backtest, BacktestStatistics
-from .serializers import BacktestSerializer, BacktestStatisticsSerializer
+from .serializers import BacktestSerializer, BacktestStatisticsSerializer, BacktestTradeSerializer
 from .services import ParameterOptimizationService, ReplayService
 from apps.strategies.models import Strategy as StrategyModel
 from apps.market_data.models import MarketSymbol
@@ -63,8 +63,20 @@ class BacktestViewSet(viewsets.ModelViewSet):
         strategy = StrategyModel.objects.filter(name__iexact=strategy_name).first()
         if not strategy:
             raise ValidationError({'strategy': 'Selected strategy does not exist in the strategy catalog.'})
-        backtest = serializer.save(user=self.request.user, strategy=strategy.name, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date, mode=str(data.get('mode') or 'candle_close'), status='pending')
-        self._queue(backtest)
+        mode = str(data.get('mode') or 'candle_close').strip().lower()
+        if mode not in {'candle_close', 'tick'}:
+            raise ValidationError({'mode': 'Execution mode must be candle_close or tick.'})
+        with transaction.atomic():
+            user_model = self.request.user.__class__
+            user_model.objects.select_for_update().get(pk=self.request.user.pk)
+            duplicate = Backtest.objects.filter(
+                user=self.request.user, strategy=strategy.name, symbol=symbol, timeframe=timeframe,
+                start_date=start_date, end_date=end_date, mode=mode, status__in=['pending', 'running']
+            ).first()
+            if duplicate:
+                raise ValidationError({'detail': 'An identical backtest is already queued or running.', 'code': 'DUPLICATE_BACKTEST', 'id': duplicate.pk})
+            backtest = serializer.save(user=self.request.user, strategy=strategy.name, symbol=symbol, timeframe=timeframe, start_date=start_date, end_date=end_date, mode=mode, status='pending')
+            self._queue(backtest)
 
     def perform_update(self, serializer):
         instance = self.get_object()
