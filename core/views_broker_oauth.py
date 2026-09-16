@@ -97,13 +97,8 @@ def _persist_deriv_account(*, user, broker, record, access_token, refresh_token,
     broker_account.last_synced_at = timezone.now()
     broker_account.save()
 
-    # OAuth verification is authoritative for the account/token. Websocket
-    # health may be checked asynchronously, so an unverified websocket must not
-    # make a freshly authorized account disappear from the dashboard. Explicit
-    # degraded/failed health remains degraded.
-    connection_status = "connected" if websocket_health in {"verified", "not_checked"} else "degraded"
     BrokerConnection.objects.update_or_create(
         broker_account=broker_account,
-        defaults={"broker": broker, "status": connection_status, "last_ping": timezone.now() if websocket_health == "verified" else None, "connected_at": timezone.now(), "heartbeat": {"oauth_verified": True, "websocket_health": websocket_health}},
+        defaults={"broker": broker, "status": "connected" if websocket_health == "verified" else "degraded", "last_ping": timezone.now() if websocket_health == "verified" else None, "connected_at": timezone.now(), "heartbeat": {"oauth_verified": True, "websocket_health": websocket_health}},
     )
     return broker_account
