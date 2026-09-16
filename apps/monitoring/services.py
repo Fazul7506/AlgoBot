@@ -31,7 +31,7 @@ class TradingMonitoringService:
 class StrategyMonitoringService:
     def snapshot(self): return {"running_strategies":None,"paused_strategies":None,"stopped_strategies":None,"signals_generated":None,"win_rate":None,"loss_rate":None,"profit_factor":None,"performance_drift":None,"strategy_errors":None}
 class RiskMonitoringService:
-    def snapshot(self): return {"current_drawdown":None,"portfolio_risk":None,"exposure":None,"margin":None,"daily_loss":None,"daily_profit":None,"risk_score":None,"circuit_breakers":None,"kill_switch_status":"unknown"}
+    def snapshot(self): return {"current_drawdown":None,"portfolio_risk":None,"exposure":None,"margin":None,"daily_loss":None,"daily_profit":None,"risk_score":None,"circuit_breakers":None}
 class AIMonitoringService:
     def snapshot(self): return {"prediction_latency":None,"prediction_accuracy":None,"model_drift":None,"feature_drift":None,"training_status":"unknown","inference_errors":None,"champion_model":None,"memory_usage":None,"gpu_usage":None}
 class InfrastructureMonitoringService:

@@ -1,5 +1,4 @@
-from django.utils import timezone
-from .models import RiskProfile, RiskRule, RiskAssessment, Exposure, DrawdownHistory, KillSwitchEvent
+from .models import RiskProfile, RiskRule, RiskAssessment, Exposure, DrawdownHistory
 from . import constants as c
 
 
@@ -30,12 +29,3 @@ class RiskRepository:
         else:
             payload['trade'] = trade
         return RiskAssessment.objects.create(**payload)
-
-    def active_kill_switch(self, user):
-        return KillSwitchEvent.objects.filter(user=user, resolved_at__isnull=True).first()
-
-    def activate_kill_switch(self, user, reason, activated_by=None):
-        return KillSwitchEvent.objects.create(user=user, reason=reason, activated_by=activated_by or user)
-
-    def deactivate_kill_switch(self, user):
-        return KillSwitchEvent.objects.filter(user=user, resolved_at__isnull=True).update(resolved_at=timezone.now())

@@ -1,8 +1,6 @@
-from django.db import transaction
-from rest_framework import viewsets, permissions, decorators, response
-from .models import RiskProfile, RiskRule, RiskAssessment, Exposure, DrawdownHistory, KillSwitchEvent
+from rest_framework import viewsets, permissions, response
+from .models import RiskProfile, RiskRule, RiskAssessment, Exposure, DrawdownHistory
 from .serializers import *
-from .services import KillSwitchService
 
 
 class OwnQuerysetMixin:
@@ -23,9 +21,6 @@ class RiskProfileViewSet(OwnQuerysetMixin, viewsets.ModelViewSet):
         return super().get_queryset().order_by("-created_at")
 
     def list(self, request, *args, **kwargs):
-        # A newly connected account should always have a usable protection
-        # profile.  Do this lazily so existing production databases need no
-        # manual seed/migration step.
         profile, _ = RiskProfile.objects.get_or_create(
             user=request.user,
             defaults={
@@ -72,23 +67,3 @@ class DrawdownViewSet(OwnQuerysetMixin, viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return super().get_queryset().order_by("-timestamp")
-
-
-class KillSwitchViewSet(OwnQuerysetMixin, viewsets.ReadOnlyModelViewSet):
-    queryset = KillSwitchEvent.objects.all()
-    serializer_class = KillSwitchEventSerializer
-
-    @decorators.action(detail=False, methods=["post"], url_path="activate")
-    @transaction.atomic
-    def activate(self, request):
-        event = KillSwitchService().activate(
-            request.user,
-            request.data.get("reason", "Manual activation"),
-            request.user,
-        )
-        return response.Response(self.get_serializer(event).data)
-
-    @decorators.action(detail=False, methods=["post"], url_path="deactivate")
-    def deactivate(self, request):
-        KillSwitchService().deactivate(request.user)
-        return response.Response({"resolved": True})

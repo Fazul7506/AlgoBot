@@ -1,12 +1,11 @@
 from decimal import Decimal, InvalidOperation
 
-from .exceptions import KillSwitchActiveError, RiskRuleViolation
+from .exceptions import RiskRuleViolation
 from .repositories import RiskRepository
-from .services import KillSwitchService
 
 
 class RiskValidator:
-    """Fail-closed pre-trade risk validation at the execution boundary."""
+    """Pre-trade risk validation at the execution boundary."""
 
     @staticmethod
     def _decimal(value, field_name):
@@ -20,9 +19,6 @@ class RiskValidator:
 
     def validate_order(self, order, profile=None):
         profile = profile or RiskRepository().profile_for_user(order.user)
-        if KillSwitchService().is_active(order.user):
-            raise KillSwitchActiveError("Kill switch is active")
-
         account = getattr(order, "account", None) or getattr(order, "broker_account", None)
         balance = self._decimal(getattr(account, "balance", 0), "account balance")
         stake = self._decimal(getattr(order, "stake", 0), "stake")

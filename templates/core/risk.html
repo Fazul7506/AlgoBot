@@ -7,7 +7,7 @@
 <section class="risk-center" data-risk-center>
   <header class="risk-hero">
     <div><p class="eyebrow">TRADE PROTECTION</p><h1>Risk</h1><p>Know what you can afford to lose before you place a trade.</p><div class="risk-status" data-risk-status><span class="risk-status-dot"></span><span>Loading your account risk…</span></div></div>
-    <div class="risk-hero-actions"><button class="btn ghost" type="button" data-risk-refresh>Refresh</button><a class="btn primary" href="/trading/">Open terminal</a><button class="btn danger" type="button" data-risk-kill>Emergency stop</button></div>
+    <div class="risk-hero-actions"><button class="btn ghost" type="button" data-risk-refresh>Refresh</button><a class="btn primary" href="/trading/">Open terminal</a></div>
   </header>
   <section class="risk-summary" aria-label="Risk summary">
     <article class="risk-summary-card"><span>Account balance</span><strong data-risk-balance>—</strong><small>Your selected broker account</small></article>
@@ -42,7 +42,6 @@
     <article class="risk-card"><div class="risk-card-head"><div><p class="eyebrow">CURRENT EXPOSURE</p><h2>What is already at risk?</h2></div><a href="/positions/">View positions</a></div><div class="simple-list" data-risk-exposure><div class="calculator-empty">Loading exposure…</div></div></article>
     <article class="risk-card"><div class="risk-card-head"><div><p class="eyebrow">RECENT CHECKS</p><h2>Risk checks</h2></div><a href="/trade-history/">Trade history</a></div><div class="simple-list" data-risk-assessments><div class="calculator-empty">Loading risk checks…</div></div></article>
   </section>
-  <section class="risk-danger"><div><strong>Emergency stop</strong><p>Stops new trading activity through the platform safety control. Use it when you need the system to stop opening trades immediately.</p></div><button class="btn danger" type="button" data-risk-kill>Stop new trades</button></section>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/risk.js' %}?v=20260901-risk2" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/risk.js' %}?v=20260916-risk3" defer></script>{% endblock %}
