@@ -11,6 +11,14 @@ class BacktestSerializer(serializers.ModelSerializer):
         read_only_fields = ('user', 'status', 'result_snapshot', 'result_version')
 
     def validate(self, attrs):
+        if self.instance:
+            immutable = {'strategy', 'symbol', 'timeframe', 'mode', 'parameters'}
+            changed = immutable.intersection(attrs)
+            if changed:
+                raise serializers.ValidationError({
+                    'detail': 'Only start_date and end_date can be edited after a backtest is created.',
+                    'immutable_fields': sorted(changed),
+                })
         start = attrs.get('start_date', getattr(self.instance, 'start_date', None))
         end = attrs.get('end_date', getattr(self.instance, 'end_date', None))
         if not start or not end:
