@@ -18,12 +18,14 @@ from rest_framework import status
 from core.account_context import get_active_account
 from .deriv_sync import _request
 from .models import MarketSymbol
+from .constants import TIMEFRAMES
 
 CATALOGUE_CACHE = "algobot:broker:deriv:active-symbols"
 CAPABILITIES_CACHE_PREFIX = "algobot:broker:deriv:contracts-for:"
 CAPABILITIES_STALE_PREFIX = "algobot:broker:deriv:contracts-for:stale:"
 CAPABILITIES_CACHE_SECONDS = 300
 CAPABILITIES_STALE_SECONDS = 86400
+BACKTEST_TIMEFRAMES = list(TIMEFRAMES.keys())
 
 
 def _account(user, request=None):
@@ -48,6 +50,7 @@ def _normalise_symbol(item):
         "exchange_is_open": bool(item.get("exchange_is_open", True)),
         "is_trading_suspended": bool(item.get("is_trading_suspended", False)),
         "trade_count": item.get("trade_count"),
+        "supported_timeframes": BACKTEST_TIMEFRAMES,
     }
 
 
@@ -67,6 +70,7 @@ def _cached_database_catalogue():
             "is_tradable": row.is_tradable,
             "exchange_is_open": True,
             "is_trading_suspended": False,
+            "supported_timeframes": BACKTEST_TIMEFRAMES,
         }
         for row in rows
     ]
@@ -90,26 +94,19 @@ def catalogue(request):
             if payload:
                 cache.set(CATALOGUE_CACHE, payload, timeout=30)
         if payload:
-            return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,"symbols":payload,"count":len(payload),"stale":False})
+            return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,"symbols":payload,"count":len(payload),"supported_timeframes":BACKTEST_TIMEFRAMES,"stale":False})
         raise RuntimeError("Deriv returned no active tradable instruments")
     except Exception as exc:
         cached = _cached_database_catalogue()
         if cached:
-            return Response({"status":"stale","source":"cached_broker_catalogue","broker":account.broker.name,"account_id":account.account_id,"symbols":cached,"count":len(cached),"stale":True,"detail":"Live broker catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
+            return Response({"status":"stale","source":"cached_broker_catalogue","broker":account.broker.name,"account_id":account.account_id,"symbols":cached,"count":len(cached),"supported_timeframes":BACKTEST_TIMEFRAMES,"stale":True,"detail":"Live broker catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
         return Response({"status":"error","code":"BROKER_CATALOGUE_UNAVAILABLE","detail":str(exc),"source":"connected_broker"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def capabilities(request):
-    """Return fast broker-authoritative contract capabilities for the selected symbol.
-
-    Capability discovery is deliberately decoupled from authenticated execution:
-    Deriv's public ``contracts_for`` response is sufficient to populate the
-    terminal selector. This avoids the extra OAuth/OTP WebSocket handshake that
-    previously caused the UI to sit on "Loading broker contracts…" until the
-    frontend timeout expired.
-    """
+    """Return fast broker-authoritative contract capabilities for the selected symbol."""
     symbol = str(request.query_params.get("symbol") or "").strip()
     account = _account(request.user, request=request)
     if not account:
