@@ -91,7 +91,7 @@ class BillingPaymentFlowTests(TestCase):
         response.json.return_value = ["unexpected"]
         post.return_value = response
 
-        result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900))
+        result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
 
         self.assertEqual(result["url"], "")
         self.assertIn("no checkout URL", result["error"])
