@@ -17,9 +17,6 @@
       const rememberedId=storageGet();
       const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},10000)).filter(a=>a?.id);accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
       let serverSelected=null,activeRequestFailed=false;
-      // The account list already carries the server-authoritative active/preferred
-      // flags. Only make the second active-account call when the list cannot
-      // establish a safe target. This removes a blocking request from every page.
       const listedActive=rows.find(a=>a.is_active===true||a.is_preferred===true||a.is_default===true);
       if(listedActive) serverSelected=listedActive;
       else if(rows.length>1 && rememberedId){
@@ -29,11 +26,16 @@
         }catch(_){activeRequestFailed=true}
       }
       const serverId=accountId(serverSelected);
-      // The backend remains authoritative. A remembered account is only used
-      // as a recovery hint when the active-account read itself is unavailable;
-      // the next API request still sends the account header and the backend
-      // revalidates it against the authenticated user's connected accounts.
-      let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
+      // A connected account is always a safe local fallback. If no account is
+      // connected yet, an active account with ready broker credentials is also
+      // a safe bootstrap target: broker_state_bridge.js will establish the
+      // account-scoped connection and then rehydrate the authoritative state.
+      // This prevents a deadlock where the bridge needs a selected account to
+      // connect, while the selector refused every account because none was yet
+      // connected.
+      const connectedFallback=rows.find(a=>a.is_connected===true&&a.status==='active')||null;
+      const connectionBootstrap=rows.find(a=>a.status==='active'&&a.credential_status==='ready')||null;
+      let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||connectedFallback||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null)||connectionBootstrap;
       if(!target){selected=null;storageSet(null);window.AlgoBotBrokerState?.reset('no-connected-broker-account');window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));return null}
       const hydrated=serverSelected&&accountId(serverSelected)===accountId(target)?serverSelected:target;
       accounts=accounts.map(a=>accountId(a)===accountId(hydrated)?{...a,...hydrated,is_active:true}:{...a,is_active:false,is_preferred:false});
@@ -52,9 +54,6 @@
   window.addEventListener('algobot:account-synced',event=>{if(!event.detail?.id)return;const id=accountId(event.detail);accounts=accounts.map(a=>accountId(a)===id?event.detail:a);if(getSelectedId()===id)setSelected(event.detail,'account-synced',true)});
   window.addEventListener('algobot:account-context-error',event=>{
     const message=event.detail?.message||'Broker account selection is temporarily unavailable.';
-    // Account-context failures are rendered by the account-aware page/shell.
-    // Do not turn a recoverable bootstrap failure into a global "Failed to fetch"
-    // overlay that obscures the workspace.
     window.dispatchEvent(new CustomEvent('algobot:account-state-unavailable',{detail:{message,retryable:true}}));
   });
   const boot=()=>{if(document.body.dataset.authenticated==='true')load().catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})))};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
