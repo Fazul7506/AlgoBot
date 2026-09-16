@@ -8,7 +8,7 @@ from core.models import UserProfile, Subscription, BotSettings
 
 @receiver(post_save, sender=get_user_model())
 def ensure_user_related_models(sender, instance, created, **kwargs):
-    """Create related objects when user is created"""
+    """Create related objects when user is created."""
     if not created:
         return
 
@@ -23,13 +23,21 @@ def ensure_user_related_models(sender, instance, created, **kwargs):
 
 
 def canonical_deriv_account(user):
-    """Get preferred Deriv account for user"""
+    """Return the authenticated user's active Deriv account without legacy preference state."""
     from apps.brokers.models import BrokerAccount
-    account = BrokerAccount.objects.filter(
-        user=user,
-        broker__broker_type="deriv",
-        is_preferred=True,
-    ).select_related("broker").first()
+    account = (
+        BrokerAccount.objects.filter(
+            user=user,
+            broker__broker_type="deriv",
+            status="active",
+            broker__status="active",
+            connections__status="connected",
+        )
+        .select_related("broker")
+        .distinct()
+        .order_by("-last_synced_at", "-id")
+        .first()
+    )
     if account is None:
         raise BrokerAccount.DoesNotExist
     return account
