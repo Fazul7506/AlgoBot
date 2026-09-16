@@ -21,14 +21,6 @@ class MarginService:
         b=Decimal(str(balance or 0)); used=Decimal(str(used_margin or 0)); free=b-used; level=(b/used*100) if used else Decimal('9999')
         return {'available_balance':b,'used_margin':used,'free_margin':free,'margin_level':level,'margin_call':level<100,'stop_out_risk':level<50}
 
-class KillSwitchService:
-    def activate(self,user,reason='Manual kill switch',activated_by=None): logger.critical('Kill switch activated for %s: %s',user,reason); return RiskRepository().activate_kill_switch(user,reason,activated_by)
-    def deactivate(self,user): return RiskRepository().deactivate_kill_switch(user)
-    def pause_all_trading(self,user,reason='Trading paused'): return self.activate(user,reason)
-    def resume_trading(self,user): return self.deactivate(user)
-    def emergency_shutdown(self,user,reason='Emergency shutdown'): return self.activate(user,reason)
-    def is_active(self,user): return RiskRepository().active_kill_switch(user) is not None
-
 class CircuitBreakerService:
     def evaluate(self,broker_unstable=False,websocket_disconnected=False,market_volatility=0,latency_ms=0,strategy_malfunction=False,risk_limits_exceeded=False):
         reasons=[]
@@ -50,7 +42,7 @@ class TradingSessionRiskService:
         return True,''
 
 class RiskMonitoringService:
-    def dashboard(self,user): return {'risk_score':0,'today_profit_loss':0,'current_drawdown':0,'maximum_drawdown':0,'portfolio_exposure':ExposureService().summary(user)['overall'],'margin_level':0,'free_margin':0,'open_risk':0,'daily_loss_remaining':0,'kill_switch_status':KillSwitchService().is_active(user),'circuit_breaker_status':False}
+    def dashboard(self,user): return {'risk_score':0,'today_profit_loss':0,'current_drawdown':0,'maximum_drawdown':0,'portfolio_exposure':ExposureService().summary(user)['overall'],'margin_level':0,'free_margin':0,'open_risk':0,'daily_loss_remaining':0,'circuit_breaker_status':False}
 
 # public aliases
 RiskRepository=RiskRepository; PositionSizingService=PositionSizingService; DrawdownService=DrawdownService; ExposureService=ExposureService; CorrelationService=CorrelationService; PortfolioRiskService=PortfolioRiskService
