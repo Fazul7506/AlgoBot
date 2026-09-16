@@ -102,7 +102,7 @@ class StrategyService:
                 trades.append({'index': index + 1, 'signal': signal, 'mode': mode, 'entry_price': quote, 'exit_price': next_quote, 'profit': profit, 'entry_epoch': int(current['epoch']), 'exit_epoch': int(nxt['epoch'])})
                 equity.append(equity[-1] + profit)
         else:
-                for index in range(min_history, len(candles) - 1):
+            for index in range(min_history, len(candles) - 1):
                 current = candles[index]; indicators = rows[index]
                 market_data = {'symbol': symbol, 'open': float(current['open']), 'high': float(current['high']), 'low': float(current['low']), 'close': float(current['close']), 'volume': float(current['volume'] or 0), 'epoch': int(current['epoch'])}
                 closes = [float(c['close']) for c in candles[:index + 1]]
