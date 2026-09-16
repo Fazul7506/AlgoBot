@@ -16,6 +16,8 @@ class BacktestSerializer(serializers.ModelSerializer):
         read_only_fields = ('user', 'status', 'result_snapshot', 'result_version')
 
     def validate(self, attrs):
+        attrs.pop('strategy_id', None)
+        attrs.pop('strategy_slug', None)
         if self.instance:
             if self.instance.status != 'pending':
                 raise serializers.ValidationError({'status': 'Only pending backtests can be edited.'})
