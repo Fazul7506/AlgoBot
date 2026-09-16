@@ -3,6 +3,17 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
   const json = async (url, opts = {}) => {
+    const shared = window.AlgoBotFrontendData?.request;
+    if (typeof shared === 'function') {
+      try { return await shared(url, { ...opts, notifyOnError: false }, opts.__timeoutMs || 25000); }
+      catch (error) {
+        if (error?.status === 401 || error?.status === 403) {
+          document.body.classList.add('auth-expired');
+          window.location.assign('/login/?next=' + encodeURIComponent(window.location.pathname));
+        }
+        throw error;
+      }
+    }
     const headers = { Accept: 'application/json', ...(opts.headers || {}) };
     const res = await fetch(url, { credentials: 'same-origin', ...opts, headers });
     const text = await res.text();
@@ -89,6 +100,7 @@
   };
 
   async function accountKPIs() {
+    if (document.querySelector('[data-dashboard-command]')) return null;
     try {
       const [overview, accounts] = await Promise.all([
         json('/api/dashboard/account_overview/'),
