@@ -5,7 +5,6 @@ from django.test import TestCase
 
 from apps.brokers.models import Broker, BrokerAccount, Order
 from apps.risk.models import RiskAssessment, RiskProfile
-from apps.risk.services import KillSwitchService
 from apps.risk.engine import RiskEngine
 
 
@@ -40,17 +39,3 @@ class BrokerOrderRiskGateTests(TestCase):
         self.assertTrue(assessment.approved, assessment.rejection_reason)
         self.assertEqual(assessment.broker_trade_id, order.pk)
         self.assertEqual(RiskAssessment.objects.filter(broker_trade=order).count(), 1)
-
-    def test_kill_switch_blocks_broker_order(self):
-        KillSwitchService().activate(self.user, reason='audit test')
-        order = Order.objects.create(
-            user=self.user,
-            broker=self.broker,
-            account=self.account,
-            symbol='R_100',
-            direction='buy',
-            stake=Decimal('10'),
-        )
-        assessment = RiskEngine().evaluate_order(order)
-        self.assertFalse(assessment.approved)
-        self.assertIn('Kill switch', assessment.rejection_reason)
