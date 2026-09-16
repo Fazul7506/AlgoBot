@@ -70,9 +70,16 @@ class StrategyService:
             raise ValueError('Unsupported backtest execution mode')
         if start_date is not None and end_date is not None and end_date <= start_date:
             raise ValueError('end_date must be later than start_date')
-        candles = StrategyService._historic_candles(symbol, timeframe, start_date, end_date)
-        if len(candles) <= min_history:
-            raise ValueError('Insufficient canonical candle history for the selected symbol, timeframe and date range')
+        if mode == 'tick':
+            from apps.market_data.models import Tick
+            tick_qs = Tick.objects.filter(symbol__symbol=symbol).order_by('epoch', 'id')
+            if start_date is not None: tick_qs = tick_qs.filter(epoch__gte=int(start_date.timestamp()))
+            if end_date is not None: tick_qs = tick_qs.filter(epoch__lte=int(end_date.timestamp()))
+            ticks = list(tick_qs.values('quote', 'volume', 'epoch'))
+            if len(ticks) <= min_history: raise ValueError('Insufficient canonical tick history for the selected symbol and exact date range')
+        else:
+            candles = StrategyService._historic_candles(symbol, timeframe, start_date, end_date)
+            if len(candles) <= min_history: raise ValueError('Insufficient canonical candle history for the selected symbol, timeframe and date range')
         from apps.indicators.basic_features import compute_basic_features
         rows = compute_basic_features(candles)
         strategy_cls = registry.get(getattr(strategy_record, 'slug', '') or str(getattr(strategy_record, 'name', '')).lower().replace(' ', '_'))
@@ -81,7 +88,21 @@ class StrategyService:
         config = SimpleNamespace(criteria={}, parameters={})
         trades = []
         equity = [1000.0]
-        for index in range(min_history, len(candles) - 1):
+        if mode == 'tick':
+            for index in range(min_history, len(ticks) - 1):
+                current, nxt = ticks[index], ticks[index + 1]
+                quote, next_quote = float(current['quote']), float(nxt['quote'])
+                history = [float(t['quote']) for t in ticks[:index + 1]]
+                trend = 'up' if quote > history[max(0, len(history)-20)] else 'down' if quote < history[max(0, len(history)-20)] else 'sideways'
+                market_data = {'symbol': symbol, 'open': quote, 'high': quote, 'low': quote, 'close': quote, 'volume': float(current['volume'] or 0), 'epoch': int(current['epoch'])}
+                indicator_data = {'sma5': sum(history[-5:]) / min(5, len(history)), 'sma20': sum(history[-20:]) / min(20, len(history)), 'ret1': (quote / history[-2] - 1) if len(history) > 1 and history[-2] else 0.0, 'range': 0.0, 'rsi': LiveMarketContextService._rsi(history), 'trend': trend, 'source': 'historical_tick'}
+                strategy = strategy_cls(configuration=config, market_data=market_data, indicator_data=indicator_data); strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or 'HOLD').upper()
+                if signal not in {'BUY', 'SELL'}: continue
+                profit = 1.0 if (signal == 'BUY' and next_quote > quote) or (signal == 'SELL' and next_quote < quote) else -1.0
+                trades.append({'index': index + 1, 'signal': signal, 'mode': mode, 'entry_price': quote, 'exit_price': next_quote, 'profit': profit, 'entry_epoch': int(current['epoch']), 'exit_epoch': int(nxt['epoch'])})
+                equity.append(equity[-1] + profit)
+        else:
+            for index in range(min_history, len(candles) - 1):
             current = candles[index]; indicators = rows[index]
             market_data = {'symbol': symbol, 'open': float(current['open']), 'high': float(current['high']), 'low': float(current['low']), 'close': float(current['close']), 'volume': float(current['volume'] or 0), 'epoch': int(current['epoch'])}
             closes = [float(c['close']) for c in candles[:index + 1]]
@@ -91,16 +112,8 @@ class StrategyService:
             strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or 'HOLD').upper()
             if signal not in {'BUY', 'SELL'}: continue
             next_candle = candles[index + 1]
-            if mode == 'tick':
-                # Historical Candle rows are the canonical broker-ingested source.
-                # With no tick table available, use the first reachable OHLC
-                # boundary as the deterministic tick-mode proxy rather than
-                # silently pretending tick data exists.
-                entry = float(current['close'])
-                exit_price = float(next_candle['open'])
-            else:
-                entry = float(current['close'])
-                exit_price = float(next_candle['close'])
+            entry = float(current['close'])
+            exit_price = float(next_candle['close'])
             profit = 1.0 if (signal == 'BUY' and exit_price > entry) or (signal == 'SELL' and exit_price < entry) else -1.0
             trades.append({'index': index + 1, 'signal': signal, 'mode': mode, 'entry_price': entry, 'exit_price': exit_price, 'profit': profit, 'entry_epoch': int(current['epoch']), 'exit_epoch': int(next_candle['epoch'])})
             equity.append(equity[-1] + profit)
