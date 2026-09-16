@@ -6,7 +6,7 @@
   const $ = s => document.querySelector(s);
   const list = v => Array.isArray(v) ? v : (v?.results || v?.data || v?.items || []);
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const tradeUrl = s => `/trading/?strategy=${encodeURIComponent(s.slug || s.name || '')}`;
+  const tradeUrl = s => `/trading/?strategy=${encodeURIComponent(s.slug || s.name || '')}${s.active_configuration?.symbol ? `&symbol=${encodeURIComponent(s.active_configuration.symbol)}` : ''}`;
   const builderUrl = s => `/strategies/builder/?strategy=${encodeURIComponent(s.slug || '')}`;
   let strategies = [];
 
@@ -22,13 +22,17 @@
     const visible = strategies.filter(s => String(s.name || s.slug || '').toLowerCase().includes(q));
     $('[data-s-list]').innerHTML = visible.length ? visible.map(s => {
       const configs = Array.isArray(s.configurations) ? s.configurations : [];
-      const active = s.active_configuration || configs.find(c => c.is_active && c.enabled);
-      const state = s.running ? 'RUNNING' : (s.configured ? 'CONFIGURED' : 'AVAILABLE');
-      const stateClass = s.running ? 'active' : (s.configured ? 'configured' : 'available');
-      const detail = active ? `${esc(active.symbol || '—')} · ${esc(active.timeframe || '—')}` : (s.configured ? `${configs.length} saved configuration${configs.length === 1 ? '' : 's'}` : 'Not configured');
-      const action = s.running
+      const active = s.active_configuration || configs.find(c => c.is_active);
+      const connected = Boolean(s.connected || active);
+      const running = Boolean(s.running || (active && active.enabled));
+      const paused = Boolean(s.paused || (connected && !running));
+      const configured = Boolean(s.configured || configs.length);
+      const state = running ? 'RUNNING' : paused ? 'PAUSED' : configured ? 'CONFIGURED' : 'AVAILABLE';
+      const stateClass = running ? 'active' : (paused ? 'paused' : (configured ? 'configured' : 'available'));
+      const detail = active ? `${esc(active.symbol || '—')} · ${esc(active.timeframe || '—')}` : (configured ? `${configs.length} saved configuration${configs.length === 1 ? '' : 's'}` : 'Not configured');
+      const action = connected
         ? `<button class="btn small ghost" type="button" data-strategy-disconnect data-strategy-id="${esc(s.id)}" data-config-id="${esc(active?.id || '')}">Disconnect</button>`
-        : s.configured
+        : configured
           ? `<button class="btn small primary" type="button" data-strategy-switch data-strategy-id="${esc(s.id)}" data-config-id="${esc((configs.find(c => c.enabled) || configs[0])?.id || '')}">Use strategy</button>`
           : `<a class="btn small ghost" href="${builderUrl(s)}">Configure</a>`;
       return `<article class="strategy-row strategy-control-row"><div class="strategy-row-main"><strong>${esc(s.name || s.slug || 'Strategy')}</strong><small>${esc(s.category || 'Strategy')} · v${esc(s.version || '1.0.0')}</small><small class="strategy-config-detail">${detail}</small></div><span class="state-badge ${stateClass}">${state}</span><div class="strategy-actions-inline">${action}<a class="btn small ghost" href="${tradeUrl(s)}">Trade</a></div></article>`;
@@ -68,9 +72,10 @@
     const data = window.AlgoBotFrontendData;
     if (!data?.request) throw new Error('Strategy service is not ready.');
     const result = await data.request(path, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body || {})});
-    if (result?.detail && result?.status === 'error') throw new Error(result.detail);
-    window.alert(result?.message || result?.detail || successMessage);
+    const message = result?.detail || result?.message || successMessage;
+    window.alert(message);
     await load();
+    return result;
   }
 
   async function useStrategy(id, configId) {
@@ -83,19 +88,17 @@
     catch(e) { window.alert(e?.message || 'Unable to disconnect strategy.'); }
   }
 
-  async function action(path) {
+  async function action(path, requireBroker = false) {
     try {
-      window.AlgoBotFrontendData.requireConnected('run or change executable strategies');
-      const result = await window.AlgoBotFrontendData.request(path, {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-      window.alert(result?.detail || 'Strategy action completed.');
-      await load();
+      if (requireBroker) window.AlgoBotFrontendData.requireConnected('run executable strategies');
+      await post(path, {}, 'Strategy action completed.');
     } catch(e) { window.alert(e?.message || 'Strategy action failed.'); }
   }
 
   function boot() {
-    document.querySelectorAll('[data-strategy-run]').forEach(b => b.addEventListener('click', () => action('/api/strategies/run/')));
+    document.querySelectorAll('[data-strategy-run]').forEach(b => b.addEventListener('click', () => action('/api/strategies/run/', true)));
     $('[data-strategy-pause]')?.addEventListener('click', () => action('/api/strategies/pause/'));
-    $('[data-strategy-stop]')?.addEventListener('click', () => { if(confirm('Stop all active strategies for this account?')) action('/api/strategies/stop/'); });
+    $('[data-strategy-stop]')?.addEventListener('click', () => { if(confirm('Stop and disconnect the currently connected strategies? Saved configurations will remain available.')) action('/api/strategies/stop/'); });
     $('[data-s-search]')?.addEventListener('input', renderList);
     $('[data-s-list]')?.addEventListener('click', e => {
       const switchButton = e.target.closest('[data-strategy-switch]');
