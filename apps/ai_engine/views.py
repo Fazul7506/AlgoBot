@@ -153,12 +153,8 @@ def _discover_symbol(request):
 
 
 def _connected_account(user, request=None):
-    """Resolve the account selected in the authenticated user's session."""
-    if request is not None:
-        active = get_active_account(user, request=request)
-        if active:
-            return active
-    return BrokerAccount.objects.filter(user=user, status="active", broker__status="active").select_related("broker").order_by("-is_preferred", "-id").first()
+    """Resolve only the canonical account selected by the authenticated session/request."""
+    return get_active_account(user, request=request)
 
 
 async def _bounded_market_data(account, symbol):
