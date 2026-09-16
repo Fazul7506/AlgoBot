@@ -1,4 +1,6 @@
 import importlib
+from datetime import datetime, timezone as dt_timezone
+from decimal import Decimal, InvalidOperation
 
 
 def _celery_app():
@@ -26,6 +28,56 @@ def _strategy_confidence(result):
     dd_score = 1.0 / (1.0 + drawdown / 100.0)
     score = 100.0 * (0.35 * win_rate + 0.25 * pf_score + 0.15 * sharpe_score + 0.15 * dd_score + 0.10 * sample_score)
     return round(max(0.0, min(100.0, score)), 2)
+
+
+def _decimal(value, default='0'):
+    try:
+        return Decimal(str(value if value is not None else default))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal(default)
+
+
+def _trade_datetime(value):
+    if value in (None, ''):
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=dt_timezone.utc)
+    try:
+        return datetime.fromtimestamp(float(value), tz=dt_timezone.utc)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
+def _persist_trades(backtest, result):
+    from .models import BacktestTrade
+
+    BacktestTrade.objects.filter(backtest=backtest).delete()
+    rows = []
+    for raw in result.get('trades', []) or []:
+        if not isinstance(raw, dict):
+            continue
+        entry_time = _trade_datetime(raw.get('entry_epoch', raw.get('entry_time')))
+        if not entry_time:
+            continue
+        exit_time = _trade_datetime(raw.get('exit_epoch', raw.get('exit_time')))
+        direction = str(raw.get('direction', raw.get('side', 'long'))).lower()
+        direction = 'short' if direction in {'short', 'sell', 'put'} else 'long'
+        duration = (exit_time - entry_time) if exit_time else None
+        rows.append(BacktestTrade(
+            backtest=backtest,
+            entry_time=entry_time,
+            exit_time=exit_time,
+            entry_price=_decimal(raw.get('entry_price')),
+            exit_price=_decimal(raw.get('exit_price')) if raw.get('exit_price') is not None else None,
+            direction=direction,
+            profit=_decimal(raw.get('profit', raw.get('pnl', 0))),
+            fees=_decimal(raw.get('fees', 0)),
+            duration=duration,
+            metadata=raw,
+        ))
+    if rows:
+        BacktestTrade.objects.bulk_create(rows, batch_size=500)
+    return len(rows)
 
 
 def _persist_statistics(backtest, result):
@@ -56,6 +108,7 @@ def _persist_statistics(backtest, result):
 
 @_task
 def execute_backtest(backtest_id):
+    from django.db import transaction
     from .models import Backtest
     from apps.strategies.models import Strategy as StrategyModel
     from apps.strategies.services import StrategyService
@@ -71,13 +124,17 @@ def execute_backtest(backtest_id):
         backtest.status = 'running'
         backtest.save(update_fields=['status', 'updated_at'])
         result = StrategyService.run_backtest(strategy, symbol=backtest.symbol, timeframe=backtest.timeframe, start_date=backtest.start_date, end_date=backtest.end_date)
+        result = result if isinstance(result, dict) else {}
         confidence = _strategy_confidence(result)
         result['strategy_confidence'] = confidence
         result['research_training'] = {'eligible': bool(result.get('total_trades', 0)), 'purpose': 'ai_training_research_only', 'live_authority': False, 'source': 'completed_historical_backtest'}
-        backtest.status = 'completed'
-        backtest.result_snapshot = {'status': 'completed', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat(), 'strategy': strategy.name, 'symbol': backtest.symbol, 'timeframe': backtest.timeframe, 'result': result}
-        backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
-        _persist_statistics(backtest, result)
+        with transaction.atomic():
+            trade_count = _persist_trades(backtest, result)
+            _persist_statistics(backtest, result)
+            result['persisted_trade_count'] = trade_count
+            backtest.status = 'completed'
+            backtest.result_snapshot = {'status': 'completed', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat(), 'strategy': strategy.name, 'symbol': backtest.symbol, 'timeframe': backtest.timeframe, 'result': result}
+            backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
         return backtest.id
     except Exception as exc:
         backtest.status = 'failed'
