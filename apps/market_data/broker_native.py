@@ -1,4 +1,10 @@
-"""Connected-broker market capabilities."""
+"""Connected-broker market capabilities.
+
+Deriv is the authoritative source for the market universe and contracts. Public
+contract metadata is used for capability discovery because ``contracts_for``
+is broker catalogue data and does not require an authenticated trading socket.
+Actual order execution remains authenticated and broker/risk gated.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -10,7 +16,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from core.account_context import get_active_account
-from .deriv_sync import _request, _payload_data
+from .deriv_sync import _request
 from .models import MarketSymbol
 
 CATALOGUE_CACHE = "algobot:broker:deriv:active-symbols"
@@ -25,18 +31,17 @@ def _account(user, request=None):
 
 
 def _public_deriv(payload):
-    return _payload_data(asyncio.run(_request(payload)))
+    return asyncio.run(_request(payload))
 
 
 def _normalise_symbol(item):
-    symbol = str(item.get("underlying_symbol") or item.get("symbol") or "").strip()
-    display_name = str(item.get("underlying_symbol_name") or item.get("display_name") or item.get("name") or symbol).strip()
+    symbol = str(item.get("underlying_symbol") or "").strip()
     return {
         "symbol": symbol,
-        "display_name": display_name,
+        "display_name": str(item.get("underlying_symbol_name") or symbol),
         "market": str(item.get("market") or ""),
-        "sub_market": str(item.get("submarket") or item.get("sub_market") or item.get("subgroup") or ""),
-        "symbol_type": str(item.get("underlying_symbol_type") or item.get("symbol_type") or ""),
+        "sub_market": str(item.get("submarket") or item.get("subgroup") or ""),
+        "symbol_type": str(item.get("underlying_symbol_type") or ""),
         "pip_size": item.get("pip_size"),
         "is_active": bool(item.get("exchange_is_open", True)) and not bool(item.get("is_trading_suspended", False)),
         "is_tradable": bool(item.get("exchange_is_open", True)) and not bool(item.get("is_trading_suspended", False)),
@@ -47,8 +52,24 @@ def _normalise_symbol(item):
 
 
 def _cached_database_catalogue():
-    rows = MarketSymbol.objects.filter(broker="deriv", is_active=True, is_tradable=True).order_by("market", "symbol")
-    return [{"symbol": row.symbol, "display_name": row.display_name, "market": row.market, "sub_market": row.sub_market, "symbol_type": "", "pip_size": row.pip_size, "is_active": row.is_active, "is_tradable": row.is_tradable, "exchange_is_open": True, "is_trading_suspended": False} for row in rows]
+    rows = MarketSymbol.objects.filter(
+        broker="deriv", is_active=True, is_tradable=True
+    ).order_by("market", "symbol")
+    return [
+        {
+            "symbol": row.symbol,
+            "display_name": row.display_name,
+            "market": row.market,
+            "sub_market": row.sub_market,
+            "symbol_type": "",
+            "pip_size": row.pip_size,
+            "is_active": row.is_active,
+            "is_tradable": row.is_tradable,
+            "exchange_is_open": True,
+            "is_trading_suspended": False,
+        }
+        for row in rows
+    ]
 
 
 @api_view(["GET"])
@@ -62,24 +83,33 @@ def catalogue(request):
     try:
         payload = cache.get(CATALOGUE_CACHE)
         if payload is None:
-            raw = _public_deriv({"active_symbols": "brief"}).get("active_symbols") or []
-            payload = [_normalise_symbol(item) for item in raw if isinstance(item, dict) and (_normalise_symbol(item)["symbol"])]
-            payload = [item for item in payload if item["is_active"] and item["is_tradable"]]
+            response = _public_deriv({"active_symbols": "brief"})
+            raw = response.get("active_symbols") or []
+            payload = [_normalise_symbol(item) for item in raw if isinstance(item, dict) and item.get("underlying_symbol")]
+            payload = [item for item in payload if item["is_active"]]
             if payload:
                 cache.set(CATALOGUE_CACHE, payload, timeout=30)
         if payload:
-            return Response({"status": "ok", "source": "connected_broker", "broker": account.broker.name, "account_id": account.account_id, "symbols": payload, "count": len(payload), "stale": False})
+            return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,"symbols":payload,"count":len(payload),"stale":False})
         raise RuntimeError("Deriv returned no active tradable instruments")
     except Exception as exc:
         cached = _cached_database_catalogue()
         if cached:
-            return Response({"status": "stale", "source": "cached_broker_catalogue", "broker": account.broker.name, "account_id": account.account_id, "symbols": cached, "count": len(cached), "stale": True, "detail": "Live broker catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
-        return Response({"status": "error", "code": "BROKER_CATALOGUE_UNAVAILABLE", "detail": str(exc), "source": "connected_broker"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({"status":"stale","source":"cached_broker_catalogue","broker":account.broker.name,"account_id":account.account_id,"symbols":cached,"count":len(cached),"stale":True,"detail":"Live broker catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
+        return Response({"status":"error","code":"BROKER_CATALOGUE_UNAVAILABLE","detail":str(exc),"source":"connected_broker"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def capabilities(request):
+    """Return fast broker-authoritative contract capabilities for the selected symbol.
+
+    Capability discovery is deliberately decoupled from authenticated execution:
+    Deriv's public ``contracts_for`` response is sufficient to populate the
+    terminal selector. This avoids the extra OAuth/OTP WebSocket handshake that
+    previously caused the UI to sit on "Loading broker contracts…" until the
+    frontend timeout expired.
+    """
     symbol = str(request.query_params.get("symbol") or "").strip()
     account = _account(request.user, request=request)
     if not account:
@@ -88,28 +118,55 @@ def capabilities(request):
         return Response({"detail": "symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
     if account.broker.broker_type != "deriv":
         return Response({"detail": f"Broker contract capabilities are not implemented for {account.broker.name} yet."}, status=status.HTTP_409_CONFLICT)
+
     cache_key = f"{CAPABILITIES_CACHE_PREFIX}{symbol}"
     try:
         payload = cache.get(cache_key)
         if payload is None:
-            root = _public_deriv({"contracts_for": symbol}).get("contracts_for") or {}
+            response = _public_deriv({"contracts_for": symbol})
+            root = response.get("contracts_for") or {}
             raw_contracts = root.get("available") or []
             if not isinstance(raw_contracts, list):
                 raise RuntimeError("Broker returned an invalid contract capability payload")
             unique = {}
             for item in raw_contracts:
-                if isinstance(item, dict) and item.get("contract_type"):
-                    contract_type = str(item["contract_type"]).strip().upper()
-                    unique.setdefault(contract_type, {"contract_type": contract_type, "contract_category": str(item.get("contract_category") or ""), "expiry_type": str(item.get("expiry_type") or ""), "barriers": item.get("barriers", 0), "market": str(item.get("market") or ""), "submarket": str(item.get("submarket") or ""), "sentiment": str(item.get("sentiment") or ""), "underlying_symbol": str(item.get("underlying_symbol") or symbol)})
+                if not isinstance(item, dict) or not item.get("contract_type"):
+                    continue
+                contract_type = str(item.get("contract_type")).strip().upper()
+                unique.setdefault(contract_type, {
+                    "contract_type": contract_type,
+                    "contract_category": str(item.get("contract_category") or ""),
+                    "expiry_type": str(item.get("expiry_type") or ""),
+                    "barriers": item.get("barriers", 0),
+                    "market": str(item.get("market") or ""),
+                    "submarket": str(item.get("submarket") or ""),
+                    "sentiment": str(item.get("sentiment") or ""),
+                    "underlying_symbol": str(item.get("underlying_symbol") or symbol),
+                })
             contracts = list(unique.values())
-            payload = {"symbol": symbol, "contracts": contracts, "contract_types": sorted(unique), "trade_types": sorted({c["contract_category"] for c in contracts if c["contract_category"]}), "timeframe_capability": {"granularity": "broker_defined_integer_seconds", "minimum_seconds": 1}}
+            payload = {
+                "symbol": symbol,
+                "contracts": contracts,
+                "contract_types": sorted(unique),
+                "trade_types": sorted({c["contract_category"] for c in contracts if c["contract_category"]}),
+                "timeframe_capability": {"granularity": "broker_defined_integer_seconds", "minimum_seconds": 1},
+            }
             cache.set(cache_key, payload, timeout=CAPABILITIES_CACHE_SECONDS)
             cache.set(f"{CAPABILITIES_STALE_PREFIX}{symbol}", payload, timeout=CAPABILITIES_STALE_SECONDS)
         if not payload.get("contracts"):
             return Response({"detail": "Deriv reports no contracts for this instrument.", "symbol": symbol}, status=status.HTTP_409_CONFLICT)
-        return Response({"status": "ok", "source": "connected_broker", "broker": account.broker.name, "account_id": account.account_id, **payload})
+        return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,**payload})
     except Exception as exc:
         stale = cache.get(f"{CAPABILITIES_STALE_PREFIX}{symbol}")
         if isinstance(stale, dict) and stale.get("contracts"):
-            return Response({"status": "stale", "code": "BROKER_CAPABILITIES_STALE", "detail": "Live broker capability refresh is temporarily unavailable; serving the last verified broker contract catalogue.", "source": "cached_broker_capabilities", "broker": account.broker.name, "account_id": account.account_id, "stale": True, **stale})
-        return Response({"status": "error", "code": "BROKER_CAPABILITIES_UNAVAILABLE", "detail": str(exc), "source": "connected_broker", "symbol": symbol}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({
+                "status": "stale",
+                "code": "BROKER_CAPABILITIES_STALE",
+                "detail": "Live broker capability refresh is temporarily unavailable; serving the last verified broker contract catalogue.",
+                "source": "cached_broker_capabilities",
+                "broker": account.broker.name,
+                "account_id": account.account_id,
+                "stale": True,
+                **stale,
+            })
+        return Response({"status":"error","code":"BROKER_CAPABILITIES_UNAVAILABLE","detail":str(exc),"source":"connected_broker","symbol":symbol}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
