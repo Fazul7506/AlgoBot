@@ -12,7 +12,7 @@ class PlanEntitlement:
     key: str; name: str; api_daily: int; api_per_minute: int; strategies: int; backtests_daily: int; predictions_daily: int; orders_daily: int; broker_accounts: int; automations: int; live_orders_daily: int; live_trading: bool; advanced_ai: bool; priority: str; support: str
 
 PLAN_ENTITLEMENTS: Dict[str, PlanEntitlement] = {
-    "FREE": PlanEntitlement("FREE", "Free", 250, 30, 1, 3, 25, 10, 1, 1, 5, True, False, "standard", "community"),
+    "FREE": PlanEntitlement("FREE", "Free", 250, 30, 3, 3, 25, 10, 1, 1, 5, True, False, "standard", "community"),
     "BASIC": PlanEntitlement("BASIC", "Basic", 5000, 120, 5, 50, 250, 100, 2, 5, 25, True, True, "priority", "standard"),
     "PRO": PlanEntitlement("PRO", "Pro", 25000, 300, 25, 500, 2000, 1000, 5, 25, 250, True, True, "highest", "priority"),
     "ENTERPRISE": PlanEntitlement("ENTERPRISE", "Enterprise", -1, -1, -1, -1, -1, -1, -1, -1, -1, True, True, "dedicated", "dedicated"),
