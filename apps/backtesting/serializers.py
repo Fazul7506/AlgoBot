@@ -5,6 +5,11 @@ from .models import Backtest, BacktestTrade, BacktestStatistics
 
 
 class BacktestSerializer(serializers.ModelSerializer):
+    # Research handoff identifiers are write-only routing hints. The persisted
+    # Backtest keeps the canonical strategy name for historical reproducibility.
+    strategy_id = serializers.IntegerField(required=False, write_only=True)
+    strategy_slug = serializers.CharField(required=False, write_only=True, allow_blank=True)
+
     class Meta:
         model = Backtest
         fields = '__all__'
