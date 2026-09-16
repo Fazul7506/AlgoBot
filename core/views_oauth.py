@@ -8,13 +8,14 @@ from rest_framework import status
 from django.utils import timezone
 
 from apps.brokers.models import BrokerAccount
+from core.account_context import get_active_account
 from core.services.oauth_service import DerivOAuthService
 
 logger = logging.getLogger("oauth")
 
 
 def _account(request):
-    return (BrokerAccount.objects.filter(user=request.user, broker__broker_type='deriv').select_related('broker').order_by('-is_preferred', '-id').first())
+    return get_active_account(request.user, request=request, broker_type="deriv")
 
 
 def _serialize(account):

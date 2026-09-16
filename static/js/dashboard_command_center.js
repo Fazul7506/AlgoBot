@@ -25,7 +25,7 @@
   let lastLoadedAt = null;
   const REFRESH_MS = 45000;
   const ACCOUNT_TIMEOUT_MS = 15000;
-  const SNAPSHOT_KEY = 'algobot:dashboard:last-verified-account:v2';
+  const SNAPSHOT_KEY = 'algobot:dashboard:last-verified-account:v3';
 
   function request(url, options = {}, timeout = 8000) {
     const shared = window.AlgoBotFrontendData?.request;
@@ -101,18 +101,63 @@
     renderRows('[data-dashboard-activity]', activity, item => `<div class="mini-row"><strong>${esc(item.label)}</strong><span>${esc(item.meta)}</span><b>${esc(new Date(item.time).toLocaleString())}</b></div>`, 'No recent backend activity.');
   }
 
-  async function load() {
-    if (busy) return; busy = true; setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…'); document.documentElement.dataset.dashboardLoading = 'true';
+  async function ensureAccountContext() {
+    const context = window.AlgoBotAccountContext;
+    if (!context?.load) return window.AlgoBotBrokerState?.get?.()?.account || null;
     try {
-      const responses = await Promise.allSettled([request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS), request('/api/positions/open/', {}, 8000), request('/api/orders/', {}, 8000), request('/api/market/snapshots/all_snapshots/', {}, 8000), request('/api/dashboard/signals/?limit=8', {}, 8000)]);
+      const account = await context.load();
+      if (account) return account;
+      return window.AlgoBotBrokerState?.get?.()?.account || null;
+    } catch (_) {
+      return window.AlgoBotBrokerState?.get?.()?.account || null;
+    }
+  }
+
+  async function load() {
+    if (busy) return;
+    busy = true;
+    setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
+    document.documentElement.dataset.dashboardLoading = 'true';
+    try {
+      // Do not fire market/position/order requests until the canonical account
+      // context has had a chance to hydrate the server-selected account. This
+      // removes the race that produced "Connect a broker" while an account was
+      // already connected.
+      await ensureAccountContext();
+      const responses = await Promise.allSettled([
+        request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS),
+        request('/api/positions/open/', {}, 8000),
+        request('/api/orders/', {}, 8000),
+        request('/api/market/snapshots/all_snapshots/', {}, 8000),
+        request('/api/dashboard/signals/?limit=8', {}, 8000)
+      ]);
       const [account, positions, orders, markets, signals] = responses;
-      if (account.status === 'fulfilled') renderAccount(accountFrom(account.value));
-      else if (account.reason?.code === 'API_TIMEOUT') { const stale = readLastAccountSnapshot(); if (stale?.account) { renderAccount(stale.account); setText('[data-kpi-state="balance"]', `Last verified broker snapshot · refresh timed out${stale.at ? ` · ${new Date(stale.at).toLocaleTimeString()}` : ''}`); status('account', 'warn', 'Broker refresh timed out · last verified snapshot shown'); } else renderAccount(null, 'Broker snapshot timed out · refresh again'); }
-      else renderAccount(null, 'Broker snapshot unavailable');
+      if (account.status === 'fulfilled') {
+        const accountPayload = accountFrom(account.value);
+        const contextAccount = window.AlgoBotAccountContext?.getSelected?.();
+        renderAccount(contextAccount || accountPayload);
+      } else if (account.reason?.code === 'API_TIMEOUT') {
+        const stale = readLastAccountSnapshot();
+        if (stale?.account) { renderAccount(stale.account); setText('[data-kpi-state="balance"]', `Last verified broker snapshot · refresh timed out${stale.at ? ` · ${new Date(stale.at).toLocaleTimeString()}` : ''}`); status('account', 'warn', 'Broker refresh timed out · last verified snapshot shown'); }
+        else renderAccount(null, 'Broker snapshot timed out · refresh again');
+      } else {
+        const contextAccount = window.AlgoBotAccountContext?.getSelected?.();
+        if (contextAccount) renderAccount(contextAccount);
+        else renderAccount(null, 'Broker snapshot unavailable');
+      }
       renderCollections({positions:{ok:positions.status === 'fulfilled',value:positions.value,error:positions.reason},orders:{ok:orders.status === 'fulfilled',value:orders.value,error:orders.reason},markets:{ok:markets.status === 'fulfilled',value:markets.value,error:markets.reason},signals:{ok:signals.status === 'fulfilled',value:signals.value,error:signals.reason}});
-      lastLoadedAt = new Date(); setText('[data-dashboard-sync]', `Updated ${lastLoadedAt.toLocaleTimeString()} · snapshot only`); window.dispatchEvent(new CustomEvent('algobot:dashboard-updated', {detail:{timestamp:lastLoadedAt.toISOString()}}));
-    } catch (error) { setText('[data-dashboard-sync]', 'Dashboard update failed · last known state retained'); window.dispatchEvent(new CustomEvent('algobot:dashboard-error', {detail:error})); }
-    finally { busy = false; document.documentElement.dataset.dashboardLoading = 'false'; clearTimeout(timer); timer = setTimeout(load, REFRESH_MS); }
+      lastLoadedAt = new Date();
+      setText('[data-dashboard-sync]', `Updated ${lastLoadedAt.toLocaleTimeString()} · snapshot only`);
+      window.dispatchEvent(new CustomEvent('algobot:dashboard-updated', {detail:{timestamp:lastLoadedAt.toISOString()}}));
+    } catch (error) {
+      setText('[data-dashboard-sync]', 'Dashboard update failed · last known state retained');
+      window.dispatchEvent(new CustomEvent('algobot:dashboard-error', {detail:error}));
+    } finally {
+      busy = false;
+      document.documentElement.dataset.dashboardLoading = 'false';
+      clearTimeout(timer);
+      timer = setTimeout(load, REFRESH_MS);
+    }
   }
 
   async function killSwitch() {
@@ -123,6 +168,12 @@
     finally { if (button) button.disabled = false; }
   }
 
-  function boot() { $('[data-dashboard-refresh]')?.addEventListener('click', load); $('[data-dashboard-kill-switch]')?.addEventListener('click', killSwitch); document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(timer); else { clearTimeout(timer); timer = setTimeout(load, 250); } }); window.addEventListener('algobot:account-changed', () => { clearTimeout(timer); timer = setTimeout(load, 250); }); load(); }
+  function boot() {
+    $('[data-dashboard-refresh]')?.addEventListener('click', load);
+    $('[data-dashboard-kill-switch]')?.addEventListener('click', killSwitch);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(timer); else { clearTimeout(timer); timer = setTimeout(load, 250); } });
+    window.addEventListener('algobot:account-changed', () => { clearTimeout(timer); timer = setTimeout(load, 250); });
+    load();
+  }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true}); else boot();
 })();
