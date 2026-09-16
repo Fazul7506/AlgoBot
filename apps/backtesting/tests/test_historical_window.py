@@ -13,7 +13,7 @@ class HistoricalWindowTests(TestCase):
             broker='deriv',
             symbol='BOOM1000',
             display_name='Boom 1000 Index',
-            market='synthetic',
+            market='Boom',
         )
         start = datetime(2026, 9, 16, 20, 0, tzinfo=timezone.utc)
         for index in range(20):
