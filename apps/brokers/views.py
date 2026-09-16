@@ -14,6 +14,7 @@ from .exceptions import BrokerAuthenticationError, BrokerConnectionError, Broker
 from core.account_context import select_account, get_active_account
 logger=logging.getLogger(__name__)
 BROKER_CONNECT_TIMEOUT_SECONDS=30.0
+BROKER_SECONDARY_VERIFY_TIMEOUT_SECONDS=5.0
 BROKER_SYNC_TIMEOUT_SECONDS=15.0
 
 def _run_bounded(coro,timeout=8.0):
@@ -60,8 +61,6 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):return BrokerAccount.objects.filter(user=self.request.user).select_related('broker').order_by('broker__name','account_id')
     def finalize_response(self,request, response_obj,*args,**kwargs):
         response_obj=super().finalize_response(request,response_obj,*args,**kwargs)
-        # Account-scoped responses must never be cached or shared between
-        # sessions/accounts by a CDN, browser cache, or reverse proxy.
         response_obj['Cache-Control']='private, no-store, max-age=0'
         response_obj['Pragma']='no-cache'
         response_obj['Vary']='Cookie, X-Algobot-Account-ID'
@@ -145,14 +144,16 @@ def connect_broker(request):
     allowed,used,limit=check(request.user,'broker_accounts',amount=0)
     if limit>=0 and used>limit:return response.Response({'detail':f'Your {effective_plan(request.user).name} broker-account capacity is exceeded. Upgrade the plan to authorize all connected accounts.','code':'BROKER_ACCOUNT_LIMIT_REACHED','used':used,'limit':limit},status=status.HTTP_429_TOO_MANY_REQUESTS)
     try:
-        connection=_run_bounded(BrokerConnectionService().connect(broker,account),timeout=BROKER_CONNECT_TIMEOUT_SECONDS);account.refresh_from_db();target_accounts=_prepare_user_broker_accounts(request.user,broker,account);connected_ids,failed_accounts=_run_bounded(_verify_user_broker_accounts(target_accounts,broker,account.pk),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
+        connection=_run_bounded(BrokerConnectionService().connect(broker,account),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
+        account.refresh_from_db()
+        target_accounts=_prepare_user_broker_accounts(request.user,broker,account)
+        connected_ids,failed_accounts=_run_bounded(_verify_user_broker_accounts(target_accounts,broker,account.pk),timeout=BROKER_SECONDARY_VERIFY_TIMEOUT_SECONDS)
     except BrokerAuthenticationError as exc:return response.Response({'detail':str(exc),'status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
     except BrokerConnectionError as exc:return response.Response({'detail':str(exc),'status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except BrokerRoutingError as exc:return response.Response({'detail':str(exc),'status':'blocked'},status=status.HTTP_409_CONFLICT)
     except asyncio.TimeoutError:return response.Response({'detail':'Broker connection timed out while waiting for the provider.','status':'timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
     except Exception as exc:logger.exception('broker_connection_unexpected_failure',extra={'account_id':account.id});return response.Response({'detail':'Broker connection failed unexpectedly.','status':'error','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
-    account.refresh_from_db();all_accounts=list(BrokerAccount.objects.filter(user=request.user,broker=broker).select_related('broker').order_by('id'));target_ids={item.pk for item in target_accounts};payload={'connection':BrokerConnectionSerializer(connection).data,'account':BrokerAccountSerializer(account,context={'request':request}).data,'accounts':BrokerAccountSerializer(all_accounts,many=True,context={'request':request}).data,'connected_account_ids':connected_ids,'failed_accounts':failed_accounts,'all_accounts_ready':not failed_accounts and set(connected_ids)==target_ids}
-    if failed_accounts:return response.Response(payload,status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    account.refresh_from_db();all_accounts=list(BrokerAccount.objects.filter(user=request.user,broker=broker).select_related('broker').order_by('id'));target_ids={item.pk for item in target_accounts};payload={'connection':BrokerConnectionSerializer(connection).data,'account':BrokerAccountSerializer(account,context={'request':request}).data,'accounts':BrokerAccountSerializer(all_accounts,many=True,context={'request':request}).data,'connected_account_ids':connected_ids,'failed_accounts':failed_accounts,'all_accounts_ready':not failed_accounts and set(connected_ids)==target_ids,'partial_connection':bool(failed_accounts)}
     return response.Response(payload)
 @decorators.api_view(['POST'])
 @decorators.permission_classes([JWTAuthenticatedPermission])
