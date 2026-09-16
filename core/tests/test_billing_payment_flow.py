@@ -143,7 +143,7 @@ class BillingPaymentFlowTests(TestCase):
 
         result = PaymentService().create_intasend_checkout(
             self.user,
-            CheckoutPlan(plan="BASIC", price_cents=99900, currency="KES", reference=reference),
+            CheckoutPlan(plan="BASIC", price_cents=99900, currency="KES", reference=reference, recurring=False),
         )
 
         self.assertEqual(result["reference"], reference)
