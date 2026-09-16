@@ -16,7 +16,7 @@ class BillingEntitlementTests(TestCase):
     def test_free_defaults_are_restricted(self):
         plan = effective_plan(self.user)
         self.assertEqual(plan.key, 'FREE')
-        self.assertEqual(plan.strategies, 3)
+        self.assertEqual(plan.strategies, 1)
         self.assertTrue(plan.live_trading)
         self.assertEqual(plan.live_orders_daily, 5)
         self.assertFalse(plan.advanced_ai)
