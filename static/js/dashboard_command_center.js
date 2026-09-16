@@ -150,22 +150,8 @@
     }
   }
 
-  async function killSwitch() {
-    if (!window.confirm('Activate the trading emergency stop? New execution should be blocked until risk controls are restored.')) return;
-    const button = $('[data-dashboard-kill-switch]');
-    if (button) button.disabled = true;
-    try {
-      await request('/api/risk/kill-switch/activate/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({reason:'Dashboard emergency stop'})}, 8000);
-      setText('[data-dashboard-sync]', `Emergency stop confirmed · ${new Date().toLocaleTimeString()}`);
-      window.dispatchEvent(new CustomEvent('algobot:kill-switch-activated'));
-    } catch (error) {
-      setText('[data-dashboard-sync]', error?.message || 'Emergency stop request failed');
-    } finally { if (button) button.disabled = false; }
-  }
-
   function boot() {
     $('[data-dashboard-refresh]')?.addEventListener('click', load);
-    $('[data-dashboard-kill-switch]')?.addEventListener('click', killSwitch);
     document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(timer); else { clearTimeout(timer); timer = setTimeout(load, 250); } });
     window.addEventListener('algobot:account-changed', () => { clearTimeout(timer); timer = setTimeout(load, 250); });
     load();
