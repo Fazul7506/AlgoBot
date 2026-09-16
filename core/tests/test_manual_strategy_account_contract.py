@@ -35,4 +35,4 @@ class ManualStrategyAccountContractTests(SimpleTestCase):
         for plan in ('FREE', 'BASIC', 'PRO', 'ENTERPRISE'):
             self.assertIn(f'"{plan}"', billing)
         self.assertIn('broker_accounts', billing)
-        self.assertIn('def limit_for(plan, metric', billing)
+        self.assertIn('limit_for(plan,metric)', billing)
