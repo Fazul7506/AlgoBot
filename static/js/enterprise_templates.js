@@ -3,17 +3,6 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
   const json = async (url, opts = {}) => {
-    const shared = window.AlgoBotFrontendData?.request;
-    if (typeof shared === 'function') {
-      try { return await shared(url, { ...opts, notifyOnError: false }, opts.__timeoutMs || 25000); }
-      catch (error) {
-        if (error?.status === 401 || error?.status === 403) {
-          document.body.classList.add('auth-expired');
-          window.location.assign('/login/?next=' + encodeURIComponent(window.location.pathname));
-        }
-        throw error;
-      }
-    }
     const headers = { Accept: 'application/json', ...(opts.headers || {}) };
     const res = await fetch(url, { credentials: 'same-origin', ...opts, headers });
     const text = await res.text();
@@ -100,7 +89,6 @@
   };
 
   async function accountKPIs() {
-    if (document.querySelector('[data-dashboard-command]')) return null;
     try {
       const [overview, accounts] = await Promise.all([
         json('/api/dashboard/account_overview/'),
@@ -109,8 +97,7 @@
       const data = overview.data || {};
       const stats = data.trading_stats || {};
       const accountsList = normalise(accounts);
-      const selected = window.AlgoBotAccountContext?.getSelected?.();
-      const account = selected || accountsList.find(x => x.is_active === true) || (accountsList.length === 1 ? accountsList[0] : null) || data.account || null;
+      const account = accountsList.find(x => x.is_default) || accountsList[0];
       const balance = $('[data-kpi="balance"]');
       const positions = $('[data-kpi="positions"]');
       const winrate = $('[data-kpi="winrate"]');
@@ -120,7 +107,7 @@
       if (winrate) winrate.textContent = pct(stats.win_rate);
       if (pnl) pnl.textContent = money(stats.total_pnl);
       const terminalAccount = $('[data-terminal-account]');
-      if (terminalAccount) terminalAccount.textContent = `Account: ${account?.broker_account_id || account?.account_id || data.account?.account_id || 'Not connected'}`;
+      if (terminalAccount) terminalAccount.textContent = `Account: ${account?.broker_account_id || data.account?.account_id || 'Not connected'}`;
       return { ...data, selectedAccount: account };
     } catch (error) {
       toast(`Account data unavailable: ${error.message}`, 'error');
@@ -290,8 +277,7 @@
           $('[data-ask]', page).textContent = snapshot.ask_price ?? snapshot.ask ?? snapshot.price ?? '—';
         }
         const accountsList = normalise(accounts);
-        const selected = window.AlgoBotAccountContext?.getSelected?.();
-        const account = selected || accountsList.find(x => x.is_active === true) || (accountsList.length === 1 ? accountsList[0] : null);
+        const account = accountsList.find(x => x.is_default) || accountsList[0];
         accountId = account?.id || null;
         const strategiesList = normalise(strategies);
         if (strategySelect) {
@@ -307,7 +293,7 @@
           if (current) strategySelect.value = current;
         }
         $('[data-terminal-status]', page).textContent = account?.is_connected ? 'Ready to trade' : 'Broker account required';
-        $('[data-terminal-account]', page).textContent = `Account: ${account?.broker_account_id || account?.account_id || 'Not connected'}`;
+        $('[data-terminal-account]', page).textContent = `Account: ${account?.broker_account_id || 'Not connected'}`;
         $('[data-risk-check]', page).textContent = account ? 'Pre-trade checks active' : 'Connect broker first';
       } catch (error) {
         $('[data-terminal-status]', page).textContent = 'Data unavailable';

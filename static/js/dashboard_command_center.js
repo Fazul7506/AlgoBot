@@ -10,22 +10,13 @@
   const setText = (selector, value) => { const node = $(selector); if (node) node.textContent = value; };
   const setHtml = (selector, value) => { const node = $(selector); if (node) node.innerHTML = value; };
   const empty = (message) => `<div class="empty-state">${esc(message)}</div>`;
-  const accountFrom = (payload) => {
-    const account = payload?.data?.account || payload?.account || null;
-    return account && (account.id || account.account_id || account.broker || account.loginid) ? account : null;
-  };
-  const symbolLabel = (item) => {
-    const value = item?.symbol;
-    if (value && typeof value === 'object') return value.display_name || value.name || value.symbol || 'Market';
-    return item?.display_name || item?.instrument_name || value || 'Market';
-  };
 
   let busy = false;
   let timer = null;
   let lastLoadedAt = null;
   const REFRESH_MS = 45000;
   const ACCOUNT_TIMEOUT_MS = 15000;
-  const SNAPSHOT_KEY = 'algobot:dashboard:last-verified-account:v3';
+  const SNAPSHOT_KEY = 'algobot:dashboard:last-verified-account:v2';
 
   function request(url, options = {}, timeout = 8000) {
     const shared = window.AlgoBotFrontendData?.request;
@@ -52,9 +43,16 @@
   }
 
   function readLastAccountSnapshot() {
-    try { const raw = sessionStorage.getItem(SNAPSHOT_KEY); const value = raw ? JSON.parse(raw) : null; return value && value.account ? value : null; } catch (_) { return null; }
+    try {
+      const raw = sessionStorage.getItem(SNAPSHOT_KEY);
+      const value = raw ? JSON.parse(raw) : null;
+      return value && value.account ? value : null;
+    } catch (_) { return null; }
   }
-  function writeLastAccountSnapshot(account) { if (account) { try { sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({at: Date.now(), account})); } catch (_) {} } }
+  function writeLastAccountSnapshot(account) {
+    if (!account) return;
+    try { sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({at: Date.now(), account})); } catch (_) {}
+  }
 
   function renderAccount(account, message = '') {
     if (!account) {
@@ -74,7 +72,7 @@
     setText('[data-kpi="pnl"]', pnl == null ? 'Unavailable' : `${currency} ${money(pnl)}`.trim());
     setText('[data-kpi-state="balance"]', 'Authoritative broker snapshot');
     setText('[data-kpi-state="equity"]', account.equity == null ? 'Not reported by broker' : 'Authoritative broker equity');
-    const broker = account.broker?.name || account.broker_name || account.broker || 'Broker';
+    const broker = account.broker?.name || account.broker_name || 'Broker';
     const id = account.account_id || account.broker_account_id || account.loginid || 'Account';
     const sync = account.last_synced_at ? new Date(account.last_synced_at).toLocaleTimeString() : 'snapshot';
     setHtml('[data-dashboard-brokers]', `<span><b></b><strong>${esc(broker)}</strong> · ${esc(id)} · CONNECTED</span><small>Broker snapshot · ${esc(sync)}</small>`);
@@ -82,35 +80,31 @@
     writeLastAccountSnapshot(account);
   }
 
-  function renderRows(selector, values, renderer, fallback) { setHtml(selector, values.length ? values.map(renderer).join('') : empty(fallback)); }
+  function renderRows(selector, values, renderer, fallback) {
+    setHtml(selector, values.length ? values.map(renderer).join('') : empty(fallback));
+  }
 
   function renderCollections(result) {
     const positions = result.positions.ok ? list(result.positions.value).slice(0, 8) : [];
     const orders = result.orders.ok ? list(result.orders.value).slice(0, 8) : [];
     const markets = result.markets.ok ? list(result.markets.value).slice(0, 8) : [];
     const signals = result.signals.ok ? list(result.signals.value).slice(0, 8) : [];
-    renderRows('[data-dashboard-positions]', positions, item => `<div class="mini-row"><strong>${esc(symbolLabel(item))}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.profit ?? item.pnl ?? item.profit_loss ?? '—')}</b></div>`, result.positions.ok ? 'No open positions reported by the backend.' : 'Position service unavailable.');
-    renderRows('[data-dashboard-orders]', orders, item => `<div class="mini-row"><strong>${esc(symbolLabel(item))}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.status || 'Unknown')}</b></div>`, result.orders.ok ? 'No orders reported by the backend.' : 'Order service unavailable.');
-    renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><strong>${esc(symbolLabel(item))}</strong><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid)} · Ask ${esc(item.ask_price ?? item.ask)}` : 'Broker market catalogue'}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.ok ? 'No market snapshot is currently available.' : 'Market data service unavailable.');
-    renderRows('[data-dashboard-signals]', signals, item => `<div class="signal-row"><strong>${esc(symbolLabel(item))} · ${esc(item.direction || item.signal || 'HOLD')}</strong><span>${esc(item.strategy?.name || item.strategy || item.market_regime || '')}</span><b>${item.confidence != null ? `${Number(item.confidence).toFixed(0)}%` : '—'}</b></div>`, result.signals.ok ? 'No recent backend signals.' : 'Signal service unavailable.');
+
+    renderRows('[data-dashboard-positions]', positions, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.profit ?? item.pnl ?? item.profit_loss ?? '—')}</b></div>`, result.positions.ok ? 'No open positions reported by the backend.' : 'Position service unavailable.');
+    renderRows('[data-dashboard-orders]', orders, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.status || 'Unknown')}</b></div>`, result.orders.ok ? 'No orders reported by the backend.' : 'Order service unavailable.');
+    renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol?.display_name || item.display_name || item.symbol || 'Market')}</strong><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid)} · Ask ${esc(item.ask_price ?? item.ask)}` : 'Broker market catalogue'}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.ok ? 'No market snapshot is currently available.' : 'Market data service unavailable.');
+    renderRows('[data-dashboard-signals]', signals, item => `<div class="signal-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')} · ${esc(item.direction || item.signal || 'HOLD')}</strong><span>${esc(item.strategy?.name || item.strategy || item.market_regime || '')}</span><b>${item.confidence != null ? `${Number(item.confidence).toFixed(0)}%` : '—'}</b></div>`, result.signals.ok ? 'No recent backend signals.' : 'Signal service unavailable.');
+
     status('positions', result.positions.ok ? (positions.length ? 'ok' : 'warn') : 'error', result.positions.ok ? (positions.length ? 'Exposure available' : 'No open positions') : 'Position service unavailable');
     status('execution', result.orders.ok ? (orders.length ? 'ok' : 'warn') : 'error', result.orders.ok ? (orders.length ? 'Execution feed available' : 'No recent orders') : 'Order service unavailable');
     status('markets', result.markets.ok ? (markets.length ? 'ok' : 'warn') : 'error', result.markets.ok ? (markets.length ? 'Market data available' : 'No market snapshot') : 'Market data unavailable');
     status('signals', result.signals.ok ? (signals.length ? 'ok' : 'warn') : 'error', result.signals.ok ? (signals.length ? 'AI signal feed available' : 'No recent signals') : 'Signal service unavailable');
-    const activity = [...orders.map(item => ({label: symbolLabel(item), meta: item.status || 'Order', time: item.updated_at || item.created_at}), ...signals.map(item => ({label: symbolLabel(item), meta: item.direction || item.signal || 'Signal', time: item.created_at || item.timestamp}))].filter(item => item.time).sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0, 8);
-    renderRows('[data-dashboard-activity]', activity, item => `<div class="mini-row"><strong>${esc(item.label)}</strong><span>${esc(item.meta)}</span><b>${esc(new Date(item.time).toLocaleString())}</b></div>`, 'No recent backend activity.');
-  }
 
-  async function ensureAccountContext() {
-    const context = window.AlgoBotAccountContext;
-    if (!context?.load) return window.AlgoBotBrokerState?.get?.()?.account || null;
-    try {
-      const account = await context.load();
-      if (account) return account;
-      return window.AlgoBotBrokerState?.get?.()?.account || null;
-    } catch (_) {
-      return window.AlgoBotBrokerState?.get?.()?.account || null;
-    }
+    const activity = [
+      ...orders.map(item => ({label: item.symbol?.symbol || item.symbol || 'Order', meta: item.status || 'Order', time: item.updated_at || item.created_at})),
+      ...signals.map(item => ({label: item.symbol?.symbol || item.symbol || 'Signal', meta: item.direction || item.signal || 'Signal', time: item.created_at || item.timestamp}))
+    ].filter(item => item.time).sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0, 8);
+    renderRows('[data-dashboard-activity]', activity, item => `<div class="mini-row"><strong>${esc(item.label)}</strong><span>${esc(item.meta)}</span><b>${esc(new Date(item.time).toLocaleString())}</b></div>`, 'No recent backend activity.');
   }
 
   async function load() {
@@ -119,11 +113,6 @@
     setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
     document.documentElement.dataset.dashboardLoading = 'true';
     try {
-      // Do not fire market/position/order requests until the canonical account
-      // context has had a chance to hydrate the server-selected account. This
-      // removes the race that produced "Connect a broker" while an account was
-      // already connected.
-      await ensureAccountContext();
       const responses = await Promise.allSettled([
         request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS),
         request('/api/positions/open/', {}, 8000),
@@ -132,26 +121,27 @@
         request('/api/dashboard/signals/?limit=8', {}, 8000)
       ]);
       const [account, positions, orders, markets, signals] = responses;
-      if (account.status === 'fulfilled') {
-        const accountPayload = accountFrom(account.value);
-        const contextAccount = window.AlgoBotAccountContext?.getSelected?.();
-        renderAccount(contextAccount || accountPayload);
-      } else if (account.reason?.code === 'API_TIMEOUT') {
+      if (account.status === 'fulfilled') renderAccount(account.value?.data?.account || account.value?.account || null);
+      else if (account.reason?.code === 'API_TIMEOUT') {
         const stale = readLastAccountSnapshot();
-        if (stale?.account) { renderAccount(stale.account); setText('[data-kpi-state="balance"]', `Last verified broker snapshot · refresh timed out${stale.at ? ` · ${new Date(stale.at).toLocaleTimeString()}` : ''}`); status('account', 'warn', 'Broker refresh timed out · last verified snapshot shown'); }
-        else renderAccount(null, 'Broker snapshot timed out · refresh again');
-      } else {
-        const contextAccount = window.AlgoBotAccountContext?.getSelected?.();
-        if (contextAccount) renderAccount(contextAccount);
-        else renderAccount(null, 'Broker snapshot unavailable');
-      }
-      renderCollections({positions:{ok:positions.status === 'fulfilled',value:positions.value,error:positions.reason},orders:{ok:orders.status === 'fulfilled',value:orders.value,error:orders.reason},markets:{ok:markets.status === 'fulfilled',value:markets.value,error:markets.reason},signals:{ok:signals.status === 'fulfilled',value:signals.value,error:signals.reason}});
+        if (stale?.account) {
+          renderAccount(stale.account);
+          setText('[data-kpi-state="balance"]', `Last verified broker snapshot · refresh timed out${stale.at ? ` · ${new Date(stale.at).toLocaleTimeString()}` : ''}`);
+          status('account', 'warn', 'Broker refresh timed out · last verified snapshot shown');
+        } else renderAccount(null, 'Broker snapshot timed out · refresh again');
+      } else renderAccount(null, 'Broker snapshot unavailable');
+      renderCollections({
+        positions: {ok: positions.status === 'fulfilled', value: positions.value, error: positions.reason},
+        orders: {ok: orders.status === 'fulfilled', value: orders.value, error: orders.reason},
+        markets: {ok: markets.status === 'fulfilled', value: markets.value, error: markets.reason},
+        signals: {ok: signals.status === 'fulfilled', value: signals.value, error: signals.reason}
+      });
       lastLoadedAt = new Date();
       setText('[data-dashboard-sync]', `Updated ${lastLoadedAt.toLocaleTimeString()} · snapshot only`);
-      window.dispatchEvent(new CustomEvent('algobot:dashboard-updated', {detail:{timestamp:lastLoadedAt.toISOString()}}));
+      window.dispatchEvent(new CustomEvent('algobot:dashboard-updated', {detail: {timestamp: lastLoadedAt.toISOString()}}));
     } catch (error) {
       setText('[data-dashboard-sync]', 'Dashboard update failed · last known state retained');
-      window.dispatchEvent(new CustomEvent('algobot:dashboard-error', {detail:error}));
+      window.dispatchEvent(new CustomEvent('algobot:dashboard-error', {detail: error}));
     } finally {
       busy = false;
       document.documentElement.dataset.dashboardLoading = 'false';
@@ -162,10 +152,15 @@
 
   async function killSwitch() {
     if (!window.confirm('Activate the trading emergency stop? New execution should be blocked until risk controls are restored.')) return;
-    const button = $('[data-dashboard-kill-switch]'); if (button) button.disabled = true;
-    try { await request('/api/risk/kill-switch/activate/', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Dashboard emergency stop'})},8000); setText('[data-dashboard-sync]', `Emergency stop confirmed · ${new Date().toLocaleTimeString()}`); window.dispatchEvent(new CustomEvent('algobot:kill-switch-activated')); }
-    catch (error) { setText('[data-dashboard-sync]', error?.message || 'Emergency stop request failed'); }
-    finally { if (button) button.disabled = false; }
+    const button = $('[data-dashboard-kill-switch]');
+    if (button) button.disabled = true;
+    try {
+      await request('/api/risk/kill-switch/activate/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({reason:'Dashboard emergency stop'})}, 8000);
+      setText('[data-dashboard-sync]', `Emergency stop confirmed · ${new Date().toLocaleTimeString()}`);
+      window.dispatchEvent(new CustomEvent('algobot:kill-switch-activated'));
+    } catch (error) {
+      setText('[data-dashboard-sync]', error?.message || 'Emergency stop request failed');
+    } finally { if (button) button.disabled = false; }
   }
 
   function boot() {
@@ -175,5 +170,6 @@
     window.addEventListener('algobot:account-changed', () => { clearTimeout(timer); timer = setTimeout(load, 250); });
     load();
   }
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true}); else boot();
 })();
