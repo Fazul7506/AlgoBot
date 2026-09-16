@@ -49,8 +49,9 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
         self.assertEqual(response.json()["source"], "cached_broker_catalogue")
         self.assertEqual(response.json()["account_id"], "VRTC-CATALOGUE")
         self.assertEqual(response.json()["symbols"][0]["symbol"], "TEST")
+        self.assertIn("1m", response.json()["symbols"][0]["supported_timeframes"])
+        self.assertIn("1h", response.json()["supported_timeframes"])
 
-    
     @patch(
         "apps.market_data.broker_native._public_deriv",
         side_effect=RuntimeError("provider unavailable"),
