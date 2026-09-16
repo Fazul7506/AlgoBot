@@ -8,12 +8,31 @@ from .validator import RiskValidator
 logger = logging.getLogger(__name__)
 
 
+# Routing/transport metadata is deliberately separate from numeric risk inputs.
+# Client requests can carry broker_source, contract_type, signal_id, etc.; those
+# fields must never be expanded into the RiskService.score(**kwargs) call.
+RISK_SCORE_FIELDS = frozenset({
+    'volatility',
+    'exposure',
+    'drawdown',
+    'correlation',
+    'margin',
+    'market_conditions',
+    'strategy_confidence',
+})
+
+
 class RiskEngine:
+    @staticmethod
+    def _score_context(context):
+        context = context or {}
+        return {key: context[key] for key in RISK_SCORE_FIELDS if key in context}
+
     def evaluate_order(self, order, context=None):
         start = time.perf_counter()
         context = context or {}
         repo = RiskRepository()
-        score = RiskService().score(**context)
+        score = RiskService().score(**self._score_context(context))
         try:
             RiskValidator().validate_order(order)
             routing = getattr(order, 'routing_context', {}) or {}
