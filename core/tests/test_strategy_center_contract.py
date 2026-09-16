@@ -11,4 +11,5 @@ class StrategyCenterContractTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn("Broker-aware quant engine", content)
-        self.assertIn("Connect a broker", content)
+        self.assertIn("broker account", content.lower())
+        self.assertIn("Checking broker account", content)
