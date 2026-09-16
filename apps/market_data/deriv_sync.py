@@ -40,14 +40,29 @@ def _decimal_places(value) -> int:
         return 0
 
 
+def _payload_data(response: dict) -> dict:
+    """Unwrap the response envelope used by the public Deriv API variants."""
+    data = response.get("data")
+    return data if isinstance(data, dict) else response
+
+
 async def _request(payload: dict) -> dict:
     """Request public market data with bounded network timeouts."""
     try:
-        async with websockets.connect(DERIV_PUBLIC_WS, open_timeout=5, close_timeout=5, ping_interval=20, ping_timeout=5) as ws:
+        async with websockets.connect(
+            DERIV_PUBLIC_WS,
+            open_timeout=8,
+            close_timeout=5,
+            ping_interval=20,
+            ping_timeout=8,
+            max_size=4 * 1024 * 1024,
+        ) as ws:
             await ws.send(json.dumps(payload))
-            response = json.loads(await asyncio.wait_for(ws.recv(), timeout=5))
+            response = json.loads(await asyncio.wait_for(ws.recv(), timeout=8))
     except (asyncio.TimeoutError, OSError, websockets.WebSocketException, json.JSONDecodeError) as exc:
         raise RuntimeError("Deriv public market data is temporarily unavailable") from exc
+    if not isinstance(response, dict):
+        raise RuntimeError("Deriv returned an invalid market-data response")
     if response.get("error"):
         raise RuntimeError(response["error"].get("message", "Deriv market-data request failed"))
     return response
@@ -68,7 +83,12 @@ def _sync_one_symbol(item: dict) -> bool:
     pip = item.get("pip_size") or item.get("pip")
     defaults = {
         "broker": "deriv",
-        "display_name": str(item.get("underlying_symbol_name") or item.get("display_name") or symbol)[:160],
+        "display_name": str(
+            item.get("underlying_symbol_name")
+            or item.get("display_name")
+            or item.get("name")
+            or symbol
+        )[:160],
         "market": _market_name(item),
         "sub_market": str(item.get("submarket") or item.get("subgroup") or "")[:120],
         "pip_size": _decimal_places(pip),
@@ -91,11 +111,11 @@ def _sync_one_symbol(item: dict) -> bool:
 
 
 def sync_active_symbols() -> int:
-    """Refresh the cached broker catalogue without allowing concurrent bursts."""
-    if not cache.add(MARKET_SYNC_LOCK, "1", timeout=15):
+    """Refresh the broker catalogue without allowing concurrent bursts."""
+    if not cache.add(MARKET_SYNC_LOCK, "1", timeout=30):
         raise RuntimeError("Deriv market catalogue refresh is already in progress")
     try:
-        response = asyncio.run(_request({"active_symbols": "brief"}))
+        response = _payload_data(asyncio.run(_request({"active_symbols": "brief"})))
         symbols = response.get("active_symbols", [])
         if not isinstance(symbols, list):
             raise RuntimeError("Deriv returned an invalid active_symbols payload")
@@ -108,21 +128,19 @@ def sync_active_symbols() -> int:
 
 
 def fetch_tick(symbol: str) -> dict:
-    """Fetch one authoritative broker quote without writing to the database.
-
-    Persistence belongs to TickService.ingest so every caller uses the same
-    idempotent ingestion path. This prevents the broker endpoint from writing
-    the same tick once during fetch and again during normalization.
-    """
-    response = asyncio.run(_request({"ticks": symbol}))
+    """Fetch one authoritative broker quote without writing to the database."""
+    normalized = str(symbol or "").strip()
+    if not normalized or len(normalized) > 40:
+        raise RuntimeError("A valid broker symbol is required")
+    response = _payload_data(asyncio.run(_request({"ticks": normalized})))
     tick = response.get("tick") or {}
     quote = tick.get("quote")
     if quote is None:
-        raise RuntimeError(f"Deriv returned no quote for {symbol}")
-    if not MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists():
-        raise RuntimeError(f"Symbol {symbol} is not present in the broker market catalogue")
+        raise RuntimeError(f"Deriv returned no quote for {normalized}")
+    if not MarketSymbol.objects.filter(symbol=normalized, is_active=True).exists():
+        raise RuntimeError(f"Symbol {normalized} is not present in the broker market catalogue")
     return {
-        "symbol": symbol,
+        "symbol": normalized,
         "quote": float(quote),
         "bid": float(tick["bid"]) if tick.get("bid") is not None else None,
         "ask": float(tick["ask"]) if tick.get("ask") is not None else None,
