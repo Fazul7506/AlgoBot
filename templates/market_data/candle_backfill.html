@@ -7,11 +7,11 @@
     <div>
       <p class="eyebrow">QUANT RESEARCH · DATA OPERATIONS</p>
       <h1>Historical Candle Backfill</h1>
-      <p class="hero-copy">Run the one-time broker-authoritative historical warm-up through the Celery worker. Long-running Deriv history requests never block the Render build or browser request.</p>
+      <p class="hero-copy">Broker-authoritative OHLC history is persisted by Celery. This page reflects durable worker state, including jobs started manually and scheduled maintenance jobs.</p>
     </div>
   </header>
 
-  <section class="panel" style="max-width:760px">
+  <section class="panel" style="max-width:900px">
     <div class="panel-heading">
       <div><p class="eyebrow">INITIAL WARM-UP</p><h2>5,000 candles per active tradable symbol</h2></div>
       <strong data-status>{% if run %}{{ run.get_status_display }}{% else %}Ready{% endif %}</strong>
@@ -20,12 +20,13 @@
     {% if run %}
       <dl style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem">
         <div><dt>State</dt><dd data-state>{{ run.status }}</dd></div>
-        <div><dt>Requested</dt><dd>{{ run.requested_at|date:"Y-m-d H:i:s T" }}</dd></div>
-        <div><dt>Started</dt><dd>{% if run.started_at %}{{ run.started_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
-        <div><dt>Completed</dt><dd>{% if run.completed_at %}{{ run.completed_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
+        <div><dt>Requested</dt><dd data-requested>{% if run.requested_at %}{{ run.requested_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
+        <div><dt>Started</dt><dd data-started>{% if run.started_at %}{{ run.started_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
+        <div><dt>Completed</dt><dd data-completed>{% if run.completed_at %}{{ run.completed_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
+        <div><dt>Celery task</dt><dd data-task>{{ run.task_id|default:"—" }}</dd></div>
       </dl>
 
-      {% if run.error %}<div role="alert" style="margin:1rem 0">{{ run.error }}</div>{% endif %}
+      <div data-error role="alert" style="margin:1rem 0;{% if not run.error %}display:none{% endif %}">{{ run.error }}</div>
 
       {% if run.status == "failed" %}
         <form method="post">
@@ -33,7 +34,7 @@
           <button class="btn primary" type="submit">Retry 5,000-candle backfill</button>
         </form>
       {% elif run.status == "queued" or run.status == "running" %}
-        <p aria-live="polite">The Celery worker is processing the historical data. Status updates automatically.</p>
+        <p aria-live="polite">The Celery worker is processing the historical data. The state below refreshes automatically.</p>
       {% elif run.status == "succeeded" %}
         <p aria-live="polite">The initial historical warm-up has completed. Future candle maintenance is handled by scheduled Celery backfill.</p>
       {% endif %}
@@ -45,9 +46,24 @@
     {% endif %}
   </section>
 
+  <section class="panel" style="max-width:900px;margin-top:1rem" data-research-run>
+    <div class="panel-heading">
+      <div><p class="eyebrow">SCHEDULED MAINTENANCE</p><h2>Research candle backfill</h2><p>Created and updated by the Celery schedule so scheduled work is visible here and in Django administration.</p></div>
+      <strong data-research-status>{% if research_run %}{{ research_run.get_status_display }}{% else %}Not run yet{% endif %}</strong>
+    </div>
+    <dl style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem">
+      <div><dt>State</dt><dd data-research-state>{% if research_run %}{{ research_run.status }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Count</dt><dd data-research-count>{% if research_run %}{{ research_run.count }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Last started</dt><dd data-research-started>{% if research_run and research_run.started_at %}{{ research_run.started_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Last completed</dt><dd data-research-completed>{% if research_run and research_run.completed_at %}{{ research_run.completed_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Celery task</dt><dd data-research-task>{% if research_run %}{{ research_run.task_id|default:"—" }}{% else %}—{% endif %}</dd></div>
+    </dl>
+    <div data-research-error role="alert" style="margin-top:1rem;{% if not research_run or not research_run.error %}display:none{% endif %}">{% if research_run %}{{ research_run.error }}{% endif %}</div>
+  </section>
+
   <section class="data-research-note" style="margin-top:1rem">
     <strong>Access</strong>
-    <span>This control is restricted to Django staff/superuser accounts. It queues work on Celery and never performs the backfill inside the web request.</span>
+    <span>This control is restricted to Django staff/superuser accounts. Backfill work is executed by Celery and its durable state is available to the browser and Django admin.</span>
   </section>
 </section>
 {% endblock %}
@@ -56,23 +72,40 @@
 (() => {
   const page = document.querySelector('[data-backfill-page]');
   if (!page) return;
-  const state = page.querySelector('[data-state]');
-  if (!state || !['queued', 'running'].includes(state.textContent.trim())) return;
   const endpoint = `${window.location.pathname}?format=json`;
-  const timer = window.setInterval(async () => {
+  const setText = (selector, value) => { const el = page.querySelector(selector); if (el) el.textContent = value || '—'; };
+  const fmt = value => value ? new Date(value).toLocaleString() : '—';
+  const renderRun = (prefix, run) => {
+    if (!run) return;
+    setText(`[data-${prefix}state]`, run.status);
+    setText(`[data-${prefix}status]`, run.status_label || run.status);
+    if (prefix === '') {
+      setText('[data-requested]', fmt(run.requested_at));
+      setText('[data-started]', fmt(run.started_at));
+      setText('[data-completed]', fmt(run.completed_at));
+      setText('[data-task]', run.task_id || '—');
+      const error = page.querySelector('[data-error]');
+      if (error) { error.textContent = run.error || ''; error.style.display = run.error ? '' : 'none'; }
+    } else {
+      setText('[data-research-count]', run.count);
+      setText('[data-research-started]', fmt(run.started_at));
+      setText('[data-research-completed]', fmt(run.completed_at));
+      setText('[data-research-task]', run.task_id || '—');
+      const error = page.querySelector('[data-research-error]');
+      if (error) { error.textContent = run.error || ''; error.style.display = run.error ? '' : 'none'; }
+    }
+  };
+  const refresh = async () => {
     try {
-      const response = await fetch(endpoint, {headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin'});
+      const response = await fetch(endpoint, {headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin', cache: 'no-store'});
       if (!response.ok) return;
       const data = await response.json();
-      state.textContent = data.status;
-      const status = page.querySelector('[data-status]');
-      if (status) status.textContent = data.status;
-      if (!['queued', 'running'].includes(data.status)) {
-        window.clearInterval(timer);
-        window.location.reload();
-      }
+      renderRun('', data.initial);
+      renderRun('research-', data.research);
     } catch (_) {}
-  }, 5000);
+  };
+  refresh();
+  window.setInterval(refresh, 3000);
 })();
 </script>
 {% endblock %}
