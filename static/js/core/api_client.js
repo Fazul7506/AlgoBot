@@ -67,7 +67,7 @@
     const timer=setTimeout(()=>controller.abort(new Error('API request timeout')),timeoutMs), signal=callerSignal && typeof AbortSignal.any === 'function' ? AbortSignal.any([callerSignal,controller.signal]) : controller.signal;
     if (callerSignal?.aborted) controller.abort(callerSignal.reason);
     try {
-      try { return await nativeFetch(url.toString(),{...options,method,body,headers,credentials:options.credentials || 'include',signal}); }
+      try { return await nativeFetch(url.toString(),{...options,method,body,headers,credentials: options.credentials || 'include',signal}); }
       catch (error) {
         if (controller.signal.aborted && !callerSignal?.aborted) { const timeout=new APIError('API request timed out after '+timeoutMs+'ms',{code:'API_TIMEOUT',url:url.toString(),method}); emitError(timeout,options); throw timeout; }
         if (callerSignal?.aborted) { const cancelled=new APIError(callerSignal.reason?.message || 'Request was cancelled.',{code:'REQUEST_ABORTED',url:url.toString(),method}); cancelled.retryable=false; throw cancelled; }
