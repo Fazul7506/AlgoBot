@@ -9,29 +9,29 @@
   const pct = value => value == null || Number.isNaN(Number(value)) ? '—' : `${Number(value).toFixed(1)}%`;
   const tone = value => { const v = String(value || '').toUpperCase(); return v === 'BUY' ? 'buy' : v === 'SELL' ? 'sell' : 'hold'; };
   const stateText = value => String(value || 'WAITING').replaceAll('_', ' ');
-  const S = { rows: [], last: null, scanning: false };
+  const S = { rows: [], last: null, scanning: false, scanStartedAt: 0 };
 
   function setStatus(message, live = false) {
-    const feed = $('signalsFeed');
-    if (feed) feed.textContent = message;
-    if ($('signalsFeedAge')) $('signalsFeedAge').textContent = live ? 'Fresh Deriv snapshot' : 'No current live snapshot';
+    if ($('signalsFeed')) $('signalsFeed').textContent = message;
+    if ($('signalsFeedAge')) $('signalsFeedAge').textContent = live ? 'Fresh authenticated Deriv snapshot' : 'No current live snapshot';
   }
 
   async function getApiClient() {
-    if (window.AlgoBotAPI?.apiClient) return window.AlgoBotAPI.apiClient;
+    const api = window.AlgoBotAPI?.apiClient;
+    if (api) return api;
     await new Promise(resolve => {
       let done = false;
       const finish = () => { if (!done) { done = true; resolve(); } };
       window.addEventListener('algobot:api-ready', finish, {once: true});
-      setTimeout(finish, 1500);
+      setTimeout(finish, 2500);
     });
     if (window.AlgoBotAPI?.apiClient) return window.AlgoBotAPI.apiClient;
-    throw new Error('Canonical API client failed to initialise. Reload the page and try again.');
+    throw new Error('The AlgoBot API client is still loading. Refresh the page and retry.');
   }
 
   async function request(path) {
     const api = await getApiClient();
-    return api.get(path, {credentials: 'include', timeout: 30000});
+    return api.get(path, {credentials: 'include', timeout: 15000});
   }
 
   function populateSymbols(rows) {
@@ -44,13 +44,31 @@
   }
 
   function focus(row) {
-    if (!row) return;
+    if (!row) {
+      $('focusInstrument').textContent = 'Select a market';
+      $('focusState').textContent = 'WAITING';
+      $('focusState').className = 'signal-state waiting';
+      $('focusPrice').textContent = '—';
+      $('focusSource').textContent = 'No live tick';
+      $('focusConfidence').textContent = '0%';
+      $('focusConfidenceBar').style.width = '0%';
+      $('focusBaseline').textContent = '—';
+      $('focusDirection').textContent = 'HOLD';
+      $('focusThreshold').textContent = '—';
+      $('focusAge').textContent = '—';
+      $('focusEntry').textContent = '—';
+      $('focusStop').textContent = '—';
+      $('focusTake').textContent = '—';
+      $('focusTf').textContent = '—';
+      $('focusEvidence').innerHTML = '<span class="muted">No signal selected.</span>';
+      return;
+    }
     $('focusInstrument').textContent = row.display_name || row.instrument || row.symbol || '—';
     $('focusState').textContent = stateText(row.status);
     $('focusState').className = `signal-state ${tone(row.direction)}${row.status === 'WAITING_FOR_ANALYSIS' ? ' waiting' : ''}`;
     $('focusPrice').textContent = num(row.live?.price);
     $('focusSource').textContent = row.live?.source === 'deriv_authenticated_websocket' ? `Deriv live · ${row.live?.epoch ? new Date(Number(row.live.epoch) * 1000).toLocaleTimeString() : 'now'}` : 'No live tick';
-    $('focusConfidence').textContent = pct(row.confidence);
+    $('focusConfidence').textContent = pct(row.confidence ?? 0);
     $('focusConfidenceBar').style.width = `${Math.max(0, Math.min(100, Number(row.confidence) || 0))}%`;
     $('focusBaseline').textContent = row.baseline_direction ? `${row.baseline_direction} · ${pct(row.baseline_confidence)}` : 'No Analysis baseline';
     $('focusDirection').textContent = row.direction || 'HOLD';
@@ -79,39 +97,49 @@
     tbody.querySelectorAll('tr[data-symbol]').forEach(row => row.addEventListener('click', () => focus(S.rows.find(item => item.symbol === row.dataset.symbol))));
   }
 
+  function renderHealth(data) {
+    const live = Number(data.live_data_available_count || 0);
+    const total = Number(data.count || 0);
+    const stale = Number(data.stale_count || 0);
+    if ($('signalsFeed')) $('signalsFeed').textContent = live === total && total > 0 ? 'LIVE' : live > 0 ? 'PARTIAL' : 'UNAVAILABLE';
+    if ($('signalsFeedAge')) $('signalsFeedAge').textContent = live > 0 ? `${live}/${total} live Deriv quotes · ${num(data.feed_latency_ms, 0)} ms` : 'No authenticated Deriv quotes received';
+    if ($('signalsReady')) $('signalsReady').textContent = String(data.actionable_count ?? 0);
+    if ($('signalsBaseline')) $('signalsBaseline').textContent = `${S.rows.filter(row => row.analysis_signal_id).length}/${S.rows.length} matched`;
+    if ($('scanTimestamp')) $('scanTimestamp').textContent = `Scanned ${new Date().toLocaleTimeString()}${stale ? ` · ${stale} stale` : ''}`;
+  }
+
   async function scan() {
     if (S.scanning) return;
     S.scanning = true;
+    S.scanStartedAt = performance.now();
     const controls = [$('signalsScan'), $('signalsRefresh')].filter(Boolean);
     controls.forEach(button => { button.disabled = true; button.setAttribute('aria-busy', 'true'); });
-    const symbol = $('signalsSymbol').value;
-    const timeframe = $('signalsTimeframe').value;
-    const limit = $('signalsLimit').value;
+    const symbol = $('signalsSymbol')?.value || '';
+    const timeframe = $('signalsTimeframe')?.value || 'M1';
+    const limit = $('signalsLimit')?.value || '40';
     const path = `/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol ? `&symbol=${encodeURIComponent(symbol)}` : ''}`;
     try {
-      setStatus('Reading Deriv…');
+      setStatus('Authenticating Deriv live feed…');
       const data = await request(path);
+      if (data.status !== 'ok') throw new Error(data.message || 'Live signal service returned an invalid response.');
       S.rows = Array.isArray(data.data) ? data.data : [];
       S.last = data;
       populateSymbols(S.rows);
-      $('signalsAccount').textContent = data.account?.id || '—';
-      $('signalsAccountType').textContent = `${data.account?.type || 'account'} · ${data.account?.currency || ''}`;
-      $('signalsReady').textContent = String(data.actionable_count ?? S.rows.filter(row => row.execution_ready).length);
-      $('signalsBaseline').textContent = `${S.rows.filter(row => row.analysis_signal_id).length}/${S.rows.length} matched`;
-      const liveCount = Number(data.live_data_available_count ?? S.rows.filter(row => row.live).length);
-      setStatus(liveCount > 0 ? 'LIVE' : 'LIVE DATA UNAVAILABLE');
-      if ($('signalsFeedAge')) $('signalsFeedAge').textContent = liveCount > 0 ? `${liveCount}/${S.rows.length} fresh Deriv quotes` : 'No fresh Deriv quote received';
-      $('scanTimestamp').textContent = `Scanned ${new Date().toLocaleTimeString()}`;
+      if ($('signalsAccount')) $('signalsAccount').textContent = data.account?.id || '—';
+      if ($('signalsAccountType')) $('signalsAccountType').textContent = `${data.account?.type || 'account'} · ${data.account?.currency || ''}`;
+      renderHealth(data);
+      setStatus(Number(data.live_data_available_count || 0) > 0 ? 'LIVE' : 'LIVE DATA UNAVAILABLE', Number(data.live_data_available_count || 0) > 0);
       renderTape(S.rows); renderTable(S.rows);
-      const preferred = S.rows.find(row => row.execution_ready) || S.rows.find(row => row.direction === 'BUY' || row.direction === 'SELL') || S.rows[0];
+      const preferred = S.rows.find(row => row.execution_ready) || S.rows.find(row => row.direction === 'BUY' || row.direction === 'SELL') || S.rows.find(row => row.live) || S.rows[0];
       focus(preferred);
     } catch (error) {
       S.rows = [];
-      setStatus(error?.message || 'Live feed unavailable');
-      $('signalsReady').textContent = '0';
-      $('signalsBaseline').textContent = 'Unavailable';
-      $('scanTimestamp').textContent = `Scan failed · ${new Date().toLocaleTimeString()}`;
-      renderTape([]); renderTable([]);
+      const message = error?.message || 'Authenticated Deriv live feed unavailable.';
+      setStatus(message);
+      if ($('signalsReady')) $('signalsReady').textContent = '0';
+      if ($('signalsBaseline')) $('signalsBaseline').textContent = 'Unavailable';
+      if ($('scanTimestamp')) $('scanTimestamp').textContent = `Scan failed · ${new Date().toLocaleTimeString()}`;
+      renderTape([]); renderTable([]); focus(null);
     } finally {
       S.scanning = false;
       controls.forEach(button => { button.disabled = false; button.removeAttribute('aria-busy'); });
@@ -124,7 +152,8 @@
     $('signalsSymbol')?.addEventListener('change', scan);
     $('signalsTimeframe')?.addEventListener('change', scan);
     $('signalsLimit')?.addEventListener('change', scan);
-    window.addEventListener('algobot:account-synced', () => { S.rows = []; setStatus('Account changed — run live scan'); });
+    window.addEventListener('algobot:account-synced', () => { S.rows = []; setStatus('Account changed — authenticating the new Deriv feed…'); scan(); });
+    window.addEventListener('algobot:account-changed', () => { S.rows = []; setStatus('Account changed — authenticating the new Deriv feed…'); scan(); });
     scan();
   }
 
