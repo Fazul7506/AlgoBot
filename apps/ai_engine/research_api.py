@@ -1,9 +1,7 @@
-from django.utils import timezone
 from rest_framework import decorators, permissions, response, status
 
 from apps.indicators.basic_features import compute_basic_features
 from apps.market_data.research import ResearchCandleStore
-from .models import AIRecommendation, MarketRegime, Prediction
 from .serializers import AIRecommendationSerializer, MarketRegimeSerializer, PredictionSerializer
 from .services import AIEngine
 from .validators import validate_feature_context
