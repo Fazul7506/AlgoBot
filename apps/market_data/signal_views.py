@@ -20,6 +20,8 @@ LIVE_TICK_MAX_AGE_SECONDS = 5
 ANALYSIS_BASELINE_MAX_AGE_SECONDS = 900
 DEFAULT_CONFIDENCE_THRESHOLD = 70.0
 MAX_SCAN_SYMBOLS = 80
+LIVE_TICK_REQUEST_TIMEOUT_SECONDS = 2.0
+LIVE_TICK_SCAN_TIMEOUT_SECONDS = 30.0
 
 
 def _selected_deriv_account(request):
@@ -57,13 +59,14 @@ def _analysis_baselines(request, symbols, timeframe):
         symbol__in=symbols,
     ).order_by("-timestamp")
     baselines = {}
+    selected = request.session.get("active_broker_account_id")
+    selected_id = int(selected) if str(selected).isdigit() else None
     for signal in qs:
         tf = _analysis_timeframe(signal)
         if timeframe and tf != timeframe:
             continue
         if signal.configuration and signal.configuration.broker_account_id:
-            selected = request.session.get("active_broker_account_id")
-            if selected and signal.configuration.broker_account_id != int(selected):
+            if selected_id is None or signal.configuration.broker_account_id != selected_id:
                 continue
         if signal.symbol not in baselines:
             baselines[signal.symbol] = signal
@@ -71,8 +74,17 @@ def _analysis_baselines(request, symbols, timeframe):
 
 
 async def _authenticated_live_ticks(adapter, symbols):
-    """Use one authenticated Deriv WebSocket session for the live signal snapshot."""
+    """Read one fresh live tick at a time over one authenticated Deriv session.
+
+    Requests are deliberately serialized instead of bursting dozens of tick
+    requests into a newly authenticated connection. This avoids broker-side
+    request/rate-limit races while keeping the selected account credentials
+    authoritative for the entire snapshot.
+    """
     endpoint = await asyncio.to_thread(adapter._authenticated_ws_url)
+    unique_symbols = list(dict.fromkeys(symbols))
+    deadline = time.monotonic() + LIVE_TICK_SCAN_TIMEOUT_SECONDS
+    results = {}
     async with websockets.connect(
         endpoint,
         open_timeout=adapter.timeout,
@@ -81,32 +93,37 @@ async def _authenticated_live_ticks(adapter, symbols):
         ping_timeout=10,
         max_size=2**20,
     ) as ws:
-        pending = {}
-        for index, symbol in enumerate(dict.fromkeys(symbols), start=1):
-            pending[index] = symbol
-            await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": index}))
-
-        results = {}
-        deadline = time.monotonic() + min(12.0, max(4.0, len(pending) * 0.25))
-        while pending and time.monotonic() < deadline:
-            try:
-                raw = await asyncio.wait_for(ws.recv(), timeout=max(0.1, deadline - time.monotonic()))
-            except asyncio.TimeoutError:
+        for index, symbol in enumerate(unique_symbols, start=1):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 break
-            payload = json.loads(raw)
-            if payload.get("error"):
-                code = str((payload.get("error") or {}).get("code") or "")
-                if code in {"AuthorizationRequired", "InvalidToken", "Unauthorized", "InvalidAppId"}:
-                    raise BrokerAuthenticationError((payload.get("error") or {}).get("message", "Deriv authentication failed"))
-                continue
-            if payload.get("msg_type") != "tick":
-                continue
-            tick = payload.get("tick") or {}
-            symbol = str(tick.get("symbol") or pending.get(payload.get("req_id")) or "")
-            if symbol and tick.get("quote") is not None and tick.get("epoch") is not None:
-                results[symbol] = tick
-                pending.pop(payload.get("req_id"), None)
-        return results
+            req_id = index
+            await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
+            while time.monotonic() < deadline:
+                timeout = min(LIVE_TICK_REQUEST_TIMEOUT_SECONDS, max(0.1, deadline - time.monotonic()))
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
+                except asyncio.TimeoutError:
+                    break
+                try:
+                    payload = json.loads(raw)
+                except (TypeError, ValueError):
+                    continue
+                error = payload.get("error") or {}
+                if error:
+                    code = str(error.get("code") or "")
+                    if code in {"AuthorizationRequired", "InvalidToken", "Unauthorized", "InvalidAppId"}:
+                        raise BrokerAuthenticationError(error.get("message", "Deriv authentication failed"))
+                    break
+                if payload.get("msg_type") != "tick":
+                    continue
+                tick = payload.get("tick") or {}
+                response_symbol = str(tick.get("symbol") or symbol)
+                if tick.get("quote") is None or tick.get("epoch") is None:
+                    continue
+                results[response_symbol] = tick
+                break
+    return results
 
 
 def _revise_signal(signal, live_tick, now):
