@@ -15,6 +15,7 @@ from .views import (
     predict,
     train,
 )
+from .research_api import research_predict
 
 router = DefaultRouter()
 router.register(r"ai/models", AIModelViewSet, basename="ai-models")
@@ -30,5 +31,6 @@ urlpatterns = [
     path("ai/governance/", model_governance, name="ai-governance"),
     path("ai/train/", train, name="ai-train"),
     path("ai/predict/", predict, name="ai-predict"),
+    path("ai/research-predict/", research_predict, name="ai-research-predict"),
     path("ai/explain/", explain, name="ai-explain"),
 ]
