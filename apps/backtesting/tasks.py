@@ -117,22 +117,26 @@ def _persist_statistics(backtest, result):
 
 
 def _warmup_start(backtest, minimum_history=20):
-    """Return the timestamp of the oldest warm-up observation before start."""
-    from apps.market_data.models import Candle, Tick
-
+    """Return the timestamp of the oldest persisted warm-up observation before start."""
     start_epoch = int(backtest.start_date.timestamp())
     if str(backtest.mode).lower() == 'tick':
+        from apps.market_data.models import Tick
         epochs = list(
             Tick.objects.filter(symbol__symbol=backtest.symbol, epoch__lt=start_epoch)
             .order_by('-epoch', '-id')
             .values_list('epoch', flat=True)[:minimum_history]
         )
     else:
-        epochs = list(
-            Candle.objects.filter(symbol__symbol=backtest.symbol, timeframe=backtest.timeframe, epoch__lt=start_epoch)
-            .order_by('-epoch', '-id')
-            .values_list('epoch', flat=True)[:minimum_history]
-        )
+        from apps.market_data.research_data import ResearchDataService
+        epochs = [
+            row['epoch']
+            for row in ResearchDataService().previous_candles(
+                backtest.symbol,
+                backtest.timeframe,
+                before_epoch=start_epoch,
+                limit=minimum_history,
+            )
+        ]
     if len(epochs) < minimum_history:
         raise ValueError(
             f'Insufficient historical warm-up data before the selected start: '
