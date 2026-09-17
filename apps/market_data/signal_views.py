@@ -54,19 +54,19 @@ def _analysis_timeframe(signal):
     return str(metadata.get("timeframe") or metadata.get("interval") or "M1")
 
 
-def _analysis_baselines(request, symbols, timeframe):
-    qs = StrategySignal.objects.select_related("strategy", "configuration").filter(
-        Q(configuration__user=request.user) | Q(configuration__isnull=True),
-        symbol__in=symbols,
-    ).order_by("-timestamp")
+def _analysis_baselines(request, symbols, timeframe, account=None):
+    qs = StrategySignal.objects.select_related("strategy", "configuration").filter(Q(configuration__user=request.user) | Q(configuration__isnull=True), symbol__in=symbols).order_by("-timestamp")
     baselines = {}
     selected = request.session.get("active_broker_account_id")
     selected_id = int(selected) if str(selected).isdigit() else None
+    account_id = getattr(account, "pk", None)
     for signal in qs:
         if timeframe and _analysis_timeframe(signal) != timeframe:
             continue
-        if signal.configuration and signal.configuration.broker_account_id:
-            if selected_id is None or signal.configuration.broker_account_id != selected_id:
+        signal_account_id = signal.configuration.broker_account_id if signal.configuration else None
+        if signal_account_id:
+            expected_id = selected_id or account_id
+            if expected_id is None or signal_account_id != expected_id:
                 continue
         if signal.symbol not in baselines:
             baselines[signal.symbol] = signal
@@ -221,7 +221,7 @@ def strategy_signals(request):
         return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": str(exc)}, status=502)
     except Exception:
         return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": "The authenticated Deriv live signal feed could not be established."}, status=502)
-    baselines = _analysis_baselines(request, symbols, timeframe)
+    baselines = _analysis_baselines(request, symbols, timeframe, account=account)
     now = timezone.now(); rows = []
     for market in markets:
         live_tick = live_ticks.get(market.symbol); baseline = baselines.get(market.symbol)
