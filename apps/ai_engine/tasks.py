@@ -4,6 +4,8 @@ from django.utils import timezone
 
 from deriv_platform.celery import app
 
+from apps.market_data.constants import TIMEFRAMES
+from apps.market_data.research_data import ResearchDataService
 from .data_pipeline import AIDataPipeline
 from .models import Prediction, PredictionOutcome
 from .services import (
@@ -64,14 +66,12 @@ def resolve_prediction_outcomes(timeframe="M1", horizon_candles=1, batch_size=50
     rows. The timeframe is normalized before both the maturity cutoff and the
     candle query so aliases such as M1/H1 cannot diverge from stored rows.
     """
-    from apps.market_data.research_data import ResearchDataService
-
     research_data = ResearchDataService()
     canonical_timeframe = research_data.timeframe(timeframe)
     if canonical_timeframe == "tick":
         raise ValueError("Prediction outcomes require a candle timeframe, not tick mode")
 
-    seconds = max(1, int(__import__("apps.market_data.constants", fromlist=["TIMEFRAMES"]).TIMEFRAMES[canonical_timeframe]))
+    seconds = max(1, int(TIMEFRAMES[canonical_timeframe]))
     cutoff = timezone.now() - timedelta(seconds=seconds * max(1, int(horizon_candles)))
     pending = Prediction.objects.filter(
         timeframe=canonical_timeframe,
@@ -83,11 +83,11 @@ def resolve_prediction_outcomes(timeframe="M1", horizon_candles=1, batch_size=50
     for prediction in pending:
         try:
             market = research_data.market(prediction.symbol)
-            future = research_data.candles(
+            future = research_data.next_candles(
                 market.symbol,
                 canonical_timeframe,
+                after_epoch=int(prediction.created_at.timestamp()),
                 limit=max(1, int(horizon_candles)),
-                start_epoch=int(prediction.created_at.timestamp()),
             )
         except ValueError:
             skipped += 1
