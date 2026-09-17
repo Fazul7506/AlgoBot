@@ -38,6 +38,7 @@ class ResearchDataService:
         start_epoch: int | None = None,
         end_epoch: int | None = None,
     ) -> list[dict[str, Any]]:
+        """Return the newest persisted candles in chronological order."""
         canonical = self.timeframe(timeframe)
         market = self.market(symbol)
         limit = min(max(int(limit), 1), 10000)
@@ -67,6 +68,50 @@ class ResearchDataService:
             start_epoch=start_epoch,
             end_epoch=end_epoch,
         )
+
+    def next_candles(
+        self,
+        symbol: str,
+        timeframe: str,
+        after_epoch: int,
+        limit: int = 1,
+    ) -> list[dict[str, Any]]:
+        """Return the first persisted candles strictly after an epoch boundary."""
+        canonical = self.timeframe(timeframe)
+        market = self.market(symbol)
+        bounded_limit = min(max(int(limit), 1), 10000)
+        return list(
+            Candle.objects.filter(
+                symbol=market,
+                timeframe=canonical,
+                epoch__gt=int(after_epoch),
+            )
+            .order_by("epoch", "id")
+            .values("open", "high", "low", "close", "volume", "epoch")[:bounded_limit]
+        )
+
+    def previous_candles(
+        self,
+        symbol: str,
+        timeframe: str,
+        before_epoch: int,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Return the latest persisted candles strictly before an epoch boundary."""
+        canonical = self.timeframe(timeframe)
+        market = self.market(symbol)
+        bounded_limit = min(max(int(limit), 1), 10000)
+        rows = list(
+            Candle.objects.filter(
+                symbol=market,
+                timeframe=canonical,
+                epoch__lt=int(before_epoch),
+            )
+            .order_by("-epoch", "-id")
+            .values("open", "high", "low", "close", "volume", "epoch")[:bounded_limit]
+        )
+        rows.reverse()
+        return rows
 
     def count(
         self,
