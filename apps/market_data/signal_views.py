@@ -4,7 +4,6 @@ import time
 from decimal import InvalidOperation
 
 import websockets
-from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
@@ -155,33 +154,70 @@ def _revise_signal(signal, live_tick, now, market, account):
     status = "LIVE_REVIEW"
     direction = baseline_direction
     if analysis_age > ANALYSIS_BASELINE_MAX_AGE_SECONDS:
-        revised = min(revised, 50.0); status = "ANALYSIS_STALE"; direction = "HOLD"; evidence.append("analysis_baseline_stale")
+        revised = min(revised, 50.0)
+        status = "ANALYSIS_STALE"
+        direction = "HOLD"
+        evidence.append("analysis_baseline_stale")
     elif live_age > LIVE_TICK_MAX_AGE_SECONDS:
-        revised = min(revised, 45.0); status = "LIVE_DATA_STALE"; direction = "HOLD"; evidence.append("live_tick_stale")
+        revised = min(revised, 45.0)
+        status = "LIVE_DATA_STALE"
+        direction = "HOLD"
+        evidence.append("live_tick_stale")
     elif baseline_direction in {"BUY", "SELL"} and live_price is not None and entry is not None:
         favorable = (baseline_direction == "BUY" and live_price >= entry) or (baseline_direction == "SELL" and live_price <= entry)
         revised = round((base_confidence * 0.80) + ((100.0 if favorable else 0.0) * 0.20), 2)
-        if favorable: evidence.append("live_price_confirms_analysis_entry_side")
-        else: direction = "HOLD"; status = "LIVE_CONFIRMATION_FAILED"; evidence.append("live_price_conflicts_with_analysis_entry_side")
+        if favorable:
+            evidence.append("live_price_confirms_analysis_entry_side")
+        else:
+            direction = "HOLD"
+            status = "LIVE_CONFIRMATION_FAILED"
+            evidence.append("live_price_conflicts_with_analysis_entry_side")
     elif baseline_direction in {"BUY", "SELL"}:
         evidence.append("analysis_entry_price_unavailable")
     threshold = _as_float(metadata.get("live_confidence_threshold")) or DEFAULT_CONFIDENCE_THRESHOLD
     execution_ready = direction in {"BUY", "SELL"} and revised >= threshold and status == "LIVE_REVIEW"
-    if not execution_ready and direction in {"BUY", "SELL"}: status = "LIVE_CONFIDENCE_BELOW_GATE"
+    if not execution_ready and direction in {"BUY", "SELL"}:
+        status = "LIVE_CONFIDENCE_BELOW_GATE"
     return {
-        "analysis_signal_id": signal.id, "analysis_timestamp": signal.timestamp.isoformat(), "analysis_age_seconds": analysis_age,
-        "baseline_direction": baseline_direction, "baseline_confidence": round(base_confidence, 2), "direction": direction,
-        "confidence": round(revised, 2), "live_confidence_threshold": round(threshold, 2), "execution_ready": execution_ready,
-        "status": status, "evidence": evidence, "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
-        "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None, "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
-        "strategy": signal.strategy.name, "strategy_version": signal.strategy.version, "timeframe": _analysis_timeframe(signal),
-        "analysis_metadata": metadata, "trade_context": _trade_context(signal, market, account),
-        "live": {"price": live_price, "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": live_epoch, "age_seconds": live_age, "source": "deriv_authenticated_websocket"},
+        "analysis_signal_id": signal.id,
+        "analysis_timestamp": signal.timestamp.isoformat(),
+        "analysis_age_seconds": analysis_age,
+        "baseline_direction": baseline_direction,
+        "baseline_confidence": round(base_confidence, 2),
+        "direction": direction,
+        "confidence": round(revised, 2),
+        "live_confidence_threshold": round(threshold, 2),
+        "execution_ready": execution_ready,
+        "status": status,
+        "evidence": evidence,
+        "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
+        "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None,
+        "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
+        "strategy": signal.strategy.name,
+        "strategy_version": signal.strategy.version,
+        "timeframe": _analysis_timeframe(signal),
+        "analysis_metadata": metadata,
+        "trade_context": _trade_context(signal, market, account),
+        "live": {
+            "price": live_price,
+            "bid": _as_float(live_tick.get("bid")),
+            "ask": _as_float(live_tick.get("ask")),
+            "epoch": live_epoch,
+            "age_seconds": live_age,
+            "source": "deriv_authenticated_websocket",
+        },
     }
 
 
-@login_required
 def strategy_signals(request):
+    """Return authenticated, broker-sourced signal data as an API response.
+
+    This is deliberately API-native rather than using Django's ``login_required``
+    redirect. API callers (including DRF's APIClient and browser fetch clients)
+    must receive a machine-readable 401 instead of a 302 to the login page.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({"status": "error", "code": "AUTHENTICATION_REQUIRED", "message": "Authentication is required to read live signals."}, status=401)
     account = _selected_deriv_account(request)
     if account is None:
         return JsonResponse({"status": "error", "code": "DERIV_ACCOUNT_REQUIRED", "message": "Connect and select a Deriv account before reading live signals."}, status=409)
@@ -189,24 +225,30 @@ def strategy_signals(request):
         return JsonResponse({"status": "error", "code": "DERIV_CREDENTIALS_INVALID", "message": "The selected Deriv credentials are expired or revoked."}, status=401)
     symbol_filter = str(request.GET.get("symbol") or "").strip()
     timeframe = str(request.GET.get("timeframe") or "M1").strip()
-    try: limit = min(max(int(request.GET.get("limit", 40)), 1), MAX_SCAN_SYMBOLS)
-    except (TypeError, ValueError): limit = 40
+    try:
+        limit = min(max(int(request.GET.get("limit", 40)), 1), MAX_SCAN_SYMBOLS)
+    except (TypeError, ValueError):
+        limit = 40
     symbols_qs = MarketSymbol.objects.filter(is_active=True, is_tradable=True, broker="deriv").order_by("market", "symbol")
-    if symbol_filter: symbols_qs = symbols_qs.filter(symbol=symbol_filter)
+    if symbol_filter:
+        symbols_qs = symbols_qs.filter(symbol=symbol_filter)
     markets = list(symbols_qs[:limit])
     if not markets:
         return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "count": 0, "live_data_available_count": 0, "actionable_count": 0, "data": []})
     adapter = BrokerRegistry().adapter(account.broker, account)
     symbols = [market.symbol for market in markets]
-    try: live_ticks, feed_latency_ms = asyncio.run(_authenticated_live_ticks(adapter, symbols))
+    try:
+        live_ticks, feed_latency_ms = asyncio.run(_authenticated_live_ticks(adapter, symbols))
     except (BrokerAuthenticationError, BrokerConnectionError) as exc:
         return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": str(exc)}, status=502)
     except Exception:
         return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": "The authenticated Deriv live signal feed could not be established."}, status=502)
     baselines = _analysis_baselines(request, symbols, timeframe)
-    now = timezone.now(); rows = []
+    now = timezone.now()
+    rows = []
     for market in markets:
-        live_tick = live_ticks.get(market.symbol); baseline = baselines.get(market.symbol)
+        live_tick = live_ticks.get(market.symbol)
+        baseline = baselines.get(market.symbol)
         row = {"symbol": market.symbol, "instrument": market.display_name, "display_name": market.display_name, "market": market.market, "sub_market": market.sub_market, "broker": "deriv", "account_id": account.account_id, "account_type": account.account_type, "timeframe": timeframe, "source": "deriv_authenticated_live"}
         if not live_tick:
             row.update({"direction": "HOLD", "confidence": 0, "status": "LIVE_DATA_UNAVAILABLE", "execution_ready": False, "evidence": ["no_live_deriv_tick"], "trade_context": {"market_type": market.market, "sub_market": market.sub_market, "symbol": market.symbol, "instrument": market.display_name, "trade_type": None, "direction": "HOLD", "contract_type": None, "contract_family": None, "duration": None, "duration_unit": None, "barrier": None, "stake": None, "payout": None, "currency": account.currency, "account_type": account.account_type, "broker": account.broker.name, "timeframe": timeframe}})
@@ -216,5 +258,6 @@ def strategy_signals(request):
             row.update(_revise_signal(baseline, live_tick, now, market, account))
         rows.append(row)
     actionable = [r for r in rows if r.get("execution_ready")]
-    live_data_available_count = sum(1 for r in rows if r.get("live")); stale_count = sum(1 for r in rows if r.get("status") == "LIVE_DATA_STALE")
+    live_data_available_count = sum(1 for r in rows if r.get("live"))
+    stale_count = sum(1 for r in rows if r.get("status") == "LIVE_DATA_STALE")
     return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency}, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
