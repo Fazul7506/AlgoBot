@@ -5,11 +5,12 @@ reads only this canonical store, keeping provider payloads out of models.
 """
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import Any
 
 from django.utils import timezone
 
+from apps.market_data.historical import normalize_timeframe
 from apps.market_data.models import Candle, MarketSymbol, Tick
 
 
@@ -19,8 +20,9 @@ class AIDataPipeline:
     MIN_CANDLES = 250
 
     def snapshot(self, timeframe="M1", lookback_hours=168, symbol=None):
-        cutoff = timezone.now() - timedelta(hours=lookback_hours)
-        qs = Candle.objects.filter(timeframe=timeframe, created_at__gte=cutoff)
+        timeframe = normalize_timeframe(timeframe)
+        cutoff_epoch = int((timezone.now() - timedelta(hours=lookback_hours)).timestamp())
+        qs = Candle.objects.filter(timeframe=timeframe, epoch__gte=cutoff_epoch)
         if symbol:
             qs = qs.filter(symbol__symbol=symbol)
         qs = qs.select_related("symbol").order_by("symbol__symbol", "epoch")
@@ -40,22 +42,26 @@ class AIDataPipeline:
         return rows
 
     def health(self, timeframe="M1"):
+        timeframe = normalize_timeframe(timeframe)
         symbols = MarketSymbol.objects.filter(is_active=True, is_tradable=True)
-        cutoff = timezone.now() - timedelta(hours=1)
+        cutoff_epoch = int((timezone.now() - timedelta(hours=1)).timestamp())
         result = []
         for item in symbols.iterator():
-            candles = Candle.objects.filter(symbol=item, timeframe=timeframe, created_at__gte=cutoff).count()
-            ticks = Tick.objects.filter(symbol=item, created_at__gte=cutoff).count()
+            candles = Candle.objects.filter(symbol=item, timeframe=timeframe, epoch__gte=cutoff_epoch).count()
+            ticks = Tick.objects.filter(symbol=item, epoch__gte=cutoff_epoch).count()
+            latest_candle = Candle.objects.filter(symbol=item, timeframe=timeframe).order_by("-epoch").first()
             result.append({
                 "broker": item.broker,
                 "symbol": item.symbol,
                 "candles_last_hour": candles,
                 "ticks_last_hour": ticks,
+                "latest_candle_epoch": latest_candle.epoch if latest_candle else None,
                 "ready": candles > 0,
             })
         return result
 
     def training_summary(self, timeframe="M1", lookback_hours=168):
+        timeframe = normalize_timeframe(timeframe)
         rows = self.snapshot(timeframe=timeframe, lookback_hours=lookback_hours)
         return {
             "timeframe": timeframe,
@@ -68,6 +74,7 @@ class AIDataPipeline:
 
     def dataset(self, symbol, timeframe="M1", limit=5000):
         """Return chronologically ordered OHLCV rows for model construction."""
+        timeframe = normalize_timeframe(timeframe)
         market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
         if not market_symbol:
             raise ValueError(f"Unknown active market symbol: {symbol}")
@@ -79,6 +86,7 @@ class AIDataPipeline:
 
     def dataset_metadata(self, symbol, timeframe="M1") -> dict[str, Any]:
         """Return provenance information to store alongside a trained model."""
+        timeframe = normalize_timeframe(timeframe)
         market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
         if not market_symbol:
             raise ValueError(f"Unknown active market symbol: {symbol}")
