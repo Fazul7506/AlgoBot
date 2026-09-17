@@ -1,4 +1,7 @@
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth.views import redirect_to_login
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
@@ -26,33 +29,35 @@ def symbol_detail(request, symbol):
     return render(request, "market_data/symbol_detail.html", {"symbol": symbol})
 
 
-@user_passes_test(_staff_required)
 def initial_candle_backfill(request):
-    """Staff-only control page for the one-time 5,000-candle warm-up.
+    """Staff-only control page for the one-time 5,000-candle warm-up."""
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
+    if not _staff_required(request.user):
+        raise PermissionDenied
 
-    GET displays current state. POST queues the job on Celery. A durable DB
-    record prevents duplicate initial runs while still allowing a failed run
-    to be retried safely.
-    """
-    run, _ = CandleBackfillRun.objects.get_or_create(scope="initial")
+    run = CandleBackfillRun.objects.filter(scope="initial").first()
 
     if request.method == "POST":
-        if run.status in {"queued", "running", "succeeded"}:
-            return redirect(reverse("initial_candle_backfill"))
+        with transaction.atomic():
+            run = CandleBackfillRun.objects.select_for_update().filter(scope="initial").first()
+            if run and run.status in {"queued", "running", "succeeded"}:
+                return redirect(reverse("initial_candle_backfill"))
+            if run is None:
+                run = CandleBackfillRun(scope="initial")
 
-        count = 5000
-        symbol = (request.POST.get("symbol") or "").strip()
-        run.status = "queued"
-        run.count = count
-        run.symbol = symbol
-        run.task_id = ""
-        run.requested_by = request.user
-        run.requested_at = timezone.now()
-        run.started_at = None
-        run.completed_at = None
-        run.result = {}
-        run.error = ""
-        run.save()
+            count = 5000
+            symbol = (request.POST.get("symbol") or "").strip()
+            run.status = "queued"
+            run.count = count
+            run.symbol = symbol
+            run.task_id = ""
+            run.requested_by = request.user
+            run.started_at = None
+            run.completed_at = None
+            run.result = {}
+            run.error = ""
+            run.save()
 
         from .tasks import run_initial_candle_backfill
 
@@ -69,6 +74,8 @@ def initial_candle_backfill(request):
         return redirect(reverse("initial_candle_backfill"))
 
     if request.GET.get("format") == "json":
+        if not run:
+            return JsonResponse({"scope": "initial", "status": "ready", "count": 5000})
         return JsonResponse({
             "scope": run.scope,
             "status": run.status,
