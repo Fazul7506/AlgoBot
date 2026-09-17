@@ -1,25 +1,21 @@
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.http import JsonResponse
 from apps.strategies.models import StrategySignal
 
 
 @login_required
 def strategy_signals(request):
-    """Authenticated canonical strategy-signal feed for the current user.
-
-    Analysis remains untouched. Signals exposes persisted signal records only,
-    while preserving the evidence/diagnostic fields produced by the strategy
-    pipeline in ``metadata``.
-    """
+    """Return current persisted scan signals with the same market context used by Analysis."""
     try:
-        limit = min(max(int(request.GET.get("limit", 50)), 1), 100)
+        limit = min(max(int(request.GET.get("limit", 100)), 1), 100)
     except (TypeError, ValueError):
-        limit = 50
+        limit = 100
 
     queryset = (
         StrategySignal.objects
         .select_related("strategy", "configuration")
-        .filter(configuration__user=request.user)
+        .filter(Q(configuration__user=request.user) | Q(configuration__isnull=True))
         .order_by("-timestamp")
     )
 
@@ -30,9 +26,13 @@ def strategy_signals(request):
             "id": signal.id,
             "symbol": signal.symbol,
             "display_name": metadata.get("display_name") or metadata.get("instrument") or signal.symbol,
+            "instrument": metadata.get("instrument") or signal.symbol,
+            "timeframe": metadata.get("timeframe") or metadata.get("interval") or getattr(signal.configuration, "timeframe", None) or "—",
             "direction": signal.signal,
             "signal_type": signal.signal,
             "confidence": signal.confidence,
+            "score": metadata.get("score") or metadata.get("signal_score") or "—",
+            "price": metadata.get("price") or metadata.get("current_price") or metadata.get("last_price") or "—",
             "market_regime": metadata.get("market_regime") or metadata.get("regime") or "—",
             "strategy": signal.strategy.name,
             "strategy_name": signal.strategy.name,
@@ -56,8 +56,4 @@ def strategy_signals(request):
             "metadata": metadata,
         })
 
-    return JsonResponse({
-        "status": "success",
-        "count": len(rows),
-        "data": rows,
-    })
+    return JsonResponse({"status": "success", "count": len(rows), "data": rows})
