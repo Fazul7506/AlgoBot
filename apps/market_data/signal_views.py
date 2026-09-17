@@ -1,7 +1,7 @@
 import asyncio
+import json
 import time
-from collections import defaultdict
-from decimal import Decimal, InvalidOperation
+from decimal import InvalidOperation
 
 import websockets
 from django.contrib.auth.decorators import login_required
@@ -53,17 +53,20 @@ def _analysis_timeframe(signal):
 
 def _analysis_baselines(request, symbols, timeframe):
     qs = StrategySignal.objects.select_related("strategy", "configuration").filter(
-        symbol__in=symbols,
         Q(configuration__user=request.user) | Q(configuration__isnull=True),
+        symbol__in=symbols,
     ).order_by("-timestamp")
     baselines = {}
     for signal in qs:
         tf = _analysis_timeframe(signal)
         if timeframe and tf != timeframe:
             continue
-        key = signal.symbol
-        if key not in baselines:
-            baselines[key] = signal
+        if signal.configuration and signal.configuration.broker_account_id:
+            selected = request.session.get("active_broker_account_id")
+            if selected and signal.configuration.broker_account_id != int(selected):
+                continue
+        if signal.symbol not in baselines:
+            baselines[signal.symbol] = signal
     return baselines
 
 
@@ -78,22 +81,19 @@ async def _authenticated_live_ticks(adapter, symbols):
         ping_timeout=10,
         max_size=2**20,
     ) as ws:
-        requests = {}
+        pending = {}
         for index, symbol in enumerate(dict.fromkeys(symbols), start=1):
-            req_id = index
-            requests[req_id] = symbol
-            await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
+            pending[index] = symbol
+            await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": index}))
 
         results = {}
-        deadline = time.monotonic() + min(12.0, max(4.0, len(requests) * 0.25))
-        while requests and time.monotonic() < deadline:
-            timeout = max(0.1, deadline - time.monotonic())
+        deadline = time.monotonic() + min(12.0, max(4.0, len(pending) * 0.25))
+        while pending and time.monotonic() < deadline:
             try:
-                message = await asyncio.wait_for(ws.recv(), timeout=timeout)
+                raw = await asyncio.wait_for(ws.recv(), timeout=max(0.1, deadline - time.monotonic()))
             except asyncio.TimeoutError:
                 break
-            import json
-            payload = json.loads(message)
+            payload = json.loads(raw)
             if payload.get("error"):
                 code = str((payload.get("error") or {}).get("code") or "")
                 if code in {"AuthorizationRequired", "InvalidToken", "Unauthorized", "InvalidAppId"}:
@@ -102,12 +102,10 @@ async def _authenticated_live_ticks(adapter, symbols):
             if payload.get("msg_type") != "tick":
                 continue
             tick = payload.get("tick") or {}
-            symbol = str(tick.get("symbol") or requests.get(payload.get("req_id")) or "")
+            symbol = str(tick.get("symbol") or pending.get(payload.get("req_id")) or "")
             if symbol and tick.get("quote") is not None and tick.get("epoch") is not None:
                 results[symbol] = tick
-                req_id = payload.get("req_id")
-                if req_id in requests:
-                    requests.pop(req_id, None)
+                pending.pop(payload.get("req_id"), None)
         return results
 
 
@@ -185,15 +183,10 @@ def _revise_signal(signal, live_tick, now):
 
 @login_required
 def strategy_signals(request):
-    """Produce live Deriv signals from an Analysis baseline plus a fresh broker tick.
-
-    Analysis is upstream evidence only. This endpoint never treats historical candles as
-    the live signal source and never submits an order.
-    """
+    """Produce live Deriv signals from an Analysis baseline plus a fresh broker tick."""
     account = _selected_deriv_account(request)
     if account is None:
         return JsonResponse({"status": "error", "code": "DERIV_ACCOUNT_REQUIRED", "message": "Connect and select a Deriv account before reading live signals."}, status=409)
-
     if account.token_status != "active" or account.is_token_expired:
         return JsonResponse({"status": "error", "code": "DERIV_CREDENTIALS_INVALID", "message": "The selected Deriv credentials are expired or revoked."}, status=401)
 
