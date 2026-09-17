@@ -1,46 +1,36 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Signals | AlgoBot{% endblock %}
-{% block mobile_title %}Signals{% endblock %}
+{% block title %}Live Signals | AlgoBot{% endblock %}
+{% block mobile_title %}Live Signals{% endblock %}
 {% block content %}
-<main id="main-content" class="analysis-pro signals-pro" data-signals-pro>
-  <div class="analysis-bar">
-    <select id="sSymbol" class="symbol" aria-label="Instrument"></select>
-    <select id="sTf" aria-label="Timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select>
-    <select id="sLimit" aria-label="Candle history"><option value="200">200</option><option value="300" selected>300</option><option value="500">500</option><option value="1000">1000</option></select>
-    <button id="sRefresh">Refresh</button><button id="sScan">Scan all markets</button><span class="grow"></span><span><i id="sDot" class="dot"></i><span id="sStatus">Connecting…</span></span>
-  </div>
-  <section class="kpis">
-    <article class="analysis-kpi"><small>Instrument</small><strong id="sName">—</strong></article>
-    <article class="analysis-kpi"><small>Price</small><strong id="sPrice">—</strong></article>
-    <article class="analysis-kpi"><small>Signal</small><strong id="sSignal">—</strong></article>
-    <article class="analysis-kpi"><small>Score</small><strong id="sScore">—</strong></article>
-    <article class="analysis-kpi"><small>Confidence</small><strong id="sConfidence">—</strong></article>
-    <article class="analysis-kpi"><small>Regime</small><strong id="sRegime">—</strong></article>
+<main id="main-content" class="live-signals" data-live-signals>
+  <header class="live-signals-head">
+    <div><p class="eyebrow">Deriv live intelligence</p><h1>Live Signals</h1><p>Analysis is examined first. This page then reads the selected Deriv account's live market feed and revises the baseline direction and confidence before a signal can be considered trading-ready.</p></div>
+    <div class="live-actions"><button class="btn primary" id="signalsScan">Scan live now</button><button class="btn" id="signalsRefresh">Refresh</button><a class="btn" href="/analysis/">View Analysis</a><a class="btn" href="/trading/">Trading Terminal</a></div>
+  </header>
+  <section class="live-status-grid">
+    <article class="live-status-card"><span>Deriv account</span><strong id="signalsAccount">—</strong><small id="signalsAccountType">—</small></article>
+    <article class="live-status-card"><span>Live feed</span><strong id="signalsFeed">Connecting</strong><small id="signalsFeedAge">—</small></article>
+    <article class="live-status-card"><span>Analysis baseline</span><strong id="signalsBaseline">—</strong><small>Upstream examination only</small></article>
+    <article class="live-status-card"><span>Trading-ready</span><strong id="signalsReady">0</strong><small>Manual execution remains separate</small></article>
   </section>
-  <section class="main-analysis">
-    <article class="analysis-box">
-      <div class="box-head"><div><h2>Signal market context</h2><small>Same broker-authoritative candles and deterministic analysis used by Analysis.</small></div><span class="chip" id="sStructure">—</span></div>
-      <div class="chart"><canvas id="sChart"></canvas><div class="empty" id="sEmpty">Select an instrument and run the scan.</div></div>
-      <div class="foot"><a href="/trading/">Open Trading Terminal</a><a href="/analysis/">Open Analysis</a><button id="sAnalyze">Re-run selected analysis</button></div>
+  <section class="signal-command panel">
+    <div><strong>Live signal review</strong><span>Instrument, market, timeframe and live Deriv quote are evaluated against the latest matching Analysis examination.</span></div>
+    <div class="signal-filters"><select id="signalsSymbol" aria-label="Instrument"><option value="">All instruments</option></select><select id="signalsTimeframe" aria-label="Timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select><select id="signalsLimit" aria-label="Market limit"><option>20</option><option selected>40</option><option>60</option><option>80</option></select></div>
+  </section>
+  <section class="signal-overview">
+    <article class="signal-focus panel"><div class="panel-title"><div><span class="eyebrow">Selected signal</span><h2 id="focusInstrument">Select a market</h2></div><span id="focusState" class="signal-state">WAITING</span></div>
+      <div class="focus-price"><strong id="focusPrice">—</strong><span id="focusSource">No live tick</span></div>
+      <div class="confidence-wrap"><div class="confidence-label"><span>Revised live confidence</span><strong id="focusConfidence">0%</strong></div><div class="confidence-track"><i id="focusConfidenceBar"></i></div></div>
+      <div class="focus-grid"><div><span>Baseline</span><strong id="focusBaseline">—</strong></div><div><span>Revised direction</span><strong id="focusDirection">HOLD</strong></div><div><span>Threshold</span><strong id="focusThreshold">—</strong></div><div><span>Live age</span><strong id="focusAge">—</strong></div><div><span>Entry</span><strong id="focusEntry">—</strong></div><div><span>Stop loss</span><strong id="focusStop">—</strong></div><div><span>Take profit</span><strong id="focusTake">—</strong></div><div><span>Timeframe</span><strong id="focusTf">—</strong></div></div>
+      <div class="signal-evidence"><h3>Revision evidence</h3><div id="focusEvidence">No signal selected.</div></div>
     </article>
-    <aside class="side">
-      <article class="analysis-box"><div class="box-head"><h2>Key levels</h2></div><div class="metrics"><div class="metric"><span>Resistance</span><strong id="sRes">—</strong></div><div class="metric"><span>Support</span><strong id="sSup">—</strong></div><div class="metric"><span>Range</span><strong id="sRange">—</strong></div><div class="metric"><span>Change</span><strong id="sChange">—</strong></div></div></article>
-      <article class="analysis-box"><div class="box-head"><h2>Trend</h2></div><div class="metrics"><div class="metric"><span>SMA 20</span><strong id="sS20">—</strong></div><div class="metric"><span>SMA 50</span><strong id="sS50">—</strong></div><div class="metric"><span>SMA 200</span><strong id="sS200">—</strong></div><div class="metric"><span>EMA 9 / 21</span><strong id="sEma">—</strong></div></div></article>
-      <article class="analysis-box"><div class="box-head"><h2>Momentum &amp; volatility</h2></div><div class="metrics"><div class="metric"><span>RSI 14</span><strong id="sRsi">—</strong></div><div class="metric"><span>ATR 14</span><strong id="sAtr">—</strong></div><div class="metric"><span>MACD hist.</span><strong id="sMacd">—</strong></div><div class="metric"><span>Bollinger width</span><strong id="sBb">—</strong></div></div></article>
+    <aside class="live-side">
+      <article class="panel"><div class="panel-title"><h2>Live market tape</h2><span id="marketCount">0 markets</span></div><div id="liveTape" class="live-tape"><div class="empty">Run a live scan.</div></div></article>
+      <article class="panel"><div class="panel-title"><h2>Signal lifecycle</h2></div><div class="lifecycle"><div><span>1</span><strong>Analysis examined</strong><small>Baseline signal and criteria</small></div><div><span>2</span><strong>Deriv tick read</strong><small>Authenticated live quote</small></div><div><span>3</span><strong>Confidence revised</strong><small>Live confirmation gate</small></div><div><span>4</span><strong>Trading decision</strong><small>Manual execution only</small></div></div></article>
     </aside>
   </section>
-  <section class="analysis-box"><div class="box-head"><div><h2>Signal evidence</h2><small>Signals are derived from the selected instrument/timeframe; no synthetic market values are generated.</small></div><span class="chip" id="sFactors">0 factors</span></div><div class="tool-grid">
-    <div class="tool-card"><h3>Market Structure</h3><p id="sToolStructure">—</p><div class="list" id="sStructureList"></div></div>
-    <div class="tool-card"><h3>Liquidity Sweeps</h3><p id="sToolSweep">—</p><div class="list" id="sSweepList"></div></div>
-    <div class="tool-card"><h3>Fair Value Gaps</h3><p id="sToolFvg">—</p><div class="list" id="sFvgList"></div></div>
-    <div class="tool-card"><h3>Supply / Demand</h3><p id="sToolZones">—</p><div class="list" id="sZoneList"></div></div>
-    <div class="tool-card"><h3>Candlestick Patterns</h3><p id="sToolPatterns">—</p><div class="list" id="sPatternList"></div></div>
-    <div class="tool-card"><h3>Fibonacci</h3><div class="list" id="sFibList"></div></div>
-    <div class="tool-card"><h3>Volatility Regime</h3><p id="sToolRegime">—</p><p class="muted">ATR-normalized regime classification</p></div>
-    <div class="tool-card"><h3>Confluence</h3><p id="sToolConfluence">—</p><div class="evidence" id="sEvidence" style="padding:4px 0"></div></div>
-  </div></section>
-  <section class="analysis-box"><div class="box-head"><div><h2>Live signal scanner</h2><small>Every scanned active tradable market is shown with instrument, timeframe, market data and signal evidence.</small></div><strong id="sScanCount">0 markets</strong></div><div style="overflow:auto"><table class="scanner"><thead><tr><th>Instrument</th><th>Market</th><th>Timeframe</th><th>Price</th><th>Signal</th><th>Score</th><th>Confidence</th><th>Change</th><th>Regime</th></tr></thead><tbody id="sScanner"><tr><td colspan="9">Run scan to analyze active markets.</td></tr></tbody></table></div></section>
+  <section class="panel signal-table-panel"><div class="panel-title"><div><h2>Live signal matrix</h2><p>Historical candles are not the primary signal source on this page.</p></div><span id="scanTimestamp">Not scanned</span></div><div class="table-scroll"><table class="live-signal-table"><thead><tr><th>Instrument</th><th>Market</th><th>TF</th><th>Live price</th><th>Baseline</th><th>Revised</th><th>Confidence</th><th>Live age</th><th>Status</th></tr></thead><tbody id="signalsTable"><tr><td colspan="9">Run a live scan to read Deriv data.</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals.css' %}">{% endblock %}
