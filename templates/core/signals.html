@@ -5,31 +5,16 @@
 {% block content %}
 <main id="main-content" class="live-signals" data-live-signals>
   <header class="live-signals-head">
-    <div>
-      <p class="eyebrow">DERIV · LIVE MARKET INTELLIGENCE</p>
-      <h1>Live Signals</h1>
-      <p>Broker-native quotes are read from the selected Deriv account and checked against the latest matching Analysis baseline. A signal is marked trading-ready only when the live confirmation gate passes.</p>
-    </div>
-    <div class="live-actions">
-      <button class="btn primary" id="signalsScan" type="button">Scan live now</button>
-      <button class="btn" id="signalsRefresh" type="button">Refresh</button>
-      <a class="btn" href="/analysis/">Analysis</a>
-      <a class="btn" href="/trading/">Trading Terminal</a>
-    </div>
+    <div><p class="eyebrow">DERIV · LIVE MARKET INTELLIGENCE</p><h1>Live Signals</h1><p>Broker-native quotes are read from the selected Deriv account and checked against the latest matching Analysis baseline. A signal is marked trading-ready only when the live confirmation gate passes.</p></div>
+    <div class="live-actions"><button class="btn primary" id="signalsScan" type="button">Scan live now</button><button class="btn" id="signalsRefresh" type="button">Refresh</button><a class="btn" href="/analysis/">Analysis</a><a class="btn" href="/trading/">Trading Terminal</a></div>
   </header>
-
   <section class="live-status-grid" aria-label="Live signal health">
     <article class="live-status-card"><span>Selected Deriv account</span><strong id="signalsAccount">—</strong><small id="signalsAccountType">—</small></article>
     <article class="live-status-card"><span>Broker feed</span><strong id="signalsFeed">CONNECTING</strong><small id="signalsFeedAge">Authenticating…</small></article>
     <article class="live-status-card"><span>Analysis coverage</span><strong id="signalsBaseline">—</strong><small>Latest matching baseline</small></article>
     <article class="live-status-card"><span>Trading-ready</span><strong id="signalsReady">0</strong><small>Manual execution only</small></article>
   </section>
-
-  <section class="signal-command panel">
-    <div><strong>Signal scanner</strong><span>Use the broker feed as the source of truth for current price. No fabricated quotes or synthetic live rows are displayed.</span></div>
-    <div class="signal-filters"><select id="signalsSymbol" aria-label="Instrument"><option value="">All instruments</option></select><select id="signalsTimeframe" aria-label="Analysis timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select><select id="signalsLimit" aria-label="Market limit"><option>20</option><option selected>40</option><option>60</option><option>80</option></select></div>
-  </section>
-
+  <section class="signal-command panel"><div><strong>Signal scanner</strong><span>Use the broker feed as the source of truth for current price. No fabricated quotes or synthetic live rows are displayed.</span></div><div class="signal-filters"><select id="signalsSymbol" aria-label="Instrument"><option value="">All instruments</option></select><select id="signalsTimeframe" aria-label="Analysis timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select><select id="signalsLimit" aria-label="Market limit"><option>20</option><option selected>40</option><option>60</option><option>80</option></select></div></section>
   <section class="signal-overview">
     <article class="signal-focus panel">
       <div class="panel-title"><div><span class="eyebrow">SELECTED SIGNAL</span><h2 id="focusInstrument">Select a market</h2></div><span id="focusState" class="signal-state waiting">WAITING</span></div>
@@ -43,9 +28,15 @@
       <article class="panel"><div class="panel-title"><h2>Signal lifecycle</h2></div><div class="lifecycle"><div><span>1</span><strong>Analysis examined</strong><small>Latest user-scoped baseline</small></div><div><span>2</span><strong>Deriv quote verified</strong><small>Authenticated broker session</small></div><div><span>3</span><strong>Live gate evaluated</strong><small>Freshness and price confirmation</small></div><div><span>4</span><strong>Manual decision</strong><small>AlgoBot never auto-executes from this page</small></div></div></article>
     </aside>
   </section>
-
-  <section class="panel signal-table-panel"><div class="panel-title"><div><h2>Live signal matrix</h2><p>Rows contain only broker-returned live quotes and matching Analysis baselines.</p></div><span id="scanTimestamp">Not scanned</span></div><div class="table-scroll"><table class="live-signal-table"><thead><tr><th>Instrument</th><th>Market</th><th>TF</th><th>Live price</th><th>Baseline</th><th>Revised</th><th>Confidence</th><th>Live age</th><th>Status</th></tr></thead><tbody id="signalsTable"><tr><td colspan="9">Run a live scan to read authenticated Deriv data.</td></tr></tbody></table></div></section>
+  <section class="panel trade-spec-panel"><div class="panel-title"><div><h2>Trade specification</h2><p>Every field is sourced from the selected market, Analysis baseline or stored contract configuration. Missing values remain explicitly unspecified.</p></div><span class="spec-source" id="specSource">Awaiting signal</span></div><div class="trade-spec-grid">
+    <div><span>Market type</span><strong id="specMarketType">—</strong></div><div><span>Sub-market</span><strong id="specSubMarket">—</strong></div><div><span>Instrument / symbol</span><strong id="specInstrument">—</strong></div><div><span>Trade type</span><strong id="specTradeType">—</strong></div>
+    <div><span>Direction</span><strong id="specDirection">—</strong></div><div><span>Contract type</span><strong id="specContractType">—</strong></div><div><span>Contract family</span><strong id="specContractFamily">—</strong></div><div><span>Duration</span><strong id="specDuration">—</strong></div>
+    <div><span>Duration unit</span><strong id="specDurationUnit">—</strong></div><div><span>Barrier / strike</span><strong id="specBarrier">—</strong></div><div><span>Stake / amount</span><strong id="specStake">—</strong></div><div><span>Potential payout</span><strong id="specPayout">—</strong></div>
+    <div><span>Strategy</span><strong id="specStrategy">—</strong></div><div><span>Strategy category</span><strong id="specCategory">—</strong></div><div><span>Risk profile</span><strong id="specRisk">—</strong></div><div><span>Execution mode</span><strong id="specExecution">—</strong></div>
+    <div><span>Entry condition</span><strong id="specEntryCondition">—</strong></div><div><span>Confirmation</span><strong id="specConfirmation">—</strong></div><div><span>Market regime</span><strong id="specRegime">—</strong></div><div><span>Quote source</span><strong id="specQuoteSource">—</strong></div>
+  </div></section>
+  <section class="panel signal-table-panel"><div class="panel-title"><div><h2>Live signal matrix</h2><p>Rows contain only broker-returned live quotes and matching Analysis baselines.</p></div><span id="scanTimestamp">Not scanned</span></div><div class="table-scroll"><table class="live-signal-table"><thead><tr><th>Instrument</th><th>Market</th><th>Trade</th><th>Contract</th><th>TF</th><th>Live price</th><th>Baseline</th><th>Revised</th><th>Confidence</th><th>Status</th></tr></thead><tbody id="signalsTable"><tr><td colspan="10">Run a live scan to read authenticated Deriv data.</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals.css' %}?v=20260917-signals3">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/signals.js' %}?v=20260917-signals3" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals.css' %}?v=20260917-signals4"><style>.trade-spec-panel{margin-top:12px}.trade-spec-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--line)}.trade-spec-grid>div{background:var(--panel);padding:11px 13px;min-width:0}.trade-spec-grid span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em}.trade-spec-grid strong{display:block;margin-top:5px;font-size:12px;overflow-wrap:anywhere}.spec-source{font-size:11px;color:var(--muted)}@media(max-width:1100px){.trade-spec-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:700px){.trade-spec-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}</style>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/signals.js' %}?v=20260917-signals4" defer></script>{% endblock %}
