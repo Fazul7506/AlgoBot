@@ -15,14 +15,34 @@
     if ($('signalsFeed')) $('signalsFeed').textContent = message;
     if ($('signalsFeedAge')) $('signalsFeedAge').textContent = live ? 'Fresh authenticated Deriv snapshot' : 'No current live snapshot';
   }
-  async function getApiClient() {
-    const api = window.AlgoBotAPI?.apiClient;
-    if (api) return api;
-    await new Promise(resolve => { let done = false; const finish = () => { if (!done) { done = true; resolve(); } }; window.addEventListener('algobot:api-ready', finish, {once:true}); setTimeout(finish, 2500); });
-    if (window.AlgoBotAPI?.apiClient) return window.AlgoBotAPI.apiClient;
-    throw new Error('The AlgoBot API client is still loading. Refresh the page and retry.');
+  function apiBase() {
+    const configured = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
+    if (configured) return configured.replace(/\/+$/, '');
+    if (['algobot.dpdns.org','www.algobot.dpdns.org'].includes(window.location.hostname)) return 'https://api.algobot.dpdns.org';
+    return window.location.origin;
   }
-  async function request(path) { return (await getApiClient()).get(path, {credentials:'include', timeout:15000}); }
+  async function getApiClient() {
+    if (window.AlgoBotAPI?.apiClient) return window.AlgoBotAPI.apiClient;
+    // The page must remain functional if another deferred shell script delays the
+    // canonical client. api_client.js also emits this event when it finishes.
+    await new Promise(resolve => { let done = false; const finish = () => { if (!done) { done = true; resolve(); } }; window.addEventListener('algobot:api-ready', finish, {once:true}); setTimeout(finish, 1200); });
+    return window.AlgoBotAPI?.apiClient || null;
+  }
+  async function request(path) {
+    const client = await getApiClient();
+    if (client) return client.get(path, {credentials:'include', __algoTimeoutMs:15000});
+    // Read-only fallback: keep Signals usable even when the shared client did not
+    // initialise. This never changes mutation/authentication behaviour.
+    const rawPath = String(path || '/');
+    const selectedId = window.AlgoBotAccountContext?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id;
+    const headers = new Headers({'Accept':'application/json'});
+    if (selectedId != null) headers.set('X-Algobot-Account-ID', String(selectedId));
+    const response = await fetch(new URL(rawPath, `${apiBase()}/`).toString(), {method:'GET', credentials:'include', headers});
+    let payload = {};
+    try { payload = await response.json(); } catch (_) { payload = {detail: await response.text()}; }
+    if (!response.ok) throw new Error(payload?.message || payload?.detail || `Signals API request failed (${response.status})`);
+    return payload;
+  }
   function populateSymbols(rows) {
     const select = $('signalsSymbol'); if (!select) return;
     const current = select.value; const symbols = [...new Map(rows.map(row => [row.symbol, row])).values()];
