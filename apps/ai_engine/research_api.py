@@ -1,7 +1,7 @@
 from rest_framework import decorators, permissions, response, status
 
 from apps.indicators.basic_features import compute_basic_features
-from apps.market_data.research import ResearchCandleStore
+from apps.market_data.research_data import ResearchDataService
 from .serializers import AIRecommendationSerializer, MarketRegimeSerializer, PredictionSerializer
 from .services import AIEngine
 from .validators import validate_feature_context
@@ -24,9 +24,10 @@ def research_predict(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    research_data = ResearchDataService()
     try:
-        timeframe = ResearchCandleStore.timeframe(timeframe)
-        candles = ResearchCandleStore.candles(symbol, timeframe, limit=250)
+        timeframe = research_data.timeframe(timeframe)
+        candles = research_data.candles(symbol, timeframe, limit=250)
     except ValueError as exc:
         return response.Response(
             {"detail": str(exc), "code": "RESEARCH_CANDLE_CONTEXT_INVALID"},
