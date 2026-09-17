@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.analytics import views
-from apps.market_data.models import MarketSymbol
+from apps.market_data.models import Candle, MarketSymbol
 
 
 class AnalyticsSmokeTests(TestCase):
@@ -47,28 +47,50 @@ class AnalyticsSmokeTests(TestCase):
         self.assertEqual(first, second)
         self.assertEqual(query.call_count, 1)
 
-    def test_analysis_data_cache_avoids_recalculation(self):
+    def test_analysis_data_uses_persisted_candles_and_normalizes_aliases(self):
         market = MarketSymbol.objects.create(
             symbol="R_100",
             display_name="Volatility 100",
             market="Volatility Indices",
         )
+        for epoch, close in ((100, 100), (160, 101), (220, 102)):
+            Candle.objects.create(
+                symbol=market,
+                timeframe="1m",
+                open=close,
+                high=close + 1,
+                low=close - 1,
+                close=close,
+                volume=1,
+                epoch=epoch,
+            )
         with patch.object(
             views,
             "analyze_candles",
-            return_value={"status": "ok", "candles": 0},
+            return_value={"status": "ok", "candles": 3},
         ) as analyze:
-            first = self.client.get(
+            response = self.client.get(
                 reverse("analysis-data"),
                 {"symbol": market.symbol, "timeframe": "M1", "limit": 300},
             )
-            second = self.client.get(
-                reverse("analysis-data"),
-                {"symbol": market.symbol, "timeframe": "M1", "limit": 300},
-            )
-        self.assertEqual(first.status_code, 200)
-        self.assertEqual(second.status_code, 200)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(analyze.call_count, 1)
+        self.assertEqual(analyze.call_args.kwargs["timeframe"], "1m")
+        self.assertEqual(response.json()["data_provenance"]["source"], "market_data.Candle")
+        self.assertEqual(response.json()["data_provenance"]["candle_count"], 3)
+
+    def test_analysis_data_reports_missing_persisted_candles(self):
+        market = MarketSymbol.objects.create(
+            symbol="R_100",
+            display_name="Volatility 100",
+            market="Volatility Indices",
+        )
+        response = self.client.get(
+            reverse("analysis-data"),
+            {"symbol": market.symbol, "timeframe": "1m", "limit": 300},
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["source"], "market_data.Candle")
 
     def test_analysis_market_endpoint_is_user_authenticated(self):
         response = self.client.get(reverse("analysis-markets"))
