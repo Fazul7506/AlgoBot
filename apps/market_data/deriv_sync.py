@@ -21,6 +21,17 @@ MARKET_MAP = {
     "synthetics": "Derived Indices", "volatility": "Volatility Indices", "boom": "Boom",
     "crash": "Crash", "jump": "Jump Indices", "commodities": "Commodities",
 }
+SUBMARKET_MAP = {
+    "boom_index": "Boom",
+    "crash_index": "Crash",
+    "jump_index": "Jump",
+    "volatility": "Volatility",
+    "random_index": "Random Index",
+    "step_index": "Step Index",
+    "range_index": "Range Break",
+    "1_second": "1 Second",
+    "non_stable_coin": "Non-Stable Coin",
+}
 
 
 def _safe_decimal(value, default="0") -> Decimal:
@@ -54,11 +65,26 @@ async def _request(payload: dict) -> dict:
 
 
 def _market_name(item: dict) -> str:
+    """Resolve the displayed market from Deriv's own market/submarket metadata."""
+    submarket = str(item.get("submarket") or item.get("subgroup") or "").strip().lower()
+    if submarket in SUBMARKET_MAP:
+        mapped = SUBMARKET_MAP[submarket]
+        if mapped in {"Boom", "Crash", "Jump"}:
+            return mapped
+        if mapped in {"Volatility", "Random Index", "Step Index", "Range Break", "1 Second", "Non-Stable Coin"}:
+            return "Volatility Indices" if mapped in {"Volatility", "Random Index", "1 Second"} else "Derived Indices"
     raw = str(item.get("market") or item.get("underlying_symbol_type") or "synthetic_index").lower()
     for key, value in MARKET_MAP.items():
         if key in raw:
             return value
     return "Derived Indices"
+
+
+def _sub_market_name(item: dict) -> str:
+    raw = str(item.get("submarket") or item.get("subgroup") or "").strip()
+    if not raw:
+        return ""
+    return SUBMARKET_MAP.get(raw.lower(), raw.replace("_", " ").title())
 
 
 def _sync_one_symbol(item: dict) -> bool:
@@ -70,7 +96,7 @@ def _sync_one_symbol(item: dict) -> bool:
         "broker": "deriv",
         "display_name": str(item.get("underlying_symbol_name") or item.get("display_name") or symbol)[:160],
         "market": _market_name(item),
-        "sub_market": str(item.get("submarket") or item.get("subgroup") or "")[:120],
+        "sub_market": _sub_market_name(item)[:120],
         "pip_size": _decimal_places(pip),
         "tick_size": _safe_decimal(pip),
         "is_active": True,
