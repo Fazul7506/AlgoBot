@@ -4,27 +4,9 @@ SUPPORTED_MARKETS = [
     "Volatility Indices", "Boom", "Crash", "Forex", "Crypto", "Derived Indices",
     "Jump Indices", "Commodities", "Stock Indices",
 ]
-
-# Canonical research/backtest timeframes. Tick is retained as a first-class
-# candle record for tick-mode research; sub-minute bars are derived from raw
-# persisted ticks, while minute-and-higher bars can also be broker-native OHLC.
 TIMEFRAMES = {
-    "tick": 0,
-    "1s": 1,
-    "5s": 5,
-    "15s": 15,
-    "30s": 30,
-    "1m": 60,
-    "2m": 120,
-    "5m": 300,
-    "10m": 600,
-    "15m": 900,
-    "30m": 1800,
-    "1h": 3600,
-    "2h": 7200,
-    "4h": 14400,
-    "8h": 28800,
-    "1d": 86400,
+    "tick": 0, "1s": 1, "5s": 5, "15s": 15, "30s": 30, "1m": 60, "2m": 120,
+    "5m": 300, "10m": 600, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400,
 }
 EVENT_TICK_RECEIVED = "TickReceived"
 EVENT_NEW_CANDLE = "NewCandle"
