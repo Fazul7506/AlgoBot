@@ -73,10 +73,11 @@ services:
         fromService:
           name: AlgoBot
           type: web
-          envVarKey: REDIS_URL
+          envVarKey: DATABASE_URL
       - key: USE_REDIS
         fromService:
           name: AlgoBot
+          type: web
           envVarKey: USE_REDIS
       - key: USE_CELERY
         value: "true"
