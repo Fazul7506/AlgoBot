@@ -29,7 +29,7 @@ services:
         value: "true"
       - key: CSRF_COOKIE_SAMESITE
         value: Lax
-    buildCommand: pip install -r requirements.txt && python manage.py check && python manage.py makemigrations && python manage.py migrate && python manage.py seed_markets && python manage.py set_telegram_webhook && python manage.py collectstatic --noinput
+    buildCommand: python3 -m pip install -r requirements.txt && python3 manage.py check && python3 manage.py makemigrations --check --dry-run && python3 manage.py migrate --noinput && python3 manage.py seed_markets && python3 manage.py set_telegram_webhook && python3 manage.py collectstatic --noinput
     startCommand: DJANGO_ENV=production exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
     healthCheckPath: /health/
     maxShutdownDelaySeconds: 60
@@ -39,8 +39,8 @@ services:
     name: AlgoBot-Worker
     runtime: python
     plan: starter
-    buildCommand: pip install -r requirements/base.txt
-    startCommand: DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && exec celery -A deriv_platform worker --beat --loglevel=INFO --concurrency=2 --max-tasks-per-child=100
+    buildCommand: python3 -m pip install -r requirements/production.txt
+    startCommand: DJANGO_ENV=production python3 manage.py migrate --fake-initial --noinput && exec celery -A deriv_platform worker --beat --loglevel=INFO --concurrency=2 --max-tasks-per-child=100
     maxShutdownDelaySeconds: 60
     envVars:
       - key: DJANGO_ENV
@@ -77,7 +77,6 @@ services:
       - key: USE_REDIS
         fromService:
           name: AlgoBot
-          type: web
           envVarKey: USE_REDIS
       - key: USE_CELERY
         value: "true"
