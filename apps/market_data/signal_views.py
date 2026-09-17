@@ -74,13 +74,7 @@ def _analysis_baselines(request, symbols, timeframe):
 
 
 async def _authenticated_live_ticks(adapter, symbols):
-    """Read one fresh live tick at a time over one authenticated Deriv session.
-
-    Requests are deliberately serialized instead of bursting dozens of tick
-    requests into a newly authenticated connection. This avoids broker-side
-    request/rate-limit races while keeping the selected account credentials
-    authoritative for the entire snapshot.
-    """
+    """Read one fresh live tick at a time over one authenticated Deriv session."""
     endpoint = await asyncio.to_thread(adapter._authenticated_ws_url)
     unique_symbols = list(dict.fromkeys(symbols))
     deadline = time.monotonic() + LIVE_TICK_SCAN_TIMEOUT_SECONDS
@@ -219,7 +213,7 @@ def strategy_signals(request):
         symbols_qs = symbols_qs.filter(symbol=symbol_filter)
     markets = list(symbols_qs[:limit])
     if not markets:
-        return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "count": 0, "data": []})
+        return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "count": 0, "live_data_available_count": 0, "data": []})
 
     adapter = BrokerRegistry().adapter(account.broker, account)
     symbols = [market.symbol for market in markets]
@@ -261,6 +255,7 @@ def strategy_signals(request):
         rows.append(row)
 
     actionable = [row for row in rows if row.get("execution_ready")]
+    live_data_available_count = sum(1 for row in rows if row.get("live"))
     return JsonResponse({
         "status": "ok",
         "source": "deriv_authenticated_live",
@@ -270,6 +265,7 @@ def strategy_signals(request):
         "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS,
         "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS,
         "count": len(rows),
+        "live_data_available_count": live_data_available_count,
         "actionable_count": len(actionable),
         "data": rows,
     })
