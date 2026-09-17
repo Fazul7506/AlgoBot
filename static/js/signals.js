@@ -15,11 +15,10 @@
 
   const S = { rows: [], last: null };
 
-  async function request(url) {
-    const response = await fetch(url, {credentials: 'same-origin', headers: {Accept: 'application/json'}, cache: 'no-store'});
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.message || 'Live signal request failed');
-    return data;
+  async function request(path) {
+    const api = window.AlgoBotAPI?.apiClient;
+    if (!api) throw new Error('Canonical API client is not available.');
+    return api.get(path, {credentials: 'include', timeout: 30000});
   }
 
   function setStatus(message, live = false) {
@@ -77,10 +76,10 @@
     const symbol = $('signalsSymbol').value;
     const timeframe = $('signalsTimeframe').value;
     const limit = $('signalsLimit').value;
-    const url = `/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol ? `&symbol=${encodeURIComponent(symbol)}` : ''}`;
+    const path = `/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol ? `&symbol=${encodeURIComponent(symbol)}` : ''}`;
     try {
       setStatus('Reading Deriv…');
-      const data = await request(url);
+      const data = await request(path);
       S.rows = Array.isArray(data.data) ? data.data : [];
       S.last = data;
       populateSymbols(S.rows);
