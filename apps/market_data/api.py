@@ -97,7 +97,7 @@ def statistics(request): return Response(MarketStatisticsSerializer(MarketStatis
 @permission_classes([AllowAny])
 def snapshot(request):
     qs = MarketSnapshot.objects.select_related("symbol").order_by("-timestamp")
-    if request.query_params.get("symbol"): qs = qs.filter(symbol__symbol=symbol)
+    if request.query_params.get("symbol"): qs = qs.filter(symbol__symbol=request.query_params["symbol"])
     return Response(MarketSnapshotSerializer(qs[:_limit(request, default=100, maximum=500)], many=True).data)
 
 @api_view(["POST"])
