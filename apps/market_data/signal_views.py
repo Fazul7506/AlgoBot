@@ -20,8 +20,7 @@ LIVE_TICK_MAX_AGE_SECONDS = 5
 ANALYSIS_BASELINE_MAX_AGE_SECONDS = 900
 DEFAULT_CONFIDENCE_THRESHOLD = 70.0
 MAX_SCAN_SYMBOLS = 80
-LIVE_TICK_REQUEST_TIMEOUT_SECONDS = 2.0
-LIVE_TICK_SCAN_TIMEOUT_SECONDS = 30.0
+LIVE_TICK_SCAN_TIMEOUT_SECONDS = 8.0
 
 
 def _selected_deriv_account(request):
@@ -62,8 +61,7 @@ def _analysis_baselines(request, symbols, timeframe):
     selected = request.session.get("active_broker_account_id")
     selected_id = int(selected) if str(selected).isdigit() else None
     for signal in qs:
-        tf = _analysis_timeframe(signal)
-        if timeframe and tf != timeframe:
+        if timeframe and _analysis_timeframe(signal) != timeframe:
             continue
         if signal.configuration and signal.configuration.broker_account_id:
             if selected_id is None or signal.configuration.broker_account_id != selected_id:
@@ -74,11 +72,17 @@ def _analysis_baselines(request, symbols, timeframe):
 
 
 async def _authenticated_live_ticks(adapter, symbols):
-    """Read one fresh live tick at a time over one authenticated Deriv session."""
+    """Read a bounded batch of broker-native live ticks over one authenticated Deriv session."""
     endpoint = await asyncio.to_thread(adapter._authenticated_ws_url)
     unique_symbols = list(dict.fromkeys(symbols))
-    deadline = time.monotonic() + LIVE_TICK_SCAN_TIMEOUT_SECONDS
+    if not unique_symbols:
+        return {}, 0
+
+    started = time.monotonic()
     results = {}
+    req_to_symbol = {index: symbol for index, symbol in enumerate(unique_symbols, start=1)}
+    deadline = started + LIVE_TICK_SCAN_TIMEOUT_SECONDS
+
     async with websockets.connect(
         endpoint,
         open_timeout=adapter.timeout,
@@ -87,37 +91,40 @@ async def _authenticated_live_ticks(adapter, symbols):
         ping_timeout=10,
         max_size=2**20,
     ) as ws:
-        for index, symbol in enumerate(unique_symbols, start=1):
+        for req_id, symbol in req_to_symbol.items():
+            await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
+
+        while len(results) < len(req_to_symbol):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
-            req_id = index
-            await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
-            while time.monotonic() < deadline:
-                timeout = min(LIVE_TICK_REQUEST_TIMEOUT_SECONDS, max(0.1, deadline - time.monotonic()))
-                try:
-                    raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
-                except asyncio.TimeoutError:
-                    break
-                try:
-                    payload = json.loads(raw)
-                except (TypeError, ValueError):
-                    continue
-                error = payload.get("error") or {}
-                if error:
-                    code = str(error.get("code") or "")
-                    if code in {"AuthorizationRequired", "InvalidToken", "Unauthorized", "InvalidAppId"}:
-                        raise BrokerAuthenticationError(error.get("message", "Deriv authentication failed"))
-                    break
-                if payload.get("msg_type") != "tick":
-                    continue
-                tick = payload.get("tick") or {}
-                response_symbol = str(tick.get("symbol") or symbol)
-                if tick.get("quote") is None or tick.get("epoch") is None:
-                    continue
-                results[response_symbol] = tick
+            try:
+                raw = await asyncio.wait_for(ws.recv(), timeout=min(1.5, remaining))
+            except asyncio.TimeoutError:
                 break
-    return results
+            try:
+                payload = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+
+            error = payload.get("error") or {}
+            if error:
+                code = str(error.get("code") or "")
+                if code in {"AuthorizationRequired", "InvalidToken", "Unauthorized", "InvalidAppId"}:
+                    raise BrokerAuthenticationError(error.get("message", "Deriv authentication failed"))
+                continue
+
+            if payload.get("msg_type") != "tick":
+                continue
+            tick = payload.get("tick") or {}
+            symbol = str(tick.get("symbol") or req_to_symbol.get(payload.get("req_id"), ""))
+            if symbol not in req_to_symbol.values():
+                continue
+            if tick.get("quote") is None or tick.get("epoch") is None:
+                continue
+            results[symbol] = tick
+
+    return results, round((time.monotonic() - started) * 1000, 1)
 
 
 def _revise_signal(signal, live_tick, now):
@@ -146,11 +153,11 @@ def _revise_signal(signal, live_tick, now):
         evidence.append("live_tick_stale")
     elif baseline_direction in {"BUY", "SELL"} and live_price is not None and entry is not None:
         favorable = (baseline_direction == "BUY" and live_price >= entry) or (baseline_direction == "SELL" and live_price <= entry)
+        live_confirmation_score = 100.0 if favorable else 0.0
+        revised = round((base_confidence * 0.80) + (live_confirmation_score * 0.20), 2)
         if favorable:
-            revised = min(100.0, revised + 5.0)
             evidence.append("live_price_confirms_analysis_entry_side")
         else:
-            revised = max(0.0, revised - 10.0)
             direction = "HOLD"
             status = "LIVE_CONFIRMATION_FAILED"
             evidence.append("live_price_conflicts_with_analysis_entry_side")
@@ -194,7 +201,7 @@ def _revise_signal(signal, live_tick, now):
 
 @login_required
 def strategy_signals(request):
-    """Produce live Deriv signals from an Analysis baseline plus a fresh broker tick."""
+    """Return broker-native Deriv live signal reviews for the currently selected account."""
     account = _selected_deriv_account(request)
     if account is None:
         return JsonResponse({"status": "error", "code": "DERIV_ACCOUNT_REQUIRED", "message": "Connect and select a Deriv account before reading live signals."}, status=409)
@@ -204,21 +211,21 @@ def strategy_signals(request):
     symbol_filter = str(request.GET.get("symbol") or "").strip()
     timeframe = str(request.GET.get("timeframe") or "M1").strip()
     try:
-        limit = min(max(int(request.GET.get("limit", 80)), 1), MAX_SCAN_SYMBOLS)
+        limit = min(max(int(request.GET.get("limit", 40)), 1), MAX_SCAN_SYMBOLS)
     except (TypeError, ValueError):
-        limit = MAX_SCAN_SYMBOLS
+        limit = 40
 
     symbols_qs = MarketSymbol.objects.filter(is_active=True, is_tradable=True, broker="deriv").order_by("market", "symbol")
     if symbol_filter:
         symbols_qs = symbols_qs.filter(symbol=symbol_filter)
     markets = list(symbols_qs[:limit])
     if not markets:
-        return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "count": 0, "live_data_available_count": 0, "data": []})
+        return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "count": 0, "live_data_available_count": 0, "actionable_count": 0, "data": []})
 
     adapter = BrokerRegistry().adapter(account.broker, account)
     symbols = [market.symbol for market in markets]
     try:
-        live_ticks = asyncio.run(_authenticated_live_ticks(adapter, symbols))
+        live_ticks, feed_latency_ms = asyncio.run(_authenticated_live_ticks(adapter, symbols))
     except (BrokerAuthenticationError, BrokerConnectionError) as exc:
         return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": str(exc)}, status=502)
     except Exception:
@@ -248,7 +255,7 @@ def strategy_signals(request):
             row.update({
                 "direction": "HOLD", "confidence": 0, "status": "WAITING_FOR_ANALYSIS", "execution_ready": False,
                 "evidence": ["live_tick_received", "no_matching_analysis_baseline"],
-                "live": {"price": _as_float(live_tick.get("quote")), "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": int(live_tick.get("epoch")), "source": "deriv_authenticated_websocket"},
+                "live": {"price": _as_float(live_tick.get("quote")), "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": int(live_tick.get("epoch")), "age_seconds": max(0, int(time.time()) - int(live_tick.get("epoch"))), "source": "deriv_authenticated_websocket"},
             })
         else:
             row.update(_revise_signal(baseline, live_tick, now))
@@ -256,9 +263,12 @@ def strategy_signals(request):
 
     actionable = [row for row in rows if row.get("execution_ready")]
     live_data_available_count = sum(1 for row in rows if row.get("live"))
+    stale_count = sum(1 for row in rows if row.get("status") == "LIVE_DATA_STALE")
     return JsonResponse({
         "status": "ok",
         "source": "deriv_authenticated_live",
+        "generated_at": now.isoformat(),
+        "feed_latency_ms": feed_latency_ms,
         "account": {"id": account.account_id, "type": (account.credentials or {}).get("account_type"), "currency": account.currency},
         "analysis_role": "upstream_baseline_only",
         "historical_candles_primary": False,
@@ -266,6 +276,7 @@ def strategy_signals(request):
         "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS,
         "count": len(rows),
         "live_data_available_count": live_data_available_count,
+        "stale_count": stale_count,
         "actionable_count": len(actionable),
         "data": rows,
     })
