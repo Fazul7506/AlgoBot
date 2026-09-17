@@ -12,7 +12,8 @@ from django.shortcuts import render
 
 from apps.analysis.advanced import analyze_candles
 from apps.execution.models import Order
-from apps.market_data.models import Candle, MarketSnapshot, MarketSymbol
+from apps.market_data.models import MarketSnapshot, MarketSymbol
+from apps.market_data.research_data import ResearchDataService
 from apps.portfolio.models import PortfolioPerformance
 
 
@@ -102,33 +103,40 @@ def analytics_dashboard(request):
 @login_required
 def analysis_data(request):
     symbol = (request.GET.get("symbol") or "R_100").strip().upper()
-    timeframe = (request.GET.get("timeframe") or "M1").strip().upper()
+    timeframe = (request.GET.get("timeframe") or "1m").strip()
     try:
         limit = min(max(int(request.GET.get("limit", 300)), 50), 1000)
     except (TypeError, ValueError):
         limit = 300
 
-    cache_key = "algobot:analysis:v2:" + hashlib.sha256(
-        json.dumps([request.user.pk, symbol, timeframe, limit]).encode("utf-8")
+    cache_key = "algobot:analysis:v3:" + hashlib.sha256(
+        json.dumps([request.user.pk, symbol, timeframe.lower(), limit]).encode("utf-8")
     ).hexdigest()
     cached = cache.get(cache_key)
     if cached is not None:
         return JsonResponse(cached)
 
-    market = MarketSymbol.objects.filter(symbol=symbol, is_active=True, is_tradable=True).only("id", "symbol").first()
-    if not market:
-        return JsonResponse({"status": "error", "message": "Unknown or inactive market symbol."}, status=404)
-    candles = list(
-        Candle.objects.filter(symbol=market, timeframe=timeframe)
-        .only("open", "high", "low", "close", "volume", "epoch")
-        .order_by("-epoch")[:limit]
-    )
-    candles.reverse()
-    payload = [
-        {"open": c.open, "high": c.high, "low": c.low, "close": c.close, "volume": c.volume, "epoch": c.epoch}
-        for c in candles
-    ]
-    result = analyze_candles(payload, symbol=symbol, timeframe=timeframe)
+    research_data = ResearchDataService()
+    try:
+        canonical_timeframe = research_data.timeframe(timeframe)
+        market = research_data.market(symbol)
+        candles = research_data.candles(market.symbol, canonical_timeframe, limit=limit)
+    except ValueError as exc:
+        return JsonResponse({"status": "error", "message": str(exc)}, status=404)
+
+    if not candles:
+        return JsonResponse(
+            {
+                "status": "error",
+                "message": "No persisted market candles are available for this symbol/timeframe.",
+                "source": "market_data.Candle",
+                "symbol": market.symbol,
+                "timeframe": canonical_timeframe,
+            },
+            status=503,
+        )
+
+    result = analyze_candles(candles, symbol=market.symbol, timeframe=canonical_timeframe)
     snapshot = MarketSnapshot.objects.filter(symbol=market).only("last_price", "bid", "ask", "change_percent").first()
     result["snapshot"] = (
         {
@@ -140,6 +148,15 @@ def analysis_data(request):
         if snapshot
         else None
     )
+    result["data_provenance"] = {
+        "source": "market_data.Candle",
+        "storage": "database",
+        "symbol": market.symbol,
+        "timeframe": canonical_timeframe,
+        "candle_count": len(candles),
+        "first_epoch": candles[0]["epoch"],
+        "last_epoch": candles[-1]["epoch"],
+    }
     cache.set(cache_key, result, ANALYSIS_CACHE_SECONDS)
     return JsonResponse(result)
 
