@@ -54,6 +54,33 @@ def subscription_cleanup():
 logger = logging.getLogger(__name__)
 
 
+def _active_symbols(symbol=None):
+    from .models import MarketSymbol
+
+    return [symbol] if symbol else list(
+        MarketSymbol.objects.filter(is_active=True, is_tradable=True)
+        .order_by("symbol")
+        .values_list("symbol", flat=True)
+    )
+
+
+def _backfill_symbols(symbols, count):
+    from .historical import fetch_and_store_all_timeframes
+
+    results = {}
+    for value in symbols:
+        try:
+            results[value] = fetch_and_store_all_timeframes(value, count=int(count))
+        except Exception as exc:
+            logger.warning(
+                "Research candle backfill failed",
+                extra={"symbol": value, "error": str(exc)},
+                exc_info=True,
+            )
+            results[value] = {"status": "failed", "error": str(exc)}
+    return {"symbols": len(symbols), "results": results}
+
+
 @_task
 def backfill_research_candles(count=250, symbol=None):
     """Keep the research database warm with broker-authoritative candle history.
@@ -64,24 +91,59 @@ def backfill_research_candles(count=250, symbol=None):
     history downloads.
     """
     from django.db import close_old_connections
-    from .historical import fetch_and_store_all_timeframes
-    from .models import MarketSymbol
 
     close_old_connections()
-    symbols = [symbol] if symbol else list(
-        MarketSymbol.objects.filter(is_active=True, is_tradable=True)
-        .order_by("symbol")
-        .values_list("symbol", flat=True)
-    )
-    results = {}
-    for value in symbols:
-        try:
-            results[value] = fetch_and_store_all_timeframes(value, count=int(count))
-        except Exception as exc:
-            logger.warning(
-                "Research candle backfill failed",
-                extra={"symbol": value, "error": str(exc)},
-            )
-            results[value] = {"status": "failed", "error": str(exc)}
+    try:
+        symbols = _active_symbols(symbol)
+        result = _backfill_symbols(symbols, int(count))
+        return result
+    finally:
+        close_old_connections()
+
+
+@_task
+def run_initial_candle_backfill(run_id, count=5000, symbol=None):
+    """Run the one-time historical warm-up from a Celery worker.
+
+    The web tier only queues this task; historical Deriv requests never block
+    the user's browser or the Render build process.
+    """
+    from django.db import close_old_connections
+    from django.utils import timezone
+    from .models import CandleBackfillRun
+
     close_old_connections()
-    return {"symbols": len(symbols), "results": results}
+    run = CandleBackfillRun.objects.get(pk=run_id)
+    run.status = "running"
+    run.started_at = timezone.now()
+    run.error = ""
+    run.save(update_fields=["status", "started_at", "error"])
+
+    try:
+        symbols = _active_symbols(symbol)
+        if not symbols:
+            raise RuntimeError("No active tradable market symbols are available")
+        result = _backfill_symbols(symbols, int(count))
+        failed = [
+            value
+            for value, payload in result["results"].items()
+            if isinstance(payload, dict) and payload.get("status") == "failed"
+        ]
+        run.result = result
+        run.status = "failed" if failed else "succeeded"
+        if failed:
+            run.error = f"Historical backfill failed for: {', '.join(failed)}"
+        run.completed_at = timezone.now()
+        run.save(update_fields=["result", "status", "error", "completed_at"])
+        if failed:
+            raise RuntimeError(run.error)
+        return result
+    except Exception as exc:
+        run.status = "failed"
+        run.error = str(exc)
+        run.completed_at = timezone.now()
+        run.save(update_fields=["status", "error", "completed_at"])
+        logger.exception("Initial candle backfill failed", extra={"run_id": run_id})
+        raise
+    finally:
+        close_old_connections()

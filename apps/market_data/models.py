@@ -104,3 +104,38 @@ class MarketStatistics(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["symbol", "-created_at"])]
+
+
+class CandleBackfillRun(models.Model):
+    """Durable control record for the one-time historical warm-up job."""
+
+    STATUS_CHOICES = [
+        ("queued", "Queued"),
+        ("running", "Running"),
+        ("succeeded", "Succeeded"),
+        ("failed", "Failed"),
+    ]
+
+    scope = models.CharField(max_length=32, unique=True, default="initial")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="queued", db_index=True)
+    count = models.PositiveIntegerField(default=5000)
+    symbol = models.CharField(max_length=40, blank=True)
+    task_id = models.CharField(max_length=255, blank=True, db_index=True)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="candle_backfill_runs",
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+
+    def __str__(self):
+        return f"{self.scope}:{self.status}"

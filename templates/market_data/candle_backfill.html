@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Historical Candle Backfill | AlgoBot{% endblock %}
+{% block mobile_title %}Candle Backfill{% endblock %}
+{% block content %}
+<section class="algobot-shared-page" data-backfill-page>
+  <header class="enterprise-hero">
+    <div>
+      <p class="eyebrow">QUANT RESEARCH · DATA OPERATIONS</p>
+      <h1>Historical Candle Backfill</h1>
+      <p class="hero-copy">Run the one-time broker-authoritative historical warm-up through the Celery worker. Long-running Deriv history requests never block the Render build or browser request.</p>
+    </div>
+  </header>
+
+  <section class="panel" style="max-width:760px">
+    <div class="panel-heading">
+      <div><p class="eyebrow">INITIAL WARM-UP</p><h2>5,000 candles per active tradable symbol</h2></div>
+      <strong data-status>{% if run %}{{ run.get_status_display }}{% else %}Ready{% endif %}</strong>
+    </div>
+
+    {% if run %}
+      <dl style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem">
+        <div><dt>State</dt><dd data-state>{{ run.status }}</dd></div>
+        <div><dt>Requested</dt><dd>{{ run.requested_at|date:"Y-m-d H:i:s T" }}</dd></div>
+        <div><dt>Started</dt><dd>{% if run.started_at %}{{ run.started_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
+        <div><dt>Completed</dt><dd>{% if run.completed_at %}{{ run.completed_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
+      </dl>
+
+      {% if run.error %}<div role="alert" style="margin:1rem 0">{{ run.error }}</div>{% endif %}
+
+      {% if run.status == "failed" %}
+        <form method="post">
+          {% csrf_token %}
+          <button class="btn primary" type="submit">Retry 5,000-candle backfill</button>
+        </form>
+      {% elif run.status == "queued" or run.status == "running" %}
+        <p aria-live="polite">The Celery worker is processing the historical data. Status updates automatically.</p>
+      {% elif run.status == "succeeded" %}
+        <p aria-live="polite">The initial historical warm-up has completed. Future candle maintenance is handled by scheduled Celery backfill.</p>
+      {% endif %}
+    {% else %}
+      <form method="post">
+        {% csrf_token %}
+        <button class="btn primary" type="submit">Start initial 5,000-candle backfill</button>
+      </form>
+    {% endif %}
+  </section>
+
+  <section class="data-research-note" style="margin-top:1rem">
+    <strong>Access</strong>
+    <span>This control is restricted to Django staff/superuser accounts. It queues work on Celery and never performs the backfill inside the web request.</span>
+  </section>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script>
+(() => {
+  const page = document.querySelector('[data-backfill-page]');
+  if (!page) return;
+  const state = page.querySelector('[data-state]');
+  if (!state || !['queued', 'running'].includes(state.textContent.trim())) return;
+  const endpoint = `${window.location.pathname}?format=json`;
+  const timer = window.setInterval(async () => {
+    try {
+      const response = await fetch(endpoint, {headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin'});
+      if (!response.ok) return;
+      const data = await response.json();
+      state.textContent = data.status;
+      const status = page.querySelector('[data-status]');
+      if (status) status.textContent = data.status;
+      if (!['queued', 'running'].includes(data.status)) {
+        window.clearInterval(timer);
+        window.location.reload();
+      }
+    } catch (_) {}
+  }, 5000);
+})();
+</script>
+{% endblock %}

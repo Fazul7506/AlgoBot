@@ -15,6 +15,7 @@ from core.browser_views import browser_logout
 from core.dashboard_api import DashboardViewSet
 from apps.market_data.web_views import market_catalogue
 from apps.market_data.signal_views import strategy_signals
+from apps.market_data import views as market_data_views
 from core.views import (
     broker_connect_page, broker_marketplace_page, home, login_page,
     register_page, dashboard_page, markets_page, strategies_page, trading_page,
@@ -101,6 +102,7 @@ urlpatterns = [
     path("operations/deployments/", login_required(lambda request: operations_center(request, "deployments")), name="deployment_center"),
     path("operations/audit/", login_required(lambda request: operations_center(request, "audit")), name="audit_center"),
     path("operations/security/", login_required(lambda request: operations_center(request, "security")), name="security_center"),
+    path("operations/candle-backfill/", market_data_views.initial_candle_backfill, name="initial_candle_backfill"),
     path("operations/<str:module>/", login_required(operations_module_page), name="operations_module"),
     path("brokers/connect/", broker_connect_page, name="broker_connect_page"),
     path("brokers/marketplace/", broker_marketplace_page, name="broker_marketplace_page"),
