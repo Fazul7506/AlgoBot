@@ -7,24 +7,31 @@
   const esc = value => String(value ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const num = (value, digits = 5) => value == null || Number.isNaN(Number(value)) ? '—' : Number(value).toLocaleString(undefined, {maximumFractionDigits: digits});
   const pct = value => value == null || Number.isNaN(Number(value)) ? '—' : `${Number(value).toFixed(1)}%`;
-  const tone = value => {
-    const v = String(value || '').toUpperCase();
-    return v === 'BUY' ? 'buy' : v === 'SELL' ? 'sell' : 'hold';
-  };
+  const tone = value => { const v = String(value || '').toUpperCase(); return v === 'BUY' ? 'buy' : v === 'SELL' ? 'sell' : 'hold'; };
   const stateText = value => String(value || 'WAITING').replaceAll('_', ' ');
-
-  const S = { rows: [], last: null };
-
-  async function request(path) {
-    const api = window.AlgoBotAPI?.apiClient;
-    if (!api) throw new Error('Canonical API client is not available.');
-    return api.get(path, {credentials: 'include', timeout: 30000});
-  }
+  const S = { rows: [], last: null, scanning: false };
 
   function setStatus(message, live = false) {
     const feed = $('signalsFeed');
     if (feed) feed.textContent = message;
     if ($('signalsFeedAge')) $('signalsFeedAge').textContent = live ? 'Fresh Deriv snapshot' : 'No current live snapshot';
+  }
+
+  async function getApiClient() {
+    if (window.AlgoBotAPI?.apiClient) return window.AlgoBotAPI.apiClient;
+    await new Promise(resolve => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      window.addEventListener('algobot:api-ready', finish, {once: true});
+      setTimeout(finish, 1500);
+    });
+    if (window.AlgoBotAPI?.apiClient) return window.AlgoBotAPI.apiClient;
+    throw new Error('Canonical API client failed to initialise. Reload the page and try again.');
+  }
+
+  async function request(path) {
+    const api = await getApiClient();
+    return api.get(path, {credentials: 'include', timeout: 30000});
   }
 
   function populateSymbols(rows) {
@@ -40,7 +47,7 @@
     if (!row) return;
     $('focusInstrument').textContent = row.display_name || row.instrument || row.symbol || '—';
     $('focusState').textContent = stateText(row.status);
-    $('focusState').className = `signal-state ${tone(row.direction)}`;
+    $('focusState').className = `signal-state ${tone(row.direction)}${row.status === 'WAITING_FOR_ANALYSIS' ? ' waiting' : ''}`;
     $('focusPrice').textContent = num(row.live?.price);
     $('focusSource').textContent = row.live?.source === 'deriv_authenticated_websocket' ? `Deriv live · ${row.live?.epoch ? new Date(Number(row.live.epoch) * 1000).toLocaleTimeString() : 'now'}` : 'No live tick';
     $('focusConfidence').textContent = pct(row.confidence);
@@ -61,7 +68,7 @@
     const el = $('liveTape');
     if (!el) return;
     $('marketCount').textContent = `${rows.length} markets`;
-    el.innerHTML = rows.slice(0, 20).map(row => `<button class="tape-row" data-symbol="${esc(row.symbol)}"><span><strong>${esc(row.symbol)}</strong><small>${esc(row.market || 'Deriv')}</small></span><strong>${esc(num(row.live?.price))}</strong><span class="tape-signal ${tone(row.direction)}">${esc(row.direction || 'HOLD')}</span><span>${esc(pct(row.confidence))}</span></button>`).join('') || '<div class="empty">No live market rows returned.</div>';
+    el.innerHTML = rows.slice(0, 20).map(row => `<button type="button" class="tape-row" data-symbol="${esc(row.symbol)}"><span><strong>${esc(row.symbol)}</strong><small>${esc(row.market || 'Deriv')}</small></span><strong>${esc(num(row.live?.price))}</strong><span class="tape-signal ${tone(row.direction)}">${esc(row.direction || 'HOLD')}</span><span>${esc(pct(row.confidence))}</span></button>`).join('') || '<div class="empty">No live market rows returned.</div>';
     el.querySelectorAll('[data-symbol]').forEach(button => button.addEventListener('click', () => focus(S.rows.find(row => row.symbol === button.dataset.symbol))));
   }
 
@@ -73,6 +80,10 @@
   }
 
   async function scan() {
+    if (S.scanning) return;
+    S.scanning = true;
+    const controls = [$('signalsScan'), $('signalsRefresh')].filter(Boolean);
+    controls.forEach(button => { button.disabled = true; button.setAttribute('aria-busy', 'true'); });
     const symbol = $('signalsSymbol').value;
     const timeframe = $('signalsTimeframe').value;
     const limit = $('signalsLimit').value;
@@ -96,10 +107,14 @@
       focus(preferred);
     } catch (error) {
       S.rows = [];
-      setStatus(error.message || 'Live feed unavailable');
+      setStatus(error?.message || 'Live feed unavailable');
       $('signalsReady').textContent = '0';
       $('signalsBaseline').textContent = 'Unavailable';
+      $('scanTimestamp').textContent = `Scan failed · ${new Date().toLocaleTimeString()}`;
       renderTape([]); renderTable([]);
+    } finally {
+      S.scanning = false;
+      controls.forEach(button => { button.disabled = false; button.removeAttribute('aria-busy'); });
     }
   }
 
@@ -110,8 +125,6 @@
     $('signalsTimeframe')?.addEventListener('change', scan);
     $('signalsLimit')?.addEventListener('change', scan);
     window.addEventListener('algobot:account-synced', () => { S.rows = []; setStatus('Account changed — run live scan'); });
-    // Deliberately no timer: live Signals is a user-triggered authenticated snapshot,
-    // while continuous Deriv streams belong to the trading/market-data websocket layer.
     scan();
   }
 
