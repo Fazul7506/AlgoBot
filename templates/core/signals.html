@@ -5,33 +5,47 @@
 {% block content %}
 <main id="main-content" class="live-signals" data-live-signals>
   <header class="live-signals-head">
-    <div><p class="eyebrow">Deriv live intelligence</p><h1>Live Signals</h1><p>Analysis is examined first. This page then reads the selected Deriv account's live market feed and revises the baseline direction and confidence before a signal can be considered trading-ready.</p></div>
-    <div class="live-actions"><button class="btn primary" id="signalsScan" type="button">Scan live now</button><button class="btn" id="signalsRefresh" type="button">Refresh</button><a class="btn" href="/analysis/">View Analysis</a><a class="btn" href="/trading/">Trading Terminal</a></div>
+    <div>
+      <p class="eyebrow">DERIV · LIVE MARKET INTELLIGENCE</p>
+      <h1>Live Signals</h1>
+      <p>Broker-native quotes are read from the selected Deriv account and checked against the latest matching Analysis baseline. A signal is marked trading-ready only when the live confirmation gate passes.</p>
+    </div>
+    <div class="live-actions">
+      <button class="btn primary" id="signalsScan" type="button">Scan live now</button>
+      <button class="btn" id="signalsRefresh" type="button">Refresh</button>
+      <a class="btn" href="/analysis/">Analysis</a>
+      <a class="btn" href="/trading/">Trading Terminal</a>
+    </div>
   </header>
-  <section class="live-status-grid">
-    <article class="live-status-card"><span>Deriv account</span><strong id="signalsAccount">—</strong><small id="signalsAccountType">—</small></article>
-    <article class="live-status-card"><span>Live feed</span><strong id="signalsFeed">Connecting</strong><small id="signalsFeedAge">—</small></article>
-    <article class="live-status-card"><span>Analysis baseline</span><strong id="signalsBaseline">—</strong><small>Upstream examination only</small></article>
-    <article class="live-status-card"><span>Trading-ready</span><strong id="signalsReady">0</strong><small>Manual execution remains separate</small></article>
+
+  <section class="live-status-grid" aria-label="Live signal health">
+    <article class="live-status-card"><span>Selected Deriv account</span><strong id="signalsAccount">—</strong><small id="signalsAccountType">—</small></article>
+    <article class="live-status-card"><span>Broker feed</span><strong id="signalsFeed">CONNECTING</strong><small id="signalsFeedAge">Authenticating…</small></article>
+    <article class="live-status-card"><span>Analysis coverage</span><strong id="signalsBaseline">—</strong><small>Latest matching baseline</small></article>
+    <article class="live-status-card"><span>Trading-ready</span><strong id="signalsReady">0</strong><small>Manual execution only</small></article>
   </section>
+
   <section class="signal-command panel">
-    <div><strong>Live signal review</strong><span>Instrument, market, timeframe and live Deriv quote are evaluated against the latest matching Analysis examination.</span></div>
-    <div class="signal-filters"><select id="signalsSymbol" aria-label="Instrument"><option value="">All instruments</option></select><select id="signalsTimeframe" aria-label="Timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select><select id="signalsLimit" aria-label="Market limit"><option>20</option><option selected>40</option><option>60</option><option>80</option></select></div>
+    <div><strong>Signal scanner</strong><span>Use the broker feed as the source of truth for current price. No fabricated quotes or synthetic live rows are displayed.</span></div>
+    <div class="signal-filters"><select id="signalsSymbol" aria-label="Instrument"><option value="">All instruments</option></select><select id="signalsTimeframe" aria-label="Analysis timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select><select id="signalsLimit" aria-label="Market limit"><option>20</option><option selected>40</option><option>60</option><option>80</option></select></div>
   </section>
+
   <section class="signal-overview">
-    <article class="signal-focus panel"><div class="panel-title"><div><span class="eyebrow">Selected signal</span><h2 id="focusInstrument">Select a market</h2></div><span id="focusState" class="signal-state waiting">WAITING</span></div>
+    <article class="signal-focus panel">
+      <div class="panel-title"><div><span class="eyebrow">SELECTED SIGNAL</span><h2 id="focusInstrument">Select a market</h2></div><span id="focusState" class="signal-state waiting">WAITING</span></div>
       <div class="focus-price"><strong id="focusPrice">—</strong><span id="focusSource">No live tick</span></div>
       <div class="confidence-wrap"><div class="confidence-label"><span>Revised live confidence</span><strong id="focusConfidence">0%</strong></div><div class="confidence-track"><i id="focusConfidenceBar"></i></div></div>
-      <div class="focus-grid"><div><span>Baseline</span><strong id="focusBaseline">—</strong></div><div><span>Revised direction</span><strong id="focusDirection">HOLD</strong></div><div><span>Threshold</span><strong id="focusThreshold">—</strong></div><div><span>Live age</span><strong id="focusAge">—</strong></div><div><span>Entry</span><strong id="focusEntry">—</strong></div><div><span>Stop loss</span><strong id="focusStop">—</strong></div><div><span>Take profit</span><strong id="focusTake">—</strong></div><div><span>Timeframe</span><strong id="focusTf">—</strong></div></div>
-      <div class="signal-evidence"><h3>Revision evidence</h3><div id="focusEvidence">No signal selected.</div></div>
+      <div class="focus-grid"><div><span>Baseline</span><strong id="focusBaseline">—</strong></div><div><span>Revised direction</span><strong id="focusDirection">HOLD</strong></div><div><span>Gate threshold</span><strong id="focusThreshold">—</strong></div><div><span>Live age</span><strong id="focusAge">—</strong></div><div><span>Entry</span><strong id="focusEntry">—</strong></div><div><span>Stop loss</span><strong id="focusStop">—</strong></div><div><span>Take profit</span><strong id="focusTake">—</strong></div><div><span>Timeframe</span><strong id="focusTf">—</strong></div></div>
+      <div class="signal-evidence"><h3>Confirmation evidence</h3><div id="focusEvidence"><span class="muted">No signal selected.</span></div></div>
     </article>
     <aside class="live-side">
       <article class="panel"><div class="panel-title"><h2>Live market tape</h2><span id="marketCount">0 markets</span></div><div id="liveTape" class="live-tape"><div class="empty">Run a live scan.</div></div></article>
-      <article class="panel"><div class="panel-title"><h2>Signal lifecycle</h2></div><div class="lifecycle"><div><span>1</span><strong>Analysis examined</strong><small>Baseline signal and criteria</small></div><div><span>2</span><strong>Deriv tick read</strong><small>Authenticated live quote</small></div><div><span>3</span><strong>Confidence revised</strong><small>Live confirmation gate</small></div><div><span>4</span><strong>Trading decision</strong><small>Manual execution only</small></div></div></article>
+      <article class="panel"><div class="panel-title"><h2>Signal lifecycle</h2></div><div class="lifecycle"><div><span>1</span><strong>Analysis examined</strong><small>Latest user-scoped baseline</small></div><div><span>2</span><strong>Deriv quote verified</strong><small>Authenticated broker session</small></div><div><span>3</span><strong>Live gate evaluated</strong><small>Freshness and price confirmation</small></div><div><span>4</span><strong>Manual decision</strong><small>AlgoBot never auto-executes from this page</small></div></div></article>
     </aside>
   </section>
-  <section class="panel signal-table-panel"><div class="panel-title"><div><h2>Live signal matrix</h2><p>Historical candles are not the primary signal source on this page.</p></div><span id="scanTimestamp">Not scanned</span></div><div class="table-scroll"><table class="live-signal-table"><thead><tr><th>Instrument</th><th>Market</th><th>TF</th><th>Live price</th><th>Baseline</th><th>Revised</th><th>Confidence</th><th>Live age</th><th>Status</th></tr></thead><tbody id="signalsTable"><tr><td colspan="9">Run a live scan to read Deriv data.</td></tr></tbody></table></div></section>
+
+  <section class="panel signal-table-panel"><div class="panel-title"><div><h2>Live signal matrix</h2><p>Rows contain only broker-returned live quotes and matching Analysis baselines.</p></div><span id="scanTimestamp">Not scanned</span></div><div class="table-scroll"><table class="live-signal-table"><thead><tr><th>Instrument</th><th>Market</th><th>TF</th><th>Live price</th><th>Baseline</th><th>Revised</th><th>Confidence</th><th>Live age</th><th>Status</th></tr></thead><tbody id="signalsTable"><tr><td colspan="9">Run a live scan to read authenticated Deriv data.</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals.css' %}?v=20260917-signals2">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/signals.js' %}?v=20260917-signals2" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals.css' %}?v=20260917-signals3">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/signals.js' %}?v=20260917-signals3" defer></script>{% endblock %}
