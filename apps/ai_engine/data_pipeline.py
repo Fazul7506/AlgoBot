@@ -1,62 +1,69 @@
 """Broker-agnostic AI training data pipeline.
 
-Broker adapters normalize data into market_data.Candle/Tick records. The AI
-reads only this canonical store, keeping provider payloads out of models.
+All research data comes from the persisted canonical market_data.Candle store.
+Broker APIs are ingestion sources, never a training/research data source.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import timedelta
 from typing import Any
 
 from django.utils import timezone
 
+from apps.market_data.models import MarketSymbol, Tick
 from apps.market_data.historical import normalize_timeframe
-from apps.market_data.models import Candle, MarketSymbol, Tick
+from apps.market_data.research_data import ResearchDataService
 
 
 class AIDataPipeline:
-    """Read canonical broker data and prepare deterministic training snapshots."""
+    """Read canonical persisted broker data and prepare deterministic datasets."""
 
     MIN_CANDLES = 250
+
+    def __init__(self):
+        self.research_data = ResearchDataService()
 
     def snapshot(self, timeframe="M1", lookback_hours=168, symbol=None):
         timeframe = normalize_timeframe(timeframe)
         cutoff_epoch = int((timezone.now() - timedelta(hours=lookback_hours)).timestamp())
-        qs = Candle.objects.filter(timeframe=timeframe, epoch__gte=cutoff_epoch)
         if symbol:
-            qs = qs.filter(symbol__symbol=symbol)
-        qs = qs.select_related("symbol").order_by("symbol__symbol", "epoch")
+            market = self.research_data.market(symbol)
+            rows = self.research_data.candles(
+                market.symbol, timeframe, limit=10000, start_epoch=cutoff_epoch
+            )
+            return [
+                {"broker": market.broker, "symbol": market.symbol, "timeframe": timeframe, **row}
+                for row in rows
+            ]
+
         rows = []
-        for candle in qs.iterator(chunk_size=2000):
-            rows.append({
-                "broker": candle.symbol.broker,
-                "symbol": candle.symbol.symbol,
-                "timeframe": candle.timeframe,
-                "epoch": candle.epoch,
-                "open": float(candle.open),
-                "high": float(candle.high),
-                "low": float(candle.low),
-                "close": float(candle.close),
-                "volume": float(candle.volume),
-            })
+        for market in MarketSymbol.objects.filter(is_active=True, is_tradable=True).iterator():
+            candles = self.research_data.candles(
+                market.symbol, timeframe, limit=10000, start_epoch=cutoff_epoch
+            )
+            rows.extend(
+                {"broker": market.broker, "symbol": market.symbol, "timeframe": timeframe, **row}
+                for row in candles
+            )
         return rows
 
     def health(self, timeframe="M1"):
         timeframe = normalize_timeframe(timeframe)
-        symbols = MarketSymbol.objects.filter(is_active=True, is_tradable=True)
         cutoff_epoch = int((timezone.now() - timedelta(hours=1)).timestamp())
         result = []
-        for item in symbols.iterator():
-            candles = Candle.objects.filter(symbol=item, timeframe=timeframe, epoch__gte=cutoff_epoch).count()
+        for item in MarketSymbol.objects.filter(is_active=True, is_tradable=True).iterator():
+            candles = self.research_data.candles(
+                item.symbol, timeframe, limit=10000, start_epoch=cutoff_epoch
+            )
             ticks = Tick.objects.filter(symbol=item, epoch__gte=cutoff_epoch).count()
-            latest_candle = Candle.objects.filter(symbol=item, timeframe=timeframe).order_by("-epoch").first()
+            latest = self.research_data.latest(item.symbol, timeframe)
             result.append({
                 "broker": item.broker,
                 "symbol": item.symbol,
-                "candles_last_hour": candles,
+                "candles_last_hour": len(candles),
                 "ticks_last_hour": ticks,
-                "latest_candle_epoch": latest_candle.epoch if latest_candle else None,
-                "ready": candles > 0,
+                "latest_candle_epoch": latest["epoch"] if latest else None,
+                "ready": bool(candles),
             })
         return result
 
@@ -73,27 +80,20 @@ class AIDataPipeline:
         }
 
     def dataset(self, symbol, timeframe="M1", limit=5000):
-        """Return chronologically ordered OHLCV rows for model construction."""
-        timeframe = normalize_timeframe(timeframe)
-        market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
-        if not market_symbol:
-            raise ValueError(f"Unknown active market symbol: {symbol}")
-        return list(
-            Candle.objects.filter(symbol=market_symbol, timeframe=timeframe)
-            .order_by("epoch")
-            .values("epoch", "open", "high", "low", "close", "volume")[:limit]
-        )
+        """Return chronologically ordered persisted OHLCV rows for model construction."""
+        return self.research_data.candles(symbol, timeframe, limit=limit)
 
     def dataset_metadata(self, symbol, timeframe="M1") -> dict[str, Any]:
-        """Return provenance information to store alongside a trained model."""
+        """Return provenance identifying the canonical persisted research source."""
         timeframe = normalize_timeframe(timeframe)
-        market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
-        if not market_symbol:
-            raise ValueError(f"Unknown active market symbol: {symbol}")
+        market_symbol = self.research_data.market(symbol)
+        latest = self.research_data.latest(symbol, timeframe)
         return {
             "broker": market_symbol.broker,
             "symbol": market_symbol.symbol,
             "timeframe": timeframe,
             "source": "market_data.Candle",
+            "storage": "database",
+            "latest_epoch": latest["epoch"] if latest else None,
             "generated_at": timezone.now().isoformat(),
         }
