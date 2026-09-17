@@ -177,7 +177,7 @@ class DerivAdapter(BrokerAdapter):
         if not tick: raise BrokerConnectionError("Deriv did not return a tick")
         return {"symbol": symbol, "price": tick.get("quote"), "bid": tick.get("bid"), "ask": tick.get("ask"), "epoch": tick.get("epoch")}
     async def get_live_signal_tick(self, symbol):
-        """Read a live tick through the selected authenticated Deriv account session."""
+        """Read a single live tick through the selected authenticated Deriv account session."""
         tick = (await self._request({"ticks": symbol, "subscribe": 0}, authenticated=True)).get("tick")
         if not tick or tick.get("quote") is None or tick.get("epoch") is None:
             raise BrokerConnectionError("Deriv did not return a live signal tick")
@@ -223,4 +223,27 @@ class DerivAdapter(BrokerAdapter):
             except (TypeError, ValueError): growth_rate = 0.01
             if growth_rate not in {0.01, 0.02, 0.03, 0.04, 0.05}: raise BrokerOrderError("Deriv accumulator growth rate must be 1%, 2%, 3%, 4% or 5%")
             proposal_payload["growth_rate"] = growth_rate
-        proposal_response = await...
+        proposal_response = await self._request(proposal_payload, authenticated=True); proposal = proposal_response.get("proposal") or {}; proposal_id = proposal.get("id"); ask_price = proposal.get("ask_price") or proposal.get("display_value")
+        if not proposal_id or ask_price is None: raise BrokerOrderError("Deriv returned an unusable proposal")
+        buy = (await self._request({"buy": proposal_id, "price": float(ask_price)}, authenticated=True)).get("buy") or {}; contract_id = buy.get("contract_id")
+        if not contract_id: raise BrokerOrderError("Deriv accepted the request without returning a contract ID")
+        return {"status": "filled", "broker_order_id": str(contract_id), "execution_price": buy.get("buy_price") or ask_price, "fees": 0, "payout": buy.get("payout"), "proposal_id": proposal_id, "contract_type": requested_contract}
+
+    async def modify_order(self, order, **changes): raise BrokerOrderError("Use the Deriv contract_update operation for supported open-contract changes")
+    async def cancel_order(self, order): raise BrokerOrderError("Deriv contracts cannot be cancelled through the generic order API")
+    async def close_position(self, position):
+        contract_id = getattr(position, "broker_order_id", None)
+        if not contract_id: raise BrokerOrderError("A Deriv contract id is required to sell a position")
+        return await self._request({"sell": int(contract_id), "price": 0}, authenticated=True)
+    async def stream_positions(self, callback=None): return self._start_stream([{"portfolio": 1, "req_id": 1}, {"transaction": 1, "subscribe": 1, "req_id": 2}], callback=callback, authenticated=True, stream_name="portfolio")
+    async def stream_orders(self, callback=None): return self._start_stream([{"transaction": 1, "subscribe": 1, "req_id": 1}], callback=callback, authenticated=True, stream_name="transactions")
+    async def stream_prices(self, symbols, callback=None):
+        symbols = [str(symbol).strip() for symbol in symbols if str(symbol).strip()]
+        if not symbols: raise BrokerOrderError("At least one market symbol is required for a price stream")
+        subscriptions = [{"ticks": symbol, "subscribe": 1, "req_id": index + 1} for index, symbol in enumerate(dict.fromkeys(symbols))]
+        return self._start_stream(subscriptions, callback=callback, authenticated=False, stream_name="ticks")
+    async def health_check(self): return {"status": "ok", "latency": await self.ping()}
+    async def ping(self):
+        cached = getattr(self, "_last_connection_latency", None)
+        if cached is not None: return cached
+        start = time.perf_counter(); await self._request({"ping": 1}); return (time.perf_counter() - start) * 1000
