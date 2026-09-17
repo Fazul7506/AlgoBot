@@ -9,6 +9,8 @@ from .models import MarketSymbol, Tick, Candle, MarketSnapshot, MarketStatistics
 from .serializers import MarketSymbolSerializer, TickSerializer, CandleSerializer, MarketSnapshotSerializer, MarketStatisticsSerializer
 from .deriv_sync import fetch_tick, sync_active_symbols
 from .services import MarketDataService
+from .historical import persist_broker_chart_history
+from .constants import TIMEFRAMES
 from apps.brokers.services import BrokerRegistry
 from apps.brokers.exceptions import BrokerConnectionError, BrokerAuthenticationError, BrokerOrderError
 from core.account_context import get_active_account
@@ -171,7 +173,18 @@ def broker_chart_history(request):
         data = awaitable_to_sync(adapter.get_chart_history(symbol, mode=mode, count=_limit(request, 500, 1000), granularity=granularity))
         if not isinstance(data, dict) or data.get("symbol") != symbol or not isinstance(data.get("items"), list):
             return Response({"status":"error","code":"BROKER_CHART_HISTORY_INVALID","detail":"The broker returned an invalid chart history payload."}, status=status.HTTP_502_BAD_GATEWAY)
-        data.update({"broker": account.broker.name, "account_id": account.account_id, "source": "live_broker"})
+
+        persistence = None
+        if mode == "candles":
+            try:
+                granularity_seconds = int(granularity)
+                timeframe = next((name for name, seconds in TIMEFRAMES.items() if seconds == granularity_seconds and name != "tick"), None)
+                if timeframe:
+                    persistence = persist_broker_chart_history(symbol, timeframe, data["items"])
+            except (TypeError, ValueError):
+                persistence = {"status": "not_persisted", "reason": "invalid_granularity"}
+
+        data.update({"broker": account.broker.name, "account_id": account.account_id, "source": "live_broker", "persistence": persistence})
         return Response(data)
     except (BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, asyncio.TimeoutError) as exc:
         cached = _last_known_tick(symbol)
