@@ -1,11 +1,37 @@
-# Production runtime dependencies are kept in one canonical constraints set.
--r requirements/production.txt
+Django
+daphne
+channels
+django-cors-headers
+djangorestframework
+djangorestframework-simplejwt
+django-filter
+dj-database-url
 
-# Quantitative / AI research stack.
+gunicorn
+psycopg2-binary
+
+celery
+redis
+django-redis
+channels-redis
+django-anymail[brevo]
+python-dotenv
+
+requests
 cryptography
 pyotp
+
+numpy
+pandas
+scipy
+scikit-learn
+joblib
 xgboost
 lightgbm
 tensorflow
 statsmodels
+
 reportlab
+websockets
+whitenoise
+sentry-sdk
