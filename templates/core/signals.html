@@ -6,7 +6,7 @@
 <main id="main-content" class="live-signals" data-live-signals>
   <header class="live-signals-head">
     <div><p class="eyebrow">Deriv live intelligence</p><h1>Live Signals</h1><p>Analysis is examined first. This page then reads the selected Deriv account's live market feed and revises the baseline direction and confidence before a signal can be considered trading-ready.</p></div>
-    <div class="live-actions"><button class="btn primary" id="signalsScan">Scan live now</button><button class="btn" id="signalsRefresh">Refresh</button><a class="btn" href="/analysis/">View Analysis</a><a class="btn" href="/trading/">Trading Terminal</a></div>
+    <div class="live-actions"><button class="btn primary" id="signalsScan" type="button">Scan live now</button><button class="btn" id="signalsRefresh" type="button">Refresh</button><a class="btn" href="/analysis/">View Analysis</a><a class="btn" href="/trading/">Trading Terminal</a></div>
   </header>
   <section class="live-status-grid">
     <article class="live-status-card"><span>Deriv account</span><strong id="signalsAccount">—</strong><small id="signalsAccountType">—</small></article>
@@ -19,7 +19,7 @@
     <div class="signal-filters"><select id="signalsSymbol" aria-label="Instrument"><option value="">All instruments</option></select><select id="signalsTimeframe" aria-label="Timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select><select id="signalsLimit" aria-label="Market limit"><option>20</option><option selected>40</option><option>60</option><option>80</option></select></div>
   </section>
   <section class="signal-overview">
-    <article class="signal-focus panel"><div class="panel-title"><div><span class="eyebrow">Selected signal</span><h2 id="focusInstrument">Select a market</h2></div><span id="focusState" class="signal-state">WAITING</span></div>
+    <article class="signal-focus panel"><div class="panel-title"><div><span class="eyebrow">Selected signal</span><h2 id="focusInstrument">Select a market</h2></div><span id="focusState" class="signal-state waiting">WAITING</span></div>
       <div class="focus-price"><strong id="focusPrice">—</strong><span id="focusSource">No live tick</span></div>
       <div class="confidence-wrap"><div class="confidence-label"><span>Revised live confidence</span><strong id="focusConfidence">0%</strong></div><div class="confidence-track"><i id="focusConfidenceBar"></i></div></div>
       <div class="focus-grid"><div><span>Baseline</span><strong id="focusBaseline">—</strong></div><div><span>Revised direction</span><strong id="focusDirection">HOLD</strong></div><div><span>Threshold</span><strong id="focusThreshold">—</strong></div><div><span>Live age</span><strong id="focusAge">—</strong></div><div><span>Entry</span><strong id="focusEntry">—</strong></div><div><span>Stop loss</span><strong id="focusStop">—</strong></div><div><span>Take profit</span><strong id="focusTake">—</strong></div><div><span>Timeframe</span><strong id="focusTf">—</strong></div></div>
@@ -33,5 +33,5 @@
   <section class="panel signal-table-panel"><div class="panel-title"><div><h2>Live signal matrix</h2><p>Historical candles are not the primary signal source on this page.</p></div><span id="scanTimestamp">Not scanned</span></div><div class="table-scroll"><table class="live-signal-table"><thead><tr><th>Instrument</th><th>Market</th><th>TF</th><th>Live price</th><th>Baseline</th><th>Revised</th><th>Confidence</th><th>Live age</th><th>Status</th></tr></thead><tbody id="signalsTable"><tr><td colspan="9">Run a live scan to read Deriv data.</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals.css' %}">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/signals.js' %}" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals.css' %}?v=20260917-signals2">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/signals.js' %}?v=20260917-signals2" defer></script>{% endblock %}
