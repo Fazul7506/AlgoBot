@@ -63,8 +63,6 @@ class BacktestViewSet(viewsets.ModelViewSet):
         backtest.status = 'pending'
         backtest.save(update_fields=['status', 'updated_at'])
         try:
-            # Do not use Celery's publisher retry loop on an interactive HTTP
-            # request. The broker connection itself is bounded in settings.
             execute_backtest.apply_async(args=(backtest.pk,), retry=False)
             return True
         except Exception as exc:
@@ -129,15 +127,37 @@ class BacktestViewSet(viewsets.ModelViewSet):
         if mode not in {'candle_close', 'tick'}:
             raise ValidationError({'mode': 'Execution mode must be candle_close or tick.'})
 
+        # Strategy indicators need warm-up observations, but the user-selected
+        # interval is the evaluation window. Do not require 21 candles/ticks to
+        # exist *inside* a short research window such as one hour of 15m data.
+        # The worker loads the preceding warm-up history separately and only
+        # records trades whose entry/exit timestamps remain inside this exact
+        # interval.
         start_epoch = int(start_date.timestamp())
         end_epoch = int(end_date.timestamp())
+        min_history = 20
         if mode == 'tick':
-            history_count = Tick.objects.filter(symbol=market, epoch__gte=start_epoch, epoch__lte=end_epoch).count()
+            warmup_count = len(list(
+                Tick.objects.filter(symbol=market, epoch__lt=start_epoch)
+                .order_by('-epoch', '-id')
+                .values('id')[:min_history]
+            ))
+            evaluation_count = Tick.objects.filter(
+                symbol=market, epoch__gte=start_epoch, epoch__lte=end_epoch
+            ).count()
+            if warmup_count < min_history or evaluation_count < 2:
+                raise ValidationError({'date_range': f'Insufficient broker tick history for this evaluation window. AlgoBot needs {min_history} earlier ticks for indicator warm-up and at least 2 ticks inside the selected interval; found {warmup_count} warm-up ticks and {evaluation_count} evaluation ticks.'})
         else:
-            history_count = Candle.objects.filter(symbol=market, timeframe=timeframe, epoch__gte=start_epoch, epoch__lte=end_epoch).count()
-        if history_count <= 20:
-            source = 'ticks' if mode == 'tick' else f'{timeframe} candles'
-            raise ValidationError({'date_range': f'Insufficient broker historical data in the exact selected interval ({history_count} {source}; at least 21 are required). Choose an older or wider interval with available data.'})
+            warmup_count = len(list(
+                Candle.objects.filter(symbol=market, timeframe=timeframe, epoch__lt=start_epoch)
+                .order_by('-epoch', '-id')
+                .values('id')[:min_history]
+            ))
+            evaluation_count = Candle.objects.filter(
+                symbol=market, timeframe=timeframe, epoch__gte=start_epoch, epoch__lte=end_epoch
+            ).count()
+            if warmup_count < min_history or evaluation_count < 2:
+                raise ValidationError({'date_range': f'Insufficient broker {timeframe} candle history for this evaluation window. AlgoBot needs {min_history} earlier candles for indicator warm-up and at least 2 candles inside the selected interval; found {warmup_count} warm-up candles and {evaluation_count} evaluation candles.'})
 
         with transaction.atomic():
             user_model = self.request.user.__class__
@@ -209,7 +229,8 @@ class StatisticsViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BacktestStatisticsSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self): return BacktestStatistics.objects.filter(backtest__user=self.request.user)
+    def get_queryset(self):
+        return BacktestStatistics.objects.filter(backtest__user=self.request.user)
 
 
 @decorators.api_view(['POST'])

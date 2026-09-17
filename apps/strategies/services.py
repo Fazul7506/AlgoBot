@@ -61,8 +61,7 @@ class StrategyService:
         """Run historical strategy evaluation entirely through canonical app models.
 
         ``mode`` is an execution-model selector. Candle-close evaluates the
-        next candle close; tick mode evaluates the next available historical
-        candle OHLC range and uses its first reachable price, while still
+        next candle close; tick mode evaluates each next historical tick while
         remaining strictly inside the requested historical boundary.
         """
         mode = str(mode or 'candle_close').strip().lower()
@@ -77,11 +76,12 @@ class StrategyService:
             if end_date is not None: tick_qs = tick_qs.filter(epoch__lte=int(end_date.timestamp()))
             ticks = list(tick_qs.values('quote', 'volume', 'epoch'))
             if len(ticks) <= min_history: raise ValueError('Insufficient canonical tick history for the selected symbol and exact date range')
+            rows = None
         else:
             candles = StrategyService._historic_candles(symbol, timeframe, start_date, end_date)
             if len(candles) <= min_history: raise ValueError('Insufficient canonical candle history for the selected symbol, timeframe and date range')
-        from apps.indicators.basic_features import compute_basic_features
-        rows = compute_basic_features(candles)
+            from apps.indicators.basic_features import compute_basic_features
+            rows = compute_basic_features(candles)
         strategy_cls = registry.get(getattr(strategy_record, 'slug', '') or str(getattr(strategy_record, 'name', '')).lower().replace(' ', '_'))
         if strategy_cls is None:
             raise ValueError('Selected strategy is not registered in the canonical strategy registry')
