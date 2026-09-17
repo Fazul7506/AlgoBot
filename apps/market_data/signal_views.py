@@ -1,59 +1,265 @@
+import asyncio
+import time
+from collections import defaultdict
+from decimal import Decimal, InvalidOperation
+
+import websockets
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import JsonResponse
+from django.utils import timezone
+
+from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError
+from apps.brokers.models import BrokerAccount
+from apps.brokers.services import BrokerRegistry
 from apps.strategies.models import StrategySignal
+
+from .models import MarketSymbol
+
+LIVE_TICK_MAX_AGE_SECONDS = 5
+ANALYSIS_BASELINE_MAX_AGE_SECONDS = 900
+DEFAULT_CONFIDENCE_THRESHOLD = 70.0
+MAX_SCAN_SYMBOLS = 80
+
+
+def _selected_deriv_account(request):
+    qs = BrokerAccount.objects.filter(
+        user=request.user,
+        status="active",
+        broker__status="active",
+        broker__broker_type="deriv",
+    ).select_related("broker")
+    selected_id = request.session.get("active_broker_account_id")
+    if selected_id:
+        account = qs.filter(pk=selected_id).first()
+        if account:
+            return account
+    return qs.order_by("-last_synced_at", "-id").first()
+
+
+def _as_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError, InvalidOperation):
+        return None
+
+
+def _analysis_timeframe(signal):
+    if signal.configuration and signal.configuration.timeframe:
+        return str(signal.configuration.timeframe)
+    metadata = signal.metadata if isinstance(signal.metadata, dict) else {}
+    return str(metadata.get("timeframe") or metadata.get("interval") or "M1")
+
+
+def _analysis_baselines(request, symbols, timeframe):
+    qs = StrategySignal.objects.select_related("strategy", "configuration").filter(
+        symbol__in=symbols,
+        Q(configuration__user=request.user) | Q(configuration__isnull=True),
+    ).order_by("-timestamp")
+    baselines = {}
+    for signal in qs:
+        tf = _analysis_timeframe(signal)
+        if timeframe and tf != timeframe:
+            continue
+        key = signal.symbol
+        if key not in baselines:
+            baselines[key] = signal
+    return baselines
+
+
+async def _authenticated_live_ticks(adapter, symbols):
+    """Use one authenticated Deriv WebSocket session for the live signal snapshot."""
+    endpoint = await asyncio.to_thread(adapter._authenticated_ws_url)
+    async with websockets.connect(
+        endpoint,
+        open_timeout=adapter.timeout,
+        close_timeout=5,
+        ping_interval=20,
+        ping_timeout=10,
+        max_size=2**20,
+    ) as ws:
+        requests = {}
+        for index, symbol in enumerate(dict.fromkeys(symbols), start=1):
+            req_id = index
+            requests[req_id] = symbol
+            await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
+
+        results = {}
+        deadline = time.monotonic() + min(12.0, max(4.0, len(requests) * 0.25))
+        while requests and time.monotonic() < deadline:
+            timeout = max(0.1, deadline - time.monotonic())
+            try:
+                message = await asyncio.wait_for(ws.recv(), timeout=timeout)
+            except asyncio.TimeoutError:
+                break
+            import json
+            payload = json.loads(message)
+            if payload.get("error"):
+                code = str((payload.get("error") or {}).get("code") or "")
+                if code in {"AuthorizationRequired", "InvalidToken", "Unauthorized", "InvalidAppId"}:
+                    raise BrokerAuthenticationError((payload.get("error") or {}).get("message", "Deriv authentication failed"))
+                continue
+            if payload.get("msg_type") != "tick":
+                continue
+            tick = payload.get("tick") or {}
+            symbol = str(tick.get("symbol") or requests.get(payload.get("req_id")) or "")
+            if symbol and tick.get("quote") is not None and tick.get("epoch") is not None:
+                results[symbol] = tick
+                req_id = payload.get("req_id")
+                if req_id in requests:
+                    requests.pop(req_id, None)
+        return results
+
+
+def _revise_signal(signal, live_tick, now):
+    metadata = signal.metadata if isinstance(signal.metadata, dict) else {}
+    baseline_direction = str(signal.signal or "HOLD").upper()
+    base_confidence = max(0.0, min(100.0, _as_float(signal.confidence) or 0.0))
+    analysis_age = max(0, int((now - signal.timestamp).total_seconds()))
+    live_epoch = int(live_tick.get("epoch"))
+    live_age = max(0, int(time.time()) - live_epoch)
+    live_price = _as_float(live_tick.get("quote"))
+    entry = _as_float(signal.entry_price)
+    revised = base_confidence
+    evidence = ["analysis_baseline_loaded", "authenticated_live_deriv_tick"]
+    status = "LIVE_REVIEW"
+    direction = baseline_direction
+
+    if analysis_age > ANALYSIS_BASELINE_MAX_AGE_SECONDS:
+        revised = min(revised, 50.0)
+        status = "ANALYSIS_STALE"
+        direction = "HOLD"
+        evidence.append("analysis_baseline_stale")
+    elif live_age > LIVE_TICK_MAX_AGE_SECONDS:
+        revised = min(revised, 45.0)
+        status = "LIVE_DATA_STALE"
+        direction = "HOLD"
+        evidence.append("live_tick_stale")
+    elif baseline_direction in {"BUY", "SELL"} and live_price is not None and entry is not None:
+        favorable = (baseline_direction == "BUY" and live_price >= entry) or (baseline_direction == "SELL" and live_price <= entry)
+        if favorable:
+            revised = min(100.0, revised + 5.0)
+            evidence.append("live_price_confirms_analysis_entry_side")
+        else:
+            revised = max(0.0, revised - 10.0)
+            direction = "HOLD"
+            status = "LIVE_CONFIRMATION_FAILED"
+            evidence.append("live_price_conflicts_with_analysis_entry_side")
+    elif baseline_direction in {"BUY", "SELL"}:
+        evidence.append("analysis_entry_price_unavailable")
+
+    threshold = _as_float(metadata.get("live_confidence_threshold")) or DEFAULT_CONFIDENCE_THRESHOLD
+    execution_ready = direction in {"BUY", "SELL"} and revised >= threshold and status == "LIVE_REVIEW"
+    if not execution_ready and direction in {"BUY", "SELL"}:
+        status = "LIVE_CONFIDENCE_BELOW_GATE"
+
+    return {
+        "analysis_signal_id": signal.id,
+        "analysis_timestamp": signal.timestamp.isoformat(),
+        "analysis_age_seconds": analysis_age,
+        "baseline_direction": baseline_direction,
+        "baseline_confidence": round(base_confidence, 2),
+        "direction": direction,
+        "confidence": round(revised, 2),
+        "live_confidence_threshold": round(threshold, 2),
+        "execution_ready": execution_ready,
+        "status": status,
+        "evidence": evidence,
+        "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
+        "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None,
+        "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
+        "strategy": signal.strategy.name,
+        "strategy_version": signal.strategy.version,
+        "timeframe": _analysis_timeframe(signal),
+        "analysis_metadata": metadata,
+        "live": {
+            "price": live_price,
+            "bid": _as_float(live_tick.get("bid")),
+            "ask": _as_float(live_tick.get("ask")),
+            "epoch": live_epoch,
+            "age_seconds": live_age,
+            "source": "deriv_authenticated_websocket",
+        },
+    }
 
 
 @login_required
 def strategy_signals(request):
-    """Return current persisted scan signals with the same market context used by Analysis."""
+    """Produce live Deriv signals from an Analysis baseline plus a fresh broker tick.
+
+    Analysis is upstream evidence only. This endpoint never treats historical candles as
+    the live signal source and never submits an order.
+    """
+    account = _selected_deriv_account(request)
+    if account is None:
+        return JsonResponse({"status": "error", "code": "DERIV_ACCOUNT_REQUIRED", "message": "Connect and select a Deriv account before reading live signals."}, status=409)
+
+    if account.token_status != "active" or account.is_token_expired:
+        return JsonResponse({"status": "error", "code": "DERIV_CREDENTIALS_INVALID", "message": "The selected Deriv credentials are expired or revoked."}, status=401)
+
+    symbol_filter = str(request.GET.get("symbol") or "").strip()
+    timeframe = str(request.GET.get("timeframe") or "M1").strip()
     try:
-        limit = min(max(int(request.GET.get("limit", 100)), 1), 100)
+        limit = min(max(int(request.GET.get("limit", 80)), 1), MAX_SCAN_SYMBOLS)
     except (TypeError, ValueError):
-        limit = 100
+        limit = MAX_SCAN_SYMBOLS
 
-    queryset = (
-        StrategySignal.objects
-        .select_related("strategy", "configuration")
-        .filter(Q(configuration__user=request.user) | Q(configuration__isnull=True))
-        .order_by("-timestamp")
-    )
+    symbols_qs = MarketSymbol.objects.filter(is_active=True, is_tradable=True, broker="deriv").order_by("market", "symbol")
+    if symbol_filter:
+        symbols_qs = symbols_qs.filter(symbol=symbol_filter)
+    markets = list(symbols_qs[:limit])
+    if not markets:
+        return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "count": 0, "data": []})
 
+    adapter = BrokerRegistry().adapter(account.broker, account)
+    symbols = [market.symbol for market in markets]
+    try:
+        live_ticks = asyncio.run(_authenticated_live_ticks(adapter, symbols))
+    except (BrokerAuthenticationError, BrokerConnectionError) as exc:
+        return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": str(exc)}, status=502)
+    except Exception:
+        return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": "The authenticated Deriv live signal feed could not be established."}, status=502)
+
+    baselines = _analysis_baselines(request, symbols, timeframe)
+    now = timezone.now()
     rows = []
-    for signal in queryset[:limit]:
-        metadata = signal.metadata if isinstance(signal.metadata, dict) else {}
-        rows.append({
-            "id": signal.id,
-            "symbol": signal.symbol,
-            "display_name": metadata.get("display_name") or metadata.get("instrument") or signal.symbol,
-            "instrument": metadata.get("instrument") or signal.symbol,
-            "timeframe": metadata.get("timeframe") or metadata.get("interval") or getattr(signal.configuration, "timeframe", None) or "—",
-            "direction": signal.signal,
-            "signal_type": signal.signal,
-            "confidence": signal.confidence,
-            "score": metadata.get("score") or metadata.get("signal_score") or "—",
-            "price": metadata.get("price") or metadata.get("current_price") or metadata.get("last_price") or "—",
-            "market_regime": metadata.get("market_regime") or metadata.get("regime") or "—",
-            "strategy": signal.strategy.name,
-            "strategy_name": signal.strategy.name,
-            "was_executed": bool(metadata.get("was_executed", False)),
-            "created_at": signal.timestamp,
-            "timestamp": signal.timestamp,
-            "entry_price": signal.entry_price,
-            "stop_loss": signal.stop_loss,
-            "take_profit": signal.take_profit,
-            "entry_condition": metadata.get("entry_condition") or metadata.get("entry") or "—",
-            "risk_gate": metadata.get("risk_gate") or metadata.get("risk_status") or "—",
-            "trend_confirmation": metadata.get("trend_confirmation") or metadata.get("trend") or "—",
-            "momentum_confirmation": metadata.get("momentum_confirmation") or metadata.get("momentum") or "—",
-            "data_freshness": metadata.get("data_freshness") or metadata.get("data_status") or "—",
-            "broker_availability": metadata.get("broker_availability") or metadata.get("execution_availability") or "—",
-            "evidence": metadata.get("evidence") or metadata.get("reason") or metadata.get("explanation") or "—",
-            "reason": metadata.get("reason") or metadata.get("explanation") or metadata.get("evidence") or "—",
-            "confirmation": metadata.get("confirmation") or metadata.get("confirmation_reason") or "—",
-            "confirmation_status": metadata.get("confirmation_status") or metadata.get("trigger_status") or "—",
-            "status": metadata.get("status") or metadata.get("trigger_status") or "—",
-            "metadata": metadata,
-        })
+    for market in markets:
+        live_tick = live_ticks.get(market.symbol)
+        baseline = baselines.get(market.symbol)
+        row = {
+            "symbol": market.symbol,
+            "instrument": market.display_name,
+            "display_name": market.display_name,
+            "market": market.market,
+            "sub_market": market.sub_market,
+            "broker": "deriv",
+            "account_id": account.account_id,
+            "account_type": (account.credentials or {}).get("account_type"),
+            "timeframe": timeframe,
+            "source": "deriv_authenticated_live",
+        }
+        if not live_tick:
+            row.update({"direction": "HOLD", "confidence": 0, "status": "LIVE_DATA_UNAVAILABLE", "execution_ready": False, "evidence": ["no_live_deriv_tick"]})
+        elif not baseline:
+            row.update({
+                "direction": "HOLD", "confidence": 0, "status": "WAITING_FOR_ANALYSIS", "execution_ready": False,
+                "evidence": ["live_tick_received", "no_matching_analysis_baseline"],
+                "live": {"price": _as_float(live_tick.get("quote")), "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": int(live_tick.get("epoch")), "source": "deriv_authenticated_websocket"},
+            })
+        else:
+            row.update(_revise_signal(baseline, live_tick, now))
+        rows.append(row)
 
-    return JsonResponse({"status": "success", "count": len(rows), "data": rows})
+    actionable = [row for row in rows if row.get("execution_ready")]
+    return JsonResponse({
+        "status": "ok",
+        "source": "deriv_authenticated_live",
+        "account": {"id": account.account_id, "type": (account.credentials or {}).get("account_type"), "currency": account.currency},
+        "analysis_role": "upstream_baseline_only",
+        "historical_candles_primary": False,
+        "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS,
+        "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS,
+        "count": len(rows),
+        "actionable_count": len(actionable),
+        "data": rows,
+    })
