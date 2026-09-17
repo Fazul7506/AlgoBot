@@ -87,7 +87,9 @@
       $('signalsAccountType').textContent = `${data.account?.type || 'account'} · ${data.account?.currency || ''}`;
       $('signalsReady').textContent = String(data.actionable_count ?? S.rows.filter(row => row.execution_ready).length);
       $('signalsBaseline').textContent = `${S.rows.filter(row => row.analysis_signal_id).length}/${S.rows.length} matched`;
-      setStatus('LIVE', true);
+      const liveCount = Number(data.live_data_available_count ?? S.rows.filter(row => row.live).length);
+      setStatus(liveCount > 0 ? 'LIVE' : 'LIVE DATA UNAVAILABLE');
+      if ($('signalsFeedAge')) $('signalsFeedAge').textContent = liveCount > 0 ? `${liveCount}/${S.rows.length} fresh Deriv quotes` : 'No fresh Deriv quote received';
       $('scanTimestamp').textContent = `Scanned ${new Date().toLocaleTimeString()}`;
       renderTape(S.rows); renderTable(S.rows);
       const preferred = S.rows.find(row => row.execution_ready) || S.rows.find(row => row.direction === 'BUY' || row.direction === 'SELL') || S.rows[0];
