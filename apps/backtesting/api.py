@@ -11,8 +11,9 @@ from .models import Backtest, BacktestClusterJob, BacktestStatistics
 from .serializers import BacktestSerializer, BacktestStatisticsSerializer, BacktestTradeSerializer, canonical_timeframe
 from .services import ParameterOptimizationService, ReplayService
 from apps.strategies.models import Strategy as StrategyModel
-from apps.market_data.models import MarketSymbol, Candle, Tick
+from apps.market_data.models import MarketSymbol, Tick
 from apps.market_data.constants import TIMEFRAMES
+from apps.market_data.research_data import ResearchDataService
 from core.billing_entitlements import check, effective_plan
 
 log = logging.getLogger(__name__)
@@ -137,27 +138,32 @@ class BacktestViewSet(viewsets.ModelViewSet):
         end_epoch = int(end_date.timestamp())
         min_history = 20
         if mode == 'tick':
-            warmup_count = len(list(
-                Tick.objects.filter(symbol=market, epoch__lt=start_epoch)
-                .order_by('-epoch', '-id')
-                .values('id')[:min_history]
-            ))
+            warmup_count = Tick.objects.filter(
+                symbol=market, epoch__lt=start_epoch
+            ).order_by('-epoch', '-id').values('id')[:min_history].count()
             evaluation_count = Tick.objects.filter(
                 symbol=market, epoch__gte=start_epoch, epoch__lte=end_epoch
             ).count()
             if warmup_count < min_history or evaluation_count < 2:
-                raise ValidationError({'date_range': f'Insufficient broker tick history for this evaluation window. AlgoBot needs {min_history} earlier ticks for indicator warm-up and at least 2 ticks inside the selected interval; found {warmup_count} warm-up ticks and {evaluation_count} evaluation ticks.'})
+                raise ValidationError({'date_range': f'Insufficient persisted tick history for this evaluation window. AlgoBot needs {min_history} earlier ticks for indicator warm-up and at least 2 ticks inside the selected interval; found {warmup_count} warm-up ticks and {evaluation_count} evaluation ticks.'})
         else:
-            warmup_count = len(list(
-                Candle.objects.filter(symbol=market, timeframe=timeframe, epoch__lt=start_epoch)
-                .order_by('-epoch', '-id')
-                .values('id')[:min_history]
-            ))
-            evaluation_count = Candle.objects.filter(
-                symbol=market, timeframe=timeframe, epoch__gte=start_epoch, epoch__lte=end_epoch
-            ).count()
+            research_data = ResearchDataService()
+            try:
+                warmup_count = research_data.count(
+                    market.symbol,
+                    timeframe,
+                    end_epoch=start_epoch - 1,
+                )
+                evaluation_count = research_data.count(
+                    market.symbol,
+                    timeframe,
+                    start_epoch=start_epoch,
+                    end_epoch=end_epoch,
+                )
+            except ValueError as exc:
+                raise ValidationError({'date_range': str(exc)}) from exc
             if warmup_count < min_history or evaluation_count < 2:
-                raise ValidationError({'date_range': f'Insufficient broker {timeframe} candle history for this evaluation window. AlgoBot needs {min_history} earlier candles for indicator warm-up and at least 2 candles inside the selected interval; found {warmup_count} warm-up candles and {evaluation_count} evaluation candles.'})
+                raise ValidationError({'date_range': f'Insufficient persisted {timeframe} candle history for this evaluation window. AlgoBot needs {min_history} earlier candles for indicator warm-up and at least 2 candles inside the selected interval; found {warmup_count} warm-up candles and {evaluation_count} evaluation candles.'})
 
         with transaction.atomic():
             user_model = self.request.user.__class__
