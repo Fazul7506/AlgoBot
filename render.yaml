@@ -29,7 +29,7 @@ services:
         value: "true"
       - key: CSRF_COOKIE_SAMESITE
         value: Lax
-    buildCommand: pip install -r requirements.txt && python manage.py check && python manage.py makemigrations && python manage.py migrate && python manage.py backfill_all_candles --count 5000 && python manage.py seed_markets && python manage.py set_telegram_webhook && python manage.py collectstatic --noinput
+    buildCommand: pip install -r requirements.txt && python manage.py check && python manage.py makemigrations && python manage.py migrate && python manage.py seed_markets && python manage.py set_telegram_webhook && python manage.py collectstatic --noinput
     startCommand: DJANGO_ENV=production exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
     healthCheckPath: /health/
     maxShutdownDelaySeconds: 60
