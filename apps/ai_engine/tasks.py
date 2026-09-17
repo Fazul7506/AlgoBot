@@ -4,6 +4,8 @@ from django.utils import timezone
 
 from deriv_platform.celery import app
 
+from apps.market_data.constants import TIMEFRAMES
+from apps.market_data.research_data import ResearchDataService
 from .data_pipeline import AIDataPipeline
 from .models import Prediction, PredictionOutcome
 from .services import (
@@ -58,29 +60,39 @@ def refresh_prediction(symbol, timeframe="M1", context=None):
 
 @app.task
 def resolve_prediction_outcomes(timeframe="M1", horizon_candles=1, batch_size=500):
-    """Label matured predictions using the next persisted candle.
+    """Label matured predictions using the next persisted canonical candle.
 
-    This creates the feedback dataset without allowing future candles to leak
-    into the original prediction. Only predictions old enough to have a full
-    horizon are resolved.
+    Historical validation reads only broker-ingested ``market_data.Candle``
+    rows. The timeframe is normalized before both the maturity cutoff and the
+    candle query so aliases such as M1/H1 cannot diverge from stored rows.
     """
-    from apps.market_data.models import Candle, MarketSymbol
+    research_data = ResearchDataService()
+    canonical_timeframe = research_data.timeframe(timeframe)
+    if canonical_timeframe == "tick":
+        raise ValueError("Prediction outcomes require a candle timeframe, not tick mode")
 
-    cutoff = timezone.now() - timedelta(minutes=max(1, horizon_candles))
-    pending = Prediction.objects.filter(timeframe=timeframe, created_at__lte=cutoff).exclude(outcome__isnull=False).order_by("created_at")[:batch_size]
+    seconds = max(1, int(TIMEFRAMES[canonical_timeframe]))
+    cutoff = timezone.now() - timedelta(seconds=seconds * max(1, int(horizon_candles)))
+    pending = Prediction.objects.filter(
+        timeframe=canonical_timeframe,
+        created_at__lte=cutoff,
+    ).exclude(outcome__isnull=False).order_by("created_at")[:batch_size]
     resolved = 0
     skipped = 0
 
     for prediction in pending:
-        symbol = MarketSymbol.objects.filter(symbol=prediction.symbol, is_active=True).first()
-        if not symbol:
+        try:
+            market = research_data.market(prediction.symbol)
+            future = research_data.next_candles(
+                market.symbol,
+                canonical_timeframe,
+                after_epoch=int(prediction.created_at.timestamp()),
+                limit=max(1, int(horizon_candles)),
+            )
+        except ValueError:
             skipped += 1
             continue
 
-        future = list(
-            Candle.objects.filter(symbol=symbol, timeframe=timeframe, created_at__gt=prediction.created_at)
-            .order_by("epoch")[:horizon_candles]
-        )
         if len(future) < horizon_candles:
             skipped += 1
             continue
@@ -88,10 +100,10 @@ def resolve_prediction_outcomes(timeframe="M1", horizon_candles=1, batch_size=50
         first = future[0]
         last = future[-1]
         try:
-            base_close = float(prediction.payload.get("reference_price", first.open))
+            base_close = float(prediction.payload.get("reference_price", first["open"]))
         except (TypeError, ValueError):
-            base_close = float(first.open)
-        actual_close = float(last.close)
+            base_close = float(first["open"])
+        actual_close = float(last["close"])
         actual_return = (actual_close - base_close) / base_close if base_close else 0.0
         actual_direction = "UP" if actual_return > 0 else "DOWN" if actual_return < 0 else "FLAT"
         predicted = str(prediction.prediction).upper()
@@ -110,7 +122,7 @@ def resolve_prediction_outcomes(timeframe="M1", horizon_candles=1, batch_size=50
         )
         resolved += 1
 
-    return {"status": "resolved", "resolved": resolved, "skipped": skipped, "timeframe": timeframe, "horizon_candles": horizon_candles}
+    return {"status": "resolved", "resolved": resolved, "skipped": skipped, "timeframe": canonical_timeframe, "horizon_candles": horizon_candles}
 
 
 @app.task

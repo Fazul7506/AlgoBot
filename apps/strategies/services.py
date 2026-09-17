@@ -48,13 +48,17 @@ class StrategyService:
 
     @staticmethod
     def _historic_candles(symbol, timeframe='M1', start_date=None, end_date=None):
-        from apps.market_data.models import Candle
-        qs = Candle.objects.filter(symbol__symbol=symbol, timeframe=timeframe).order_by('epoch')
-        if start_date is not None:
-            qs = qs.filter(epoch__gte=int(start_date.timestamp()))
-        if end_date is not None:
-            qs = qs.filter(epoch__lte=int(end_date.timestamp()))
-        return list(qs.values('open', 'high', 'low', 'close', 'volume', 'epoch'))
+        """Read historical strategy inputs from the canonical persisted Candle store."""
+        from apps.market_data.research_data import ResearchDataService
+        service = ResearchDataService()
+        canonical = service.timeframe(timeframe)
+        return service.candles(
+            symbol,
+            canonical,
+            limit=10000,
+            start_epoch=int(start_date.timestamp()) if start_date is not None else None,
+            end_epoch=int(end_date.timestamp()) if end_date is not None else None,
+        )
 
     @staticmethod
     def run_backtest(strategy_record, symbol, timeframe='M1', start_date=None, end_date=None, min_history=20, mode='candle_close'):
