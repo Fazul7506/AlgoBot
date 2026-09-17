@@ -4,7 +4,6 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
-from rest_framework.test import APIClient
 
 from apps.brokers.models import Broker, BrokerAccount
 from apps.strategies.models import Strategy, StrategyConfiguration, StrategySignal
@@ -14,11 +13,11 @@ from .models import MarketSymbol
 
 class LiveSignalsContractTests(TestCase):
     def setUp(self):
-        self.client = APIClient()
+        self.client = self.client_class()
         self.user = get_user_model().objects.create_user(username="signals-contract", password="test-pass")
         self.broker = Broker.objects.create(name="Deriv", broker_type="deriv", status="active", supports_live=True)
         self.account = BrokerAccount.objects.create(user=self.user, broker=self.broker, account_id="VRTC-SIGNALS", status="active", token_status="active")
-        self.client.force_authenticate(self.user)
+        self.assertTrue(self.client.login(username="signals-contract", password="test-pass"))
         self.market = MarketSymbol.objects.create(symbol="R_100", display_name="Volatility 100", market="Derived Indices", broker="deriv", is_active=True, is_tradable=True)
         self.strategy = Strategy.objects.create(name="Live Test", slug="live-test", category="Trend Following", version="1", enabled=True)
         self.config = StrategyConfiguration.objects.create(strategy=self.strategy, user=self.user, broker_account=self.account, symbol="R_100", timeframe="M1", enabled=True)
