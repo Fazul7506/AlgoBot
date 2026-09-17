@@ -14,6 +14,24 @@ def _staff_required(user):
     return user.is_authenticated and (user.is_staff or user.is_superuser)
 
 
+def _run_payload(run):
+    if not run:
+        return None
+    return {
+        "scope": run.scope,
+        "status": run.status,
+        "status_label": run.get_status_display(),
+        "count": run.count,
+        "symbol": run.symbol,
+        "task_id": run.task_id,
+        "requested_at": run.requested_at.isoformat() if run.requested_at else None,
+        "started_at": run.started_at.isoformat() if run.started_at else None,
+        "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+        "result": run.result,
+        "error": run.error,
+    }
+
+
 @login_required
 def dashboard(request):
     return render(request, "market_data/dashboard.html")
@@ -37,6 +55,7 @@ def initial_candle_backfill(request):
         raise PermissionDenied
 
     run = CandleBackfillRun.objects.filter(scope="initial").first()
+    research_run = CandleBackfillRun.objects.filter(scope="research").first()
 
     if request.method == "POST":
         with transaction.atomic():
@@ -74,19 +93,13 @@ def initial_candle_backfill(request):
         return redirect(reverse("initial_candle_backfill"))
 
     if request.GET.get("format") == "json":
-        if not run:
-            return JsonResponse({"scope": "initial", "status": "ready", "count": 5000})
         return JsonResponse({
-            "scope": run.scope,
-            "status": run.status,
-            "count": run.count,
-            "symbol": run.symbol,
-            "task_id": run.task_id,
-            "requested_at": run.requested_at.isoformat() if run.requested_at else None,
-            "started_at": run.started_at.isoformat() if run.started_at else None,
-            "completed_at": run.completed_at.isoformat() if run.completed_at else None,
-            "result": run.result,
-            "error": run.error,
+            "initial": _run_payload(CandleBackfillRun.objects.filter(scope="initial").first()),
+            "research": _run_payload(CandleBackfillRun.objects.filter(scope="research").first()),
         })
 
-    return render(request, "market_data/candle_backfill.html", {"run": run})
+    return render(
+        request,
+        "market_data/candle_backfill.html",
+        {"run": run, "research_run": research_run},
+    )
