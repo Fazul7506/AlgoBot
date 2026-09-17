@@ -20,7 +20,7 @@ class LiveSignalsContractTests(TestCase):
         self.account = BrokerAccount.objects.create(user=self.user, broker=self.broker, account_id="VRTC-SIGNALS", status="active", token_status="active")
         self.client.force_authenticate(self.user)
         self.market = MarketSymbol.objects.create(symbol="R_100", display_name="Volatility 100", market="Derived Indices", broker="deriv", is_active=True, is_tradable=True)
-        self.strategy = Strategy.objects.create(name="Live Test", slug="live-test", category="trend", version="1", enabled=True)
+        self.strategy = Strategy.objects.create(name="Live Test", slug="live-test", category="Trend Following", version="1", enabled=True)
         self.config = StrategyConfiguration.objects.create(strategy=self.strategy, user=self.user, broker_account=self.account, symbol="R_100", timeframe="M1", enabled=True)
 
     @patch("apps.market_data.signal_views._authenticated_live_ticks")
