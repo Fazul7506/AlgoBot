@@ -1,14 +1,47 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Signal Intelligence | AlgoBot{% endblock %}
+{% block title %}Signals | AlgoBot{% endblock %}
+{% block mobile_title %}Signals{% endblock %}
 {% block content %}
-<section class="data-page panel signal-workspace" data-data-page="signals-page">
-  <header class="page-heading"><div><p class="eyebrow">Trading intelligence</p><h1>Signal Intelligence</h1><p>Every signal is shown with its evidence, confirmation state, risk gate and data freshness. Unconfirmed setups are never presented as executable trades.</p></div><div class="page-actions"><a class="btn" href="/markets/">Markets</a><a class="btn primary" href="/trading/">Open trading terminal</a></div></header>
-  <div class="kpi-grid compact signal-kpis"><article class="kpi-card"><span>Signals</span><strong data-record-count>—</strong></article><article class="kpi-card"><span>Avg confidence</span><strong data-page-confidence>—</strong></article><article class="kpi-card"><span>Executed</span><strong data-page-executed>—</strong></article><article class="kpi-card"><span>Feed status</span><strong data-page-status>Loading</strong></article></div>
-  <section class="panel signal-controls"><div class="panel-head"><div><h2>Broker signal feed</h2><p>SETUP DETECTED means wait. CONFIRMED SIGNAL means the backend entry condition is met. NO TRADE means confirmation or risk checks failed.</p></div><input type="search" data-page-search placeholder="Search signals…" aria-label="Search signals"></div></section>
-  <section class="signal-grid" data-signal-grid></section>
-  <section class="panel"><div class="panel-head"><div><h2>Signal records</h2><p>Backend records remain available for audit and inspection.</p></div></div><div class="table-wrap"><table class="enterprise-table" data-page-table><thead></thead><tbody><tr><td>Loading…</td></tr></tbody></table></div></section>
-</section>
+<main id="main-content" class="analysis-pro signals-pro" data-signals-pro>
+  <div class="analysis-bar">
+    <select id="sSymbol" class="symbol" aria-label="Instrument"></select>
+    <select id="sTf" aria-label="Timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select>
+    <select id="sLimit" aria-label="Candle history"><option value="200">200</option><option value="300" selected>300</option><option value="500">500</option><option value="1000">1000</option></select>
+    <button id="sRefresh">Refresh</button><button id="sScan">Scan all markets</button><span class="grow"></span><span><i id="sDot" class="dot"></i><span id="sStatus">Connecting…</span></span>
+  </div>
+  <section class="kpis">
+    <article class="analysis-kpi"><small>Instrument</small><strong id="sName">—</strong></article>
+    <article class="analysis-kpi"><small>Price</small><strong id="sPrice">—</strong></article>
+    <article class="analysis-kpi"><small>Signal</small><strong id="sSignal">—</strong></article>
+    <article class="analysis-kpi"><small>Score</small><strong id="sScore">—</strong></article>
+    <article class="analysis-kpi"><small>Confidence</small><strong id="sConfidence">—</strong></article>
+    <article class="analysis-kpi"><small>Regime</small><strong id="sRegime">—</strong></article>
+  </section>
+  <section class="main-analysis">
+    <article class="analysis-box">
+      <div class="box-head"><div><h2>Signal market context</h2><small>Same broker-authoritative candles and deterministic analysis used by Analysis.</small></div><span class="chip" id="sStructure">—</span></div>
+      <div class="chart"><canvas id="sChart"></canvas><div class="empty" id="sEmpty">Select an instrument and run the scan.</div></div>
+      <div class="foot"><a href="/trading/">Open Trading Terminal</a><a href="/analysis/">Open Analysis</a><button id="sAnalyze">Re-run selected analysis</button></div>
+    </article>
+    <aside class="side">
+      <article class="analysis-box"><div class="box-head"><h2>Key levels</h2></div><div class="metrics"><div class="metric"><span>Resistance</span><strong id="sRes">—</strong></div><div class="metric"><span>Support</span><strong id="sSup">—</strong></div><div class="metric"><span>Range</span><strong id="sRange">—</strong></div><div class="metric"><span>Change</span><strong id="sChange">—</strong></div></div></article>
+      <article class="analysis-box"><div class="box-head"><h2>Trend</h2></div><div class="metrics"><div class="metric"><span>SMA 20</span><strong id="sS20">—</strong></div><div class="metric"><span>SMA 50</span><strong id="sS50">—</strong></div><div class="metric"><span>SMA 200</span><strong id="sS200">—</strong></div><div class="metric"><span>EMA 9 / 21</span><strong id="sEma">—</strong></div></div></article>
+      <article class="analysis-box"><div class="box-head"><h2>Momentum &amp; volatility</h2></div><div class="metrics"><div class="metric"><span>RSI 14</span><strong id="sRsi">—</strong></div><div class="metric"><span>ATR 14</span><strong id="sAtr">—</strong></div><div class="metric"><span>MACD hist.</span><strong id="sMacd">—</strong></div><div class="metric"><span>Bollinger width</span><strong id="sBb">—</strong></div></div></article>
+    </aside>
+  </section>
+  <section class="analysis-box"><div class="box-head"><div><h2>Signal evidence</h2><small>Signals are derived from the selected instrument/timeframe; no synthetic market values are generated.</small></div><span class="chip" id="sFactors">0 factors</span></div><div class="tool-grid">
+    <div class="tool-card"><h3>Market Structure</h3><p id="sToolStructure">—</p><div class="list" id="sStructureList"></div></div>
+    <div class="tool-card"><h3>Liquidity Sweeps</h3><p id="sToolSweep">—</p><div class="list" id="sSweepList"></div></div>
+    <div class="tool-card"><h3>Fair Value Gaps</h3><p id="sToolFvg">—</p><div class="list" id="sFvgList"></div></div>
+    <div class="tool-card"><h3>Supply / Demand</h3><p id="sToolZones">—</p><div class="list" id="sZoneList"></div></div>
+    <div class="tool-card"><h3>Candlestick Patterns</h3><p id="sToolPatterns">—</p><div class="list" id="sPatternList"></div></div>
+    <div class="tool-card"><h3>Fibonacci</h3><div class="list" id="sFibList"></div></div>
+    <div class="tool-card"><h3>Volatility Regime</h3><p id="sToolRegime">—</p><p class="muted">ATR-normalized regime classification</p></div>
+    <div class="tool-card"><h3>Confluence</h3><p id="sToolConfluence">—</p><div class="evidence" id="sEvidence" style="padding:4px 0"></div></div>
+  </div></section>
+  <section class="analysis-box"><div class="box-head"><div><h2>Live signal scanner</h2><small>Every scanned active tradable market is shown with instrument, timeframe, market data and signal evidence.</small></div><strong id="sScanCount">0 markets</strong></div><div style="overflow:auto"><table class="scanner"><thead><tr><th>Instrument</th><th>Market</th><th>Timeframe</th><th>Price</th><th>Signal</th><th>Score</th><th>Confidence</th><th>Change</th><th>Regime</th></tr></thead><tbody id="sScanner"><tr><td colspan="9">Run scan to analyze active markets.</td></tr></tbody></table></div></section>
+</main>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals.css' %}">{% endblock %}
 {% block extra_js %}<script src="{% static 'js/signals.js' %}" defer></script>{% endblock %}
