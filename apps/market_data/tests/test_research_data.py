@@ -40,6 +40,14 @@ class ResearchDataServiceTests(TestCase):
         self.assertEqual([row["epoch"] for row in rows], [100, 160])
         self.assertEqual(rows[-1]["close"], "103")
 
+    def test_next_candles_returns_first_rows_after_boundary(self):
+        rows = ResearchDataService().next_candles("R_100", "M1", after_epoch=100, limit=1)
+        self.assertEqual([row["epoch"] for row in rows], [160])
+
+    def test_previous_candles_returns_latest_rows_before_boundary(self):
+        rows = ResearchDataService().previous_candles("R_100", "M1", before_epoch=160, limit=1)
+        self.assertEqual([row["epoch"] for row in rows], [100])
+
     def test_missing_symbol_is_explicit(self):
         with self.assertRaisesMessage(ValueError, "Unknown active tradable market symbol"):
             ResearchDataService().candles("UNKNOWN", "M1")
