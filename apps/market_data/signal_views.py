@@ -115,7 +115,15 @@ def _trade_context(signal, market, account, timeframe=None):
 
 
 async def _authenticated_live_ticks(adapter, symbols):
-    endpoint = await asyncio.to_thread(adapter._authenticated_ws_url)
+    """Read live ticks from Deriv's authenticated public websocket session.
+
+    The options OTP endpoint is not the websocket authentication mechanism for
+    every Deriv account/session. The canonical websocket flow is to connect to
+    the broker's public endpoint, authorize the selected account token, verify
+    the authorize response, then request ticks on that same authenticated
+    socket. This keeps the signal scanner account-scoped without depending on
+    an account-specific OTP URL being available.
+    """
     unique_symbols = list(dict.fromkeys(symbols))
     if not unique_symbols:
         return {}, 0
@@ -123,7 +131,23 @@ async def _authenticated_live_ticks(adapter, symbols):
     results = {}
     req_to_symbol = {index: symbol for index, symbol in enumerate(unique_symbols, start=1)}
     deadline = started + LIVE_TICK_SCAN_TIMEOUT_SECONDS
+    token = await asyncio.to_thread(adapter._token)
+    endpoint = adapter.endpoint
     async with websockets.connect(endpoint, open_timeout=adapter.timeout, close_timeout=5, ping_interval=20, ping_timeout=10, max_size=2**20) as ws:
+        await ws.send(json.dumps({"authorize": token, "req_id": 0}))
+        try:
+            raw = await asyncio.wait_for(ws.recv(), timeout=min(3.0, max(1.0, deadline - time.monotonic())))
+            auth_payload = json.loads(raw)
+        except (asyncio.TimeoutError, TypeError, ValueError) as exc:
+            raise BrokerConnectionError("Deriv authenticated websocket authorization timed out") from exc
+        auth_error = auth_payload.get("error") or {}
+        if auth_error:
+            code = str(auth_error.get("code") or "")
+            if code in {"AuthorizationRequired", "InvalidToken", "Unauthorized", "InvalidAppId"}:
+                raise BrokerAuthenticationError(auth_error.get("message", "Deriv authentication failed"))
+            raise BrokerConnectionError(auth_error.get("message", "Deriv websocket authorization failed"))
+        if auth_payload.get("msg_type") != "authorize":
+            raise BrokerConnectionError("Deriv did not confirm websocket authorization")
         for req_id, symbol in req_to_symbol.items():
             await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
         while len(results) < len(req_to_symbol):
@@ -209,7 +233,8 @@ def strategy_signals(request):
     except (TypeError, ValueError):
         limit = 40
     symbols_qs = MarketSymbol.objects.filter(is_active=True, is_tradable=True, broker="deriv").order_by("market", "symbol")
-    if symbol_filter: symbols_qs = symbols_qs.filter(symbol=symbol_filter)
+    if symbol_filter:
+        symbols_qs = symbols_qs.filter(symbol=symbol_filter)
     markets = list(symbols_qs[:limit])
     if not markets:
         return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "count": 0, "live_data_available_count": 0, "actionable_count": 0, "data": []})
@@ -222,9 +247,11 @@ def strategy_signals(request):
     except Exception:
         return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": "The authenticated Deriv live signal feed could not be established."}, status=502)
     baselines = _analysis_baselines(request, symbols, timeframe, account=account)
-    now = timezone.now(); rows = []
+    now = timezone.now()
+    rows = []
     for market in markets:
-        live_tick = live_ticks.get(market.symbol); baseline = baselines.get(market.symbol)
+        live_tick = live_ticks.get(market.symbol)
+        baseline = baselines.get(market.symbol)
         row = {"symbol": market.symbol, "instrument": market.display_name, "display_name": market.display_name, "market": market.market, "sub_market": market.sub_market, "broker": "deriv", "account_id": account.account_id, "account_type": account.account_type, "timeframe": timeframe, "source": "deriv_authenticated_live"}
         base_context = {"market_type": market.market, "sub_market": market.sub_market, "symbol": market.symbol, "instrument": market.display_name, "trade_type": None, "direction": "HOLD", "contract_type": None, "contract_family": None, "duration": None, "duration_unit": None, "barrier": None, "stake": None, "payout": None, "currency": account.currency, "account_type": account.account_type, "broker": account.broker.name, "timeframe": timeframe}
         if not live_tick:
