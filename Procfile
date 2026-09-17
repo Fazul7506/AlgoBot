@@ -1,5 +1,5 @@
-# Web service: migrate and collect static assets before starting the ASGI server.
-web: DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && python manage.py collectstatic --noinput && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
+# Web service: use the Render-provided Python 3 executable consistently.
+web: DJANGO_ENV=production python3 manage.py migrate --fake-initial --noinput && python3 manage.py collectstatic --noinput && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
 
 # Render Background Worker service: select this process type so queued backtests
 # and other asynchronous jobs are actually consumed. Keep the worker separate
