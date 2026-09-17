@@ -13,8 +13,8 @@ from django.db import transaction
 from .models import Candle, MarketSymbol
 
 logger = logging.getLogger(__name__)
-TIMEFRAME_GRANULARITY = {"1s": 1, "5s": 5, "15s": 15, "30s": 30, "1m": 60, "2m": 120, "5m": 300, "10m": 600, "15m": 900, "30m": 1800, "1h": 3600, "2h": 7200, "4h": 14400, "8h": 28800, "1d": 86400}
-TIMEFRAME_ALIASES = {"M1": "1m", "M2": "2m", "M5": "5m", "M10": "10m", "M15": "15m", "M30": "30m", "H1": "1h", "H2": "2h", "H4": "4h", "H8": "8h", "D1": "1d"}
+TIMEFRAME_GRANULARITY = {"1s": 1, "5s": 5, "15s": 15, "30s": 30, "1m": 60, "2m": 120, "5m": 300, "10m": 600, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400}
+TIMEFRAME_ALIASES = {"M1": "1m", "M2": "2m", "M5": "5m", "M10": "10m", "M15": "15m", "M30": "30m", "H1": "1h", "H4": "4h", "D1": "1d"}
 
 def normalize_timeframe(timeframe: str) -> str:
     value = str(timeframe or "1m").strip()
