@@ -140,7 +140,6 @@
     ai: [['/predictions/', 'Prediction center'], ['/api/ai/models/', 'Model registry']],
     risk: [['/risk/', 'Risk center'], ['/api/risk/profile/', 'Risk profiles']],
     portfolio: [['/portfolio/', 'Portfolio workspace'], ['/api/portfolio/', 'Portfolios']],
-    analytics: [['/performance/', 'Performance'], ['/analytics/', 'Analytics']],
     brokers: [['/brokers/', 'Broker marketplace'], ['/brokers/connect/', 'Connect broker']],
     automation: [['/api/automation/workflows/', 'Workflows'], ['/api/automation/rules/', 'Rules']],
     monitoring: [['/monitoring/', 'Monitoring'], ['/api/monitoring/health/', 'Health API']],

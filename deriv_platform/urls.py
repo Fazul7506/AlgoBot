@@ -93,7 +93,6 @@ urlpatterns = [
     path("signals/", login_required(signals_page), name="signals_page"),
     path("portfolio/", login_required(portfolio_center), name="portfolio_page"),
     path("notifications/", notification_channels_page, name="notifications_page"),
-    path("analytics/", include("apps.analytics.urls")),
     path("monitoring/", include("apps.monitoring.urls")),
     path("risk/", login_required(risk_page), name="risk_page"),
     path("trade-history/", login_required(trade_history_page), name="trade_history_page"),
