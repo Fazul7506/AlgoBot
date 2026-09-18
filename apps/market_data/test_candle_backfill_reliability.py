@@ -25,9 +25,14 @@ class CandleBackfillReliabilityTests(TestCase):
             scope="initial",
             status="queued",
             count=5000,
-            requested_at=timezone.now() - timedelta(minutes=30),
         )
-        with patch("apps.market_data.views._celery_state", return_value="PENDING"),              patch("apps.market_data.tasks.run_initial_candle_backfill.delay") as delay:
+        CandleBackfillRun.objects.filter(pk=run.pk).update(
+            requested_at=timezone.now() - timedelta(minutes=30)
+        )
+        run.refresh_from_db()
+        with patch("apps.market_data.views._celery_state", return_value="PENDING"), patch(
+            "apps.market_data.tasks.run_initial_candle_backfill.delay"
+        ) as delay:
             delay.return_value.id = "new-task-id"
             recovered = _recover_stale_initial_run(run)
 
@@ -78,7 +83,9 @@ class CandleBackfillReliabilityTests(TestCase):
             scope="initial",
             status="queued",
             count=5000,
-            requested_at=timezone.now() - timedelta(minutes=30),
+        )
+        CandleBackfillRun.objects.filter(pk=run.pk).update(
+            requested_at=timezone.now() - timedelta(minutes=30)
         )
 
         result = recover_stale_candle_backfill.apply()
