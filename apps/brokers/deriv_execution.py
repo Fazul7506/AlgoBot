@@ -38,16 +38,17 @@ class DerivTradingOperations:
         return await self.adapter.get_trade_capabilities(symbol)
 
     async def proposal(self, *, symbol: str, contract_type: str, amount: Any,
-                       currency: str, duration: int, duration_unit: str = "s",
+                       currency: str, duration: int | None = None, duration_unit: str = "s",
                        basis: str = "stake", barrier: Any = None,
-                       multiplier: Any = None, subscribe: bool = True) -> dict:
+                       multiplier: Any = None, growth_rate: Any = None,
+                       subscribe: bool = True) -> dict:
         symbol = str(symbol or "").strip()
         contract_type = str(contract_type or "").upper().strip()
         if not symbol or not contract_type:
             raise BrokerOrderError("Symbol and contract type are required")
         amount_value = self._clean_number(amount)
-        duration = int(duration)
-        if duration <= 0:
+        duration_value = None if duration in (None, "") else int(duration)
+        if duration_value is not None and duration_value <= 0:
             raise BrokerOrderError("Duration must be greater than zero")
         payload = {
             "proposal": 1,
@@ -55,16 +56,19 @@ class DerivTradingOperations:
             "basis": basis or "stake",
             "contract_type": contract_type,
             "currency": str(currency or self.account.currency),
-            "duration": duration,
-            "duration_unit": str(duration_unit or "s"),
             "underlying_symbol": symbol,
         }
         if subscribe:
             payload["subscribe"] = 1
+        if duration_value is not None:
+            payload["duration"] = duration_value
+            payload["duration_unit"] = str(duration_unit or "s")
         if barrier is not None:
             payload["barrier"] = str(barrier)
         if multiplier is not None:
             payload["multiplier"] = float(multiplier)
+        if growth_rate is not None:
+            payload["growth_rate"] = float(growth_rate)
         response = await self.adapter._request(payload, authenticated=True)
         proposal = response.get("proposal") or {}
         if not proposal.get("id"):
