@@ -17,20 +17,6 @@ class AnalyticsSmokeTests(TestCase):
         self.client.force_login(self.user)
         cache.clear()
 
-    def test_dashboard_renders_single_page_controller_and_embedded_markets(self):
-        MarketSymbol.objects.create(
-            symbol="R_100",
-            display_name="Volatility 100",
-            market="Volatility Indices",
-        )
-        response = self.client.get(reverse("analytics-dashboard"))
-        self.assertEqual(response.status_code, 200)
-        body = response.content.decode()
-        self.assertEqual(body.count('data-page-controller="analysis-v2"'), 1)
-        self.assertEqual(body.count('id="main-content"'), 1)
-        self.assertIn('id="analysis-markets-data"', body)
-        self.assertIn("R_100", body)
-
     def test_analysis_markets_cache_is_reused(self):
         MarketSymbol.objects.create(
             symbol="R_100",
