@@ -30,7 +30,7 @@ def _run_payload(run):
     return {
         "scope": run.scope,
         "status": run.status,
-        "status_label": "Completed" if run.status == "succeeded" else run.get_status_display(),
+        "status_label": "Completed" if run.status == "completed" else run.get_status_display(),
         "count": run.count,
         "symbol": run.symbol,
         "task_id": run.task_id,
@@ -68,7 +68,7 @@ def initial_candle_backfill(request):
     if request.method == "POST":
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().filter(scope="initial").first()
-            if run and run.status in {"running", "succeeded"}:
+            if run and run.status in {"running", "completed"}:
                 return redirect(reverse("initial_candle_backfill"))
 
             count = 5000
