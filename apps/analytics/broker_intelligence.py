@@ -62,8 +62,9 @@ def build_account_risk_context(user, account: BrokerAccount, *, signal=None, con
 
     balance = _decimal(account.balance)
     equity = _decimal(account.equity) if account.equity else balance
-    free_margin = _decimal(account.free_margin) if account.free_margin else balance
-    margin = _decimal(account.margin)
+    free_margin = _decimal(account.free_margin) if account.free_margin else None
+    margin = _decimal(account.margin) if account.margin else None
+    available_funds = free_margin if free_margin is not None else balance
 
     max_risk_fraction = max(ZERO, _decimal(profile.max_risk_per_trade, Decimal("0.02")))
     daily_loss_fraction = max(ZERO, _decimal(profile.max_daily_loss, Decimal("0.04")))
@@ -79,7 +80,7 @@ def build_account_risk_context(user, account: BrokerAccount, *, signal=None, con
         ("per_trade_risk_budget", risk_budget),
         ("daily_loss_remaining", daily_remaining),
         ("exposure_remaining", exposure_remaining),
-        ("free_margin", max(ZERO, free_margin)),
+        ("available_funds", max(ZERO, available_funds)),
     ]
     recommended_stake = max(ZERO, min(value for _, value in candidates))
 
@@ -102,7 +103,7 @@ def build_account_risk_context(user, account: BrokerAccount, *, signal=None, con
         exposure=(open_stake / balance) if balance else ZERO,
         drawdown=ZERO,
         correlation=ZERO,
-        margin=(margin / balance) if balance else ZERO,
+        margin=(margin / balance) if margin is not None and balance else ZERO,
         market_conditions=ZERO,
         strategy_confidence=(confidence_value / HUNDRED) if confidence is not None else Decimal("1"),
     )
@@ -117,7 +118,8 @@ def build_account_risk_context(user, account: BrokerAccount, *, signal=None, con
         "balance": _money(balance),
         "equity": _money(equity),
         "margin": _money(margin),
-        "free_margin": _money(free_margin),
+        "free_margin": _money(free_margin) if free_margin is not None else None,
+        "available_funds": _money(available_funds),
         "risk_profile": profile.risk_level,
         "max_risk_per_trade": str(max_risk_fraction),
         "risk_budget": _money(risk_budget),
