@@ -157,6 +157,68 @@ def sync_active_symbols() -> int:
             pass
 
 
+def fetch_contracts_for(symbol: str) -> dict:
+    """Return the current broker-published contract capabilities for one symbol.
+
+    This is deliberately capability metadata only. It never invents a
+    contract, duration, stake, barrier, or payout. Those values require a
+    concrete proposal request and account context.
+    """
+    symbol = str(symbol or "").strip()
+    if not symbol:
+        raise ValueError("A Deriv symbol is required")
+
+    cache_key = f"algobot:deriv:contracts-for:{symbol}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    response = asyncio.run(_request({"contracts_for": symbol}))
+    payload = response.get("contracts_for") or {}
+    available = payload.get("available") or []
+    if not isinstance(available, list):
+        raise RuntimeError(f"Deriv returned an invalid contracts_for payload for {symbol}")
+
+    contracts = []
+    for item in available:
+        if not isinstance(item, dict):
+            continue
+        contracts.append(
+            {
+                "underlying_symbol": str(item.get("underlying_symbol") or symbol),
+                "contract_type": item.get("contract_type"),
+                "contract_category": item.get("contract_category"),
+                "market": item.get("market"),
+                "submarket": item.get("submarket"),
+                "exchange_name": item.get("exchange_name"),
+                "expiry_type": item.get("expiry_type"),
+                "sentiment": item.get("sentiment"),
+                "barriers": item.get("barriers"),
+            }
+        )
+
+    result = {
+        "symbol": symbol,
+        "source": "deriv_public_websocket",
+        "available": contracts,
+        "available_contract_types": sorted(
+            {str(item["contract_type"]) for item in contracts if item.get("contract_type")}
+        ),
+        "available_contract_families": sorted(
+            {str(item["contract_category"]) for item in contracts if item.get("contract_category")}
+        ),
+        "expiry_types": sorted(
+            {str(item["expiry_type"]) for item in contracts if item.get("expiry_type")}
+        ),
+        "sentiments": sorted(
+            {str(item["sentiment"]) for item in contracts if item.get("sentiment")}
+        ),
+        "fetched_at": int(__import__("time").time()),
+    }
+    cache.set(cache_key, result, 300)
+    return result
+
+
 def fetch_tick(symbol: str) -> dict:
     """Fetch one authoritative broker quote without writing to the database.
 
