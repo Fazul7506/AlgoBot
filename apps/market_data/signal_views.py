@@ -107,7 +107,7 @@ def _trade_context(signal, market, account, timeframe=None):
         "confirmation": _meta_first(merged, "confirmation", "confirmation_sequence", "confirmation_status"),
         "market_regime": _meta_first(merged, "market_regime", "regime", "volatility_regime"),
         "execution_mode": _meta_first(merged, "execution_mode", "execution", "mode"),
-        "quote_type": _meta_first(merged, "quote_type", "price_source") or "deriv_public_websocket",
+        "quote_type": "deriv_public_websocket",
         "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
         "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None,
         "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
