@@ -17,6 +17,9 @@ def _staff_required(user):
 def _run_payload(run):
     if not run:
         return None
+    now = timezone.now()
+    age_seconds = max(0, int((now - run.requested_at).total_seconds())) if run.requested_at else 0
+    stale = run.status == "queued" and age_seconds >= 300
     return {
         "scope": run.scope,
         "status": run.status,
@@ -27,6 +30,8 @@ def _run_payload(run):
         "requested_at": run.requested_at.isoformat() if run.requested_at else None,
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+        "age_seconds": age_seconds,
+        "stale": stale,
         "result": run.result,
         "error": run.error,
     }
