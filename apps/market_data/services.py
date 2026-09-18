@@ -36,7 +36,9 @@ class CandleService:
             except IntegrityError:
                 candle = Candle.objects.get(symbol=tick.symbol, timeframe=timeframe, epoch=epoch)
                 created = False
-            if not created:
+            if not created and not (
+                candle.source == "deriv_candles" and TIMEFRAMES.get(timeframe, 0) >= 60
+            ):
                 candle.high=max(candle.high,tick.quote); candle.low=min(candle.low,tick.quote); candle.close=tick.quote; candle.volume += tick.volume; candle.save(update_fields=["high","low","close","volume"])
             MarketCacheService().set_latest_candle(tick.symbol.symbol, timeframe, self.serialize(candle)); event_bus.publish(EVENT_NEW_CANDLE, self.serialize(candle)); made.append(candle)
         return made
