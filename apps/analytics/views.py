@@ -5,6 +5,7 @@ import csv
 import hashlib
 import json
 import time
+from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
