@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import csv
 import hashlib
 import json
@@ -13,6 +14,9 @@ from django.shortcuts import render
 
 from apps.analysis.advanced import analyze_candles
 from apps.execution.models import Order
+from apps.analytics.broker_intelligence import build_account_risk_context
+from apps.brokers.services import SynchronizationService
+from core.account_context import get_active_account
 from apps.market_data.models import MarketSnapshot, MarketSymbol
 from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick
 from apps.market_data.historical import fetch_and_store, fetch_and_store_ticks
@@ -25,7 +29,7 @@ ANALYTICS_CACHE_SECONDS = 15
 ANALYSIS_CACHE_SECONDS = 3
 
 
-def _broker_trade_spec(result, market, capabilities):
+def _broker_trade_spec(result, market, capabilities, account_context=None):
     """Build a complete analysis specification from broker capabilities + verified candles.
 
     Broker-supplied contract metadata is never invented. Strategy fields are
@@ -69,11 +73,15 @@ def _broker_trade_spec(result, market, capabilities):
         "duration": duration,
         "duration_unit": "Broker expiry type",
         "barrier": "Broker contract metadata",
-        "stake": "Account/order amount required before proposal",
-        "payout": "Broker proposal quote generated after contract parameters",
+        "stake": account_context.get("recommended_stake") if account_context else None,
+        "risk_budget": account_context.get("risk_budget") if account_context else None,
+        "payout": None,
         "strategy": strategy,
         "strategy_category": category,
         "risk_profile": risk_profile,
+        "account_type": account_context.get("account_type") if account_context else None,
+        "account_balance": account_context.get("balance") if account_context else None,
+        "free_margin": account_context.get("free_margin") if account_context else None,
         "execution_mode": execution_mode,
         "entry_condition": entry,
         "confirmation": confirmation,
@@ -242,7 +250,40 @@ def analysis_data(request):
             "symbol": market.symbol,
             "timeframe": canonical_timeframe,
         }, status=503)
-    result["trade_spec"] = _broker_trade_spec(result, market, broker_capabilities)
+    active_account = get_active_account(request.user, request=request)
+    account_context = None
+    if active_account is not None:
+        try:
+            if refresh_requested:
+                synced_account, _broker_data = asyncio.run(
+                    asyncio.wait_for(
+                        SynchronizationService().sync_account(active_account),
+                        timeout=8.0,
+                    )
+                )
+                active_account = synced_account
+            account_context = build_account_risk_context(
+                request.user,
+                active_account,
+                signal=result.get("signal"),
+                confidence=result.get("confidence"),
+                volatility=result.get("volatility_regime"),
+            )
+        except Exception as exc:
+            if refresh_requested:
+                return JsonResponse(
+                    {
+                        "status": "error",
+                        "code": "BROKER_ACCOUNT_CONTEXT_FAILED",
+                        "message": "The selected broker account could not be refreshed, so account-dependent risk and sizing values were not substituted.",
+                        "detail": str(exc),
+                    },
+                    status=503,
+                )
+    result["account_context"] = account_context
+    result["trade_spec"] = _broker_trade_spec(
+        result, market, broker_capabilities, account_context
+    )
     result["contract_capabilities"] = broker_capabilities
     snapshot = MarketSnapshot.objects.filter(symbol=market).only("last_price", "bid", "ask", "change_percent").first()
     if refresh_requested:
