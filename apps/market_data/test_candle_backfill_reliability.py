@@ -22,7 +22,7 @@ class CandleBackfillReliabilityTests(TestCase):
     def test_status_choices_exclude_queued(self):
         self.assertEqual(
             [value for value, _ in CandleBackfillRun.STATUS_CHOICES],
-            ["running", "succeeded", "failed"],
+            ["running", "completed", "failed"],
         )
         run = CandleBackfillRun.objects.create(scope="initial", count=5000)
         self.assertEqual(run.status, "running")
@@ -83,6 +83,6 @@ class CandleBackfillReliabilityTests(TestCase):
 
         self.assertEqual(result.state, "SUCCESS")
         run.refresh_from_db()
-        self.assertEqual(run.status, "succeeded")
+        self.assertEqual(run.status, "completed")
         self.assertEqual(run.result["symbols_completed"], 1)
         fetch.assert_called_once()
