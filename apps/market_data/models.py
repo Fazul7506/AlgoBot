@@ -112,7 +112,7 @@ class CandleBackfillRun(models.Model):
 
     STATUS_CHOICES = [
         ("running", "Running"),
-        ("succeeded", "Succeeded"),
+        ("completed", "Completed"),
         ("failed", "Failed"),
     ]
 
