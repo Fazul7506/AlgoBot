@@ -406,24 +406,3 @@ def broker_proposal(request):
         "account_context": risk_context,
         "proposal": proposal,
     })
-
-
-@login_required
-def analytics_export(request):
-    response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="trading-analytics.csv"'
-    writer = csv.writer(response)
-    writer.writerow(["symbol", "strategy", "status", "stake", "profit", "opened_at", "closed_at"])
-    for order in Order.objects.filter(user=request.user).iterator(chunk_size=250):
-        writer.writerow(
-            [
-                order.symbol,
-                order.strategy,
-                order.status,
-                order.stake,
-                _order_profit(order),
-                order.created_at,
-                order.updated_at if order.status == "executed" else None,
-            ]
-        )
-    return response
