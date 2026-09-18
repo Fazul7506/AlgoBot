@@ -7,7 +7,6 @@ from django.test import TestCase
 from apps.analytics.broker_intelligence import build_account_risk_context
 from apps.brokers.models import Broker, BrokerAccount
 from apps.market_data.models import MarketSymbol
-from apps.market_data.models import MarketSymbol
 from apps.risk.models import RiskProfile
 
 
