@@ -36,7 +36,7 @@
         </form>
             {% elif run.status == "running" %}
         <p aria-live="polite">The Celery worker is processing broker-authoritative Deriv history. Progress is persisted per symbol and refreshes automatically.</p>
-      {% elif run.status == "succeeded" %}
+      {% elif run.status == "completed" %}
         <p aria-live="polite">The initial historical warm-up has completed. Future candle maintenance is handled by scheduled Celery backfill.</p>
       {% endif %}
     {% else %}
@@ -50,10 +50,10 @@
   <section class="panel" style="max-width:900px;margin-top:1rem" data-research-run>
     <div class="panel-heading">
       <div><p class="eyebrow">SCHEDULED MAINTENANCE</p><h2>Research candle backfill</h2><p>Created and updated by the Celery schedule so scheduled work is visible here and in Django administration.</p></div>
-      <strong data-research-status>{% if research_run %}{% if research_run.status == "succeeded" %}Completed{% else %}{{ research_run.get_status_display }}{% endif %}{% else %}—{% endif %}</strong>
+      <strong data-research-status>{% if research_run %}{% if research_run.status == "completed" %}Completed{% else %}{{ research_run.get_status_display }}{% endif %}{% else %}—{% endif %}</strong>
     </div>
     <dl style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem">
-      <div><dt>State</dt><dd data-research-state>{% if research_run %}{% if research_run.status == "succeeded" %}completed{% else %}{{ research_run.status }}{% endif %}{% else %}—{% endif %}</dd></div>
+      <div><dt>State</dt><dd data-research-state>{% if research_run %}{% if research_run.status == "completed" %}completed{% else %}{{ research_run.status }}{% endif %}{% else %}—{% endif %}</dd></div>
       <div><dt>Count</dt><dd data-research-count>{% if research_run %}{{ research_run.count }}{% else %}—{% endif %}</dd></div>
       <div><dt>Last started</dt><dd data-research-started>{% if research_run and research_run.started_at %}{{ research_run.started_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
       <div><dt>Last completed</dt><dd data-research-completed>{% if research_run and research_run.completed_at %}{{ research_run.completed_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
@@ -79,7 +79,7 @@
   const fmt = value => value ? new Date(value).toLocaleString() : '—';
   const renderRun = (prefix, run) => {
     if (!run) return;
-    setText(`[data-${prefix}state]`, run.status === "succeeded" ? "completed" : run.status);
+    setText(`[data-${prefix}state]`, run.status === "completed" ? "completed" : run.status);
     setText(`[data-${prefix}status]`, run.status_label || run.status);
     if (prefix === '') {
       setText('[data-requested]', fmt(run.requested_at));
