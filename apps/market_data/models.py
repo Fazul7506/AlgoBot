@@ -111,14 +111,13 @@ class CandleBackfillRun(models.Model):
     """Durable control record for the one-time historical warm-up job."""
 
     STATUS_CHOICES = [
-        ("queued", "Queued"),
         ("running", "Running"),
-        ("succeeded", "Succeeded"),
+        ("completed", "Completed"),
         ("failed", "Failed"),
     ]
 
     scope = models.CharField(max_length=32, unique=True, default="initial")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="queued", db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="running", db_index=True)
     count = models.PositiveIntegerField(default=5000)
     symbol = models.CharField(max_length=40, blank=True)
     task_id = models.CharField(max_length=255, blank=True, db_index=True)
