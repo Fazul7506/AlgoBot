@@ -71,7 +71,7 @@ class BrokerAccountIntelligenceTests(TestCase):
             Decimal(str(context["risk_budget"])),
         )
 
-    @patch("apps.analytics.views.DerivTradingOperations.proposal")
+    @patch("apps.brokers.deriv_execution.DerivTradingOperations.proposal")
     @patch("apps.analytics.views.get_active_account")
     @patch("apps.analytics.views.DerivTradingOperations.proposal")
     @patch("apps.analytics.views.get_active_account")
