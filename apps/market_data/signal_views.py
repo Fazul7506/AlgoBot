@@ -11,7 +11,6 @@ from django.utils import timezone
 
 from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError
 from apps.brokers.models import BrokerAccount
-from apps.brokers.services import BrokerRegistry
 from apps.strategies.models import StrategySignal
 
 from .models import MarketSymbol
