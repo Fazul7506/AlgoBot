@@ -47,7 +47,8 @@ class AnalyticsSmokeTests(TestCase):
         self.assertEqual(first, second)
         self.assertEqual(query.call_count, 1)
 
-    def test_analysis_data_uses_persisted_candles_and_normalizes_aliases(self):
+    @patch.object(views, "fetch_contracts_for")
+    def test_analysis_data_uses_persisted_candles_and_normalizes_aliases(self, fetch_contracts):
         market = MarketSymbol.objects.create(
             symbol="R_100",
             display_name="Volatility 100",
@@ -64,10 +65,16 @@ class AnalyticsSmokeTests(TestCase):
                 volume=1,
                 epoch=epoch,
             )
+        fetch_contracts.return_value = {
+            "available_contract_types": ["MULTUP", "MULTDOWN"],
+            "available_contract_families": ["multiplier"],
+            "expiry_types": ["intraday"],
+            "sentiments": ["up", "down"],
+        }
         with patch.object(
             views,
             "analyze_candles",
-            return_value={"status": "ok", "candles": 3},
+            return_value={"status": "ok", "candles": 3, "signal": "Bullish", "score": 70, "confidence": 68, "structure": "Bullish structure", "volatility_regime": "normal", "factors": ["EMA 9/21 trend"]},
         ) as analyze:
             response = self.client.get(
                 reverse("analysis-data"),
@@ -78,6 +85,12 @@ class AnalyticsSmokeTests(TestCase):
         self.assertEqual(analyze.call_args.kwargs["timeframe"], "1m")
         self.assertEqual(response.json()["data_provenance"]["source"], "market_data.Candle")
         self.assertEqual(response.json()["data_provenance"]["candle_count"], 3)
+        spec = response.json()["trade_spec"]
+        self.assertEqual(spec["contract_type"], "MULTUP / MULTDOWN")
+        self.assertEqual(spec["direction"], "BUY")
+        self.assertTrue(spec["strategy"])
+        self.assertTrue(spec["entry_condition"])
+        self.assertEqual(response.json()["contract_capabilities"]["available_contract_families"], ["multiplier"])
 
     def test_analysis_data_reports_missing_persisted_candles(self):
         market = MarketSymbol.objects.create(
