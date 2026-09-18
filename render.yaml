@@ -40,7 +40,7 @@ services:
     runtime: python
     plan: starter
     buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt
-    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && exec celery -A deriv_platform worker --beat --loglevel=INFO --concurrency=2 --max-tasks-per-child=100
+    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && exec celery -A deriv_platform worker --beat --loglevel=INFO --concurrency=2 --max-tasks-per-child=100 -Q celery,market_data_backfill
     maxShutdownDelaySeconds: 60
     envVars:
       - key: DJANGO_ENV
