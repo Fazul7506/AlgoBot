@@ -37,15 +37,25 @@ const label=v=>String(v??'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCas
 const list=(id,items,fn,empty='No events detected.')=>$(id).innerHTML=items?.length?items.map(fn).join(''):`<span class="muted">${empty}</span>`;
 function status(ok,t){$('aDot').className='dot'+(ok?' live':'');$('aStatus').textContent=t}
 function chart(d){const c=$('aChart'),b=c.getBoundingClientRect(),q=devicePixelRatio||1,w=Math.max(320,b.width),h=Math.max(250,b.height);c.width=w*q;c.height=h*q;const x=c.getContext('2d');x.setTransform(q,0,0,q,0,0);x.clearRect(0,0,w,h);const r=d.last_candles||[];if(!r.length){c.hidden=true;$('aEmpty').hidden=false;return}c.hidden=false;$('aEmpty').hidden=true;const hi=Math.max(...r.map(v=>+v.high)),lo=Math.min(...r.map(v=>+v.low)),span=hi-lo||1;for(let i=1;i<6;i++){x.strokeStyle='rgba(148,163,184,.12)';x.beginPath();x.moveTo(0,h*i/6);x.lineTo(w,h*i/6);x.stroke()}const cw=Math.max(2,Math.min(11,w/r.length*.65));r.forEach((v,i)=>{const xx=i*w/(r.length-1||1),py=z=>h-18-(z-lo)/span*(h-36),up=+v.close>=+v.open;x.strokeStyle=up?'#4ade80':'#fb7185';x.fillStyle=x.strokeStyle;x.beginPath();x.moveTo(xx,py(v.high));x.lineTo(xx,py(v.low));x.stroke();const top=Math.min(py(v.open),py(v.close)),bh=Math.max(1,Math.abs(py(v.close)-py(v.open)));x.fillRect(xx-cw/2,top,cw,bh)});}
-function markets(){
+async function markets(){
+  const fallback=()=>JSON.parse(document.getElementById('analysis-markets-data')?.textContent||'[]');
   try{
-    const raw=document.getElementById('analysis-markets-data')?.textContent||'[]';
-    S.markets=JSON.parse(raw);
+    const response=await fetch('/api/market/broker-catalogue/?refresh=1',{headers:{Accept:'application/json'},credentials:'same-origin'});
+    const raw=await response.text();
+    let payload={};try{payload=JSON.parse(raw)}catch(_){throw Error('Broker market catalogue returned an invalid response.')}
+    if(!response.ok)throw Error(payload.detail||'Broker market catalogue unavailable.');
+    S.markets=Array.isArray(payload.symbols)?payload.symbols:fallback();
     const select=$('aSymbol');
     select.innerHTML=S.markets.map(m=>`<option value="${esc(m.symbol)}">${esc(m.symbol)} · ${esc(m.display_name||m.market||'Market')}</option>`).join('')||'<option value="">No active broker markets</option>';
-    if(S.markets.length) load();
-    else status(false,'No active broker markets are available.');
-  }catch(e){status(false,'Broker market catalogue unavailable.');clearAnalysisState();}
+    if(S.markets.length)load();else status(false,'No active broker markets are available.');
+  }catch(e){
+    try{
+      S.markets=fallback();
+      const select=$('aSymbol');
+      select.innerHTML=S.markets.map(m=>`<option value="${esc(m.symbol)}">${esc(m.symbol)} · ${esc(m.display_name||m.market||'Market')}</option>`).join('')||'<option value="">No active broker markets</option>';
+      if(S.markets.length)load();else status(false,'No active broker markets are available.');
+    }catch(_){status(false,'Broker market catalogue unavailable.');clearAnalysisState();}
+  }
 }
 async function tradeSpec(symbol,timeframe){
   try{
