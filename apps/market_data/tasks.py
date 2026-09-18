@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 # Deriv documents a shared 220 requests/minute budget for the WebSocket
 # market-data calls used here. Keep the maintenance queue deliberately below
 # that ceiling rather than allowing several workers to burst independently.
-BACKFILL_REQUEST_INTERVAL_SECONDS = 0.30
+BACKFILL_REQUEST_INTERVAL_SECONDS = 0.75
 BACKFILL_STALE_AFTER = timedelta(minutes=10)
 
 
