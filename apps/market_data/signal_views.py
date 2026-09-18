@@ -139,6 +139,7 @@ async def _live_deriv_ticks(symbols):
     }
     symbol_set = set(unique_symbols)
     results = {}
+    failed_symbols = set()
     deadline = started + max(LIVE_TICK_SCAN_TIMEOUT_SECONDS, 12.0)
 
     try:
@@ -157,7 +158,7 @@ async def _live_deriv_ticks(symbols):
                     "req_id": req_id,
                 }))
 
-            while len(results) < len(symbol_set):
+            while len(results) + len(failed_symbols) < len(symbol_set):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     break
@@ -174,6 +175,9 @@ async def _live_deriv_ticks(symbols):
                     continue
 
                 if payload.get("error"):
+                    failed = req_to_symbol.get(payload.get("req_id"))
+                    if failed:
+                        failed_symbols.add(failed)
                     continue
                 if payload.get("msg_type") != "tick":
                     continue
