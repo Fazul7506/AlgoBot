@@ -81,6 +81,10 @@ services:
           envVarKey: USE_REDIS
       - key: USE_CELERY
         value: "true"
+      - key: CELERY_WORKER_BROKER_RETRY
+        value: "true"
+      - key: CELERY_WORKER_RETRY_ON_STARTUP
+        value: "true"
       - key: SECRET_KEY
         fromService:
           name: AlgoBot
@@ -134,6 +138,10 @@ services:
           envVarKey: USE_REDIS
       - key: USE_CELERY
         value: "true"
+      - key: CELERY_WORKER_BROKER_RETRY
+        value: "true"
+      - key: CELERY_WORKER_RETRY_ON_STARTUP
+        value: "true"
       - key: SECRET_KEY
         fromService:
           name: AlgoBot
@@ -186,6 +194,10 @@ services:
           type: web
           envVarKey: USE_REDIS
       - key: USE_CELERY
+        value: "true"
+      - key: CELERY_WORKER_BROKER_RETRY
+        value: "true"
+      - key: CELERY_WORKER_RETRY_ON_STARTUP
         value: "true"
       - key: SECRET_KEY
         fromService:
