@@ -368,6 +368,97 @@ def analysis_contracts(request):
 
 
 @login_required
+def broker_proposal(request):
+    """Return a live Deriv proposal using the selected account and risk-capped amount.
+
+    This endpoint only prices a concrete contract; it never buys it. Every
+    proposal parameter is supplied by the caller or returned by Deriv. The
+    default amount comes from the selected account's risk budget.
+    """
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "code": "METHOD_NOT_ALLOWED", "message": "Use POST to request a broker proposal."}, status=405)
+    try:
+        payload = json.loads(request.body or "{}")
+    except (TypeError, ValueError):
+        return JsonResponse({"status": "error", "code": "INVALID_JSON", "message": "A valid JSON proposal request is required."}, status=400)
+
+    symbol = str(payload.get("symbol") or "").strip().upper()
+    contract_type = str(payload.get("contract_type") or "").strip().upper()
+    if not symbol or not contract_type:
+        return JsonResponse({"status": "error", "code": "CONTRACT_PARAMETERS_REQUIRED", "message": "Symbol and broker contract type are required."}, status=400)
+
+    try:
+        market = MarketSymbol.objects.get(symbol=symbol, is_active=True, is_tradable=True)
+    except MarketSymbol.DoesNotExist:
+        return JsonResponse({"status": "error", "code": "MARKET_UNAVAILABLE", "message": "The selected market is not currently available from the broker catalogue."}, status=404)
+
+    account = get_active_account(request.user, request=request)
+    if account is None:
+        return JsonResponse({"status": "error", "code": "NO_ACTIVE_BROKER_ACCOUNT", "message": "Select a connected broker account before requesting a proposal."}, status=409)
+
+    try:
+        synced_account, _broker_data = asyncio.run(
+            asyncio.wait_for(
+                SynchronizationService().sync_account(account),
+                timeout=8.0,
+            )
+        )
+        account = synced_account
+        capabilities = fetch_contracts_for(symbol)
+        allowed = {str(v).upper() for v in capabilities.get("available_contract_types", [])}
+        if contract_type not in allowed:
+            return JsonResponse({"status": "error", "code": "CONTRACT_NOT_AVAILABLE", "message": f"{contract_type} is not currently offered by Deriv for {symbol}.", "available_contract_types": sorted(allowed)}, status=422)
+
+        confidence = payload.get("confidence")
+        risk_context = build_account_risk_context(
+            request.user,
+            account,
+            signal=payload.get("signal"),
+            confidence=confidence,
+            volatility=payload.get("volatility"),
+        )
+        amount = payload.get("amount")
+        if amount in (None, ""):
+            amount = risk_context["recommended_stake"]
+        amount_decimal = Decimal(str(amount))
+        recommended_decimal = Decimal(str(risk_context["recommended_stake"]))
+        if amount_decimal <= 0:
+            return JsonResponse({"status": "error", "code": "NO_RISK_BUDGET", "message": "The selected account has no broker-available risk budget for this proposal.", "account_context": risk_context}, status=422)
+        if amount_decimal > recommended_decimal:
+            return JsonResponse({"status": "error", "code": "RISK_BUDGET_EXCEEDED", "message": "Requested stake exceeds the selected account's calculated risk budget.", "requested_amount": str(amount_decimal), "recommended_stake": str(recommended_decimal), "account_context": risk_context}, status=422)
+
+        from apps.brokers.deriv_execution import DerivTradingOperations
+        proposal = asyncio.run(
+            asyncio.wait_for(
+                DerivTradingOperations(account).proposal(
+                    symbol=symbol,
+                    contract_type=contract_type,
+                    amount=amount_decimal,
+                    currency=account.currency,
+                    duration=payload.get("duration"),
+                    duration_unit=payload.get("duration_unit") or "s",
+                    basis=payload.get("basis") or "stake",
+                    barrier=payload.get("barrier"),
+                    multiplier=payload.get("multiplier"),
+                    growth_rate=payload.get("growth_rate"),
+                ),
+                timeout=8.0,
+            )
+        )
+    except Exception as exc:
+        return JsonResponse({"status": "error", "code": "BROKER_PROPOSAL_FAILED", "message": "Deriv did not return a usable proposal for the supplied contract parameters.", "detail": str(exc)}, status=502)
+
+    return JsonResponse({
+        "status": "ok",
+        "broker": "Deriv",
+        "symbol": symbol,
+        "contract_type": contract_type,
+        "account_context": risk_context,
+        "proposal": proposal,
+    })
+
+
+@login_required
 def analytics_export(request):
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="trading-analytics.csv"'
