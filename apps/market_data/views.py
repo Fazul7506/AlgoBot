@@ -10,6 +10,56 @@ from django.utils import timezone
 from .models import CandleBackfillRun
 
 
+STALE_QUEUED_BACKFILL_MINUTES = 10
+
+
+def _celery_state(task_id):
+    if not task_id:
+        return None
+    try:
+        from deriv_platform.celery import app
+        return app.AsyncResult(task_id).state
+    except Exception:
+        return None
+
+
+def _recover_stale_initial_run(run):
+    if not run or run.status != "queued" or not run.requested_at:
+        return run
+    if timezone.now() - run.requested_at < timezone.timedelta(minutes=STALE_QUEUED_BACKFILL_MINUTES):
+        return run
+
+    state = _celery_state(run.task_id)
+    if state == "STARTED":
+        run.status = "running"
+        run.started_at = run.started_at or timezone.now()
+        run.save(update_fields=["status", "started_at"])
+        return run
+
+    from .tasks import run_initial_candle_backfill
+
+    old_task_id = run.task_id
+    try:
+        from deriv_platform.celery import app
+        if old_task_id:
+            app.control.revoke(old_task_id)
+    except Exception:
+        pass
+
+    run.task_id = ""
+    run.error = "Previous Celery delivery was stale and has been requeued."
+    run.save(update_fields=["task_id", "error"])
+    task = run_initial_candle_backfill.delay(
+        run.pk,
+        count=run.count,
+        symbol=run.symbol or None,
+    )
+    run.task_id = task.id
+    run.error = ""
+    run.save(update_fields=["task_id", "error"])
+    return run
+
+
 def _staff_required(user):
     return user.is_authenticated and (user.is_staff or user.is_superuser)
 
@@ -29,6 +79,7 @@ def _run_payload(run):
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "result": run.result,
         "error": run.error,
+        "celery_state": _celery_state(run.task_id),
     }
 
 
@@ -55,6 +106,8 @@ def initial_candle_backfill(request):
         raise PermissionDenied
 
     run = CandleBackfillRun.objects.filter(scope="initial").first()
+    if request.method == "GET":
+        run = _recover_stale_initial_run(run)
     research_run = CandleBackfillRun.objects.filter(scope="research").first()
 
     if request.method == "POST":
