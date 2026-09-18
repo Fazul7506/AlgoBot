@@ -117,10 +117,27 @@ def backfill_research_candles(count=250, symbol=None):
     task_id = getattr(backfill_research_candles.request, "id", "")
     try:
         started = timezone.now()
-        _mark_backfill_run(
-            "research", status="running", count=count, symbol=symbol,
-            task_id=task_id, started_at=started, completed_at=None, result={}, error="",
-        )
+        with transaction.atomic():
+            run, _ = CandleBackfillRun.objects.select_for_update().get_or_create(
+                scope="research",
+                defaults={"count": int(count or 250), "symbol": symbol or ""},
+            )
+            if run.status == "running" and run.started_at:
+                return {"status": "already_running", "task_id": run.task_id}
+            run.status = "running"
+            run.count = int(count)
+            run.symbol = symbol or ""
+            run.task_id = task_id
+            run.started_at = started
+            run.completed_at = None
+            run.result = {}
+            run.error = ""
+            run.save(
+                update_fields=[
+                    "status", "count", "symbol", "task_id", "started_at",
+                    "completed_at", "result", "error",
+                ]
+            )
         symbols = _active_symbols(symbol)
         if not symbols:
             raise RuntimeError("No active tradable market symbols are available")
