@@ -148,7 +148,9 @@ urlpatterns = [
     path("api/", include("apps.copy_trading.urls")),
     path("api/", include("apps.strategies.urls")),
     path("api/", include("apps.automation.urls")),
-    path("api/", include("apps.notifications.urls")),\n    # Analysis is the canonical research API namespace; no Analytics namespace remains.\n    path("analysis/", include("apps.analysis.urls")),
+    path("api/", include("apps.notifications.urls")),
+    # Analysis is the canonical research API namespace; no Analytics namespace remains.
+    path("analysis/", include("apps.analysis.urls")),
     path("api/", include("apps.deployment.urls")),
     path("api/strategy-signals/", strategy_signals, name="strategy_signals"),
     path("api/", include(router.urls)),
