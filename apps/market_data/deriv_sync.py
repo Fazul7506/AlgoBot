@@ -65,14 +65,26 @@ async def _request(payload: dict) -> dict:
 
 
 def _market_name(item: dict) -> str:
-    """Resolve the displayed market from Deriv's own market/submarket metadata."""
-    submarket = str(item.get("submarket") or item.get("subgroup") or "").strip().lower()
-    if submarket in SUBMARKET_MAP:
-        mapped = SUBMARKET_MAP[submarket]
-        if mapped in {"Boom", "Crash", "Jump"}:
-            return mapped
-        if mapped in {"Volatility", "Random Index", "Step Index", "Range Break", "1 Second", "Non-Stable Coin"}:
-            return "Volatility Indices" if mapped in {"Volatility", "Random Index", "1 Second"} else "Derived Indices"
+    """Resolve market classification from Deriv symbol identity and metadata.
+
+    Deriv's active_symbols payload is authoritative, but some synthetic
+    submarket fields are not stable enough to classify Boom/Crash symbols on
+    their own. The broker-provided symbol/name is the canonical identity; the
+    metadata remains the fallback for non-synthetic instruments.
+    """
+    symbol = str(item.get("underlying_symbol") or item.get("symbol") or "").strip().upper()
+    name = str(item.get("underlying_symbol_name") or item.get("display_name") or "").strip().lower()
+    identity = f"{symbol} {name}"
+    if symbol.startswith("BOOM") or "boom" in name:
+        return "Boom"
+    if symbol.startswith("CRASH") or "crash" in name:
+        return "Crash"
+    if symbol.startswith("JD") or "jump" in name:
+        return "Jump Indices"
+    if symbol.startswith(("R_", "1HZ")) or "volatility" in name:
+        return "Volatility Indices"
+    if symbol.startswith(("RB", "stpRNG")) or "step index" in name or "range break" in name:
+        return "Derived Indices"
     raw = str(item.get("market") or item.get("underlying_symbol_type") or "synthetic_index").lower()
     for key, value in MARKET_MAP.items():
         if key in raw:
