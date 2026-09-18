@@ -148,7 +148,7 @@ urlpatterns = [
     path("api/", include("apps.copy_trading.urls")),
     path("api/", include("apps.strategies.urls")),
     path("api/", include("apps.automation.urls")),
-    path("api/", include("apps.notifications.urls")),\n    # Analytics dashboard was retired; keep the broker-backed API routes mounted\n    # so Analysis, Risk, and Signals can continue to consume shared account intelligence.\n    path("analytics/", include("apps.analytics.urls")),
+    path("api/", include("apps.notifications.urls")),\n    # Analysis is the canonical research API namespace; no Analytics namespace remains.\n    path("analysis/", include("apps.analysis.urls")),
     path("api/", include("apps.deployment.urls")),
     path("api/strategy-signals/", strategy_signals, name="strategy_signals"),
     path("api/", include(router.urls)),
