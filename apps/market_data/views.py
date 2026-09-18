@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.views import redirect_to_login
@@ -12,9 +10,6 @@ from django.utils import timezone
 from .models import CandleBackfillRun
 
 
-STALE_QUEUED_BACKFILL_MINUTES = 10
-
-
 def _celery_state(task_id):
     if not task_id:
         return None
@@ -23,50 +18,6 @@ def _celery_state(task_id):
         return app.AsyncResult(task_id).state
     except Exception:
         return None
-
-
-def _recover_stale_initial_run(run):
-    if not run or run.status != "queued" or not run.requested_at:
-        return run
-    if timezone.now() - run.requested_at < timedelta(minutes=STALE_QUEUED_BACKFILL_MINUTES):
-        return run
-
-    state = _celery_state(run.task_id)
-    if state == "STARTED":
-        run.status = "running"
-        run.started_at = run.started_at or timezone.now()
-        run.save(update_fields=["status", "started_at"])
-        return run
-
-    from .tasks import run_initial_candle_backfill
-
-    old_task_id = run.task_id
-    try:
-        from deriv_platform.celery import app
-        if old_task_id:
-            app.control.revoke(old_task_id)
-    except Exception:
-        pass
-
-    run.task_id = ""
-    run.requested_at = timezone.now()
-    run.error = "Previous Celery delivery was stale and has been requeued."
-    run.save(update_fields=["task_id", "requested_at", "error"])
-    try:
-        task = run_initial_candle_backfill.delay(
-            run.pk,
-            count=run.count,
-            symbol=run.symbol or None,
-        )
-    except Exception as exc:
-        run.error = f"Unable to requeue stale Celery task: {exc}"
-        run.save(update_fields=["error"])
-        return run
-
-    run.task_id = task.id
-    run.error = ""
-    run.save(update_fields=["task_id", "error"])
-    return run
 
 
 def _staff_required(user):
@@ -79,7 +30,7 @@ def _run_payload(run):
     return {
         "scope": run.scope,
         "status": run.status,
-        "status_label": run.get_status_display(),
+        "status_label": "Completed" if run.status == "succeeded" else run.get_status_display(),
         "count": run.count,
         "symbol": run.symbol,
         "task_id": run.task_id,
@@ -108,33 +59,33 @@ def symbol_detail(request, symbol):
 
 
 def initial_candle_backfill(request):
-    """Staff-only control page for the one-time 5,000-candle warm-up."""
+    """Staff-only control page for broker-authoritative historical candle backfill."""
     if not request.user.is_authenticated:
         return redirect_to_login(request.get_full_path())
     if not _staff_required(request.user):
         raise PermissionDenied
 
-    run = CandleBackfillRun.objects.filter(scope="initial").first()
-    if request.method == "GET":
-        run = _recover_stale_initial_run(run)
-    research_run = CandleBackfillRun.objects.filter(scope="research").first()
-
     if request.method == "POST":
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().filter(scope="initial").first()
-            if run and run.status in {"queued", "running", "succeeded"}:
+            if run and run.status in {"running", "succeeded"}:
                 return redirect(reverse("initial_candle_backfill"))
-            if run is None:
-                run = CandleBackfillRun(scope="initial")
 
             count = 5000
             symbol = (request.POST.get("symbol") or "").strip()
-            run.status = "queued"
+            if run is None:
+                run = CandleBackfillRun(scope="initial")
+
+            # Public lifecycle is deliberately limited to Running, Succeeded,
+            # and Failed. Celery transport PENDING is not an application state.
+            now = timezone.now()
+            run.status = "running"
             run.count = count
             run.symbol = symbol
             run.task_id = ""
             run.requested_by = request.user
-            run.started_at = None
+            run.requested_at = now
+            run.started_at = now
             run.completed_at = None
             run.result = {}
             run.error = ""
@@ -143,25 +94,30 @@ def initial_candle_backfill(request):
         from .tasks import run_initial_candle_backfill
 
         try:
-            task = run_initial_candle_backfill.delay(run.pk, count=count, symbol=symbol or None)
+            task = run_initial_candle_backfill.delay(
+                run.pk, count=count, symbol=symbol or None
+            )
             run.task_id = task.id
             run.save(update_fields=["task_id"])
         except Exception as exc:
             run.status = "failed"
-            run.error = f"Unable to queue Celery task: {exc}"
+            run.error = f"Unable to dispatch Celery task: {exc}"
             run.completed_at = timezone.now()
             run.save(update_fields=["status", "error", "completed_at"])
 
         return redirect(reverse("initial_candle_backfill"))
 
+    initial = CandleBackfillRun.objects.filter(scope="initial").first()
+    research_run = CandleBackfillRun.objects.filter(scope="research").first()
+
     if request.GET.get("format") == "json":
         return JsonResponse({
-            "initial": _run_payload(CandleBackfillRun.objects.filter(scope="initial").first()),
-            "research": _run_payload(CandleBackfillRun.objects.filter(scope="research").first()),
+            "initial": _run_payload(initial),
+            "research": _run_payload(research_run),
         })
 
     return render(
         request,
         "market_data/candle_backfill.html",
-        {"run": run, "research_run": research_run},
+        {"run": initial, "research_run": research_run},
     )
