@@ -17,9 +17,12 @@ LOGGING = {
             "style": "{",
         },
     },
+    "filters": {
+        "wordpress_probe": {"()": "core.middleware.wordpress_probe.WordPressProbeLogFilter"},
+    },
     "handlers": {
-        "console": {"level": "INFO", "class": "logging.StreamHandler", "formatter": "verbose"},
-        "django_file": {"level": "INFO", "class": "logging.handlers.RotatingFileHandler", "filename": LOG_DIR / "django.log", "maxBytes": 10485760, "backupCount": 10, "formatter": "json"},
+        "console": {"level": "INFO", "class": "logging.StreamHandler", "formatter": "verbose", "filters": ["wordpress_probe"]},
+        "django_file": {"level": "INFO", "class": "logging.handlers.RotatingFileHandler", "filters": ["wordpress_probe"], "filename": LOG_DIR / "django.log", "maxBytes": 10485760, "backupCount": 10, "formatter": "json"},
         "oauth_file": {"level": "INFO", "class": "logging.handlers.RotatingFileHandler", "filename": LOG_DIR / "oauth.log", "maxBytes": 10485760, "backupCount": 10, "formatter": "json"},
         "broker_file": {"level": "INFO", "class": "logging.handlers.RotatingFileHandler", "filename": LOG_DIR / "broker.log", "maxBytes": 10485760, "backupCount": 10, "formatter": "json"},
         "trading_file": {"level": "INFO", "class": "logging.handlers.RotatingFileHandler", "filename": LOG_DIR / "trading.log", "maxBytes": 10485760, "backupCount": 10, "formatter": "json"},
@@ -30,6 +33,7 @@ LOGGING = {
     "root": {"handlers": ["console", "django_file", "error_file"], "level": "INFO"},
     "loggers": {
         "django": {"handlers": ["console", "django_file", "error_file"], "level": "INFO", "propagate": False},
+        "django.server": {"handlers": ["console", "django_file", "error_file"], "level": "INFO", "propagate": False},
         "oauth": {"handlers": ["oauth_file", "error_file"], "level": "INFO", "propagate": True},
         "broker": {"handlers": ["broker_file", "error_file"], "level": "INFO", "propagate": True},
         "market": {"handlers": ["trading_file"], "level": "INFO", "propagate": True},
