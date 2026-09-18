@@ -62,7 +62,7 @@ def _broker_trade_spec(result, market, capabilities, account_context=None):
     confirmation = " + ".join(["Deriv live tick", *factors[:3]]) if factors else "Deriv live tick + broker OHLC analysis"
     contract_type = " / ".join(contract_types) or "Broker contract catalogue"
     contract_family = " / ".join(families) or "Broker contract categories"
-    duration = " / ".join(expiry) or "Broker expiry metadata"
+    duration = None
     return {
         "market_type": market.market,
         "sub_market": market.sub_market or "Broker active-symbol submarket",
@@ -72,8 +72,8 @@ def _broker_trade_spec(result, market, capabilities, account_context=None):
         "contract_type": contract_type,
         "contract_family": contract_family,
         "duration": duration,
-        "duration_unit": "Broker expiry type",
-        "barrier": "Broker contract metadata",
+        "duration_unit": None,
+        "barrier": None,
         "stake": account_context.get("recommended_stake") if account_context else None,
         "risk_budget": account_context.get("risk_budget") if account_context else None,
         "payout": None,
@@ -88,7 +88,8 @@ def _broker_trade_spec(result, market, capabilities, account_context=None):
         "confirmation": confirmation,
         "market_regime": regime,
         "quote_source": "Deriv public market-data WebSocket",
-        "broker_contract_sentiments": " / ".join(sentiments) or "Broker contract catalogue",
+        "broker_contract_sentiments": " / ".join(sentiments) or None,
+        "broker_expiry_types": " / ".join(expiry) or None,
         "source": "Deriv contracts_for + Deriv OHLC/tick analysis",
     }
 
