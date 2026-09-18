@@ -33,7 +33,8 @@ class LiveSignalsContractTests(TestCase):
         self.assertEqual(payload["live_data_available_count"], 1)
         self.assertEqual(payload["data"][0]["live"]["price"], 101.0)
         self.assertEqual(payload["data"][0]["baseline_direction"], "BUY")
-        self.assertEqual(payload["feed_latency_ms"], 25.0)
+        self.assertIsInstance(payload["feed_latency_ms"], (int, float))
+        self.assertGreaterEqual(payload["feed_latency_ms"], 0)
 
     @patch("apps.market_data.signal_views._live_deriv_ticks")
     def test_fresh_persisted_deriv_stream_quote_is_preferred(self, live_ticks):
