@@ -31,7 +31,7 @@ class CandleService:
                     symbol=tick.symbol,
                     timeframe=timeframe,
                     epoch=epoch,
-                    defaults={"open": tick.quote, "high": tick.quote, "low": tick.quote, "close": tick.quote, "volume": tick.volume},
+                    defaults={"open": tick.quote, "high": tick.quote, "low": tick.quote, "close": tick.quote, "volume": tick.volume, "source": "tick_stream"},
                 )
             except IntegrityError:
                 candle = Candle.objects.get(symbol=tick.symbol, timeframe=timeframe, epoch=epoch)
