@@ -22,7 +22,7 @@ class LiveSignalsContractTests(TestCase):
         self.strategy = Strategy.objects.create(name="Live Test", slug="live-test", category="Trend Following", version="1", enabled=True)
         self.config = StrategyConfiguration.objects.create(strategy=self.strategy, user=self.user, broker_account=self.account, symbol="R_100", timeframe="M1", enabled=True)
 
-    @patch("apps.market_data.signal_views._authenticated_live_ticks")
+    @patch("apps.market_data.signal_views._live_deriv_ticks")
     def test_live_signal_uses_authenticated_broker_quote_and_matching_baseline(self, live_ticks):
         StrategySignal.objects.create(strategy=self.strategy, configuration=self.config, symbol="R_100", signal="BUY", confidence=80, entry_price="100.00000", timestamp=timezone.now())
         live_ticks.return_value = ({"R_100": {"symbol": "R_100", "quote": 101.0, "epoch": int(timezone.now().timestamp())}}, 25.0)
@@ -35,7 +35,7 @@ class LiveSignalsContractTests(TestCase):
         self.assertEqual(payload["data"][0]["baseline_direction"], "BUY")
         self.assertEqual(payload["feed_latency_ms"], 25.0)
 
-    @patch("apps.market_data.signal_views._authenticated_live_ticks")
+    @patch("apps.market_data.signal_views._live_deriv_ticks")
     def test_missing_baseline_never_becomes_actionable(self, live_ticks):
         live_ticks.return_value = ({"R_100": {"symbol": "R_100", "quote": 101.0, "epoch": int(timezone.now().timestamp())}}, 12.0)
         response = self.client.get("/api/strategy-signals/?symbol=R_100&timeframe=M1")
@@ -45,7 +45,7 @@ class LiveSignalsContractTests(TestCase):
         self.assertFalse(row["execution_ready"])
         self.assertEqual(row["confidence"], 0)
 
-    @patch("apps.market_data.signal_views._authenticated_live_ticks")
+    @patch("apps.market_data.signal_views._live_deriv_ticks")
     def test_stale_analysis_cannot_be_trading_ready(self, live_ticks):
         StrategySignal.objects.create(strategy=self.strategy, configuration=self.config, symbol="R_100", signal="BUY", confidence=99, entry_price="100.00000", timestamp=timezone.now() - timedelta(hours=1))
         live_ticks.return_value = ({"R_100": {"symbol": "R_100", "quote": 101.0, "epoch": int(timezone.now().timestamp())}}, 15.0)

@@ -4,13 +4,13 @@ import time
 from decimal import InvalidOperation
 
 import websockets
+from django.conf import settings
 from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
 
 from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError
 from apps.brokers.models import BrokerAccount
-from apps.brokers.services import BrokerRegistry
 from apps.strategies.models import StrategySignal
 
 from .models import MarketSymbol
@@ -114,43 +114,74 @@ def _trade_context(signal, market, account, timeframe=None):
     }
 
 
-async def _authenticated_live_ticks(adapter, symbols):
-    endpoint = await asyncio.to_thread(adapter._authenticated_ws_url)
-    unique_symbols = list(dict.fromkeys(symbols))
+async def _live_deriv_ticks(symbols):
+    """Read current Deriv quotes from the broker's public market-data channel.
+
+    Deriv documents the public Options WebSocket as the authoritative no-auth
+    channel for real-time ticks. Account OTP authentication is reserved for
+    account-scoped operations such as trading and balances. Keeping quote
+    retrieval on the public market-data channel prevents an OAuth trade-scope
+    or account OTP problem from incorrectly making every market appear to
+    have no live price.
+    """
+    unique_symbols = list(dict.fromkeys(str(symbol).strip() for symbol in symbols if str(symbol).strip()))
     if not unique_symbols:
         return {}, 0
+
+    endpoint = getattr(settings, "DERIV_PUBLIC_WS_URL", "").strip()
+    if not endpoint:
+        raise BrokerConnectionError("DERIV_PUBLIC_WS_URL is not configured")
+
     started = time.monotonic()
     results = {}
     req_to_symbol = {index: symbol for index, symbol in enumerate(unique_symbols, start=1)}
     deadline = started + LIVE_TICK_SCAN_TIMEOUT_SECONDS
-    async with websockets.connect(endpoint, open_timeout=adapter.timeout, close_timeout=5, ping_interval=20, ping_timeout=10, max_size=2**20) as ws:
-        for req_id, symbol in req_to_symbol.items():
-            await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
-        while len(results) < len(req_to_symbol):
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            try:
-                raw = await asyncio.wait_for(ws.recv(), timeout=min(1.5, remaining))
-            except asyncio.TimeoutError:
-                break
-            try:
-                payload = json.loads(raw)
-            except (TypeError, ValueError):
-                continue
-            error = payload.get("error") or {}
-            if error:
-                code = str(error.get("code") or "")
-                if code in {"AuthorizationRequired", "InvalidToken", "Unauthorized", "InvalidAppId"}:
-                    raise BrokerAuthenticationError(error.get("message", "Deriv authentication failed"))
-                continue
-            if payload.get("msg_type") != "tick":
-                continue
-            tick = payload.get("tick") or {}
-            symbol = str(tick.get("symbol") or req_to_symbol.get(payload.get("req_id"), ""))
-            if symbol not in req_to_symbol.values() or tick.get("quote") is None or tick.get("epoch") is None:
-                continue
-            results[symbol] = tick
+
+    try:
+        async with websockets.connect(
+            endpoint,
+            open_timeout=5,
+            close_timeout=5,
+            ping_interval=20,
+            ping_timeout=10,
+            max_size=2**20,
+        ) as ws:
+            for req_id, symbol in req_to_symbol.items():
+                await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
+
+            while len(results) < len(req_to_symbol):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=min(1.5, remaining))
+                except asyncio.TimeoutError:
+                    break
+
+                try:
+                    payload = json.loads(raw)
+                except (TypeError, ValueError):
+                    continue
+
+                if payload.get("error"):
+                    continue
+                if payload.get("msg_type") != "tick":
+                    continue
+
+                tick = payload.get("tick") or {}
+                symbol = str(tick.get("symbol") or req_to_symbol.get(payload.get("req_id"), ""))
+                if symbol not in req_to_symbol.values():
+                    continue
+
+                quote = _as_float(tick.get("quote"))
+                epoch = _as_float(tick.get("epoch"))
+                if quote is None or epoch is None:
+                    continue
+
+                results[symbol] = tick
+    except (OSError, asyncio.TimeoutError, websockets.WebSocketException) as exc:
+        raise BrokerConnectionError("Deriv public live market data is temporarily unavailable") from exc
+
     return results, round((time.monotonic() - started) * 1000, 1)
 
 
@@ -200,8 +231,7 @@ def strategy_signals(request):
     account = _selected_deriv_account(request)
     if account is None:
         return JsonResponse({"status": "error", "code": "DERIV_ACCOUNT_REQUIRED", "message": "Connect and select a Deriv account before reading live signals."}, status=409)
-    if account.token_status != "active" or account.is_token_expired:
-        return JsonResponse({"status": "error", "code": "DERIV_CREDENTIALS_INVALID", "message": "The selected Deriv credentials are expired or revoked."}, status=401)
+    account_credentials_valid = account.token_status == "active" and not account.is_token_expired
     symbol_filter = str(request.GET.get("symbol") or "").strip()
     timeframe = str(request.GET.get("timeframe") or "M1").strip()
     try:
@@ -213,11 +243,10 @@ def strategy_signals(request):
     markets = list(symbols_qs[:limit])
     if not markets:
         return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "count": 0, "live_data_available_count": 0, "actionable_count": 0, "data": []})
-    adapter = BrokerRegistry().adapter(account.broker, account)
     symbols = [market.symbol for market in markets]
     try:
-        live_ticks, feed_latency_ms = asyncio.run(_authenticated_live_ticks(adapter, symbols))
-    except (BrokerAuthenticationError, BrokerConnectionError) as exc:
+        live_ticks, feed_latency_ms = asyncio.run(_live_deriv_ticks(symbols))
+    except BrokerConnectionError as exc:
         return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": str(exc)}, status=502)
     except Exception:
         return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": "The authenticated Deriv live signal feed could not be established."}, status=502)
@@ -228,14 +257,21 @@ def strategy_signals(request):
         row = {"symbol": market.symbol, "instrument": market.display_name, "display_name": market.display_name, "market": market.market, "sub_market": market.sub_market, "broker": "deriv", "account_id": account.account_id, "account_type": account.account_type, "timeframe": timeframe, "source": "deriv_authenticated_live"}
         base_context = {"market_type": market.market, "sub_market": market.sub_market, "symbol": market.symbol, "instrument": market.display_name, "trade_type": None, "direction": "HOLD", "contract_type": None, "contract_family": None, "duration": None, "duration_unit": None, "barrier": None, "stake": None, "payout": None, "currency": account.currency, "account_type": account.account_type, "broker": account.broker.name, "timeframe": timeframe}
         if not live_tick:
-            row.update({"direction": "HOLD", "confidence": 0, "status": "LIVE_DATA_UNAVAILABLE", "execution_ready": False, "evidence": ["no_live_deriv_tick"], "trade_context": base_context})
+            row.update({"direction": "HOLD", "confidence": 0, "status": "LIVE_DATA_UNAVAILABLE", "execution_ready": False, "evidence": ["broker_tick_not_received"], "trade_context": base_context})
         elif not baseline:
             live_age = max(0, int(time.time()) - int(live_tick.get("epoch")))
             row.update({"direction": "HOLD", "confidence": 0, "status": "WAITING_FOR_ANALYSIS", "execution_ready": False, "evidence": ["live_tick_received", "no_matching_analysis_baseline"], "live": {"price": _as_float(live_tick.get("quote")), "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": int(live_tick.get("epoch")), "age_seconds": live_age, "source": "deriv_authenticated_websocket"}, "trade_context": base_context})
         else:
             row.update(_revise_signal(baseline, live_tick, now, market, account))
         rows.append(row)
+    if not account_credentials_valid:
+        for row in rows:
+            if row.get("execution_ready"):
+                row["execution_ready"] = False
+                row["evidence"] = [*row.get("evidence", []), "selected_account_credentials_not_ready_for_execution"]
+                row["status"] = "ACCOUNT_AUTH_REQUIRED"
+
     actionable = [r for r in rows if r.get("execution_ready")]
     live_data_available_count = sum(1 for r in rows if r.get("live"))
     stale_count = sum(1 for r in rows if r.get("status") == "LIVE_DATA_STALE")
-    return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency}, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
+    return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency}, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "account_trading_enabled": account_credentials_valid, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
