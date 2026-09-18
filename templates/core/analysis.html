@@ -8,7 +8,6 @@
 </style>
 {% endblock %}
 {% block content %}
-<script type="application/json" id="analysis-markets-data">{{ analysis_markets_json|safe }}</script>
 <main id="main-content" class="analysis-pro" data-analysis-pro>
   <div class="analysis-bar"><select id="aSymbol" class="symbol" aria-label="Market"></select><select id="aTf" aria-label="Timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select><select id="aLimit" aria-label="Candle history"><option value="200">200</option><option value="300" selected>300</option><option value="500">500</option><option value="1000">1000</option></select><button id="aRefresh">Refresh</button><button id="aAuto">Auto: Off</button><span class="grow"></span><span><i id="aDot" class="dot"></i><span id="aStatus">Connecting…</span></span></div>
   <section class="kpis"><article class="analysis-kpi"><small>Instrument</small><strong id="aName">—</strong></article><article class="analysis-kpi"><small>Price</small><strong id="aPrice">—</strong></article><article class="analysis-kpi"><small>Signal</small><strong id="aSignal">—</strong></article><article class="analysis-kpi"><small>Score</small><strong id="aScore">—</strong></article><article class="analysis-kpi"><small>Confidence</small><strong id="aConfidence">—</strong></article><article class="analysis-kpi"><small>Regime</small><strong id="aRegime">—</strong></article></section>
@@ -17,7 +16,7 @@
     <div><span>Contract type</span><strong id="aContractType">—</strong></div><div><span>Contract family</span><strong id="aContractFamily">—</strong></div><div><span>Duration</span><strong id="aDuration">—</strong></div><div><span>Duration unit</span><strong id="aDurationUnit">—</strong></div><div><span>Barrier / strike</span><strong id="aBarrier">—</strong></div>
     <div><span>Stake / amount</span><strong id="aStake">—</strong></div><div><span>Potential payout</span><strong id="aPayout">—</strong></div><div><span>Strategy</span><strong id="aStrategy">—</strong></div><div><span>Strategy category</span><strong id="aCategory">—</strong></div><div><span>Risk profile</span><strong id="aRisk">—</strong></div>
     <div><span>Execution mode</span><strong id="aExecution">—</strong></div><div><span>Entry condition</span><strong id="aEntryCondition">—</strong></div><div><span>Confirmation</span><strong id="aConfirmation">—</strong></div><div><span>Market regime</span><strong id="aSpecRegime">—</strong></div><div><span>Quote source</span><strong id="aQuoteSource">—</strong></div>
-  </div><div class="spec-note">Only broker-returned contract capabilities are displayed. Proposal-dependent values require a concrete Deriv contract proposal and are never invented.</div></section>
+  </div><div class="spec-note">Contract capabilities are read directly from Deriv. Duration, barrier, stake and payout are proposal-dependent and are only displayed after a concrete broker proposal or stored strategy configuration supplies them; AlgoBot never invents those values.</div></section>
   <section class="main-analysis">
     <article class="analysis-box"><div class="box-head"><div><h2>Advanced price analysis</h2><small>Broker-stored OHLC candles · deterministic analysis</small></div><span class="chip" id="aStructure">—</span></div><div class="chart"><canvas id="aChart"></canvas><div class="empty" id="aEmpty">No stored candles are available for this market/timeframe.</div></div><div class="foot"><a href="/trading/">Open Trading Terminal</a><a href="/analytics/export/">Export trade analytics</a><button id="aAnalyze">Re-run analysis</button></div></article>
     <aside class="side"><article class="analysis-box"><div class="box-head"><h2>Key levels</h2></div><div class="metrics"><div class="metric"><span>Resistance</span><strong id="aRes">—</strong></div><div class="metric"><span>Support</span><strong id="aSup">—</strong></div><div class="metric"><span>Range</span><strong id="aRange">—</strong></div><div class="metric"><span>Change</span><strong id="aChange">—</strong></div></div></article><article class="analysis-box"><div class="box-head"><h2>Trend</h2></div><div class="metrics"><div class="metric"><span>SMA 20</span><strong id="aS20">—</strong></div><div class="metric"><span>SMA 50</span><strong id="aS50">—</strong></div><div class="metric"><span>SMA 200</span><strong id="aS200">—</strong></div><div class="metric"><span>EMA 9 / 21</span><strong id="aEma">—</strong></div></div></article><article class="analysis-box"><div class="box-head"><h2>Momentum</h2></div><div class="metrics"><div class="metric"><span>RSI 14</span><strong id="aRsi">—</strong></div><div class="metric"><span>ATR 14</span><strong id="aAtr">—</strong></div><div class="metric"><span>MACD hist.</span><strong id="aMacd">—</strong></div><div class="metric"><span>Bollinger width</span><strong id="aBb">—</strong></div></div></article></aside>
@@ -33,98 +32,18 @@ const $=id=>document.getElementById(id),S={markets:[],data:null,timer:null};
 const F=(v,d=5)=>v==null||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const tone=s=>String(s||'').toLowerCase().includes('bull')||String(s||'').toUpperCase()==='BUY'?'bull':String(s||'').toLowerCase().includes('bear')||String(s||'').toUpperCase()==='SELL'?'bear':'neutral';
-const label=v=>String(v??'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())||'Broker data unavailable';
+const label=v=>String(v??'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())||'Not specified';
 const list=(id,items,fn,empty='No events detected.')=>$(id).innerHTML=items?.length?items.map(fn).join(''):`<span class="muted">${empty}</span>`;
 function status(ok,t){$('aDot').className='dot'+(ok?' live':'');$('aStatus').textContent=t}
+function clearAnalysis(message='No broker-authoritative analysis is available for this selection.'){const ids=['aName','aPrice','aSignal','aScore','aConfidence','aRegime','aStructure','aRes','aSup','aRange','aChange','aS20','aS50','aS200','aEma','aRsi','aAtr','aMacd','aBb','aFactorsCount','toolStructure','toolConfluence','toolRegime'];ids.forEach(id=>{if($(id))$(id).textContent='—'});if($('aFactorsCount'))$('aFactorsCount').textContent='0 factors';if($('aEvidence'))$('aEvidence').innerHTML='<span class="muted">'+esc(message)+'</span>';['structureList','sweepList','fvgList','zoneList','patternList','fibList'].forEach(id=>{if($(id))$(id).innerHTML=''});if($('aChart'))$('aChart').hidden=true;if($('aEmpty')){$('aEmpty').hidden=false;$('aEmpty').textContent=message}S.data=null}
 function chart(d){const c=$('aChart'),b=c.getBoundingClientRect(),q=devicePixelRatio||1,w=Math.max(320,b.width),h=Math.max(250,b.height);c.width=w*q;c.height=h*q;const x=c.getContext('2d');x.setTransform(q,0,0,q,0,0);x.clearRect(0,0,w,h);const r=d.last_candles||[];if(!r.length){c.hidden=true;$('aEmpty').hidden=false;return}c.hidden=false;$('aEmpty').hidden=true;const hi=Math.max(...r.map(v=>+v.high)),lo=Math.min(...r.map(v=>+v.low)),span=hi-lo||1;for(let i=1;i<6;i++){x.strokeStyle='rgba(148,163,184,.12)';x.beginPath();x.moveTo(0,h*i/6);x.lineTo(w,h*i/6);x.stroke()}const cw=Math.max(2,Math.min(11,w/r.length*.65));r.forEach((v,i)=>{const xx=i*w/(r.length-1||1),py=z=>h-18-(z-lo)/span*(h-36),up=+v.close>=+v.open;x.strokeStyle=up?'#4ade80':'#fb7185';x.fillStyle=x.strokeStyle;x.beginPath();x.moveTo(xx,py(v.high));x.lineTo(xx,py(v.low));x.stroke();const top=Math.min(py(v.open),py(v.close)),bh=Math.max(1,Math.abs(py(v.close)-py(v.open)));x.fillRect(xx-cw/2,top,cw,bh)});}
-async function markets(){
-  const fallback=()=>JSON.parse(document.getElementById('analysis-markets-data')?.textContent||'[]');
-  try{
-    const response=await fetch('/api/market/broker-catalogue/?refresh=1',{headers:{Accept:'application/json'},credentials:'same-origin'});
-    const raw=await response.text();
-    let payload={};try{payload=JSON.parse(raw)}catch(_){throw Error('Broker market catalogue returned an invalid response.')}
-    if(!response.ok)throw Error(payload.detail||'Broker market catalogue unavailable.');
-    S.markets=Array.isArray(payload.symbols)?payload.symbols:fallback();
-    const select=$('aSymbol');
-    select.innerHTML=S.markets.map(m=>`<option value="${esc(m.symbol)}">${esc(m.symbol)} · ${esc(m.display_name||m.market||'Market')}</option>`).join('')||'<option value="">No active broker markets</option>';
-    if(S.markets.length)load();else status(false,'No active broker markets are available.');
-  }catch(e){
-    try{
-      S.markets=fallback();
-      const select=$('aSymbol');
-      select.innerHTML=S.markets.map(m=>`<option value="${esc(m.symbol)}">${esc(m.symbol)} · ${esc(m.display_name||m.market||'Market')}</option>`).join('')||'<option value="">No active broker markets</option>';
-      if(S.markets.length)load();else status(false,'No active broker markets are available.');
-    }catch(_){status(false,'Broker market catalogue unavailable.');clearAnalysisState();}
-  }
-}
-async function tradeSpec(symbol,timeframe){
-  try{
-    const r=await fetch(`/api/strategy-signals/?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&limit=1`,{headers:{Accept:'application/json'},credentials:'same-origin'});
-    const j=await r.json();
-    const row=(j.data||[])[0];
-    const c=row?.trade_context||{};
-    let capabilities=null;
-    try{
-      const cr=await fetch(`/analytics/contracts/?symbol=${encodeURIComponent(symbol)}`,{headers:{Accept:'application/json'},credentials:'same-origin'});
-      const cj=await cr.json();
-      if(cr.ok) capabilities=cj;
-    }catch(_){}
-    const types=capabilities?.contract_types||[];
-    const families=capabilities?.contract_families||capabilities?.trade_types||[];
-    const expiry=[...new Set((capabilities?.contracts||[]).map(v=>v.expiry_type).filter(Boolean))];
-    const fields={
-      aMarketType:c.market_type||row?.market,
-      aSubMarket:c.sub_market||row?.sub_market,
-      aInstrument:c.instrument||row?.display_name||symbol,
-      aTradeType:c.trade_type||row?.direction,
-      aTradeDirection:c.direction||row?.direction,
-      aContractType:c.contract_type||types.join(', '),
-      aContractFamily:c.contract_family||families.join(', '),
-      aDuration:c.duration,
-      aDurationUnit:c.duration_unit||expiry.join(', '),
-      aBarrier:c.barrier,
-      aStake:c.stake,
-      aPayout:c.payout,
-      aStrategy:c.strategy,
-      aCategory:c.strategy_category,
-      aRisk:c.risk_profile,
-      aExecution:c.execution_mode,
-      aEntryCondition:c.entry_condition,
-      aConfirmation:c.confirmation,
-      aSpecRegime:c.market_regime,
-      aQuoteSource:c.quote_type||row?.source||'deriv_public_websocket'
-    };
-    const requiresProposal=new Set(['aDuration','aBarrier','aStake','aPayout']);
-    Object.entries(fields).forEach(([id,v])=>{
-      if(v!=null&&v!=='') $(id).textContent=label(v);
-      else $(id).textContent=requiresProposal.has(id)?'Awaiting contract proposal':(row?'Not returned by broker baseline':'No analysis baseline');
-    });
-    $('aTradeSpecStatus').textContent=capabilities?.stale?'Broker capability cache':'Broker capability verified';
-  }catch(e){
-    $('aTradeSpecStatus').textContent='Broker data unavailable';
-    ['aMarketType','aSubMarket','aInstrument','aTradeType','aTradeDirection','aContractType','aContractFamily','aDuration','aDurationUnit','aBarrier','aStake','aPayout','aStrategy','aCategory','aRisk','aExecution','aEntryCondition','aConfirmation','aSpecRegime','aQuoteSource'].forEach(id=>$(id).textContent='Broker data unavailable');
-  }
-}
-async function load(){
-  const sym=$('aSymbol').value;if(!sym)return;
-  clearAnalysisState();
-  try{
-    const r=await fetch(`/analytics/data/?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent($('aTf').value)}&limit=${$('aLimit').value}&refresh=1`,{headers:{Accept:'application/json'},credentials:'same-origin'});
-    const text=await r.text();
-    let d={};try{d=JSON.parse(text)}catch(_){throw Error(r.status===401||r.redirected?'Analysis session expired. Refresh the page.':'Analysis service returned an invalid response.')}
-    if(!r.ok)throw Error(d.message||'Analysis unavailable');
-    if(!d.candles||d.status==='no_data')throw Error('Deriv broker history is not available for this market/timeframe.');
-    S.data=d;render(d);tradeSpec(sym,$('aTf').value);
-    status(Boolean(d.data_provenance?.fresh),`${d.data_provenance?.fresh?'Broker-confirmed':'Stale broker data'} · ${d.candles||0} candles`);
-  }catch(e){
-    status(false,e.message);$('aEmpty').hidden=false;$('aEmpty').textContent=e.message;$('aTradeSpecStatus').textContent='No verified baseline';clearTradeSpec();
-  }
-}
+async function jsonResponse(r){const text=await r.text();let j;try{j=JSON.parse(text)}catch(e){throw Error(text.trim().startsWith('<')?'The Analysis API returned an HTML error page instead of JSON. Check authentication and the deployed API route.':'The Analysis API returned invalid JSON.')}if(!r.ok)throw Error(j.message||j.detail||`Analysis API error (${r.status})`);return j}
+async function markets(){try{const r=await fetch('/analytics/markets/',{headers:{Accept:'application/json'},credentials:'same-origin'});const j=await jsonResponse(r);S.markets=j.markets||[];$('aSymbol').innerHTML=S.markets.map(m=>`<option value="${esc(m.symbol)}">${esc(m.symbol)} · ${esc(m.display_name||m.market||'Market')}</option>`).join('')||'<option>No active broker markets</option>';if(S.markets.length)load()}catch(e){status(false,e.message)}}
+async function tradeSpec(symbol,timeframe){const ids=['aMarketType','aSubMarket','aInstrument','aTradeType','aTradeDirection','aContractType','aContractFamily','aDuration','aDurationUnit','aBarrier','aStake','aPayout','aStrategy','aCategory','aRisk','aExecution','aEntryCondition','aConfirmation','aSpecRegime','aQuoteSource'];const put=(id,v)=>$(id).textContent=v==null||v===''?'Broker data not returned':label(v);try{const [sr,cr]=await Promise.all([fetch(`/api/strategy-signals/?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&limit=1`,{headers:{Accept:'application/json'},credentials:'same-origin'}),fetch(`/analytics/contracts/?symbol=${encodeURIComponent(symbol)}`,{headers:{Accept:'application/json'},credentials:'same-origin'})]);const sj=await jsonResponse(sr);const cj=await jsonResponse(cr);const row=(sj.data||[])[0];const ctx=row?.trade_context||{};const cap=cj.capabilities||{};const types=(cap.available_contract_types||[]).join(' / ');const families=(cap.available_contract_families||[]).join(' / ');const expiry=(cap.expiry_types||[]).join(' / ');const fields={aMarketType:ctx.market_type||row?.market||cj.market,aSubMarket:ctx.sub_market||row?.sub_market||cj.sub_market,aInstrument:ctx.instrument||row?.display_name||cj.display_name||symbol,aTradeType:ctx.trade_type||'Analysis baseline required',aTradeDirection:ctx.direction||row?.direction||'HOLD — no matching baseline',aContractType:ctx.contract_type||types,aContractFamily:ctx.contract_family||families,aDuration:ctx.duration||'Proposal required',aDurationUnit:ctx.duration_unit||expiry,aBarrier:ctx.barrier||'Broker proposal determines barrier',aStake:ctx.stake||'Proposal required',aPayout:ctx.payout||'Proposal required',aStrategy:ctx.strategy,aCategory:ctx.strategy_category,aRisk:ctx.risk_profile,aExecution:ctx.execution_mode,aEntryCondition:ctx.entry_condition,aConfirmation:ctx.confirmation,aSpecRegime:ctx.market_regime,aQuoteSource:ctx.quote_type||row?.source||'Deriv public market-data WebSocket'};ids.forEach(id=>put(id,fields[id]));$('aTradeSpecStatus').textContent=row?'Analysis baseline + Deriv contract capabilities':'Deriv contract capabilities · no matching baseline';}catch(e){$('aTradeSpecStatus').textContent=e.message;ids.forEach(id=>put(id,null))}}
+async function load(){const sym=$('aSymbol').value;if(!sym)return;clearAnalysis('Loading fresh Deriv market data…');$('aTradeSpecStatus').textContent='Loading broker capabilities';try{const r=await fetch(`/analytics/data/?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent($('aTf').value)}&limit=${$('aLimit').value}&refresh=1`,{headers:{Accept:'application/json'},credentials:'same-origin'});const d=await jsonResponse(r);S.data=d;render(d);tradeSpec(sym,$('aTf').value);status(Boolean(d.data_provenance?.fresh),`${d.data_provenance?.fresh?'Broker-confirmed':'Stale broker data'} · ${d.candles||0} candles`)}catch(e){status(false,e.message);clearAnalysis(e.message||'Analysis unavailable');$('aTradeSpecStatus').textContent=e.message||'Broker data unavailable'}}
 function render(d){$('aName').textContent=d.symbol||'—';$('aPrice').textContent=F(d.price);$('aSignal').textContent=d.signal||'—';$('aSignal').className=tone(d.signal);$('aScore').textContent=d.score!=null?`${F(d.score,1)}/100`:'—';$('aConfidence').textContent=d.confidence!=null?`${F(d.confidence,1)}%`:'—';$('aRegime').textContent=d.volatility_regime||'—';$('aStructure').textContent=d.structure||'—';$('aRes').textContent=F(d.levels?.resistance);$('aSup').textContent=F(d.levels?.support);$('aRange').textContent=F(d.levels?.range);$('aChange').textContent=d.change_pct!=null?`${F(d.change_pct,2)}%`:'—';const i=d.indicators||{};$('aS20').textContent=F(i.sma20);$('aS50').textContent=F(i.sma50);$('aS200').textContent=F(i.sma200);$('aEma').textContent=`${F(i.ema9)} / ${F(i.ema21)}`;$('aRsi').textContent=F(i.rsi14,2);$('aAtr').textContent=F(i.atr14);$('aMacd').textContent=F(i.macd?.histogram);$('aBb').textContent=i.bollinger?.width!=null?`${F(i.bollinger.width,2)}%`:'—';const fs=d.factors||[];$('aFactorsCount').textContent=`${fs.length} factors`;$('aEvidence').innerHTML=fs.map(v=>`<span class="chip">${esc(v)}</span>`).join('')||'<span class="muted">No additional factors.</span>';$('toolStructure').textContent=d.structure||'—';$('toolConfluence').textContent=d.signal?`${d.signal} · ${F(d.confidence,1)}% confidence`:'—';$('toolRegime').textContent=d.volatility_regime||'—';list('structureList',d.events,e=>`<div class="list-row"><span>${esc(e.type)}</span><span>${F(e.price)}</span></div>`);list('sweepList',d.liquidity_sweeps,e=>`<div class="list-row"><span>${esc(e.type)}</span><span>${F(e.level)}</span></div>`);list('fvgList',d.fair_value_gaps,e=>`<div class="list-row"><span>${esc(e.type)} FVG</span><span>${F(e.low)}–${F(e.high)}</span></div>`);list('zoneList',d.supply_demand,e=>`<div class="list-row"><span>${esc(e.type)}</span><span>${F(e.low)}–${F(e.high)}</span></div>`);list('patternList',d.candlestick_patterns,e=>`<div class="list-row"><span>${esc(e.type)}</span><span>${esc(e.bias)}</span></div>`);const fib=d.fibonacci||{};list('fibList',Object.entries(fib),e=>`<div class="list-row"><span>${esc(e[0])}</span><span>${F(e[1])}</span></div>`,'No Fibonacci swing range.');chart(d)}
-async function scan(){const out=$('aScanner');out.innerHTML='<tr><td colspan="6">Scanning…</td></tr>';const rows=await Promise.all(S.markets.slice(0,40).map(async m=>{try{const r=await fetch(`/analytics/data/?symbol=${encodeURIComponent(m.symbol)}&timeframe=${encodeURIComponent($('aTf').value)}&limit=200&refresh=0`,{headers:{Accept:'application/json'}});const d=await r.json();let contract='Broker capability unavailable';try{const sr=await fetch(`/api/strategy-signals/?symbol=${encodeURIComponent(m.symbol)}&timeframe=${encodeURIComponent($('aTf').value)}&limit=1`,{headers:{Accept:'application/json'}});const sj=await sr.json();contract=sj.data?.[0]?.trade_context?.contract_type||contract}catch{}return r.ok?{...m,...d,contract}:null}catch{return null}}));const good=rows.filter(x=>x&&x.status==='ok').sort((a,b)=>(b.score||0)-(a.score||0));out.innerHTML=good.map(r=>`<tr><td>${esc(r.symbol)}</td><td>${esc(r.market||'—')}</td><td class="${tone(r.signal)}">${esc(r.signal||'—')}</td><td class="score">${F(r.score,1)}</td><td>${F(r.change_pct,2)}%</td><td>${esc(label(r.contract))}</td></tr>`).join('')||'<tr><td colspan="6">No markets with sufficient candle data.</td></tr>'}
-$('aRefresh').onclick=load;$('aAnalyze').onclick=load;$('aSymbol').onchange=load;$('aTf').onchange=load;$('aLimit').onchange=load;$('aScan').onclick=scan;$('aAuto').onclick=()=>{if(S.timer){clearInterval(S.timer);S.timer=null;$('aAuto').textContent='Auto: Off'}else{S.timer=setInterval(load,15000);$('aAuto').textContent='Auto: On';load()}};addEventListener('resize',()=>S.data&&chart(S.data),{passive:true});function clearTradeSpec(){['aMarketType','aSubMarket','aInstrument','aTradeType','aTradeDirection','aContractType','aContractFamily','aDuration','aDurationUnit','aBarrier','aStake','aPayout','aStrategy','aCategory','aRisk','aExecution','aEntryCondition','aConfirmation','aSpecRegime','aQuoteSource'].forEach(id=>$(id).textContent='—');}
-function clearAnalysisState(){['aName','aPrice','aSignal','aScore','aConfidence','aRegime','aStructure','aRes','aSup','aRange','aChange','aS20','aS50','aS200','aEma','aRsi','aAtr','aMacd','aBb'].forEach(id=>$(id).textContent='—');clearTradeSpec();if($('aChart'))$('aChart').hidden=true;if($('aEmpty')){$('aEmpty').hidden=false;$('aEmpty').textContent='Loading verified Deriv broker history…';}}
-markets();
+async function scan(){const out=$('aScanner');out.innerHTML='<tr><td colspan="6">Scanning…</td></tr>';const rows=await Promise.all(S.markets.slice(0,40).map(async m=>{try{const r=await fetch(`/analytics/data/?symbol=${encodeURIComponent(m.symbol)}&timeframe=${encodeURIComponent($('aTf').value)}&limit=200&refresh=0`,{headers:{Accept:'application/json'},credentials:'same-origin'});const d=await jsonResponse(r);let contract='Broker data unavailable';try{const cr=await fetch(`/analytics/contracts/?symbol=${encodeURIComponent(m.symbol)}`,{headers:{Accept:'application/json'},credentials:'same-origin'});const cj=await jsonResponse(cr);contract=(cj.capabilities?.available_contract_types||[]).join(' / ')||'No broker contract types returned'}catch{}return {...m,...d,contract}}catch{return null}}));const good=rows.filter(x=>x&&x.status==='ok').sort((a,b)=>(b.score||0)-(a.score||0));out.innerHTML=good.map(r=>`<tr><td>${esc(r.symbol)}</td><td>${esc(r.market||'—')}</td><td class="${tone(r.signal)}">${esc(r.signal||'—')}</td><td class="score">${F(r.score,1)}</td><td>${F(r.change_pct,2)}%</td><td>${esc(label(r.contract))}</td></tr>`).join('')||'<tr><td colspan="6">No markets with sufficient candle data.</td></tr>'}
+$('aRefresh').onclick=load;$('aAnalyze').onclick=load;$('aSymbol').onchange=load;$('aTf').onchange=load;$('aLimit').onchange=load;$('aScan').onclick=scan;$('aAuto').onclick=()=>{if(S.timer){clearInterval(S.timer);S.timer=null;$('aAuto').textContent='Auto: Off'}else{S.timer=setInterval(load,15000);$('aAuto').textContent='Auto: On';load()}};addEventListener('resize',()=>S.data&&chart(S.data),{passive:true});markets();
 })();
 </script>
 {% endblock %}

@@ -148,6 +148,56 @@ services:
           envVarKey: SECRET_KEY
 
   - type: worker
+    name: AlgoBot-LiveMarketStream
+    runtime: python
+    plan: starter
+    buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt
+    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && exec python manage.py run_market_stream
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: DJANGO_ENV
+        value: production
+      - key: TELEGRAM_MODE
+        value: webhook
+      - key: TELEGRAM_WEBHOOK_URL
+        value: https://algobot.dpdns.org/api/notifications/telegram/webhook/
+      - key: TELEGRAM_BOT_TOKEN
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: TELEGRAM_BOT_TOKEN
+      - key: TELEGRAM_BOT_USERNAME
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: TELEGRAM_BOT_USERNAME
+      - key: TELEGRAM_WEBHOOK_SECRET
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: TELEGRAM_WEBHOOK_SECRET
+      - key: DATABASE_URL
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: DATABASE_URL
+      - key: REDIS_URL
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: REDIS_URL
+      - key: USE_REDIS
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: USE_REDIS
+      - key: SECRET_KEY
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: SECRET_KEY
+
+  - type: worker
     name: AlgoBot-MarketData
     runtime: python
     plan: starter

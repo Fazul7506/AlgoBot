@@ -9,7 +9,7 @@
   const label = value => String(value ?? '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—';
   const tone = value => { const v = String(value || '').toUpperCase(); return v === 'BUY' ? 'buy' : v === 'SELL' ? 'sell' : 'hold'; };
   const stateText = value => String(value || 'WAITING').replaceAll('_', ' ');
-  const S = { rows: [], last: null, scanning: false, contractCache: new Map(), focusToken: 0, catalogueRefreshed: false };
+  const S = { rows: [], last: null, scanning: false, specRequest: 0 };
 
   function setStatus(message, live = false) {
     if ($('signalsFeed')) $('signalsFeed').textContent = message;
@@ -47,60 +47,26 @@
     select.innerHTML = '<option value="">All instruments</option>' + symbols.map(row => `<option value="${esc(row.symbol)}">${esc(row.symbol)} · ${esc(row.display_name || row.instrument)}</option>`).join('');
     if (symbols.some(row => row.symbol === current)) select.value = current;
   }
-  function setSpec(id, value, fallback='Broker data unavailable') {
-    if ($(id)) $(id).textContent = value == null || value === '' ? fallback : label(value);
-  }
-  async function loadContractCapabilities(symbol, token) {
-    if (!symbol) return null;
-    if (S.contractCache.has(symbol)) return S.contractCache.get(symbol);
-    try {
-      const response = await request(`/analytics/contracts/?symbol=${encodeURIComponent(symbol)}`);
-      if (token !== S.focusToken) return null;
-      if (response?.capabilities) {
-        S.contractCache.set(symbol, response.capabilities);
-        return response.capabilities;
-      }
-    } catch (_) {}
-    return null;
-  }
+  function setSpec(id, value) { if ($(id)) $(id).textContent = value == null || value === '' ? 'Broker data not returned' : label(value); }
   async function renderSpec(row) {
-    const c = row?.trade_context || {};
-    const token = ++S.focusToken;
-    setSpec('specMarketType', c.market_type || row?.market, 'No broker market classification');
-    setSpec('specSubMarket', c.sub_market || row?.sub_market, 'No broker sub-market classification');
-    setSpec('specInstrument', c.instrument || row?.symbol, 'No broker instrument identity');
-    setSpec('specTradeType', c.trade_type || row?.direction, 'No analysis baseline');
-    setSpec('specDirection', c.direction || row?.direction, 'No analysis baseline');
-    setSpec('specStrategy', c.strategy, row ? 'No strategy baseline' : 'No analysis baseline');
-    setSpec('specCategory', c.strategy_category, row ? 'No strategy category' : 'No analysis baseline');
-    setSpec('specRisk', c.risk_profile, row ? 'No risk profile in baseline' : 'No analysis baseline');
-    setSpec('specExecution', c.execution_mode, row ? 'Execution mode not returned' : 'No analysis baseline');
-    setSpec('specEntryCondition', c.entry_condition, row ? 'Entry condition not returned' : 'No analysis baseline');
-    setSpec('specConfirmation', c.confirmation, row ? 'Confirmation not returned' : 'No analysis baseline');
-    setSpec('specRegime', c.market_regime, row ? 'Regime not returned' : 'No analysis baseline');
-    setSpec('specQuoteSource', c.quote_type || row?.source || 'deriv_public_websocket', 'Deriv public market data');
-    if ($('specSource')) $('specSource').textContent = row ? `${c.broker || 'Deriv'} · ${c.account_type || 'account'} · ${c.currency || ''}` : 'Awaiting verified signal';
-
-    ['specContractType','specContractFamily','specDurationUnit'].forEach(id => setSpec(id, null, 'Loading broker contract capabilities'));
-    setSpec('specDuration', null, 'Awaiting contract selection');
-    setSpec('specBarrier', null, 'Awaiting contract proposal');
-    setSpec('specStake', null, 'Awaiting contract proposal');
-    setSpec('specPayout', null, 'Awaiting contract proposal');
-
-    if (!row) return;
-    const capabilities = await loadContractCapabilities(row.symbol, token);
-    if (!capabilities || token !== S.focusToken) {
-      ['specContractType','specContractFamily','specDurationUnit'].forEach(id => setSpec(id, null, 'Broker capabilities unavailable'));
-      return;
-    }
-    const contracts = Array.isArray(capabilities.contracts) ? capabilities.contracts : [];
-    const types = capabilities.contract_types || contracts.map(v => v.contract_type).filter(Boolean);
-    const families = capabilities.trade_types || contracts.map(v => v.contract_category).filter(Boolean);
-    const expiry = [...new Set(contracts.map(v => v.expiry_type).filter(Boolean))];
-    setSpec('specContractType', c.contract_type || [...new Set(types)].join(', '), 'No broker contract types');
-    setSpec('specContractFamily', c.contract_family || [...new Set(families)].join(', '), 'No broker contract family');
-    setSpec('specDurationUnit', c.duration_unit || expiry.join(', '), 'No broker expiry type returned');
-    if ($('specSource')) $('specSource').textContent = capabilities.stale ? 'Deriv verified capability cache' : 'Deriv broker capabilities verified';
+    const requestId = ++S.specRequest;
+    if (!row) { ['specMarketType','specSubMarket','specInstrument','specTradeType','specDirection','specContractType','specContractFamily','specDuration','specDurationUnit','specBarrier','specStake','specPayout','specStrategy','specCategory','specRisk','specExecution','specEntryCondition','specConfirmation','specRegime','specQuoteSource'].forEach(id => setSpec(id, null)); if ($('specSource')) $('specSource').textContent='Waiting for a selected market'; return; }
+    const c = row.trade_context || {};
+    let cap = {};
+    try {
+      const response = await request(`/analytics/contracts/?symbol=${encodeURIComponent(row.symbol)}`);
+      cap = response.capabilities || {};
+    } catch (_) { cap = {}; }
+    if (requestId !== S.specRequest) return;
+    const types = (cap.available_contract_types || []).join(' / ');
+    const families = (cap.available_contract_families || []).join(' / ');
+    const expiry = (cap.expiry_types || []).join(' / ');
+    setSpec('specMarketType', c.market_type || row.market); setSpec('specSubMarket', c.sub_market || row.sub_market); setSpec('specInstrument', c.instrument || row.symbol);
+    setSpec('specTradeType', c.trade_type || 'Analysis baseline required'); setSpec('specDirection', c.direction || row.direction || 'HOLD'); setSpec('specContractType', c.contract_type || types || 'No broker contract types returned'); setSpec('specContractFamily', c.contract_family || families || 'No broker contract family returned');
+    setSpec('specDuration', c.duration || 'Proposal required'); setSpec('specDurationUnit', c.duration_unit || expiry || 'Proposal required'); setSpec('specBarrier', c.barrier || 'Broker proposal required'); setSpec('specStake', c.stake || 'Proposal required'); setSpec('specPayout', c.payout || 'Proposal required');
+    setSpec('specStrategy', c.strategy || 'No matching strategy baseline'); setSpec('specCategory', c.strategy_category || 'No matching strategy baseline'); setSpec('specRisk', c.risk_profile || 'Risk configuration required'); setSpec('specExecution', c.execution_mode || 'Manual until execution gate passes');
+    setSpec('specEntryCondition', c.entry_condition || 'Confirmation gate required'); setSpec('specConfirmation', c.confirmation || 'Fresh broker quote + baseline confirmation required'); setSpec('specRegime', c.market_regime || 'Analysis baseline required'); setSpec('specQuoteSource', c.quote_type || row.live?.source || row.source);
+    if ($('specSource')) $('specSource').textContent = `${c.broker || 'Deriv'} · ${c.account_type || 'account'} · ${c.currency || ''} · contract capabilities confirmed`;
   }
   function focus(row) {
     if (!row) {
@@ -121,15 +87,15 @@
   }
   function renderTable(rows) {
     const tbody=$('signalsTable'); if(!tbody)return;
-    tbody.innerHTML=rows.map(row=>{const c=row.trade_context||{};return `<tr data-symbol="${esc(row.symbol)}"><td><strong>${esc(row.display_name||row.symbol)}</strong><small>${esc(row.symbol)}</small></td><td>${esc(c.market_type||row.market||'—')}<small>${esc(c.sub_market||row.sub_market||'')}</small></td><td>${esc(c.trade_type||row.direction||'—')}</td><td>${esc(c.contract_type||'—')}</td><td>${esc(row.timeframe||'—')}</td><td>${esc(num(row.live?.price))}</td><td class="${tone(row.baseline_direction)}">${esc(row.baseline_direction||'—')}</td><td class="${tone(row.direction)}">${esc(row.direction||'HOLD')}</td><td><strong>${esc(pct(row.confidence))}</strong></td><td><span class="status-pill ${tone(row.direction)}">${esc(stateText(row.status))}</span></td></tr>`}).join('')||'<tr><td colspan="10">No broker signal rows returned.</td></tr>';
+    tbody.innerHTML=rows.map(row=>{const c=row.trade_context||{};return `<tr data-symbol="${esc(row.symbol)}"><td><strong>${esc(row.display_name||row.symbol)}</strong><small>${esc(row.symbol)}</small></td><td>${esc(c.market_type||row.market||'—')}<small>${esc(c.sub_market||row.sub_market||'')}</small></td><td>${esc(c.trade_type||row.direction||'—')}</td><td>${esc(c.contract_type||'Broker capabilities on selection')}</td><td>${esc(row.timeframe||'—')}</td><td>${esc(num(row.live?.price))}</td><td class="${tone(row.baseline_direction)}">${esc(row.baseline_direction||'—')}</td><td class="${tone(row.direction)}">${esc(row.direction||'HOLD')}</td><td><strong>${esc(pct(row.confidence))}</strong></td><td><span class="status-pill ${tone(row.direction)}">${esc(stateText(row.status))}</span></td></tr>`}).join('')||'<tr><td colspan="10">No broker signal rows returned.</td></tr>';
     tbody.querySelectorAll('tr[data-symbol]').forEach(r=>r.addEventListener('click',()=>focus(S.rows.find(item=>item.symbol===r.dataset.symbol))));
   }
   function renderHealth(data) {
     const live=Number(data.live_data_available_count||0), total=Number(data.count||0), stale=Number(data.stale_count||0); if($('signalsFeed'))$('signalsFeed').textContent=live===total&&total>0?'LIVE':live>0?'PARTIAL':'UNAVAILABLE'; if($('signalsFeedAge'))$('signalsFeedAge').textContent=live>0?`${live}/${total} live Deriv quotes · ${num(data.feed_latency_ms,0)} ms`:'No current Deriv quotes received'; if($('signalsReady'))$('signalsReady').textContent=String(data.actionable_count??0); if($('signalsBaseline'))$('signalsBaseline').textContent=`${S.rows.filter(r=>r.analysis_signal_id).length}/${S.rows.length} matched`; if($('scanTimestamp'))$('scanTimestamp').textContent=`Scanned ${new Date().toLocaleTimeString()}${stale?` · ${stale} stale`:''}`;
   }
   async function scan() {
-    if(S.scanning)return; S.scanning=true; const controls=[$('signalsScan'),$('signalsRefresh')].filter(Boolean); controls.forEach(b=>{b.disabled=true;b.setAttribute('aria-busy','true')}); const symbol=$('signalsSymbol')?.value||'', timeframe=$('signalsTimeframe')?.value||'M1', limit=$('signalsLimit')?.value||'40', refreshCatalogue=!S.catalogueRefreshed;
-    try { setStatus('Connecting to Deriv public live market-data feed…'); const data=await request(`/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol?`&symbol=${encodeURIComponent(symbol)}`:''}${refreshCatalogue?'&refresh_catalogue=1':''}`); if(data.status!=='ok')throw new Error(data.message||'Live signal service returned an invalid response.'); S.rows=Array.isArray(data.data)?data.data:[]; S.catalogueRefreshed=true; S.last=data; populateSymbols(S.rows); if($('signalsAccount'))$('signalsAccount').textContent=data.account?.id||'—'; if($('signalsAccountType'))$('signalsAccountType').textContent=`${data.account?.type||'account'} · ${data.account?.currency||''}`; renderHealth(data); setStatus(Number(data.live_data_available_count||0)>0?'LIVE':'NO LIVE QUOTES',Number(data.live_data_available_count||0)>0); renderTape(S.rows); renderTable(S.rows); focus(S.rows.find(r=>r.execution_ready)||S.rows.find(r=>r.direction==='BUY'||r.direction==='SELL')||S.rows.find(r=>r.live)||S.rows[0]); }
+    if(S.scanning)return; S.scanning=true; const controls=[$('signalsScan'),$('signalsRefresh')].filter(Boolean); controls.forEach(b=>{b.disabled=true;b.setAttribute('aria-busy','true')}); const symbol=$('signalsSymbol')?.value||'', timeframe=$('signalsTimeframe')?.value||'M1', limit=$('signalsLimit')?.value||'40';
+    try { setStatus('Reading the continuous Deriv public market-data stream…'); const data=await request(`/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol?`&symbol=${encodeURIComponent(symbol)}`:''}`); if(data.status!=='ok')throw new Error(data.message||'Live signal service returned an invalid response.'); S.rows=Array.isArray(data.data)?data.data:[]; S.last=data; populateSymbols(S.rows); if($('signalsAccount'))$('signalsAccount').textContent=data.account?.id||'—'; if($('signalsAccountType'))$('signalsAccountType').textContent=`${data.account?.type||'account'} · ${data.account?.currency||''}`; renderHealth(data); setStatus(Number(data.live_data_available_count||0)>0?'LIVE':'NO LIVE QUOTES',Number(data.live_data_available_count||0)>0); renderTape(S.rows); renderTable(S.rows); focus(S.rows.find(r=>r.execution_ready)||S.rows.find(r=>r.direction==='BUY'||r.direction==='SELL')||S.rows.find(r=>r.live)||S.rows[0]); }
     catch(error){S.rows=[];setStatus(error?.message||'Deriv public live market-data feed unavailable.');if($('signalsReady'))$('signalsReady').textContent='0';if($('signalsBaseline'))$('signalsBaseline').textContent='Unavailable';if($('scanTimestamp'))$('scanTimestamp').textContent=`Scan failed · ${new Date().toLocaleTimeString()}`;renderTape([]);renderTable([]);focus(null)}
     finally{S.scanning=false;controls.forEach(b=>{b.disabled=false;b.removeAttribute('aria-busy')})}
   }
