@@ -54,6 +54,7 @@ class Candle(models.Model):
     close = models.DecimalField(max_digits=20, decimal_places=8)
     volume = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     epoch = models.BigIntegerField(db_index=True)
+    source = models.CharField(max_length=32, default="tick_stream", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
