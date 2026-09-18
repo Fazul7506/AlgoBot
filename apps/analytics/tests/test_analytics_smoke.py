@@ -63,7 +63,6 @@ class AnalyticsSmokeTests(TestCase):
                 close=close,
                 volume=1,
                 epoch=epoch,
-                source="deriv_candles",
             )
         with patch.object(
             views,
@@ -72,7 +71,7 @@ class AnalyticsSmokeTests(TestCase):
         ) as analyze:
             response = self.client.get(
                 reverse("analysis-data"),
-                {"symbol": market.symbol, "timeframe": "M1", "limit": 300, "refresh": 0},
+                {"symbol": market.symbol, "timeframe": "M1", "limit": 300},
             )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(analyze.call_count, 1)
@@ -92,6 +91,28 @@ class AnalyticsSmokeTests(TestCase):
         )
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["source"], "market_data.Candle")
+
+
+    @patch.object(views, "fetch_contracts_for")
+    def test_analysis_contracts_returns_deriv_capabilities(self, fetch_contracts):
+        market = MarketSymbol.objects.create(
+            symbol="R_100",
+            display_name="Volatility 100",
+            market="Volatility Indices",
+        )
+        fetch_contracts.return_value = {
+            "symbol": "R_100",
+            "source": "deriv_public_websocket",
+            "available": [{"underlying_symbol": "R_100", "contract_type": "MULTUP", "contract_category": "multiplier", "market": "synthetic_index", "submarket": "volatility", "exchange_name": "DERIV", "expiry_type": "intraday", "sentiment": "up", "barriers": 0}],
+            "available_contract_types": ["MULTUP"],
+            "available_contract_families": ["multiplier"],
+            "expiry_types": ["intraday"],
+            "sentiments": ["up"],
+        }
+        response = self.client.get(reverse("analysis-contracts"), {"symbol": market.symbol})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["capabilities"]["available_contract_types"], ["MULTUP"])
+        fetch_contracts.assert_called_once_with("R_100")
 
     def test_analysis_market_endpoint_is_user_authenticated(self):
         response = self.client.get(reverse("analysis-markets"))

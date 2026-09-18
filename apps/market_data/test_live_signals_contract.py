@@ -8,7 +8,7 @@ from django.utils import timezone
 from apps.brokers.models import Broker, BrokerAccount
 from apps.strategies.models import Strategy, StrategyConfiguration, StrategySignal
 
-from .models import MarketSymbol
+from .models import MarketSnapshot, MarketSymbol
 
 
 class LiveSignalsContractTests(TestCase):
@@ -34,6 +34,31 @@ class LiveSignalsContractTests(TestCase):
         self.assertEqual(payload["data"][0]["live"]["price"], 101.0)
         self.assertEqual(payload["data"][0]["baseline_direction"], "BUY")
         self.assertEqual(payload["feed_latency_ms"], 25.0)
+
+    @patch("apps.market_data.signal_views._live_deriv_ticks")
+    def test_fresh_persisted_deriv_stream_quote_is_preferred(self, live_ticks):
+        MarketSnapshot.objects.create(
+            symbol=self.market,
+            last_price="101.25000",
+            bid="101.24000",
+            ask="101.26000",
+            timestamp=timezone.now(),
+        )
+        StrategySignal.objects.create(
+            strategy=self.strategy,
+            configuration=self.config,
+            symbol="R_100",
+            signal="BUY",
+            confidence=80,
+            entry_price="100.00000",
+            timestamp=timezone.now(),
+        )
+        response = self.client.get("/api/strategy-signals/?symbol=R_100&timeframe=M1")
+        self.assertEqual(response.status_code, 200)
+        row = response.json()["data"][0]
+        self.assertEqual(row["live"]["price"], 101.25)
+        self.assertEqual(row["live"]["source"], "deriv_public_stream")
+        live_ticks.assert_not_called()
 
     @patch("apps.market_data.signal_views._live_deriv_ticks")
     def test_missing_baseline_never_becomes_actionable(self, live_ticks):

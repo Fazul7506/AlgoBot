@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import time
 from decimal import Decimal, InvalidOperation
 
 import websockets
@@ -213,7 +214,7 @@ def fetch_contracts_for(symbol: str) -> dict:
         "sentiments": sorted(
             {str(item["sentiment"]) for item in contracts if item.get("sentiment")}
         ),
-        "fetched_at": int(__import__("time").time()),
+        "fetched_at": int(time.time()),
     }
     cache.set(cache_key, result, 300)
     return result

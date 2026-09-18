@@ -13,14 +13,15 @@ from apps.brokers.exceptions import BrokerConnectionError
 from apps.brokers.models import BrokerAccount
 from apps.strategies.models import StrategySignal
 
-from .models import MarketSymbol
+from .models import MarketSnapshot, MarketSymbol
 from .deriv_sync import sync_active_symbols
 
 LIVE_TICK_MAX_AGE_SECONDS = 5
 ANALYSIS_BASELINE_MAX_AGE_SECONDS = 900
 DEFAULT_CONFIDENCE_THRESHOLD = 70.0
 MAX_SCAN_SYMBOLS = 80
-LIVE_TICK_SCAN_TIMEOUT_SECONDS = 8.0
+LIVE_TICK_SCAN_TIMEOUT_SECONDS = 12.0
+LIVE_SNAPSHOT_MAX_AGE_SECONDS = 5
 
 
 def _selected_deriv_account(request):
@@ -108,7 +109,7 @@ def _trade_context(signal, market, account, timeframe=None):
         "confirmation": _meta_first(merged, "confirmation", "confirmation_sequence", "confirmation_status"),
         "market_regime": _meta_first(merged, "market_regime", "regime", "volatility_regime"),
         "execution_mode": _meta_first(merged, "execution_mode", "execution", "mode"),
-        "quote_type": "deriv_public_websocket",
+        "quote_type": _meta_first(merged, "quote_type", "price_source"),
         "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
         "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None,
         "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
@@ -116,16 +117,16 @@ def _trade_context(signal, market, account, timeframe=None):
 
 
 async def _live_deriv_ticks(symbols):
-    """Read current Deriv quotes from one public broker market-data stream.
+    """Read current Deriv quotes from the broker's public market-data channel.
 
-    The public Options WebSocket is the authoritative no-auth source for live
-    quotes. Subscribe to each requested symbol on one connection rather than
-    opening one connection per symbol or depending on an authenticated account
-    socket.
+    Deriv documents the public Options WebSocket as the authoritative no-auth
+    channel for real-time ticks. Account OTP authentication is reserved for
+    account-scoped operations such as trading and balances. Keeping quote
+    retrieval on the public market-data channel prevents an OAuth trade-scope
+    or account OTP problem from incorrectly making every market appear to
+    have no live price.
     """
-    unique_symbols = list(dict.fromkeys(
-        str(symbol).strip() for symbol in symbols if str(symbol).strip()
-    ))
+    unique_symbols = list(dict.fromkeys(str(symbol).strip() for symbol in symbols if str(symbol).strip()))
     if not unique_symbols:
         return {}, 0
 
@@ -134,13 +135,9 @@ async def _live_deriv_ticks(symbols):
         raise BrokerConnectionError("DERIV_PUBLIC_WS_URL is not configured")
 
     started = time.monotonic()
-    req_to_symbol = {
-        index: symbol for index, symbol in enumerate(unique_symbols, start=1)
-    }
-    symbol_set = set(unique_symbols)
     results = {}
-    failed_symbols = set()
-    deadline = started + max(LIVE_TICK_SCAN_TIMEOUT_SECONDS, 12.0)
+    req_to_symbol = {index: symbol for index, symbol in enumerate(unique_symbols, start=1)}
+    deadline = started + LIVE_TICK_SCAN_TIMEOUT_SECONDS
 
     try:
         async with websockets.connect(
@@ -152,22 +149,16 @@ async def _live_deriv_ticks(symbols):
             max_size=2**20,
         ) as ws:
             for req_id, symbol in req_to_symbol.items():
-                await ws.send(json.dumps({
-                    "ticks": symbol,
-                    "subscribe": 1,
-                    "req_id": req_id,
-                }))
+                await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
 
-            while len(results) + len(failed_symbols) < len(symbol_set):
+            while len(results) < len(req_to_symbol):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     break
                 try:
-                    raw = await asyncio.wait_for(
-                        ws.recv(), timeout=min(2.0, remaining)
-                    )
+                    raw = await asyncio.wait_for(ws.recv(), timeout=min(1.5, remaining))
                 except asyncio.TimeoutError:
-                    continue
+                    break
 
                 try:
                     payload = json.loads(raw)
@@ -175,20 +166,13 @@ async def _live_deriv_ticks(symbols):
                     continue
 
                 if payload.get("error"):
-                    failed = req_to_symbol.get(payload.get("req_id"))
-                    if failed:
-                        failed_symbols.add(failed)
                     continue
                 if payload.get("msg_type") != "tick":
                     continue
 
                 tick = payload.get("tick") or {}
-                symbol = str(
-                    tick.get("symbol")
-                    or req_to_symbol.get(payload.get("req_id"))
-                    or ""
-                )
-                if symbol not in symbol_set:
+                symbol = str(tick.get("symbol") or req_to_symbol.get(payload.get("req_id"), ""))
+                if symbol not in req_to_symbol.values():
                     continue
 
                 quote = _as_float(tick.get("quote"))
@@ -198,11 +182,29 @@ async def _live_deriv_ticks(symbols):
 
                 results[symbol] = tick
     except (OSError, asyncio.TimeoutError, websockets.WebSocketException) as exc:
-        raise BrokerConnectionError(
-            "Deriv public live market data is temporarily unavailable"
-        ) from exc
+        raise BrokerConnectionError("Deriv public live market data is temporarily unavailable") from exc
 
     return results, round((time.monotonic() - started) * 1000, 1)
+
+def _persisted_live_ticks(markets):
+    """Read the latest broker ticks persisted by the continuous Deriv stream."""
+    now = timezone.now()
+    results = {}
+    snapshots = MarketSnapshot.objects.filter(symbol__in=markets).select_related("symbol")
+    for snapshot in snapshots:
+        age = max(0.0, (now - snapshot.timestamp).total_seconds())
+        if age > LIVE_SNAPSHOT_MAX_AGE_SECONDS:
+            continue
+        results[snapshot.symbol.symbol] = {
+            "symbol": snapshot.symbol.symbol,
+            "quote": _as_float(snapshot.last_price),
+            "bid": _as_float(snapshot.bid),
+            "ask": _as_float(snapshot.ask),
+            "epoch": int(snapshot.timestamp.timestamp()),
+            "_source": "deriv_public_stream",
+        }
+    return results
+
 
 
 def _revise_signal(signal, live_tick, now, market, account):
@@ -240,7 +242,7 @@ def _revise_signal(signal, live_tick, now, market, account):
         "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None, "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
         "strategy": signal.strategy.name, "strategy_version": signal.strategy.version, "timeframe": _analysis_timeframe(signal),
         "analysis_metadata": metadata, "trade_context": _trade_context(signal, market, account),
-        "live": {"price": live_price, "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": live_epoch, "age_seconds": live_age, "source": "deriv_public_websocket"},
+        "live": {"price": live_price, "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": live_epoch, "age_seconds": live_age, "source": live_tick.get("_source", "deriv_public_websocket")},
     }
 
 
@@ -254,14 +256,6 @@ def strategy_signals(request):
     account_credentials_valid = account.token_status == "active" and not account.is_token_expired
     symbol_filter = str(request.GET.get("symbol") or "").strip()
     timeframe = str(request.GET.get("timeframe") or "M1").strip()
-    refresh_catalogue = str(request.GET.get("refresh_catalogue") or "").lower() in {"1", "true", "yes"}
-    if refresh_catalogue:
-        try:
-            sync_active_symbols()
-        except Exception:
-            # The existing broker-synced catalogue remains the last verified
-            # market universe if this optional refresh is temporarily down.
-            pass
     try:
         limit = min(max(int(request.GET.get("limit", 40)), 1), MAX_SCAN_SYMBOLS)
     except (TypeError, ValueError):
@@ -272,23 +266,33 @@ def strategy_signals(request):
     if not markets:
         return JsonResponse({"status": "ok", "source": "deriv_public_live", "count": 0, "live_data_available_count": 0, "actionable_count": 0, "data": []})
     symbols = [market.symbol for market in markets]
-    try:
-        live_ticks, feed_latency_ms = asyncio.run(_live_deriv_ticks(symbols))
-    except BrokerConnectionError as exc:
-        return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": str(exc)}, status=502)
-    except Exception:
-        return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": "The Deriv public live market-data feed could not be established."}, status=502)
+    live_started = time.monotonic()
+    live_ticks = _persisted_live_ticks(markets)
+    missing_symbols = [symbol for symbol in symbols if symbol not in live_ticks]
+    if missing_symbols:
+        try:
+            fallback_ticks, _fallback_latency = asyncio.run(_live_deriv_ticks(missing_symbols))
+            for symbol, tick in fallback_ticks.items():
+                tick["_source"] = "deriv_public_websocket"
+            live_ticks.update(fallback_ticks)
+        except BrokerConnectionError:
+            # A missing live quote remains missing. No stale or fabricated value
+            # is substituted into a trading signal.
+            pass
+        except Exception:
+            pass
+    feed_latency_ms = round((time.monotonic() - live_started) * 1000, 1)
     baselines = _analysis_baselines(request, symbols, timeframe, account=account)
     now = timezone.now(); rows = []
     for market in markets:
         live_tick = live_ticks.get(market.symbol); baseline = baselines.get(market.symbol)
-        row = {"symbol": market.symbol, "instrument": market.display_name, "display_name": market.display_name, "market": market.market, "sub_market": market.sub_market, "broker": "deriv", "account_id": account.account_id, "account_type": account.account_type, "timeframe": timeframe, "source": "deriv_public_live"}
+        row = {"symbol": market.symbol, "instrument": market.display_name, "display_name": market.display_name, "market": market.market, "sub_market": market.sub_market, "broker": "deriv", "account_id": account.account_id, "account_type": account.account_type, "timeframe": timeframe, "source": "deriv_public_stream"}
         base_context = {"market_type": market.market, "sub_market": market.sub_market, "symbol": market.symbol, "instrument": market.display_name, "trade_type": None, "direction": "HOLD", "contract_type": None, "contract_family": None, "duration": None, "duration_unit": None, "barrier": None, "stake": None, "payout": None, "currency": account.currency, "account_type": account.account_type, "broker": account.broker.name, "timeframe": timeframe}
         if not live_tick:
             row.update({"direction": "HOLD", "confidence": 0, "status": "LIVE_DATA_UNAVAILABLE", "execution_ready": False, "evidence": ["broker_tick_not_received"], "trade_context": base_context})
         elif not baseline:
             live_age = max(0, int(time.time()) - int(live_tick.get("epoch")))
-            row.update({"direction": "HOLD", "confidence": 0, "status": "WAITING_FOR_ANALYSIS", "execution_ready": False, "evidence": ["live_tick_received", "no_matching_analysis_baseline"], "live": {"price": _as_float(live_tick.get("quote")), "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": int(live_tick.get("epoch")), "age_seconds": live_age, "source": "deriv_public_websocket"}, "trade_context": base_context})
+            row.update({"direction": "HOLD", "confidence": 0, "status": "WAITING_FOR_ANALYSIS", "execution_ready": False, "evidence": ["live_tick_received", "no_matching_analysis_baseline"], "live": {"price": _as_float(live_tick.get("quote")), "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": int(live_tick.get("epoch")), "age_seconds": live_age, "source": live_tick.get("_source", "deriv_public_websocket")}, "trade_context": base_context})
         else:
             row.update(_revise_signal(baseline, live_tick, now, market, account))
         rows.append(row)
