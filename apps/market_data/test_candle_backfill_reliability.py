@@ -14,7 +14,9 @@ class CandleBackfillReliabilityTests(TestCase):
             scope="initial",
             status="queued",
             count=5000,
-            requested_at=timezone.now() - timedelta(minutes=10),
+        )
+        CandleBackfillRun.objects.filter(pk=run.pk).update(
+            requested_at=timezone.now() - timedelta(minutes=10)
         )
 
         with patch(
@@ -34,7 +36,6 @@ class CandleBackfillReliabilityTests(TestCase):
             scope="initial",
             status="queued",
             count=5000,
-            requested_at=timezone.now(),
         )
 
         with patch(
@@ -53,8 +54,10 @@ class CandleBackfillReliabilityTests(TestCase):
             status="running",
             count=250,
             started_at=timezone.now() - timedelta(minutes=20),
-            requested_at=timezone.now() - timedelta(minutes=20),
             task_id="active-worker-task",
+        )
+        CandleBackfillRun.objects.filter(pk=run.pk).update(
+            requested_at=timezone.now() - timedelta(minutes=20)
         )
 
         with patch(
