@@ -14,9 +14,9 @@ USE_CELERY = env_bool("USE_CELERY", True)
 # Keep broker/result URLs centralized in cache.py so managed Redis configuration
 # is shared by Django, Channels and Celery.
 CELERY_BROKER_CONNECTION_TIMEOUT = 3
-CELERY_BROKER_CONNECTION_RETRY = False
-CELERY_BROKER_CONNECTION_MAX_RETRIES = 0
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = False
+CELERY_BROKER_CONNECTION_RETRY = env_bool("CELERY_WORKER_BROKER_RETRY", False)
+CELERY_BROKER_CONNECTION_MAX_RETRIES = None if CELERY_BROKER_CONNECTION_RETRY else 0
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = env_bool("CELERY_WORKER_RETRY_ON_STARTUP", False)
 
 # A failed publish is a failed queue operation, not a reason to hold an HTTP
 # request open while Celery retries a dead Redis connection.
