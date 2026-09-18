@@ -220,7 +220,7 @@ def backfill_research_candles(count=250, symbol=None):
         error = f"Historical backfill failed for: {', '.join(failed)}" if failed else ""
         _mark_backfill_run(
             "research",
-            status="failed" if failed else "succeeded",
+            status="failed" if failed else "completed",
             result=result,
             error=error,
             completed_at=timezone.now(),
@@ -252,8 +252,8 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
     try:
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
-            if run.status == "succeeded" and run.completed_at:
-                return run.result or {"status": "succeeded"}
+            if run.status == "completed" and run.completed_at:
+                return run.result or {"status": "completed"}
 
             run.status = "running"
             run.started_at = run.started_at or timezone.now()
@@ -290,10 +290,10 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
 
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
-            if run.status == "succeeded" and run.completed_at:
-                return run.result or {"status": "succeeded"}
+            if run.status == "completed" and run.completed_at:
+                return run.result or {"status": "completed"}
             run.result = result
-            run.status = "failed" if failed else "succeeded"
+            run.status = "failed" if failed else "completed"
             run.error = error
             run.completed_at = timezone.now()
             run.save(update_fields=["result", "status", "error", "completed_at"])
@@ -304,7 +304,7 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
     except Exception as exc:
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
-            if not (run.status == "succeeded" and run.completed_at):
+            if not (run.status == "completed" and run.completed_at):
                 run.status = "failed"
                 run.error = str(exc)
                 run.completed_at = timezone.now()
