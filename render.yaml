@@ -92,8 +92,8 @@ services:
     name: AlgoBot-Beat
     runtime: python
     plan: starter
-    buildCommand: export PATH="$PWD/bin:\${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt
-    startCommand: export PATH="$PWD/bin:\${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && exec celery -A deriv_platform beat --loglevel=INFO --pidfile=/tmp/algobot-celerybeat.pid
+    buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt
+    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && exec celery -A deriv_platform beat --loglevel=INFO --pidfile=/tmp/algobot-celerybeat.pid
     maxShutdownDelaySeconds: 60
     envVars:
       - key: DJANGO_ENV
@@ -145,8 +145,8 @@ services:
     name: AlgoBot-MarketData
     runtime: python
     plan: starter
-    buildCommand: export PATH="$PWD/bin:\${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt
-    startCommand: export PATH="$PWD/bin:\${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && exec celery -A deriv_platform worker --loglevel=INFO -Q market_data --concurrency=1 --prefetch-multiplier=1 --max-tasks-per-child=20
+    buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt
+    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && exec celery -A deriv_platform worker --loglevel=INFO -Q market_data --concurrency=1 --prefetch-multiplier=1 --max-tasks-per-child=20
     maxShutdownDelaySeconds: 60
     envVars:
       - key: DJANGO_ENV
