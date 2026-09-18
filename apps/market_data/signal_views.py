@@ -244,7 +244,6 @@ def strategy_signals(request):
     markets = list(symbols_qs[:limit])
     if not markets:
         return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "count": 0, "live_data_available_count": 0, "actionable_count": 0, "data": []})
-    adapter = BrokerRegistry().adapter(account.broker, account)
     symbols = [market.symbol for market in markets]
     try:
         live_ticks, feed_latency_ms = asyncio.run(_live_deriv_ticks(symbols))
