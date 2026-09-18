@@ -10,9 +10,13 @@ def _celery_app():
     return getattr(module, "app", None)
 
 
-def _task(fn):
+def _task(fn=None, **options):
     app = _celery_app()
-    return app.task(fn) if app else fn
+
+    def decorate(target):
+        return app.task(target, **options) if app else target
+
+    return decorate(fn) if fn is not None else decorate
 
 
 @_task
@@ -146,7 +150,7 @@ def _mark_backfill_run(scope, *, status=None, count=None, symbol=None, task_id=N
         return run
 
 
-@_task
+@_task(acks_late=True, reject_on_worker_lost=True)
 def backfill_research_candles(count=250, symbol=None):
     """Keep research history warm and persist every scheduled Celery run."""
     from django.db import close_old_connections
@@ -219,7 +223,7 @@ def backfill_research_candles(count=250, symbol=None):
         close_old_connections()
 
 
-@_task
+@_task(acks_late=True, reject_on_worker_lost=True)
 def run_initial_candle_backfill(run_id, count=5000, symbol=None):
     """Run the one-time historical warm-up from a Celery worker."""
     from django.db import close_old_connections, transaction
