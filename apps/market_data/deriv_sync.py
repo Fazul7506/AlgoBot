@@ -137,7 +137,19 @@ def sync_active_symbols() -> int:
         symbols = response.get("active_symbols", [])
         if not isinstance(symbols, list):
             raise RuntimeError("Deriv returned an invalid active_symbols payload")
-        return sum(_sync_one_symbol(item) for item in symbols if isinstance(item, dict))
+        active_values = {
+            str(item.get("underlying_symbol") or item.get("symbol") or "").strip()
+            for item in symbols
+            if isinstance(item, dict)
+        }
+        active_values.discard("")
+        synced = sum(_sync_one_symbol(item) for item in symbols if isinstance(item, dict))
+        if active_values:
+            MarketSymbol.objects.filter(
+                broker="deriv",
+                is_active=True,
+            ).exclude(symbol__in=active_values).update(is_active=False, is_tradable=False)
+        return synced
     finally:
         try:
             cache.delete(MARKET_SYNC_LOCK)
