@@ -6,5 +6,6 @@ urlpatterns = [
     path("data/", views.analysis_data, name="analysis-data"),
     path("markets/", views.analysis_markets, name="analysis-markets"),
     path("contracts/", views.analysis_contracts, name="analysis-contracts"),
+    path("proposal/", views.broker_proposal, name="broker-proposal"),
     path("export/", views.analytics_export, name="analytics-export"),
 ]
