@@ -54,7 +54,7 @@
     const c = row.trade_context || {};
     let cap = {};
     try {
-      const response = await request(`/analytics/contracts/?symbol=${encodeURIComponent(row.symbol)}`);
+      const response = await request(`/analysis/contracts/?symbol=${encodeURIComponent(row.symbol)}`);
       cap = response.capabilities || {};
     } catch (_) { cap = {}; }
     if (requestId !== S.specRequest) return;
