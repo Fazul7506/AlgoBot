@@ -70,14 +70,11 @@ class BrokerAccountIntelligenceTests(TestCase):
             Decimal(str(context["risk_budget"])),
         )
 
-    @patch("apps.brokers.deriv_execution.DerivTradingOperations.proposal")
-    @patch("apps.analysis.views.get_active_account")
-    @patch("apps.analysis.views.DerivTradingOperations.proposal")
-    @patch("apps.analysis.views.get_active_account")
     @patch("apps.analysis.views.fetch_contracts_for")
     @patch("apps.analysis.views.SynchronizationService.sync_account")
+    @patch("apps.analysis.views.get_active_account")
     def test_proposal_endpoint_requires_broker_contract_and_uses_risk_budget(
-        self, sync_account, fetch_contracts, get_active, proposal
+        self, get_active, sync_account, fetch_contracts
     ):
         MarketSymbol.objects.create(symbol="R_100", display_name="Volatility 100", market="Volatility Indices")
         get_active.return_value = self.account
