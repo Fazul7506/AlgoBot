@@ -4,23 +4,11 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from apps.brokers.exceptions import BrokerAuthenticationError
-
-from .signal_views import _authenticated_live_ticks
+from .signal_views import _live_deriv_ticks
 
 
 class DerivLiveWebSocketContractTests(SimpleTestCase):
-    def test_live_signal_feed_uses_otp_url_and_never_sends_authorize_to_public_options_socket(self):
-        class Adapter:
-            timeout = 10
-
-            def __init__(self):
-                self.otp_calls = 0
-
-            def _authenticated_ws_url(self):
-                self.otp_calls += 1
-                return "wss://api.derivws.com/trading/v1/options/ws/demo?otp=test"
-
+    def test_live_signal_feed_uses_public_options_socket_and_never_sends_authorize(self):
         class FakeWebSocket:
             def __init__(self):
                 self.sent = []
@@ -44,29 +32,18 @@ class DerivLiveWebSocketContractTests(SimpleTestCase):
             async def recv(self):
                 return self.messages.pop(0)
 
-        adapter = Adapter()
         socket = FakeWebSocket()
 
-        async def fake_to_thread(func, *args):
-            return func(*args)
-
-        with patch("apps.market_data.signal_views.websockets.connect", return_value=socket), patch(
-            "apps.market_data.signal_views.asyncio.to_thread", side_effect=fake_to_thread
+        with patch("apps.market_data.signal_views.settings.DERIV_PUBLIC_WS_URL", "wss://api.derivws.com/trading/v1/options/ws/public"), patch(
+            "apps.market_data.signal_views.websockets.connect", return_value=socket
         ):
-            ticks, _latency = asyncio.run(_authenticated_live_ticks(adapter, ["R_100"]))
+            ticks, _latency = asyncio.run(_live_deriv_ticks(["R_100"]))
 
-        self.assertEqual(adapter.otp_calls, 1)
         self.assertEqual(ticks["R_100"]["quote"], 123.45)
         self.assertEqual(socket.sent, [{"ticks": "R_100", "subscribe": 0, "req_id": 1}])
         self.assertNotIn("authorize", socket.sent[0])
 
-    def test_authentication_error_from_otp_session_is_propagated(self):
-        class Adapter:
-            timeout = 10
-
-            def _authenticated_ws_url(self):
-                return "wss://api.derivws.com/trading/v1/options/ws/demo?otp=test"
-
+    def test_public_socket_errors_do_not_become_account_authentication_errors(self):
         class FakeWebSocket:
             async def __aenter__(self):
                 return self
@@ -83,11 +60,9 @@ class DerivLiveWebSocketContractTests(SimpleTestCase):
                     "error": {"code": "AuthorizationRequired", "message": "session expired"},
                 })
 
-        async def fake_to_thread(func, *args):
-            return func(*args)
-
-        with patch("apps.market_data.signal_views.websockets.connect", return_value=FakeWebSocket()), patch(
-            "apps.market_data.signal_views.asyncio.to_thread", side_effect=fake_to_thread
+        with patch("apps.market_data.signal_views.settings.DERIV_PUBLIC_WS_URL", "wss://api.derivws.com/trading/v1/options/ws/public"), patch(
+            "apps.market_data.signal_views.websockets.connect", return_value=FakeWebSocket()
         ):
-            with self.assertRaises(BrokerAuthenticationError):
-                asyncio.run(_authenticated_live_ticks(Adapter(), ["R_100"]))
+            ticks, _latency = asyncio.run(_live_deriv_ticks(["R_100"]))
+
+        self.assertEqual(ticks, {})
