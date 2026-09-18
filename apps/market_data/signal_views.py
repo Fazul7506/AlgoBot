@@ -9,7 +9,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
 
-from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError
+from apps.brokers.exceptions import BrokerConnectionError
 from apps.brokers.models import BrokerAccount
 from apps.strategies.models import StrategySignal
 
@@ -195,7 +195,7 @@ def _revise_signal(signal, live_tick, now, market, account):
     live_price = _as_float(live_tick.get("quote"))
     entry = _as_float(signal.entry_price)
     revised = base_confidence
-    evidence = ["analysis_baseline_loaded", "authenticated_live_deriv_tick"]
+    evidence = ["analysis_baseline_loaded", "deriv_public_live_tick"]
     status = "LIVE_REVIEW"
     direction = baseline_direction
     if analysis_age > ANALYSIS_BASELINE_MAX_AGE_SECONDS:
@@ -220,12 +220,12 @@ def _revise_signal(signal, live_tick, now, market, account):
         "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None, "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
         "strategy": signal.strategy.name, "strategy_version": signal.strategy.version, "timeframe": _analysis_timeframe(signal),
         "analysis_metadata": metadata, "trade_context": _trade_context(signal, market, account),
-        "live": {"price": live_price, "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": live_epoch, "age_seconds": live_age, "source": "deriv_authenticated_websocket"},
+        "live": {"price": live_price, "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": live_epoch, "age_seconds": live_age, "source": "deriv_public_websocket"},
     }
 
 
 def strategy_signals(request):
-    """Return authenticated broker-sourced signal data without HTML login redirects."""
+    """Return broker-sourced signal data without HTML login redirects."""
     if not request.user.is_authenticated:
         return JsonResponse({"status": "error", "code": "AUTHENTICATION_REQUIRED", "message": "Authentication is required to read live signals."}, status=401)
     account = _selected_deriv_account(request)
@@ -242,14 +242,14 @@ def strategy_signals(request):
     if symbol_filter: symbols_qs = symbols_qs.filter(symbol=symbol_filter)
     markets = list(symbols_qs[:limit])
     if not markets:
-        return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "count": 0, "live_data_available_count": 0, "actionable_count": 0, "data": []})
+        return JsonResponse({"status": "ok", "source": "deriv_public_live", "count": 0, "live_data_available_count": 0, "actionable_count": 0, "data": []})
     symbols = [market.symbol for market in markets]
     try:
         live_ticks, feed_latency_ms = asyncio.run(_live_deriv_ticks(symbols))
     except BrokerConnectionError as exc:
         return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": str(exc)}, status=502)
     except Exception:
-        return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": "The authenticated Deriv live signal feed could not be established."}, status=502)
+        return JsonResponse({"status": "error", "code": "DERIV_LIVE_FEED_FAILED", "message": "The Deriv public live market-data feed could not be established."}, status=502)
     baselines = _analysis_baselines(request, symbols, timeframe, account=account)
     now = timezone.now(); rows = []
     for market in markets:
