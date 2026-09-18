@@ -32,7 +32,7 @@ const $=id=>document.getElementById(id),S={markets:[],data:null,timer:null};
 const F=(v,d=5)=>v==null||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const tone=s=>String(s||'').toLowerCase().includes('bull')||String(s||'').toUpperCase()==='BUY'?'bull':String(s||'').toLowerCase().includes('bear')||String(s||'').toUpperCase()==='SELL'?'bear':'neutral';
-const label=v=>String(v??'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())||'Not specified';
+const label=v=>String(v??'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())||'Broker value unavailable';
 const list=(id,items,fn,empty='No events detected.')=>$(id).innerHTML=items?.length?items.map(fn).join(''):`<span class="muted">${empty}</span>`;
 function status(ok,t){$('aDot').className='dot'+(ok?' live':'');$('aStatus').textContent=t}
 function clearAnalysis(message='No broker-authoritative analysis is available for this selection.'){const ids=['aName','aPrice','aSignal','aScore','aConfidence','aRegime','aStructure','aRes','aSup','aRange','aChange','aS20','aS50','aS200','aEma','aRsi','aAtr','aMacd','aBb','aFactorsCount','toolStructure','toolConfluence','toolRegime'];ids.forEach(id=>{if($(id))$(id).textContent='—'});if($('aFactorsCount'))$('aFactorsCount').textContent='0 factors';if($('aEvidence'))$('aEvidence').innerHTML='<span class="muted">'+esc(message)+'</span>';['structureList','sweepList','fvgList','zoneList','patternList','fibList'].forEach(id=>{if($(id))$(id).innerHTML=''});if($('aChart'))$('aChart').hidden=true;if($('aEmpty')){$('aEmpty').hidden=false;$('aEmpty').textContent=message}S.data=null}
