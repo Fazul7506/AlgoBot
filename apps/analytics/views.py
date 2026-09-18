@@ -14,7 +14,7 @@ from django.shortcuts import render
 from apps.analysis.advanced import analyze_candles
 from apps.execution.models import Order
 from apps.market_data.models import MarketSnapshot, MarketSymbol
-from apps.market_data.deriv_sync import fetch_tick
+from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick
 from apps.market_data.historical import fetch_and_store, fetch_and_store_ticks
 from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.research_data import ResearchDataService
@@ -201,6 +201,41 @@ def analysis_data(request):
 @login_required
 def analysis_markets(request):
     return JsonResponse({"markets": _analysis_markets()})
+
+
+@login_required
+def analysis_contracts(request):
+    symbol = (request.GET.get("symbol") or "").strip().upper()
+    if not symbol:
+        return JsonResponse({"status": "error", "code": "SYMBOL_REQUIRED", "message": "A market symbol is required."}, status=400)
+    try:
+        market = MarketSymbol.objects.get(symbol=symbol, is_active=True, is_tradable=True)
+    except MarketSymbol.DoesNotExist:
+        return JsonResponse({"status": "error", "code": "MARKET_UNAVAILABLE", "message": "The selected market is not currently available from the broker catalogue."}, status=404)
+    try:
+        capabilities = fetch_contracts_for(market.symbol)
+    except Exception as exc:
+        return JsonResponse(
+            {
+                "status": "error",
+                "code": "BROKER_CONTRACT_DATA_FAILED",
+                "message": "Deriv contract capabilities could not be confirmed.",
+                "detail": str(exc),
+                "symbol": market.symbol,
+            },
+            status=503,
+        )
+    return JsonResponse(
+        {
+            "status": "ok",
+            "broker": "Deriv",
+            "symbol": market.symbol,
+            "display_name": market.display_name,
+            "market": market.market,
+            "sub_market": market.sub_market,
+            "capabilities": capabilities,
+        }
+    )
 
 
 @login_required
