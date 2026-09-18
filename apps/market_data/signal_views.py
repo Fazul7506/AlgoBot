@@ -232,8 +232,7 @@ def strategy_signals(request):
     account = _selected_deriv_account(request)
     if account is None:
         return JsonResponse({"status": "error", "code": "DERIV_ACCOUNT_REQUIRED", "message": "Connect and select a Deriv account before reading live signals."}, status=409)
-    if account.token_status != "active" or account.is_token_expired:
-        return JsonResponse({"status": "error", "code": "DERIV_CREDENTIALS_INVALID", "message": "The selected Deriv credentials are expired or revoked."}, status=401)
+    account_credentials_valid = account.token_status == "active" and not account.is_token_expired
     symbol_filter = str(request.GET.get("symbol") or "").strip()
     timeframe = str(request.GET.get("timeframe") or "M1").strip()
     try:
@@ -267,7 +266,14 @@ def strategy_signals(request):
         else:
             row.update(_revise_signal(baseline, live_tick, now, market, account))
         rows.append(row)
+    if not account_credentials_valid:
+        for row in rows:
+            if row.get("execution_ready"):
+                row["execution_ready"] = False
+                row["evidence"] = [*row.get("evidence", []), "selected_account_credentials_not_ready_for_execution"]
+                row["status"] = "ACCOUNT_AUTH_REQUIRED"
+
     actionable = [r for r in rows if r.get("execution_ready")]
     live_data_available_count = sum(1 for r in rows if r.get("live"))
     stale_count = sum(1 for r in rows if r.get("status") == "LIVE_DATA_STALE")
-    return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency}, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
+    return JsonResponse({"status": "ok", "source": "deriv_authenticated_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency}, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "account_trading_enabled": account_credentials_valid, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
