@@ -312,6 +312,7 @@ def recover_stale_candle_backfill():
 
         run.status = "queued"
         run.task_id = ""
+        run.requested_at = now
         run.started_at = None
         run.completed_at = None
         run.result = {
@@ -321,7 +322,7 @@ def recover_stale_candle_backfill():
         run.error = ""
         run.save(
             update_fields=[
-                "status", "task_id", "started_at", "completed_at", "result", "error",
+                "status", "task_id", "requested_at", "started_at", "completed_at", "result", "error",
             ]
         )
         run_id = run.pk
