@@ -182,9 +182,11 @@ def analysis_data(request):
         limit = 300
 
     refresh_requested = str(request.GET.get("refresh", "1")).lower() in {"1", "true", "yes"}
-    cache_key = "algobot:analysis:v4:" + hashlib.sha256(
+    active_account = get_active_account(request.user, request=request)
+    cache_key = "algobot:analysis:v5:" + hashlib.sha256(
         json.dumps([
             request.user.pk,
+            active_account.pk if active_account else None,
             symbol,
             timeframe.lower(),
             limit,
@@ -251,7 +253,6 @@ def analysis_data(request):
             "symbol": market.symbol,
             "timeframe": canonical_timeframe,
         }, status=503)
-    active_account = get_active_account(request.user, request=request)
     account_context = None
     if active_account is not None:
         try:
