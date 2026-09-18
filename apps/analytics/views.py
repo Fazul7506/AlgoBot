@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import time
 
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
@@ -13,6 +14,9 @@ from django.shortcuts import render
 from apps.analysis.advanced import analyze_candles
 from apps.execution.models import Order
 from apps.market_data.models import MarketSnapshot, MarketSymbol
+from apps.market_data.deriv_sync import fetch_tick
+from apps.market_data.historical import fetch_and_store, fetch_and_store_ticks
+from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.research_data import ResearchDataService
 from apps.portfolio.models import PortfolioPerformance
 
@@ -120,9 +124,34 @@ def analysis_data(request):
     try:
         canonical_timeframe = research_data.timeframe(timeframe)
         market = research_data.market(symbol)
-        candles = research_data.candles(market.symbol, canonical_timeframe, limit=limit)
     except ValueError as exc:
         return JsonResponse({"status": "error", "message": str(exc)}, status=404)
+
+    refresh_requested = str(request.GET.get("refresh", "1")).lower() in {"1", "true", "yes"}
+    refresh_result = None
+    if refresh_requested:
+        try:
+            if canonical_timeframe == "tick" or TIMEFRAMES[canonical_timeframe] < 60:
+                refresh_result = fetch_and_store_ticks(market.symbol, count=min(max(limit, 50), 1000))
+            else:
+                refresh_result = fetch_and_store(market.symbol, canonical_timeframe, count=min(max(limit, 50), 1000))
+            live_tick = fetch_tick(market.symbol)
+            from apps.market_data.services import MarketDataService
+            MarketDataService().tick_service.ingest(live_tick)
+        except Exception as exc:
+            return JsonResponse(
+                {
+                    "status": "error",
+                    "code": "BROKER_DATA_REFRESH_FAILED",
+                    "message": "Fresh Deriv market data could not be confirmed; stale research data was not substituted.",
+                    "detail": str(exc),
+                    "symbol": market.symbol,
+                    "timeframe": canonical_timeframe,
+                },
+                status=503,
+            )
+
+    candles = research_data.candles(market.symbol, canonical_timeframe, limit=limit)
 
     if not candles:
         return JsonResponse(
@@ -148,14 +177,22 @@ def analysis_data(request):
         if snapshot
         else None
     )
+    latest_epoch = int(candles[-1]["epoch"])
+    age_seconds = max(0, int(time.time()) - latest_epoch)
     result["data_provenance"] = {
         "source": "market_data.Candle",
+        "broker": "Deriv",
         "storage": "database",
+        "refresh_requested": refresh_requested,
+        "refresh_result": refresh_result,
         "symbol": market.symbol,
         "timeframe": canonical_timeframe,
         "candle_count": len(candles),
         "first_epoch": candles[0]["epoch"],
-        "last_epoch": candles[-1]["epoch"],
+        "last_epoch": latest_epoch,
+        "age_seconds": age_seconds,
+        "fresh": age_seconds <= max(120, TIMEFRAMES[canonical_timeframe] * 2),
+        "candle_source": "deriv_candles" if TIMEFRAMES[canonical_timeframe] >= 60 else "tick_stream",
     }
     cache.set(cache_key, result, ANALYSIS_CACHE_SECONDS)
     return JsonResponse(result)

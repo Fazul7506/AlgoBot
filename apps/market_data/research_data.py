@@ -43,13 +43,15 @@ class ResearchDataService:
         market = self.market(symbol)
         limit = min(max(int(limit), 1), 10000)
         qs = Candle.objects.filter(symbol=market, timeframe=canonical)
+        if TIMEFRAMES[canonical] >= 60:
+            qs = qs.filter(source="deriv_candles")
         if start_epoch is not None:
             qs = qs.filter(epoch__gte=int(start_epoch))
         if end_epoch is not None:
             qs = qs.filter(epoch__lte=int(end_epoch))
         rows = list(
             qs.order_by("-epoch", "-id")
-            .values("open", "high", "low", "close", "volume", "epoch")[:limit]
+            .values("open", "high", "low", "close", "volume", "epoch", "source")[:limit]
         )
         rows.reverse()
         return rows
@@ -80,12 +82,15 @@ class ResearchDataService:
         canonical = self.timeframe(timeframe)
         market = self.market(symbol)
         bounded_limit = min(max(int(limit), 1), 10000)
+        qs = Candle.objects.filter(
+            symbol=market,
+            timeframe=canonical,
+            epoch__gt=int(after_epoch),
+        )
+        if TIMEFRAMES[canonical] >= 60:
+            qs = qs.filter(source="deriv_candles")
         return list(
-            Candle.objects.filter(
-                symbol=market,
-                timeframe=canonical,
-                epoch__gt=int(after_epoch),
-            )
+            qs
             .order_by("epoch", "id")
             .values("open", "high", "low", "close", "volume", "epoch")[:bounded_limit]
         )
@@ -101,12 +106,15 @@ class ResearchDataService:
         canonical = self.timeframe(timeframe)
         market = self.market(symbol)
         bounded_limit = min(max(int(limit), 1), 10000)
+        qs = Candle.objects.filter(
+            symbol=market,
+            timeframe=canonical,
+            epoch__lt=int(before_epoch),
+        )
+        if TIMEFRAMES[canonical] >= 60:
+            qs = qs.filter(source="deriv_candles")
         rows = list(
-            Candle.objects.filter(
-                symbol=market,
-                timeframe=canonical,
-                epoch__lt=int(before_epoch),
-            )
+            qs
             .order_by("-epoch", "-id")
             .values("open", "high", "low", "close", "volume", "epoch")[:bounded_limit]
         )
@@ -123,6 +131,8 @@ class ResearchDataService:
         canonical = self.timeframe(timeframe)
         market = self.market(symbol)
         qs = Candle.objects.filter(symbol=market, timeframe=canonical)
+        if TIMEFRAMES[canonical] >= 60:
+            qs = qs.filter(source="deriv_candles")
         if start_epoch is not None:
             qs = qs.filter(epoch__gte=int(start_epoch))
         if end_epoch is not None:
@@ -143,6 +153,7 @@ class ResearchDataService:
             "first_epoch": first,
             "last_epoch": last,
             "source": "market_data.Candle",
+            "candle_source": "deriv_candles" if TIMEFRAMES[canonical] >= 60 else "tick_stream",
             "ready": count > 0,
         }
 

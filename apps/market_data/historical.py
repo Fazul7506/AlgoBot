@@ -103,6 +103,7 @@ def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
                     low=Decimal(str(item["low"])),
                     close=Decimal(str(item["close"])),
                     volume=Decimal(str(item.get("volume", 0) or 0)),
+                    source="deriv_candles",
                 )
             )
         except (KeyError, TypeError, ValueError, ArithmeticError):
@@ -112,8 +113,37 @@ def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
             )
 
     if rows:
+        epochs = [row.epoch for row in rows]
         with transaction.atomic():
-            Candle.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
+            existing = {
+                row.epoch: row
+                for row in Candle.objects.select_for_update().filter(
+                    symbol=market_symbol, timeframe=timeframe, epoch__in=epochs
+                )
+            }
+            creates = []
+            updates = []
+            for row in rows:
+                current = existing.get(row.epoch)
+                if current is None:
+                    row.source = "deriv_candles"
+                    creates.append(row)
+                    continue
+                current.open = row.open
+                current.high = row.high
+                current.low = row.low
+                current.close = row.close
+                current.volume = row.volume
+                current.source = "deriv_candles"
+                updates.append(current)
+            if creates:
+                Candle.objects.bulk_create(creates, batch_size=500)
+            if updates:
+                Candle.objects.bulk_update(
+                    updates,
+                    ["open", "high", "low", "close", "volume", "source"],
+                    batch_size=500,
+                )
 
     return {
         "symbol": symbol,
@@ -121,6 +151,7 @@ def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
         "received": len(items),
         "valid": len(rows),
         "stored_total": Candle.objects.filter(symbol=market_symbol, timeframe=timeframe).count(),
+        "source": "deriv_candles",
     }
 
 
