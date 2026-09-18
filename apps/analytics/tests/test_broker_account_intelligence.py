@@ -7,6 +7,7 @@ from django.test import TestCase
 from apps.analytics.broker_intelligence import build_account_risk_context
 from apps.brokers.models import Broker, BrokerAccount
 from apps.market_data.models import MarketSymbol
+from apps.market_data.models import MarketSymbol
 from apps.risk.models import RiskProfile
 
 
@@ -70,6 +71,8 @@ class BrokerAccountIntelligenceTests(TestCase):
             Decimal(str(context["risk_budget"])),
         )
 
+    @patch("apps.analytics.views.DerivTradingOperations.proposal")
+    @patch("apps.analytics.views.get_active_account")
     @patch("apps.analytics.views.DerivTradingOperations.proposal")
     @patch("apps.analytics.views.get_active_account")
     @patch("apps.analytics.views.fetch_contracts_for")
