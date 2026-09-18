@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from decimal import Decimal
 
 import websockets
@@ -284,19 +285,40 @@ def persist_tick_candles(symbol: str, items: list[dict]) -> int:
     return len(rows)
 
 
-def fetch_and_store_all_timeframes(symbol: str, count: int = 5000) -> dict:
-    """Populate the complete canonical timeframe catalogue for one symbol."""
+def fetch_and_store_all_timeframes(
+    symbol: str,
+    count: int = 5000,
+    request_interval: float = 0.30,
+) -> dict:
+    """Populate canonical broker history while pacing Deriv WebSocket calls.
+
+    The Deriv API groups market-data calls under a shared 220/minute budget.
+    A per-symbol pacing interval prevents a single warm-up job from producing
+    an unbounded request burst. The caller can tune the interval for scheduled
+    maintenance, but it must remain positive in production.
+    """
     _market_symbol(symbol)
+    interval = max(float(request_interval), 0.0)
     results = {}
+    first_request = True
+
+    def pace():
+        nonlocal first_request
+        if not first_request and interval:
+            time.sleep(interval)
+        first_request = False
+
     # Native broker bars provide authoritative OHLC for minute-and-higher data.
-    for timeframe, granularity in TIMEFRAME_GRANULARITY.items():
+    for timeframe in TIMEFRAME_GRANULARITY:
         try:
+            pace()
             results[timeframe] = fetch_and_store(symbol, timeframe, count)
         except Exception as exc:
             results[timeframe] = {"status": "failed", "error": str(exc)}
 
-    # Raw ticks are the source for tick, 1s, 5s, 15s and 30s research bars.
+    # Raw broker ticks are the source for tick, 1s, 5s, 15s and 30s research bars.
     try:
+        pace()
         results["tick-derived"] = fetch_and_store_ticks(symbol, count=count)
     except Exception as exc:
         results["tick-derived"] = {"status": "failed", "error": str(exc)}
