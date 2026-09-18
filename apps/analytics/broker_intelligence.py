@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from decimal import Decimal, ROUND_DOWN
 
-from django.db.models import Q
 from django.utils import timezone
 
-from apps.brokers.models import BrokerAccount, Position
+from apps.brokers.models import BrokerAccount
 from apps.execution.models import Order as ExecutionOrder
 from apps.risk.repositories import RiskRepository
 from apps.risk.services import RiskService
