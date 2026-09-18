@@ -371,6 +371,36 @@ def analysis_contracts(request):
 
 
 @login_required
+def broker_account_context(request):
+    """Return the selected broker account's fresh balance and risk context."""
+    account = get_active_account(request.user, request=request)
+    if account is None:
+        return JsonResponse(
+            {"status": "error", "code": "NO_ACTIVE_BROKER_ACCOUNT", "message": "No connected broker account is selected."},
+            status=409,
+        )
+    try:
+        account, broker_data = asyncio.run(
+            asyncio.wait_for(
+                SynchronizationService().sync_account(account),
+                timeout=8.0,
+            )
+        )
+        context = build_account_risk_context(request.user, account)
+    except Exception as exc:
+        return JsonResponse(
+            {
+                "status": "error",
+                "code": "BROKER_ACCOUNT_CONTEXT_FAILED",
+                "message": "The selected broker account could not be refreshed; no synthetic balance or risk values were substituted.",
+                "detail": str(exc),
+            },
+            status=503,
+        )
+    return JsonResponse({"status": "ok", "account": context, "broker_data": broker_data})
+
+
+@login_required
 def broker_proposal(request):
     """Return a live Deriv proposal using the selected account and risk-capped amount.
 
