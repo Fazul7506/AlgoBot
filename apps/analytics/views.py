@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import csv
 import hashlib
 import json
 import time
@@ -9,12 +8,9 @@ from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
-from django.db.models import Count
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.http import JsonResponse
 
 from apps.analysis.advanced import analyze_candles
-from apps.execution.models import Order
 from apps.analytics.broker_intelligence import build_account_risk_context
 from apps.brokers.services import SynchronizationService
 from core.account_context import get_active_account
@@ -23,7 +19,6 @@ from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick
 from apps.market_data.historical import fetch_and_store, fetch_and_store_ticks
 from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.research_data import ResearchDataService
-from apps.portfolio.models import PortfolioPerformance
 
 
 ANALYTICS_CACHE_SECONDS = 15
@@ -93,84 +88,6 @@ def _broker_trade_spec(result, market, capabilities, account_context=None):
         "source": "Deriv contracts_for + Deriv OHLC/tick analysis",
     }
 
-
-def _order_profit(order):
-    payload = order.broker_response or {}
-    try:
-        return float(payload.get("profit", payload.get("pnl", 0)) or 0)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _analysis_markets():
-    cache_key = "algobot:analysis:markets:v1"
-    markets = cache.get(cache_key)
-    if markets is None:
-        markets = list(MarketSymbol.objects.filter(is_active=True, is_tradable=True).values("symbol", "display_name", "market", "sub_market").order_by("market", "symbol"))
-        cache.set(cache_key, markets, 60)
-    return markets
-
-
-def _analytics_context(user):
-    cache_key = f"algobot:analytics:v2:{user.pk}"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    trades = Order.objects.filter(user=user).only("id", "status", "broker_response", "strategy")
-    closed = trades.filter(status="executed")
-    profits = [_order_profit(order) for order in closed.iterator(chunk_size=250)]
-    wins = sum(value > 0 for value in profits)
-    losses = sum(value < 0 for value in profits)
-    gross_profit = sum(value for value in profits if value > 0)
-    gross_loss = abs(sum(value for value in profits if value < 0))
-    strategy_distribution = list(
-        trades.values("strategy").annotate(total=Count("id")).order_by("-total")
-    )
-    performance = (
-        PortfolioPerformance.objects.filter(portfolio__user=user)
-        .select_related("portfolio")
-        .only(
-            "timestamp",
-            "daily_return",
-            "drawdown",
-            "portfolio__equity",
-            "portfolio__current_balance",
-        )
-        .order_by("-timestamp")[:250]
-    )
-    performance = reversed(list(performance))
-    equity_curve = [
-        {
-            "timestamp": item.timestamp,
-            "equity": item.portfolio.equity,
-            "balance": item.portfolio.current_balance,
-            "daily_pnl": item.daily_return,
-            "risk_utilization": item.drawdown,
-        }
-        for item in performance
-    ]
-    markets = _analysis_markets()
-    context = {
-        "total_trades": trades.count(),
-        "closed_trades": wins + losses,
-        "winning_trades": wins,
-        "losing_trades": losses,
-        "win_rate": (wins / max(wins + losses, 1)) * 100,
-        "profit_factor": gross_profit / gross_loss if gross_loss else (float(gross_profit) if gross_profit else 0),
-        "average_profit": (sum(profits) / len(profits)) if profits else 0,
-        "net_pnl": sum(profits),
-        "equity_curve": equity_curve,
-        "strategy_distribution": strategy_distribution,
-        "analysis_markets_json": json.dumps(markets),
-    }
-    cache.set(cache_key, context, ANALYTICS_CACHE_SECONDS)
-    return context
-
-
-@login_required
-def analytics_dashboard(request):
-    return render(request, "analytics/dashboard.html", _analytics_context(request.user))
 
 
 @login_required
