@@ -33,3 +33,11 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
 
 CELERY_BROKER_URL = CELERY_BROKER_URL
 CELERY_RESULT_BACKEND = CELERY_RESULT_BACKEND
+
+
+# Long-running market backfills need visible STARTED state and conservative
+# prefetching so one heavy job cannot hide all other queued work.
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_SEND_SENT_EVENT = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
