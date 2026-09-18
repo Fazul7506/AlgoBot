@@ -6,6 +6,7 @@ from django.test import TestCase
 
 from apps.analytics.broker_intelligence import build_account_risk_context
 from apps.brokers.models import Broker, BrokerAccount
+from apps.market_data.models import MarketSymbol
 from apps.risk.models import RiskProfile
 
 
@@ -69,14 +70,16 @@ class BrokerAccountIntelligenceTests(TestCase):
             Decimal(str(context["risk_budget"])),
         )
 
+    @patch("apps.analytics.views.DerivTradingOperations.proposal")
+    @patch("apps.analytics.views.get_active_account")
     @patch("apps.analytics.views.fetch_contracts_for")
     @patch("apps.analytics.views.SynchronizationService.sync_account")
     def test_proposal_endpoint_requires_broker_contract_and_uses_risk_budget(
-        self, sync_account, fetch_contracts
+        self, sync_account, fetch_contracts, get_active, proposal
     ):
-        from unittest.mock import AsyncMock
-
-        sync_account.side_effect = AsyncMock(return_value=(self.account, {"balance": 100}))
+        MarketSymbol.objects.create(symbol="R_100", display_name="Volatility 100", market="Volatility Indices")
+        get_active.return_value = self.account
+        sync_account.return_value = (self.account, {"balance": 100})
         fetch_contracts.return_value = {
             "symbol": "R_100",
             "available_contract_types": ["MULTUP"],
