@@ -9,7 +9,7 @@
   const label = value => String(value ?? '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—';
   const tone = value => { const v = String(value || '').toUpperCase(); return v === 'BUY' ? 'buy' : v === 'SELL' ? 'sell' : 'hold'; };
   const stateText = value => String(value || 'WAITING').replaceAll('_', ' ');
-  const S = { rows: [], last: null, scanning: false };
+  const S = { rows: [], last: null, scanning: false, contractCache: new Map(), focusToken: 0 };
 
   function setStatus(message, live = false) {
     if ($('signalsFeed')) $('signalsFeed').textContent = message;
@@ -47,15 +47,60 @@
     select.innerHTML = '<option value="">All instruments</option>' + symbols.map(row => `<option value="${esc(row.symbol)}">${esc(row.symbol)} · ${esc(row.display_name || row.instrument)}</option>`).join('');
     if (symbols.some(row => row.symbol === current)) select.value = current;
   }
-  function setSpec(id, value) { if ($(id)) $(id).textContent = value == null || value === '' ? 'Not specified' : label(value); }
-  function renderSpec(row) {
+  function setSpec(id, value, fallback='Broker data unavailable') {
+    if ($(id)) $(id).textContent = value == null || value === '' ? fallback : label(value);
+  }
+  async function loadContractCapabilities(symbol, token) {
+    if (!symbol) return null;
+    if (S.contractCache.has(symbol)) return S.contractCache.get(symbol);
+    try {
+      const response = await request(`/analytics/contracts/?symbol=${encodeURIComponent(symbol)}`);
+      if (token !== S.focusToken) return null;
+      if (response?.capabilities) {
+        S.contractCache.set(symbol, response.capabilities);
+        return response.capabilities;
+      }
+    } catch (_) {}
+    return null;
+  }
+  async function renderSpec(row) {
     const c = row?.trade_context || {};
-    setSpec('specMarketType', c.market_type || row?.market); setSpec('specSubMarket', c.sub_market || row?.sub_market); setSpec('specInstrument', c.instrument || row?.symbol);
-    setSpec('specTradeType', c.trade_type); setSpec('specDirection', c.direction || row?.direction); setSpec('specContractType', c.contract_type); setSpec('specContractFamily', c.contract_family);
-    setSpec('specDuration', c.duration); setSpec('specDurationUnit', c.duration_unit); setSpec('specBarrier', c.barrier); setSpec('specStake', c.stake); setSpec('specPayout', c.payout);
-    setSpec('specStrategy', c.strategy); setSpec('specCategory', c.strategy_category); setSpec('specRisk', c.risk_profile); setSpec('specExecution', c.execution_mode);
-    setSpec('specEntryCondition', c.entry_condition); setSpec('specConfirmation', c.confirmation); setSpec('specRegime', c.market_regime); setSpec('specQuoteSource', c.quote_type || row?.source);
-    if ($('specSource')) $('specSource').textContent = row ? `${c.broker || 'Deriv'} · ${c.account_type || 'account'} · ${c.currency || ''}` : 'Awaiting signal';
+    const token = ++S.focusToken;
+    setSpec('specMarketType', c.market_type || row?.market, 'No broker market classification');
+    setSpec('specSubMarket', c.sub_market || row?.sub_market, 'No broker sub-market classification');
+    setSpec('specInstrument', c.instrument || row?.symbol, 'No broker instrument identity');
+    setSpec('specTradeType', c.trade_type || row?.direction, 'No analysis baseline');
+    setSpec('specDirection', c.direction || row?.direction, 'No analysis baseline');
+    setSpec('specStrategy', c.strategy, row ? 'No strategy baseline' : 'No analysis baseline');
+    setSpec('specCategory', c.strategy_category, row ? 'No strategy category' : 'No analysis baseline');
+    setSpec('specRisk', c.risk_profile, row ? 'No risk profile in baseline' : 'No analysis baseline');
+    setSpec('specExecution', c.execution_mode, row ? 'Execution mode not returned' : 'No analysis baseline');
+    setSpec('specEntryCondition', c.entry_condition, row ? 'Entry condition not returned' : 'No analysis baseline');
+    setSpec('specConfirmation', c.confirmation, row ? 'Confirmation not returned' : 'No analysis baseline');
+    setSpec('specRegime', c.market_regime, row ? 'Regime not returned' : 'No analysis baseline');
+    setSpec('specQuoteSource', c.quote_type || row?.source || 'deriv_public_websocket', 'Deriv public market data');
+    if ($('specSource')) $('specSource').textContent = row ? `${c.broker || 'Deriv'} · ${c.account_type || 'account'} · ${c.currency || ''}` : 'Awaiting verified signal';
+
+    ['specContractType','specContractFamily','specDurationUnit'].forEach(id => setSpec(id, null, 'Loading broker contract capabilities'));
+    setSpec('specDuration', null, 'Awaiting contract selection');
+    setSpec('specBarrier', null, 'Awaiting contract proposal');
+    setSpec('specStake', null, 'Awaiting contract proposal');
+    setSpec('specPayout', null, 'Awaiting contract proposal');
+
+    if (!row) return;
+    const capabilities = await loadContractCapabilities(row.symbol, token);
+    if (!capabilities || token !== S.focusToken) {
+      ['specContractType','specContractFamily','specDurationUnit'].forEach(id => setSpec(id, null, 'Broker capabilities unavailable'));
+      return;
+    }
+    const contracts = Array.isArray(capabilities.contracts) ? capabilities.contracts : [];
+    const types = capabilities.contract_types || contracts.map(v => v.contract_type).filter(Boolean);
+    const families = capabilities.trade_types || contracts.map(v => v.contract_category).filter(Boolean);
+    const expiry = [...new Set(contracts.map(v => v.expiry_type).filter(Boolean))];
+    setSpec('specContractType', c.contract_type || [...new Set(types)].join(', '), 'No broker contract types');
+    setSpec('specContractFamily', c.contract_family || [...new Set(families)].join(', '), 'No broker contract family');
+    setSpec('specDurationUnit', c.duration_unit || expiry.join(', '), 'No broker expiry type returned');
+    if ($('specSource')) $('specSource').textContent = capabilities.stale ? 'Deriv verified capability cache' : 'Deriv broker capabilities verified';
   }
   function focus(row) {
     if (!row) {
