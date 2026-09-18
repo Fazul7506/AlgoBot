@@ -75,4 +75,4 @@ class SignalTradeContextTests(SimpleTestCase):
             },
         )()
         context = _trade_context(Signal(), market, Account(), "1m")
-        self.assertEqual(context["quote_type"], "deriv_public_websocket")
+        self.assertIsNone(context["quote_type"])
