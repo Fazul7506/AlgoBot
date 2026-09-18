@@ -1,5 +1,3 @@
-from unittest.mock import AsyncMock, patch
-
 from django.test import SimpleTestCase
 
 from apps.market_data.deriv_sync import _market_name
