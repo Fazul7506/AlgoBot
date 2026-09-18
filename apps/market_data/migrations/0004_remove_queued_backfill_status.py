@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 def normalize_queued_runs(apps, schema_editor):
     CandleBackfillRun = apps.get_model("market_data", "CandleBackfillRun")
-    CandleBackfillRun.objects.filter(status="queued").update(status="running")
+    CandleBackfillRun.objects.filter(status__in=["queued", "succeeded"]).update(status="running")
 
 
 class Migration(migrations.Migration):
