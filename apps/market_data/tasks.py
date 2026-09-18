@@ -290,7 +290,9 @@ def recover_stale_candle_backfill():
             .select_for_update()
             .filter(scope="initial")
             .filter(
-                ({"status": "queued", "requested_at__lt": queued_cutoff})
+                scope="initial",
+                status="queued",
+                requested_at__lt=queued_cutoff,
             )
             .first()
         )
