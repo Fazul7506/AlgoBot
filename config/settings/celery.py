@@ -41,3 +41,11 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_SEND_SENT_EVENT = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
+
+
+# Historical broker ingestion is isolated so its deliberate rate limiting cannot
+# starve execution, notifications, or other default-queue tasks.
+CELERY_TASK_ROUTES = {
+    "apps.market_data.tasks.backfill_research_candles": {"queue": "market_data"},
+    "apps.market_data.tasks.run_initial_candle_backfill": {"queue": "market_data"},
+}
