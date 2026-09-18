@@ -14,6 +14,7 @@ from apps.brokers.models import BrokerAccount
 from apps.strategies.models import StrategySignal
 
 from .models import MarketSymbol
+from .deriv_sync import sync_active_symbols
 
 LIVE_TICK_MAX_AGE_SECONDS = 5
 ANALYSIS_BASELINE_MAX_AGE_SECONDS = 900
@@ -249,6 +250,14 @@ def strategy_signals(request):
     account_credentials_valid = account.token_status == "active" and not account.is_token_expired
     symbol_filter = str(request.GET.get("symbol") or "").strip()
     timeframe = str(request.GET.get("timeframe") or "M1").strip()
+    refresh_catalogue = str(request.GET.get("refresh_catalogue") or "").lower() in {"1", "true", "yes"}
+    if refresh_catalogue:
+        try:
+            sync_active_symbols()
+        except Exception:
+            # The existing broker-synced catalogue remains the last verified
+            # market universe if this optional refresh is temporarily down.
+            pass
     try:
         limit = min(max(int(request.GET.get("limit", 40)), 1), MAX_SCAN_SYMBOLS)
     except (TypeError, ValueError):
