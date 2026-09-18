@@ -24,6 +24,7 @@
         <div><dt>Started</dt><dd data-started>{% if run.started_at %}{{ run.started_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
         <div><dt>Completed</dt><dd data-completed>{% if run.completed_at %}{{ run.completed_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
         <div><dt>Celery task</dt><dd data-task>{{ run.task_id|default:"—" }}</dd></div>
+        <div><dt>Celery state</dt><dd data-celery-state>—</dd></div>
       </dl>
 
       <div data-error role="alert" style="margin:1rem 0;{% if not run.error %}display:none{% endif %}">{{ run.error }}</div>
@@ -33,8 +34,10 @@
           {% csrf_token %}
           <button class="btn primary" type="submit">Retry 5,000-candle backfill</button>
         </form>
-      {% elif run.status == "queued" or run.status == "running" %}
-        <p aria-live="polite">The Celery worker is processing the historical data. The state below refreshes automatically.</p>
+      {% elif run.status == "queued" %}
+        <p aria-live="polite">The backfill is queued for the Celery worker. If delivery remains pending, the control automatically requeues stale jobs.</p>
+      {% elif run.status == "running" %}
+        <p aria-live="polite">The Celery worker is processing broker-authoritative Deriv history. Progress is persisted per symbol and refreshes automatically.</p>
       {% elif run.status == "succeeded" %}
         <p aria-live="polite">The initial historical warm-up has completed. Future candle maintenance is handled by scheduled Celery backfill.</p>
       {% endif %}
@@ -57,6 +60,7 @@
       <div><dt>Last started</dt><dd data-research-started>{% if research_run and research_run.started_at %}{{ research_run.started_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
       <div><dt>Last completed</dt><dd data-research-completed>{% if research_run and research_run.completed_at %}{{ research_run.completed_at|date:"Y-m-d H:i:s T" }}{% else %}—{% endif %}</dd></div>
       <div><dt>Celery task</dt><dd data-research-task>{% if research_run %}{{ research_run.task_id|default:"—" }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Celery state</dt><dd data-research-celery-state>—</dd></div>
     </dl>
     <div data-research-error role="alert" style="margin-top:1rem;{% if not research_run or not research_run.error %}display:none{% endif %}">{% if research_run %}{{ research_run.error }}{% endif %}</div>
   </section>
@@ -84,6 +88,7 @@
       setText('[data-started]', fmt(run.started_at));
       setText('[data-completed]', fmt(run.completed_at));
       setText('[data-task]', run.task_id || '—');
+      setText('[data-celery-state]', run.celery_state || '—');
       const error = page.querySelector('[data-error]');
       if (error) { error.textContent = run.error || ''; error.style.display = run.error ? '' : 'none'; }
     } else {
@@ -91,6 +96,7 @@
       setText('[data-research-started]', fmt(run.started_at));
       setText('[data-research-completed]', fmt(run.completed_at));
       setText('[data-research-task]', run.task_id || '—');
+      setText('[data-research-celery-state]', run.celery_state || '—');
       const error = page.querySelector('[data-research-error]');
       if (error) { error.textContent = run.error || ''; error.style.display = run.error ? '' : 'none'; }
     }
