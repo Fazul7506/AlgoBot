@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.views import redirect_to_login
@@ -26,7 +28,7 @@ def _celery_state(task_id):
 def _recover_stale_initial_run(run):
     if not run or run.status != "queued" or not run.requested_at:
         return run
-    if timezone.now() - run.requested_at < timezone.timedelta(minutes=STALE_QUEUED_BACKFILL_MINUTES):
+    if timezone.now() - run.requested_at < timedelta(minutes=STALE_QUEUED_BACKFILL_MINUTES):
         return run
 
     state = _celery_state(run.task_id)
