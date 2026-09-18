@@ -36,7 +36,7 @@ INSTALLED_APPS = [
     "daphne", "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
     "rest_framework", "rest_framework_simplejwt", "corsheaders", "django_filters", "core",
-    "apps.admin_portal", "apps.ai_engine", "apps.alerts", "apps.analysis", "apps.analytics",
+    "apps.admin_portal", "apps.ai_engine", "apps.alerts", "apps.analysis",
     "apps.audit", "apps.automation", "apps.backtesting", "apps.brokers", "apps.community",
     "apps.contracts", "apps.copy_trading", "apps.deployment", "apps.developer",
     "apps.developer_api", "apps.enterprise", "apps.execution", "apps.feature_flags",
