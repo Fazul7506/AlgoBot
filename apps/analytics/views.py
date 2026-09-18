@@ -25,6 +25,65 @@ ANALYTICS_CACHE_SECONDS = 15
 ANALYSIS_CACHE_SECONDS = 3
 
 
+def _broker_trade_spec(result, market, capabilities):
+    """Build a complete analysis specification from broker capabilities + verified candles.
+
+    Broker-supplied contract metadata is never invented. Strategy fields are
+    explicitly deterministic labels derived from the same broker OHLC analysis
+    already returned by this endpoint, so the UI never presents an empty
+    strategy row as if a broker field were missing.
+    """
+    caps = capabilities or {}
+    contract_types = [str(v) for v in caps.get("available_contract_types", []) if v]
+    families = [str(v) for v in caps.get("available_contract_families", []) if v]
+    expiry = [str(v) for v in caps.get("expiry_types", []) if v]
+    sentiments = [str(v) for v in caps.get("sentiments", []) if v]
+    signal = str(result.get("signal") or "Neutral")
+    regime = str(result.get("volatility_regime") or "normal")
+    factors = [str(v) for v in result.get("factors") or [] if v]
+    structure = str(result.get("structure") or "Range")
+    direction = "BUY" if "Bullish" in signal else "SELL" if "Bearish" in signal else "HOLD"
+    strategy_parts = []
+    for factor in factors:
+        if factor not in strategy_parts:
+            strategy_parts.append(factor)
+    if structure not in strategy_parts:
+        strategy_parts.append(structure)
+    strategy = " + ".join(strategy_parts[:5]) or "Broker OHLC technical analysis"
+    category = "Technical analysis · broker OHLC confluence"
+    risk_profile = f"{regime.title()} volatility · confidence-gated"
+    execution_mode = "Manual command · execution gate enforced"
+    entry = f"{direction} only when {signal} baseline is confirmed by the live Deriv quote"
+    confirmation = " + ".join(["Deriv live tick", *factors[:3]]) if factors else "Deriv live tick + broker OHLC analysis"
+    contract_type = " / ".join(contract_types) or "Broker contract catalogue"
+    contract_family = " / ".join(families) or "Broker contract categories"
+    duration = " / ".join(expiry) or "Broker expiry metadata"
+    return {
+        "market_type": market.market,
+        "sub_market": market.sub_market or "Broker active-symbol submarket",
+        "instrument": market.display_name,
+        "trade_type": f"{signal} analysis baseline",
+        "direction": direction,
+        "contract_type": contract_type,
+        "contract_family": contract_family,
+        "duration": duration,
+        "duration_unit": "Broker expiry type",
+        "barrier": "Broker contract metadata",
+        "stake": "Account/order amount required before proposal",
+        "payout": "Broker proposal quote generated after contract parameters",
+        "strategy": strategy,
+        "strategy_category": category,
+        "risk_profile": risk_profile,
+        "execution_mode": execution_mode,
+        "entry_condition": entry,
+        "confirmation": confirmation,
+        "market_regime": regime,
+        "quote_source": "Deriv public market-data WebSocket",
+        "broker_contract_sentiments": " / ".join(sentiments) or "Broker contract catalogue",
+        "source": "Deriv contracts_for + Deriv OHLC/tick analysis",
+    }
+
+
 def _order_profit(order):
     payload = order.broker_response or {}
     try:
@@ -172,6 +231,19 @@ def analysis_data(request):
         )
 
     result = analyze_candles(candles, symbol=market.symbol, timeframe=canonical_timeframe)
+    try:
+        broker_capabilities = fetch_contracts_for(market.symbol)
+    except Exception as exc:
+        return JsonResponse({
+            "status": "error",
+            "code": "BROKER_CONTRACT_DATA_FAILED",
+            "message": "Deriv contract capabilities could not be confirmed for this analysis.",
+            "detail": str(exc),
+            "symbol": market.symbol,
+            "timeframe": canonical_timeframe,
+        }, status=503)
+    result["trade_spec"] = _broker_trade_spec(result, market, broker_capabilities)
+    result["contract_capabilities"] = broker_capabilities
     snapshot = MarketSnapshot.objects.filter(symbol=market).only("last_price", "bid", "ask", "change_percent").first()
     if refresh_requested:
         # The live broker tick is the authoritative current price. The stored
