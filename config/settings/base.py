@@ -51,7 +51,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware", "whitenoise.middleware.WhiteNoiseMiddleware",
-    "corsheaders.middleware.CorsMiddleware", "django.middleware.common.CommonMiddleware",\n    "core.middleware.wordpress_probe.WordPressProbeMiddleware",
+    "corsheaders.middleware.CorsMiddleware", "django.middleware.common.CommonMiddleware",
+    "core.middleware.wordpress_probe.WordPressProbeMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware", "core.middleware.csrf.APIAwareCsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware", "apps.developer.middleware.DeveloperAPIMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware", "django.middleware.clickjacking.XFrameOptionsMiddleware",
