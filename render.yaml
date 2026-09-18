@@ -91,7 +91,6 @@ services:
           type: web
           envVarKey: SECRET_KEY
 
-
   - type: worker
     name: AlgoBot-Beat
     runtime: python
@@ -147,7 +146,6 @@ services:
           name: AlgoBot
           type: web
           envVarKey: SECRET_KEY
-
 
   - type: worker
     name: AlgoBot-MarketData
