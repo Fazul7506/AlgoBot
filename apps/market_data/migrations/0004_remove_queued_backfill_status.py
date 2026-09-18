@@ -23,7 +23,7 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 choices=[
                     ("running", "Running"),
-                    ("succeeded", "Succeeded"),
+                    ("completed", "Completed"),
                     ("failed", "Failed"),
                 ],
                 db_index=True,
