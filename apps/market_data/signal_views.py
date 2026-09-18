@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from apps.brokers.exceptions import BrokerConnectionError
 from apps.brokers.models import BrokerAccount
+from apps.analytics.broker_intelligence import build_account_risk_context
 from apps.strategies.models import StrategySignal
 
 from .models import MarketSnapshot, MarketSymbol
@@ -254,6 +255,7 @@ def strategy_signals(request):
     if account is None:
         return JsonResponse({"status": "error", "code": "DERIV_ACCOUNT_REQUIRED", "message": "Connect and select a Deriv account before reading live signals."}, status=409)
     account_credentials_valid = account.token_status == "active" and not account.is_token_expired
+    account_risk_context = build_account_risk_context(request.user, account)
     symbol_filter = str(request.GET.get("symbol") or "").strip()
     timeframe = str(request.GET.get("timeframe") or "M1").strip()
     try:
@@ -287,7 +289,7 @@ def strategy_signals(request):
     for market in markets:
         live_tick = live_ticks.get(market.symbol); baseline = baselines.get(market.symbol)
         row = {"symbol": market.symbol, "instrument": market.display_name, "display_name": market.display_name, "market": market.market, "sub_market": market.sub_market, "broker": "deriv", "account_id": account.account_id, "account_type": account.account_type, "timeframe": timeframe, "source": "deriv_public_stream"}
-        base_context = {"market_type": market.market, "sub_market": market.sub_market, "symbol": market.symbol, "instrument": market.display_name, "trade_type": None, "direction": "HOLD", "contract_type": None, "contract_family": None, "duration": None, "duration_unit": None, "barrier": None, "stake": None, "payout": None, "currency": account.currency, "account_type": account.account_type, "broker": account.broker.name, "timeframe": timeframe}
+        base_context = {"market_type": market.market, "sub_market": market.sub_market, "symbol": market.symbol, "instrument": market.display_name, "trade_type": None, "direction": "HOLD", "contract_type": None, "contract_family": None, "duration": None, "duration_unit": None, "barrier": None, "stake": account_risk_context.get("recommended_stake"), "risk_budget": account_risk_context.get("risk_budget"), "payout": None, "currency": account.currency, "account_type": account.account_type, "broker": account.broker.name, "timeframe": timeframe}
         if not live_tick:
             row.update({"direction": "HOLD", "confidence": 0, "status": "LIVE_DATA_UNAVAILABLE", "execution_ready": False, "evidence": ["broker_tick_not_received"], "trade_context": base_context})
         elif not baseline:
@@ -306,4 +308,4 @@ def strategy_signals(request):
     actionable = [r for r in rows if r.get("execution_ready")]
     live_data_available_count = sum(1 for r in rows if r.get("live"))
     stale_count = sum(1 for r in rows if r.get("status") == "LIVE_DATA_STALE")
-    return JsonResponse({"status": "ok", "source": "deriv_public_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency}, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "account_trading_enabled": account_credentials_valid, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
+    return JsonResponse({"status": "ok", "source": "deriv_public_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency, "balance": account_risk_context.get("balance"), "available_funds": account_risk_context.get("available_funds"), "recommended_stake": account_risk_context.get("recommended_stake"), "risk_budget": account_risk_context.get("risk_budget")}, "account_risk_context": account_risk_context, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "account_trading_enabled": account_credentials_valid, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
