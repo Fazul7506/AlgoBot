@@ -48,7 +48,7 @@ class CandleBackfillReliabilityTests(TestCase):
         state.assert_not_called()
 
     @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
-    @patch("apps.market_data.tasks.fetch_and_store_all_timeframes")
+    @patch("apps.market_data.historical.fetch_and_store_all_timeframes")
     def test_initial_backfill_marks_success_after_real_ingestion_call(self, fetch):
         fetch.return_value = {
             "symbol": "R_100",
