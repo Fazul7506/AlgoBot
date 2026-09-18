@@ -27,6 +27,7 @@
       </dl>
 
       <div data-error role="alert" style="margin:1rem 0;{% if not run.error %}display:none{% endif %}">{{ run.error }}</div>
+      <p data-stale role="status" style="{% if not run or run.status != "queued" %}display:none{% endif %}">Queued jobs are automatically recovered if Celery does not start them within five minutes.</p>
 
       {% if run.status == "failed" %}
         <form method="post">
@@ -86,6 +87,13 @@
       setText('[data-task]', run.task_id || '—');
       const error = page.querySelector('[data-error]');
       if (error) { error.textContent = run.error || ''; error.style.display = run.error ? '' : 'none'; }
+      const stale = page.querySelector('[data-stale]');
+      if (stale) {
+        stale.textContent = run.stale
+          ? 'This queued job has exceeded five minutes; the worker recovery loop is re-publishing it automatically.'
+          : 'Queued jobs are automatically recovered if Celery does not start them within five minutes.';
+        stale.style.display = run.status === 'queued' ? '' : 'none';
+      }
     } else {
       setText('[data-research-count]', run.count);
       setText('[data-research-started]', fmt(run.started_at));

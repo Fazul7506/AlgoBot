@@ -117,10 +117,27 @@ def backfill_research_candles(count=250, symbol=None):
     task_id = getattr(backfill_research_candles.request, "id", "")
     try:
         started = timezone.now()
-        _mark_backfill_run(
-            "research", status="running", count=count, symbol=symbol,
-            task_id=task_id, started_at=started, completed_at=None, result={}, error="",
-        )
+        with transaction.atomic():
+            run, _ = CandleBackfillRun.objects.select_for_update().get_or_create(
+                scope="research",
+                defaults={"count": int(count or 250), "symbol": symbol or ""},
+            )
+            if run.status == "running" and run.started_at:
+                return {"status": "already_running", "task_id": run.task_id}
+            run.status = "running"
+            run.count = int(count)
+            run.symbol = symbol or ""
+            run.task_id = task_id
+            run.started_at = started
+            run.completed_at = None
+            run.result = {}
+            run.error = ""
+            run.save(
+                update_fields=[
+                    "status", "count", "symbol", "task_id", "started_at",
+                    "completed_at", "result", "error",
+                ]
+            )
         symbols = _active_symbols(symbol)
         if not symbols:
             raise RuntimeError("No active tradable market symbols are available")
@@ -141,6 +158,72 @@ def backfill_research_candles(count=250, symbol=None):
         _mark_backfill_run("research", status="failed", error=str(exc), completed_at=timezone.now())
         logger.exception("Research candle backfill failed", extra={"task_id": task_id})
         raise
+    finally:
+        close_old_connections()
+
+
+@_task
+def reconcile_candle_backfill_runs(max_age_seconds=300):
+    """Recover durable backfill rows whose Celery delivery never started."""
+    from datetime import timedelta
+    from django.db import close_old_connections, transaction
+    from django.utils import timezone
+    from .models import CandleBackfillRun
+
+    close_old_connections()
+    cutoff = timezone.now() - timedelta(seconds=max(60, int(max_age_seconds)))
+    recovered = []
+    try:
+        for scope in ("initial", "research"):
+            with transaction.atomic():
+                run = (
+                    CandleBackfillRun.objects.select_for_update()
+                    .filter(scope=scope, status="queued", requested_at__lt=cutoff)
+                    .first()
+                )
+                if not run:
+                    continue
+                run.error = (
+                    "Celery delivery did not start within the recovery window; "
+                    "the broker-data job is being re-published automatically."
+                )
+                run.task_id = ""
+                run.save(update_fields=["error", "task_id"])
+
+            try:
+                if scope == "initial":
+                    task = run_initial_candle_backfill.delay(
+                        run.pk,
+                        count=int(run.count or 5000),
+                        symbol=run.symbol or None,
+                    )
+                else:
+                    task = backfill_research_candles.delay(
+                        count=int(run.count or 250),
+                        symbol=run.symbol or None,
+                    )
+                with transaction.atomic():
+                    current = CandleBackfillRun.objects.select_for_update().get(pk=run.pk)
+                    if current.status == "queued":
+                        current.task_id = task.id
+                        current.error = ""
+                        current.save(update_fields=["task_id", "error"])
+                        recovered.append({
+                            "scope": scope,
+                            "run_id": current.pk,
+                            "task_id": current.task_id,
+                        })
+            except Exception as exc:
+                with transaction.atomic():
+                    current = CandleBackfillRun.objects.select_for_update().get(pk=run.pk)
+                    if current.status == "queued":
+                        current.error = f"Automatic Celery requeue failed: {exc}"
+                        current.save(update_fields=["error"])
+                logger.exception(
+                    "Unable to recover stale candle backfill",
+                    extra={"scope": scope, "run_id": run.pk},
+                )
+        return {"recovered": recovered}
     finally:
         close_old_connections()
 
