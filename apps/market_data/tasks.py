@@ -154,6 +154,22 @@ def backfill_research_candles(count=250, symbol=None):
     close_old_connections()
     task_id = getattr(backfill_research_candles.request, "id", "")
     try:
+        from .models import CandleBackfillRun
+        initial = CandleBackfillRun.objects.filter(
+            scope="initial",
+            status__in={"queued", "running"},
+        ).first()
+        if initial:
+            logger.info(
+                "Skipping scheduled research backfill while initial warm-up is active",
+                extra={"initial_run_id": initial.pk},
+            )
+            return {
+                "status": "skipped",
+                "reason": "initial_backfill_active",
+                "initial_run_id": initial.pk,
+            }
+
         started = timezone.now()
         _mark_backfill_run(
             "research",
