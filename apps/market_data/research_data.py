@@ -143,6 +143,8 @@ class ResearchDataService:
         canonical = self.timeframe(timeframe)
         market = self.market(symbol)
         qs = Candle.objects.filter(symbol=market, timeframe=canonical)
+        if TIMEFRAMES[canonical] >= 60:
+            qs = qs.filter(source="deriv_candles")
         first = qs.order_by("epoch", "id").values_list("epoch", flat=True).first()
         last = qs.order_by("-epoch", "-id").values_list("epoch", flat=True).first()
         count = qs.count()

@@ -14,6 +14,7 @@ from apps.brokers.models import BrokerAccount
 from apps.strategies.models import StrategySignal
 
 from .models import MarketSymbol
+from .deriv_sync import sync_active_symbols
 
 LIVE_TICK_MAX_AGE_SECONDS = 5
 ANALYSIS_BASELINE_MAX_AGE_SECONDS = 900
@@ -107,7 +108,7 @@ def _trade_context(signal, market, account, timeframe=None):
         "confirmation": _meta_first(merged, "confirmation", "confirmation_sequence", "confirmation_status"),
         "market_regime": _meta_first(merged, "market_regime", "regime", "volatility_regime"),
         "execution_mode": _meta_first(merged, "execution_mode", "execution", "mode"),
-        "quote_type": _meta_first(merged, "quote_type", "price_source"),
+        "quote_type": "deriv_public_websocket",
         "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
         "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None,
         "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
@@ -115,16 +116,16 @@ def _trade_context(signal, market, account, timeframe=None):
 
 
 async def _live_deriv_ticks(symbols):
-    """Read current Deriv quotes from the broker's public market-data channel.
+    """Read current Deriv quotes from one public broker market-data stream.
 
-    Deriv documents the public Options WebSocket as the authoritative no-auth
-    channel for real-time ticks. Account OTP authentication is reserved for
-    account-scoped operations such as trading and balances. Keeping quote
-    retrieval on the public market-data channel prevents an OAuth trade-scope
-    or account OTP problem from incorrectly making every market appear to
-    have no live price.
+    The public Options WebSocket is the authoritative no-auth source for live
+    quotes. Subscribe to each requested symbol on one connection rather than
+    opening one connection per symbol or depending on an authenticated account
+    socket.
     """
-    unique_symbols = list(dict.fromkeys(str(symbol).strip() for symbol in symbols if str(symbol).strip()))
+    unique_symbols = list(dict.fromkeys(
+        str(symbol).strip() for symbol in symbols if str(symbol).strip()
+    ))
     if not unique_symbols:
         return {}, 0
 
@@ -133,9 +134,13 @@ async def _live_deriv_ticks(symbols):
         raise BrokerConnectionError("DERIV_PUBLIC_WS_URL is not configured")
 
     started = time.monotonic()
+    req_to_symbol = {
+        index: symbol for index, symbol in enumerate(unique_symbols, start=1)
+    }
+    symbol_set = set(unique_symbols)
     results = {}
-    req_to_symbol = {index: symbol for index, symbol in enumerate(unique_symbols, start=1)}
-    deadline = started + LIVE_TICK_SCAN_TIMEOUT_SECONDS
+    failed_symbols = set()
+    deadline = started + max(LIVE_TICK_SCAN_TIMEOUT_SECONDS, 12.0)
 
     try:
         async with websockets.connect(
@@ -147,16 +152,22 @@ async def _live_deriv_ticks(symbols):
             max_size=2**20,
         ) as ws:
             for req_id, symbol in req_to_symbol.items():
-                await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
+                await ws.send(json.dumps({
+                    "ticks": symbol,
+                    "subscribe": 1,
+                    "req_id": req_id,
+                }))
 
-            while len(results) < len(req_to_symbol):
+            while len(results) + len(failed_symbols) < len(symbol_set):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     break
                 try:
-                    raw = await asyncio.wait_for(ws.recv(), timeout=min(1.5, remaining))
+                    raw = await asyncio.wait_for(
+                        ws.recv(), timeout=min(2.0, remaining)
+                    )
                 except asyncio.TimeoutError:
-                    break
+                    continue
 
                 try:
                     payload = json.loads(raw)
@@ -164,13 +175,20 @@ async def _live_deriv_ticks(symbols):
                     continue
 
                 if payload.get("error"):
+                    failed = req_to_symbol.get(payload.get("req_id"))
+                    if failed:
+                        failed_symbols.add(failed)
                     continue
                 if payload.get("msg_type") != "tick":
                     continue
 
                 tick = payload.get("tick") or {}
-                symbol = str(tick.get("symbol") or req_to_symbol.get(payload.get("req_id"), ""))
-                if symbol not in req_to_symbol.values():
+                symbol = str(
+                    tick.get("symbol")
+                    or req_to_symbol.get(payload.get("req_id"))
+                    or ""
+                )
+                if symbol not in symbol_set:
                     continue
 
                 quote = _as_float(tick.get("quote"))
@@ -180,7 +198,9 @@ async def _live_deriv_ticks(symbols):
 
                 results[symbol] = tick
     except (OSError, asyncio.TimeoutError, websockets.WebSocketException) as exc:
-        raise BrokerConnectionError("Deriv public live market data is temporarily unavailable") from exc
+        raise BrokerConnectionError(
+            "Deriv public live market data is temporarily unavailable"
+        ) from exc
 
     return results, round((time.monotonic() - started) * 1000, 1)
 
@@ -234,6 +254,14 @@ def strategy_signals(request):
     account_credentials_valid = account.token_status == "active" and not account.is_token_expired
     symbol_filter = str(request.GET.get("symbol") or "").strip()
     timeframe = str(request.GET.get("timeframe") or "M1").strip()
+    refresh_catalogue = str(request.GET.get("refresh_catalogue") or "").lower() in {"1", "true", "yes"}
+    if refresh_catalogue:
+        try:
+            sync_active_symbols()
+        except Exception:
+            # The existing broker-synced catalogue remains the last verified
+            # market universe if this optional refresh is temporarily down.
+            pass
     try:
         limit = min(max(int(request.GET.get("limit", 40)), 1), MAX_SCAN_SYMBOLS)
     except (TypeError, ValueError):

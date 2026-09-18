@@ -1,7 +1,7 @@
-"""
-Browser-based views for AlgoBot.
-"""
-import logging,json
+"""Browser-based views for AlgoBot."""
+import json
+import logging
+from apps.market_data.models import MarketSymbol
 from urllib.parse import urlparse
 from django.conf import settings
 from django.http import Http404,HttpResponse
@@ -41,7 +41,17 @@ def positions_page(request): return render(request,'core/positions.html')
 def signals_page(request): return render(request,'core/signals.html')
 
 @login_required
-def analysis_page(request): return render(request, 'core/analysis.html')
+def analysis_page(request):
+    markets = list(
+        MarketSymbol.objects.filter(is_active=True, is_tradable=True)
+        .values("symbol", "display_name", "market", "sub_market")
+        .order_by("market", "symbol")
+    )
+    return render(
+        request,
+        "core/analysis.html",
+        {"analysis_markets_json": json.dumps(markets)},
+    )
 @login_required
 def billing_success_page(request): return render(request,'core/billing_success.html')
 @login_required

@@ -117,7 +117,19 @@ def _backfill_symbols(symbols, count, *, scope=None):
                     if failed else ""
                 ),
             )
-    return {"symbols": total, "results": results}
+    failed = [
+        symbol_name
+        for symbol_name, payload in results.items()
+        if isinstance(payload, dict) and payload.get("status") == "failed"
+    ]
+    return {
+        "symbols": total,
+        "symbols_total": total,
+        "symbols_completed": len(results),
+        "symbols_succeeded": total - len(failed),
+        "symbols_failed": len(failed),
+        "results": results,
+    }
 
 
 def _mark_backfill_run(

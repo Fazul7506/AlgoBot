@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from core.account_context import get_active_account
-from .deriv_sync import _request
+from .deriv_sync import _request, sync_active_symbols
 from .models import MarketSymbol
 from .constants import TIMEFRAMES
 
@@ -85,7 +85,14 @@ def catalogue(request):
     if account.broker.broker_type != "deriv":
         return Response({"detail": f"Live market catalogue is not implemented for {account.broker.name} yet."}, status=status.HTTP_409_CONFLICT)
     try:
-        payload = cache.get(CATALOGUE_CACHE)
+        force_refresh = str(request.query_params.get("refresh") or "").lower() in {"1", "true", "yes"}
+        payload = None if force_refresh else cache.get(CATALOGUE_CACHE)
+        if force_refresh:
+            # Refresh the durable DB catalogue through the same authoritative
+            # Deriv active_symbols parser used by the market-data worker. This
+            # also repairs persisted Boom/Crash/Volatility classifications.
+            sync_active_symbols()
+            payload = None
         if payload is None:
             response = _public_deriv({"active_symbols": "brief"})
             raw = response.get("active_symbols") or []
@@ -94,6 +101,16 @@ def catalogue(request):
             if payload:
                 cache.set(CATALOGUE_CACHE, payload, timeout=30)
         if payload:
+            if force_refresh:
+                payload = [
+                    {
+                        **item,
+                        "market": row.market,
+                        "sub_market": row.sub_market,
+                    }
+                    for item in payload
+                    for row in MarketSymbol.objects.filter(symbol=item["symbol"]).only("market","sub_market")
+                ] or payload
             return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,"symbols":payload,"count":len(payload),"supported_timeframes":BACKTEST_TIMEFRAMES,"stale":False})
         raise RuntimeError("Deriv returned no active tradable instruments")
     except Exception as exc:

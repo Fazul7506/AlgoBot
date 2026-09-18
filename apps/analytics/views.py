@@ -113,8 +113,15 @@ def analysis_data(request):
     except (TypeError, ValueError):
         limit = 300
 
-    cache_key = "algobot:analysis:v3:" + hashlib.sha256(
-        json.dumps([request.user.pk, symbol, timeframe.lower(), limit]).encode("utf-8")
+    refresh_requested = str(request.GET.get("refresh", "1")).lower() in {"1", "true", "yes"}
+    cache_key = "algobot:analysis:v4:" + hashlib.sha256(
+        json.dumps([
+            request.user.pk,
+            symbol,
+            timeframe.lower(),
+            limit,
+            bool(refresh_requested),
+        ]).encode("utf-8")
     ).hexdigest()
     cached = cache.get(cache_key)
     if cached is not None:
@@ -127,7 +134,6 @@ def analysis_data(request):
     except ValueError as exc:
         return JsonResponse({"status": "error", "message": str(exc)}, status=404)
 
-    refresh_requested = str(request.GET.get("refresh", "1")).lower() in {"1", "true", "yes"}
     refresh_result = None
     if refresh_requested:
         try:
@@ -167,6 +173,16 @@ def analysis_data(request):
 
     result = analyze_candles(candles, symbol=market.symbol, timeframe=canonical_timeframe)
     snapshot = MarketSnapshot.objects.filter(symbol=market).only("last_price", "bid", "ask", "change_percent").first()
+    if refresh_requested:
+        # The live broker tick is the authoritative current price. The stored
+        # snapshot remains useful for bid/ask/change context, but must never
+        # override the current broker quote in Analysis.
+        try:
+            live_tick
+        except UnboundLocalError:
+            live_tick = None
+        if live_tick and live_tick.get("quote") is not None:
+            result["price"] = float(live_tick["quote"])
     result["snapshot"] = (
         {
             "last_price": float(snapshot.last_price),
@@ -201,41 +217,6 @@ def analysis_data(request):
 @login_required
 def analysis_markets(request):
     return JsonResponse({"markets": _analysis_markets()})
-
-
-@login_required
-def analysis_contracts(request):
-    symbol = (request.GET.get("symbol") or "").strip().upper()
-    if not symbol:
-        return JsonResponse({"status": "error", "code": "SYMBOL_REQUIRED", "message": "A market symbol is required."}, status=400)
-    try:
-        market = MarketSymbol.objects.get(symbol=symbol, is_active=True, is_tradable=True)
-    except MarketSymbol.DoesNotExist:
-        return JsonResponse({"status": "error", "code": "MARKET_UNAVAILABLE", "message": "The selected market is not currently available from the broker catalogue."}, status=404)
-    try:
-        capabilities = fetch_contracts_for(market.symbol)
-    except Exception as exc:
-        return JsonResponse(
-            {
-                "status": "error",
-                "code": "BROKER_CONTRACT_DATA_FAILED",
-                "message": "Deriv contract capabilities could not be confirmed.",
-                "detail": str(exc),
-                "symbol": market.symbol,
-            },
-            status=503,
-        )
-    return JsonResponse(
-        {
-            "status": "ok",
-            "broker": "Deriv",
-            "symbol": market.symbol,
-            "display_name": market.display_name,
-            "market": market.market,
-            "sub_market": market.sub_market,
-            "capabilities": capabilities,
-        }
-    )
 
 
 @login_required

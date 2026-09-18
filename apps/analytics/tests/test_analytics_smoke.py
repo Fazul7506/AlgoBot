@@ -63,6 +63,7 @@ class AnalyticsSmokeTests(TestCase):
                 close=close,
                 volume=1,
                 epoch=epoch,
+                source="deriv_candles",
             )
         with patch.object(
             views,
@@ -71,7 +72,7 @@ class AnalyticsSmokeTests(TestCase):
         ) as analyze:
             response = self.client.get(
                 reverse("analysis-data"),
-                {"symbol": market.symbol, "timeframe": "M1", "limit": 300},
+                {"symbol": market.symbol, "timeframe": "M1", "limit": 300, "refresh": 0},
             )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(analyze.call_count, 1)
