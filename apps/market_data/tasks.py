@@ -276,36 +276,45 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
 
 @_task
 def recover_stale_candle_backfill():
-    """Requeue a control record that never reached a worker.
-
-    A backfill task marks its durable record running as its first database
-    operation. Therefore a queued record older than the recovery window is a
-    safe indication that the message was never consumed (or the worker died
-    before it could start the task).
-    """
+    """Requeue durable backfill records that outlived a worker execution window."""
+    from django.db import transaction
     from .models import CandleBackfillRun
 
-    cutoff = timezone.now() - BACKFILL_STALE_AFTER
-    run = (
-        CandleBackfillRun.objects
-        .filter(scope="initial", status="queued", requested_at__lt=cutoff)
-        .order_by("requested_at")
-        .first()
-    )
-    if not run:
-        return {"status": "healthy", "requeued": False}
+    now = timezone.now()
+    queued_cutoff = now - BACKFILL_STALE_AFTER
+    running_cutoff = now - timedelta(minutes=60)
 
-    from .models import CandleBackfillRun
+    with transaction.atomic():
+        run = (
+            CandleBackfillRun.objects
+            .select_for_update()
+            .filter(scope="initial")
+            .filter(
+                ({"status": "queued", "requested_at__lt": queued_cutoff})
+            )
+            .first()
+        )
+        if run is None:
+            run = (
+                CandleBackfillRun.objects
+                .select_for_update()
+                .filter(
+                    scope="initial",
+                    status="running",
+                    started_at__lt=running_cutoff,
+                )
+                .first()
+            )
+        if not run:
+            return {"status": "healthy", "requeued": False}
 
-    with CandleBackfillRun.objects.select_for_update().get(pk=run.pk):
-        run = CandleBackfillRun.objects.get(pk=run.pk)
         run.status = "queued"
         run.task_id = ""
         run.started_at = None
         run.completed_at = None
         run.result = {
-            "requeued_at": timezone.now().isoformat(),
-            "reason": "Celery task remained queued beyond recovery threshold",
+            "requeued_at": now.isoformat(),
+            "reason": "Celery execution exceeded the recovery window",
         }
         run.error = ""
         run.save(
@@ -313,11 +322,10 @@ def recover_stale_candle_backfill():
                 "status", "task_id", "started_at", "completed_at", "result", "error",
             ]
         )
+        run_id = run.pk
+        count = run.count
+        symbol = run.symbol or None
 
-    task = run_initial_candle_backfill.delay(
-        run.pk,
-        count=run.count,
-        symbol=run.symbol or None,
-    )
-    CandleBackfillRun.objects.filter(pk=run.pk).update(task_id=task.id)
-    return {"status": "requeued", "run_id": run.pk, "task_id": task.id}
+    task = run_initial_candle_backfill.delay(run_id, count=count, symbol=symbol)
+    CandleBackfillRun.objects.filter(pk=run_id).update(task_id=task.id)
+    return {"status": "requeued", "run_id": run_id, "task_id": task.id}
