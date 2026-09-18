@@ -49,8 +49,9 @@ def _recover_stale_initial_run(run):
         pass
 
     run.task_id = ""
+    run.requested_at = timezone.now()
     run.error = "Previous Celery delivery was stale and has been requeued."
-    run.save(update_fields=["task_id", "error"])
+    run.save(update_fields=["task_id", "requested_at", "error"])
     task = run_initial_candle_backfill.delay(
         run.pk,
         count=run.count,
