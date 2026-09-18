@@ -1,9 +1,7 @@
+"""Browser-based views for AlgoBot."""
 import json
+import logging
 from apps.market_data.models import MarketSymbol
-"""
-Browser-based views for AlgoBot.
-"""
-import logging,json
 from urllib.parse import urlparse
 from django.conf import settings
 from django.http import Http404,HttpResponse
