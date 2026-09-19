@@ -1,13 +1,23 @@
 from django.contrib import admin
 
-from .models import Candle, CandleBackfillRun, MarketSnapshot, MarketStatistics, MarketSymbol, Tick
+from .models import Candle, CandleBackfillEvent, CandleBackfillRun, MarketSnapshot, MarketStatistics, MarketSymbol, Tick
+
+
+class CandleBackfillEventInline(admin.TabularInline):
+    model = CandleBackfillEvent
+    extra = 0
+    can_delete = False
+    fields = ("created_at", "level", "event_type", "message", "symbol", "timeframe", "task_id", "worker_hostname")
+    readonly_fields = fields
+    ordering = ("-created_at",)
+    classes = ("collapse",)
 
 
 @admin.register(CandleBackfillRun)
 class CandleBackfillRunAdmin(admin.ModelAdmin):
     change_list_template = "admin/market_data/candlebackfillrun/change_list.html"
     list_display = (
-        "scope", "status", "progress_display", "celery_state", "count", "symbol",
+        "scope", "status", "progress_display", "celery_state", "heartbeat_display", "count", "current_symbol", "current_timeframe",
         "task_id", "requested_by", "requested_at", "started_at", "completed_at",
     )
     list_filter = ("scope", "status")
@@ -18,6 +28,7 @@ class CandleBackfillRunAdmin(admin.ModelAdmin):
         "result", "error",
     )
     ordering = ("-requested_at",)
+    inlines = (CandleBackfillEventInline,)
 
     @admin.display(description="Progress", ordering="status")
     def progress_display(self, obj):
@@ -27,19 +38,21 @@ class CandleBackfillRunAdmin(admin.ModelAdmin):
         total = result.get("symbols_total", 0)
         return f"{percent}% · {completed}/{total}" if total else "—"
 
-    @admin.display(description="Celery", ordering="status")
+    @admin.display(description="Worker", ordering="status")
     def celery_state(self, obj):
         if obj.status == "completed":
             return "SUCCESS"
         if obj.status == "failed":
             return "FAILURE"
-        if not obj.task_id:
+        if obj.started_at:
+            return "STARTED"
+        if obj.task_id:
             return "DISPATCHING"
-        try:
-            from deriv_platform.celery import app
-            return app.AsyncResult(obj.task_id).state
-        except Exception:
-            return "UNKNOWN"
+        return "DISPATCHING"
+
+    @admin.display(description="Heartbeat")
+    def heartbeat_display(self, obj):
+        return obj.last_heartbeat_at or "—"
 
 
 @admin.register(MarketSymbol)
