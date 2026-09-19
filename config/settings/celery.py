@@ -28,6 +28,13 @@ CELERY_TASK_PUBLISH_RETRY_POLICY = {
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     "socket_connect_timeout": 3,
     "socket_timeout": 3,
+    # Initial broker history can be long-running. Keep Redis from redelivering
+    # a still-running late-ack task before its durable heartbeat/recovery logic
+    # can make a decision.
+    "visibility_timeout": 4 * 60 * 60,
+}
+CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
+    "visibility_timeout": 4 * 60 * 60,
 }
 
 CELERY_BROKER_URL = CELERY_BROKER_URL
