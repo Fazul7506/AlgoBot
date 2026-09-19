@@ -44,6 +44,9 @@ CELERY_RESULT_BACKEND = CELERY_RESULT_BACKEND
 # after execution. Worker loss therefore allows Celery to redeliver them.
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_SEND_SENT_EVENT = True
+# Emit worker/task lifecycle events so delivery and STARTED state are observable.
+CELERY_WORKER_SEND_TASK_EVENTS = True
+CELERY_WORKER_ENABLE_REMOTE_CONTROL = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
 
