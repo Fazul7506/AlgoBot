@@ -4,7 +4,6 @@
 {% block mobile_title %}Candle Backfill{% endblock %}
 {% block content %}
 <section class="rb-page" data-backfill-page>
-  <script type="application/json" id="initial-backfill-state">{{ run_payload|default_if_none:"null"|safe }}</script>
   <header class="rb-top">
     <div class="rb-breadcrumb"><span class="material-symbols-rounded">database</span><span>Candle Backfill</span><span>›</span><strong>Initial warm-up</strong></div>
     <div class="rb-title-row">
