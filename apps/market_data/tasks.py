@@ -315,13 +315,12 @@ def backfill_research_candles(count=250, symbol=None):
             error="",
         )
         _emit_backfill_event(
-            "initial",
+            "research",
             event_type="worker_started",
-            message=f"Worker accepted candle backfill task {task_id}",
+            message=f"Worker accepted scheduled research backfill task {task_id}",
             task_id=task_id,
             worker_hostname=_worker_identity(),
         )
-        logger.info("Candle backfill worker started", extra={"run_id": run_id, "task_id": task_id})
         symbols = _active_symbols(symbol)
         if not symbols:
             raise RuntimeError("No active tradable market symbols are available")
@@ -386,6 +385,14 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
             }
             run.save(update_fields=["status", "started_at", "accepted_at", "last_heartbeat_at", "error", "task_id", "worker_hostname", "result"])
 
+        _emit_backfill_event(
+            "initial",
+            event_type="worker_started",
+            message=f"Worker accepted candle backfill task {task_id}",
+            task_id=task_id,
+            worker_hostname=_worker_identity(),
+        )
+        logger.info("Candle backfill worker started", extra={"run_id": run_id, "task_id": task_id})
         symbols = _active_symbols(symbol)
         if not symbols:
             raise RuntimeError("No active tradable market symbols are available")
