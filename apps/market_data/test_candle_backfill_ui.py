@@ -177,3 +177,29 @@ class CandleBackfillUiTests(TestCase):
         self.assertEqual(payload["progress"]["work_total"], 0)
         self.assertEqual(payload["duration_seconds"], 0)
         self.assertEqual(payload["task_id"], run.task_id)
+
+
+    def test_json_page_recovers_stale_dispatch_when_periodic_reconciler_is_late(self):
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="running",
+            count=5000,
+            task_id="stale-task",
+        )
+        CandleBackfillRun.objects.filter(pk=run.pk).update(
+            requested_at=timezone.now() - timedelta(minutes=3),
+        )
+        recovered = SimpleNamespace(id="page-recovered-task")
+        with patch(
+            "apps.market_data.tasks.run_initial_candle_backfill.apply_async",
+            return_value=recovered,
+        ) as publish:
+            response = self.client.get(
+                reverse("initial_candle_backfill"),
+                {"format": "json", "scope": "initial"},
+            )
+        self.assertEqual(response.status_code, 200)
+        run.refresh_from_db()
+        self.assertEqual(run.task_id, "page-recovered-task")
+        self.assertIsNone(run.started_at)
+        publish.assert_called_once()
