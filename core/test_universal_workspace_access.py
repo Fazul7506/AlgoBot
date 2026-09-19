@@ -85,7 +85,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn(".app-shell {\n  display: block !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock15")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive3")
 
 
     def test_sidebar_visual_shell_is_fixed_and_brand_spacing_is_stable(self):
@@ -109,7 +109,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover5")
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock15")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive3")
         self.assertContains(response, 'href="/static/icons/favicon.ico"')
  
     def test_runtime_sidebar_layer_is_loaded_after_other_presentation_layers(self):
@@ -121,7 +121,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             html.index("card_alignment.css"),
             html.index("platform_polish.css"),
             html.index("control_polish.css"),
-            html.index("runtime_recovery.css?v=20260919-shelldock15"),
+            html.index("runtime_recovery.css?v=20260919-responsive3"),
         ]
         self.assertEqual(positions, sorted(positions))
 
@@ -166,7 +166,7 @@ class UniversalWorkspaceAccessTests(TestCase):
 
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock15")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive3")
         self.assertContains(response, "base_shell.js?v=20260919-sidebar9")
 
     def test_sidebar_zones_cannot_follow_document_scroll(self):
@@ -189,7 +189,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertNotIn("sidebar.scrollHeight", js)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock15")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive3")
         self.assertContains(response, "base_shell.js?v=20260919-sidebar9")
 
     def test_sidebar_scroll_state_uses_nav_only(self):
@@ -219,3 +219,26 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("position: absolute !important;", css)
         self.assertIn("#app-sidebar.app-sidebar > .sidebar-user", css)
         self.assertIn("transition: width .22s ease !important;", css)
+
+
+    def test_responsive_shell_separates_desktop_tablet_and_mobile_geometry(self):
+        """Desktop reserves a rail; tablet/mobile use a full-width page plus drawer."""
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("FINAL RESPONSIVE SHELL CONTRACT", css)
+        self.assertIn("@media (min-width: 901px)", css)
+        self.assertIn("@media (min-width: 601px) and (max-width: 900px)", css)
+        self.assertIn("@media (max-width: 600px)", css)
+        self.assertIn("height: 100svh !important;", css)
+        self.assertIn("transform: translate3d(-105%, 0, 0) !important;", css)
+        self.assertIn(".app-sidebar.app-sidebar.is-open", css)
+        self.assertIn(".mobile-menu-button", css)
+        self.assertIn("margin-left: 260px !important;", css)
+        self.assertIn("margin-left: 0 !important;", css)
+        self.assertIn("bottom: 154px !important;", css)
+        self.assertIn("position: absolute !important;", css)
+
+        response = self.client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive3")
