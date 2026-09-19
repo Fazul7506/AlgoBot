@@ -75,7 +75,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("display: grid !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover3")
+        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover4")
 
 
     def test_authenticated_shell_uses_vertical_topbar_content_flow(self):
@@ -85,7 +85,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn(".app-shell {\n  display: block !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow2")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow3")
 
 
     def test_sidebar_visual_shell_is_fixed_and_brand_spacing_is_stable(self):
