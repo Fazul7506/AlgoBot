@@ -35,10 +35,11 @@ class CandleBackfillReliabilityTests(TestCase):
         run = CandleBackfillRun.objects.create(
             scope="initial",
             status="completed",
-            requested_at=requested,
             started_at=started,
             completed_at=completed,
         )
+        CandleBackfillRun.objects.filter(pk=run.pk).update(requested_at=requested)
+        run.refresh_from_db()
         from .views import _run_payload
 
         payload = _run_payload(run)
