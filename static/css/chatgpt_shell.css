@@ -10,3 +10,87 @@
 @media(min-width:901px){.app-sidebar{transform:none!important}.app-shell{margin-left:264px}.app-sidebar.is-collapsed~.app-shell{margin-left:78px}.mobile-menu-button{display:none!important}}
 @media(max-width:520px){.topbar{padding-left:60px!important;padding-right:10px!important}.topbar-actions>button[data-theme-toggle]{padding:8px!important}.topbar-actions>button[data-theme-toggle] span:last-child{display:none}.connection-indicator{font-size:11px;max-width:46vw}.logout-modal{padding:14px}.logout-modal-card{padding:20px}.logout-modal-actions{flex-direction:column-reverse}.logout-modal-actions .btn{width:100%}}
 @media(prefers-reduced-motion:reduce){.app-sidebar{transition:none}.mobile-menu-button{transition:none}}
+
+
+/* Collapsed desktop sidebar: keep the AlgoBot favicon as the visual trail and
+ * reveal the expand control on hover/focus, matching the compact interaction
+ * pattern used by modern chat workspaces. The control remains the same
+ * existing data-sidebar-toggle button; this is presentation-only. */
+@media (min-width: 901px) {
+  .app-sidebar.is-collapsed .sidebar-header {
+    position: relative;
+    width: 100%;
+    min-height: 38px;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header .brand {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    flex: 0 0 48px;
+    justify-content: center;
+    gap: 0;
+    border-radius: 14px;
+    position: relative;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header .brand-mark {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header .brand-favicon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header .sidebar-toggle {
+    position: absolute;
+    inset: 0;
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    opacity: 0;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--panel2) 94%, transparent);
+    box-shadow: 0 8px 24px rgba(0,0,0,.22);
+    transition: opacity .14s ease, background-color .14s ease, border-color .14s ease;
+    z-index: 2;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header .sidebar-toggle .material-symbols-rounded {
+    font-size: 22px;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header .brand:hover + .sidebar-toggle,
+  .app-sidebar.is-collapsed .sidebar-header .brand:focus-visible + .sidebar-toggle,
+  .app-sidebar.is-collapsed .sidebar-header .sidebar-toggle:hover,
+  .app-sidebar.is-collapsed .sidebar-header .sidebar-toggle:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header:focus-within .sidebar-toggle {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header .sidebar-toggle:hover,
+  .app-sidebar.is-collapsed .sidebar-header .sidebar-toggle:focus-visible {
+    background: var(--panel2);
+    border-color: var(--line);
+  }
+}
