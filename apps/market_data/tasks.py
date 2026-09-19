@@ -463,7 +463,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             run = (
                 CandleBackfillRun.objects.select_for_update()
                 .filter(scope="initial", status="running")
-                .filter(Q(started_at__lt=running_cutoff) | Q(started_at__isnull=True, requested_at__lt=dispatch_cutoff))
+                .filter(Q(last_heartbeat_at__lt=running_cutoff) | Q(last_heartbeat_at__isnull=True, started_at__lt=running_cutoff) | Q(started_at__isnull=True, requested_at__lt=dispatch_cutoff))
                 .first()
             )
             if not run:
