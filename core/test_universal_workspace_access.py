@@ -34,6 +34,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertContains(response, 'data-sidebar-toggle')
         self.assertContains(response, 'aria-label="Collapse navigation"')
         self.assertContains(response, 'aria-expanded="true"')
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shellfix4")
         for href in (
             "/dashboard/", "/trading/", "/markets/", "/orders/", "/trade-history/",
             "/positions/", "/signals/", "/strategies/", "/backtesting/", "/performance/",
