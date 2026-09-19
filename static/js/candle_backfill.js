@@ -9,6 +9,7 @@
   let tail = true;
   let query = "";
   let searchTimer = null;
+  let telemetryFailures = 0;
 
   const text = (selector, value) => {
     const node = $(selector);
@@ -179,6 +180,9 @@
       });
       if (!response.ok) throw new Error("status " + response.status);
       const data = await response.json();
+      telemetryFailures = 0;
+      const telemetryNotice = $("[data-telemetry-error]");
+      if (telemetryNotice) telemetryNotice.remove();
       renderRun(data.initial);
       if (query && lastEventId === 0) {
         renderEvents(data.events || [], true);
@@ -187,6 +191,10 @@
       }
       if (data.events_last_id) lastEventId = Number(data.events_last_id) || lastEventId;
     } catch (error) {
+      telemetryFailures += 1;
+      // A single mobile-network hiccup must not look like a broker failure.
+      // Show the reconnect warning only after several consecutive failures.
+      if (telemetryFailures < 3) return;
       const notices = $("[data-notices]");
       if (notices) {
         let row = notices.querySelector("[data-telemetry-error]");
@@ -196,7 +204,7 @@
           row.dataset.telemetryError = "true";
           notices.appendChild(row);
         }
-        row.textContent = "Live telemetry request failed. The page is still showing the last server-rendered durable state; no run state was changed by this browser error.";
+        row.textContent = "Live telemetry is temporarily unavailable; the durable server state remains authoritative and the page will keep retrying.";
       }
     } finally {
       polling = false;
