@@ -418,3 +418,158 @@ body.mobile-nav-open,html.mobile-nav-open { overflow-y:auto !important; overflow
     opacity: 1 !important;
   }
 }
+
+
+/* Final viewport-rail override — presentation only.
+ * The authenticated sidebar is a permanent rail at every viewport size.
+ * Page/document scrolling is isolated from the rail; only <nav> scrolls.
+ * Existing DOM, links, collapse handler and favicon are unchanged.
+ */
+#app-sidebar.app-sidebar {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: auto !important;
+  bottom: 0 !important;
+  width: 260px !important;
+  min-width: 260px !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  margin: 0 !important;
+  padding: 10px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  transform: none !important;
+  box-sizing: border-box !important;
+  z-index: 3000 !important;
+}
+#app-sidebar.app-sidebar > nav {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+#app-sidebar.app-sidebar .sidebar-header {
+  position: relative !important;
+  flex: 0 0 54px !important;
+  min-height: 54px !important;
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  box-sizing: border-box !important;
+}
+#app-sidebar.app-sidebar .sidebar-header .brand {
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+#app-sidebar.app-sidebar .sidebar-header .brand-mark {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+  margin: 0 !important;
+}
+#app-sidebar.app-sidebar .sidebar-header .brand-favicon {
+  display: block !important;
+  width: 28px !important;
+  height: 28px !important;
+  flex: 0 0 28px !important;
+  object-fit: contain !important;
+}
+#app-sidebar.app-sidebar .sidebar-header .brand-name {
+  display: inline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+}
+#app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle {
+  position: relative !important;
+  inset: auto !important;
+  top: auto !important;
+  right: auto !important;
+  display: grid !important;
+  place-items: center !important;
+  flex: 0 0 36px !important;
+  width: 36px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  z-index: 5 !important;
+}
+.app-shell {
+  margin-left: 260px !important;
+}
+.app-shell.sidebar-collapsed,
+.app-sidebar.is-collapsed + .app-shell,
+body.sidebar-collapsed .app-shell {
+  margin-left: 78px !important;
+}
+.mobile-menu-button {
+  display: none !important;
+}
+@media (max-width: 900px) {
+  #app-sidebar.app-sidebar,
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: 260px !important;
+    min-width: 260px !important;
+    transform: none !important;
+    padding: 10px !important;
+  }
+  #app-sidebar.app-sidebar .sidebar-toggle {
+    display: grid !important;
+  }
+  .app-shell,
+  .app-shell.sidebar-collapsed,
+  .app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: 260px !important;
+  }
+  .app-shell.sidebar-collapsed,
+  .app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: 78px !important;
+  }
+  .topbar {
+    padding-left: 14px !important;
+  }
+}
+@media (max-width: 420px) {
+  #app-sidebar.app-sidebar,
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: min(260px, 78vw) !important;
+    min-width: min(260px, 78vw) !important;
+  }
+  .app-shell,
+  .app-shell.sidebar-collapsed,
+  .app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: min(260px, 78vw) !important;
+  }
+  .app-shell.sidebar-collapsed,
+  .app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: 78px !important;
+  }
+}
