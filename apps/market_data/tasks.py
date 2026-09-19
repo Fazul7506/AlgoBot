@@ -1,6 +1,7 @@
 import importlib
 import logging
 from datetime import timedelta
+import socket
 
 from django.utils import timezone
 
@@ -64,6 +65,8 @@ logger = logging.getLogger(__name__)
 # market-data request budget. The Render market-data worker is single-consumer.
 BACKFILL_REQUEST_INTERVAL_SECONDS = 0.75
 BACKFILL_RUNNING_STALE_AFTER = timedelta(minutes=60)
+BACKFILL_DISPATCH_STALE_AFTER = timedelta(minutes=2)
+BACKFILL_MAX_RECOVERY_ATTEMPTS = 3
 
 
 def _active_symbols(symbol=None):
@@ -73,6 +76,80 @@ def _active_symbols(symbol=None):
         MarketSymbol.objects.filter(is_active=True, is_tradable=True)
         .order_by("symbol")
         .values_list("symbol", flat=True)
+    )
+
+
+
+def _worker_identity():
+    return socket.gethostname() or "unknown-worker"
+
+
+def _emit_backfill_event(
+    scope,
+    *,
+    level="info",
+    event_type="heartbeat",
+    message,
+    symbol="",
+    timeframe="",
+    task_id="",
+    worker_hostname="",
+    payload=None,
+):
+    """Persist an operator log line and the worker heartbeat atomically."""
+    from django.db import transaction
+    from .models import CandleBackfillEvent, CandleBackfillRun
+
+    now = timezone.now()
+    with transaction.atomic():
+        run = CandleBackfillRun.objects.select_for_update().filter(scope=scope).first()
+        if not run:
+            return None
+        if task_id and run.task_id and run.task_id != str(task_id):
+            return None
+        event = CandleBackfillEvent.objects.create(
+            run=run,
+            created_at=now,
+            level=level,
+            event_type=event_type,
+            message=str(message),
+            symbol=symbol or "",
+            timeframe=timeframe or "",
+            task_id=str(task_id or run.task_id or ""),
+            worker_hostname=worker_hostname or run.worker_hostname or "",
+            payload=payload or {},
+        )
+        updates = {"last_heartbeat_at"}
+        run.last_heartbeat_at = now
+        if symbol:
+            run.current_symbol = symbol
+            updates.add("current_symbol")
+        if timeframe:
+            run.current_timeframe = timeframe
+            updates.add("current_timeframe")
+        if worker_hostname:
+            run.worker_hostname = worker_hostname
+            updates.add("worker_hostname")
+        run.save(update_fields=sorted(updates))
+        return event
+
+
+def _backfill_timeframe_progress(scope, symbol, timeframe, payload):
+    """Persist every broker timeframe boundary for live operator visibility."""
+    from .models import CandleBackfillRun
+
+    task_id = CandleBackfillRun.objects.filter(scope=scope).values_list("task_id", flat=True).first() or ""
+    failed = isinstance(payload, dict) and payload.get("status") == "failed"
+    _emit_backfill_event(
+        scope,
+        level="error" if failed else "info",
+        event_type="timeframe",
+        message=f"{'FAILED' if failed else 'OK'} {symbol} · {timeframe}",
+        symbol=symbol,
+        timeframe=timeframe,
+        task_id=task_id,
+        worker_hostname=_worker_identity(),
+        payload=payload if isinstance(payload, dict) else {"value": str(payload)},
     )
 
 
@@ -95,11 +172,27 @@ def _backfill_symbols(symbols, count, *, scope=None):
     results = {}
     total = len(symbols)
     for index, value in enumerate(symbols, start=1):
+        if scope:
+            from .models import CandleBackfillRun
+            task_id = CandleBackfillRun.objects.filter(scope=scope).values_list("task_id", flat=True).first() or ""
+            _emit_backfill_event(
+                scope,
+                event_type="symbol_started",
+                message=f"Fetching broker history for {value}",
+                symbol=value,
+                task_id=task_id,
+                worker_hostname=_worker_identity(),
+            )
         try:
             results[value] = fetch_and_store_all_timeframes(
                 value,
                 count=int(count),
                 request_interval=BACKFILL_REQUEST_INTERVAL_SECONDS,
+                progress_callback=(
+                    lambda timeframe, payload, symbol=value: _backfill_timeframe_progress(
+                        scope, symbol, timeframe, payload
+                    )
+                ) if scope else None,
             )
         except Exception as exc:
             logger.warning(
@@ -126,6 +219,19 @@ def _backfill_symbols(symbols, count, *, scope=None):
                     f"Historical backfill failed for: {', '.join(failed)}"
                     if failed else ""
                 ),
+            )
+            _emit_backfill_event(
+                scope,
+                level="error" if _symbol_backfill_failed(results[value]) else "success",
+                event_type="symbol_completed",
+                message=(
+                    f"FAILED {value}" if _symbol_backfill_failed(results[value])
+                    else f"Completed {value}"
+                ),
+                symbol=value,
+                task_id=CandleBackfillRun.objects.filter(scope=scope).values_list("task_id", flat=True).first() or "",
+                worker_hostname=_worker_identity(),
+                payload={"index": index, "total": total, "percent": progress["percent"]},
             )
 
     failed = [name for name, payload in results.items() if _symbol_backfill_failed(payload)]
@@ -209,6 +315,13 @@ def backfill_research_candles(count=250, symbol=None):
             result={"symbols_total": 0, "symbols_completed": 0, "percent": 0},
             error="",
         )
+        _emit_backfill_event(
+            "research",
+            event_type="worker_started",
+            message=f"Worker accepted scheduled research backfill task {task_id}",
+            task_id=task_id,
+            worker_hostname=_worker_identity(),
+        )
         symbols = _active_symbols(symbol)
         if not symbols:
             raise RuntimeError("No active tradable market symbols are available")
@@ -252,10 +365,17 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
             if run.status == "completed" and run.completed_at:
                 return run.result or {"status": "completed"}
+            if run.task_id and task_id and run.task_id != task_id:
+                logger.warning("Ignoring superseded candle backfill delivery", extra={"run_id": run_id, "task_id": task_id})
+                return {"status": "superseded", "run_id": run_id}
+            now = timezone.now()
             run.status = "running"
-            run.started_at = run.started_at or timezone.now()
+            run.started_at = run.started_at or now
+            run.accepted_at = run.accepted_at or now
+            run.last_heartbeat_at = now
             run.error = ""
             run.task_id = task_id or run.task_id
+            run.worker_hostname = _worker_identity()
             run.result = {
                 "symbols_total": 0,
                 "symbols_completed": 0,
@@ -264,8 +384,16 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
                 "percent": 0,
                 "results": {},
             }
-            run.save(update_fields=["status", "started_at", "error", "task_id", "result"])
+            run.save(update_fields=["status", "started_at", "accepted_at", "last_heartbeat_at", "error", "task_id", "worker_hostname", "result"])
 
+        _emit_backfill_event(
+            "initial",
+            event_type="worker_started",
+            message=f"Worker accepted candle backfill task {task_id}",
+            task_id=task_id,
+            worker_hostname=_worker_identity(),
+        )
+        logger.info("Candle backfill worker started", extra={"run_id": run_id, "task_id": task_id})
         symbols = _active_symbols(symbol)
         if not symbols:
             raise RuntimeError("No active tradable market symbols are available")
@@ -284,6 +412,16 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
             run.completed_at = timezone.now()
             run.save(update_fields=["result", "status", "error", "completed_at"])
 
+        _emit_backfill_event(
+            "initial",
+            level="error" if failed else "success",
+            event_type="failed" if failed else "completed",
+            message=error if failed else f"Candle backfill completed: {result['symbols_succeeded']}/{result['symbols_total']} symbols succeeded",
+            task_id=task_id,
+            worker_hostname=_worker_identity(),
+            payload={"result": result},
+        )
+
         if failed:
             raise RuntimeError(error)
         return result
@@ -295,6 +433,14 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
                 run.error = str(exc)
                 run.completed_at = timezone.now()
                 run.save(update_fields=["status", "error", "completed_at"])
+        _emit_backfill_event(
+            "initial",
+            level="error",
+            event_type="failed",
+            message=f"Candle backfill failed: {exc}",
+            task_id=task_id,
+            worker_hostname=_worker_identity(),
+        )
         logger.exception("Initial candle backfill failed", extra={"run_id": run_id})
         raise
     finally:
@@ -305,27 +451,49 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
 def reconcile_candle_backfill_runs(max_age_seconds=300):
     """Recover stalled broker-data jobs without exposing a queue lifecycle state."""
     from django.db import close_old_connections, transaction
-    from .models import CandleBackfillRun
+    from django.db.models import Q
+    from .models import CandleBackfillEvent, CandleBackfillRun
 
     close_old_connections()
-    running_cutoff = timezone.now() - BACKFILL_RUNNING_STALE_AFTER
+    now = timezone.now()
+    running_cutoff = now - BACKFILL_RUNNING_STALE_AFTER
+    dispatch_cutoff = now - BACKFILL_DISPATCH_STALE_AFTER
     recovered = []
     try:
         with transaction.atomic():
             run = (
                 CandleBackfillRun.objects.select_for_update()
-                .filter(scope="initial", status="running", started_at__lt=running_cutoff)
+                .filter(scope="initial", status="running")
+                .filter(Q(last_heartbeat_at__lt=running_cutoff) | Q(last_heartbeat_at__isnull=True, started_at__lt=running_cutoff) | Q(started_at__isnull=True, requested_at__lt=dispatch_cutoff))
                 .first()
             )
             if not run:
                 return {"recovered": []}
-            run_id, count, symbol, old_task_id = run.pk, int(run.count or 5000), run.symbol or None, run.task_id
+            run_id = run.pk
+            count = int(run.count or 5000)
+            symbol = run.symbol or None
+            old_task_id = run.task_id
+            prior_result = run.result or {}
+            recovery_attempts = int(prior_result.get("dispatch_recovery_attempts", 0) or 0)
+            if run.started_at is None and recovery_attempts >= BACKFILL_MAX_RECOVERY_ATTEMPTS:
+                run.status = "failed"
+                run.error = "No market-data worker confirmed this job after three delivery attempts."
+                run.completed_at = now
+                run.save(update_fields=["status", "error", "completed_at"])
+                CandleBackfillEvent.objects.create(run=run, level="error", event_type="failed", message=run.error, task_id=old_task_id, payload={"recovery_attempts": recovery_attempts})
+                return {"recovered": [], "failed": run_id}
             run.task_id = ""
-            run.requested_at = timezone.now()
-            run.started_at = timezone.now()
+            run.requested_at = now
+            run.dispatch_at = now
+            prior_result["dispatch_recovery_attempts"] = recovery_attempts + 1
+            run.result = prior_result
+            run.started_at = None
+            run.accepted_at = None
+            run.last_heartbeat_at = None
             run.completed_at = None
-            run.error = "Previous worker execution exceeded the recovery window; the job is being re-published automatically."
-            run.save(update_fields=["task_id", "requested_at", "started_at", "completed_at", "error"])
+            run.error = "Worker delivery was not confirmed within the recovery window; the job is being re-published automatically."
+            run.save(update_fields=["task_id", "requested_at", "dispatch_at", "started_at", "accepted_at", "last_heartbeat_at", "completed_at", "error", "result"])
+            CandleBackfillEvent.objects.create(run=run, level="notice", event_type="recovered", message=run.error, task_id=old_task_id, payload={"old_task_id": old_task_id})
 
         if old_task_id:
             try:
@@ -336,13 +504,14 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 logger.warning("Unable to revoke stale candle backfill task", extra={"task_id": old_task_id})
 
         try:
-            task = run_initial_candle_backfill.delay(run_id, count=count, symbol=symbol)
+            task = run_initial_candle_backfill.apply_async(args=(run_id,), kwargs={"count": count, "symbol": symbol}, queue="market_data")
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
                 if current.status == "running":
                     current.task_id = task.id
+                    current.dispatch_at = timezone.now()
                     current.error = ""
-                    current.save(update_fields=["task_id", "error"])
+                    current.save(update_fields=["task_id", "dispatch_at", "error"])
                     recovered.append({"scope": "initial", "run_id": run_id, "task_id": task.id})
         except Exception as exc:
             with transaction.atomic():
@@ -352,6 +521,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     current.error = f"Automatic Celery retry failed: {exc}"
                     current.completed_at = timezone.now()
                     current.save(update_fields=["status", "error", "completed_at"])
+                    CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": "market_data"})
             logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
         return {"recovered": recovered}
     finally:

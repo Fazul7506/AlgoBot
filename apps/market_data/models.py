@@ -131,6 +131,12 @@ class CandleBackfillRun(models.Model):
     requested_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    dispatch_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    last_heartbeat_at = models.DateTimeField(null=True, blank=True)
+    current_symbol = models.CharField(max_length=40, blank=True)
+    current_timeframe = models.CharField(max_length=32, blank=True)
+    worker_hostname = models.CharField(max_length=255, blank=True)
     result = models.JSONField(default=dict, blank=True)
     error = models.TextField(blank=True)
 
@@ -139,3 +145,51 @@ class CandleBackfillRun(models.Model):
 
     def __str__(self):
         return f"{self.scope}:{self.status}"
+
+
+class CandleBackfillEvent(models.Model):
+    """Durable operator log line for a candle-backfill run."""
+
+    LEVEL_CHOICES = [
+        ("info", "Info"),
+        ("notice", "Notice"),
+        ("warning", "Warning"),
+        ("error", "Error"),
+        ("success", "Success"),
+    ]
+
+    EVENT_TYPES = [
+        ("dispatch", "Dispatch"),
+        ("worker_received", "Worker received"),
+        ("worker_started", "Worker started"),
+        ("symbol_started", "Symbol started"),
+        ("timeframe", "Timeframe"),
+        ("symbol_completed", "Symbol completed"),
+        ("heartbeat", "Heartbeat"),
+        ("warning", "Warning"),
+        ("error", "Error"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+        ("recovered", "Recovered"),
+    ]
+
+    run = models.ForeignKey(CandleBackfillRun, on_delete=models.CASCADE, related_name="events")
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    level = models.CharField(max_length=16, choices=LEVEL_CHOICES, default="info", db_index=True)
+    event_type = models.CharField(max_length=32, choices=EVENT_TYPES, default="heartbeat")
+    message = models.TextField()
+    symbol = models.CharField(max_length=40, blank=True)
+    timeframe = models.CharField(max_length=32, blank=True)
+    task_id = models.CharField(max_length=255, blank=True)
+    worker_hostname = models.CharField(max_length=255, blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["run", "-created_at"]),
+            models.Index(fields=["run", "level", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.run_id}:{self.level}:{self.message[:80]}"

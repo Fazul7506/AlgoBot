@@ -289,6 +289,7 @@ def fetch_and_store_all_timeframes(
     symbol: str,
     count: int = 5000,
     request_interval: float = 0.30,
+    progress_callback=None,
 ) -> dict:
     """Populate canonical broker history while pacing Deriv WebSocket calls.
 
@@ -315,6 +316,9 @@ def fetch_and_store_all_timeframes(
             results[timeframe] = fetch_and_store(symbol, timeframe, count)
         except Exception as exc:
             results[timeframe] = {"status": "failed", "error": str(exc)}
+        finally:
+            if progress_callback:
+                progress_callback(timeframe, results[timeframe])
 
     # Raw broker ticks are the source for tick, 1s, 5s, 15s and 30s research bars.
     try:
