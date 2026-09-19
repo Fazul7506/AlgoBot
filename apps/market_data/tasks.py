@@ -66,6 +66,7 @@ logger = logging.getLogger(__name__)
 BACKFILL_REQUEST_INTERVAL_SECONDS = 0.75
 BACKFILL_RUNNING_STALE_AFTER = timedelta(minutes=60)
 BACKFILL_DISPATCH_STALE_AFTER = timedelta(minutes=2)
+BACKFILL_MAX_RECOVERY_ATTEMPTS = 3
 
 
 def _active_symbols(symbol=None):
@@ -472,15 +473,26 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             count = int(run.count or 5000)
             symbol = run.symbol or None
             old_task_id = run.task_id
+            prior_result = run.result or {}
+            recovery_attempts = int(prior_result.get("dispatch_recovery_attempts", 0) or 0)
+            if run.started_at is None and recovery_attempts >= BACKFILL_MAX_RECOVERY_ATTEMPTS:
+                run.status = "failed"
+                run.error = "No market-data worker confirmed this job after three delivery attempts."
+                run.completed_at = now
+                run.save(update_fields=["status", "error", "completed_at"])
+                CandleBackfillEvent.objects.create(run=run, level="error", event_type="failed", message=run.error, task_id=old_task_id, payload={"recovery_attempts": recovery_attempts})
+                return {"recovered": [], "failed": run_id}
             run.task_id = ""
             run.requested_at = now
             run.dispatch_at = now
+            prior_result["dispatch_recovery_attempts"] = recovery_attempts + 1
+            run.result = prior_result
             run.started_at = None
             run.accepted_at = None
             run.last_heartbeat_at = None
             run.completed_at = None
             run.error = "Worker delivery was not confirmed within the recovery window; the job is being re-published automatically."
-            run.save(update_fields=["task_id", "requested_at", "dispatch_at", "started_at", "accepted_at", "last_heartbeat_at", "completed_at", "error"])
+            run.save(update_fields=["task_id", "requested_at", "dispatch_at", "started_at", "accepted_at", "last_heartbeat_at", "completed_at", "error", "result"])
             CandleBackfillEvent.objects.create(run=run, level="notice", event_type="recovered", message=run.error, task_id=old_task_id, payload={"old_task_id": old_task_id})
 
         if old_task_id:
