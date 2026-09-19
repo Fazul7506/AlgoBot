@@ -504,7 +504,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 logger.warning("Unable to revoke stale candle backfill task", extra={"task_id": old_task_id})
 
         try:
-            task = run_initial_candle_backfill.apply_async(args=(run_id,), kwargs={"count": count, "symbol": symbol}, queue="market_data")
+            task = run_initial_candle_backfill.apply_async(\n                args=(run_id,),\n                kwargs={"count": count, "symbol": symbol},\n                queue="market_data",\n            )
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
                 if current.status == "running":
