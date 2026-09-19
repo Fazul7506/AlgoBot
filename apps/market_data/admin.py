@@ -24,7 +24,8 @@ class CandleBackfillRunAdmin(admin.ModelAdmin):
     search_fields = ("scope", "symbol", "task_id", "error", "requested_by__username")
     readonly_fields = (
         "scope", "status", "progress_display", "celery_state", "count", "symbol",
-        "task_id", "requested_by", "requested_at", "started_at", "completed_at",
+        "current_symbol", "current_timeframe", "worker_hostname", "dispatch_at", "accepted_at",
+        "last_heartbeat_at", "task_id", "requested_by", "requested_at", "started_at", "completed_at",
         "result", "error",
     )
     ordering = ("-requested_at",)
