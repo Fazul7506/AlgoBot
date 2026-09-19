@@ -61,7 +61,7 @@ def subscription_cleanup():
 logger = logging.getLogger(__name__)
 
 # Keep the long-running broker-history queue deliberately below Deriv's shared
-# market-data request budget.  The Render market-data worker is single-consumer.
+# market-data request budget. The Render market-data worker is single-consumer.
 BACKFILL_REQUEST_INTERVAL_SECONDS = 0.75
 BACKFILL_RUNNING_STALE_AFTER = timedelta(minutes=60)
 
@@ -73,6 +73,19 @@ def _active_symbols(symbol=None):
         MarketSymbol.objects.filter(is_active=True, is_tradable=True)
         .order_by("symbol")
         .values_list("symbol", flat=True)
+    )
+
+
+def _symbol_backfill_failed(payload):
+    """A symbol is failed when any broker timeframe request failed."""
+    if not isinstance(payload, dict):
+        return True
+    if payload.get("status") == "failed":
+        return True
+    timeframes = payload.get("timeframes", {})
+    return any(
+        isinstance(value, dict) and value.get("status") == "failed"
+        for value in timeframes.values()
     )
 
 
@@ -96,37 +109,33 @@ def _backfill_symbols(symbols, count, *, scope=None):
             )
             results[value] = {"status": "failed", "error": str(exc)}
 
+        failed = [name for name, payload in results.items() if _symbol_backfill_failed(payload)]
+        progress = {
+            "symbols_total": total,
+            "symbols_completed": index,
+            "symbols_succeeded": index - len(failed),
+            "symbols_failed": len(failed),
+            "percent": round((index / total) * 100, 1) if total else 100.0,
+            "results": results,
+        }
         if scope:
-            failed = [
-                symbol_name
-                for symbol_name, payload in results.items()
-                if isinstance(payload, dict) and payload.get("status") == "failed"
-            ]
             _mark_backfill_run(
                 scope,
-                result={
-                    "symbols_total": total,
-                    "symbols_completed": index,
-                    "symbols_succeeded": index - len(failed),
-                    "symbols_failed": len(failed),
-                    "results": results,
-                },
+                result=progress,
                 error=(
                     f"Historical backfill failed for: {', '.join(failed)}"
                     if failed else ""
                 ),
             )
-    failed = [
-        symbol_name
-        for symbol_name, payload in results.items()
-        if isinstance(payload, dict) and payload.get("status") == "failed"
-    ]
+
+    failed = [name for name, payload in results.items() if _symbol_backfill_failed(payload)]
     return {
         "symbols": total,
         "symbols_total": total,
         "symbols_completed": len(results),
         "symbols_succeeded": total - len(failed),
         "symbols_failed": len(failed),
+        "percent": round((len(results) / total) * 100, 1) if total else 100.0,
         "results": results,
     }
 
@@ -180,20 +189,13 @@ def backfill_research_candles(count=250, symbol=None):
     close_old_connections()
     task_id = getattr(backfill_research_candles.request, "id", "")
     try:
-        initial = CandleBackfillRun.objects.filter(
-            scope="initial",
-            status="running",
-        ).first()
+        initial = CandleBackfillRun.objects.filter(scope="initial", status="running").first()
         if initial:
             logger.info(
                 "Skipping scheduled research backfill while initial warm-up is active",
                 extra={"initial_run_id": initial.pk},
             )
-            return {
-                "status": "skipped",
-                "reason": "initial_backfill_active",
-                "initial_run_id": initial.pk,
-            }
+            return {"status": "skipped", "reason": "initial_backfill_active", "initial_run_id": initial.pk}
 
         started = timezone.now()
         _mark_backfill_run(
@@ -204,7 +206,7 @@ def backfill_research_candles(count=250, symbol=None):
             task_id=task_id,
             started_at=started,
             completed_at=None,
-            result={"symbols_total": 0, "symbols_completed": 0},
+            result={"symbols_total": 0, "symbols_completed": 0, "percent": 0},
             error="",
         )
         symbols = _active_symbols(symbol)
@@ -212,11 +214,7 @@ def backfill_research_candles(count=250, symbol=None):
             raise RuntimeError("No active tradable market symbols are available")
 
         result = _backfill_symbols(symbols, int(count), scope="research")
-        failed = [
-            value
-            for value, payload in result["results"].items()
-            if isinstance(payload, dict) and payload.get("status") == "failed"
-        ]
+        failed = [value for value, payload in result["results"].items() if _symbol_backfill_failed(payload)]
         error = f"Historical backfill failed for: {', '.join(failed)}" if failed else ""
         _mark_backfill_run(
             "research",
@@ -254,7 +252,6 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
             if run.status == "completed" and run.completed_at:
                 return run.result or {"status": "completed"}
-
             run.status = "running"
             run.started_at = run.started_at or timezone.now()
             run.error = ""
@@ -264,28 +261,17 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
                 "symbols_completed": 0,
                 "symbols_succeeded": 0,
                 "symbols_failed": 0,
+                "percent": 0,
                 "results": {},
             }
-            run.save(
-                update_fields=[
-                    "status",
-                    "started_at",
-                    "error",
-                    "task_id",
-                    "result",
-                ]
-            )
+            run.save(update_fields=["status", "started_at", "error", "task_id", "result"])
 
         symbols = _active_symbols(symbol)
         if not symbols:
             raise RuntimeError("No active tradable market symbols are available")
 
         result = _backfill_symbols(symbols, int(count), scope="initial")
-        failed = [
-            value
-            for value, payload in result["results"].items()
-            if isinstance(payload, dict) and payload.get("status") == "failed"
-        ]
+        failed = [value for value, payload in result["results"].items() if _symbol_backfill_failed(payload)]
         error = f"Historical backfill failed for: {', '.join(failed)}" if failed else ""
 
         with transaction.atomic():
@@ -324,39 +310,22 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
     close_old_connections()
     running_cutoff = timezone.now() - BACKFILL_RUNNING_STALE_AFTER
     recovered = []
-
     try:
-        # A Celery task may be broker-PENDING while waiting for a worker. The
-        # application lifecycle remains Running; only a genuinely abandoned
-        # execution is retried, and it never becomes a public queue state.
         with transaction.atomic():
             run = (
                 CandleBackfillRun.objects.select_for_update()
-                .filter(
-                    scope="initial",
-                    status="running",
-                    started_at__lt=running_cutoff,
-                )
+                .filter(scope="initial", status="running", started_at__lt=running_cutoff)
                 .first()
             )
             if not run:
-                return {"recovered": recovered}
-
-            run_id = run.pk
-            count = int(run.count or 5000)
-            symbol = run.symbol or None
-            old_task_id = run.task_id
+                return {"recovered": []}
+            run_id, count, symbol, old_task_id = run.pk, int(run.count or 5000), run.symbol or None, run.task_id
             run.task_id = ""
             run.requested_at = timezone.now()
             run.started_at = timezone.now()
             run.completed_at = None
-            run.error = (
-                "The previous worker execution exceeded the recovery window; "
-                "the broker-data job is being re-published automatically."
-            )
-            run.save(update_fields=[
-                "task_id", "requested_at", "started_at", "completed_at", "error"
-            ])
+            run.error = "Previous worker execution exceeded the recovery window; the job is being re-published automatically."
+            run.save(update_fields=["task_id", "requested_at", "started_at", "completed_at", "error"])
 
         if old_task_id:
             try:
@@ -364,28 +333,17 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 if app:
                     app.control.revoke(old_task_id)
             except Exception:
-                logger.warning(
-                    "Unable to revoke stale candle backfill task",
-                    extra={"task_id": old_task_id},
-                )
+                logger.warning("Unable to revoke stale candle backfill task", extra={"task_id": old_task_id})
 
         try:
-            task = run_initial_candle_backfill.delay(
-                run_id,
-                count=count,
-                symbol=symbol,
-            )
+            task = run_initial_candle_backfill.delay(run_id, count=count, symbol=symbol)
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
                 if current.status == "running":
                     current.task_id = task.id
                     current.error = ""
                     current.save(update_fields=["task_id", "error"])
-                    recovered.append({
-                        "scope": "initial",
-                        "run_id": run_id,
-                        "task_id": task.id,
-                    })
+                    recovered.append({"scope": "initial", "run_id": run_id, "task_id": task.id})
         except Exception as exc:
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
@@ -394,11 +352,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     current.error = f"Automatic Celery retry failed: {exc}"
                     current.completed_at = timezone.now()
                     current.save(update_fields=["status", "error", "completed_at"])
-            logger.exception(
-                "Unable to recover abandoned initial candle backfill",
-                extra={"run_id": run_id},
-            )
-
+            logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
         return {"recovered": recovered}
     finally:
         close_old_connections()
