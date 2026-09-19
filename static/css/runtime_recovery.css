@@ -880,3 +880,76 @@ body.sidebar-collapsed .app-shell {
     bottom: 116px !important;
   }
 }
+
+
+/* FINAL VIEWPORT-DOCK HARDENING — presentation only.
+ * Lock every sidebar zone to the viewport so rapid document scrolling cannot
+ * expose/reveal/reposition the account dock or navigation rail.
+ */
+
+#app-sidebar.app-sidebar {
+  position: fixed !important;
+  inset: 0 auto auto 0 !important;
+  width: 260px !important;
+  min-width: 260px !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+  transform: none !important;
+  translate: none !important;
+  will-change: auto !important;
+  contain: none !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-header {
+  position: absolute !important;
+  top: 10px !important;
+  left: 10px !important;
+  right: 10px !important;
+  bottom: auto !important;
+  transform: none !important;
+  translate: none !important;
+}
+
+#app-sidebar.app-sidebar > nav {
+  position: absolute !important;
+  top: 64px !important;
+  left: 10px !important;
+  right: 10px !important;
+  bottom: 116px !important;
+  transform: none !important;
+  translate: none !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-user {
+  position: absolute !important;
+  left: 10px !important;
+  right: 10px !important;
+  bottom: 10px !important;
+  top: auto !important;
+  transform: none !important;
+  translate: none !important;
+  overflow: visible !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed,
+body.sidebar-collapsed #app-sidebar.app-sidebar {
+  width: 78px !important;
+  min-width: 78px !important;
+}
+
+@media (max-width: 420px) {
+  #app-sidebar.app-sidebar {
+    width: 260px !important;
+    min-width: 260px !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+  }
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: 78px !important;
+    min-width: 78px !important;
+  }
+}
