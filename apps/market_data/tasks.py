@@ -276,6 +276,7 @@ def _backfill_symbols(symbols, count, *, scope=None):
             )
 
     failed = [name for name, payload in results.items() if _symbol_backfill_failed(payload)]
+    work_completed = min(work_total, len(results) * timeframes_per_symbol)
     return {
         "symbols": total,
         "symbols_total": total,
@@ -283,6 +284,9 @@ def _backfill_symbols(symbols, count, *, scope=None):
         "symbols_succeeded": total - len(failed),
         "symbols_failed": len(failed),
         "percent": round((len(results) / total) * 100, 1) if total else 100.0,
+        "work_total": work_total,
+        "work_completed": work_completed,
+        "work_percent": round((work_completed / work_total) * 100, 1) if work_total else 0,
         "results": results,
     }
 
