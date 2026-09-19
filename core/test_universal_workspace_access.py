@@ -75,7 +75,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("display: grid !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover4")
+        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover5")
 
 
     def test_authenticated_shell_uses_vertical_topbar_content_flow(self):
@@ -85,7 +85,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn(".app-shell {\n  display: block !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow3")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow5")
 
 
     def test_sidebar_visual_shell_is_fixed_and_brand_spacing_is_stable(self):
@@ -108,6 +108,20 @@ class UniversalWorkspaceAccessTests(TestCase):
 
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover4")
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow3")
+        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover5")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow5")
         self.assertContains(response, 'href="/static/icons/favicon.ico"')
+ 
+    def test_runtime_sidebar_layer_is_loaded_after_other_presentation_layers(self):
+        """The final sidebar layer must load last so legacy responsive rules cannot override it."""
+        response = self.client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode("utf-8")
+        positions = [
+            html.index("card_alignment.css"),
+            html.index("platform_polish.css"),
+            html.index("control_polish.css"),
+            html.index("runtime_recovery.css?v=20260919-shellflow5"),
+        ]
+        self.assertEqual(positions, sorted(positions))
+
