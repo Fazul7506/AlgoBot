@@ -6,7 +6,8 @@ from django.utils import timezone
 from .models import AIModel, ModelVersion, Prediction, FeatureVector, TrainingJob, AIRecommendation, MarketRegime, AnomalyEvent
 from .constants import CONFIDENCE_LABELS
 from .candlestick_features import FEATURE_NAMES
-from .training_dataset import current_ai_feedback, extract_candlestick_features
+from .training_dataset import current_ai_feedback
+from .ensemble_predictor import MODEL_FEATURE_NAMES, extract_candlestick_features
 log=logging.getLogger(__name__)
 
 def _num(v,default=0.0):
@@ -59,7 +60,7 @@ class InferenceService:
         if ensemble and ensemble.models:
             try:
                 import numpy as np
-                vector=np.array([[_num(features.get(name,0.0)) for name in FEATURE_NAMES]],dtype=float); result=ensemble.predict(vector); direction=_decision(result.get('direction')); prob=float(result.get('probability',0)); consensus={'decision':direction,'probability':round(prob,6),'confidence':round(float(result.get('confidence',prob*100)),2),'agreement':round(float(result.get('agreement',0)),6),'disagreement':round(float(result.get('disagreement',0)),6),'models_used':int(result.get('models_used',0)),'model_types':result.get('model_types',[]),'method':result.get('method','weighted_average'),'model_outputs':result.get('model_outputs',result.get('predictions',[]))}; return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
+                vector=np.array([[_num(features.get(name,0.0)) for name in MODEL_FEATURE_NAMES]],dtype=float); result=ensemble.predict(vector); direction=_decision(result.get('direction')); prob=float(result.get('probability',0)); consensus={'decision':direction,'probability':round(prob,6),'confidence':round(float(result.get('confidence',prob*100)),2),'agreement':round(float(result.get('agreement',0)),6),'disagreement':round(float(result.get('disagreement',0)),6),'models_used':int(result.get('models_used',0)),'model_types':result.get('model_types',[]),'method':result.get('method','weighted_average'),'model_outputs':result.get('model_outputs',result.get('predictions',[]))}; return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
             except Exception as exc:log.exception('AI ensemble inference failed',extra={'symbol':symbol}); return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'error':str(exc),'source':'trained_ensemble','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'ensemble_inference_error'}}
         return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'no_trained_model','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'no_trained_model'}}
 
