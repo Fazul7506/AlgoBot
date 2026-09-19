@@ -235,6 +235,30 @@ class CandleBackfillReliabilityTests(TestCase):
             CandleBackfillEvent.objects.filter(run=run, event_type="recovered").exists()
         )
 
+    def test_recovery_cooldown_prevents_rapid_republish_of_same_dispatch(self):
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="running",
+            count=5000,
+            task_id="first-dispatch",
+        )
+        CandleBackfillRun.objects.filter(pk=run.pk).update(
+            requested_at=timezone.now() - timedelta(minutes=6),
+            dispatch_at=timezone.now() - timedelta(minutes=6),
+        )
+
+        with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as publish:
+            publish.return_value.id = "recovered-once"
+            first = reconcile_candle_backfill_runs(max_age_seconds=300)
+            self.assertEqual(first["recovered"][0]["task_id"], "recovered-once")
+
+            second = reconcile_candle_backfill_runs(max_age_seconds=300)
+
+        run.refresh_from_db()
+        self.assertEqual(run.task_id, "recovered-once")
+        self.assertEqual(second, {"recovered": []})
+        publish.assert_called_once()
+
     @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
     @patch("apps.market_data.historical.fetch_and_store_all_timeframes")
     def test_partial_timeframe_failure_is_terminal_and_logged(self, fetch):
