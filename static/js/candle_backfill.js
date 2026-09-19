@@ -66,7 +66,7 @@
     text("[data-duration]", run.started_at ? formatDuration(duration) : "—");
     text("[data-requested]", formatDate(run.requested_at));
     text("[data-started]", formatDate(run.started_at));
-    text("[data-source]", run.worker_hostname || (run.started_at ? "market_data worker" : "market_data queue"));
+    text("[data-source]", run.started_at ? "Deriv · market_data worker" : "market_data queue");
     text("[data-worker-state]", run.worker_state || run.celery_state || "DISPATCHING");
     text("[data-heartbeat]", run.last_heartbeat_at ? "Heartbeat " + formatDate(run.last_heartbeat_at) : "Heartbeat —");
     const progress = run.progress || {};
