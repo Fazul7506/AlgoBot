@@ -150,4 +150,4 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow8")
-        self.assertContains(response, "base_shell.js?v=20260919-sidebar6")
+        self.assertContains(response, "base_shell.js?v=20260919-sidebar7")
