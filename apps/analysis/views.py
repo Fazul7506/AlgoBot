@@ -207,13 +207,13 @@ def analysis_data(request):
             decision = str(consensus.get("decision") or "AVOID").upper()
             confidence = float(consensus.get("confidence", 0.0) or 0.0) * 100.0
             ai_result = {
-                "status": "ok" if decision in {"BUY", "SELL"} and int(consensus.get("models_used", 0) or 0) > 0 else "no_trade",
+                "status": "ok" if recommendation.recommendation == decision and decision in {"BUY", "SELL"} and int(consensus.get("models_used", 0) or 0) > 0 else "no_trade",
                 "decision": decision,
                 "signal": (
-                    "Strong Bullish" if decision == "BUY" and confidence >= 80
-                    else "Bullish" if decision == "BUY"
-                    else "Strong Bearish" if decision == "SELL" and confidence >= 80
-                    else "Bearish" if decision == "SELL"
+                    "Strong Bullish" if recommendation.recommendation == "BUY" and decision == "BUY" and confidence >= 80
+                    else "Bullish" if recommendation.recommendation == "BUY" and decision == "BUY"
+                    else "Strong Bearish" if recommendation.recommendation == "SELL" and decision == "SELL" and confidence >= 80
+                    else "Bearish" if recommendation.recommendation == "SELL" and decision == "SELL"
                     else "NO_TRADE"
                 ),
                 "confidence": round(confidence, 2),
@@ -246,7 +246,7 @@ def analysis_data(request):
     result["execution_gate"] = {
         "data_fresh": False,
         "sufficient_history": len(candles) >= 251,
-        "ai_ready": ai_result["models_used"] > 0 and ai_result["decision"] in {"BUY", "SELL"},
+        "ai_ready": ai_result["models_used"] > 0 and ai_result["decision"] in {"BUY", "SELL"} and ai_result.get("recommendation") == ai_result["decision"],
         "broker_contracts_confirmed": bool(broker_capabilities.get("available_contract_types")),
         "live_quote_confirmed": False,
         "ready": False,
