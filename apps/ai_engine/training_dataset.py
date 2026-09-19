@@ -36,6 +36,23 @@ def _historical_ai_feedback(symbol: str, timeframe: str, before_epoch: int) -> t
     return float(accuracy), float(mean_return), len(rows)
 
 
+def current_ai_feedback(symbol: str, timeframe: str, before_epoch: int | None = None) -> tuple[float, float, int]:
+    """Return only feedback that was resolved before the current market observation."""
+    cutoff = datetime.now(tz=dt_timezone.utc) if before_epoch is None else datetime.fromtimestamp(int(before_epoch), tz=dt_timezone.utc)
+    outcomes = PredictionOutcome.objects.filter(
+        prediction__symbol=symbol,
+        prediction__timeframe=timeframe,
+        resolved_at__isnull=False,
+        resolved_at__lte=cutoff,
+    ).filter(Q(correct=True) | Q(correct=False)).order_by("-resolved_at")[:100]
+    rows = list(outcomes.values_list("correct", "actual_return"))
+    if not rows:
+        return 0.5, 0.0, 0
+    accuracy = sum(bool(correct) for correct, _ in rows) / len(rows)
+    mean_return = sum(float(ret or 0.0) for _, ret in rows) / len(rows)
+    return float(accuracy), float(mean_return), len(rows)
+
+
 def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 5000) -> FeatureDataset:
     pipeline = AIDataPipeline()
     candles = pipeline.dataset(symbol, timeframe=timeframe, limit=limit)
