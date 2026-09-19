@@ -6,6 +6,7 @@ from django.utils import timezone
 from .models import AIModel, ModelVersion, Prediction, FeatureVector, TrainingJob, AIRecommendation, MarketRegime, AnomalyEvent
 from .constants import CONFIDENCE_LABELS
 from .candlestick_features import FEATURE_NAMES, extract_candlestick_features
+from .training_dataset import current_ai_feedback, current_strategy_signal_features, MODEL_FEATURE_NAMES
 log=logging.getLogger(__name__)
 
 def _num(v,default=0.0):
@@ -58,13 +59,44 @@ class InferenceService:
         if ensemble and ensemble.models:
             try:
                 import numpy as np
-                vector=np.array([[_num(features.get(name,0.0)) for name in FEATURE_NAMES]],dtype=float); result=ensemble.predict(vector); direction=_decision(result.get('direction')); prob=float(result.get('probability',0)); consensus={'decision':direction,'probability':round(prob,6),'confidence':round(float(result.get('confidence',prob*100)),2),'agreement':round(float(result.get('agreement',0)),6),'disagreement':round(float(result.get('disagreement',0)),6),'models_used':int(result.get('models_used',0)),'model_types':result.get('model_types',[]),'method':result.get('method','weighted_average'),'model_outputs':result.get('model_outputs',result.get('predictions',[]))}; return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
+                vector=np.array([[_num(features.get(name,0.0)) for name in MODEL_FEATURE_NAMES]],dtype=float); result=ensemble.predict(vector); direction=_decision(result.get('direction')); prob=float(result.get('probability',0)); consensus={'decision':direction,'probability':round(prob,6),'confidence':round(float(result.get('confidence',prob*100)),2),'agreement':round(float(result.get('agreement',0)),6),'disagreement':round(float(result.get('disagreement',0)),6),'models_used':int(result.get('models_used',0)),'model_types':result.get('model_types',[]),'method':result.get('method','weighted_average'),'model_outputs':result.get('model_outputs',result.get('predictions',[]))}; return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
             except Exception as exc:log.exception('AI ensemble inference failed',extra={'symbol':symbol}); return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'error':str(exc),'source':'trained_ensemble','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'ensemble_inference_error'}}
         return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'no_trained_model','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'no_trained_model'}}
 
 class PredictionService:
     def predict(self,symbol,timeframe,context=None):
-        start=time.perf_counter(); feats=FeatureEngineeringService().build_features(symbol,timeframe,context); FeatureStoreService().store(symbol,timeframe,feats); raw=InferenceService().infer(feats,ModelRegistry().champion(),symbol,timeframe); cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score']); consensus=raw.get('consensus',{}); return Prediction.objects.create(symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],confidence=cal['score'],expected_return=raw['expected_return'],risk_score=raw['risk_score'],payload={'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),'source':raw.get('source'),'consensus':consensus,'feature_set':list(FEATURE_NAMES),'price_action':{k:feats.get(k) for k in FEATURE_NAMES}})
+        start=time.perf_counter()
+        context=context or {}
+        feats=FeatureEngineeringService().build_features(symbol,timeframe,context)
+        candles=context.get('candles') or []
+        before_epoch=candles[-1].get('epoch') if candles else None
+        feedback_accuracy, feedback_return, feedback_count=current_ai_feedback(symbol,timeframe,before_epoch)
+        signal_bias, signal_confidence, signal_count=current_strategy_signal_features(symbol,timeframe,before_epoch)
+        feats['ai_feedback_accuracy']=feedback_accuracy
+        feats['ai_feedback_mean_return']=feedback_return
+        feats['ai_feedback_sample_count']=float(feedback_count)
+        feats['strategy_signal_bias']=signal_bias
+        feats['strategy_signal_confidence']=signal_confidence
+        feats['strategy_signal_count']=float(signal_count)
+        FeatureStoreService().store(symbol,timeframe,feats)
+        raw=InferenceService().infer(feats,ModelRegistry().champion(),symbol,timeframe)
+        consensus=raw.get('consensus',{})
+        consensus_confidence=float(consensus.get('confidence',0.0) or 0.0)*100.0
+        cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score'])
+        model_features=list(MODEL_FEATURE_NAMES)
+        return Prediction.objects.create(
+            symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],
+            confidence=round(consensus_confidence,2),expected_return=raw['expected_return'],risk_score=raw['risk_score'],
+            payload={
+                'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'model_confidence':round(consensus_confidence,2),'confidence_source':'ensemble_consensus',
+                'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),
+                'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,
+                'price_action':{k:feats.get(k) for k in FEATURE_NAMES},
+                'ai_feedback':{'accuracy':feedback_accuracy,'mean_return':feedback_return,'sample_count':feedback_count},
+                'strategy_signal':{'bias':signal_bias,'confidence':signal_confidence,'sample_count':signal_count},
+                'reference_price':float(candles[-1].get('close')) if candles and candles[-1].get('close') is not None else None,
+            }
+        )
 
 class EnsembleService:
     def combine(self,predictions:Iterable[dict],method='weighted_average'):

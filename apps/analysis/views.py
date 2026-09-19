@@ -19,6 +19,7 @@ from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick
 from apps.market_data.historical import fetch_and_store, fetch_and_store_ticks
 from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.research_data import ResearchDataService
+from apps.ai_engine.services import PredictionService, RecommendationService
 
 
 ANALYSIS_MARKETS_CACHE_SECONDS = 15
@@ -171,6 +172,86 @@ def analysis_data(request):
             "symbol": market.symbol,
             "timeframe": canonical_timeframe,
         }, status=503)
+    # The analysis page is also an AI inference surface, but only from the
+    # same broker-ingested candles shown above. No heuristic confidence is
+    # promoted to an executable signal.
+    ai_result = {
+        "status": "not_ready",
+        "decision": "AVOID",
+        "signal": "NO_TRADE",
+        "confidence": 0.0,
+        "models_used": 0,
+        "model_types": [],
+        "reason": "A validated trained ensemble is required before an analysis can become an executable signal.",
+    }
+    if len(candles) >= 25:
+        try:
+            prediction = PredictionService().predict(
+                market.symbol,
+                canonical_timeframe,
+                {
+                    "candles": candles,
+                    "market_data": {
+                        **candles[-1],
+                        "price": candles[-1].get("close"),
+                    },
+                    "indicators": result.get("indicators", {}),
+                    "smart_money": {
+                        "confluence_score": result.get("technical_score", 0) / 100.0,
+                        "structure": result.get("market_structure", {}),
+                    },
+                },
+            )
+            consensus = prediction.payload.get("consensus") or {}
+            recommendation = RecommendationService().recommend(market.symbol, prediction)
+            decision = str(consensus.get("decision") or "AVOID").upper()
+            confidence = float(consensus.get("confidence", 0.0) or 0.0) * 100.0
+            ai_result = {
+                "status": "ok" if recommendation.recommendation == decision and decision in {"BUY", "SELL"} and int(consensus.get("models_used", 0) or 0) > 0 else "no_trade",
+                "decision": decision,
+                "signal": (
+                    "Strong Bullish" if recommendation.recommendation == "BUY" and decision == "BUY" and confidence >= 80
+                    else "Bullish" if recommendation.recommendation == "BUY" and decision == "BUY"
+                    else "Strong Bearish" if recommendation.recommendation == "SELL" and decision == "SELL" and confidence >= 80
+                    else "Bearish" if recommendation.recommendation == "SELL" and decision == "SELL"
+                    else "NO_TRADE"
+                ),
+                "confidence": round(confidence, 2),
+                "models_used": int(consensus.get("models_used", 0) or 0),
+                "model_types": consensus.get("model_types", []),
+                "probability": float(consensus.get("probability", 0.0) or 0.0),
+                "agreement": float(consensus.get("agreement", 0.0) or 0.0),
+                "recommendation": recommendation.recommendation,
+                "recommendation_confidence": float(recommendation.confidence),
+                "prediction_id": prediction.id,
+                "reason": recommendation.reason,
+                "source": prediction.payload.get("source"),
+            }
+        except Exception as exc:
+            return JsonResponse(
+                {
+                    "status": "error",
+                    "code": "AI_ANALYSIS_FAILED",
+                    "message": "The trained AI inference pipeline could not be completed; no executable signal was substituted.",
+                    "detail": str(exc),
+                    "symbol": market.symbol,
+                    "timeframe": canonical_timeframe,
+                },
+                status=503,
+            )
+    result["ai"] = ai_result
+    result["signal"] = ai_result["signal"]
+    result["confidence"] = ai_result["confidence"]
+    result["score"] = result.get("technical_score")
+    result["execution_gate"] = {
+        "data_fresh": False,
+        "sufficient_history": len(candles) >= 251,
+        "ai_ready": ai_result["models_used"] > 0 and ai_result["decision"] in {"BUY", "SELL"} and ai_result.get("recommendation") == ai_result["decision"],
+        "broker_contracts_confirmed": bool(broker_capabilities.get("available_contract_types")),
+        "live_quote_confirmed": False,
+        "ready": False,
+        "reason": "Final execution readiness is set only after the fresh broker tick is confirmed below.",
+    }
     account_context = None
     if active_account is not None:
         try:
@@ -243,6 +324,24 @@ def analysis_data(request):
         "fresh": age_seconds <= max(120, TIMEFRAMES[canonical_timeframe] * 2),
         "candle_source": "deriv_candles" if TIMEFRAMES[canonical_timeframe] >= 60 else "tick_stream",
     }
+    result["execution_gate"]["data_fresh"] = bool(
+        result["data_provenance"]["age_seconds"] <= max(120, TIMEFRAMES[canonical_timeframe] * 2)
+    )
+    result["execution_gate"]["live_quote_confirmed"] = bool(
+        refresh_requested and live_tick and live_tick.get("quote") is not None
+    )
+    result["execution_gate"]["ready"] = all(
+        (
+            result["execution_gate"]["data_fresh"],
+            result["execution_gate"]["sufficient_history"],
+            result["execution_gate"]["ai_ready"],
+            result["execution_gate"]["broker_contracts_confirmed"],
+            result["execution_gate"]["live_quote_confirmed"],
+        )
+    )
+    if not result["execution_gate"]["ready"]:
+        result["trade_spec"]["direction"] = "HOLD"
+        result["trade_spec"]["entry_condition"] = "NO TRADE until every execution gate is confirmed"
     cache.set(cache_key, result, ANALYSIS_CACHE_SECONDS)
     return JsonResponse(result)
 

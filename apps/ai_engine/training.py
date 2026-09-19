@@ -12,12 +12,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import AIModel, ModelVersion, TrainingJob
-from .training_dataset import build_direction_dataset
+from .training_dataset import build_direction_dataset, MODEL_FEATURE_NAMES
 from .validation import walk_forward_validate
 from .candlestick_features import FEATURE_NAMES
 
 logger = logging.getLogger(__name__)
-FEATURES = tuple(FEATURE_NAMES) + ("ai_feedback_accuracy", "ai_feedback_mean_return", "ai_feedback_sample_count")
+FEATURES = tuple(MODEL_FEATURE_NAMES)
 TIMEFRAME_ALIASES = {"M1": "1m", "M2": "2m", "M5": "5m", "M10": "10m", "M15": "15m", "M30": "30m", "H1": "1h", "H4": "4h", "D1": "1d"}
 
 

@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 
-from apps.analysis.advanced import analyze_candles
+from apps.analysis.advanced import analyze_candles, rsi
 
 
 class AdvancedAnalysisTests(SimpleTestCase):
@@ -19,7 +19,10 @@ class AdvancedAnalysisTests(SimpleTestCase):
         result = analyze_candles(self.candles(), "R_100", "M1")
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["candles"], 320)
-        self.assertIn(result["signal"], {"Strong Bullish", "Bullish", "Neutral", "Bearish", "Strong Bearish"})
+        self.assertEqual(result["signal"], "NO_TRADE")
+        self.assertIn(result["technical_signal"], {"Strong Bullish", "Bullish", "Neutral", "Bearish", "Strong Bearish"})
+        self.assertIsNone(result["confidence"])
+        self.assertIn("confidence_source", result)
         self.assertGreaterEqual(result["score"], 0)
         self.assertLessEqual(result["score"], 100)
         self.assertLess(result["levels"]["support"], result["levels"]["resistance"])
@@ -31,6 +34,10 @@ class AdvancedAnalysisTests(SimpleTestCase):
             self.assertIn(key, result)
         self.assertIn(result["volatility_regime"], {"normal", "expanding", "contracting", "unknown"})
         self.assertIn("labels", result["market_structure"])
+
+    def test_rsi_uses_wilder_smoothing(self):
+        self.assertEqual(rsi([float(i) for i in range(30)]), 100.0)
+        self.assertEqual(rsi([float(30 - i) for i in range(30)]), 0.0)
 
     def test_empty_data_is_explicit(self):
         result = analyze_candles([], "R_100", "M1")
