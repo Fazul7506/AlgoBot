@@ -243,8 +243,8 @@ class CandleBackfillReliabilityTests(TestCase):
             task_id="first-dispatch",
         )
         CandleBackfillRun.objects.filter(pk=run.pk).update(
-            requested_at=timezone.now() - timedelta(minutes=3),
-            dispatch_at=timezone.now() - timedelta(minutes=3),
+            requested_at=timezone.now() - timedelta(minutes=6),
+            dispatch_at=timezone.now() - timedelta(minutes=6),
         )
 
         with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as publish:
