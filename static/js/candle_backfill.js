@@ -62,7 +62,7 @@
       const live = $("[data-live]");
       if (live) live.hidden = true;
       renderNotices([]);
-      if (body && !body.querySelector(".rb-log-line")) {
+      if (body) {
         body.replaceChildren();
         const empty = document.createElement("div");
         empty.className = "rb-log-empty";
