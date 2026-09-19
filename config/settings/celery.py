@@ -43,7 +43,7 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
 CELERY_TASK_ROUTES = {
     "apps.market_data.tasks.backfill_research_candles": {"queue": "market_data"},
     "apps.market_data.tasks.run_initial_candle_backfill": {"queue": "market_data"},
-    "apps.market_data.tasks.reconcile_candle_backfill_runs": {"queue": "market_data"},
+    # Recovery/observability must not share the single-consumer market-data queue.\n    # If the long-running backfill is stalled there, a recovery task on that same\n    # queue could never execute. The general worker consumes the default celery queue.\n    "apps.market_data.tasks.reconcile_candle_backfill_runs": {"queue": "celery"},
 }
 
 CELERY_TASK_ANNOTATIONS = {
