@@ -4,6 +4,8 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 import numpy as np
+from .candlestick_features import FEATURE_NAMES
+MODEL_FEATURE_NAMES=tuple(FEATURE_NAMES)+("ai_feedback_accuracy","ai_feedback_mean_return","ai_feedback_sample_count")
 
 MODEL_DIR=os.environ.get("AI_MODEL_DIR",os.path.join(os.path.dirname(__file__),"models"))
 DEFAULT_WEIGHTS={"rf":1.0,"xgb":1.0,"lgb":1.0,"lstm":1.0}
