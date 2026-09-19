@@ -182,7 +182,7 @@ def initial_candle_backfill(request):
             run.requested_by = request.user
             run.requested_at = now
             run.started_at = None
-            run.dispatch_at = now
+            run.dispatch_at = None
             run.accepted_at = None
             run.last_heartbeat_at = None
             run.current_symbol = ""
@@ -203,7 +203,6 @@ def initial_candle_backfill(request):
             # be restarted with a new request timestamp through Model.save().
             CandleBackfillRun.objects.filter(pk=run.pk).update(
                 requested_at=now,
-                dispatch_at=now,
             )
             run.refresh_from_db()
 
@@ -313,6 +312,11 @@ def initial_candle_backfill(request):
         response["Pragma"] = "no-cache"
         response["Expires"] = "0"
         return response
+    page_error = (
+        "Selected symbol is not an active, tradable Deriv market symbol."
+        if request.GET.get("error") == "invalid-symbol"
+        else ""
+    )
     return render(
         request,
         "market_data/candle_backfill.html",
@@ -322,5 +326,6 @@ def initial_candle_backfill(request):
             "research_run": research_run,
             "eligible_symbols": eligible_symbols,
             "backfill_config": backfill_config,
+            "page_error": page_error,
         },
     )
