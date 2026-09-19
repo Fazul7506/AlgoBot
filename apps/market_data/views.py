@@ -111,17 +111,53 @@ def initial_candle_backfill(request):
             run.task_id = ""
             run.requested_by = request.user
             run.requested_at = now
-            run.started_at = now
+            run.started_at = None
+            run.dispatch_at = now
+            run.accepted_at = None
+            run.last_heartbeat_at = None
+            run.current_symbol = ""
+            run.current_timeframe = ""
+            run.worker_hostname = ""
             run.completed_at = None
-            run.result = {}
+            run.result = {
+                "symbols_total": 0,
+                "symbols_completed": 0,
+                "symbols_succeeded": 0,
+                "symbols_failed": 0,
+                "percent": 0,
+                "results": {},
+            }
             run.error = ""
             run.save()
 
+        CandleBackfillEvent.objects.create(
+            run=run,
+            level="notice",
+            event_type="dispatch",
+            message="Backfill requested; publishing to the dedicated market_data Celery queue.",
+            symbol=symbol,
+            payload={"count": count, "queue": "market_data"},
+        )
+
         from .tasks import run_initial_candle_backfill
         try:
-            task = run_initial_candle_backfill.delay(run.pk, count=count, symbol=symbol or None)
+            task = run_initial_candle_backfill.apply_async(
+                args=(run.pk,),
+                kwargs={"count": count, "symbol": symbol or None},
+                queue="market_data",
+            )
             run.task_id = task.id
-            run.save(update_fields=["task_id"])
+            run.dispatch_at = timezone.now()
+            run.save(update_fields=["task_id", "dispatch_at"])
+            CandleBackfillEvent.objects.create(
+                run=run,
+                level="info",
+                event_type="dispatch",
+                message=f"Celery accepted the publish request: {task.id}",
+                symbol=symbol,
+                task_id=task.id,
+                payload={"queue": "market_data"},
+            )
         except Exception as exc:
             run.status = "failed"
             run.error = f"Unable to dispatch Celery task: {exc}"
