@@ -81,6 +81,16 @@ services:
           envVarKey: USE_REDIS
       - key: USE_CELERY
         value: "true"
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: CELERY_BROKER_URL
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: CELERY_RESULT_BACKEND
       - key: CELERY_WORKER_BROKER_RETRY
         value: "true"
       - key: CELERY_WORKER_RETRY_ON_STARTUP
@@ -137,6 +147,16 @@ services:
           envVarKey: USE_REDIS
       - key: USE_CELERY
         value: "true"
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: CELERY_BROKER_URL
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: CELERY_RESULT_BACKEND
       - key: CELERY_WORKER_BROKER_RETRY
         value: "true"
       - key: CELERY_WORKER_RETRY_ON_STARTUP
@@ -243,6 +263,16 @@ services:
           envVarKey: USE_REDIS
       - key: USE_CELERY
         value: "true"
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: CELERY_BROKER_URL
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: AlgoBot
+          type: web
+          envVarKey: CELERY_RESULT_BACKEND
       - key: CELERY_WORKER_BROKER_RETRY
         value: "true"
       - key: CELERY_WORKER_RETRY_ON_STARTUP
