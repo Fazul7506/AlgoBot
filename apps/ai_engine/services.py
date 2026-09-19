@@ -89,6 +89,7 @@ class PredictionService:
                 'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,
                 'price_action':{k:feats.get(k) for k in FEATURE_NAMES},
                 'ai_feedback':{'accuracy':feedback_accuracy,'mean_return':feedback_return,'sample_count':feedback_count},
+                'reference_price':float(candles[-1].get('close')) if candles and candles[-1].get('close') is not None else None,
             }
         )
 
