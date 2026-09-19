@@ -1286,3 +1286,21 @@ body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
     max-width: 50px !important;
   }
 }
+
+
+/* MOBILE ACCOUNT SWITCHER — stable presentation anchor for rapid document scrolling. */
+ * The account switcher is the only affected surface. On mobile Chromium/WebKit,
+ * browser chrome can expand/retract while the document is being scrolled, which
+ * changes the dynamic viewport height. Anchoring this dock to the small viewport
+ * keeps its screen position stable instead of making it jump with that chrome.
+ * The main document, sidebar nav, header, collapse behavior and account logic
+ * remain untouched.
+ */
+@media (max-width: 900px) {
+  @supports (height: 100svh) {
+    #app-sidebar.app-sidebar > .sidebar-user {
+      top: calc(100svh - 148px) !important;
+      bottom: auto !important;
+    }
+  }
+}
