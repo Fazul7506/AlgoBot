@@ -4,30 +4,83 @@
 {% block mobile_title %}Candle Backfill{% endblock %}
 {% block content %}
 <section class="rb-page" data-backfill-page>
+  <script type="application/json" id="initial-backfill-state">{{ run_payload|default_if_none:"null"|safe }}</script>
   <header class="rb-top">
     <div class="rb-breadcrumb"><span class="material-symbols-rounded">database</span><span>Candle Backfill</span><span>›</span><strong>Initial warm-up</strong></div>
     <div class="rb-title-row">
-      <div><h1>Historical Candle Backfill</h1><p>Deriv-authoritative OHLC ingestion · dedicated <code>market_data</code> worker</p></div>
-      <div class="rb-title-status"><span class="rb-pill" data-status>Loading</span><span class="rb-live" data-live hidden><i></i>Live</span></div>
+      <div>
+        <h1>Historical Candle Backfill</h1>
+        <p>Deriv-authoritative historical market data · dedicated <code>market_data</code> worker</p>
+      </div>
+      <div class="rb-title-status">
+        <span class="rb-pill" data-status>{% if run %}{{ run.get_status_display }}{% else %}Not started{% endif %}</span>
+        <span class="rb-live" data-live {% if not run_payload or not run_payload.live %}hidden{% endif %}><i></i>Live</span>
+      </div>
     </div>
+    {% if not run or run.status == "failed" %}
+    <form class="rb-start-form" method="post" action="{% url 'initial_candle_backfill' %}">
+      {% csrf_token %}
+      <div class="rb-start-copy">
+        <span class="rb-eyebrow">OPERATOR CONTROL</span>
+        <strong>{% if run %}Retry failed backfill{% else %}Start initial backfill{% endif %}</strong>
+        <small>Runs against the active, tradable Deriv symbol catalogue only. No market data is generated locally.</small>
+      </div>
+      <label class="rb-symbol-field">
+        <span>Scope</span>
+        <select name="symbol">
+          <option value="">All eligible Deriv symbols ({{ backfill_config.eligible_symbol_count }})</option>
+          {% for value in eligible_symbols %}
+          <option value="{{ value }}" {% if run and run.symbol == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="rb-start-btn">
+        <span class="material-symbols-rounded">{% if run %}restart_alt{% else %}play_arrow{% endif %}</span>
+        {% if run %}Retry backfill{% else %}Start backfill{% endif %}
+      </button>
+    </form>
+    {% elif run.status == "running" %}
+    <div class="rb-start-state">
+      <span class="material-symbols-rounded">sync</span>
+      <div><strong>Backfill is running under the durable worker lifecycle.</strong><small>Do not start another initial run while this run is active.</small></div>
+    </div>
+    {% else %}
+    <div class="rb-start-state rb-start-complete">
+      <span class="material-symbols-rounded">task_alt</span>
+      <div><strong>Initial backfill completed.</strong><small>This singleton initial warm-up is retained as the source-of-truth run.</small></div>
+    </div>
+    {% endif %}
   </header>
 
   <section class="rb-run-summary">
-    <div class="rb-summary-item rb-summary-status"><span>STATUS</span><strong data-status-large>Loading live state</strong><em data-status-sub>Reading durable worker telemetry…</em></div>
-    <div class="rb-summary-item"><span>DURATION</span><strong data-duration>—</strong></div>
-    <div class="rb-summary-item"><span>REQUESTED</span><strong data-requested>—</strong></div>
-    <div class="rb-summary-item"><span>STARTED</span><strong data-started>—</strong></div>
+    <div class="rb-summary-item rb-summary-status"><span>STATUS</span><strong data-status-large>{% if run %}{{ run.get_status_display }}{% else %}Not started{% endif %}</strong><em data-status-sub>{% if run %}{% if run.status == "completed" %}Backfill is persisted{% elif run.status == "failed" %}Worker stopped with an error{% elif run.started_at %}Worker is processing broker history{% else %}Waiting for worker confirmation{% endif %}{% else %}No initial backfill run exists{% endif %}</em></div>
+    <div class="rb-summary-item"><span>DURATION</span><strong data-duration>{% if run_payload and run_payload.started_at %}{{ run_payload.duration_seconds }}s{% else %}—{% endif %}</strong></div>
+    <div class="rb-summary-item"><span>REQUESTED</span><strong data-requested>{% if run %}{{ run.requested_at|date:"d/m/Y, H:i:s" }}{% else %}—{% endif %}</strong></div>
+    <div class="rb-summary-item"><span>STARTED</span><strong data-started>{% if run and run.started_at %}{{ run.started_at|date:"d/m/Y, H:i:s" }}{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>TRIGGER</span><strong>Manual</strong></div>
-    <div class="rb-summary-item"><span>SOURCE</span><strong data-source>—</strong></div>
+    <div class="rb-summary-item"><span>SOURCE</span><strong data-source>{% if run and run.started_at %}Deriv · market_data worker{% elif run %}market_data queue{% else %}—{% endif %}</strong></div>
   </section>
 
-  <section class="rb-notices" data-notices aria-live="polite"></section>
+  <section class="rb-notices" data-notices aria-live="polite">
+    {% if run_payload %}
+      {% for notice in run_payload.notices %}
+      <div class="rb-notice {{ notice.level }}"><span class="material-symbols-rounded">{% if notice.level == "error" %}error{% else %}info{% endif %}</span><span>{{ notice.message }}</span></div>
+      {% endfor %}
+    {% endif %}
+  </section>
 
   <section class="rb-progress-card">
-    <div class="rb-card-head"><div><span class="rb-eyebrow">INITIAL WARM-UP</span><h2>5,000 candles per active tradable symbol</h2></div><div class="rb-worker"><span data-worker-state>CONNECTING</span><small data-heartbeat>Heartbeat —</small></div></div>
-    <div class="rb-progress-label"><span><b data-progress-count>— / —</b> symbols</span><strong data-progress-percent>—</strong></div>
-    <div class="rb-progress-track"><span data-progress-bar></span></div>
-    <div class="rb-current"><span class="material-symbols-rounded">sync</span><span>Current broker operation</span><strong data-current-operation>Reading durable telemetry…</strong></div>
+    <div class="rb-card-head">
+      <div><span class="rb-eyebrow">INITIAL WARM-UP</span><h2>Up to {{ backfill_config.count|default:"5000" }} broker records per series</h2></div>
+      <div class="rb-worker"><span data-worker-state>{% if run_payload %}{{ run_payload.worker_state }}{% else %}NOT STARTED{% endif %}</span><small data-heartbeat>{% if run_payload and run_payload.last_heartbeat_at %}Heartbeat {{ run_payload.last_heartbeat_at|date:"d/m/Y, H:i:s" }}{% else %}Heartbeat —{% endif %}</small></div>
+    </div>
+    <div class="rb-progress-label">
+      <span><b data-progress-count>{% if run_payload and run_payload.progress.total %}{{ run_payload.progress.completed }} / {{ run_payload.progress.total }}{% else %}— / —{% endif %}</b> symbols complete</span>
+      <strong data-progress-percent>{% if run_payload and run_payload.progress.work_total %}{{ run_payload.progress.percent }}%{% else %}—{% endif %}</strong>
+    </div>
+    <div class="rb-progress-track"><span data-progress-bar style="width:{% if run_payload and run_payload.progress.work_total %}{{ run_payload.progress.percent }}%{% else %}0%{% endif %}"></span></div>
+    <div class="rb-work-progress"><span data-work-progress>{% if run_payload and run_payload.progress.work_total %}{{ run_payload.progress.work_completed }} / {{ run_payload.progress.work_total }} broker series{% else %}No worker work has been confirmed{% endif %}</span></div>
+    <div class="rb-current"><span class="material-symbols-rounded">sync</span><span>Current broker operation</span><strong data-current-operation>{% if run_payload and run_payload.current_symbol %}{{ run_payload.current_symbol }}{% if run_payload.current_timeframe %} · {{ run_payload.current_timeframe }}{% endif %}{% elif run %}Waiting for worker{% else %}Start the backfill to begin broker ingestion{% endif %}</strong></div>
   </section>
 
   <section class="rb-log-panel" data-log-panel>
@@ -38,16 +91,39 @@
       <button type="button" class="rb-icon-btn" data-copy aria-label="Copy visible logs"><span class="material-symbols-rounded">more_horiz</span></button>
     </div>
     <div class="rb-search"><span class="material-symbols-rounded">search</span><input data-log-search type="search" placeholder="Search logs" autocomplete="off"></div>
-    <div class="rb-log-head"><span>Operation logs</span><span data-log-count>0 lines</span></div>
-    <div class="rb-log-body" data-log-body aria-live="polite"><div class="rb-log-empty">Waiting for durable operator events…</div></div>
+    <div class="rb-log-head"><span>Operation logs</span><span data-log-count>{% if run_payload %}{{ run_payload.event_count }} lines{% else %}0 lines{% endif %}</span></div>
+    <div class="rb-log-body" data-log-body aria-live="polite">
+      {% if not run %}
+      <div class="rb-log-empty">No initial run exists. Start the backfill above to create durable dispatch and worker log events.</div>
+      {% elif not run_payload.event_count %}
+      <div class="rb-log-empty">No durable operator events have been recorded for this run.</div>
+      {% endif %}
+    </div>
   </section>
 
   <section class="rb-details-grid">
-    <article class="rb-detail-card"><span class="rb-eyebrow">BROKER DATA CONTRACT</span><h3>Deriv is the source of OHLC truth</h3><p>Minute-and-higher candles are persisted from Deriv's native candle history. Tick-derived research bars use persisted Deriv ticks. No synthetic market prices are generated.</p></article>
-    <article class="rb-detail-card"><span class="rb-eyebrow">WORKER TELEMETRY</span><h3>Database-backed, not Celery-cache-backed</h3><p>Worker acceptance, heartbeat, symbol progress, timeframe results and terminal state are persisted in Django. A Redis result state of <code>PENDING</code> cannot overwrite a confirmed database lifecycle state.</p></article>
-    <article class="rb-detail-card"><span class="rb-eyebrow">ADMIN CONSISTENCY</span><h3>Same run, same evidence</h3><p>Django admin reads the same run and event records shown here. Open the run in admin to inspect the complete durable operator log.</p><a href="{% url 'admin:market_data_candlebackfillrun_changelist' %}">Open Django admin →</a></article>
+    <article class="rb-detail-card">
+      <span class="rb-eyebrow">BACKFILL CRITERIA</span>
+      <h3>{{ backfill_config.eligible_symbol_count }} eligible Deriv symbols</h3>
+      <p>Eligibility is evaluated at start time from Django <code>MarketSymbol</code> records where <code>broker=deriv</code>, <code>is_active=true</code> and <code>is_tradable=true</code>. A selected symbol must meet the same criteria.</p>
+    </article>
+    <article class="rb-detail-card">
+      <span class="rb-eyebrow">TIMEFRAME PLAN</span>
+      <h3>{{ backfill_config.native_timeframes|length }} native candle series + tick-derived research</h3>
+      <p>Native Deriv OHLC: {{ backfill_config.native_timeframes|join:", " }}. Tick history also supplies {{ backfill_config.tick_derived_timeframes|join:", " }}. Each request is capped at {{ backfill_config.count }} records and paced to respect the broker data budget.</p>
+    </article>
+    <article class="rb-detail-card">
+      <span class="rb-eyebrow">BROKER DATA CONTRACT</span>
+      <h3>Deriv is the OHLC source of truth</h3>
+      <p>Minute-and-higher candles are persisted from Deriv native candle history. Sub-minute and tick research series are built only from persisted Deriv ticks. No synthetic market prices are generated.</p>
+    </article>
+  </section>
+
+  <section class="rb-details-grid rb-details-secondary">
+    <article class="rb-detail-card"><span class="rb-eyebrow">WORKER TELEMETRY</span><h3>Database-backed lifecycle</h3><p>Worker acceptance, start time, heartbeat, symbol progress, timeframe results and terminal state are persisted in Django. Celery <code>PENDING</code> cannot overwrite confirmed application lifecycle evidence.</p></article>
+    <article class="rb-detail-card"><span class="rb-eyebrow">ADMIN CONSISTENCY</span><h3>Same run, same evidence</h3><p>Django admin reads the same run and durable event records shown here. Deleting the singleton run intentionally returns this page to <strong>Not started</strong> and exposes the Start backfill control.</p><a href="{% url 'admin:market_data_candlebackfillrun_changelist' %}">Open Django admin →</a></article>
   </section>
 </section>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20260919-renderclone3">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20260919-renderclone3" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20260919-renderclone4">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20260919-renderclone4" defer></script>{% endblock %}
