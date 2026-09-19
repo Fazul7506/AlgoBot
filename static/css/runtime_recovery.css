@@ -88,3 +88,168 @@ body.mobile-nav-open,html.mobile-nav-open { overflow-y:auto !important; overflow
     margin-left: 0 !important;
   }
 }
+
+
+/* Canonical ChatGPT-style authenticated workspace shell.
+ *
+ * This is the final shell layer and intentionally owns the desktop/mobile
+ * breakpoint so legacy enterprise template rules cannot partially change the
+ * sidebar geometry. Page/trading CSS must not participate in workspace
+ * navigation geometry.
+ */
+@media (min-width: 901px) {
+  .app-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: 264px !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    padding: 10px !important;
+    transform: none !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    z-index: 1000 !important;
+  }
+
+  .app-sidebar.is-collapsed,
+  body.sidebar-collapsed .app-sidebar {
+    width: 78px !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  .app-shell,
+  .app-shell.sidebar-collapsed {
+    min-width: 0 !important;
+  }
+
+  .app-shell {
+    margin-left: 264px !important;
+  }
+
+  .app-shell.sidebar-collapsed,
+  .app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: 78px !important;
+  }
+
+  .app-sidebar .sidebar-header {
+    position: relative;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 48px;
+    box-sizing: border-box;
+  }
+
+  .app-sidebar .sidebar-header > .sidebar-toggle {
+    position: relative !important;
+    inset: auto !important;
+    display: grid !important;
+    flex: 0 0 38px;
+    width: 38px !important;
+    min-width: 38px !important;
+    height: 38px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    place-items: center;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header {
+    justify-content: center;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header .brand {
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
+    justify-content: center;
+    gap: 0;
+    margin: 0;
+    position: relative;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header .brand-mark {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header .brand-favicon {
+    width: 32px;
+    height: 32px;
+    display: block;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 3;
+    flex: none;
+    width: 48px !important;
+    min-width: 48px !important;
+    height: 48px !important;
+    border-radius: 14px;
+    opacity: 0;
+    pointer-events: auto;
+    transition: opacity .14s ease, background-color .14s ease, border-color .14s ease;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header:hover > .sidebar-toggle,
+  .app-sidebar.is-collapsed .sidebar-header:focus-within > .sidebar-toggle,
+  .app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:hover,
+  .app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:focus-visible {
+    opacity: 1;
+  }
+
+  .mobile-menu-button {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .mobile-menu-button {
+    display: grid !important;
+    place-items: center;
+  }
+
+  .app-sidebar,
+  .app-sidebar.is-collapsed,
+  body.sidebar-collapsed .app-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: min(320px, 86vw) !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    padding: 10px !important;
+    transform: translate3d(-105%, 0, 0);
+    z-index: 3000 !important;
+    box-sizing: border-box !important;
+  }
+
+  .app-sidebar.is-open {
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  .app-sidebar .sidebar-toggle {
+    display: none !important;
+  }
+
+  .app-shell,
+  .app-shell.sidebar-collapsed,
+  .app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: 0 !important;
+  }
+
+  .topbar {
+    padding-left: 64px !important;
+  }
+}
