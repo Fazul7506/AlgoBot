@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.views import redirect_to_login
@@ -11,6 +13,45 @@ from .constants import TIMEFRAMES
 from .models import CandleBackfillEvent, CandleBackfillRun, MarketSymbol
 
 BACKFILL_COUNT = 5000
+
+
+def _recover_stale_initial_run(run):
+    """Use the page as a safety net when the periodic reconciler is unavailable."""
+    if not run or run.status != "running":
+        return run
+    now = timezone.now()
+    from .tasks import (
+        BACKFILL_DISPATCH_STALE_AFTER,
+        BACKFILL_RECEIVED_STALE_AFTER,
+        BACKFILL_RUNNING_STALE_AFTER,
+        reconcile_candle_backfill_runs,
+    )
+    stale = (
+        (run.started_at and (
+            not run.last_heartbeat_at
+            or now - run.last_heartbeat_at > BACKFILL_RUNNING_STALE_AFTER
+        ))
+        or (
+            not run.started_at
+            and not run.accepted_at
+            and run.requested_at
+            and now - run.requested_at > BACKFILL_DISPATCH_STALE_AFTER
+        )
+        or (
+            not run.started_at
+            and run.accepted_at
+            and now - run.accepted_at > BACKFILL_RECEIVED_STALE_AFTER
+        )
+    )
+    if stale:
+        try:
+            reconcile_candle_backfill_runs(max_age_seconds=300)
+        except Exception:
+            # The durable run remains authoritative. A browser refresh must
+            # never fabricate worker state merely because recovery failed.
+            return CandleBackfillRun.objects.filter(scope="initial").first()
+        return CandleBackfillRun.objects.filter(scope="initial").first()
+    return run
 
 
 def _celery_state(run):
@@ -258,6 +299,7 @@ def initial_candle_backfill(request):
         return redirect(reverse("initial_candle_backfill"))
 
     initial = CandleBackfillRun.objects.filter(scope="initial").first()
+    initial = _recover_stale_initial_run(initial)
     research_run = CandleBackfillRun.objects.filter(scope="research").first()
     eligible_symbols = list(
         MarketSymbol.objects.filter(
