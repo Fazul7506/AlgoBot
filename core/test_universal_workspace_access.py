@@ -64,6 +64,18 @@ class UniversalWorkspaceAccessTests(TestCase):
                 self.assertContains(response, f'href="{href}"')
 
 
+    def test_collapsed_sidebar_keeps_favicon_and_expand_affordance(self):
+        """Collapsed desktop navigation keeps the favicon and existing expand control."""
+        css_path = Path(settings.BASE_DIR) / "static" / "css" / "chatgpt_shell.css"
+        css = css_path.read_text(encoding="utf-8")
+        self.assertIn(".app-sidebar.is-collapsed .sidebar-header .brand-favicon", css)
+        self.assertIn(".app-sidebar.is-collapsed .sidebar-header .brand:hover + .sidebar-toggle", css)
+        self.assertIn(".app-sidebar.is-collapsed .sidebar-header .sidebar-toggle:focus-visible", css)
+        response = self.client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover1")
+
+
     def test_authenticated_shell_uses_vertical_topbar_content_flow(self):
         """The current sibling DOM must not be laid out as the legacy flex-row shell."""
         css_path = Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css"
