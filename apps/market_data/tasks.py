@@ -615,13 +615,38 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
     now = timezone.now()
     running_cutoff = now - BACKFILL_RUNNING_STALE_AFTER
     dispatch_cutoff = now - BACKFILL_DISPATCH_STALE_AFTER
+    # The first delivery attempt may recover after the short dispatch window.
+    # After a re-publish, use the caller's recovery window as a real cooldown
+    # so the operator page cannot re-publish the same job on every poll.
+    recovery_cutoff = now - timedelta(seconds=max(1, int(max_age_seconds or 300)))
     recovered = []
     try:
         with transaction.atomic():
             run = (
                 CandleBackfillRun.objects.select_for_update()
                 .filter(scope="initial", status="running")
-                .filter(Q(last_heartbeat_at__lt=running_cutoff) | Q(last_heartbeat_at__isnull=True, started_at__lt=running_cutoff) | Q(started_at__isnull=True, accepted_at__isnull=True, requested_at__lt=dispatch_cutoff) | Q(started_at__isnull=True, accepted_at__lt=now - BACKFILL_RECEIVED_STALE_AFTER))
+                .filter(
+                    Q(last_heartbeat_at__lt=running_cutoff)
+                    | Q(
+                        last_heartbeat_at__isnull=True,
+                        started_at__lt=running_cutoff,
+                    )
+                    | Q(
+                        started_at__isnull=True,
+                        accepted_at__isnull=True,
+                        dispatch_at__isnull=True,
+                        requested_at__lt=dispatch_cutoff,
+                    )
+                    | Q(
+                        started_at__isnull=True,
+                        accepted_at__isnull=True,
+                        dispatch_at__lt=recovery_cutoff,
+                    )
+                    | Q(
+                        started_at__isnull=True,
+                        accepted_at__lt=now - BACKFILL_RECEIVED_STALE_AFTER,
+                    )
+                )
                 .first()
             )
             if not run:
