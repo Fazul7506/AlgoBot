@@ -69,11 +69,11 @@ class UniversalWorkspaceAccessTests(TestCase):
         css_path = Path(settings.BASE_DIR) / "static" / "css" / "chatgpt_shell.css"
         css = css_path.read_text(encoding="utf-8")
         self.assertIn(".app-sidebar.is-collapsed .sidebar-header .brand-favicon", css)
-        self.assertIn(".app-sidebar.is-collapsed .sidebar-header .brand:hover + .sidebar-toggle", css)
+        self.assertIn(".app-sidebar.is-collapsed .sidebar-header:hover .sidebar-toggle", css)
         self.assertIn(".app-sidebar.is-collapsed .sidebar-header .sidebar-toggle:focus-visible", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover1")
+        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover2")
 
 
     def test_authenticated_shell_uses_vertical_topbar_content_flow(self):
