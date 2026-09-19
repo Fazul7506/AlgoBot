@@ -257,3 +257,17 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("body:has(#app-sidebar.app-sidebar.is-open)", css)
         self.assertIn("grid-template-columns: minmax(0, 1fr) 44px !important;", css)
         self.assertIn("if(icon)icon.textContent=next?'close':'menu';", js)
+
+
+    def test_mobile_drawer_hides_desktop_control_and_locks_page_scroll(self):
+        """Touch layouts hide desktop collapse UI and lock the document behind the drawer."""
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(encoding="utf-8")
+        js = (Path(settings.BASE_DIR) / "static" / "js" / "base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("FINAL MOBILE/TABLET DRAWER CORRECTION", css)
+        self.assertIn("#app-sidebar.app-sidebar > .sidebar-header > .sidebar-toggle", css)
+        self.assertIn("html.mobile-drawer-locked", css)
+        self.assertIn("body.mobile-drawer-locked", css)
+        self.assertIn("document.body.style.position='fixed'", js)
+        self.assertIn("window.scrollTo(0,mobileScrollY)", js)
+        self.assertIn("runtime_recovery.css?v=20260919-responsive5", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn("base_shell.js?v=20260919-sidebar11", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
