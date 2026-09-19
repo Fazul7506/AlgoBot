@@ -5,9 +5,8 @@ from django.core.cache import cache
 from django.utils import timezone
 from .models import AIModel, ModelVersion, Prediction, FeatureVector, TrainingJob, AIRecommendation, MarketRegime, AnomalyEvent
 from .constants import CONFIDENCE_LABELS
-from .candlestick_features import FEATURE_NAMES
-from .training_dataset import current_ai_feedback, current_strategy_signal_features, MODEL_FEATURE_NAMES, AI_FEEDBACK_FEATURE_NAMES, STRATEGY_FEATURE_NAMES
-from .ensemble_predictor import MODEL_FEATURE_NAMES, extract_candlestick_features
+from .candlestick_features import FEATURE_NAMES, extract_candlestick_features
+from .training_dataset import current_ai_feedback, current_strategy_signal_features, MODEL_FEATURE_NAMES
 log=logging.getLogger(__name__)
 
 def _num(v,default=0.0):
