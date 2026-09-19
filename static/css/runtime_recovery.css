@@ -576,3 +576,219 @@ body.sidebar-collapsed .app-shell {
     margin-left: 78px !important;
   }
 }
+
+
+/* FINAL PERMANENT SIDEBAR RAIL — presentation only.
+ * This is intentionally the last sidebar contract in this stylesheet.
+ * The rail itself never scrolls or translates; only its <nav> may scroll.
+ * The existing DOM, links, collapse state, broker/account UI and handlers remain unchanged.
+ */
+#app-sidebar.app-sidebar {
+  position: fixed !important;
+  top: 0 !important;
+  right: auto !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 260px !important;
+  min-width: 260px !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100vh !important;
+  max-height: 100dvh !important;
+  margin: 0 !important;
+  padding: 10px !important;
+  overflow: hidden !important;
+  overflow-anchor: none !important;
+  overscroll-behavior: none !important;
+  transform: none !important;
+  translate: none !important;
+  will-change: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+  z-index: 3000 !important;
+}
+
+#app-sidebar.app-sidebar > nav {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overflow-anchor: none !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+}
+
+#app-sidebar.app-sidebar .sidebar-header {
+  flex: 0 0 54px !important;
+  min-height: 54px !important;
+  position: relative !important;
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  box-sizing: border-box !important;
+}
+
+#app-sidebar.app-sidebar .sidebar-header .brand {
+  position: relative !important;
+  inset: auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  gap: 4px !important;
+}
+
+#app-sidebar.app-sidebar .sidebar-header .brand-mark {
+  flex: 0 0 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+}
+
+#app-sidebar.app-sidebar .sidebar-header .brand-favicon {
+  display: block !important;
+  width: 28px !important;
+  height: 28px !important;
+  flex: 0 0 28px !important;
+  object-fit: contain !important;
+}
+
+#app-sidebar.app-sidebar .sidebar-header .brand-name {
+  display: inline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+}
+
+/* Collapsed state: the header shows ONLY favicon.ico visually.
+ * The existing expand button remains available on hover/focus over the icon.
+ */
+#app-sidebar.app-sidebar.is-collapsed,
+body.sidebar-collapsed #app-sidebar.app-sidebar {
+  width: 78px !important;
+  min-width: 78px !important;
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+  transform: none !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed .sidebar-header,
+body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header {
+  justify-content: center !important;
+  gap: 0 !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand,
+body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand {
+  width: 48px !important;
+  min-width: 48px !important;
+  height: 48px !important;
+  flex: 0 0 48px !important;
+  justify-content: center !important;
+  gap: 0 !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand-name,
+body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand-name {
+  display: none !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand-mark,
+body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand-mark {
+  width: 40px !important;
+  height: 40px !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand-favicon,
+body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand-favicon {
+  width: 32px !important;
+  height: 32px !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+#app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle {
+  position: relative !important;
+  inset: auto !important;
+  flex: 0 0 36px !important;
+  width: 36px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle,
+body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 48px !important;
+  min-width: 48px !important;
+  height: 48px !important;
+  opacity: 0 !important;
+  z-index: 5 !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed .sidebar-header:hover > .sidebar-toggle,
+#app-sidebar.app-sidebar.is-collapsed .sidebar-header:focus-within > .sidebar-toggle,
+#app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:hover,
+#app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:focus-visible,
+body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header:hover > .sidebar-toggle,
+body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header:focus-within > .sidebar-toggle,
+body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle:hover,
+body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle:focus-visible {
+  opacity: 1 !important;
+}
+
+/* The page begins beside the fixed rail at every viewport size. */
+.app-shell {
+  margin-left: 260px !important;
+}
+.app-shell.sidebar-collapsed,
+#app-sidebar.app-sidebar.is-collapsed + .app-shell,
+body.sidebar-collapsed .app-shell {
+  margin-left: 78px !important;
+}
+
+/* The legacy mobile off-canvas trigger is presentation-only and must not
+ * reintroduce a competing navigation surface over the permanent rail.
+ */
+.mobile-menu-button {
+  display: none !important;
+}
+
+@media (max-width: 420px) {
+  #app-sidebar.app-sidebar {
+    width: 260px !important;
+    min-width: 260px !important;
+  }
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: 78px !important;
+    min-width: 78px !important;
+  }
+  .app-shell {
+    margin-left: 260px !important;
+  }
+  .app-shell.sidebar-collapsed,
+  #app-sidebar.app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: 78px !important;
+  }
+}
