@@ -3,7 +3,7 @@ import logging
 from datetime import timedelta
 import socket
 
-from celery.signals import task_received
+from celery.signals import task_received, task_unknown, task_rejected
 
 from django.utils import timezone
 
@@ -136,6 +136,67 @@ def _record_candle_backfill_worker_received(sender=None, request=None, **kwargs)
         )
 
 
+
+
+
+
+
+def _mark_unknown_candle_backfill_delivery(task_id, message):
+    """Fail only the matching run when a worker has stale/unregistered code."""
+    if not task_id:
+        return
+    try:
+        from django.db import transaction
+        from .models import CandleBackfillEvent, CandleBackfillRun
+
+        with transaction.atomic():
+            run = CandleBackfillRun.objects.select_for_update().filter(
+                scope="initial", status="running", task_id=str(task_id)
+            ).first()
+            if not run:
+                return
+            run.status = "failed"
+            run.error = str(message)
+            run.completed_at = timezone.now()
+            run.save(update_fields=["status", "error", "completed_at"])
+            CandleBackfillEvent.objects.create(
+                run=run,
+                level="error",
+                event_type="error",
+                message=run.error,
+                task_id=str(task_id),
+                worker_hostname=_worker_identity(),
+                payload={"queue": "market_data", "terminal": True},
+            )
+    except Exception:
+        logger.exception(
+            "Unable to persist candle backfill worker delivery failure",
+            extra={"task_id": str(task_id)},
+        )
+
+
+@task_unknown.connect
+def _record_candle_backfill_unknown_task(sender=None, name=None, id=None, **kwargs):
+    if name != "apps.market_data.tasks.run_initial_candle_backfill":
+        return
+    _mark_unknown_candle_backfill_delivery(
+        id,
+        "Market-data worker received the candle backfill task but does not have the current task registered. Redeploy the market-data worker from the same commit as the web service.",
+    )
+
+
+@task_rejected.connect
+def _record_candle_backfill_rejected_task(sender=None, message=None, **kwargs):
+    headers = getattr(message, "headers", {}) or {}
+    properties = getattr(message, "properties", {}) or {}
+    task_name = headers.get("task") or properties.get("type")
+    if task_name != "apps.market_data.tasks.run_initial_candle_backfill":
+        return
+    task_id = headers.get("id") or properties.get("correlation_id")
+    _mark_unknown_candle_backfill_delivery(
+        task_id,
+        "Market-data worker rejected the candle backfill task before execution. Check the market-data worker deployment and Celery queue configuration.",
+    )
 
 
 def _emit_backfill_event(
