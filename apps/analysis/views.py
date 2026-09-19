@@ -184,7 +184,7 @@ def analysis_data(request):
         "model_types": [],
         "reason": "A validated trained ensemble is required before an analysis can become an executable signal.",
     }
-    if len(candles) >= 251:
+    if len(candles) >= 25:
         try:
             prediction = PredictionService().predict(
                 market.symbol,
