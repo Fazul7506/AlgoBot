@@ -524,8 +524,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 CandleBackfillEvent.objects.create(run=run, level="error", event_type="failed", message=run.error, task_id=old_task_id, payload={"recovery_attempts": recovery_attempts})
                 return {"recovered": [], "failed": run_id}
             run.task_id = ""
-            run.requested_at = now
-            run.dispatch_at = now
+            run.dispatch_at = None
             prior_result["dispatch_recovery_attempts"] = recovery_attempts + 1
             run.result = prior_result
             run.started_at = None
@@ -533,7 +532,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             run.last_heartbeat_at = None
             run.completed_at = None
             run.error = "Worker delivery was not confirmed within the recovery window; the job is being re-published automatically."
-            run.save(update_fields=["task_id", "requested_at", "dispatch_at", "started_at", "accepted_at", "last_heartbeat_at", "completed_at", "error", "result"])
+            run.save(update_fields=["task_id", "dispatch_at", "started_at", "accepted_at", "last_heartbeat_at", "completed_at", "error", "result"])
             CandleBackfillEvent.objects.create(run=run, level="notice", event_type="recovered", message=run.error, task_id=old_task_id, payload={"old_task_id": old_task_id})
 
         if old_task_id:
