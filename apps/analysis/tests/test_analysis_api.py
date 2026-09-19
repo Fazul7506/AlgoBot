@@ -60,7 +60,7 @@ class AnalysisSmokeTests(TestCase):
         with patch.object(
             views,
             "analyze_candles",
-            return_value={"status": "ok", "candles": 3, "signal": "Bullish", "score": 70, "confidence": 68, "structure": "Bullish structure", "volatility_regime": "normal", "factors": ["EMA 9/21 trend"]},
+            return_value={"status": "ok", "candles": 3, "signal": "NO_TRADE", "technical_signal": "Bullish", "technical_score": 70, "confidence": None, "structure": "Bullish structure", "volatility_regime": "normal", "factors": ["EMA 9/21 trend"]},
         ) as analyze:
             response = self.client.get(
                 reverse("analysis-data"),
@@ -73,7 +73,9 @@ class AnalysisSmokeTests(TestCase):
         self.assertEqual(response.json()["data_provenance"]["candle_count"], 3)
         spec = response.json()["trade_spec"]
         self.assertEqual(spec["contract_type"], "MULTUP / MULTDOWN")
-        self.assertEqual(spec["direction"], "BUY")
+        self.assertEqual(spec["direction"], "HOLD")
+        self.assertEqual(response.json()["ai"]["decision"], "AVOID")
+        self.assertFalse(response.json()["execution_gate"]["sufficient_history"])
         self.assertTrue(spec["strategy"])
         self.assertTrue(spec["entry_condition"])
         self.assertEqual(response.json()["contract_capabilities"]["available_contract_families"], ["multiplier"])
