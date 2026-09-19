@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -59,3 +62,13 @@ class UniversalWorkspaceAccessTests(TestCase):
             with self.subTest(label=label):
                 self.assertContains(response, label)
                 self.assertContains(response, f'href="{href}"')
+
+
+    def test_authenticated_shell_uses_vertical_topbar_content_flow(self):
+        """The current sibling DOM must not be laid out as the legacy flex-row shell."""
+        css_path = Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css"
+        css = css_path.read_text(encoding="utf-8")
+        self.assertIn(".app-shell {\n  display: block !important;", css)
+        response = self.client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow1")
