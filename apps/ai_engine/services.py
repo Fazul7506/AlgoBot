@@ -77,14 +77,15 @@ class PredictionService:
         feats['ai_feedback_sample_count']=float(feedback_count)
         FeatureStoreService().store(symbol,timeframe,feats)
         raw=InferenceService().infer(feats,ModelRegistry().champion(),symbol,timeframe)
-        cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score'])
         consensus=raw.get('consensus',{})
+        consensus_confidence=float(consensus.get('confidence',0.0) or 0.0)*100.0
+        cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score'])
         model_features=list(FEATURE_NAMES)+['ai_feedback_accuracy','ai_feedback_mean_return','ai_feedback_sample_count']
         return Prediction.objects.create(
             symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],
-            confidence=cal['score'],expected_return=raw['expected_return'],risk_score=raw['risk_score'],
+            confidence=round(consensus_confidence,2),expected_return=raw['expected_return'],risk_score=raw['risk_score'],
             payload={
-                'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],
+                'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'model_confidence':round(consensus_confidence,2),'confidence_source':'ensemble_consensus',
                 'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),
                 'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,
                 'price_action':{k:feats.get(k) for k in FEATURE_NAMES},
