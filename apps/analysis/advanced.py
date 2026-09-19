@@ -145,13 +145,19 @@ def structure_events(rows):
 
 
 def fair_value_gaps(rows):
+    """Detect three-candle imbalances and mark them filled only after later price trades through the gap."""
     gaps = []
     for i in range(2, len(rows)):
-        a, c = rows[i - 2], rows[i]
-        if c["low"] > a["high"]:
-            gaps.append({"type": "bullish", "index": i, "low": a["high"], "high": c["low"], "filled": rows[-1]["low"] <= a["high"]})
-        elif c["high"] < a["low"]:
-            gaps.append({"type": "bearish", "index": i, "low": c["high"], "high": a["low"], "filled": rows[-1]["high"] >= a["low"]})
+        first, third = rows[i - 2], rows[i]
+        future = rows[i + 1:]
+        if third["low"] > first["high"]:
+            low, high = first["high"], third["low"]
+            filled = any(row["low"] <= low for row in future)
+            gaps.append({"type": "bullish", "index": i, "low": low, "high": high, "filled": filled})
+        elif third["high"] < first["low"]:
+            low, high = third["high"], first["low"]
+            filled = any(row["high"] >= high for row in future)
+            gaps.append({"type": "bearish", "index": i, "low": low, "high": high, "filled": filled})
     return gaps[-20:]
 
 
@@ -210,11 +216,15 @@ def fibonacci(rows):
     highs, lows = _swing_points(rows, 3)
     if not highs or not lows:
         return None
-    high, low = highs[-1]["price"], lows[-1]["price"]
-    if high == low:
+    high, low = highs[-1], lows[-1]
+    if high["price"] == low["price"]:
         return None
-    diff = high - low
-    return {str(r): high - diff * r for r in (0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0)}
+    if high["index"] > low["index"]:
+        recent, older = high["price"], low["price"]
+    else:
+        recent, older = low["price"], high["price"]
+    diff = recent - older
+    return {str(r): recent - diff * r for r in (0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0)}
 
 
 def volatility_regime(rows, atr_value=None):
