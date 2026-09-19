@@ -528,21 +528,24 @@ body.sidebar-collapsed .app-shell {
   display: none !important;
 }
 @media (max-width: 900px) {
-  #app-sidebar.app-sidebar,
-  #app-sidebar.app-sidebar.is-collapsed,
-  body.sidebar-collapsed #app-sidebar.app-sidebar {
+  #app-sidebar.app-sidebar {
     width: 260px !important;
     min-width: 260px !important;
     transform: none !important;
     padding: 10px !important;
   }
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: 78px !important;
+    min-width: 78px !important;
+    transform: none !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
   #app-sidebar.app-sidebar .sidebar-toggle {
     display: grid !important;
   }
-  .app-shell,
-  .app-shell.sidebar-collapsed,
-  .app-sidebar.is-collapsed + .app-shell,
-  body.sidebar-collapsed .app-shell {
+  .app-shell {
     margin-left: 260px !important;
   }
   .app-shell.sidebar-collapsed,
@@ -555,16 +558,16 @@ body.sidebar-collapsed .app-shell {
   }
 }
 @media (max-width: 420px) {
-  #app-sidebar.app-sidebar,
-  #app-sidebar.app-sidebar.is-collapsed,
-  body.sidebar-collapsed #app-sidebar.app-sidebar {
+  #app-sidebar.app-sidebar {
     width: min(260px, 78vw) !important;
     min-width: min(260px, 78vw) !important;
   }
-  .app-shell,
-  .app-shell.sidebar-collapsed,
-  .app-sidebar.is-collapsed + .app-shell,
-  body.sidebar-collapsed .app-shell {
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: 78px !important;
+    min-width: 78px !important;
+  }
+  .app-shell {
     margin-left: min(260px, 78vw) !important;
   }
   .app-shell.sidebar-collapsed,
