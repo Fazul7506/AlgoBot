@@ -253,3 +253,42 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertTrue(
             CandleBackfillEvent.objects.filter(run=run, event_type="failed").exists()
         )
+
+
+    def test_unknown_task_delivery_fails_only_matching_run(self):
+        from .tasks import _record_candle_backfill_unknown_task
+
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="running",
+            count=5000,
+            task_id="unknown-task",
+        )
+        _record_candle_backfill_unknown_task(
+            name="apps.market_data.tasks.run_initial_candle_backfill",
+            id="unknown-task",
+        )
+        run.refresh_from_db()
+        self.assertEqual(run.status, "failed")
+        self.assertIn("does not have the current task registered", run.error)
+        self.assertTrue(
+            CandleBackfillEvent.objects.filter(
+                run=run, event_type="error", task_id="unknown-task"
+            ).exists()
+        )
+
+    def test_unknown_other_task_does_not_change_backfill_run(self):
+        from .tasks import _record_candle_backfill_unknown_task
+
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="running",
+            count=5000,
+            task_id="other-task",
+        )
+        _record_candle_backfill_unknown_task(
+            name="apps.other.tasks.some_task",
+            id="other-task",
+        )
+        run.refresh_from_db()
+        self.assertEqual(run.status, "running")
