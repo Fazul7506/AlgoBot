@@ -48,3 +48,43 @@ body.mobile-nav-open,html.mobile-nav-open { overflow-y:auto !important; overflow
   .app-shell main { min-height:calc(100vh - 58px); }
 }
 @media (min-width:801px) { .app-sidebar.is-open { transform:none; } }
+
+
+/* Canonical authenticated shell flow.
+ *
+ * The authenticated DOM is intentionally:
+ *   fixed sidebar (sibling) + app-shell > topbar + app-content.
+ *
+ * frontend_foundation.css historically declared .app-shell as a flex row,
+ * which was for an older nested-shell DOM. In the current DOM that puts the
+ * topbar and page content beside each other and creates a large phantom
+ * horizontal column on every authenticated page. Keep the rule here because
+ * runtime_recovery.css is the final shell layer loaded by base.html.
+ */
+.app-shell {
+  display: block !important;
+  min-width: 0;
+  width: auto;
+}
+.app-content {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+.app-shell > .topbar {
+  width: 100%;
+}
+@media (min-width: 901px) {
+  .app-shell {
+    margin-left: 264px;
+  }
+  .app-shell.sidebar-collapsed {
+    margin-left: 78px;
+  }
+}
+@media (max-width: 900px) {
+  .app-shell,
+  .app-shell.sidebar-collapsed {
+    margin-left: 0 !important;
+  }
+}
