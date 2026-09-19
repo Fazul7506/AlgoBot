@@ -26,6 +26,25 @@ class UniversalWorkspaceAccessTests(TestCase):
                 self.assertNotEqual(response.status_code, 302, path)
                 self.assertEqual(response.status_code, 200, path)
 
+
+    def test_sidebar_has_chat_workspace_collapse_contract(self):
+        response = self.client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="app-sidebar"')
+        self.assertContains(response, 'data-sidebar-toggle')
+        self.assertContains(response, 'aria-label="Collapse navigation"')
+        self.assertContains(response, 'aria-expanded="true"')
+        for href in (
+            "/dashboard/", "/trading/", "/markets/", "/orders/", "/trade-history/",
+            "/positions/", "/signals/", "/strategies/", "/backtesting/", "/performance/",
+            "/predictions/", "/analysis/", "/risk/", "/monitoring/", "/notifications/",
+            "/automation/", "/operations/deployments/", "/operations/audit/",
+            "/operations/security/", "/portfolio/", "/operations/brokers/", "/billing/",
+            "/developer/",
+        ):
+            with self.subTest(href=href):
+                self.assertContains(response, f'href="{href}"')
+
     def test_universal_workspace_links_are_present_in_authenticated_sidebar(self):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)

@@ -143,3 +143,50 @@
   #django-message-stack.toast-stack .toast { animation: none !important; }
   #app-sidebar nav a, #app-sidebar .sidebar-new-trade { transition: none !important; }
 }
+
+
+/* ChatGPT-style workspace navigation refinement.
+ * Presentation-only: preserves every existing href, account switcher, logout form,
+ * active-route contract, mobile drawer, and desktop collapse state.
+ */
+#app-sidebar {
+  width: 264px !important;
+  min-width: 264px !important;
+  box-sizing: border-box;
+  padding: 10px 10px 12px !important;
+  background: var(--panel, #11151b);
+  border-right: 1px solid color-mix(in srgb, var(--line, #243244) 72%, transparent);
+}
+#app-sidebar .sidebar-header { min-height: 42px; padding: 0 2px 8px; gap: 8px; }
+#app-sidebar .brand { min-height: 40px; padding: 4px 8px; border-radius: 10px; color: var(--text); text-decoration: none; }
+#app-sidebar .brand:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+#app-sidebar .brand-mark { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 30px; }
+#app-sidebar .brand-favicon { width: 28px; height: 28px; border-radius: 8px; }
+#app-sidebar .brand-name { font-size: 14px; font-weight: 700; letter-spacing: .01em; }
+#app-sidebar .sidebar-toggle { width: 34px !important; height: 34px !important; flex: 0 0 34px; padding: 0 !important; border: 0 !important; border-radius: 9px !important; background: transparent !important; color: var(--muted) !important; box-shadow: none !important; }
+#app-sidebar .sidebar-toggle:hover, #app-sidebar .sidebar-toggle:focus-visible { background: color-mix(in srgb, var(--text) 8%, transparent) !important; color: var(--text) !important; outline: none; }
+#app-sidebar nav { margin-top: 2px !important; padding: 2px 2px 12px !important; }
+#app-sidebar .sidebar-section { margin: 0 0 14px; }
+#app-sidebar .sidebar-section h2 { margin: 0 8px 5px; padding: 0; color: var(--muted); font-size: 10px; line-height: 18px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+#app-sidebar nav a, #app-sidebar .sidebar-new-trade { min-height: 38px; margin: 1px 0; padding: 8px 10px; gap: 11px; border: 0 !important; border-radius: 9px; color: color-mix(in srgb, var(--text) 72%, var(--muted)); text-decoration: none; font-size: 13px; line-height: 20px; font-weight: 500; }
+#app-sidebar nav a .material-symbols-rounded, #app-sidebar .sidebar-new-trade .material-symbols-rounded { flex: 0 0 20px; width: 20px; font-size: 20px; color: var(--muted); }
+#app-sidebar nav a:hover, #app-sidebar .sidebar-new-trade:hover { background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text); }
+#app-sidebar nav a.active, #app-sidebar nav a[aria-current='page'], #app-sidebar .sidebar-new-trade.active, #app-sidebar .sidebar-new-trade[aria-current='page'] { background: color-mix(in srgb, var(--text) 9%, transparent) !important; color: var(--text) !important; border: 0 !important; box-shadow: none !important; font-weight: 600; }
+#app-sidebar nav a.active::before, #app-sidebar nav a[aria-current='page']::before, #app-sidebar .sidebar-new-trade.active::before, #app-sidebar .sidebar-new-trade[aria-current='page']::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+#app-sidebar nav a.active .material-symbols-rounded, #app-sidebar nav a[aria-current='page'] .material-symbols-rounded { color: var(--accent) !important; }
+#app-sidebar .sidebar-user { gap: 8px !important; padding-top: 10px !important; margin-top: 2px !important; border-top: 1px solid color-mix(in srgb, var(--line, #243244) 70%, transparent); }
+#app-sidebar .sidebar-user-actions button { background: transparent !important; border-color: transparent !important; }
+#app-sidebar .sidebar-user-actions button:hover, #app-sidebar .sidebar-user-actions button:focus-visible { background: color-mix(in srgb, var(--text) 8%, transparent) !important; }
+#app-sidebar.is-collapsed { width: 78px !important; min-width: 78px !important; padding-left: 9px !important; padding-right: 9px !important; }
+#app-sidebar.is-collapsed .sidebar-header { justify-content: center; padding-left: 0; padding-right: 0; }
+#app-sidebar.is-collapsed .brand { padding: 4px; }
+#app-sidebar.is-collapsed .sidebar-toggle { position: absolute; top: 52px; right: 7px; width: 28px !important; height: 28px !important; z-index: 3; opacity: .88; }
+#app-sidebar.is-collapsed nav a, #app-sidebar.is-collapsed .sidebar-new-trade { justify-content: center; width: 50px; min-height: 42px; margin: 2px auto; padding: 8px 0; }
+#app-sidebar.is-collapsed nav a::before, #app-sidebar.is-collapsed .sidebar-new-trade::before { display: none; }
+#app-sidebar.is-collapsed nav a .material-symbols-rounded, #app-sidebar.is-collapsed .sidebar-new-trade .material-symbols-rounded { color: var(--muted); }
+#app-sidebar.is-collapsed nav a.active, #app-sidebar.is-collapsed nav a[aria-current='page'], #app-sidebar.is-collapsed .sidebar-new-trade.active, #app-sidebar.is-collapsed .sidebar-new-trade[aria-current='page'] { background: color-mix(in srgb, var(--text) 10%, transparent) !important; }
+#app-sidebar.is-collapsed nav a.active .material-symbols-rounded, #app-sidebar.is-collapsed nav a[aria-current='page'] .material-symbols-rounded { color: var(--accent) !important; }
+#app-sidebar.is-collapsed .sidebar-section { margin-bottom: 9px; }
+#app-sidebar.is-collapsed .sidebar-user { align-items: center; }
+#app-sidebar.is-collapsed .sidebar-user-actions button { background: transparent !important; border: 0 !important; }
+@media (max-width: 900px) { #app-sidebar { width: min(320px, 86vw) !important; min-width: 0 !important; padding: 10px !important; } #app-sidebar .sidebar-toggle { display: none !important; } }
