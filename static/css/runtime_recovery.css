@@ -1304,3 +1304,374 @@ body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
     }
   }
 }
+
+
+/* FINAL RESPONSIVE SHELL CONTRACT — desktop/tablet/mobile are intentionally
+ * different layouts. This block is the authoritative last override.
+ *
+ * Desktop (>=901px): permanent fixed rail; document scroll stays on the page;
+ * only nav scrolls; account dock stays inside the fixed rail.
+ *
+ * Tablet (601–900px) and mobile (<=600px): sidebar is an off-canvas drawer.
+ * The page uses the full viewport width. The drawer itself is fixed and its
+ * internal nav scrolls. The account dock is anchored inside the fixed drawer.
+ *
+ * Do not use the desktop 260px rail or desktop collapsed 78px geometry below
+ * 901px. The account/broker UI and navigation behavior are unchanged.
+ */
+
+/* Shared viewport safety. */
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden !important;
+}
+
+.app-shell,
+.app-content,
+.app-shell > .topbar {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.app-content {
+  overflow-x: clip;
+}
+
+/* DESKTOP — permanent rail. */
+@media (min-width: 901px) {
+  #app-sidebar.app-sidebar {
+    position: fixed !important;
+    inset: 0 auto auto 0 !important;
+    width: 260px !important;
+    min-width: 260px !important;
+    height: 100svh !important;
+    max-height: 100svh !important;
+    margin: 0 !important;
+    padding: 10px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    overflow-anchor: none !important;
+    overscroll-behavior: none !important;
+    transform: none !important;
+    translate: none !important;
+    contain: none !important;
+    box-sizing: border-box !important;
+    z-index: 3000 !important;
+  }
+
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: 78px !important;
+    min-width: 78px !important;
+  }
+
+  .app-shell {
+    margin-left: 260px !important;
+  }
+
+  .app-shell.sidebar-collapsed,
+  #app-sidebar.app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: 78px !important;
+  }
+
+  .mobile-menu-button {
+    display: none !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-header {
+    position: absolute !important;
+    inset: 10px 10px auto 10px !important;
+    width: auto !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    max-height: 54px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 30 !important;
+  }
+
+  #app-sidebar.app-sidebar > nav {
+    position: absolute !important;
+    top: 64px !important;
+    right: 10px !important;
+    bottom: 154px !important;
+    left: 10px !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 2px 10px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    overflow-anchor: none !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+    z-index: 10 !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-user {
+    position: absolute !important;
+    inset: auto 10px 10px 10px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 120px !important;
+    max-height: 138px !important;
+    height: 138px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    z-index: 30 !important;
+    transform: none !important;
+    translate: none !important;
+    touch-action: manipulation !important;
+  }
+
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header {
+    left: 14px !important;
+    right: 14px !important;
+    width: auto !important;
+  }
+
+  #app-sidebar.app-sidebar.is-collapsed > nav,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > nav {
+    left: 14px !important;
+    right: 14px !important;
+  }
+
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
+    left: 14px !important;
+    right: 14px !important;
+  }
+}
+
+/* TABLET — full-width page + fixed off-canvas navigation drawer. */
+@media (min-width: 601px) and (max-width: 900px) {
+  .mobile-menu-button {
+    display: grid !important;
+    position: fixed !important;
+    top: 10px !important;
+    left: 12px !important;
+    z-index: 3001 !important;
+    place-items: center !important;
+  }
+
+  #app-sidebar.app-sidebar,
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    position: fixed !important;
+    inset: 0 auto auto 0 !important;
+    width: min(360px, 82vw) !important;
+    min-width: 0 !important;
+    height: 100svh !important;
+    max-height: 100svh !important;
+    padding: 10px !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    transform: translate3d(-105%, 0, 0) !important;
+    translate: none !important;
+    transition: transform .22s ease !important;
+    z-index: 3000 !important;
+  }
+
+  #app-sidebar.app-sidebar.is-open {
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  .app-shell,
+  .app-shell.sidebar-collapsed,
+  #app-sidebar.app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: 0 !important;
+  }
+
+  .topbar {
+    padding-left: 68px !important;
+  }
+
+  #app-sidebar.app-sidebar .sidebar-toggle {
+    display: none !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-header {
+    position: absolute !important;
+    inset: 10px 10px auto 10px !important;
+    width: auto !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    max-height: 54px !important;
+  }
+
+  #app-sidebar.app-sidebar > nav {
+    position: absolute !important;
+    top: 64px !important;
+    right: 10px !important;
+    bottom: 154px !important;
+    left: 10px !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    touch-action: pan-y !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-user {
+    position: absolute !important;
+    inset: auto 10px 10px 10px !important;
+    width: auto !important;
+    height: 138px !important;
+    min-height: 120px !important;
+    max-height: 138px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    transform: none !important;
+    translate: none !important;
+    z-index: 30 !important;
+  }
+
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header,
+  #app-sidebar.app-sidebar.is-collapsed > nav,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > nav,
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+  }
+
+  .sidebar-backdrop {
+    z-index: 2998 !important;
+  }
+}
+
+/* MOBILE — narrower drawer, compact topbar, zero desktop rail reservation. */
+@media (max-width: 600px) {
+  .mobile-menu-button {
+    display: grid !important;
+    position: fixed !important;
+    top: max(10px, env(safe-area-inset-top)) !important;
+    left: max(10px, env(safe-area-inset-left)) !important;
+    z-index: 3001 !important;
+    place-items: center !important;
+  }
+
+  #app-sidebar.app-sidebar,
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    position: fixed !important;
+    inset: 0 auto auto 0 !important;
+    width: min(320px, 88vw) !important;
+    min-width: 0 !important;
+    height: 100svh !important;
+    max-height: 100svh !important;
+    padding: 10px !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    transform: translate3d(-105%, 0, 0) !important;
+    translate: none !important;
+    transition: transform .22s ease !important;
+    z-index: 3000 !important;
+  }
+
+  #app-sidebar.app-sidebar.is-open {
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  .app-shell,
+  .app-shell.sidebar-collapsed,
+  #app-sidebar.app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: 0 !important;
+  }
+
+  .topbar {
+    padding-left: 60px !important;
+    padding-right: 10px !important;
+  }
+
+  #app-sidebar.app-sidebar .sidebar-toggle {
+    display: none !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-header {
+    position: absolute !important;
+    inset: 10px 10px auto 10px !important;
+    width: auto !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    max-height: 54px !important;
+  }
+
+  #app-sidebar.app-sidebar > nav {
+    position: absolute !important;
+    top: 64px !important;
+    right: 10px !important;
+    bottom: 154px !important;
+    left: 10px !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    touch-action: pan-y !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-user {
+    position: absolute !important;
+    inset: auto 10px 10px 10px !important;
+    width: auto !important;
+    height: 138px !important;
+    min-height: 120px !important;
+    max-height: 138px !important;
+    top: auto !important;
+    right: 10px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    transform: none !important;
+    translate: none !important;
+    z-index: 30 !important;
+  }
+
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header,
+  #app-sidebar.app-sidebar.is-collapsed > nav,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > nav,
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+  }
+
+  .sidebar-backdrop {
+    z-index: 2998 !important;
+  }
+
+  .app-shell main {
+    min-height: calc(100svh - 58px) !important;
+  }
+}
+
+/* Stable small viewport sizing prevents mobile browser chrome from changing
+ * the drawer/account geometry while the document is scrolled. */
+@supports (height: 100svh) {
+  #app-sidebar.app-sidebar {
+    max-height: 100svh !important;
+  }
+}
