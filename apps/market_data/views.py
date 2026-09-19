@@ -175,8 +175,36 @@ def initial_candle_backfill(request):
     initial = CandleBackfillRun.objects.filter(scope="initial").first()
     research_run = CandleBackfillRun.objects.filter(scope="research").first()
     if request.GET.get("format") == "json":
-        response = JsonResponse({"initial": _run_payload(initial), "research": _run_payload(research_run)})
+        scope = request.GET.get("scope", "initial")
+        run = initial if scope == "initial" else research_run
+        payload = {"initial": _run_payload(initial), "research": _run_payload(research_run), "events": [], "events_last_id": 0}
+        if run:
+            try:
+                after = max(0, int(request.GET.get("after", "0") or 0))
+            except ValueError:
+                after = 0
+            try:
+                limit = min(max(int(request.GET.get("limit", "200") or 200), 1), 500)
+            except ValueError:
+                limit = 200
+            events = CandleBackfillEvent.objects.filter(run=run)
+            query = (request.GET.get("q") or "").strip()
+            if query:
+                from django.db.models import Q
+                events = events.filter(Q(message__icontains=query) | Q(symbol__icontains=query) | Q(timeframe__icontains=query) | Q(level__icontains=query))
+            if after:
+                events = events.filter(id__gt=after)
+            events = list(events.order_by("id")[:limit])
+            payload["events"] = [{
+                "id": event.id, "timestamp": event.created_at.isoformat(), "level": event.level,
+                "type": event.event_type, "message": event.message, "symbol": event.symbol,
+                "timeframe": event.timeframe, "task_id": event.task_id, "worker": event.worker_hostname,
+                "payload": event.payload,
+            } for event in events]
+            payload["events_last_id"] = events[-1].id if events else after
+        response = JsonResponse(payload)
         response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response["Pragma"] = "no-cache"
+        response["Expires"] = "0"
         return response
     return render(request, "market_data/candle_backfill.html", {"run": initial, "research_run": research_run})
