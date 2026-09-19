@@ -114,9 +114,11 @@ class CandleBackfillReliabilityTests(TestCase):
             scope="initial",
             status="running",
             count=5000,
-            requested_at=timezone.now() - timedelta(minutes=3),
             started_at=None,
             task_id="undelivered-task",
+        )
+        CandleBackfillRun.objects.filter(pk=run.pk).update(
+            requested_at=timezone.now() - timedelta(minutes=3),
         )
         with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as publish:
             publish.return_value.id = "recovered-task-id"
