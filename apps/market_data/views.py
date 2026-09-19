@@ -10,23 +10,24 @@ from django.utils import timezone
 from .models import CandleBackfillRun
 
 
-def _celery_state(task_id):
-    if not task_id:
+def _celery_state(run):
+    if not run or not run.task_id:
         return None
+    if run.status == "completed":
+        return "SUCCESS"
+    if run.status == "failed":
+        return "FAILURE"
     try:
         from deriv_platform.celery import app
-        return app.AsyncResult(task_id).state
+        return app.AsyncResult(run.task_id).state
     except Exception:
         return None
-
-
-def _staff_required(user):
-    return user.is_authenticated and (user.is_staff or user.is_superuser)
 
 
 def _run_payload(run):
     if not run:
         return None
+    result = run.result or {}
     return {
         "scope": run.scope,
         "status": run.status,
@@ -37,10 +38,21 @@ def _run_payload(run):
         "requested_at": run.requested_at.isoformat() if run.requested_at else None,
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
-        "result": run.result,
+        "result": result,
+        "progress": {
+            "total": result.get("symbols_total", 0),
+            "completed": result.get("symbols_completed", 0),
+            "succeeded": result.get("symbols_succeeded", 0),
+            "failed": result.get("symbols_failed", 0),
+            "percent": result.get("percent", 0),
+        },
         "error": run.error,
-        "celery_state": _celery_state(run.task_id),
+        "celery_state": _celery_state(run),
     }
+
+
+def _staff_required(user):
+    return user.is_authenticated and (user.is_staff or user.is_superuser)
 
 
 @login_required
@@ -70,14 +82,10 @@ def initial_candle_backfill(request):
             run = CandleBackfillRun.objects.select_for_update().filter(scope="initial").first()
             if run and run.status in {"running", "completed"}:
                 return redirect(reverse("initial_candle_backfill"))
-
             count = 5000
             symbol = (request.POST.get("symbol") or "").strip()
             if run is None:
                 run = CandleBackfillRun(scope="initial")
-
-            # Public lifecycle is deliberately limited to Running, Succeeded,
-            # and Failed. Celery transport PENDING is not an application state.
             now = timezone.now()
             run.status = "running"
             run.count = count
@@ -92,11 +100,8 @@ def initial_candle_backfill(request):
             run.save()
 
         from .tasks import run_initial_candle_backfill
-
         try:
-            task = run_initial_candle_backfill.delay(
-                run.pk, count=count, symbol=symbol or None
-            )
+            task = run_initial_candle_backfill.delay(run.pk, count=count, symbol=symbol or None)
             run.task_id = task.id
             run.save(update_fields=["task_id"])
         except Exception as exc:
@@ -104,20 +109,13 @@ def initial_candle_backfill(request):
             run.error = f"Unable to dispatch Celery task: {exc}"
             run.completed_at = timezone.now()
             run.save(update_fields=["status", "error", "completed_at"])
-
         return redirect(reverse("initial_candle_backfill"))
 
     initial = CandleBackfillRun.objects.filter(scope="initial").first()
     research_run = CandleBackfillRun.objects.filter(scope="research").first()
-
     if request.GET.get("format") == "json":
-        return JsonResponse({
-            "initial": _run_payload(initial),
-            "research": _run_payload(research_run),
-        })
-
-    return render(
-        request,
-        "market_data/candle_backfill.html",
-        {"run": initial, "research_run": research_run},
-    )
+        response = JsonResponse({"initial": _run_payload(initial), "research": _run_payload(research_run)})
+        response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response["Pragma"] = "no-cache"
+        return response
+    return render(request, "market_data/candle_backfill.html", {"run": initial, "research_run": research_run})
