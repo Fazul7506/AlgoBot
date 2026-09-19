@@ -41,11 +41,12 @@ def check_ai_data_health(timeframe="M1"):
 @app.task
 def scheduled_ai_training(timeframe="M1", min_accuracy=0.52):
     """Train active symbols only when canonical market data is ready."""
+    outcome_summary = resolve_prediction_outcomes(timeframe=timeframe, horizon_candles=1)
     summary = AIDataPipeline().training_summary(timeframe=timeframe, lookback_hours=168)
     if not summary["ready"]:
         return {"status": "skipped", "reason": "no_market_data", "summary": summary}
     result = MarketModelTrainer().train_active_symbols(timeframe=timeframe, min_accuracy=min_accuracy)
-    return {"status": "trained", "summary": summary, "result": result}
+    return {"status": "trained", "summary": summary, "outcomes": outcome_summary, "result": result}
 
 
 @app.task
