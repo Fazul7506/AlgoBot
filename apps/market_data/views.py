@@ -7,7 +7,10 @@ from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import CandleBackfillEvent, CandleBackfillRun
+from .constants import TIMEFRAMES
+from .models import CandleBackfillEvent, CandleBackfillRun, MarketSymbol
+
+BACKFILL_COUNT = 5000
 
 
 def _celery_state(run):
@@ -107,7 +110,10 @@ def _run_payload(run):
             "completed": result.get("symbols_completed", 0),
             "succeeded": result.get("symbols_succeeded", 0),
             "failed": result.get("symbols_failed", 0),
-            "percent": result.get("percent", 0),
+            "percent": result.get("work_percent", result.get("percent", 0)),
+            "symbols_percent": result.get("percent", 0),
+            "work_total": result.get("work_total", 0),
+            "work_completed": result.get("work_completed", 0),
         },
         "error": run.error,
         "celery_state": _celery_state(run),
@@ -152,8 +158,20 @@ def initial_candle_backfill(request):
             run = CandleBackfillRun.objects.select_for_update().filter(scope="initial").first()
             if run and run.status in {"running", "completed"}:
                 return redirect(reverse("initial_candle_backfill"))
-            count = 5000
+            count = BACKFILL_COUNT
             symbol = (request.POST.get("symbol") or "").strip()
+            eligible = MarketSymbol.objects.filter(
+                broker__iexact="deriv",
+                is_active=True,
+                is_tradable=True,
+            )
+            if symbol and not eligible.filter(symbol=symbol).exists():
+                return JsonResponse(
+                    {"error": "Selected symbol is not an active, tradable Deriv market symbol."},
+                    status=400,
+                ) if request.GET.get("format") == "json" else redirect(
+                    f"{reverse('initial_candle_backfill')}?error=invalid-symbol"
+                )
             if run is None:
                 run = CandleBackfillRun(scope="initial")
             now = timezone.now()
@@ -164,7 +182,7 @@ def initial_candle_backfill(request):
             run.requested_by = request.user
             run.requested_at = now
             run.started_at = None
-            run.dispatch_at = now
+            run.dispatch_at = None
             run.accepted_at = None
             run.last_heartbeat_at = None
             run.current_symbol = ""
@@ -181,6 +199,12 @@ def initial_candle_backfill(request):
             }
             run.error = ""
             run.save()
+            # requested_at uses auto_now_add, so an existing failed run cannot
+            # be restarted with a new request timestamp through Model.save().
+            CandleBackfillRun.objects.filter(pk=run.pk).update(
+                requested_at=now,
+            )
+            run.refresh_from_db()
 
         CandleBackfillEvent.objects.create(
             run=run,
@@ -226,10 +250,39 @@ def initial_candle_backfill(request):
 
     initial = CandleBackfillRun.objects.filter(scope="initial").first()
     research_run = CandleBackfillRun.objects.filter(scope="research").first()
+    eligible_symbols = list(
+        MarketSymbol.objects.filter(
+            broker__iexact="deriv",
+            is_active=True,
+            is_tradable=True,
+        )
+        .order_by("symbol")
+        .values_list("symbol", flat=True)
+    )
+    native_timeframes = [
+        timeframe for timeframe, seconds in TIMEFRAMES.items()
+        if timeframe != "tick" and seconds >= 60
+    ]
+    tick_derived_timeframes = [
+        timeframe for timeframe, seconds in TIMEFRAMES.items()
+        if timeframe == "tick" or seconds < 60
+    ]
+    backfill_config = {
+        "count": BACKFILL_COUNT,
+        "eligible_symbol_count": len(eligible_symbols),
+        "native_timeframes": native_timeframes,
+        "tick_derived_timeframes": tick_derived_timeframes,
+    }
     if request.GET.get("format") == "json":
         scope = request.GET.get("scope", "initial")
         run = initial if scope == "initial" else research_run
-        payload = {"initial": _run_payload(initial), "research": _run_payload(research_run), "events": [], "events_last_id": 0}
+        payload = {
+            "initial": _run_payload(initial),
+            "research": _run_payload(research_run),
+            "events": [],
+            "events_last_id": 0,
+            "config": backfill_config,
+        }
         if run:
             try:
                 after = max(0, int(request.GET.get("after", "0") or 0))
@@ -259,4 +312,20 @@ def initial_candle_backfill(request):
         response["Pragma"] = "no-cache"
         response["Expires"] = "0"
         return response
-    return render(request, "market_data/candle_backfill.html", {"run": initial, "research_run": research_run})
+    page_error = (
+        "Selected symbol is not an active, tradable Deriv market symbol."
+        if request.GET.get("error") == "invalid-symbol"
+        else ""
+    )
+    return render(
+        request,
+        "market_data/candle_backfill.html",
+        {
+            "run": initial,
+            "run_payload": _run_payload(initial),
+            "research_run": research_run,
+            "eligible_symbols": eligible_symbols,
+            "backfill_config": backfill_config,
+            "page_error": page_error,
+        },
+    )

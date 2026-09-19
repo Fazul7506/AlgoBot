@@ -72,11 +72,14 @@ BACKFILL_MAX_RECOVERY_ATTEMPTS = 3
 def _active_symbols(symbol=None):
     from .models import MarketSymbol
 
-    return [symbol] if symbol else list(
-        MarketSymbol.objects.filter(is_active=True, is_tradable=True)
-        .order_by("symbol")
-        .values_list("symbol", flat=True)
-    )
+    eligible = MarketSymbol.objects.filter(
+        broker__iexact="deriv",
+        is_active=True,
+        is_tradable=True,
+    ).order_by("symbol")
+    if symbol:
+        return list(eligible.filter(symbol=symbol).values_list("symbol", flat=True))
+    return list(eligible.values_list("symbol", flat=True))
 
 
 
@@ -136,10 +139,27 @@ def _emit_backfill_event(
 
 def _backfill_timeframe_progress(scope, symbol, timeframe, payload):
     """Persist every broker timeframe boundary for live operator visibility."""
+    from django.db import transaction
     from .models import CandleBackfillRun
 
     task_id = CandleBackfillRun.objects.filter(scope=scope).values_list("task_id", flat=True).first() or ""
     failed = isinstance(payload, dict) and payload.get("status") == "failed"
+    with transaction.atomic():
+        run = CandleBackfillRun.objects.select_for_update().filter(scope=scope).first()
+        if run:
+            result = dict(run.result or {})
+            completed = int(result.get("work_completed", 0) or 0) + 1
+            total = int(result.get("work_total", 0) or 0)
+            result["work_completed"] = completed
+            result["work_percent"] = round((completed / total) * 100, 1) if total else 0
+            result["current_symbol"] = symbol
+            result["current_timeframe"] = timeframe
+            result["current_timeframe_status"] = "failed" if failed else "completed"
+            run.result = result
+            run.current_symbol = symbol
+            run.current_timeframe = timeframe
+            run.last_heartbeat_at = timezone.now()
+            run.save(update_fields=["result", "current_symbol", "current_timeframe", "last_heartbeat_at"])
     _emit_backfill_event(
         scope,
         level="error" if failed else "info",
@@ -167,10 +187,27 @@ def _symbol_backfill_failed(payload):
 
 
 def _backfill_symbols(symbols, count, *, scope=None):
-    from .historical import fetch_and_store_all_timeframes
+    from .historical import TIMEFRAME_GRANULARITY, fetch_and_store_all_timeframes
 
     results = {}
     total = len(symbols)
+    timeframes_per_symbol = len(TIMEFRAME_GRANULARITY) + 1
+    work_total = total * timeframes_per_symbol
+    if scope:
+        _mark_backfill_run(
+            scope,
+            result={
+                "symbols_total": total,
+                "symbols_completed": 0,
+                "symbols_succeeded": 0,
+                "symbols_failed": 0,
+                "percent": 0,
+                "work_total": work_total,
+                "work_completed": 0,
+                "work_percent": 0,
+                "results": {},
+            },
+        )
     for index, value in enumerate(symbols, start=1):
         if scope:
             from .models import CandleBackfillRun
@@ -203,12 +240,16 @@ def _backfill_symbols(symbols, count, *, scope=None):
             results[value] = {"status": "failed", "error": str(exc)}
 
         failed = [name for name, payload in results.items() if _symbol_backfill_failed(payload)]
+        work_completed = min(work_total, index * timeframes_per_symbol)
         progress = {
             "symbols_total": total,
             "symbols_completed": index,
             "symbols_succeeded": index - len(failed),
             "symbols_failed": len(failed),
             "percent": round((index / total) * 100, 1) if total else 100.0,
+            "work_total": work_total,
+            "work_completed": work_completed,
+            "work_percent": round((work_completed / work_total) * 100, 1) if work_total else 0,
             "results": results,
         }
         if scope:
@@ -235,6 +276,7 @@ def _backfill_symbols(symbols, count, *, scope=None):
             )
 
     failed = [name for name, payload in results.items() if _symbol_backfill_failed(payload)]
+    work_completed = min(work_total, len(results) * timeframes_per_symbol)
     return {
         "symbols": total,
         "symbols_total": total,
@@ -242,6 +284,9 @@ def _backfill_symbols(symbols, count, *, scope=None):
         "symbols_succeeded": total - len(failed),
         "symbols_failed": len(failed),
         "percent": round((len(results) / total) * 100, 1) if total else 100.0,
+        "work_total": work_total,
+        "work_completed": work_completed,
+        "work_percent": round((work_completed / work_total) * 100, 1) if work_total else 0,
         "results": results,
     }
 
@@ -483,8 +528,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 CandleBackfillEvent.objects.create(run=run, level="error", event_type="failed", message=run.error, task_id=old_task_id, payload={"recovery_attempts": recovery_attempts})
                 return {"recovered": [], "failed": run_id}
             run.task_id = ""
-            run.requested_at = now
-            run.dispatch_at = now
+            run.dispatch_at = None
             prior_result["dispatch_recovery_attempts"] = recovery_attempts + 1
             run.result = prior_result
             run.started_at = None
@@ -492,7 +536,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             run.last_heartbeat_at = None
             run.completed_at = None
             run.error = "Worker delivery was not confirmed within the recovery window; the job is being re-published automatically."
-            run.save(update_fields=["task_id", "requested_at", "dispatch_at", "started_at", "accepted_at", "last_heartbeat_at", "completed_at", "error", "result"])
+            run.save(update_fields=["task_id", "dispatch_at", "started_at", "accepted_at", "last_heartbeat_at", "completed_at", "error", "result"])
             CandleBackfillEvent.objects.create(run=run, level="notice", event_type="recovered", message=run.error, task_id=old_task_id, payload={"old_task_id": old_task_id})
 
         if old_task_id:

@@ -20,6 +20,18 @@ class CandleBackfillReliabilityTests(TestCase):
             is_tradable=True,
         )
 
+    def test_active_symbol_scope_is_deriv_only(self):
+        MarketSymbol.objects.create(
+            symbol="OTHER_100",
+            display_name="Other Broker 100",
+            market="Volatility Indices",
+            broker="other",
+            is_active=True,
+            is_tradable=True,
+        )
+        from .tasks import _active_symbols
+        self.assertEqual(_active_symbols(), ["R_100"])
+
     def test_recovery_runs_on_general_worker_queue(self):
         self.assertEqual(
             settings.CELERY_TASK_ROUTES[
@@ -94,10 +106,24 @@ class CandleBackfillReliabilityTests(TestCase):
     @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
     @patch("apps.market_data.historical.fetch_and_store_all_timeframes")
     def test_initial_backfill_marks_success_after_real_ingestion_call(self, fetch):
-        fetch.return_value = {
-            "symbol": "R_100",
-            "timeframes": {"1m": {"source": "deriv_candles"}},
-        }
+        def ingest(symbol, count, request_interval, progress_callback):
+            payload = {
+                "symbol": symbol,
+                "timeframes": {},
+            }
+            for timeframe in (
+                "1m", "2m", "5m", "10m", "15m", "30m",
+                "1h", "2h", "4h", "8h", "1d",
+            ):
+                value = {"source": "deriv_candles"}
+                payload["timeframes"][timeframe] = value
+                progress_callback(timeframe, value)
+            tick_value = {"received": 5000, "valid": 5000}
+            payload["timeframes"]["tick-derived"] = tick_value
+            progress_callback("tick-derived", tick_value)
+            return payload
+
+        fetch.side_effect = ingest
         run = CandleBackfillRun.objects.create(
             scope="initial",
             status="running",
@@ -113,6 +139,9 @@ class CandleBackfillReliabilityTests(TestCase):
         run.refresh_from_db()
         self.assertEqual(run.status, "completed")
         self.assertEqual(run.result["symbols_completed"], 1)
+        self.assertEqual(run.result["work_completed"], 12)
+        self.assertEqual(run.result["work_total"], 12)
+        self.assertEqual(run.result["work_percent"], 100.0)
         fetch.assert_called_once()
         self.assertGreater(CandleBackfillEvent.objects.filter(run=run).count(), 0)
         self.assertIsNotNone(run.last_heartbeat_at)

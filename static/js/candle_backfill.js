@@ -43,7 +43,36 @@
   };
 
   const renderRun = (run) => {
-    if (!run) return;
+    if (!run) {
+      text("[data-status]", "Not started");
+      text("[data-status-large]", "Not started");
+      text("[data-status-sub]", "No initial backfill run exists");
+      text("[data-duration]", "—");
+      text("[data-requested]", "—");
+      text("[data-started]", "—");
+      text("[data-source]", "—");
+      text("[data-worker-state]", "NOT STARTED");
+      text("[data-heartbeat]", "Heartbeat —");
+      text("[data-progress-count]", "— / —");
+      text("[data-progress-percent]", "—");
+      text("[data-work-progress]", "No worker work has been confirmed");
+      text("[data-current-operation]", "Start the backfill to begin broker ingestion");
+      const bar = $("[data-progress-bar]");
+      if (bar) bar.style.width = "0%";
+      const live = $("[data-live]");
+      if (live) live.hidden = true;
+      renderNotices([]);
+      if (body) {
+        body.replaceChildren();
+        const empty = document.createElement("div");
+        empty.className = "rb-log-empty";
+        empty.textContent = "No initial run exists. Start the backfill above to create durable dispatch and worker log events.";
+        body.appendChild(empty);
+      }
+      lastEventId = 0;
+      text("[data-log-count]", "0 lines");
+      return;
+    }
     const state = run.status || "running";
     const pill = $("[data-status]");
     if (pill) {
@@ -67,10 +96,14 @@
     const progress = run.progress || {};
     const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
     const hasTotal = Number.isFinite(Number(progress.total)) && Number(progress.total) > 0;
+    const hasWorkTotal = Number.isFinite(Number(progress.work_total)) && Number(progress.work_total) > 0;
     text("[data-progress-count]", hasTotal ? (progress.completed || 0) + " / " + progress.total : "— / —");
-    text("[data-progress-percent]", hasTotal ? percent + "%" : "—");
+    text("[data-progress-percent]", hasWorkTotal ? percent + "%" : "—");
+    text("[data-work-progress]", hasWorkTotal
+      ? (progress.work_completed || 0) + " / " + progress.work_total + " broker series"
+      : "No worker work has been confirmed");
     const bar = $("[data-progress-bar]");
-    if (bar) bar.style.width = hasTotal ? percent + "%" : "0%";
+    if (bar) bar.style.width = hasWorkTotal ? percent + "%" : "0%";
     const current = [run.current_symbol, run.current_timeframe].filter(Boolean).join(" · ");
     text("[data-current-operation]", current || (run.started_at ? "Processing broker history" : "Waiting for worker"));
     renderNotices(run.notices || []);
@@ -149,11 +182,15 @@
       if (data.events_last_id) lastEventId = Number(data.events_last_id) || lastEventId;
     } catch (error) {
       const notices = $("[data-notices]");
-      if (notices && !notices.children.length) {
-        const row = document.createElement("div");
-        row.className = "rb-notice error";
-        row.textContent = "Live telemetry connection failed. The durable run state has not been changed.";
-        notices.appendChild(row);
+      if (notices) {
+        let row = notices.querySelector("[data-telemetry-error]");
+        if (!row) {
+          row = document.createElement("div");
+          row.className = "rb-notice error";
+          row.dataset.telemetryError = "true";
+          notices.appendChild(row);
+        }
+        row.textContent = "Live telemetry request failed. The page is still showing the last server-rendered durable state; no run state was changed by this browser error.";
       }
     } finally {
       polling = false;
