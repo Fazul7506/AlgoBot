@@ -12,6 +12,30 @@
 @media(prefers-reduced-motion:reduce){.app-sidebar{transition:none}.mobile-menu-button{transition:none}}
 
 
+/* Canonical desktop sidebar-toggle geometry.
+ *
+ * enterprise_templates.css contains a legacy <=980px hide/absolute rule.
+ * The current authenticated shell treats 901px+ as desktop, so that legacy
+ * rule must not remove the primary navigation control from the header.
+ * Keep the existing data-sidebar-toggle button; only restore its desktop
+ * visibility and normal header positioning. The collapsed-state rule below
+ * intentionally overrides this geometry and overlays the favicon.
+ */
+@media (min-width: 901px) {
+  .app-sidebar .sidebar-header > .sidebar-toggle {
+    position: relative;
+    inset: auto;
+    top: auto;
+    right: auto;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    display: grid !important;
+    place-items: center;
+    margin: 0;
+  }
+}
+
 /* Collapsed desktop sidebar: keep the AlgoBot favicon as the visual trail and
  * reveal the expand control on hover/focus, matching the compact interaction
  * pattern used by modern chat workspaces. The control remains the same
