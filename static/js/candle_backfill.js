@@ -1,1 +1,199 @@
-(()=>{const p=document.querySelector('[data-backfill-page]');if(!p)return;const ep=location.pathname+'?format=json',$=s=>p.querySelector(s),t=(s,v)=>{const e=$(s);if(e)e.textContent=v??'—'},f=v=>v?new Date(v).toLocaleString():'—';const render=(r,research)=>{if(!r)return;if(research){t('[data-research-status]',r.status_label||r.status);t('[data-research-state]',r.status);t('[data-research-count]',r.count);t('[data-research-started]',f(r.started_at));t('[data-research-completed]',f(r.completed_at));t('[data-research-celery-state]',r.celery_state);t('[data-research-task]',r.task_id);const e=$('[data-research-error]');if(e){e.textContent=r.error||'';e.hidden=!r.error}return}const s=$('[data-status]');if(s){s.textContent=r.status_label||r.status;s.dataset.statusState=r.status}t('[data-state]',r.status);t('[data-celery-state]',r.celery_state);t('[data-requested]',f(r.requested_at));t('[data-started]',f(r.started_at));t('[data-completed]',f(r.completed_at));t('[data-task]',r.task_id);const x=r.progress||{},n=Math.min(100,Math.max(0,Number(x.percent)||0));t('[data-progress-label]',n+'%');t('[data-progress-count]',(x.completed||0)+' / '+(x.total||0)+' symbols');t('[data-progress-failed]',x.failed?(x.failed+' failed'):'');const b=$('[data-progress-bar]');if(b)b.style.width=n+'%';const e=$('[data-error]');if(e){e.textContent=r.error||'';e.hidden=!r.error}t('[data-run-message]',r.status==='completed'?'Backfill completed. Persisted broker history is ready for research consumers.':r.status==='failed'?'Backfill stopped with broker-data errors. Review the error before retrying.':'Worker state is live and updates automatically.')};let busy=false;const refresh=async()=>{if(busy)return;busy=true;try{const r=await fetch(ep,{credentials:'same-origin',cache:'no-store',headers:{'X-Requested-With':'XMLHttpRequest'}});if(!r.ok)throw 0;const d=await r.json();render(d.initial,false);render(d.research,true);t('[data-last-refresh]',new Date().toLocaleTimeString())}catch(e){}finally{busy=false}};refresh();setInterval(refresh,3000)})();
+(() => {
+  const page = document.querySelector("[data-backfill-page]");
+  if (!page) return;
+
+  const $ = (selector) => page.querySelector(selector);
+  const body = $("[data-log-body]");
+  let lastEventId = 0;
+  let polling = false;
+  let tail = true;
+  let query = "";
+  let searchTimer = null;
+
+  const text = (selector, value) => {
+    const node = $(selector);
+    if (node) node.textContent = value == null || value === "" ? "—" : value;
+  };
+
+  const formatDate = (value) => value ? new Date(value).toLocaleString() : "—";
+
+  const formatDuration = (seconds) => {
+    const total = Math.max(0, Number(seconds) || 0);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    return h ? h + "h " + m + "m " + s + "s" : m ? m + "m " + s + "s" : s + "s";
+  };
+
+  const renderNotices = (notices) => {
+    const box = $("[data-notices]");
+    if (!box) return;
+    box.replaceChildren();
+    (notices || []).forEach((notice) => {
+      const row = document.createElement("div");
+      row.className = "rb-notice " + (notice.level || "");
+      const icon = document.createElement("span");
+      icon.className = "material-symbols-rounded";
+      icon.textContent = notice.level === "error" ? "error" : "info";
+      const message = document.createElement("span");
+      message.textContent = notice.message || "";
+      row.append(icon, message);
+      box.appendChild(row);
+    });
+  };
+
+  const renderRun = (run) => {
+    if (!run) return;
+    const state = run.status || "running";
+    const pill = $("[data-status]");
+    if (pill) {
+      pill.textContent = run.status_label || state;
+      pill.dataset.state = state;
+    }
+    text("[data-status-large]", run.status_label || state);
+    text("[data-status-sub]",
+      state === "completed" ? "Backfill is live and persisted"
+      : state === "failed" ? "Worker stopped with an error"
+      : run.started_at ? "Worker is processing broker history" : "Waiting for worker confirmation"
+    );
+    text("[data-duration]", formatDuration(run.duration_seconds));
+    text("[data-requested]", formatDate(run.requested_at));
+    text("[data-started]", formatDate(run.started_at));
+    text("[data-source]", run.worker_hostname || "market_data queue");
+    text("[data-worker-state]", run.worker_state || run.celery_state || "DISPATCHING");
+    text("[data-heartbeat]", run.last_heartbeat_at ? "Heartbeat " + formatDate(run.last_heartbeat_at) : "Heartbeat —");
+    const progress = run.progress || {};
+    const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
+    text("[data-progress-count]", (progress.completed || 0) + " / " + (progress.total || 0));
+    text("[data-progress-percent]", percent + "%");
+    const bar = $("[data-progress-bar]");
+    if (bar) bar.style.width = percent + "%";
+    const current = [run.current_symbol, run.current_timeframe].filter(Boolean).join(" · ");
+    text("[data-current-operation]", current || (run.started_at ? "Processing broker history" : "Waiting for worker"));
+    renderNotices(run.notices || []);
+    const live = $("[data-live]");
+    if (live) live.hidden = state !== "running";
+  };
+
+  const appendEvent = (event) => {
+    const row = document.createElement("div");
+    row.className = "rb-log-line";
+    const time = document.createElement("span");
+    time.className = "rb-log-time";
+    time.textContent = new Date(event.timestamp).toLocaleTimeString();
+    const level = document.createElement("span");
+    level.className = "rb-log-level " + (event.level || "");
+    level.textContent = event.level || "info";
+    const message = document.createElement("span");
+    message.className = "rb-log-message";
+    message.textContent = event.message || "";
+    if (event.symbol || event.timeframe) {
+      const meta = document.createElement("span");
+      meta.className = "rb-log-meta";
+      meta.textContent = [event.symbol, event.timeframe].filter(Boolean).join(" · ");
+      message.appendChild(meta);
+    }
+    row.append(time, level, message);
+    body.appendChild(row);
+  };
+
+  const renderEvents = (events, replace) => {
+    if (!body) return;
+    if (replace) {
+      body.replaceChildren();
+      lastEventId = 0;
+    }
+    (events || []).forEach(appendEvent);
+    text("[data-log-count]", body.querySelectorAll(".rb-log-line").length + " lines");
+    if (tail) body.scrollTop = body.scrollHeight;
+  };
+
+  const refresh = async () => {
+    if (polling) return;
+    polling = true;
+    try {
+      const params = new URLSearchParams({
+        format: "json",
+        scope: "initial",
+        after: String(lastEventId),
+        limit: "200",
+      });
+      if (query) params.set("q", query);
+      const response = await fetch(location.pathname + "?" + params.toString(), {
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: {"X-Requested-With": "XMLHttpRequest", "Cache-Control": "no-cache"},
+      });
+      if (!response.ok) throw new Error("status " + response.status);
+      const data = await response.json();
+      renderRun(data.initial);
+      if (query && lastEventId === 0) {
+        renderEvents(data.events || [], true);
+      } else {
+        renderEvents(data.events || [], false);
+      }
+      if (data.events_last_id) lastEventId = Number(data.events_last_id) || lastEventId;
+    } catch (error) {
+      const notices = $("[data-notices]");
+      if (notices && !notices.children.length) {
+        const row = document.createElement("div");
+        row.className = "rb-notice error";
+        row.textContent = "Live telemetry connection failed. The durable run state has not been changed.";
+        notices.appendChild(row);
+      }
+    } finally {
+      polling = false;
+    }
+  };
+
+  const resetSearch = () => {
+    lastEventId = 0;
+    body.replaceChildren();
+    refresh();
+  };
+
+  const search = $("[data-log-search]");
+  if (search) {
+    search.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        query = search.value.trim();
+        resetSearch();
+      }, 250);
+    });
+  }
+
+  const tailButton = $("[data-tail]");
+  if (tailButton) {
+    tailButton.addEventListener("click", () => {
+      tail = !tail;
+      tailButton.classList.toggle("rb-tail-active", tail);
+      if (tail) body.scrollTop = body.scrollHeight;
+    });
+  }
+
+  const expand = $("[data-expand]");
+  if (expand) {
+    expand.addEventListener("click", () => {
+      const panel = $("[data-log-panel]");
+      panel.classList.toggle("is-fullscreen");
+      const icon = expand.querySelector(".material-symbols-rounded");
+      if (icon) icon.textContent = panel.classList.contains("is-fullscreen") ? "close_fullscreen" : "open_in_full";
+    });
+  }
+
+  const copy = $("[data-copy]");
+  if (copy) {
+    copy.addEventListener("click", async () => {
+      const lines = [...body.querySelectorAll(".rb-log-line")].map((line) => line.innerText);
+      try {
+        await navigator.clipboard.writeText(lines.join("\n"));
+        copy.title = "Copied";
+        setTimeout(() => { copy.title = "Copy visible logs"; }, 1200);
+      } catch (_) {}
+    });
+  }
+
+  refresh();
+  window.setInterval(refresh, 1500);
+})();
