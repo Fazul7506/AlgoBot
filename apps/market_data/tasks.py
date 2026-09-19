@@ -443,27 +443,38 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
 def reconcile_candle_backfill_runs(max_age_seconds=300):
     """Recover stalled broker-data jobs without exposing a queue lifecycle state."""
     from django.db import close_old_connections, transaction
-    from .models import CandleBackfillRun
+    from django.db.models import Q
+    from .models import CandleBackfillEvent, CandleBackfillRun
 
     close_old_connections()
-    running_cutoff = timezone.now() - BACKFILL_RUNNING_STALE_AFTER
+    now = timezone.now()
+    running_cutoff = now - BACKFILL_RUNNING_STALE_AFTER
+    dispatch_cutoff = now - BACKFILL_DISPATCH_STALE_AFTER
     recovered = []
     try:
         with transaction.atomic():
             run = (
                 CandleBackfillRun.objects.select_for_update()
-                .filter(scope="initial", status="running", started_at__lt=running_cutoff)
+                .filter(scope="initial", status="running")
+                .filter(Q(started_at__lt=running_cutoff) | Q(started_at__isnull=True, requested_at__lt=dispatch_cutoff))
                 .first()
             )
             if not run:
                 return {"recovered": []}
-            run_id, count, symbol, old_task_id = run.pk, int(run.count or 5000), run.symbol or None, run.task_id
+            run_id = run.pk
+            count = int(run.count or 5000)
+            symbol = run.symbol or None
+            old_task_id = run.task_id
             run.task_id = ""
-            run.requested_at = timezone.now()
-            run.started_at = timezone.now()
+            run.requested_at = now
+            run.dispatch_at = now
+            run.started_at = None
+            run.accepted_at = None
+            run.last_heartbeat_at = None
             run.completed_at = None
-            run.error = "Previous worker execution exceeded the recovery window; the job is being re-published automatically."
-            run.save(update_fields=["task_id", "requested_at", "started_at", "completed_at", "error"])
+            run.error = "Worker delivery was not confirmed within the recovery window; the job is being re-published automatically."
+            run.save(update_fields=["task_id", "requested_at", "dispatch_at", "started_at", "accepted_at", "last_heartbeat_at", "completed_at", "error"])
+            CandleBackfillEvent.objects.create(run=run, level="notice", event_type="recovered", message=run.error, task_id=old_task_id, payload={"old_task_id": old_task_id})
 
         if old_task_id:
             try:
@@ -474,13 +485,14 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 logger.warning("Unable to revoke stale candle backfill task", extra={"task_id": old_task_id})
 
         try:
-            task = run_initial_candle_backfill.delay(run_id, count=count, symbol=symbol)
+            task = run_initial_candle_backfill.apply_async(args=(run_id,), kwargs={"count": count, "symbol": symbol}, queue="market_data")
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
                 if current.status == "running":
                     current.task_id = task.id
+                    current.dispatch_at = timezone.now()
                     current.error = ""
-                    current.save(update_fields=["task_id", "error"])
+                    current.save(update_fields=["task_id", "dispatch_at", "error"])
                     recovered.append({"scope": "initial", "run_id": run_id, "task_id": task.id})
         except Exception as exc:
             with transaction.atomic():
@@ -490,6 +502,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     current.error = f"Automatic Celery retry failed: {exc}"
                     current.completed_at = timezone.now()
                     current.save(update_fields=["status", "error", "completed_at"])
+                    CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": "market_data"})
             logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
         return {"recovered": recovered}
     finally:
