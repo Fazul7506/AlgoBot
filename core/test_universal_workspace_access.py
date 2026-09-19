@@ -85,7 +85,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn(".app-shell {\n  display: block !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow8")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock9")
 
 
     def test_sidebar_visual_shell_is_fixed_and_brand_spacing_is_stable(self):
@@ -109,7 +109,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover5")
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow8")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock9")
         self.assertContains(response, 'href="/static/icons/favicon.ico"')
  
     def test_runtime_sidebar_layer_is_loaded_after_other_presentation_layers(self):
@@ -121,7 +121,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             html.index("card_alignment.css"),
             html.index("platform_polish.css"),
             html.index("control_polish.css"),
-            html.index("runtime_recovery.css?v=20260919-shellflow8"),
+            html.index("runtime_recovery.css?v=20260919-shelldock9"),
         ]
         self.assertEqual(positions, sorted(positions))
 
@@ -146,8 +146,12 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("display: none !important;", css)
         self.assertIn("bindSidebarScrollState(sidebar, nav)", js)
         self.assertIn("scrollHost.addEventListener('scroll',recordScroll", js)
+        self.assertIn("#app-sidebar.app-sidebar > .sidebar-header", css)
+        self.assertIn("#app-sidebar.app-sidebar > .sidebar-user", css)
+        self.assertIn("position: absolute !important;", css)
+        self.assertIn("touch-action: pan-y !important;", css)
 
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow8")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock9")
         self.assertContains(response, "base_shell.js?v=20260919-sidebar7")
