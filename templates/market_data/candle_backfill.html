@@ -8,26 +8,26 @@
     <div class="rb-breadcrumb"><span class="material-symbols-rounded">database</span><span>Candle Backfill</span><span>›</span><strong>Initial warm-up</strong></div>
     <div class="rb-title-row">
       <div><h1>Historical Candle Backfill</h1><p>Deriv-authoritative OHLC ingestion · dedicated <code>market_data</code> worker</p></div>
-      <div class="rb-title-status"><span class="rb-pill" data-status>Running</span><span class="rb-live" data-live><i></i>Live</span></div>
+      <div class="rb-title-status"><span class="rb-pill" data-status>Loading</span><span class="rb-live" data-live hidden><i></i>Live</span></div>
     </div>
   </header>
 
   <section class="rb-run-summary">
-    <div class="rb-summary-item rb-summary-status"><span>STATUS</span><strong data-status-large>Running</strong><em data-status-sub>Waiting for worker confirmation</em></div>
-    <div class="rb-summary-item"><span>DURATION</span><strong data-duration>0s</strong></div>
+    <div class="rb-summary-item rb-summary-status"><span>STATUS</span><strong data-status-large>Loading live state</strong><em data-status-sub>Reading durable worker telemetry…</em></div>
+    <div class="rb-summary-item"><span>DURATION</span><strong data-duration>—</strong></div>
     <div class="rb-summary-item"><span>REQUESTED</span><strong data-requested>—</strong></div>
     <div class="rb-summary-item"><span>STARTED</span><strong data-started>—</strong></div>
     <div class="rb-summary-item"><span>TRIGGER</span><strong>Manual</strong></div>
-    <div class="rb-summary-item"><span>SOURCE</span><strong data-source>market_data queue</strong></div>
+    <div class="rb-summary-item"><span>SOURCE</span><strong data-source>—</strong></div>
   </section>
 
   <section class="rb-notices" data-notices aria-live="polite"></section>
 
   <section class="rb-progress-card">
-    <div class="rb-card-head"><div><span class="rb-eyebrow">INITIAL WARM-UP</span><h2>5,000 candles per active tradable symbol</h2></div><div class="rb-worker"><span data-worker-state>DISPATCHING</span><small data-heartbeat>Heartbeat —</small></div></div>
-    <div class="rb-progress-label"><span><b data-progress-count>0 / 0</b> symbols</span><strong data-progress-percent>0%</strong></div>
+    <div class="rb-card-head"><div><span class="rb-eyebrow">INITIAL WARM-UP</span><h2>5,000 candles per active tradable symbol</h2></div><div class="rb-worker"><span data-worker-state>CONNECTING</span><small data-heartbeat>Heartbeat —</small></div></div>
+    <div class="rb-progress-label"><span><b data-progress-count>— / —</b> symbols</span><strong data-progress-percent>—</strong></div>
     <div class="rb-progress-track"><span data-progress-bar></span></div>
-    <div class="rb-current"><span class="material-symbols-rounded">sync</span><span>Current broker operation</span><strong data-current-operation>Waiting for worker</strong></div>
+    <div class="rb-current"><span class="material-symbols-rounded">sync</span><span>Current broker operation</span><strong data-current-operation>Reading durable telemetry…</strong></div>
   </section>
 
   <section class="rb-log-panel" data-log-panel>
@@ -39,7 +39,7 @@
     </div>
     <div class="rb-search"><span class="material-symbols-rounded">search</span><input data-log-search type="search" placeholder="Search logs" autocomplete="off"></div>
     <div class="rb-log-head"><span>Operation logs</span><span data-log-count>0 lines</span></div>
-    <div class="rb-log-body" data-log-body aria-live="polite"></div>
+    <div class="rb-log-body" data-log-body aria-live="polite"><div class="rb-log-empty">Waiting for durable operator events…</div></div>
   </section>
 
   <section class="rb-details-grid">
@@ -49,5 +49,5 @@
   </section>
 </section>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20260919-renderclone2">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20260919-renderclone2" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20260919-renderclone3">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20260919-renderclone3" defer></script>{% endblock %}

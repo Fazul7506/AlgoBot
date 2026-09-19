@@ -29,22 +29,67 @@ def _celery_state(run):
     return "DISPATCHING"
 
 
+BACKFILL_LIVE_HEARTBEAT_SECONDS = 90
+BACKFILL_STALE_HEARTBEAT_SECONDS = 120
+
+
 def _run_payload(run):
     if not run:
         return None
+    now = timezone.now()
     result = run.result or {}
-    end = run.completed_at or timezone.now()
-    duration_seconds = max(0, int((end - run.requested_at).total_seconds())) if run.requested_at else 0
-    status_label = {"completed": "Completed", "failed": "Failed", "running": "Running"}.get(run.status, run.get_status_display())
+    start = run.started_at
+    end = run.completed_at or now
+    # Duration is execution time, not queue/request age. A task that has not
+    # been accepted by a worker has no truthful execution duration yet.
+    duration_seconds = max(0, int((end - start).total_seconds())) if start else 0
+    status_label = {
+        "completed": "Completed",
+        "failed": "Failed",
+        "running": "Running",
+    }.get(run.status, run.get_status_display())
+    heartbeat_age = None
+    if run.last_heartbeat_at:
+        heartbeat_age = max(0, int((now - run.last_heartbeat_at).total_seconds()))
+    live = bool(
+        run.status == "running"
+        and run.started_at
+        and run.last_heartbeat_at
+        and heartbeat_age is not None
+        and heartbeat_age <= BACKFILL_LIVE_HEARTBEAT_SECONDS
+    )
+    stale = bool(
+        run.status == "running"
+        and run.started_at
+        and (
+            not run.last_heartbeat_at
+            or (heartbeat_age is not None and heartbeat_age > BACKFILL_STALE_HEARTBEAT_SECONDS)
+        )
+    )
+    if run.status == "completed":
+        worker_state = "COMPLETED"
+    elif run.status == "failed":
+        worker_state = "FAILED"
+    elif not run.started_at:
+        worker_state = "DISPATCHING"
+    elif stale:
+        worker_state = "STALE"
+    else:
+        worker_state = "STARTED"
     notices = []
     if run.status == "running" and not run.started_at:
-        notices.append({"level": "warning", "message": "Worker acceptance has not been confirmed yet. The run remains Running until the market-data worker starts it."})
-    elif run.status == "running" and run.last_heartbeat_at:
-        age = (timezone.now() - run.last_heartbeat_at).total_seconds()
-        if age > 120:
-            notices.append({"level": "warning", "message": f"Worker heartbeat is {int(age)}s old; no new broker progress has been confirmed."})
+        notices.append({
+            "level": "warning",
+            "message": "Worker acceptance has not been confirmed. No execution time or broker progress is reported until the market-data worker actually starts this task.",
+        })
+    elif stale:
+        notices.append({
+            "level": "warning",
+            "message": f"Worker heartbeat is {heartbeat_age if heartbeat_age is not None else 'unknown'}s old; no fresh broker progress has been confirmed.",
+        })
     if run.error:
         notices.append({"level": "error", "message": run.error})
+    event_count = CandleBackfillEvent.objects.filter(run=run).count()
     return {
         "scope": run.scope, "status": run.status, "status_label": status_label,
         "count": run.count, "symbol": run.symbol, "task_id": run.task_id,
@@ -64,8 +109,15 @@ def _run_payload(run):
             "failed": result.get("symbols_failed", 0),
             "percent": result.get("percent", 0),
         },
-        "error": run.error, "celery_state": _celery_state(run),
-        "worker_state": "STARTED" if run.started_at and run.status == "running" else _celery_state(run),
+        "error": run.error,
+        "celery_state": _celery_state(run),
+        "worker_state": worker_state,
+        "live": live,
+        "stale": stale,
+        "heartbeat_age_seconds": heartbeat_age,
+        "event_count": event_count,
+        "log_state": "recorded" if event_count else "empty",
+        "server_time": now.isoformat(),
         "notices": notices,
     }
 

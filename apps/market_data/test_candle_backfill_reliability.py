@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.conf import settings
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -18,6 +19,33 @@ class CandleBackfillReliabilityTests(TestCase):
             is_active=True,
             is_tradable=True,
         )
+
+    def test_recovery_runs_on_general_worker_queue(self):
+        self.assertEqual(
+            settings.CELERY_TASK_ROUTES[
+                "apps.market_data.tasks.reconcile_candle_backfill_runs"
+            ]["queue"],
+            "celery",
+        )
+
+    def test_execution_duration_is_not_request_age(self):
+        requested = timezone.now() - timedelta(hours=2)
+        started = requested + timedelta(hours=1, minutes=30)
+        completed = started + timedelta(minutes=5)
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="completed",
+            started_at=started,
+            completed_at=completed,
+        )
+        CandleBackfillRun.objects.filter(pk=run.pk).update(requested_at=requested)
+        run.refresh_from_db()
+        from .views import _run_payload
+
+        payload = _run_payload(run)
+        self.assertEqual(payload["duration_seconds"], 5 * 60)
+        self.assertFalse(payload["live"])
+        self.assertEqual(payload["worker_state"], "COMPLETED")
 
     def test_status_choices_exclude_queued(self):
         self.assertEqual(
@@ -55,7 +83,7 @@ class CandleBackfillReliabilityTests(TestCase):
             task_id="active-worker-task",
         )
 
-        with patch("apps.market_data.tasks.run_initial_candle_backfill.delay") as delay:
+        with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as delay:
             result = reconcile_candle_backfill_runs(max_age_seconds=300)
 
         run.refresh_from_db()

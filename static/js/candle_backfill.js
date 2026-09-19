@@ -56,23 +56,28 @@
       : state === "failed" ? "Worker stopped with an error"
       : run.started_at ? "Worker is processing broker history" : "Waiting for worker confirmation"
     );
-    text("[data-duration]", formatDuration(run.duration_seconds));
+    // Duration is calculated by the server from confirmed worker timestamps;
+    // never infer it from the phone/browser clock.
+    text("[data-duration]", run.started_at ? formatDuration(run.duration_seconds) : "—");
     text("[data-requested]", formatDate(run.requested_at));
     text("[data-started]", formatDate(run.started_at));
-    text("[data-source]", run.worker_hostname || "market_data queue");
+    text("[data-source]", run.started_at ? "Deriv · market_data worker" : "market_data queue");
     text("[data-worker-state]", run.worker_state || run.celery_state || "DISPATCHING");
     text("[data-heartbeat]", run.last_heartbeat_at ? "Heartbeat " + formatDate(run.last_heartbeat_at) : "Heartbeat —");
     const progress = run.progress || {};
     const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
-    text("[data-progress-count]", (progress.completed || 0) + " / " + (progress.total || 0));
-    text("[data-progress-percent]", percent + "%");
+    const hasTotal = Number.isFinite(Number(progress.total)) && Number(progress.total) > 0;
+    text("[data-progress-count]", hasTotal ? (progress.completed || 0) + " / " + progress.total : "— / —");
+    text("[data-progress-percent]", hasTotal ? percent + "%" : "—");
     const bar = $("[data-progress-bar]");
-    if (bar) bar.style.width = percent + "%";
+    if (bar) bar.style.width = hasTotal ? percent + "%" : "0%";
     const current = [run.current_symbol, run.current_timeframe].filter(Boolean).join(" · ");
     text("[data-current-operation]", current || (run.started_at ? "Processing broker history" : "Waiting for worker"));
     renderNotices(run.notices || []);
     const live = $("[data-live]");
-    if (live) live.hidden = state !== "running";
+    if (live) live.hidden = !run.live;
+    const logEmpty = body && body.querySelector(".rb-log-empty");
+    if (logEmpty && Number(run.event_count || 0) > 0) logEmpty.remove();
   };
 
   const appendEvent = (event) => {
@@ -104,7 +109,16 @@
       lastEventId = 0;
     }
     (events || []).forEach(appendEvent);
-    text("[data-log-count]", body.querySelectorAll(".rb-log-line").length + " lines");
+    const lineCount = body.querySelectorAll(".rb-log-line").length;
+    if (!lineCount && !body.querySelector(".rb-log-empty")) {
+      const empty = document.createElement("div");
+      empty.className = "rb-log-empty";
+      empty.textContent = query
+        ? "No durable operator events match this search."
+        : "No durable operator events have been recorded for this run.";
+      body.appendChild(empty);
+    }
+    text("[data-log-count]", lineCount + " lines");
     if (tail) body.scrollTop = body.scrollHeight;
   };
 
