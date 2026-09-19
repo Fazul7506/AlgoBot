@@ -60,10 +60,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="candlebackfillevent",
-            index=models.Index(fields=["run", "-created_at"], name="market_data_c_run_id_7b7b9c_idx"),
+            index=models.Index(fields=["run", "-created_at"], name="market_data_run_id_76e210_idx"),
         ),
         migrations.AddIndex(
             model_name="candlebackfillevent",
-            index=models.Index(fields=["run", "level", "-created_at"], name="market_data_c_run_id_3b3f8e_idx"),
+            index=models.Index(fields=["run", "level", "-created_at"], name="market_data_run_id_194119_idx"),
         ),
     ]
