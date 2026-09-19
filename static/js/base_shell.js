@@ -48,20 +48,64 @@
   }
 
   function bindSidebarScrollState(sidebar, scrollHost = sidebar.querySelector('nav')) {
-    /* The sidebar is a permanently docked presentation rail. Document/page
-       scrolling must never change its navigation position. Keep this hook
-       intentionally inert so legacy scroll restoration cannot move the rail. */
-    return;
+    if (!scrollHost || scrollHost.dataset.scrollStateBound === 'true') return;
+    scrollHost.dataset.scrollStateBound = 'true';
+
+    const saveKey = SIDEBAR_SCROLL_KEY;
+    let lastKnownTop = Math.max(0, scrollHost.scrollTop || 0);
+
+    const savePosition = () => {
+      const maxScroll = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
+      const top = Math.min(Math.max(0, lastKnownTop), maxScroll);
+      try {
+        sessionStorage.setItem(saveKey, JSON.stringify({
+          top,
+          atBottom: maxScroll > 0 && top >= maxScroll - 4
+        }));
+      } catch (_) {}
+    };
+
+    const restorePosition = () => {
+      let saved = null;
+      try { saved = JSON.parse(sessionStorage.getItem(saveKey) || 'null'); } catch (_) {}
+      if (!saved) return;
+
+      const apply = () => {
+        const maxScroll = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
+        const target = saved.atBottom ? maxScroll : Math.min(Math.max(0, Number(saved.top) || 0), maxScroll);
+        scrollHost.scrollTop = target;
+        lastKnownTop = scrollHost.scrollTop;
+      };
+
+      window.requestAnimationFrame(() => {
+        apply();
+        window.requestAnimationFrame(apply);
+      });
+    };
+
+    const recordScroll = () => {
+      lastKnownTop = Math.max(0, scrollHost.scrollTop || 0);
+      savePosition();
+    };
+
+    scrollHost.addEventListener('scroll', recordScroll, {passive:true});
+    sidebar.querySelectorAll('nav a, .sidebar-new-trade').forEach(link => {
+      link.addEventListener('click', savePosition, {capture:true});
+    });
+    window.addEventListener('pagehide', savePosition);
+    window.addEventListener('beforeunload', savePosition);
+    window.addEventListener('pageshow', restorePosition);
+    restorePosition();
   }
 
   function bindNavigation() {
     const sidebar=$('#app-sidebar'); if(!sidebar||sidebar.dataset.navigationBound==='true')return; sidebar.dataset.navigationBound='true'; const nav=sidebar.querySelector('nav'); const backdrop=$('[data-sidebar-backdrop]');const mobile=$('[data-mobile-menu]');const toggle=$('[data-sidebar-toggle]');const shell=$('.app-shell');const storageKey='algobot.sidebar.collapsed';
-    syncActiveNavigation({anchor:true}); bindSidebarScrollState(sidebar, nav);
+    syncActiveNavigation({anchor:false}); bindSidebarScrollState(sidebar, nav);
     if(window.MutationObserver&&!sidebar.dataset.activeAnchorObserver){sidebar.dataset.activeAnchorObserver='true';const observer=new MutationObserver(()=>syncActiveNavigation({anchor:true}));observer.observe(sidebar,{childList:true,subtree:true});}
     const setMobileOpen=open=>{const next=!!open;sidebar.classList.toggle('is-open',next);if(backdrop)backdrop.hidden=!next;if(mobile){mobile.setAttribute('aria-expanded',String(next));mobile.setAttribute('aria-label',next?'Close navigation':'Open navigation');}document.body.classList.remove('mobile-nav-open');document.documentElement.classList.remove('mobile-nav-open');};
     setMobileOpen(false);
     document.addEventListener('click',event=>{const target=event.target?.closest?.('[data-mobile-menu]');if(target){event.preventDefault();event.stopPropagation();setMobileOpen(!sidebar.classList.contains('is-open'));return;}if(backdrop&&(event.target===backdrop||event.target?.closest?.('[data-sidebar-backdrop]'))){event.preventDefault();setMobileOpen(false);return;}if(sidebar.classList.contains('is-open')&&event.target?.closest?.('#app-sidebar nav a,#app-sidebar .sidebar-new-trade'))setMobileOpen(false);},true);
-    if(toggle){const setCollapsed=collapsed=>{if(window.innerWidth<=900)return;sidebar.classList.toggle('is-collapsed',!!collapsed);shell?.classList.toggle('sidebar-collapsed',!!collapsed);document.body.classList.toggle('sidebar-collapsed',!!collapsed);toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',collapsed?'Expand navigation':'Collapse navigation');toggle.setAttribute('title',collapsed?'Expand navigation':'Collapse navigation');const icon=toggle.querySelector('.material-symbols-rounded');if(icon)icon.textContent=collapsed?'left_panel_open':'left_panel_close';sidebar.querySelectorAll('nav a,.sidebar-new-trade').forEach(link=>{const label=(link.querySelector('span:not(.material-symbols-rounded)')?.textContent||link.getAttribute('aria-label')||'').trim();if(label){link.setAttribute('aria-label',label);link.setAttribute('title',collapsed?label:'');}});try{localStorage.setItem(storageKey,collapsed?'1':'0');}catch(_){} };try{if(window.innerWidth>900&&localStorage.getItem(storageKey)==='1')setCollapsed(true);}catch(_){}toggle.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();setCollapsed(!sidebar.classList.contains('is-collapsed'));syncActiveNavigation({anchor:true});});}
+    if(toggle){const setCollapsed=collapsed=>{if(window.innerWidth<=900)return;sidebar.classList.toggle('is-collapsed',!!collapsed);shell?.classList.toggle('sidebar-collapsed',!!collapsed);document.body.classList.toggle('sidebar-collapsed',!!collapsed);toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',collapsed?'Expand navigation':'Collapse navigation');toggle.setAttribute('title',collapsed?'Expand navigation':'Collapse navigation');const icon=toggle.querySelector('.material-symbols-rounded');if(icon)icon.textContent=collapsed?'left_panel_open':'left_panel_close';sidebar.querySelectorAll('nav a,.sidebar-new-trade').forEach(link=>{const label=(link.querySelector('span:not(.material-symbols-rounded)')?.textContent||link.getAttribute('aria-label')||'').trim();if(label){link.setAttribute('aria-label',label);link.setAttribute('title',collapsed?label:'');}});try{localStorage.setItem(storageKey,collapsed?'1':'0');}catch(_){} };try{if(window.innerWidth>900&&localStorage.getItem(storageKey)==='1')setCollapsed(true);}catch(_){}toggle.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();setCollapsed(!sidebar.classList.contains('is-collapsed'));syncActiveNavigation({anchor:false});});}
     document.addEventListener('keydown',event=>{if(event.key==='Escape')setMobileOpen(false);}); window.addEventListener('resize',()=>{if(window.innerWidth>900)setMobileOpen(false);syncActiveNavigation({anchor:false});});
   }
 
