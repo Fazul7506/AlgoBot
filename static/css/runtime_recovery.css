@@ -1164,3 +1164,125 @@ body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
     width: 50px !important;
   }
 }
+
+
+/* FINAL MAIN-PAGE / SIDEBAR SCROLL CONTRACT — presentation only.
+ *
+ * The right-hand application page remains the document scroll surface.
+ * The sidebar is a separate viewport-locked rail. Its header and account
+ * switcher are independently fixed, while ONLY its nav owns sidebar scrolling.
+ *
+ * Do not convert the right-hand page into a sidebar scroll container here:
+ * existing page/document scrolling remains intact. This block only removes
+ * containing-block/transform conditions that could make fixed sidebar zones
+ * track document scrolling.
+ */
+#app-sidebar.app-sidebar {
+  position: fixed !important;
+  top: 0 !important;
+  right: auto !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  transform: none !important;
+  translate: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  perspective: none !important;
+  will-change: auto !important;
+  contain: none !important;
+  content-visibility: visible !important;
+  overflow: hidden !important;
+  overflow-anchor: none !important;
+  overscroll-behavior: none !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-header,
+#app-sidebar.app-sidebar > .sidebar-user {
+  position: fixed !important;
+  transform: none !important;
+  translate: none !important;
+  will-change: auto !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  perspective: none !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-header {
+  top: 10px !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 10px !important;
+  width: 240px !important;
+}
+
+#app-sidebar.app-sidebar > nav {
+  position: fixed !important;
+  top: 64px !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 10px !important;
+  width: 240px !important;
+  height: calc(100dvh - 218px) !important;
+  max-height: calc(100dvh - 218px) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  overflow-anchor: none !important;
+  touch-action: pan-y !important;
+  transform: none !important;
+  translate: none !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-user {
+  top: auto !important;
+  right: auto !important;
+  bottom: 10px !important;
+  left: 10px !important;
+  width: 240px !important;
+  max-width: 240px !important;
+  height: 138px !important;
+  min-height: 120px !important;
+  max-height: 138px !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  z-index: 3003 !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
+body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header {
+  left: 14px !important;
+  width: 50px !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed > nav,
+body.sidebar-collapsed #app-sidebar.app-sidebar > nav {
+  left: 14px !important;
+  width: 50px !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
+body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
+  left: 14px !important;
+  width: 50px !important;
+  max-width: 50px !important;
+}
+
+@media (max-width: 420px) {
+  #app-sidebar.app-sidebar > .sidebar-header,
+  #app-sidebar.app-sidebar > nav,
+  #app-sidebar.app-sidebar > .sidebar-user {
+    left: 10px !important;
+    width: 240px !important;
+  }
+
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
+  #app-sidebar.app-sidebar.is-collapsed > nav,
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > nav,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
+    left: 14px !important;
+    width: 50px !important;
+    max-width: 50px !important;
+  }
+}
