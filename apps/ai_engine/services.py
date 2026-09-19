@@ -6,7 +6,7 @@ from django.utils import timezone
 from .models import AIModel, ModelVersion, Prediction, FeatureVector, TrainingJob, AIRecommendation, MarketRegime, AnomalyEvent
 from .constants import CONFIDENCE_LABELS
 from .candlestick_features import FEATURE_NAMES
-from .training_dataset import current_ai_feedback
+from .training_dataset import current_ai_feedback, current_strategy_signal_features, MODEL_FEATURE_NAMES, AI_FEEDBACK_FEATURE_NAMES, STRATEGY_FEATURE_NAMES
 from .ensemble_predictor import MODEL_FEATURE_NAMES, extract_candlestick_features
 log=logging.getLogger(__name__)
 
@@ -72,15 +72,19 @@ class PredictionService:
         candles=context.get('candles') or []
         before_epoch=candles[-1].get('epoch') if candles else None
         feedback_accuracy, feedback_return, feedback_count=current_ai_feedback(symbol,timeframe,before_epoch)
+        signal_bias, signal_confidence, signal_count=current_strategy_signal_features(symbol,timeframe,before_epoch)
         feats['ai_feedback_accuracy']=feedback_accuracy
         feats['ai_feedback_mean_return']=feedback_return
         feats['ai_feedback_sample_count']=float(feedback_count)
+        feats['strategy_signal_bias']=signal_bias
+        feats['strategy_signal_confidence']=signal_confidence
+        feats['strategy_signal_count']=float(signal_count)
         FeatureStoreService().store(symbol,timeframe,feats)
         raw=InferenceService().infer(feats,ModelRegistry().champion(),symbol,timeframe)
         consensus=raw.get('consensus',{})
         consensus_confidence=float(consensus.get('confidence',0.0) or 0.0)*100.0
         cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score'])
-        model_features=list(FEATURE_NAMES)+['ai_feedback_accuracy','ai_feedback_mean_return','ai_feedback_sample_count']
+        model_features=list(MODEL_FEATURE_NAMES)
         return Prediction.objects.create(
             symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],
             confidence=round(consensus_confidence,2),expected_return=raw['expected_return'],risk_score=raw['risk_score'],
@@ -90,6 +94,7 @@ class PredictionService:
                 'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,
                 'price_action':{k:feats.get(k) for k in FEATURE_NAMES},
                 'ai_feedback':{'accuracy':feedback_accuracy,'mean_return':feedback_return,'sample_count':feedback_count},
+                'strategy_signal':{'bias':signal_bias,'confidence':signal_confidence,'sample_count':signal_count},
                 'reference_price':float(candles[-1].get('close')) if candles and candles[-1].get('close') is not None else None,
             }
         )
