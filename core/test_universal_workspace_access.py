@@ -85,7 +85,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn(".app-shell {\n  display: block !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock14")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock15")
 
 
     def test_sidebar_visual_shell_is_fixed_and_brand_spacing_is_stable(self):
@@ -109,7 +109,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover5")
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock14")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock15")
         self.assertContains(response, 'href="/static/icons/favicon.ico"')
  
     def test_runtime_sidebar_layer_is_loaded_after_other_presentation_layers(self):
@@ -121,7 +121,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             html.index("card_alignment.css"),
             html.index("platform_polish.css"),
             html.index("control_polish.css"),
-            html.index("runtime_recovery.css?v=20260919-shelldock14"),
+            html.index("runtime_recovery.css?v=20260919-shelldock15"),
         ]
         self.assertEqual(positions, sorted(positions))
 
@@ -166,7 +166,7 @@ class UniversalWorkspaceAccessTests(TestCase):
 
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock14")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock15")
         self.assertContains(response, "base_shell.js?v=20260919-sidebar9")
 
     def test_sidebar_zones_cannot_follow_document_scroll(self):
@@ -189,7 +189,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertNotIn("sidebar.scrollHeight", js)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock14")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock15")
         self.assertContains(response, "base_shell.js?v=20260919-sidebar9")
 
     def test_sidebar_scroll_state_uses_nav_only(self):
@@ -200,6 +200,17 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("sidebar.querySelector('nav')", js)
         self.assertNotIn("sidebar.scrollTop", js)
         self.assertNotIn("sidebar.scrollHeight", js)
+
+    def test_mobile_account_switcher_uses_stable_small_viewport_anchor(self):
+        """Rapid document scrolling must not move the mobile account switcher with browser chrome."""
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("MOBILE ACCOUNT SWITCHER — stable presentation anchor for rapid document scrolling.", css)
+        self.assertIn("@supports (height: 100svh)", css)
+        self.assertIn("#app-sidebar.app-sidebar > .sidebar-user", css)
+        self.assertIn("top: calc(100svh - 148px) !important;", css)
+        self.assertIn("bottom: auto !important;", css)
 
     def test_chatgpt_style_sidebar_dock_zones(self):
         css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(encoding="utf-8")
