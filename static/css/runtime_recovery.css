@@ -1067,3 +1067,100 @@ body.sidebar-collapsed #app-sidebar.app-sidebar {
     bottom: 154px !important;
   }
 }
+
+
+/* FINAL VIEWPORT-ANCHOR OVERRIDE — presentation only.
+ * IMPORTANT: the main document/page is the scroll owner. The sidebar is a
+ * separate viewport rail. Header and account dock are independently viewport
+ * anchored so document scrolling cannot pull either one.
+ */
+#app-sidebar.app-sidebar > .sidebar-header {
+  position: fixed !important;
+  top: 10px !important;
+  left: 10px !important;
+  width: 240px !important;
+  height: 54px !important;
+  min-height: 54px !important;
+  max-height: 54px !important;
+  margin: 0 !important;
+  z-index: 3002 !important;
+  transform: none !important;
+  translate: none !important;
+}
+
+#app-sidebar.app-sidebar > nav {
+  position: fixed !important;
+  top: 64px !important;
+  left: 10px !important;
+  width: 240px !important;
+  height: calc(100dvh - 218px) !important;
+  max-height: calc(100dvh - 218px) !important;
+  margin: 0 !important;
+  padding: 0 2px 10px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  z-index: 3001 !important;
+  transform: none !important;
+  translate: none !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-user {
+  position: fixed !important;
+  left: 10px !important;
+  bottom: 10px !important;
+  width: 240px !important;
+  max-width: 240px !important;
+  height: 138px !important;
+  min-height: 120px !important;
+  max-height: 138px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 3003 !important;
+  transform: none !important;
+  translate: none !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
+body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header {
+  left: 14px !important;
+  width: 50px !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed > nav,
+body.sidebar-collapsed #app-sidebar.app-sidebar > nav {
+  left: 14px !important;
+  width: 50px !important;
+}
+
+#app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
+body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
+  left: 14px !important;
+  width: 50px !important;
+  max-width: 50px !important;
+}
+
+@media (max-width: 420px) {
+  #app-sidebar.app-sidebar > .sidebar-header,
+  #app-sidebar.app-sidebar > nav,
+  #app-sidebar.app-sidebar > .sidebar-user {
+    left: 10px !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-header,
+  #app-sidebar.app-sidebar > nav,
+  #app-sidebar.app-sidebar > .sidebar-user {
+    width: 240px !important;
+  }
+
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
+  #app-sidebar.app-sidebar.is-collapsed > nav,
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > nav,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
+    left: 14px !important;
+    width: 50px !important;
+  }
+}
