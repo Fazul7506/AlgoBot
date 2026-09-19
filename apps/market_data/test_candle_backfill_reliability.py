@@ -86,3 +86,23 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertEqual(run.status, "completed")
         self.assertEqual(run.result["symbols_completed"], 1)
         fetch.assert_called_once()
+
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+    @patch("apps.market_data.historical.fetch_and_store_all_timeframes")
+    def test_initial_backfill_fails_when_any_broker_timeframe_fails(self, fetch):
+        fetch.return_value = {
+            "symbol": "R_100",
+            "timeframes": {
+                "1m": {"source": "deriv_candles"},
+                "5m": {"status": "failed", "error": "Deriv timeout"},
+            },
+        }
+        run = CandleBackfillRun.objects.create(scope="initial", status="running", count=5000)
+        result = run_initial_candle_backfill.apply(args=(run.pk,), kwargs={"count": 5000})
+        self.assertEqual(result.state, "FAILURE")
+        run.refresh_from_db()
+        self.assertEqual(run.status, "failed")
+        self.assertEqual(run.result["symbols_failed"], 1)
+        self.assertEqual(run.result["percent"], 100.0)
+        self.assertIn("R_100", run.error)
