@@ -12,7 +12,7 @@
         <p>Deriv-authoritative historical market data · dedicated <code>market_data</code> worker</p>
       </div>
       <div class="rb-title-status">
-        <span class="rb-pill" data-status>{% if run %}{{ run.get_status_display }}{% else %}Not started{% endif %}</span>
+        <span class="rb-pill" data-status>{% if run_payload %}{{ run_payload.status_label }}{% else %}Not started{% endif %}</span>
         <span class="rb-live" data-live {% if not run_payload or not run_payload.live %}hidden{% endif %}><i></i>Live</span>
       </div>
     </div>
@@ -52,12 +52,12 @@
   </header>
 
   <section class="rb-run-summary">
-    <div class="rb-summary-item rb-summary-status"><span>STATUS</span><strong data-status-large>{% if run %}{{ run.get_status_display }}{% else %}Not started{% endif %}</strong><em data-status-sub>{% if run %}{% if run.status == "completed" %}Backfill is persisted{% elif run.status == "failed" %}Worker stopped with an error{% elif run.started_at %}Worker is processing broker history{% else %}Waiting for worker confirmation{% endif %}{% else %}No initial backfill run exists{% endif %}</em></div>
+    <div class="rb-summary-item rb-summary-status"><span>STATUS</span><strong data-status-large>{% if run_payload %}{{ run_payload.status_label }}{% else %}Not started{% endif %}</strong><em data-status-sub>{% if run %}{% if run.status == "completed" %}Backfill is persisted{% elif run.status == "failed" %}Worker stopped with an error{% elif run.started_at %}Worker is processing broker history{% elif run_payload.accepted_at %}Worker received the task; execution has not started yet{% else %}Waiting for worker receipt{% endif %}{% else %}No initial backfill run exists{% endif %}</em></div>
     <div class="rb-summary-item"><span>DURATION</span><strong data-duration>{% if run_payload and run_payload.started_at %}{{ run_payload.duration_seconds }}s{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>REQUESTED</span><strong data-requested>{% if run %}{{ run.requested_at|date:"d/m/Y, H:i:s" }}{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>STARTED</span><strong data-started>{% if run and run.started_at %}{{ run.started_at|date:"d/m/Y, H:i:s" }}{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>TRIGGER</span><strong>Manual</strong></div>
-    <div class="rb-summary-item"><span>SOURCE</span><strong data-source>{% if run and run.started_at %}Deriv · market_data worker{% elif run %}market_data queue{% else %}—{% endif %}</strong></div>
+    <div class="rb-summary-item"><span>SOURCE</span><strong data-source>{% if run_payload and run_payload.accepted_at %}Deriv · market_data worker{% elif run %}market_data queue{% else %}—{% endif %}</strong></div>
   </section>
 
   <section class="rb-notices" data-notices aria-live="polite">
@@ -80,7 +80,7 @@
     </div>
     <div class="rb-progress-track"><span data-progress-bar style="width:{% if run_payload and run_payload.progress.work_total %}{{ run_payload.progress.percent }}%{% else %}0%{% endif %}"></span></div>
     <div class="rb-work-progress"><span data-work-progress>{% if run_payload and run_payload.progress.work_total %}{{ run_payload.progress.work_completed }} / {{ run_payload.progress.work_total }} broker series{% else %}No worker work has been confirmed{% endif %}</span></div>
-    <div class="rb-current"><span class="material-symbols-rounded">sync</span><span>Current broker operation</span><strong data-current-operation>{% if run_payload and run_payload.current_symbol %}{{ run_payload.current_symbol }}{% if run_payload.current_timeframe %} · {{ run_payload.current_timeframe }}{% endif %}{% elif run %}Waiting for worker{% else %}Start the backfill to begin broker ingestion{% endif %}</strong></div>
+    <div class="rb-current"><span class="material-symbols-rounded">sync</span><span>Current broker operation</span><strong data-current-operation>{% if run_payload and run_payload.current_symbol %}{{ run_payload.current_symbol }}{% if run_payload.current_timeframe %} · {{ run_payload.current_timeframe }}{% endif %}{% elif run_payload and run_payload.accepted_at %}Worker received the task{% elif run %}Waiting for worker receipt{% else %}Start the backfill to begin broker ingestion{% endif %}</strong></div>
   </section>
 
   <section class="rb-log-panel" data-log-panel>
@@ -125,5 +125,5 @@
   </section>
 </section>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20260919-renderclone4">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20260919-renderclone5">{% endblock %}
 {% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20260919-renderclone4" defer></script>{% endblock %}
