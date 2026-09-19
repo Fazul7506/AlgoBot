@@ -56,14 +56,9 @@
       : state === "failed" ? "Worker stopped with an error"
       : run.started_at ? "Worker is processing broker history" : "Waiting for worker confirmation"
     );
-    // The API reports execution duration from the real worker start. While a
-    // run is live, advance that duration from the server-confirmed start time.
-    let duration = Number(run.duration_seconds) || 0;
-    if (run.started_at && run.status === "running") {
-      const startedMs = Date.parse(run.started_at);
-      if (Number.isFinite(startedMs)) duration = Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
-    }
-    text("[data-duration]", run.started_at ? formatDuration(duration) : "—");
+    // Duration is calculated by the server from confirmed worker timestamps;
+    // never infer it from the phone/browser clock.
+    text("[data-duration]", run.started_at ? formatDuration(run.duration_seconds) : "—");
     text("[data-requested]", formatDate(run.requested_at));
     text("[data-started]", formatDate(run.started_at));
     text("[data-source]", run.started_at ? "Deriv · market_data worker" : "market_data queue");
