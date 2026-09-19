@@ -36,7 +36,7 @@ class CandleBackfillReliabilityTests(TestCase):
             task_id="lost-worker-task",
         )
 
-        with patch("apps.market_data.tasks.run_initial_candle_backfill.delay") as delay:
+        with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as delay:
             delay.return_value.id = "recovered-task-id"
             result = reconcile_candle_backfill_runs(max_age_seconds=300)
 
