@@ -7,21 +7,26 @@ from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import CandleBackfillRun
+from .models import CandleBackfillEvent, CandleBackfillRun
 
 
 def _celery_state(run):
-    if not run or not run.task_id:
+    if not run:
         return None
     if run.status == "completed":
         return "SUCCESS"
     if run.status == "failed":
         return "FAILURE"
-    try:
-        from deriv_platform.celery import app
-        return app.AsyncResult(run.task_id).state
-    except Exception:
-        return None
+    if run.started_at:
+        return "STARTED"
+    if run.task_id:
+        try:
+            from deriv_platform.celery import app
+            state = app.AsyncResult(run.task_id).state
+            return state if state not in {"PENDING", None} else "DISPATCHING"
+        except Exception:
+            return "DISPATCHING"
+    return "DISPATCHING"
 
 
 def _run_payload(run):
