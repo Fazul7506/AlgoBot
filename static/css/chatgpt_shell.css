@@ -113,3 +113,65 @@
     border-color: var(--line);
   }
 }
+
+
+/* Final visual shell polish — presentation only.
+ * Keep the collapse control in the sidebar header at the screenshot-indicated
+ * right-hand header position, tighten the favicon/brand spacing, and make the
+ * desktop sidebar an immutable viewport rail. Navigation behavior/state remains
+ * owned by base_shell.js.
+ */
+@media (min-width: 901px) {
+  .app-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+    box-sizing: border-box !important;
+    isolation: isolate;
+  }
+
+  .app-sidebar .sidebar-header {
+    flex: 0 0 auto !important;
+    min-height: 48px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .app-sidebar .sidebar-header .brand {
+    gap: 6px !important;
+  }
+
+  .app-sidebar .sidebar-header > .sidebar-toggle {
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    margin: 0 !important;
+    display: grid !important;
+    place-items: center !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    inset: auto !important;
+    z-index: 4 !important;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    height: 48px !important;
+    opacity: 0;
+  }
+
+  .app-sidebar.is-collapsed .sidebar-header:hover > .sidebar-toggle,
+  .app-sidebar.is-collapsed .sidebar-header:focus-within > .sidebar-toggle,
+  .app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:hover,
+  .app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:focus-visible {
+    opacity: 1;
+  }
+}
