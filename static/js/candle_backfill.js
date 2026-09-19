@@ -43,7 +43,36 @@
   };
 
   const renderRun = (run) => {
-    if (!run) return;
+    if (!run) {
+      text("[data-status]", "Not started");
+      text("[data-status-large]", "Not started");
+      text("[data-status-sub]", "No initial backfill run exists");
+      text("[data-duration]", "—");
+      text("[data-requested]", "—");
+      text("[data-started]", "—");
+      text("[data-source]", "—");
+      text("[data-worker-state]", "NOT STARTED");
+      text("[data-heartbeat]", "Heartbeat —");
+      text("[data-progress-count]", "— / —");
+      text("[data-progress-percent]", "—");
+      text("[data-work-progress]", "No worker work has been confirmed");
+      text("[data-current-operation]", "Start the backfill to begin broker ingestion");
+      const bar = $("[data-progress-bar]");
+      if (bar) bar.style.width = "0%";
+      const live = $("[data-live]");
+      if (live) live.hidden = true;
+      renderNotices([]);
+      if (body && !body.querySelector(".rb-log-line")) {
+        body.replaceChildren();
+        const empty = document.createElement("div");
+        empty.className = "rb-log-empty";
+        empty.textContent = "No initial run exists. Start the backfill above to create durable dispatch and worker log events.";
+        body.appendChild(empty);
+      }
+      lastEventId = 0;
+      text("[data-log-count]", "0 lines");
+      return;
+    }
     const state = run.status || "running";
     const pill = $("[data-status]");
     if (pill) {
