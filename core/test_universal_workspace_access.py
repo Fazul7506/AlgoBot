@@ -186,3 +186,11 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("sidebar.querySelector('nav')", js)
         self.assertNotIn("sidebar.scrollTop", js)
         self.assertNotIn("sidebar.scrollHeight", js)
+
+    def test_chatgpt_style_sidebar_dock_zones(self):
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(encoding="utf-8")
+        self.assertIn("CANONICAL CHATGPT-STYLE SIDEBAR DOCK", css)
+        self.assertIn("bottom: 154px !important;", css)
+        self.assertIn("position: absolute !important;", css)
+        self.assertIn("#app-sidebar.app-sidebar > .sidebar-user", css)
+        self.assertIn("transition: width .22s ease !important;", css)
