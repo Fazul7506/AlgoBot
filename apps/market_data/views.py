@@ -163,6 +163,13 @@ def initial_candle_backfill(request):
             run.error = f"Unable to dispatch Celery task: {exc}"
             run.completed_at = timezone.now()
             run.save(update_fields=["status", "error", "completed_at"])
+            CandleBackfillEvent.objects.create(
+                run=run,
+                level="error",
+                event_type="error",
+                message=run.error,
+                payload={"queue": "market_data"},
+            )
         return redirect(reverse("initial_candle_backfill"))
 
     initial = CandleBackfillRun.objects.filter(scope="initial").first()
