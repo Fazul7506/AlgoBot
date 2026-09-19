@@ -309,7 +309,9 @@ def analysis_data(request):
     )
     latest_epoch = int(candles[-1]["epoch"])
     age_seconds = max(0, int(time.time()) - latest_epoch)
-    result["execution_gate"]["data_fresh"] = bool(age_seconds <= max(120, TIMEFRAMES[canonical_timeframe] * 2))
+    result["execution_gate"]["data_fresh"] = bool(
+        result["data_provenance"]["age_seconds"] <= max(120, TIMEFRAMES[canonical_timeframe] * 2)
+    )
     result["execution_gate"]["live_quote_confirmed"] = bool(
         refresh_requested and live_tick and live_tick.get("quote") is not None
     )
