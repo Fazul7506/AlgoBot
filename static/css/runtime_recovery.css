@@ -792,3 +792,91 @@ body.sidebar-collapsed .app-shell {
     margin-left: 78px !important;
   }
 }
+
+
+/* FINAL DOCKED SIDEBAR ZONES — presentation only.
+ * The page/document scroll can never move the sidebar header or account dock.
+ * The rail is the viewport anchor; only the navigation list is scrollable.
+ * This deliberately keeps the existing links, account switcher, logout form,
+ * collapse handler and all broker/trading behavior unchanged.
+ */
+#app-sidebar.app-sidebar {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: auto !important;
+  bottom: 0 !important;
+  overflow: hidden !important;
+  touch-action: none !important;
+  contain: layout paint size !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-header {
+  position: absolute !important;
+  top: 10px !important;
+  left: 10px !important;
+  right: 10px !important;
+  width: auto !important;
+  height: 54px !important;
+  min-height: 54px !important;
+  max-height: 54px !important;
+  margin: 0 !important;
+  z-index: 12 !important;
+}
+
+#app-sidebar.app-sidebar > nav {
+  position: absolute !important;
+  top: 64px !important;
+  left: 10px !important;
+  right: 10px !important;
+  bottom: 116px !important;
+  width: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 2px 10px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  touch-action: pan-y !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-user {
+  position: absolute !important;
+  left: 10px !important;
+  right: 10px !important;
+  bottom: 10px !important;
+  width: auto !important;
+  height: auto !important;
+  max-height: 106px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 12 !important;
+  flex: none !important;
+  overflow: visible !important;
+  transform: none !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-user,
+#app-sidebar.app-sidebar > .sidebar-header,
+#app-sidebar.app-sidebar > nav {
+  transform: none !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-user * {
+  transform: none !important;
+}
+
+/* Never allow a navigation gesture to become a rail/page gesture. */
+#app-sidebar.app-sidebar > .sidebar-header,
+#app-sidebar.app-sidebar > .sidebar-user {
+  touch-action: manipulation !important;
+}
+
+@media (max-width: 420px) {
+  #app-sidebar.app-sidebar > nav {
+    top: 64px !important;
+    bottom: 116px !important;
+  }
+}
