@@ -253,3 +253,38 @@ body.mobile-nav-open,html.mobile-nav-open { overflow-y:auto !important; overflow
     padding-left: 64px !important;
   }
 }
+
+
+/* Absolute desktop navigation rail invariant.
+ * This final layer prevents document/page scrolling from ever moving the
+ * authenticated sidebar; only its internal nav region may scroll.
+ */
+@media (min-width: 901px) {
+  #app-sidebar.app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    right: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+    transform: none !important;
+    contain: layout paint;
+    isolation: isolate;
+  }
+
+  #app-sidebar.app-sidebar > nav {
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #app-sidebar.app-sidebar .sidebar-header,
+  #app-sidebar.app-sidebar .sidebar-user {
+    flex: 0 0 auto !important;
+  }
+}

@@ -75,7 +75,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("display: grid !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover3")
+        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover4")
 
 
     def test_authenticated_shell_uses_vertical_topbar_content_flow(self):
@@ -85,4 +85,29 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn(".app-shell {\n  display: block !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow2")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow3")
+
+
+    def test_sidebar_visual_shell_is_fixed_and_brand_spacing_is_stable(self):
+        """Regression coverage for the fixed desktop rail and header presentation contract."""
+        chat_css = (Path(settings.BASE_DIR) / "static" / "css" / "chatgpt_shell.css").read_text(
+            encoding="utf-8"
+        )
+        runtime_css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(".app-sidebar .sidebar-header .brand", chat_css)
+        self.assertIn("gap: 6px !important;", chat_css)
+        self.assertIn(".app-sidebar .sidebar-header > .sidebar-toggle", chat_css)
+        self.assertIn("visibility: visible !important;", chat_css)
+        self.assertIn("#app-sidebar.app-sidebar", runtime_css)
+        self.assertIn("position: fixed !important;", runtime_css)
+        self.assertIn("overscroll-behavior: none !important;", runtime_css)
+        self.assertIn("#app-sidebar.app-sidebar > nav", runtime_css)
+        self.assertIn("overflow-y: auto !important;", runtime_css)
+
+        response = self.client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover4")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow3")
+        self.assertContains(response, 'href="/static/icons/favicon.ico"')
