@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.views import redirect_to_login
