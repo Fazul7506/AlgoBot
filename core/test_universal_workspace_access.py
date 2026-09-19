@@ -85,7 +85,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn(".app-shell {\n  display: block !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock9")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock10")
 
 
     def test_sidebar_visual_shell_is_fixed_and_brand_spacing_is_stable(self):
@@ -154,4 +154,26 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock9")
-        self.assertContains(response, "base_shell.js?v=20260919-sidebar7")
+        self.assertContains(response, "base_shell.js?v=20260919-sidebar8")
+
+    def test_sidebar_zones_cannot_follow_document_scroll(self):
+        """Header, nav and account dock stay anchored to the fixed viewport rail."""
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(
+            encoding="utf-8"
+        )
+        js = (Path(settings.BASE_DIR) / "static" / "js" / "base_shell.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("FINAL VIEWPORT-DOCK HARDENING", css)
+        self.assertIn("height: 100vh !important;", css)
+        self.assertIn("contain: none !important;", css)
+        self.assertIn("#app-sidebar.app-sidebar > .sidebar-header", css)
+        self.assertIn("#app-sidebar.app-sidebar > nav", css)
+        self.assertIn("#app-sidebar.app-sidebar > .sidebar-user", css)
+        self.assertIn("function bindSidebarScrollState(sidebar, scrollHost = sidebar.querySelector('nav'))", js)
+        self.assertIn("return;", js[js.index("function bindSidebarScrollState"):js.index("function bindNavigation")])
+        self.assertNotIn("host.scrollTop=", js)
+        response = self.client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shelldock10")
+        self.assertContains(response, "base_shell.js?v=20260919-sidebar8")
