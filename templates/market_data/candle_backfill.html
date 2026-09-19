@@ -1,43 +1,53 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Candle Backfill | AlgoBot{% endblock %}
+{% block title %}Candle Backfill · AlgoBot{% endblock %}
 {% block mobile_title %}Candle Backfill{% endblock %}
 {% block content %}
-<section class="backfill-page" data-backfill-page>
-  <header class="backfill-hero">
-    <div>
-      <div class="backfill-kicker"><span class="backfill-live-dot"></span> DATA OPERATIONS · DERIV HISTORY</div>
-      <h1>Historical Candle Backfill</h1>
-      <p>Broker-authoritative OHLC history is fetched from Deriv and persisted to the research database. Worker progress below is live and survives page reloads.</p>
+<section class="rb-page" data-backfill-page>
+  <header class="rb-top">
+    <div class="rb-breadcrumb"><span class="material-symbols-rounded">database</span><span>Candle Backfill</span><span>›</span><strong>Initial warm-up</strong></div>
+    <div class="rb-title-row">
+      <div><h1>Historical Candle Backfill</h1><p>Deriv-authoritative OHLC ingestion · dedicated <code>market_data</code> worker</p></div>
+      <div class="rb-title-status"><span class="rb-pill" data-status>Running</span><span class="rb-live" data-live><i></i>Live</span></div>
     </div>
-    <div class="backfill-hero-meta"><span class="backfill-badge">DERIV</span><span class="backfill-refresh">Auto-refresh <strong data-last-refresh>—</strong></span></div>
   </header>
-  <section class="backfill-grid">
-    <article class="backfill-card backfill-card--primary">
-      <div class="backfill-card-head"><div><span class="backfill-section-label">INITIAL WARM-UP</span><h2>5,000 candles per active tradable symbol</h2></div><span class="backfill-status" data-status data-status-state="{% if run %}{{ run.status }}{% else %}ready{% endif %}">{% if run %}{{ run.get_status_display }}{% else %}Ready{% endif %}</span></div>
-      <div class="backfill-progress"><div class="backfill-progress-top"><span>Symbol progress</span><strong data-progress-label>0%</strong></div><div class="backfill-progress-track"><span data-progress-bar style="width:0%"></span></div><div class="backfill-progress-meta"><span data-progress-count>Waiting to start</span><span data-progress-failed></span></div></div>
-      <dl class="backfill-facts">
-        <div><dt>State</dt><dd data-state>{{ run.status|default:"ready" }}</dd></div><div><dt>Broker task</dt><dd data-celery-state>—</dd></div>
-        <div><dt>Requested</dt><dd data-requested>{% if run and run.requested_at %}{{ run.requested_at|date:"M d, Y · H:i:s" }}{% else %}—{% endif %}</dd></div>
-        <div><dt>Started</dt><dd data-started>—</dd></div><div><dt>Completed</dt><dd data-completed>—</dd></div><div><dt>Task ID</dt><dd data-task title="{{ run.task_id|default:'' }}">{{ run.task_id|default:"—" }}</dd></div>
-      </dl>
-      <div class="backfill-alert" data-error role="alert" hidden></div>
-      <div class="backfill-actions">{% if not run or run.status == "failed" %}<form method="post">{% csrf_token %}<button class="backfill-btn backfill-btn--primary" type="submit"><span>↻</span>{% if run %} Retry backfill{% else %} Start backfill{% endif %}</button></form>{% endif %}<a class="backfill-btn backfill-btn--secondary" href="{% url 'admin:market_data_candlebackfillrun_changelist' %}">Open Django admin</a></div>
-      <p class="backfill-footnote" data-run-message aria-live="polite">Live state is read from the durable Django run record; Celery transport state is shown separately.</p>
-    </article>
-    <article class="backfill-card">
-      <div class="backfill-card-head"><div><span class="backfill-section-label">SCHEDULED MAINTENANCE</span><h2>Research history refresh</h2></div><span class="backfill-status" data-research-status>—</span></div>
-      <p class="backfill-card-copy">Every 30 minutes, active tradable symbols receive a smaller broker-history refresh. It pauses while the initial warm-up is running.</p>
-      <div class="backfill-mini-grid"><div><span>State</span><strong data-research-state>—</strong></div><div><span>Batch</span><strong data-research-count>—</strong></div><div><span>Last started</span><strong data-research-started>—</strong></div><div><span>Last completed</span><strong data-research-completed>—</strong></div><div><span>Celery</span><strong data-research-celery-state>—</strong></div><div><span>Task ID</span><strong data-research-task>—</strong></div></div>
-      <div class="backfill-alert" data-research-error role="alert" hidden></div>
-    </article>
+
+  <section class="rb-run-summary">
+    <div class="rb-summary-item rb-summary-status"><span>STATUS</span><strong data-status-large>Running</strong><em data-status-sub>Waiting for worker confirmation</em></div>
+    <div class="rb-summary-item"><span>DURATION</span><strong data-duration>0s</strong></div>
+    <div class="rb-summary-item"><span>REQUESTED</span><strong data-requested>—</strong></div>
+    <div class="rb-summary-item"><span>STARTED</span><strong data-started>—</strong></div>
+    <div class="rb-summary-item"><span>TRIGGER</span><strong>Manual</strong></div>
+    <div class="rb-summary-item"><span>SOURCE</span><strong data-source>market_data queue</strong></div>
   </section>
-  <section class="backfill-data-contract">
-    <div><span class="backfill-contract-icon">✓</span><div><strong>Broker-authoritative data</strong><p>OHLC values are sourced from Deriv history and persisted before research consumes them.</p></div></div>
-    <div><span class="backfill-contract-icon">↻</span><div><strong>Live visibility</strong><p>This page polls the durable run record every 3 seconds. Django admin uses the same record.</p></div></div>
-    <div><span class="backfill-contract-icon">!</span><div><strong>Failure handling</strong><p>Partial broker failures are surfaced instead of being reported as a successful symbol backfill.</p></div></div>
+
+  <section class="rb-notices" data-notices aria-live="polite"></section>
+
+  <section class="rb-progress-card">
+    <div class="rb-card-head"><div><span class="rb-eyebrow">INITIAL WARM-UP</span><h2>5,000 candles per active tradable symbol</h2></div><div class="rb-worker"><span data-worker-state>DISPATCHING</span><small data-heartbeat>Heartbeat —</small></div></div>
+    <div class="rb-progress-label"><span><b data-progress-count>0 / 0</b> symbols</span><strong data-progress-percent>0%</strong></div>
+    <div class="rb-progress-track"><span data-progress-bar></span></div>
+    <div class="rb-current"><span class="material-symbols-rounded">sync</span><span>Current broker operation</span><strong data-current-operation>Waiting for worker</strong></div>
+  </section>
+
+  <section class="rb-log-panel" data-log-panel>
+    <div class="rb-log-toolbar">
+      <div class="rb-log-select" data-log-filter>All logs <span class="material-symbols-rounded">expand_more</span></div>
+      <button type="button" class="rb-log-control rb-tail-active" data-tail><span class="material-symbols-rounded">bolt</span> Live tail <span class="material-symbols-rounded">expand_more</span></button>
+      <button type="button" class="rb-icon-btn" data-expand aria-label="Expand logs"><span class="material-symbols-rounded">open_in_full</span></button>
+      <button type="button" class="rb-icon-btn" data-copy aria-label="Copy visible logs"><span class="material-symbols-rounded">more_horiz</span></button>
+    </div>
+    <div class="rb-search"><span class="material-symbols-rounded">search</span><input data-log-search type="search" placeholder="Search logs" autocomplete="off"></div>
+    <div class="rb-log-head"><span>Operation logs</span><span data-log-count>0 lines</span></div>
+    <div class="rb-log-body" data-log-body aria-live="polite"></div>
+  </section>
+
+  <section class="rb-details-grid">
+    <article class="rb-detail-card"><span class="rb-eyebrow">BROKER DATA CONTRACT</span><h3>Deriv is the source of OHLC truth</h3><p>Minute-and-higher candles are persisted from Deriv's native candle history. Tick-derived research bars use persisted Deriv ticks. No synthetic market prices are generated.</p></article>
+    <article class="rb-detail-card"><span class="rb-eyebrow">WORKER TELEMETRY</span><h3>Database-backed, not Celery-cache-backed</h3><p>Worker acceptance, heartbeat, symbol progress, timeframe results and terminal state are persisted in Django. A Redis result state of <code>PENDING</code> cannot overwrite a confirmed database lifecycle state.</p></article>
+    <article class="rb-detail-card"><span class="rb-eyebrow">ADMIN CONSISTENCY</span><h3>Same run, same evidence</h3><p>Django admin reads the same run and event records shown here. Open the run in admin to inspect the complete durable operator log.</p><a href="{% url 'admin:market_data_candlebackfillrun_changelist' %}">Open Django admin →</a></article>
   </section>
 </section>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20260919-v1">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20260919-v1" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20260919-renderclone2">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20260919-renderclone2" defer></script>{% endblock %}
