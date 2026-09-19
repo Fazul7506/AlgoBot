@@ -166,6 +166,53 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertEqual(run.result["percent"], 100.0)
         self.assertIn("R_100", run.error)
 
+    def test_worker_received_signal_persists_acceptance_before_task_start(self):
+        from .tasks import _record_candle_backfill_worker_received
+
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="running",
+            count=5000,
+            task_id="received-task",
+        )
+        request = type(
+            "Request",
+            (),
+            {
+                "task": "apps.market_data.tasks.run_initial_candle_backfill",
+                "id": "received-task",
+                "args": [run.pk],
+            },
+        )()
+        _record_candle_backfill_worker_received(request=request)
+
+        run.refresh_from_db()
+        self.assertIsNotNone(run.accepted_at)
+        self.assertIsNotNone(run.last_heartbeat_at)
+        self.assertIsNone(run.started_at)
+        self.assertTrue(run.worker_hostname)
+        self.assertTrue(
+            CandleBackfillEvent.objects.filter(
+                run=run, event_type="worker_received", task_id="received-task"
+            ).exists()
+        )
+
+    def test_received_but_not_started_run_is_recovered_after_five_minutes(self):
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="running",
+            count=5000,
+            task_id="received-task",
+            accepted_at=timezone.now() - timedelta(minutes=6),
+        )
+        with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as publish:
+            publish.return_value.id = "recovered-received-task"
+            result = reconcile_candle_backfill_runs()
+        run.refresh_from_db()
+        self.assertEqual(result["recovered"][0]["task_id"], "recovered-received-task")
+        self.assertIsNone(run.started_at)
+        publish.assert_called_once()
+
     def test_unconfirmed_dispatch_is_republished_and_started_at_is_not_fabricated(self):
         run = CandleBackfillRun.objects.create(
             scope="initial",

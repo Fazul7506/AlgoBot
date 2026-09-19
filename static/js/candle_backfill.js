@@ -80,6 +80,12 @@
       pill.dataset.state = state;
     }
     text("[data-status-large]", run.status_label || state);
+    text("[data-start-state]",
+      state === "completed" ? "Initial backfill completed."
+      : state === "failed" ? "Initial backfill failed."
+      : run.accepted_at ? "Worker received the backfill task."
+      : "Backfill is being dispatched to the market-data worker."
+    );
     text("[data-status-sub]",
       state === "completed" ? "Backfill is live and persisted"
       : state === "failed" ? "Worker stopped with an error"
@@ -90,7 +96,7 @@
     text("[data-duration]", run.started_at ? formatDuration(run.duration_seconds) : "—");
     text("[data-requested]", formatDate(run.requested_at));
     text("[data-started]", formatDate(run.started_at));
-    text("[data-source]", run.started_at ? "Deriv · market_data worker" : "market_data queue");
+    text("[data-source]", run.accepted_at ? "Deriv · market_data worker" : "market_data queue");
     text("[data-worker-state]", run.worker_state || run.celery_state || "DISPATCHING");
     text("[data-heartbeat]", run.last_heartbeat_at ? "Heartbeat " + formatDate(run.last_heartbeat_at) : "Heartbeat —");
     const progress = run.progress || {};
@@ -105,7 +111,7 @@
     const bar = $("[data-progress-bar]");
     if (bar) bar.style.width = hasWorkTotal ? percent + "%" : "0%";
     const current = [run.current_symbol, run.current_timeframe].filter(Boolean).join(" · ");
-    text("[data-current-operation]", current || (run.started_at ? "Processing broker history" : "Waiting for worker"));
+    text("[data-current-operation]", current || (run.started_at ? "Processing broker history" : run.accepted_at ? "Worker received the task" : "Waiting for worker receipt"));
     renderNotices(run.notices || []);
     const live = $("[data-live]");
     if (live) live.hidden = !run.live;

@@ -3,6 +3,8 @@ import logging
 from datetime import timedelta
 import socket
 
+from celery.signals import task_received
+
 from django.utils import timezone
 
 
@@ -66,6 +68,7 @@ logger = logging.getLogger(__name__)
 BACKFILL_REQUEST_INTERVAL_SECONDS = 0.75
 BACKFILL_RUNNING_STALE_AFTER = timedelta(minutes=60)
 BACKFILL_DISPATCH_STALE_AFTER = timedelta(minutes=2)
+BACKFILL_RECEIVED_STALE_AFTER = timedelta(minutes=5)
 BACKFILL_MAX_RECOVERY_ATTEMPTS = 3
 
 
@@ -85,6 +88,54 @@ def _active_symbols(symbol=None):
 
 def _worker_identity():
     return socket.gethostname() or "unknown-worker"
+
+
+@task_received.connect
+def _record_candle_backfill_worker_received(sender=None, request=None, **kwargs):
+    """Persist queue delivery before the task body starts executing."""
+    task_name = getattr(request, "task", "") if request is not None else ""
+    if task_name != "apps.market_data.tasks.run_initial_candle_backfill":
+        return
+    args = list(getattr(request, "args", None) or [])
+    if not args:
+        return
+    try:
+        run_id = int(args[0])
+    except (TypeError, ValueError):
+        return
+    task_id = str(getattr(request, "id", "") or "")
+    worker = _worker_identity()
+    try:
+        from django.db import transaction
+        from .models import CandleBackfillEvent, CandleBackfillRun
+
+        now = timezone.now()
+        with transaction.atomic():
+            run = CandleBackfillRun.objects.select_for_update().filter(
+                pk=run_id, scope="initial"
+            ).first()
+            if not run or (run.task_id and task_id and run.task_id != task_id):
+                return
+            run.accepted_at = run.accepted_at or now
+            run.worker_hostname = worker
+            run.last_heartbeat_at = now
+            run.save(update_fields=["accepted_at", "worker_hostname", "last_heartbeat_at"])
+            CandleBackfillEvent.objects.create(
+                run=run,
+                level="info",
+                event_type="worker_received",
+                message=f"Market-data worker received candle backfill task {task_id}",
+                task_id=task_id,
+                worker_hostname=worker,
+                payload={"queue": "market_data"},
+            )
+    except Exception:
+        logger.exception(
+            "Unable to persist candle backfill worker-received telemetry",
+            extra={"task_id": task_id, "run_id": run_id},
+        )
+
+
 
 
 def _emit_backfill_event(
@@ -509,7 +560,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             run = (
                 CandleBackfillRun.objects.select_for_update()
                 .filter(scope="initial", status="running")
-                .filter(Q(last_heartbeat_at__lt=running_cutoff) | Q(last_heartbeat_at__isnull=True, started_at__lt=running_cutoff) | Q(started_at__isnull=True, requested_at__lt=dispatch_cutoff))
+                .filter(Q(last_heartbeat_at__lt=running_cutoff) | Q(last_heartbeat_at__isnull=True, started_at__lt=running_cutoff) | Q(started_at__isnull=True, accepted_at__isnull=True, requested_at__lt=dispatch_cutoff) | Q(started_at__isnull=True, accepted_at__lt=now - BACKFILL_RECEIVED_STALE_AFTER))
                 .first()
             )
             if not run:

@@ -73,17 +73,26 @@ def _run_payload(run):
         worker_state = "COMPLETED"
     elif run.status == "failed":
         worker_state = "FAILED"
+    elif not run.started_at and run.accepted_at:
+        worker_state = "RECEIVED"
     elif not run.started_at:
         worker_state = "DISPATCHING"
     elif stale:
         worker_state = "STALE"
     else:
         worker_state = "STARTED"
-    notices = []
     if run.status == "running" and not run.started_at:
+        status_label = "Worker received" if run.accepted_at else "Dispatching"
+    notices = []
+    if run.status == "running" and not run.started_at and run.accepted_at:
+        notices.append({
+            "level": "info",
+            "message": "The market-data worker has received the task. Execution time and broker progress will appear when the task body starts.",
+        })
+    elif run.status == "running" and not run.started_at:
         notices.append({
             "level": "warning",
-            "message": "Worker acceptance has not been confirmed. No execution time or broker progress is reported until the market-data worker actually starts this task.",
+            "message": "Worker acceptance has not been confirmed. No execution time or broker progress is reported until the market-data worker receives this task.",
         })
     elif stale:
         notices.append({

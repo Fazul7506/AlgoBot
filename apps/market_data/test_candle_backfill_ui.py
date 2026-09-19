@@ -137,6 +137,27 @@ class CandleBackfillUiTests(TestCase):
         self.assertEqual(run.task_id, "retry-task")
         self.assertGreater(run.requested_at, old_requested)
 
+    def test_json_received_state_is_not_reported_as_running(self):
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="running",
+            count=5000,
+            task_id="received-task",
+            accepted_at=timezone.now(),
+            started_at=None,
+        )
+        response = self.client.get(
+            reverse("initial_candle_backfill"),
+            {"format": "json", "scope": "initial"},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["initial"]
+        self.assertEqual(payload["worker_state"], "RECEIVED")
+        self.assertEqual(payload["status_label"], "Worker received")
+        self.assertFalse(payload["live"])
+        self.assertEqual(payload["duration_seconds"], 0)
+        self.assertIn("received the task", payload["notices"][0]["message"])
+
     def test_json_running_state_reports_worker_not_confirmed_until_started(self):
         run = CandleBackfillRun.objects.create(
             scope="initial",
