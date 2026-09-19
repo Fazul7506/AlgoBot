@@ -110,4 +110,4 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover4")
         self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow3")
-        self.assertContains(response, 'href="{% static \'icons/favicon.ico\' %}"', html=False)
+        self.assertContains(response, 'href="/static/icons/favicon.ico"')
