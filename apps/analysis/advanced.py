@@ -33,26 +33,42 @@ def ema(values, n):
 
 
 def rsi(values, n=14):
+    """Wilder RSI using the complete available series, not only the last n deltas."""
     if len(values) <= n:
         return None
-    gains, losses = [], []
-    for a, b in zip(values[-n - 1:-1], values[-n:]):
-        d = b - a
-        gains.append(max(d, 0))
-        losses.append(max(-d, 0))
-    avg_gain, avg_loss = mean(gains), mean(losses)
+    deltas = [b - a for a, b in zip(values[:-1], values[1:])]
+    gains = [max(delta, 0.0) for delta in deltas]
+    losses = [max(-delta, 0.0) for delta in deltas]
+    avg_gain = mean(gains[:n])
+    avg_loss = mean(losses[:n])
+    for gain, loss in zip(gains[n:], losses[n:]):
+        avg_gain = ((avg_gain * (n - 1)) + gain) / n
+        avg_loss = ((avg_loss * (n - 1)) + loss) / n
     if avg_loss == 0:
-        return 100.0
-    return 100 - (100 / (1 + avg_gain / avg_loss))
+        return 100.0 if avg_gain > 0 else 50.0
+    if avg_gain == 0:
+        return 0.0
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
 
 
 def atr(rows, n=14):
-    if len(rows) < 2:
+    """Wilder ATR with true range seeded from the full available history."""
+    if len(rows) <= n:
         return None
-    trs = []
-    for prev, cur in zip(rows[-n - 1:-1], rows[-n:]):
-        trs.append(max(cur["high"] - cur["low"], abs(cur["high"] - prev["close"]), abs(cur["low"] - prev["close"])))
-    return mean(trs) if trs else None
+    true_ranges = []
+    for prev, cur in zip(rows[:-1], rows[1:]):
+        true_ranges.append(
+            max(
+                cur["high"] - cur["low"],
+                abs(cur["high"] - prev["close"]),
+                abs(cur["low"] - prev["close"]),
+            )
+        )
+    value = mean(true_ranges[:n])
+    for tr in true_ranges[n:]:
+        value = ((value * (n - 1)) + tr) / n
+    return value
 
 
 def bollinger(values, n=20, k=2):
@@ -255,11 +271,31 @@ def analyze_candles(candles, symbol="", timeframe=""):
     return {
         "symbol": symbol, "timeframe": timeframe, "status": "ok", "candles": len(rows), "price": price,
         "change_pct": ((price / closes[0]) - 1) * 100 if closes[0] else 0,
-        "signal": label, "score": round(score, 2), "confidence": round(min(99, 50 + abs(score - 50) * 0.9), 2),
+        "technical_signal": label,
+        "technical_score": round(score, 2),
+        "signal": "NO_TRADE",
+        "score": round(score, 2),
+        "confidence": None,
+        "confidence_source": "trained_ai_only",
         "indicators": {"sma20": s20, "sma50": s50, "sma200": s200, "ema9": e9, "ema21": e21, "rsi14": r, "atr14": a, "bollinger": bb, "macd": m},
         "levels": {"support": support, "resistance": resistance, "range": resistance - support},
         "structure": structure["trend"], "market_structure": structure, "events": events,
         "fair_value_gaps": fvgs, "liquidity_sweeps": sweeps, "supply_demand": zones,
         "candlestick_patterns": patterns, "fibonacci": fibonacci(rows), "volatility_regime": volatility_regime(rows, a),
-        "factors": factors, "last_candles": rows[-300:],
+        "factors": factors,
+        "evidence_quality": {
+            "minimum_candles": 251,
+            "available_candles": len(rows),
+            "sufficient_history": len(rows) >= 251,
+            "indicators": {
+                "sma200": s200 is not None,
+                "ema9": e9 is not None,
+                "ema21": e21 is not None,
+                "rsi14": r is not None,
+                "atr14": a is not None,
+                "macd": bool(m),
+                "bollinger": bool(bb),
+            },
+        },
+        "last_candles": rows[-300:],
     }
