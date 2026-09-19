@@ -61,6 +61,7 @@
   </section>
 
   <section class="rb-notices" data-notices aria-live="polite">
+    {% if page_error %}<div class="rb-notice error"><span class="material-symbols-rounded">error</span><span>{{ page_error }}</span></div>{% endif %}
     {% if run_payload %}
       {% for notice in run_payload.notices %}
       <div class="rb-notice {{ notice.level }}"><span class="material-symbols-rounded">{% if notice.level == "error" %}error{% else %}info{% endif %}</span><span>{{ notice.message }}</span></div>
