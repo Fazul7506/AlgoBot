@@ -106,10 +106,24 @@ class CandleBackfillReliabilityTests(TestCase):
     @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
     @patch("apps.market_data.historical.fetch_and_store_all_timeframes")
     def test_initial_backfill_marks_success_after_real_ingestion_call(self, fetch):
-        fetch.return_value = {
-            "symbol": "R_100",
-            "timeframes": {"1m": {"source": "deriv_candles"}},
-        }
+        def ingest(symbol, count, request_interval, progress_callback):
+            payload = {
+                "symbol": symbol,
+                "timeframes": {},
+            }
+            for timeframe in (
+                "1m", "2m", "5m", "10m", "15m", "30m",
+                "1h", "2h", "4h", "8h", "1d",
+            ):
+                value = {"source": "deriv_candles"}
+                payload["timeframes"][timeframe] = value
+                progress_callback(timeframe, value)
+            tick_value = {"received": 5000, "valid": 5000}
+            payload["timeframes"]["tick-derived"] = tick_value
+            progress_callback("tick-derived", tick_value)
+            return payload
+
+        fetch.side_effect = ingest
         run = CandleBackfillRun.objects.create(
             scope="initial",
             status="running",
