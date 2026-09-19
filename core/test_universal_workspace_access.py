@@ -85,7 +85,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn(".app-shell {\n  display: block !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow7")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow8")
 
 
     def test_sidebar_visual_shell_is_fixed_and_brand_spacing_is_stable(self):
@@ -109,7 +109,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover5")
-        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow7")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow8")
         self.assertContains(response, 'href="/static/icons/favicon.ico"')
  
     def test_runtime_sidebar_layer_is_loaded_after_other_presentation_layers(self):
@@ -121,7 +121,33 @@ class UniversalWorkspaceAccessTests(TestCase):
             html.index("card_alignment.css"),
             html.index("platform_polish.css"),
             html.index("control_polish.css"),
-            html.index("runtime_recovery.css?v=20260919-shellflow7"),
+            html.index("runtime_recovery.css?v=20260919-shellflow8"),
         ]
         self.assertEqual(positions, sorted(positions))
 
+
+
+    def test_permanent_sidebar_rail_and_collapsed_brand_contract(self):
+        """The fixed rail never scrolls; only nav scrolls, and collapsed brand shows favicon only."""
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(
+            encoding="utf-8"
+        )
+        js = (Path(settings.BASE_DIR) / "static" / "js" / "base_shell.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("#app-sidebar.app-sidebar {", css)
+        self.assertIn("position: fixed !important;", css)
+        self.assertIn("overflow: hidden !important;", css)
+        self.assertIn("transform: none !important;", css)
+        self.assertIn("translate: none !important;", css)
+        self.assertIn("#app-sidebar.app-sidebar > nav {", css)
+        self.assertIn("overflow-y: auto !important;", css)
+        self.assertIn(".brand-name", css)
+        self.assertIn("display: none !important;", css)
+        self.assertIn("bindSidebarScrollState(sidebar, nav)", js)
+        self.assertIn("scrollHost.addEventListener('scroll',recordScroll", js)
+
+        response = self.client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "runtime_recovery.css?v=20260919-shellflow8")
+        self.assertContains(response, "base_shell.js?v=20260919-sidebar6")
