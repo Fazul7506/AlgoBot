@@ -43,20 +43,15 @@
   function syncActiveNavigation({anchor=false}={}) {
     const path=currentPath(); const links=navigationLinks(); let active=null; let activeLength=-1;
     links.forEach(link=>{const href=link.getAttribute('href'); const matched=routeMatches(path,href); link.classList.remove('active','is-current-page'); link.removeAttribute('aria-current'); if(matched&&href&&href.length>activeLength){active=link;activeLength=href.length;}});
-    if(active){active.classList.add('active','is-current-page');active.setAttribute('aria-current','page');if(anchor)window.requestAnimationFrame(()=>{try{const host=active.closest('#app-sidebar')?.querySelector('nav');if(host){const top=active.offsetTop, bottom=top+active.offsetHeight, viewTop=host.scrollTop, viewBottom=viewTop+host.clientHeight;if(top<viewTop)host.scrollTop=top;else if(bottom>viewBottom)host.scrollTop=Math.max(0,bottom-host.clientHeight);}}catch(_){}});}
+    if(active){active.classList.add('active','is-current-page');active.setAttribute('aria-current','page');}
     return active;
   }
 
   function bindSidebarScrollState(sidebar, scrollHost = sidebar.querySelector('nav')) {
-    if(!scrollHost || scrollHost.dataset.scrollStateBound==='true')return; scrollHost.dataset.scrollStateBound='true'; let lastKnownTop=Math.max(0,scrollHost.scrollTop||0); let restoreTimer=null; let restoreObserver=null;
-    const readPosition=()=>{try{const raw=sessionStorage.getItem(SIDEBAR_SCROLL_KEY);if(!raw)return null;const saved=JSON.parse(raw);if(!saved||typeof saved!=='object')return null;const top=Number(saved.top);if(!Number.isFinite(top)||top<0)return null;return{top,atBottom:saved.atBottom===true};}catch(_){return null;}};
-    const savePosition=()=>{const maxScroll=Math.max(0,scrollHost.scrollHeight-scrollHost.clientHeight);const top=Math.max(0,Math.min(lastKnownTop,maxScroll));const atBottom=maxScroll>0&&top>=Math.max(0,maxScroll-12);try{sessionStorage.setItem(SIDEBAR_SCROLL_KEY,JSON.stringify({top,atBottom}));}catch(_){} };
-    const applySavedPosition=saved=>{if(!saved)return false;const maxScroll=Math.max(0,scrollHost.scrollHeight-scrollHost.clientHeight);const target=saved.atBottom?maxScroll:Math.min(saved.top,maxScroll);scrollHost.scrollTop=target;lastKnownTop=target;return scrollHost.scrollTop===target;};
-    const stopRestoreObserver=()=>{if(restoreObserver){restoreObserver.disconnect();restoreObserver=null;}if(restoreTimer){window.cancelAnimationFrame(restoreTimer);restoreTimer=null;}};
-    const restorePosition=()=>{const saved=readPosition();if(!saved)return;stopRestoreObserver();const apply=()=>applySavedPosition(saved);apply();window.requestAnimationFrame(apply);window.requestAnimationFrame(()=>window.requestAnimationFrame(apply));let frames=0;const retry=()=>{apply();frames+=1;if(frames<30)restoreTimer=window.requestAnimationFrame(retry);else restoreTimer=null;};restoreTimer=window.requestAnimationFrame(retry);if(window.MutationObserver){restoreObserver=new MutationObserver(()=>apply());restoreObserver.observe(scrollHost,{childList:true,subtree:true});window.setTimeout(stopRestoreObserver,1200);}};
-    const recordScroll=()=>{lastKnownTop=Math.max(0,scrollHost.scrollTop||0);savePosition();}; scrollHost.addEventListener('scroll',recordScroll,{passive:true});
-    sidebar.addEventListener('click',event=>{const link=event.target?.closest?.('nav a,.sidebar-new-trade');if(!link||event.defaultPrevented||event.button>0)return;savePosition();},true);
-    window.addEventListener('beforeunload',savePosition);window.addEventListener('pagehide',savePosition);window.addEventListener('pageshow',restorePosition);window.addEventListener('load',restorePosition,{once:true});restorePosition();
+    /* The sidebar is a permanently docked presentation rail. Document/page
+       scrolling must never change its navigation position. Keep this hook
+       intentionally inert so legacy scroll restoration cannot move the rail. */
+    return;
   }
 
   function bindNavigation() {
