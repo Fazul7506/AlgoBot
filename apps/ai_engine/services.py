@@ -5,7 +5,8 @@ from django.core.cache import cache
 from django.utils import timezone
 from .models import AIModel, ModelVersion, Prediction, FeatureVector, TrainingJob, AIRecommendation, MarketRegime, AnomalyEvent
 from .constants import CONFIDENCE_LABELS
-from .candlestick_features import FEATURE_NAMES, extract_candlestick_features
+from .candlestick_features import FEATURE_NAMES
+from .training_dataset import current_ai_feedback, extract_candlestick_features
 log=logging.getLogger(__name__)
 
 def _num(v,default=0.0):
@@ -64,7 +65,31 @@ class InferenceService:
 
 class PredictionService:
     def predict(self,symbol,timeframe,context=None):
-        start=time.perf_counter(); feats=FeatureEngineeringService().build_features(symbol,timeframe,context); FeatureStoreService().store(symbol,timeframe,feats); raw=InferenceService().infer(feats,ModelRegistry().champion(),symbol,timeframe); cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score']); consensus=raw.get('consensus',{}); return Prediction.objects.create(symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],confidence=cal['score'],expected_return=raw['expected_return'],risk_score=raw['risk_score'],payload={'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),'source':raw.get('source'),'consensus':consensus,'feature_set':list(FEATURE_NAMES),'price_action':{k:feats.get(k) for k in FEATURE_NAMES}})
+        start=time.perf_counter()
+        context=context or {}
+        feats=FeatureEngineeringService().build_features(symbol,timeframe,context)
+        candles=context.get('candles') or []
+        before_epoch=candles[-1].get('epoch') if candles else None
+        feedback_accuracy, feedback_return, feedback_count=current_ai_feedback(symbol,timeframe,before_epoch)
+        feats['ai_feedback_accuracy']=feedback_accuracy
+        feats['ai_feedback_mean_return']=feedback_return
+        feats['ai_feedback_sample_count']=float(feedback_count)
+        FeatureStoreService().store(symbol,timeframe,feats)
+        raw=InferenceService().infer(feats,ModelRegistry().champion(),symbol,timeframe)
+        cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score'])
+        consensus=raw.get('consensus',{})
+        model_features=list(FEATURE_NAMES)+['ai_feedback_accuracy','ai_feedback_mean_return','ai_feedback_sample_count']
+        return Prediction.objects.create(
+            symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],
+            confidence=cal['score'],expected_return=raw['expected_return'],risk_score=raw['risk_score'],
+            payload={
+                'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],
+                'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),
+                'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,
+                'price_action':{k:feats.get(k) for k in FEATURE_NAMES},
+                'ai_feedback':{'accuracy':feedback_accuracy,'mean_return':feedback_return,'sample_count':feedback_count},
+            }
+        )
 
 class EnsembleService:
     def combine(self,predictions:Iterable[dict],method='weighted_average'):
