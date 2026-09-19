@@ -64,7 +64,7 @@
     display: grid;
     place-items: center;
     opacity: 0;
-    pointer-events: none;
+    pointer-events: auto;
     background: color-mix(in srgb, var(--panel2) 94%, transparent);
     box-shadow: 0 8px 24px rgba(0,0,0,.22);
     transition: opacity .14s ease, background-color .14s ease, border-color .14s ease;
@@ -75,15 +75,10 @@
     font-size: 22px;
   }
 
-  .app-sidebar.is-collapsed .sidebar-header .brand:hover + .sidebar-toggle,
-  .app-sidebar.is-collapsed .sidebar-header .brand:focus-visible + .sidebar-toggle,
+  .app-sidebar.is-collapsed .sidebar-header:hover .sidebar-toggle,
+  .app-sidebar.is-collapsed .sidebar-header:focus-within .sidebar-toggle,
   .app-sidebar.is-collapsed .sidebar-header .sidebar-toggle:hover,
   .app-sidebar.is-collapsed .sidebar-header .sidebar-toggle:focus-visible {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .app-sidebar.is-collapsed .sidebar-header:focus-within .sidebar-toggle {
     opacity: 1;
     pointer-events: auto;
   }
