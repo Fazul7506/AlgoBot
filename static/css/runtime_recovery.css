@@ -953,3 +953,117 @@ body.sidebar-collapsed #app-sidebar.app-sidebar {
     min-width: 78px !important;
   }
 }
+
+
+/* CANONICAL CHATGPT-STYLE SIDEBAR DOCK — presentation only.
+ * One viewport rail, three isolated zones: fixed header, scrollable nav,
+ * fixed account dock. Main-document scrolling cannot move any sidebar zone.
+ */
+#app-sidebar.app-sidebar {
+  position: fixed !important;
+  inset: 0 auto 0 0 !important;
+  width: 260px !important;
+  min-width: 260px !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  overflow-anchor: none !important;
+  transform: none !important;
+  translate: none !important;
+  transition: width .22s ease !important;
+  isolation: isolate !important;
+  contain: layout paint size !important;
+  z-index: 3000 !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-header {
+  position: absolute !important;
+  inset: 10px 10px auto 10px !important;
+  width: auto !important;
+  height: 54px !important;
+  min-height: 54px !important;
+  max-height: 54px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 30 !important;
+  transform: none !important;
+  translate: none !important;
+  transition: none !important;
+}
+
+#app-sidebar.app-sidebar > nav {
+  position: absolute !important;
+  top: 64px !important;
+  right: 10px !important;
+  bottom: 154px !important;
+  left: 10px !important;
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 2px 10px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  overflow-anchor: none !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+  transform: none !important;
+  translate: none !important;
+  z-index: 10 !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-user {
+  position: absolute !important;
+  inset: auto 10px 10px 10px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 120px !important;
+  max-height: 140px !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 10px 0 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  z-index: 30 !important;
+  transform: none !important;
+  translate: none !important;
+  transition: none !important;
+  touch-action: manipulation !important;
+  border-top: 1px solid var(--line) !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-user .algobot-sidebar-account {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-user .sidebar-user-actions {
+  flex: 0 0 auto !important;
+  transform: none !important;
+  translate: none !important;
+}
+
+#app-sidebar.app-sidebar > .sidebar-header *,
+#app-sidebar.app-sidebar > .sidebar-user * {
+  transform: none !important;
+}
+
+@media (max-width: 420px) {
+  #app-sidebar.app-sidebar {
+    width: 260px !important;
+    min-width: 260px !important;
+  }
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: 78px !important;
+    min-width: 78px !important;
+  }
+  #app-sidebar.app-sidebar > nav {
+    bottom: 154px !important;
+  }
+}
