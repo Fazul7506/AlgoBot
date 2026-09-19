@@ -41,12 +41,12 @@
     {% elif run.status == "running" %}
     <div class="rb-start-state">
       <span class="material-symbols-rounded">sync</span>
-      <div><strong>Backfill is running under the durable worker lifecycle.</strong><small>Do not start another initial run while this run is active.</small></div>
+      <div><strong data-start-state>Backfill is running under the durable worker lifecycle.</strong><small>Do not start another initial run while this run is active.</small></div>
     </div>
     {% else %}
     <div class="rb-start-state rb-start-complete">
       <span class="material-symbols-rounded">task_alt</span>
-      <div><strong>Initial backfill completed.</strong><small>This singleton initial warm-up is retained as the source-of-truth run.</small></div>
+      <div><strong data-start-state>Initial backfill completed.</strong><small>This singleton initial warm-up is retained as the source-of-truth run.</small></div>
     </div>
     {% endif %}
   </header>
