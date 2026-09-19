@@ -85,7 +85,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn(".app-shell {\n  display: block !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive3")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive4")
 
 
     def test_sidebar_visual_shell_is_fixed_and_brand_spacing_is_stable(self):
@@ -109,7 +109,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover5")
-        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive3")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive4")
         self.assertContains(response, 'href="/static/icons/favicon.ico"')
  
     def test_runtime_sidebar_layer_is_loaded_after_other_presentation_layers(self):
@@ -121,7 +121,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             html.index("card_alignment.css"),
             html.index("platform_polish.css"),
             html.index("control_polish.css"),
-            html.index("runtime_recovery.css?v=20260919-responsive3"),
+            html.index("runtime_recovery.css?v=20260919-responsive4"),
         ]
         self.assertEqual(positions, sorted(positions))
 
@@ -166,8 +166,8 @@ class UniversalWorkspaceAccessTests(TestCase):
 
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive3")
-        self.assertContains(response, "base_shell.js?v=20260919-sidebar9")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive4")
+        self.assertContains(response, "base_shell.js?v=20260919-sidebar10")
 
     def test_sidebar_zones_cannot_follow_document_scroll(self):
         """Header, nav and account dock stay anchored to the fixed viewport rail."""
@@ -189,8 +189,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertNotIn("sidebar.scrollHeight", js)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive3")
-        self.assertContains(response, "base_shell.js?v=20260919-sidebar9")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive4")
+        self.assertContains(response, "base_shell.js?v=20260919-sidebar10")
 
     def test_sidebar_scroll_state_uses_nav_only(self):
         """Sidebar navigation may remember its own position without moving the dock."""
@@ -241,4 +241,19 @@ class UniversalWorkspaceAccessTests(TestCase):
 
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive3")
+        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive4")
+
+
+    def test_final_device_shell_has_distinct_drawer_and_desktop_geometry(self):
+        """The final responsive layer keeps mobile/tablet drawer geometry separate from desktop rail geometry."""
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(encoding="utf-8")
+        js = (Path(settings.BASE_DIR) / "static" / "js" / "base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("FINAL DEVICE-SPECIFIC SHELL CONTRACT", css)
+        self.assertIn("@media (min-width: 901px)", css)
+        self.assertIn("@media (min-width: 601px) and (max-width: 900px)", css)
+        self.assertIn("@media (max-width: 600px)", css)
+        self.assertIn("width: min(300px, 78vw) !important;", css)
+        self.assertIn("width: min(360px, 72vw) !important;", css)
+        self.assertIn("body:has(#app-sidebar.app-sidebar.is-open)", css)
+        self.assertIn("grid-template-columns: minmax(0, 1fr) 44px !important;", css)
+        self.assertIn("if(icon)icon.textContent=next?'close':'menu';", js)
