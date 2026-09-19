@@ -190,7 +190,7 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertIsNotNone(run.accepted_at)
         self.assertIsNotNone(run.last_heartbeat_at)
         self.assertIsNone(run.started_at)
-        self.assertEqual(run.worker_hostname, run.worker_hostname)
+        self.assertTrue(run.worker_hostname)
         self.assertTrue(
             CandleBackfillEvent.objects.filter(
                 run=run, event_type="worker_received", task_id="received-task"
