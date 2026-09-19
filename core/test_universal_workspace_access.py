@@ -232,7 +232,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("@media (max-width: 600px)", css)
         self.assertIn("height: 100svh !important;", css)
         self.assertIn("transform: translate3d(-105%, 0, 0) !important;", css)
-        self.assertIn(".app-sidebar.app-sidebar.is-open", css)
+        self.assertIn("#app-sidebar.app-sidebar.is-open", css)
         self.assertIn(".mobile-menu-button", css)
         self.assertIn("margin-left: 260px !important;", css)
         self.assertIn("margin-left: 0 !important;", css)
