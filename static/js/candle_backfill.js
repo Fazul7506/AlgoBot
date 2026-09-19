@@ -80,6 +80,12 @@
       pill.dataset.state = state;
     }
     text("[data-status-large]", run.status_label || state);
+    text("[data-start-state]",
+      state === "completed" ? "Initial backfill completed."
+      : state === "failed" ? "Initial backfill failed."
+      : run.accepted_at ? "Worker received the backfill task."
+      : "Backfill is being dispatched to the market-data worker."
+    );
     text("[data-status-sub]",
       state === "completed" ? "Backfill is live and persisted"
       : state === "failed" ? "Worker stopped with an error"
