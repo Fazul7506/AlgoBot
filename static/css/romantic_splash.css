@@ -317,6 +317,7 @@ body.algobot-splash-active {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .algobot-romantic-splash__emoji { opacity: .72 !important; }
   .algobot-romantic-splash,
   .algobot-romantic-splash__aurora,
   .algobot-romantic-splash__emoji,
