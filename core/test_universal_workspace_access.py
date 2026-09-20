@@ -167,7 +167,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "runtime_recovery.css?v=20260920-responsive8")
-        self.assertContains(response, "base_shell.js?v=20260920-sidebar13")
+        self.assertContains(response, "base_shell.js?v=20260920-sidebar14")
 
     def test_sidebar_zones_cannot_follow_document_scroll(self):
         """Header, nav and account dock stay anchored to the fixed viewport rail."""
@@ -190,7 +190,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "runtime_recovery.css?v=20260920-responsive8")
-        self.assertContains(response, "base_shell.js?v=20260920-sidebar13")
+        self.assertContains(response, "base_shell.js?v=20260920-sidebar14")
 
     def test_sidebar_scroll_state_uses_nav_only(self):
         """Sidebar navigation may remember its own position without moving the dock."""
@@ -298,8 +298,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("contain: layout style !important;", css)
         self.assertIn("overflow-anchor: none !important;", css)
         self.assertIn("scrollbar-gutter: stable !important;", css)
-        self.assertIn("isolateFromDocumentScroll", js)
-        self.assertIn("document.addEventListener('scroll', isolateFromDocumentScroll", js)
+        self.assertNotIn("isolateFromDocumentScroll", js)
+        self.assertNotIn("document.addEventListener('scroll', isolateFromDocumentScroll", js)
         self.assertIn("css/runtime_recovery.css", template)
         self.assertIn("v=20260920-responsive8", template)
         self.assertIn("js/base_shell.js", template)
