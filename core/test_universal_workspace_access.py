@@ -85,7 +85,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn(".app-shell {\n  display: block !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive4")
+        self.assertContains(response, "runtime_recovery.css?v=20260920-responsive8")
 
 
     def test_sidebar_visual_shell_is_fixed_and_brand_spacing_is_stable(self):
@@ -109,8 +109,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover5")
-        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive4")
-        self.assertContains(response, 'href="/static/icons/favicon.ico"')
+        self.assertContains(response, "runtime_recovery.css?v=20260920-responsive8")
+        self.assertContains(response, 'href="/static/icons/favicon.ico')
  
     def test_runtime_sidebar_layer_is_loaded_after_other_presentation_layers(self):
         """The final sidebar layer must load last so legacy responsive rules cannot override it."""
@@ -121,7 +121,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             html.index("card_alignment.css"),
             html.index("platform_polish.css"),
             html.index("control_polish.css"),
-            html.index("runtime_recovery.css?v=20260919-responsive4"),
+            html.index("runtime_recovery.css?v=20260920-responsive8"),
         ]
         self.assertEqual(positions, sorted(positions))
 
@@ -166,8 +166,8 @@ class UniversalWorkspaceAccessTests(TestCase):
 
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive4")
-        self.assertContains(response, "base_shell.js?v=20260919-sidebar10")
+        self.assertContains(response, "runtime_recovery.css?v=20260920-responsive8")
+        self.assertContains(response, "base_shell.js?v=20260920-sidebar13")
 
     def test_sidebar_zones_cannot_follow_document_scroll(self):
         """Header, nav and account dock stay anchored to the fixed viewport rail."""
@@ -189,8 +189,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertNotIn("sidebar.scrollHeight", js)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive4")
-        self.assertContains(response, "base_shell.js?v=20260919-sidebar10")
+        self.assertContains(response, "runtime_recovery.css?v=20260920-responsive8")
+        self.assertContains(response, "base_shell.js?v=20260920-sidebar13")
 
     def test_sidebar_scroll_state_uses_nav_only(self):
         """Sidebar navigation may remember its own position without moving the dock."""
@@ -241,7 +241,7 @@ class UniversalWorkspaceAccessTests(TestCase):
 
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260919-responsive4")
+        self.assertContains(response, "runtime_recovery.css?v=20260920-responsive8")
 
 
     def test_final_device_shell_has_distinct_drawer_and_desktop_geometry(self):
@@ -269,8 +269,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("body.mobile-drawer-locked", css)
         self.assertIn("document.body.style.position='fixed'", js)
         self.assertIn("window.scrollTo(0,mobileScrollY)", js)
-        self.assertIn("runtime_recovery.css?v=20260919-responsive5", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
-        self.assertIn("base_shell.js?v=20260919-sidebar11", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn("runtime_recovery.css?v=20260920-responsive8", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn("base_shell.js?v=20260920-sidebar13", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
 
 
     def test_mobile_header_reuses_former_desktop_control_space(self):
@@ -282,7 +282,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("left: calc(min(300px, 78vw) - 56px) !important;", css)
         self.assertIn("left: calc(min(360px, 72vw) - 56px) !important;", css)
         self.assertIn("max-width: calc(100% - 56px) !important;", css)
-        self.assertIn("runtime_recovery.css?v=20260919-responsive6", html)
+        self.assertIn("runtime_recovery.css?v=20260920-responsive8", html)
 
 
     def test_sidebar_isolation_keeps_document_scroll_separate_from_nav(self):
