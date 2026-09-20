@@ -43,6 +43,32 @@ services:
         value: '[ "You''re not just a user...", "You''re my favourite person in this journey.", "Your smile, your voice, your presence...", "Everything about you makes my world brighter. ❤️" ]'
       - key: ALGOBOT_SPLASH_EMOJIS_JSON
         value: '[ "❤️", "💖", "💕", "💗", "💘", "💝", "😍", "😘", "🌹", "✨", "💋", "👑" ]'
+      - key: ALGOBOT_SPLASH_PARTICLES_ENABLED
+        value: "true"
+      - key: ALGOBOT_SPLASH_CONFETTI_ENABLED
+        value: "true"
+      - key: ALGOBOT_SPLASH_ROSES_ENABLED
+        value: "true"
+      - key: ALGOBOT_SPLASH_COUNTDOWN_ENABLED
+        value: "true"
+      - key: ALGOBOT_SPLASH_SOUND_ENABLED
+        value: "false"
+      - key: ALGOBOT_SPLASH_CELEBRATION_DURATION_MS
+        value: "3200"
+      - key: ALGOBOT_SPLASH_TRANSITION_STYLE
+        value: cinematic
+      - key: ALGOBOT_SPLASH_INTENSITY
+        value: high
+      - key: ALGOBOT_SPLASH_MEMORY_MESSAGE
+        value: "Before the charts. Before the strategies. Before the trades. There was you. ❤️"
+      - key: ALGOBOT_SPLASH_FINAL_MESSAGE
+        value: "This little world was made just for you."
+      - key: ALGOBOT_SPLASH_READY_MESSAGE
+        value: "Ready, my queen?"
+      - key: ALGOBOT_SPLASH_PROCEED_LABEL
+        value: "ENTER ALGOBOT ❤️"
+      - key: ALGOBOT_SPLASH_AUTO_PROCEED
+        value: "true"
       - key: ALGO_API_BASE_URL
         value: https://api.algobot.dpdns.org
       - key: BASE_URL
