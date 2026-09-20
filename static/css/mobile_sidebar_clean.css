@@ -1,0 +1,39 @@
+/* Mobile sidebar presentation override.
+ * Presentation-only: preserves navigation, account switching, broker state,
+ * trading routes and all existing sidebar functionality.
+ *
+ * Mobile/tablet navigation follows the requested ChatGPT-style drawer:
+ * - no in-drawer desktop collapse/close control
+ * - no reserved header space for that control
+ * - compact drawer edge so the page is clearly an overlay, not a second panel
+ */
+@media (max-width: 900px) {
+  #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle,
+  #app-sidebar.app-sidebar .sidebar-toggle {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-header {
+    justify-content: flex-start !important;
+    gap: 0 !important;
+  }
+
+  /* Keep the mobile drawer compact and visually continuous with the page
+   * rather than leaving an oversized isolated rail. */
+  #app-sidebar.app-sidebar,
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: min(300px, 82vw) !important;
+    max-width: min(300px, 82vw) !important;
+  }
+}
