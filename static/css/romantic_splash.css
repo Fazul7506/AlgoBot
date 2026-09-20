@@ -330,3 +330,57 @@ body.algobot-splash-active {
     opacity: 1;
   }
 }
+
+
+.algobot-romantic-splash__footer {
+  width: min(900px, 100%);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255,255,255,.08);
+  color: rgba(255,255,255,.72);
+  font-size: .72rem;
+  line-height: 1.35;
+  letter-spacing: .04em;
+}
+
+.algobot-romantic-splash__footer > span {
+  padding: 0 10px;
+  border-right: 1px solid rgba(255, 72, 180, .18);
+}
+
+.algobot-romantic-splash__footer > span:last-child {
+  border-right: 0;
+  color: #ff78c5;
+}
+
+.algobot-romantic-splash__footer small {
+  color: rgba(255,255,255,.42);
+}
+
+.algobot-romantic-splash__brand-mark img {
+  width: 27px;
+  height: 27px;
+  object-fit: contain;
+  border-radius: 7px;
+}
+
+@media (max-width: 700px) {
+  .algobot-romantic-splash__footer {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 7px;
+    font-size: .66rem;
+  }
+
+  .algobot-romantic-splash__footer > span:nth-child(2n) {
+    border-right: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .algobot-romantic-splash__footer {
+    transition: none;
+  }
+}
