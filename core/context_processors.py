@@ -109,5 +109,30 @@ def algobot_romantic_splash(request):
             "tagline": os.getenv("ALGOBOT_SPLASH_TAGLINE", "Smarter trades · brighter futures · a little more love").strip(),
             "messages": messages,
             "emojis": emojis,
+            "particles_enabled": _env_bool("ALGOBOT_SPLASH_PARTICLES_ENABLED", True),
+            "confetti_enabled": _env_bool("ALGOBOT_SPLASH_CONFETTI_ENABLED", True),
+            "roses_enabled": _env_bool("ALGOBOT_SPLASH_ROSES_ENABLED", True),
+            "countdown_enabled": _env_bool("ALGOBOT_SPLASH_COUNTDOWN_ENABLED", True),
+            "sound_enabled": _env_bool("ALGOBOT_SPLASH_SOUND_ENABLED", False),
+            "celebration_duration_ms": _env_int("ALGOBOT_SPLASH_CELEBRATION_DURATION_MS", 3200, 800, 10000),
+            "transition_style": os.getenv("ALGOBOT_SPLASH_TRANSITION_STYLE", "cinematic").strip().lower() or "cinematic",
+            "intensity": os.getenv("ALGOBOT_SPLASH_INTENSITY", "high").strip().lower() or "high",
+            "memory_message": os.getenv(
+                "ALGOBOT_SPLASH_MEMORY_MESSAGE",
+                "Before the charts. Before the strategies. Before the trades. There was you. ❤️",
+            ).strip(),
+            "final_message": os.getenv(
+                "ALGOBOT_SPLASH_FINAL_MESSAGE",
+                "This little world was made just for you.",
+            ).strip(),
+            "ready_message": os.getenv(
+                "ALGOBOT_SPLASH_READY_MESSAGE",
+                "Ready, my queen?",
+            ).strip(),
+            "proceed_label": os.getenv(
+                "ALGOBOT_SPLASH_PROCEED_LABEL",
+                "ENTER ALGOBOT ❤️",
+            ).strip(),
+            "auto_proceed": _env_bool("ALGOBOT_SPLASH_AUTO_PROCEED", True),
         }
     }

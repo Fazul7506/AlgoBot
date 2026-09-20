@@ -444,3 +444,247 @@ body.algobot-splash-active {
     animation: none !important;
   }
 }
+
+/* Cinematic romantic upgrade layers. Kept isolated under the splash root. */
+.algobot-romantic-splash__particle {
+  position: absolute;
+  z-index: 1;
+  color: rgba(255, 132, 209, .58);
+  font-size: clamp(.7rem, 1.4vw, 1.1rem);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0;
+  animation: algobot-particle-drift var(--particle-duration) ease-in-out var(--particle-delay) infinite;
+  will-change: transform, opacity;
+}
+
+.algobot-romantic-splash__memory,
+.algobot-romantic-splash__final,
+.algobot-romantic-splash__ready {
+  max-width: 720px;
+  margin: 18px auto 0;
+  color: rgba(255,255,255,.94);
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  text-align: center;
+}
+
+.algobot-romantic-splash__memory {
+  font-size: clamp(1.12rem, 3.8vw, 1.9rem);
+  line-height: 1.55;
+  color: #ffd2ec;
+  text-shadow: 0 0 28px rgba(255, 68, 179, .42);
+  animation: algobot-memory-breathe 2.2s ease-in-out infinite alternate;
+}
+
+.algobot-romantic-splash__final {
+  font-size: clamp(1.1rem, 3.3vw, 1.7rem);
+  color: #fff;
+}
+
+.algobot-romantic-splash__ready {
+  margin-top: 12px;
+  font-size: clamp(1rem, 2.8vw, 1.35rem);
+  color: #ff91d1;
+}
+
+.algobot-romantic-splash__countdown {
+  position: relative;
+  width: clamp(74px, 15vw, 118px);
+  height: clamp(74px, 15vw, 118px);
+  display: grid;
+  place-items: center;
+  margin: 22px auto 10px;
+  border: 1px solid rgba(255, 107, 196, .72);
+  border-radius: 50%;
+  color: #fff;
+  font-size: clamp(2.4rem, 8vw, 4.6rem);
+  font-weight: 800;
+  background: radial-gradient(circle, rgba(255, 52, 164, .22), rgba(0,0,0,.08) 68%);
+  box-shadow: 0 0 40px rgba(255, 42, 161, .35), inset 0 0 30px rgba(255,255,255,.05);
+}
+
+.algobot-romantic-splash__countdown.is-counting {
+  animation: algobot-countdown-pop .82s cubic-bezier(.2, .9, .25, 1) both;
+}
+
+.algobot-romantic-splash__proceed {
+  position: relative;
+  margin: 16px auto 0;
+  min-width: min(280px, 82vw);
+  min-height: 54px;
+  padding: 13px 24px;
+  border: 1px solid rgba(255, 116, 201, .8);
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(255, 41, 159, .82), rgba(124, 52, 255, .82));
+  box-shadow: 0 0 32px rgba(255, 48, 167, .42), inset 0 1px 0 rgba(255,255,255,.28);
+  font: 800 .95rem/1 inherit;
+  letter-spacing: .12em;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.algobot-romantic-splash__proceed::after {
+  content: "♥";
+  position: absolute;
+  inset: -10px;
+  border: 1px solid rgba(255, 122, 205, .2);
+  border-radius: inherit;
+  animation: algobot-button-ring 2.1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.algobot-romantic-splash__proceed:hover,
+.algobot-romantic-splash__proceed:focus-visible {
+  transform: translateY(-2px) scale(1.025);
+  filter: brightness(1.08);
+  box-shadow: 0 0 48px rgba(255, 48, 167, .58), inset 0 1px 0 rgba(255,255,255,.34);
+}
+
+.algobot-romantic-splash__proceed:active {
+  transform: scale(.98);
+}
+
+.algobot-romantic-splash__celebration {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.algobot-romantic-splash__confetti {
+  position: absolute;
+  display: block;
+  font-size: clamp(1rem, 2.8vw, 1.65rem);
+  opacity: 0;
+  transform: translate3d(0, 0, 0) rotate(0deg) scale(.6);
+  animation: algobot-confetti-burst var(--fall) cubic-bezier(.16, .84, .24, 1) var(--delay) forwards;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 0 8px rgba(255, 70, 180, .55));
+}
+
+.algobot-romantic-splash__petal {
+  position: absolute;
+  top: -8vh;
+  z-index: 7;
+  font-size: clamp(1rem, 3vw, 1.8rem);
+  pointer-events: none;
+  animation: algobot-petal-fall var(--fall-time) ease-in var(--fall-delay) forwards;
+  will-change: transform, opacity;
+}
+
+.algobot-romantic-splash.is-memory-moment .algobot-romantic-splash__typing,
+.algobot-romantic-splash.is-memory-moment .algobot-romantic-splash__phone,
+.algobot-romantic-splash.is-memory-moment .algobot-romantic-splash__divider,
+.algobot-romantic-splash.is-memory-moment .algobot-romantic-splash__progress,
+.algobot-romantic-splash.is-memory-moment .algobot-romantic-splash__progress-label,
+.algobot-romantic-splash.is-memory-moment .algobot-romantic-splash__signature {
+  opacity: .12;
+  transition: opacity 650ms ease;
+}
+
+.algobot-romantic-splash.is-rose-climax {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 34, 148, .27), transparent 36%),
+    radial-gradient(circle at 50% 70%, rgba(255, 75, 132, .16), transparent 42%),
+    #030207;
+}
+
+.algobot-romantic-splash.is-celebrating .algobot-romantic-splash__name {
+  animation: algobot-hero-celebrate 2.4s ease-in-out infinite;
+}
+
+.algobot-romantic-splash.is-celebrating .algobot-romantic-splash__brand {
+  animation: algobot-brand-pulse 1.8s ease-in-out infinite;
+}
+
+.algobot-romantic-splash.is-transition-cinematic.is-exiting {
+  transform: scale(1.08);
+  filter: saturate(1.18) brightness(1.12);
+}
+
+@keyframes algobot-particle-drift {
+  0% { opacity: 0; transform: translate3d(0, 14px, 0) scale(.7); }
+  20% { opacity: .8; }
+  70% { opacity: .55; }
+  100% { opacity: 0; transform: translate3d(var(--particle-drift), -42px, 0) scale(1.2); }
+}
+
+@keyframes algobot-memory-breathe {
+  from { transform: translateY(3px) scale(.985); opacity: .78; }
+  to { transform: translateY(-3px) scale(1.015); opacity: 1; }
+}
+
+@keyframes algobot-countdown-pop {
+  0% { opacity: 0; transform: scale(.35); }
+  58% { opacity: 1; transform: scale(1.13); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes algobot-confetti-burst {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(0deg) scale(.4); }
+  8% { opacity: 1; }
+  58% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(var(--dx), var(--dy), 0) rotate(var(--rotate)) scale(.88); }
+}
+
+@keyframes algobot-petal-fall {
+  0% { opacity: 0; transform: translate3d(0, -8vh, 0) rotate(0deg); }
+  12% { opacity: .95; }
+  100% { opacity: 0; transform: translate3d(var(--fall-x), 116vh, 0) rotate(720deg); }
+}
+
+@keyframes algobot-button-ring {
+  0%, 100% { opacity: .18; transform: scale(.98); }
+  50% { opacity: .65; transform: scale(1.025); }
+}
+
+@keyframes algobot-hero-celebrate {
+  0%, 100% { filter: brightness(1); transform: scale(1); }
+  50% { filter: brightness(1.15); transform: scale(1.018); }
+}
+
+@keyframes algobot-brand-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.14); }
+}
+
+@media (max-width: 700px) {
+  .algobot-romantic-splash__memory {
+    padding: 0 8px;
+    font-size: 1.06rem;
+  }
+
+  .algobot-romantic-splash__proceed {
+    min-height: 58px;
+    font-size: .84rem;
+  }
+
+  .algobot-romantic-splash__confetti {
+    font-size: 1.2rem;
+  }
+
+  .algobot-romantic-splash__particle {
+    font-size: .72rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .algobot-romantic-splash__particle,
+  .algobot-romantic-splash__memory,
+  .algobot-romantic-splash__countdown.is-counting,
+  .algobot-romantic-splash__proceed::after,
+  .algobot-romantic-splash__confetti,
+  .algobot-romantic-splash__petal,
+  .algobot-romantic-splash.is-celebrating .algobot-romantic-splash__name,
+  .algobot-romantic-splash.is-celebrating .algobot-romantic-splash__brand {
+    animation: none !important;
+  }
+
+  .algobot-romantic-splash__proceed {
+    transition: none;
+  }
+}
