@@ -271,3 +271,15 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("window.scrollTo(0,mobileScrollY)", js)
         self.assertIn("runtime_recovery.css?v=20260919-responsive5", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
         self.assertIn("base_shell.js?v=20260919-sidebar11", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
+
+
+    def test_mobile_header_reuses_former_desktop_control_space(self):
+        """The single mobile drawer control moves into the former desktop-control slot when open."""
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(encoding="utf-8")
+        html = (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8")
+        self.assertIn("FINAL MOBILE HEADER SPACE CONTRACT", css)
+        self.assertIn("body:has(#app-sidebar.app-sidebar.is-open) .mobile-menu-button", css)
+        self.assertIn("left: calc(min(300px, 78vw) - 56px) !important;", css)
+        self.assertIn("left: calc(min(360px, 72vw) - 56px) !important;", css)
+        self.assertIn("max-width: calc(100% - 56px) !important;", css)
+        self.assertIn("runtime_recovery.css?v=20260919-responsive6", html)

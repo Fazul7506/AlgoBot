@@ -1992,3 +1992,60 @@ body {
     touch-action: none !important;
   }
 }
+
+
+/* FINAL MOBILE HEADER SPACE CONTRACT — use the former desktop-control slot.
+ * Mobile/tablet do not leave an empty header control zone. The single
+ * mobile-menu-button moves into the right side of the drawer header while
+ * the drawer is open, exactly where the desktop collapse control used to be.
+ * When the drawer is closed it remains the page-level hamburger affordance.
+ */
+@media (max-width: 600px) {
+  .mobile-menu-button {
+    left: max(10px, env(safe-area-inset-left)) !important;
+    right: auto !important;
+    top: max(10px, env(safe-area-inset-top)) !important;
+    transition: left .22s ease, top .22s ease !important;
+  }
+  body:has(#app-sidebar.app-sidebar.is-open) .mobile-menu-button {
+    left: calc(min(300px, 78vw) - 56px) !important;
+    top: max(14px, env(safe-area-inset-top)) !important;
+  }
+  #app-sidebar.app-sidebar > .sidebar-header .brand {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    max-width: calc(100% - 56px) !important;
+    width: auto !important;
+    flex: 1 1 auto !important;
+  }
+  #app-sidebar.app-sidebar > .sidebar-header {
+    justify-content: flex-start !important;
+    gap: 0 !important;
+    padding-right: 0 !important;
+  }
+}
+
+@media (min-width: 601px) and (max-width: 900px) {
+  .mobile-menu-button {
+    left: max(12px, env(safe-area-inset-left)) !important;
+    right: auto !important;
+    top: max(10px, env(safe-area-inset-top)) !important;
+    transition: left .22s ease, top .22s ease !important;
+  }
+  body:has(#app-sidebar.app-sidebar.is-open) .mobile-menu-button {
+    left: calc(min(360px, 72vw) - 56px) !important;
+    top: max(14px, env(safe-area-inset-top)) !important;
+  }
+  #app-sidebar.app-sidebar > .sidebar-header .brand {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    max-width: calc(100% - 56px) !important;
+    width: auto !important;
+    flex: 1 1 auto !important;
+  }
+  #app-sidebar.app-sidebar > .sidebar-header {
+    justify-content: flex-start !important;
+    gap: 0 !important;
+    padding-right: 0 !important;
+  }
+}
