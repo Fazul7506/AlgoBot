@@ -1,15 +1,16 @@
-/* Mobile sidebar presentation override.
- * Presentation-only: preserves navigation, account switching, broker state,
- * trading routes and all existing sidebar functionality.
+/* Final mobile sidebar presentation contract.
+ * Presentation-only: preserve every existing navigation link, account context,
+ * broker switching, logout action, trading route and backend behavior.
  *
- * Mobile/tablet navigation follows the requested ChatGPT-style drawer:
- * - no in-drawer desktop collapse/close control
- * - no reserved header space for that control
- * - compact drawer edge so the page is clearly an overlay, not a second panel
+ * Mobile intent:
+ * 1) No in-drawer X/collapse control.
+ * 2) Remove the oversized empty/isolated right-hand drawer area.
+ * 3) Make the account switcher a full-width bottom card.
+ * 4) Keep logout available without shrinking the account card.
  */
 @media (max-width: 900px) {
-  #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle,
-  #app-sidebar.app-sidebar .sidebar-toggle {
+  #app-sidebar.app-sidebar .sidebar-toggle,
+  #app-sidebar.app-sidebar > .sidebar-header > [data-sidebar-toggle] {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
@@ -23,17 +24,121 @@
     border: 0 !important;
   }
 
-  #app-sidebar.app-sidebar > .sidebar-header {
-    justify-content: flex-start !important;
-    gap: 0 !important;
-  }
-
-  /* Keep the mobile drawer compact and visually continuous with the page
-   * rather than leaving an oversized isolated rail. */
   #app-sidebar.app-sidebar,
   #app-sidebar.app-sidebar.is-collapsed,
   body.sidebar-collapsed #app-sidebar.app-sidebar {
-    width: min(300px, 82vw) !important;
-    max-width: min(300px, 82vw) !important;
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: min(410px, 92vw) !important;
+    min-width: 0 !important;
+    max-width: min(410px, 92vw) !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    padding: 10px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    transform: translate3d(-105%, 0, 0) !important;
+    translate: none !important;
+    transition: transform .22s ease !important;
+    z-index: 4000 !important;
+  }
+
+  #app-sidebar.app-sidebar.is-open {
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-header {
+    position: absolute !important;
+    inset: 10px 10px auto 10px !important;
+    width: auto !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    max-height: 54px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    justify-content: flex-start !important;
+    gap: 0 !important;
+    z-index: 30 !important;
+  }
+
+  #app-sidebar.app-sidebar > nav {
+    position: absolute !important;
+    top: 64px !important;
+    right: 10px !important;
+    bottom: 198px !important;
+    left: 10px !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 2px 10px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overflow-anchor: none !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
+    -webkit-overflow-scrolling: touch !important;
+    z-index: 10 !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-user {
+    position: absolute !important;
+    inset: auto 10px 10px 10px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    overflow: visible !important;
+    border-top: 0 !important;
+    z-index: 30 !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-user .algobot-sidebar-account {
+    display: grid !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-user .sidebar-user-actions {
+    width: 100% !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    margin: 8px 0 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-user .sidebar-user-actions form,
+  #app-sidebar.app-sidebar > .sidebar-user .sidebar-user-actions button {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-header,
+  #app-sidebar.app-sidebar > nav,
+  #app-sidebar.app-sidebar > .sidebar-user {
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 420px) {
+  #app-sidebar.app-sidebar,
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: min(410px, 92vw) !important;
+    max-width: min(410px, 92vw) !important;
   }
 }
