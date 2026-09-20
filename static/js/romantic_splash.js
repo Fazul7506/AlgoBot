@@ -58,6 +58,8 @@
   const rosesEnabled = config.roses_enabled !== false;
   const countdownEnabled = config.countdown_enabled !== false;
   const autoProceed = config.auto_proceed !== false;
+  const transitionName = String(config.transition_style || root.dataset.transition || "cinematic").replace(/[^a-z0-9_-]/gi, "").toLowerCase() || "cinematic";
+  root.classList.add("is-transition-" + transitionName);
 
   const sleep = ms => new Promise(resolve => window.setTimeout(resolve, ms));
   const setProgress = (percent, text) => {
