@@ -269,8 +269,10 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("body.mobile-drawer-locked", css)
         self.assertIn("document.body.style.position='fixed'", js)
         self.assertIn("window.scrollTo(0,mobileScrollY)", js)
-        self.assertIn("runtime_recovery.css?v=20260920-responsive8", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
-        self.assertIn("base_shell.js?v=20260920-sidebar13", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn("css/runtime_recovery.css", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn("v=20260920-responsive8", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn("js/base_shell.js", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn("v=20260920-sidebar13", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
 
 
     def test_mobile_header_reuses_former_desktop_control_space(self):
@@ -282,7 +284,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("left: calc(min(300px, 78vw) - 56px) !important;", css)
         self.assertIn("left: calc(min(360px, 72vw) - 56px) !important;", css)
         self.assertIn("max-width: calc(100% - 56px) !important;", css)
-        self.assertIn("runtime_recovery.css?v=20260920-responsive8", html)
+        self.assertIn("css/runtime_recovery.css", html)
+        self.assertIn("v=20260920-responsive8", html)
 
 
     def test_sidebar_isolation_keeps_document_scroll_separate_from_nav(self):
@@ -297,8 +300,10 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("scrollbar-gutter: stable !important;", css)
         self.assertIn("isolateFromDocumentScroll", js)
         self.assertIn("document.addEventListener('scroll', isolateFromDocumentScroll", js)
-        self.assertIn("runtime_recovery.css?v=20260920-responsive8", template)
-        self.assertIn("base_shell.js?v=20260920-sidebar13", template)
+        self.assertIn("css/runtime_recovery.css", template)
+        self.assertIn("v=20260920-responsive8", template)
+        self.assertIn("js/base_shell.js", template)
+        self.assertIn("v=20260920-sidebar13", template)
 
 
     def test_final_mobile_drawer_contract_is_authoritative(self):
