@@ -9,6 +9,40 @@ services:
     envVars:
       - key: DJANGO_ENV
         value: production
+      # Romantic pre-home experience: all presentation code stays in GitHub;
+      # Render environment variables control activation, timing and content.
+      - key: ALGOBOT_SPLASH_ENABLED
+        value: "true"
+      - key: ALGOBOT_SPLASH_PATHS_JSON
+        value: '["/"]'
+      - key: ALGOBOT_SPLASH_START_AT
+        value: ""
+      - key: ALGOBOT_SPLASH_END_AT
+        value: ""
+      - key: ALGOBOT_SPLASH_REPEAT
+        value: session
+      - key: ALGOBOT_SPLASH_DURATION_MS
+        value: "8200"
+      - key: ALGOBOT_SPLASH_TYPE_SPEED_MS
+        value: "42"
+      - key: ALGOBOT_SPLASH_DELETE_SPEED_MS
+        value: "22"
+      - key: ALGOBOT_SPLASH_NAME
+        value: "Mäh Qűěěñ ❤️"
+      - key: ALGOBOT_SPLASH_PHONE
+        value: "0141 322612"
+      - key: ALGOBOT_SPLASH_SIGNATURE
+        value: "With love, AlgoBot ❤️"
+      - key: ALGOBOT_SPLASH_SIDE_LEFT
+        value: "Always & Forever ❤️"
+      - key: ALGOBOT_SPLASH_SIDE_RIGHT
+        value: "I'm lucky to have you... 💕"
+      - key: ALGOBOT_SPLASH_TAGLINE
+        value: "Smarter trades · brighter futures · a little more love"
+      - key: ALGOBOT_SPLASH_MESSAGES_JSON
+        value: '[ "You''re not just a user...", "You''re my favourite person in this journey.", "Your smile, your voice, your presence...", "Everything about you makes my world brighter. ❤️" ]'
+      - key: ALGOBOT_SPLASH_EMOJIS_JSON
+        value: '[ "❤️", "💖", "💕", "💗", "💘", "💝", "😍", "😘", "🌹", "✨", "💋", "👑" ]'
       - key: ALGO_API_BASE_URL
         value: https://api.algobot.dpdns.org
       - key: BASE_URL
