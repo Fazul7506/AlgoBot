@@ -283,3 +283,19 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("left: calc(min(360px, 72vw) - 56px) !important;", css)
         self.assertIn("max-width: calc(100% - 56px) !important;", css)
         self.assertIn("runtime_recovery.css?v=20260919-responsive6", html)
+
+
+    def test_sidebar_isolation_keeps_document_scroll_separate_from_nav(self):
+        """The fixed sidebar is viewport-owned and document scrolling cannot mutate its nav scroll position."""
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(encoding="utf-8")
+        js = (Path(settings.BASE_DIR) / "static" / "js" / "base_shell.js").read_text(encoding="utf-8")
+        template = (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8")
+        self.assertIn("FINAL SIDEBAR VIEWPORT ISOLATION", css)
+        self.assertIn("position: fixed !important;", css)
+        self.assertIn("contain: layout style !important;", css)
+        self.assertIn("overflow-anchor: none !important;", css)
+        self.assertIn("scrollbar-gutter: stable !important;", css)
+        self.assertIn("isolateFromDocumentScroll", js)
+        self.assertIn("window.addEventListener('scroll', isolateFromDocumentScroll", js)
+        self.assertIn("runtime_recovery.css?v=20260919-responsive7", template)
+        self.assertIn("base_shell.js?v=20260919-sidebar12", template)
