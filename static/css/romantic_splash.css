@@ -384,3 +384,62 @@ body.algobot-splash-active {
     transition: none;
   }
 }
+
+
+.algobot-romantic-splash__rose {
+  position: absolute;
+  z-index: 3;
+  font-size: clamp(3rem, 8vw, 6.2rem);
+  line-height: 1;
+  filter: drop-shadow(0 0 20px rgba(255, 33, 93, .45));
+  animation: algobot-rose-breathe 4.2s ease-in-out infinite;
+  user-select: none;
+  pointer-events: none;
+}
+
+.algobot-romantic-splash__rose span {
+  display: inline-block;
+  margin-left: -16px;
+  font-size: .42em;
+  vertical-align: .1em;
+}
+
+.algobot-romantic-splash__rose--left {
+  left: 2%;
+  bottom: 6%;
+  transform: rotate(-9deg);
+}
+
+.algobot-romantic-splash__rose--right {
+  right: 2%;
+  bottom: 7%;
+  transform: rotate(9deg);
+}
+
+@keyframes algobot-rose-breathe {
+  0%, 100% { transform: translateY(0) rotate(-8deg) scale(1); }
+  50% { transform: translateY(-10px) rotate(-3deg) scale(1.035); }
+}
+
+@media (max-width: 700px) {
+  .algobot-romantic-splash__rose {
+    font-size: 3rem;
+    opacity: .7;
+  }
+
+  .algobot-romantic-splash__rose--left {
+    left: -2%;
+    bottom: 4%;
+  }
+
+  .algobot-romantic-splash__rose--right {
+    right: -2%;
+    bottom: 5%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .algobot-romantic-splash__rose {
+    animation: none !important;
+  }
+}
