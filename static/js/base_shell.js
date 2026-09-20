@@ -89,14 +89,9 @@
     };
 
     scrollHost.addEventListener('scroll', recordScroll, {passive:true});
-    // A document/window scroll must never mutate the sidebar's own scroll
-    // position. The nav is allowed to scroll only from direct sidebar input.
-    const isolateFromDocumentScroll = () => {
-      if (Math.abs((scrollHost.scrollTop || 0) - lastKnownTop) > 0.5) {
-        scrollHost.scrollTop = lastKnownTop;
-      }
-    };
-    document.addEventListener('scroll', isolateFromDocumentScroll, {passive:true});
+    // The sidebar nav is an independent scroll container. Do not attach any
+    // document/window scroll handler that writes to its scrollTop; the browser's
+    // native scroll-container model and CSS overscroll containment own isolation.
     sidebar.querySelectorAll('nav a, .sidebar-new-trade').forEach(link => {
       link.addEventListener('click', savePosition, {capture:true});
     });
