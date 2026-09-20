@@ -113,7 +113,7 @@
     section.appendChild(proceed);
     root.appendChild(celebration);
 
-    return { memory, final, ready, countdown, proceed };
+    return { memory, final, ready, countdown, proceed, celebration };
   }
 
   const ui = createOverlayContent();
