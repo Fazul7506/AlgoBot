@@ -296,6 +296,25 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("overflow-anchor: none !important;", css)
         self.assertIn("scrollbar-gutter: stable !important;", css)
         self.assertIn("isolateFromDocumentScroll", js)
-        self.assertIn("window.addEventListener('scroll', isolateFromDocumentScroll", js)
-        self.assertIn("runtime_recovery.css?v=20260919-responsive7", template)
-        self.assertIn("base_shell.js?v=20260919-sidebar12", template)
+        self.assertIn("document.addEventListener('scroll', isolateFromDocumentScroll", js)
+        self.assertIn("runtime_recovery.css?v=20260920-responsive8", template)
+        self.assertIn("base_shell.js?v=20260920-sidebar13", template)
+
+
+    def test_final_mobile_drawer_contract_is_authoritative(self):
+        """Mobile/tablet use a drawer; desktop remains a fixed rail."""
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(encoding="utf-8")
+        js = (Path(settings.BASE_DIR) / "static" / "js" / "base_shell.js").read_text(encoding="utf-8")
+        template = (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8")
+        self.assertIn("FINAL MOBILE DRAWER AUTHORITY", css)
+        self.assertIn("@media (max-width: 900px)", css)
+        self.assertIn("transform: translate3d(-105%, 0, 0) !important;", css)
+        self.assertIn("#app-sidebar.app-sidebar.is-open", css)
+        self.assertIn("margin-left: 0 !important;", css)
+        self.assertIn(".app-sidebar .sidebar-toggle", css)
+        self.assertIn("display: none !important;", css)
+        self.assertIn("body.mobile-drawer-locked", css)
+        self.assertIn("document.addEventListener('scroll', isolateFromDocumentScroll", js)
+        self.assertNotIn("window.addEventListener('scroll', isolateFromDocumentScroll, {passive:true, capture:true})", js)
+        self.assertIn("runtime_recovery.css?v=20260920-responsive8", template)
+        self.assertIn("base_shell.js?v=20260920-sidebar13", template)
