@@ -51,6 +51,20 @@
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  root.querySelectorAll("[data-splash-emoji]").forEach((emoji, index) => {
+    const angle = (index / Math.max(1, root.querySelectorAll("[data-splash-emoji]").length)) * Math.PI * 2;
+    const radiusX = 38 + (index % 4) * 11;
+    const radiusY = 34 + (index % 3) * 16;
+    const x = 50 + Math.cos(angle) * radiusX;
+    const y = 50 + Math.sin(angle) * radiusY;
+    emoji.style.setProperty("--x", Math.max(2, Math.min(96, x)) + "%");
+    emoji.style.setProperty("--y", Math.max(4, Math.min(92, y)) + "%");
+    emoji.style.setProperty("--size", (1.05 + (index % 5) * 0.22) + "rem");
+    emoji.style.setProperty("--opacity", String(0.45 + (index % 5) * 0.1));
+    emoji.style.setProperty("--delay", (index * 0.18) + "s");
+    emoji.style.setProperty("--float-duration", (3.2 + (index % 4) * 1.1) + "s");
+  });
+
   const sleep = ms => new Promise(resolve => window.setTimeout(resolve, ms));
 
   async function typeLine(line) {
