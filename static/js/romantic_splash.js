@@ -305,7 +305,7 @@
     setProgress(100, "Welcome, my queen. ❤️");
 
     if (autoProceed) {
-      if (!reducedMotion) await sleep(Math.min(1500, celebrationDuration * 0.45));
+      if (!reducedMotion) await sleep(celebrationDuration);
       finish();
     }
   }
