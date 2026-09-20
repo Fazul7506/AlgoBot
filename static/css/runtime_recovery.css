@@ -2049,3 +2049,87 @@ body {
     padding-right: 0 !important;
   }
 }
+
+
+/* FINAL SIDEBAR VIEWPORT ISOLATION — do not allow document scrolling to
+ * become a sidebar scroll/layout event. The sidebar is a viewport-owned layer;
+ * its nav is the only sidebar scroll surface. This is presentation-only.
+ */
+#app-sidebar.app-sidebar {
+  isolation: isolate !important;
+  overflow-anchor: none !important;
+  overscroll-behavior: none !important;
+}
+#app-sidebar.app-sidebar > nav {
+  overflow-anchor: none !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+}
+
+@media (min-width: 901px) {
+  #app-sidebar.app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    right: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 260px !important;
+    min-width: 260px !important;
+    height: 100svh !important;
+    max-height: 100svh !important;
+    margin: 0 !important;
+    transform: translate3d(0,0,0) !important;
+    translate: none !important;
+    overflow: hidden !important;
+    contain: layout style !important;
+    z-index: 4000 !important;
+  }
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: 78px !important;
+    min-width: 78px !important;
+  }
+  #app-sidebar.app-sidebar > nav {
+    position: absolute !important;
+    top: 64px !important;
+    right: 10px !important;
+    bottom: 154px !important;
+    left: 10px !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    touch-action: pan-y !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  #app-sidebar.app-sidebar > .sidebar-header,
+  #app-sidebar.app-sidebar > .sidebar-user {
+    flex: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  #app-sidebar.app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    right: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    height: 100svh !important;
+    max-height: 100svh !important;
+    margin: 0 !important;
+    contain: layout style !important;
+    overflow: hidden !important;
+    isolation: isolate !important;
+  }
+  #app-sidebar.app-sidebar > nav {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overflow-anchor: none !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+}
