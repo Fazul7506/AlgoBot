@@ -101,7 +101,7 @@ def algobot_romantic_splash(request):
             "duration_ms": _env_int("ALGOBOT_SPLASH_DURATION_MS", 8200, 2500, 30000),
             "type_speed_ms": _env_int("ALGOBOT_SPLASH_TYPE_SPEED_MS", 42, 10, 200),
             "delete_speed_ms": _env_int("ALGOBOT_SPLASH_DELETE_SPEED_MS", 22, 8, 120),
-            "name": os.getenv("ALGOBOT_SPLASH_NAME", "👑 Mäh Qűěěñ ❤️").strip() or "👑 Mäh Qűěěñ ❤️",
+            "name": os.getenv("ALGOBOT_SPLASH_NAME", "Mäh Qűěěñ ❤️").strip() or "👑 Mäh Qűěěñ ❤️",
             "phone": os.getenv("ALGOBOT_SPLASH_PHONE", "0141 322612").strip(),
             "signature": os.getenv("ALGOBOT_SPLASH_SIGNATURE", "With love, AlgoBot ❤️").strip(),
             "side_left": os.getenv("ALGOBOT_SPLASH_SIDE_LEFT", "Always & Forever ❤️").strip(),
