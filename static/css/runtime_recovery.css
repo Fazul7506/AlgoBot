@@ -2133,3 +2133,145 @@ body {
     -webkit-overflow-scrolling: touch !important;
   }
 }
+
+/* FINAL MOBILE DRAWER AUTHORITY — must remain the last responsive sidebar rule.
+ * Desktop owns a permanent viewport rail; <=900px owns a true off-canvas drawer.
+ * The drawer is the only sidebar surface that can scroll, and opening it
+ * prevents the underlying document from scrolling. Existing navigation,
+ * account, broker and collapse behavior are unchanged.
+ */
+@media (max-width: 900px) {
+  html,
+  body {
+    overflow-x: hidden !important;
+  }
+
+  .app-shell,
+  .app-shell.sidebar-collapsed,
+  #app-sidebar.app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .mobile-menu-button {
+    display: grid !important;
+    position: fixed !important;
+    top: max(10px, env(safe-area-inset-top)) !important;
+    left: max(10px, env(safe-area-inset-left)) !important;
+    width: 46px !important;
+    height: 46px !important;
+    z-index: 4001 !important;
+    place-items: center !important;
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
+  }
+
+  #app-sidebar.app-sidebar,
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: min(320px, 88vw) !important;
+    min-width: 0 !important;
+    height: 100svh !important;
+    max-height: 100svh !important;
+    margin: 0 !important;
+    padding: 10px !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    transform: translate3d(-105%, 0, 0) !important;
+    translate: none !important;
+    transition: transform .22s ease !important;
+    z-index: 4000 !important;
+    isolation: isolate !important;
+  }
+
+  #app-sidebar.app-sidebar.is-open {
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  #app-sidebar.app-sidebar .sidebar-toggle,
+  #app-sidebar.app-sidebar > .sidebar-header > [data-sidebar-toggle] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-header {
+    position: absolute !important;
+    inset: 10px 10px auto 10px !important;
+    width: auto !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    max-height: 54px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 30 !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  #app-sidebar.app-sidebar > nav {
+    position: absolute !important;
+    inset: 64px 10px 154px 10px !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 2px 10px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overflow-anchor: none !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
+    -webkit-overflow-scrolling: touch !important;
+    transform: none !important;
+    translate: none !important;
+    z-index: 10 !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-user {
+    position: absolute !important;
+    inset: auto 10px 10px 10px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: 142px !important;
+    min-height: 128px !important;
+    max-height: 142px !important;
+    margin: 0 !important;
+    padding: 10px 0 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    transform: none !important;
+    translate: none !important;
+    z-index: 30 !important;
+  }
+
+  body.mobile-drawer-locked,
+  html.mobile-drawer-locked {
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+    touch-action: none !important;
+  }
+
+  body.mobile-drawer-locked .app-shell {
+    overflow: hidden !important;
+  }
+
+  .sidebar-backdrop:not([hidden]) {
+    position: fixed !important;
+    inset: 0 !important;
+    display: block !important;
+    pointer-events: auto !important;
+    touch-action: none !important;
+    z-index: 3998 !important;
+  }
+
+  body:has(#app-sidebar.app-sidebar.is-open) .mobile-menu-button {
+    z-index: 4002 !important;
+  }
+}

@@ -96,7 +96,7 @@
         scrollHost.scrollTop = lastKnownTop;
       }
     };
-    window.addEventListener('scroll', isolateFromDocumentScroll, {passive:true, capture:true});
+    document.addEventListener('scroll', isolateFromDocumentScroll, {passive:true});
     sidebar.querySelectorAll('nav a, .sidebar-new-trade').forEach(link => {
       link.addEventListener('click', savePosition, {capture:true});
     });
