@@ -62,4 +62,4 @@ The upgraded sequence is intentionally staged rather than continuously animated:
 
 The animation uses CSS transforms/opacity and short-lived DOM particles rather than changing application layout or trading state. Reduced-motion preferences are honored, and the optional sound layer is disabled by default because browser autoplay policies vary.
 
-For a fully automatic surprise, keep `ALGOBOT_SPLASH_AUTO_PROCEED=true). For a deliberate tap-to-enter moment, set it to `false`.
+For a fully automatic surprise, keep `ALGOBOT_SPLASH_AUTO_PROCEED=true`. For a deliberate tap-to-enter moment, set it to `false`.
