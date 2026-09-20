@@ -325,3 +325,47 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("v=20260920-responsive8", template)
         self.assertIn("js/base_shell.js", template)
         self.assertIn("v=20260920-sidebar13", template)
+
+
+    def test_final_sidebar_scroll_isolation_layer_is_loaded_last(self):
+        """The final shell layer owns sidebar scroll geometry after all legacy/mobile CSS."""
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "sidebar_scroll_isolation.css").read_text(
+            encoding="utf-8"
+        )
+        html = (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8")
+        js = (Path(settings.BASE_DIR) / "static" / "js" / "base_shell.js").read_text(encoding="utf-8")
+
+        self.assertIn("FINAL SIDEBAR SCROLL ISOLATION", css)
+        self.assertIn("position: fixed !important;", css)
+        self.assertIn("overflow: hidden !important;", css)
+        self.assertIn("overflow-y: auto !important;", css)
+        self.assertIn("overscroll-behavior-y: contain !important;", css)
+        self.assertIn("scrollbar-gutter: stable !important;", css)
+        self.assertIn("transform: translate3d(-105%, 0, 0) !important;", css)
+        self.assertIn("#app-sidebar.app-sidebar.is-open", css)
+        self.assertIn("html.mobile-drawer-locked", css)
+        self.assertIn("body.mobile-drawer-locked", css)
+        self.assertNotIn("window.addEventListener('scroll', isolateFromDocumentScroll, {passive:true, capture:true})", js)
+
+        positions = [
+            html.index("mobile_sidebar_clean.css?v=20260920-mobile-sidebar2"),
+            html.index("sidebar_scroll_isolation.css?v=20260920-sidebar-isolation1"),
+        ]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("sidebar_scroll_isolation.css?v=20260920-sidebar-isolation1", html)
+
+    def test_sidebar_scroll_ownership_is_explicitly_split(self):
+        """Main page and sidebar nav have separate scroll owners on every device class."""
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "sidebar_scroll_isolation.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("@media (min-width: 901px)", css)
+        self.assertIn("@media (max-width: 900px)", css)
+        self.assertIn("#app-sidebar.app-sidebar > nav", css)
+        self.assertIn("position: absolute !important;", css)
+        self.assertIn("overflow-y: auto !important;", css)
+        self.assertIn("overscroll-behavior-y: contain !important;", css)
+        self.assertIn("#app-sidebar.app-sidebar > .sidebar-header", css)
+        self.assertIn("#app-sidebar.app-sidebar > .sidebar-user", css)
+        self.assertIn("position: absolute !important;", css)
+        self.assertIn("transform: none !important;", css)
