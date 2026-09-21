@@ -44,18 +44,22 @@ CELERY_RESULT_BACKEND = CELERY_RESULT_BACKEND
 # after execution. Worker loss therefore allows Celery to redeliver them.
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_SEND_SENT_EVENT = True
-# Emit worker/task lifecycle events so delivery and STARTED state are observable.
 CELERY_WORKER_SEND_TASK_EVENTS = True
 CELERY_WORKER_ENABLE_REMOTE_CONTROL = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
 
+# Explicit imports make the production worker deterministic even if Django's
+# autodiscovery behavior changes. This is especially important for the isolated
+# market_data worker, which must register the task before consuming its queue.
+CELERY_IMPORTS = (
+    "apps.market_data.tasks",
+)
+
 CELERY_TASK_ROUTES = {
     "apps.market_data.tasks.backfill_research_candles": {"queue": "market_data"},
     "apps.market_data.tasks.run_initial_candle_backfill": {"queue": "market_data"},
     # Recovery/observability must not share the single-consumer market-data queue.
-    # If the long-running backfill is stalled there, a recovery task on that same
-    # queue could never execute. The general worker consumes the default celery queue.
     "apps.market_data.tasks.reconcile_candle_backfill_runs": {"queue": "celery"},
 }
 
