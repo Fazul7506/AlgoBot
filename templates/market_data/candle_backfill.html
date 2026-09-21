@@ -103,11 +103,6 @@
 
   <section class="rb-details-grid">
     <article class="rb-detail-card">
-      <span class="rb-eyebrow">BACKFILL CRITERIA</span>
-      <h3>{{ backfill_config.eligible_symbol_count }} eligible Deriv symbols</h3>
-      <p>Eligibility is evaluated at start time from Django <code>MarketSymbol</code> records where <code>broker=deriv</code>, <code>is_active=true</code> and <code>is_tradable=true</code>. A selected symbol must meet the same criteria.</p>
-    </article>
-    <article class="rb-detail-card">
       <span class="rb-eyebrow">TIMEFRAME PLAN</span>
       <h3>{{ backfill_config.native_timeframes|length }} native candle series + tick-derived research</h3>
       <p>Native Deriv OHLC: {{ backfill_config.native_timeframes|join:", " }}. Tick history also supplies {{ backfill_config.tick_derived_timeframes|join:", " }}. Each request is capped at {{ backfill_config.count }} records and paced to respect the broker data budget.</p>
