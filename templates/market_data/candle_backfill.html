@@ -80,7 +80,8 @@
         <div><dt>Branch</dt><dd><code>{{ backfill_config.render_contract.branch }}</code></dd></div>
         <div><dt>Auto deploy</dt><dd>{{ backfill_config.render_contract.auto_deploy }}</dd></div>
         <div><dt>Preflight</dt><dd><code>{{ backfill_config.render_contract.preflight }}</code></dd></div>
-        <div><dt>Lifecycle</dt><dd>Build → preflight → worker start</dd></div>
+        <div><dt>Build</dt><dd><code>{{ backfill_config.render_contract.build_command }}</code></dd></div>
+        <div><dt>Start</dt><dd><code>{{ backfill_config.render_contract.start_command }}</code></dd></div>
       </dl>
     </article>
     <article class="rb-render-card">
@@ -91,6 +92,7 @@
         <div><dt>Recovery</dt><dd>{{ backfill_config.render_contract.recovery }}</dd></div>
         <div><dt>Automatic retry</dt><dd>{{ backfill_config.render_contract.automatic_retry }}</dd></div>
         <div><dt>Evidence</dt><dd>Run state + timestamps + logs + broker progress</dd></div>
+        <div><dt>State</dt><dd>Pending · Running · Completed · Failed</dd></div>
       </dl>
     </article>
   </section>
