@@ -8,6 +8,7 @@
   let polling = false;
   let tail = true;
   let query = "";
+  let level = "";
   let searchTimer = null;
   let telemetryFailures = 0;
 
@@ -52,6 +53,8 @@
       text("[data-requested]", "—");
       text("[data-started]", "—");
       text("[data-source]", "—");
+      text("[data-delivery]", "—");
+      text("[data-task-id]", "—");
       text("[data-worker-state]", "NOT STARTED");
       text("[data-heartbeat]", "Heartbeat —");
       text("[data-progress-count]", "— / —");
@@ -79,6 +82,8 @@
     if (pill) {
       pill.textContent = run.status_label || state;
       pill.dataset.state = state;
+      pill.dataset.renderState = run.render_status || "";
+      pill.title = run.render_status_label ? "Render-aligned task state: " + run.render_status_label : "";
     }
     text("[data-status-large]", run.status_label || state);
     text("[data-start-state]",
@@ -98,6 +103,8 @@
     text("[data-requested]", formatDate(run.requested_at));
     text("[data-started]", formatDate(run.started_at));
     text("[data-source]", run.accepted_at ? "Deriv · Celery worker" : "Celery queue");
+    text("[data-delivery]", run.delivery_queue || "—");
+    text("[data-task-id]", run.task_id || "—");
     text("[data-worker-state]", run.worker_state || run.celery_state || "DISPATCHING");
     text("[data-heartbeat]", run.last_heartbeat_at ? "Heartbeat " + formatDate(run.last_heartbeat_at) : "Heartbeat —");
     const progress = run.progress || {};
@@ -173,6 +180,7 @@
         limit: "200",
       });
       if (query) params.set("q", query);
+      if (level) params.set("level", level);
       const response = await fetch(location.pathname + "?" + params.toString(), {
         credentials: "same-origin",
         cache: "no-store",
@@ -225,6 +233,21 @@
         query = search.value.trim();
         resetSearch();
       }, 250);
+    });
+  }
+
+  const logFilter = $("[data-log-filter]");
+  if (logFilter) {
+    logFilter.addEventListener("change", () => {
+      level = logFilter.value || "";
+      resetSearch();
+    });
+  }
+
+  const refreshButton = $("[data-refresh]");
+  if (refreshButton) {
+    refreshButton.addEventListener("click", () => {
+      refresh();
     });
   }
 
