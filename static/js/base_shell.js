@@ -107,7 +107,7 @@
   }
 
   function bindNavigation() {
-    const sidebar=$('#app-sidebar'); if(!sidebar||sidebar.dataset.navigationBound==='true')return; sidebar.dataset.navigationBound='true'; const nav=sidebar.querySelector('nav'); const backdrop=$('[data-sidebar-backdrop]');const mobile=$('[data-mobile-menu]');const toggle=$('[data-sidebar-toggle]');const shell=$('.app-shell');const storageKey='algobot.sidebar.collapsed';
+    const sidebar=$('#app-sidebar'); if(!sidebar||sidebar.dataset.navigationBound==='true')return; sidebar.dataset.navigationBound='true'; const nav=sidebar.querySelector('nav'); const backdrop=$('[data-sidebar-backdrop]');const mobile=$('[data-mobile-menu]');
     syncActiveNavigation({anchor:false}); bindSidebarScrollState(sidebar, nav);
     if(window.MutationObserver&&!sidebar.dataset.activeAnchorObserver){sidebar.dataset.activeAnchorObserver='true';const observer=new MutationObserver(()=>syncActiveNavigation({anchor:true}));observer.observe(sidebar,{childList:true,subtree:true});}
     let mobileScrollLocked=false;let mobileScrollY=0;let previousBodyPosition='';let previousBodyTop='';let previousBodyLeft='';let previousBodyRight='';let previousBodyWidth='';
