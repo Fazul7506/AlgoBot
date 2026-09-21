@@ -20,7 +20,7 @@ class MarketDataWorkerPreflightTests(SimpleTestCase):
         call_command("check_market_data_worker")
         connection.ensure_connection.assert_called_once_with(max_retries=1)
 
-    @patch("apps.market_data.management.commands.check_market_data_worker.app")
+    @patch("deriv_platform.celery.app")
     def test_preflight_rejects_missing_task(self, app):
         app.tasks = {}
         app.conf.task_routes = {}
