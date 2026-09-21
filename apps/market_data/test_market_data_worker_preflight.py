@@ -6,7 +6,7 @@ from django.test import SimpleTestCase
 
 
 class MarketDataWorkerPreflightTests(SimpleTestCase):
-    @patch("apps.market_data.management.commands.check_market_data_worker.app")
+    @patch("deriv_platform.celery.app")
     def test_preflight_accepts_registered_task_and_market_data_route(self, app):
         app.tasks = {
             "apps.market_data.tasks.run_initial_candle_backfill": object(),
