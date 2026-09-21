@@ -35,12 +35,12 @@ class CandleBackfillUiTests(TestCase):
         )
         self.client.force_login(self.user)
 
-    def test_empty_page_exposes_start_control_and_truthful_criteria(self):
+    def test_empty_page_exposes_start_control_without_criteria_panel(self):
         response = self.client.get(reverse("initial_candle_backfill"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Start backfill")
-        self.assertContains(response, "1 eligible Deriv symbols")
-        self.assertContains(response, "broker=deriv")
+        self.assertNotContains(response, "BACKFILL CRITERIA")
+        self.assertNotContains(response, "broker=deriv")
         self.assertContains(response, "Not started")
         self.assertContains(response, "No initial run exists")
         self.assertNotContains(response, "Loading live state")
@@ -86,6 +86,35 @@ class CandleBackfillUiTests(TestCase):
             args=(run.pk,),
             kwargs={"count": 5000, "symbol": None},
             queue="market_data",
+        )
+
+    def test_dispatch_fails_over_to_general_celery_worker_when_market_data_has_no_consumer(self):
+        published = SimpleNamespace(id="general-queue-task")
+        with patch(
+            "apps.market_data.views._preferred_backfill_queue",
+            return_value="celery",
+        ), patch(
+            "apps.market_data.tasks.run_initial_candle_backfill.apply_async",
+            return_value=published,
+        ) as publish:
+            response = self.client.post(
+                reverse("initial_candle_backfill"),
+                {"symbol": ""},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        run = CandleBackfillRun.objects.get(scope="initial")
+        self.assertEqual(run.task_id, "general-queue-task")
+        publish.assert_called_once_with(
+            args=(run.pk,),
+            kwargs={"count": 5000, "symbol": None},
+            queue="celery",
+        )
+        self.assertTrue(
+            CandleBackfillEvent.objects.filter(
+                run=run,
+                message__icontains="general Celery worker",
+            ).exists()
         )
 
     def test_selected_symbol_must_be_active_tradable_deriv_symbol(self):
