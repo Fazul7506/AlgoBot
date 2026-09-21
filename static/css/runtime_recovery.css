@@ -2311,8 +2311,9 @@ body {
 
 
 /* FINAL CHATGPT-LIKE MOBILE SIDEBAR CONTRACT — user-visible boundary and controls.
- * The mobile drawer ends at the requested viewport boundary; the page-level
- * hamburger remains the only drawer control. No sidebar X/close control exists.
+ * The mobile drawer ends at the requested viewport boundary. The desktop
+ * collapse/expand control remains available only at 901px+; the page-level
+ * hamburger owns drawer access below that boundary.
  */
 @media (max-width: 900px) {
   #app-sidebar.app-sidebar,
@@ -2350,9 +2351,8 @@ body {
     top: max(10px, env(safe-area-inset-top)) !important;
   }
 
-  /* The desktop collapse control is removed from the authenticated DOM.
-     Keep this guard for cached/legacy markup so an old fragment can never
-     render an overlapping close/X control. */
+  /* Desktop keeps the existing collapse/expand control. Mobile/tablet
+     deliberately hide that desktop control; the page hamburger owns drawer access. */
   #app-sidebar.app-sidebar .sidebar-toggle,
   #app-sidebar.app-sidebar [data-sidebar-toggle] {
     display: none !important;
