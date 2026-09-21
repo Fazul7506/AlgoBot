@@ -34,9 +34,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="app-sidebar"')
-        self.assertContains(response, 'data-sidebar-toggle')
-        self.assertContains(response, 'aria-label="Collapse navigation"')
-        self.assertContains(response, 'aria-expanded="true"')
+        self.assertNotContains(response, 'data-sidebar-toggle')
+        self.assertNotContains(response, 'class="sidebar-toggle"')
         for href in (
             "/dashboard/", "/trading/", "/markets/", "/orders/", "/trade-history/",
             "/positions/", "/signals/", "/strategies/", "/backtesting/", "/performance/",
@@ -64,18 +63,17 @@ class UniversalWorkspaceAccessTests(TestCase):
                 self.assertContains(response, f'href="{href}"')
 
 
-    def test_collapsed_sidebar_keeps_favicon_and_expand_affordance(self):
-        """Collapsed desktop navigation keeps the favicon and existing expand control."""
+    def test_sidebar_has_no_close_or_collapse_control(self):
+        """The authenticated sidebar has no X/close control; the page hamburger owns mobile drawer access."""
         css_path = Path(settings.BASE_DIR) / "static" / "css" / "chatgpt_shell.css"
         css = css_path.read_text(encoding="utf-8")
         self.assertIn(".app-sidebar.is-collapsed .sidebar-header .brand-favicon", css)
-        self.assertIn(".app-sidebar.is-collapsed .sidebar-header:hover .sidebar-toggle", css)
-        self.assertIn(".app-sidebar.is-collapsed .sidebar-header .sidebar-toggle:focus-visible", css)
-        self.assertIn(".app-sidebar .sidebar-header > .sidebar-toggle", css)
-        self.assertIn("display: grid !important;", css)
+        self.assertIn("#app-sidebar.app-sidebar .sidebar-toggle", css)
+        self.assertIn("display: none !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover5")
+        self.assertNotContains(response, 'data-sidebar-toggle')
 
 
     def test_authenticated_shell_uses_vertical_topbar_content_flow(self):
@@ -85,7 +83,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn(".app-shell {\n  display: block !important;", css)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-boundary1")
+        self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-chatgpt2")
 
 
     def test_sidebar_visual_shell_is_fixed_and_brand_spacing_is_stable(self):
@@ -109,7 +107,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover5")
-        self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-boundary1")
+        self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-chatgpt2")
         self.assertContains(response, 'href="/static/icons/favicon.ico')
  
     def test_runtime_sidebar_layer_is_loaded_after_other_presentation_layers(self):
@@ -121,7 +119,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             html.index("card_alignment.css"),
             html.index("platform_polish.css"),
             html.index("control_polish.css"),
-            html.index("runtime_recovery.css?v=20260921-sidebar-boundary1"),
+            html.index("runtime_recovery.css?v=20260921-sidebar-chatgpt2"),
         ]
         self.assertEqual(positions, sorted(positions))
 
@@ -166,8 +164,8 @@ class UniversalWorkspaceAccessTests(TestCase):
 
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-boundary1")
-        self.assertContains(response, "base_shell.js?v=20260921-sidebar-no-x1")
+        self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-chatgpt2")
+        self.assertContains(response, "base_shell.js?v=20260921-sidebar-chatgpt2")
 
     def test_sidebar_stops_at_desktop_boundary(self):
         css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(encoding="utf-8")
@@ -196,8 +194,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertNotIn("sidebar.scrollHeight", js)
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-boundary1")
-        self.assertContains(response, "base_shell.js?v=20260921-sidebar-no-x1")
+        self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-chatgpt2")
+        self.assertContains(response, "base_shell.js?v=20260921-sidebar-chatgpt2")
 
     def test_sidebar_scroll_state_uses_nav_only(self):
         """Sidebar navigation may remember its own position without moving the dock."""
@@ -248,7 +246,7 @@ class UniversalWorkspaceAccessTests(TestCase):
 
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-boundary1")
+        self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-chatgpt2")
 
 
     def test_final_device_shell_has_distinct_drawer_and_desktop_geometry(self):
@@ -259,8 +257,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("@media (min-width: 901px)", css)
         self.assertIn("@media (min-width: 601px) and (max-width: 900px)", css)
         self.assertIn("@media (max-width: 600px)", css)
-        self.assertIn("width: min(300px, 78vw) !important;", css)
-        self.assertIn("width: min(360px, 72vw) !important;", css)
+        self.assertIn("width: 60vw !important;", css)
+        self.assertIn("max-width: 60vw !important;", css)
         self.assertIn("body:has(#app-sidebar.app-sidebar.is-open)", css)
         self.assertIn("grid-template-columns: minmax(0, 1fr) 44px !important;", css)
         self.assertIn("if(icon)icon.textContent='menu';", js)
@@ -332,3 +330,16 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("v=20260921-sidebar-boundary2", template)
         self.assertIn("js/base_shell.js", template)
         self.assertIn("v=20260921-sidebar-no-x1", template)
+
+
+    def test_mobile_sidebar_matches_requested_boundary_and_has_no_x_control(self):
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(encoding="utf-8")
+        html = (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8")
+        self.assertIn("FINAL CHATGPT-LIKE MOBILE SIDEBAR CONTRACT", css)
+        self.assertIn("width: 60vw !important;", css)
+        self.assertIn("max-width: 60vw !important;", css)
+        self.assertIn("No sidebar X/close control exists.", css)
+        self.assertNotIn('data-sidebar-toggle', html)
+        self.assertNotIn('class="sidebar-toggle"', html)
+        self.assertIn("base_shell.js?v=20260921-sidebar-chatgpt2", html)
+        self.assertIn("runtime_recovery.css?v=20260921-sidebar-chatgpt2", html)
