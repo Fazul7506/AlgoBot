@@ -10,6 +10,12 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 app.conf.beat_schedule = {
+    "initial-candle-backfill-automatic-every-5-minutes": {
+        "task": "apps.market_data.tasks.ensure_initial_candle_backfill",
+        "schedule": 300.0,
+        "kwargs": {"count": 5000},
+        "options": {"queue": "celery", "expires": 240},
+    },
     "execution-queue-every-2-seconds": {
         "task": "apps.execution.process_execution_queue",
         "schedule": 2.0,
