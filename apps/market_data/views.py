@@ -9,7 +9,6 @@ from django.utils import timezone
 
 from .constants import TIMEFRAMES
 from .models import CandleBackfillEvent, CandleBackfillRun, MarketSymbol
-from .tasks import _preferred_backfill_queue
 
 BACKFILL_COUNT = 5000
 
