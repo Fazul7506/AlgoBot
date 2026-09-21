@@ -85,7 +85,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-sidebar-toggle')
         self.assertContains(response, 'class="sidebar-toggle"')
-        self.assertContains(response, "base_shell.js?v=20260921-sidebar-desktop-collapse1")
+        self.assertContains(response, "base_shell.js?v=20260921-sidebar-desktop-collapse2")
         self.assertContains(response, "chatgpt_shell.css?v=20260919-sidebarhover5")
 
 
@@ -178,7 +178,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-chatgpt2")
-        self.assertContains(response, "base_shell.js?v=20260921-sidebar-desktop-collapse1")
+        self.assertContains(response, "base_shell.js?v=20260921-sidebar-desktop-collapse2")
 
     def test_sidebar_stops_at_desktop_boundary(self):
         css = (Path(settings.BASE_DIR) / "static" / "css" / "runtime_recovery.css").read_text(encoding="utf-8")
@@ -208,7 +208,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "runtime_recovery.css?v=20260921-sidebar-chatgpt2")
-        self.assertContains(response, "base_shell.js?v=20260921-sidebar-desktop-collapse1")
+        self.assertContains(response, "base_shell.js?v=20260921-sidebar-desktop-collapse2")
 
     def test_sidebar_scroll_state_uses_nav_only(self):
         """Sidebar navigation may remember its own position without moving the dock."""
@@ -354,5 +354,5 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("No sidebar X/close control exists.", css)
         self.assertIn('data-sidebar-toggle', html)
         self.assertIn('class="sidebar-toggle"', html)
-        self.assertIn("base_shell.js?v=20260921-sidebar-desktop-collapse1", html)
+        self.assertIn("base_shell.js?v=20260921-sidebar-desktop-collapse2", html)
         self.assertIn("runtime_recovery.css?v=20260921-sidebar-chatgpt2", html)
