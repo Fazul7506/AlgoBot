@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from .models import CandleBackfillEvent, CandleBackfillRun, MarketSymbol
-from .tasks import reconcile_candle_backfill_runs, run_initial_candle_backfill
+from .tasks import ensure_initial_candle_backfill, reconcile_candle_backfill_runs, run_initial_candle_backfill
 
 
 class CandleBackfillReliabilityTests(TestCase):
@@ -316,3 +316,35 @@ class CandleBackfillReliabilityTests(TestCase):
         )
         run.refresh_from_db()
         self.assertEqual(run.status, "running")
+
+
+    def test_initial_backfill_is_automatically_scheduled_on_celery(self):
+        self.assertEqual(
+            settings.CELERY_TASK_ROUTES[
+                "apps.market_data.tasks.ensure_initial_candle_backfill"
+            ]["queue"],
+            "celery",
+        )
+        from deriv_platform.celery import app
+        entry = app.conf.beat_schedule["initial-candle-backfill-automatic-every-5-minutes"]
+        self.assertEqual(entry["task"], "apps.market_data.tasks.ensure_initial_candle_backfill")
+        self.assertEqual(entry["options"]["queue"], "celery")
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+    def test_automatic_initial_dispatch_marks_trigger_automatic(self):
+        with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as publish:
+            publish.return_value.id = "automatic-task-id"
+            result = ensure_initial_candle_backfill(count=5000)
+        self.assertEqual(result["status"], "dispatched")
+        run = CandleBackfillRun.objects.get(scope="initial")
+        self.assertEqual(run.status, "running")
+        self.assertEqual((run.result or {}).get("trigger"), "automatic")
+        self.assertEqual((run.result or {}).get("automatic_attempts"), 1)
+        self.assertEqual(result["queue"], "market_data")
+        publish.assert_called_once()
+
+    def test_recovery_alternates_to_general_celery_queue(self):
+        from .tasks import _recovery_backfill_queue
+        self.assertEqual(_recovery_backfill_queue(0), "market_data")
+        self.assertEqual(_recovery_backfill_queue(1), "celery")
+        self.assertEqual(_recovery_backfill_queue(2), "market_data")
