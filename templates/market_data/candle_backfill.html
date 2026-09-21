@@ -62,56 +62,6 @@
     <div class="rb-summary-item"><span>TASK ID</span><strong data-task-id>{% if run_payload and run_payload.task_id %}{{ run_payload.task_id }}{% else %}—{% endif %}</strong></div>
   </section>
 
-  <section class="rb-render-grid" aria-label="Render-aligned service contract">
-    <article class="rb-render-card">
-      <div class="rb-render-card-head"><span class="rb-eyebrow">RENDER SERVICE</span><span class="rb-service-dot">●</span></div>
-      <h2>{{ backfill_config.render_contract.service }}</h2>
-      <dl>
-        <div><dt>Type</dt><dd>{{ backfill_config.render_contract.service_type }}</dd></div>
-        <div><dt>Runtime</dt><dd>{{ backfill_config.render_contract.runtime }}</dd></div>
-        <div><dt>Queue</dt><dd><code>{{ backfill_config.render_contract.queue }}</code></dd></div>
-        <div><dt>Worker</dt><dd>1 concurrent consumer · prefetch 1</dd></div>
-      </dl>
-    </article>
-    <article class="rb-render-card">
-      <div class="rb-render-card-head"><span class="rb-eyebrow">DEPLOYMENT</span><span class="rb-contract-badge">SOURCE CONTROLLED</span></div>
-      <h2>Git-linked worker contract</h2>
-      <dl>
-        <div><dt>Branch</dt><dd><code>{{ backfill_config.render_contract.branch }}</code></dd></div>
-        <div><dt>Auto deploy</dt><dd>{{ backfill_config.render_contract.auto_deploy }}</dd></div>
-        <div><dt>Preflight</dt><dd><code>{{ backfill_config.render_contract.preflight }}</code></dd></div>
-        <div><dt>Build</dt><dd><code>{{ backfill_config.render_contract.build_command }}</code></dd></div>
-        <div><dt>Start</dt><dd><code>{{ backfill_config.render_contract.start_command }}</code></dd></div>
-        <div><dt>Shutdown</dt><dd>{{ backfill_config.render_contract.shutdown }}</dd></div>
-      </dl>
-    </article>
-    <article class="rb-render-card">
-      <div class="rb-render-card-head"><span class="rb-eyebrow">TASK RUN</span><span class="rb-contract-badge">DURABLE</span></div>
-      <h2>Queue → worker → broker history</h2>
-      <dl>
-        <div><dt>Scheduled</dt><dd>{{ backfill_config.render_contract.schedule }}</dd></div>
-        <div><dt>Recovery</dt><dd>{{ backfill_config.render_contract.recovery }}</dd></div>
-        <div><dt>Automatic retry</dt><dd>{{ backfill_config.render_contract.automatic_retry }}</dd></div>
-        <div><dt>Evidence</dt><dd>Run state + timestamps + logs + broker progress</dd></div>
-        <div><dt>State</dt><dd>Pending · Running · Completed · Failed</dd></div>
-      </dl>
-    </article>
-  </section>
-
-  <section class="rb-run-lifecycle" aria-label="Task run lifecycle">
-    <div class="rb-lifecycle-head">
-      <div><span class="rb-eyebrow">RENDER-ALIGNED RUN LIFECYCLE</span><h2>One durable task run, observed end to end</h2></div>
-      <small>Presentation follows Render's pending → running → completed/failed task model; Django/Celery remains the execution authority.</small>
-    </div>
-    <div class="rb-lifecycle-track">
-      <div class="rb-lifecycle-step"><span>01</span><strong>Pending</strong><small>Scheduled or dispatched</small></div>
-      <i class="material-symbols-rounded">arrow_forward</i>
-      <div class="rb-lifecycle-step"><span>02</span><strong>Running</strong><small>Worker heartbeat + broker work</small></div>
-      <i class="material-symbols-rounded">arrow_forward</i>
-      <div class="rb-lifecycle-step"><span>03</span><strong>Terminal</strong><small>Completed or failed</small></div>
-    </div>
-  </section>
-
   <section class="rb-notices" data-notices aria-live="polite">
     {% if page_error %}<div class="rb-notice error"><span class="material-symbols-rounded">error</span><span>{{ page_error }}</span></div>{% endif %}
     {% if run_payload %}
