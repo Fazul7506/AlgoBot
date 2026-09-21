@@ -165,6 +165,8 @@ def _run_payload(run):
             "work_completed": result.get("work_completed", 0),
         },
         "error": run.error,
+        "trigger": result.get("trigger", "manual"),
+        "queue": result.get("queue", ""),
         "celery_state": _celery_state(run),
         "worker_state": worker_state,
         "live": live,
@@ -245,6 +247,7 @@ def initial_candle_backfill(request):
                 "symbols_failed": 0,
                 "percent": 0,
                 "results": {},
+                "trigger": "manual",
             }
             run.error = ""
             run.save()
@@ -255,12 +258,8 @@ def initial_candle_backfill(request):
             )
             run.refresh_from_db()
 
-        queue_name = _preferred_backfill_queue()
-        dispatch_message = (
-            "Backfill requested; publishing to the market_data Celery queue."
-            if queue_name == "market_data"
-            else "Backfill requested; market_data has no active consumer, so the general Celery worker is handling delivery."
-        )
+        queue_name = "market_data"
+        dispatch_message = "Manual backfill requested; publishing to the Celery market-data worker."
         CandleBackfillEvent.objects.create(
             run=run,
             level="notice",
