@@ -1,6 +1,6 @@
 import importlib
 import logging
-from datetime import timedelta
+from datetime import timedelta, timezone as dt_timezone
 import socket
 
 from celery.signals import task_received, task_unknown, task_rejected
@@ -560,7 +560,7 @@ def ensure_initial_candle_backfill(count=5000):
                     try:
                         last_auto_at = timezone.datetime.fromisoformat(last_auto)
                         if timezone.is_naive(last_auto_at):
-                            last_auto_at = timezone.make_aware(last_auto_at, timezone.utc)
+                            last_auto_at = last_auto_at.replace(tzinfo=dt_timezone.utc)
                         if now - last_auto_at < BACKFILL_AUTOMATIC_RETRY_AFTER:
                             return {"status": "cooldown", "run_id": run.pk}
                     except (TypeError, ValueError):
@@ -650,6 +650,8 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
                 logger.warning("Ignoring superseded candle backfill delivery", extra={"run_id": run_id, "task_id": task_id})
                 return {"status": "superseded", "run_id": run_id}
             now = timezone.now()
+            run_metadata = dict(run.result or {})
+            trigger = run_metadata.get("trigger", "manual")
             run.status = "running"
             run.started_at = run.started_at or now
             run.accepted_at = run.accepted_at or now
@@ -664,6 +666,9 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
                 "symbols_failed": 0,
                 "percent": 0,
                 "results": {},
+                "trigger": trigger,
+                "automatic_attempts": run_metadata.get("automatic_attempts", 0),
+                "last_automatic_dispatch_at": run_metadata.get("last_automatic_dispatch_at", ""),
             }
             run.save(update_fields=["status", "started_at", "accepted_at", "last_heartbeat_at", "error", "task_id", "worker_hostname", "result"])
 
@@ -687,6 +692,10 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
             if run.status == "completed" and run.completed_at:
                 return run.result or {"status": "completed"}
+            result = dict(result)
+            result["trigger"] = trigger
+            result["automatic_attempts"] = run_metadata.get("automatic_attempts", 0)
+            result["last_automatic_dispatch_at"] = run_metadata.get("last_automatic_dispatch_at", "")
             run.result = result
             run.status = "failed" if failed else "completed"
             run.error = error
