@@ -44,3 +44,157 @@
 .rb-details-primary{margin-top:12px}
 @media(max-width:1000px){.rb-render-grid{grid-template-columns:1fr}.rb-lifecycle-head{align-items:flex-start;flex-direction:column}.rb-lifecycle-head small{text-align:left;max-width:none}}
 @media(max-width:650px){.rb-lifecycle-track{align-items:stretch;flex-direction:column}.rb-lifecycle-track>i{transform:rotate(90deg);align-self:center}.rb-log-toolbar{gap:8px}.rb-log-select-wrap{min-width:130px}}
+
+
+/* FINAL RESPONSIVE LAYOUT CORRECTION — presentation only.
+ * Keep every existing control/data contract intact while preventing long
+ * task identifiers, broker names and deployment commands from widening the
+ * page beyond the mobile viewport.
+ */
+.rb-page,
+.rb-page * {
+  box-sizing: border-box;
+}
+.rb-page {
+  min-width: 0;
+  overflow-x: clip;
+}
+.rb-top,
+.rb-title-row,
+.rb-title-row > *,
+.rb-run-summary,
+.rb-summary-item,
+.rb-render-grid,
+.rb-render-card,
+.rb-run-lifecycle,
+.rb-lifecycle-head,
+.rb-progress-card,
+.rb-card-head,
+.rb-notices,
+.rb-notice,
+.rb-log-panel,
+.rb-details-grid,
+.rb-detail-card {
+  min-width: 0;
+}
+.rb-summary-item strong,
+.rb-summary-item em,
+.rb-render-card dd,
+.rb-render-card dd code,
+.rb-detail-card p,
+.rb-lifecycle-head small {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.rb-summary-item strong {
+  white-space: normal;
+}
+.rb-render-card dd {
+  white-space: normal;
+}
+.rb-render-card dd code {
+  white-space: normal;
+}
+.rb-start-copy small {
+  overflow-wrap: anywhere;
+}
+.rb-log-toolbar {
+  min-width: 0;
+}
+.rb-log-select-wrap,
+.rb-log-control,
+.rb-icon-btn {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1000px) {
+  .rb-run-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .rb-summary-item {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 650px) {
+  .rb-page {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 12px;
+    padding-right: 12px;
+    overflow-x: clip;
+  }
+
+  .rb-run-summary {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rb-summary-item {
+    min-width: 0;
+    padding: 14px 12px;
+  }
+
+  .rb-summary-item strong,
+  .rb-summary-item em {
+    min-width: 0;
+  }
+
+  .rb-summary-status {
+    grid-column: 1 / -1;
+  }
+
+  .rb-title-row h1 {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .rb-title-row p {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .rb-render-card,
+  .rb-run-lifecycle,
+  .rb-progress-card,
+  .rb-log-panel,
+  .rb-detail-card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .rb-render-card dl > div {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .rb-log-panel {
+    max-width: 100%;
+  }
+
+  .rb-search {
+    min-width: 0;
+    max-width: calc(100% - 28px);
+  }
+
+  .rb-log-body {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .rb-log-line {
+    min-width: 0;
+  }
+}
+
+/* Devices whose browser reports a wider layout viewport while rendering a
+ * narrow physical screen still receive the same safe two-column contract.
+ */
+@media (max-width: 900px) {
+  .rb-page {
+    min-width: 0;
+  }
+  .rb-run-summary {
+    min-width: 0;
+  }
+}
