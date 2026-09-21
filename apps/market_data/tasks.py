@@ -94,27 +94,6 @@ def _recovery_backfill_queue(recovery_attempts):
     """Alternate recovery delivery so a missing dedicated consumer cannot trap the job forever."""
     return "celery" if int(recovery_attempts or 0) % 2 else "market_data"
 
-def _preferred_backfill_queue():
-    """Select the first delivery queue; recovery deliberately alternates queues."""
-    app = _celery_app()
-    if not app:
-        return "market_data"
-    try:
-        active_queues = app.control.inspect(timeout=1).active_queues() or {}
-    except Exception:
-        return "market_data"
-    for queues in active_queues.values():
-        for queue in queues or []:
-            if str(queue.get("name", "")) == "market_data":
-                return "market_data"
-    if active_queues:
-        for queues in active_queues.values():
-            for queue in queues or []:
-                if str(queue.get("name", "")) == "celery":
-                    return "celery"
-    return "market_data"
-
-
 
 @task_received.connect
 def _record_candle_backfill_worker_received(sender=None, request=None, **kwargs):
