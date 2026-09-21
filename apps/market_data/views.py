@@ -120,6 +120,21 @@ def _run_payload(run):
         worker_state = "STALE"
     else:
         worker_state = "STARTED"
+    # Render Workflows exposes pending/running/completed/failed/canceled task
+    # states. This is a presentation mapping only; the Django/Celery lifecycle
+    # remains authoritative and is not changed by this label.
+    if run.status == "completed":
+        render_status = "completed"
+        render_status_label = "Completed"
+    elif run.status == "failed":
+        render_status = "failed"
+        render_status_label = "Failed"
+    elif run.started_at:
+        render_status = "running"
+        render_status_label = "Running"
+    else:
+        render_status = "pending"
+        render_status_label = "Pending"
     if run.status == "running" and not run.started_at:
         status_label = "Worker received" if run.accepted_at else "Dispatching"
     notices = []
@@ -141,8 +156,23 @@ def _run_payload(run):
     if run.error:
         notices.append({"level": "error", "message": run.error})
     event_count = CandleBackfillEvent.objects.filter(run=run).count()
+    latest_delivery = (
+        CandleBackfillEvent.objects.filter(
+            run=run,
+            event_type__in=["dispatch", "recovered", "worker_received"],
+        )
+        .order_by("-created_at", "-id")
+        .first()
+    )
+    latest_payload = latest_delivery.payload if latest_delivery else {}
+    delivery_queue = (
+        latest_payload.get("queue")
+        or result.get("queue")
+        or ""
+    )
     return {
         "scope": run.scope, "status": run.status, "status_label": status_label,
+        "render_status": render_status, "render_status_label": render_status_label,
         "count": run.count, "symbol": run.symbol, "task_id": run.task_id,
         "requested_at": run.requested_at.isoformat() if run.requested_at else None,
         "dispatch_at": run.dispatch_at.isoformat() if run.dispatch_at else None,
@@ -166,6 +196,10 @@ def _run_payload(run):
         "error": run.error,
         "trigger": result.get("trigger", "manual"),
         "queue": result.get("queue", ""),
+        "delivery_queue": delivery_queue,
+        "task_name": "apps.market_data.tasks.run_initial_candle_backfill",
+        "recovery_attempts": int(result.get("dispatch_recovery_attempts", 0) or 0),
+        "automatic_attempts": int(result.get("automatic_attempts", 0) or 0),
         "celery_state": _celery_state(run),
         "worker_state": worker_state,
         "live": live,
@@ -326,6 +360,25 @@ def initial_candle_backfill(request):
         "eligible_symbol_count": len(eligible_symbols),
         "native_timeframes": native_timeframes,
         "tick_derived_timeframes": tick_derived_timeframes,
+        # Render-aligned service metadata mirrors the checked-in Blueprint
+        # without changing the worker, queue, schedule, or broker behavior.
+        "render_contract": {
+            "service": "AlgoBot-MarketData",
+            "service_type": "Background worker",
+            "runtime": "Python",
+            "branch": "main",
+            "auto_deploy": "On commit",
+            "queue": "market_data",
+            "concurrency": "1",
+            "prefetch_multiplier": "1",
+            "max_tasks_per_child": "20",
+            "build_command": "pip install -r requirements/base.txt",
+            "preflight": "python manage.py check_market_data_worker",
+            "start_command": "celery -A deriv_platform.celery worker --include=apps.market_data.tasks -Q market_data",
+            "schedule": "Celery Beat · every 5 minutes",
+            "recovery": "Automatic reconciliation · every 2 minutes",
+            "automatic_retry": "15 minutes after a failed automatic dispatch",
+        },
     }
     if request.GET.get("format") == "json":
         scope = request.GET.get("scope", "initial")
@@ -348,9 +401,12 @@ def initial_candle_backfill(request):
                 limit = 200
             events = CandleBackfillEvent.objects.filter(run=run)
             query = (request.GET.get("q") or "").strip()
+            level = (request.GET.get("level") or "").strip().lower()
             if query:
                 from django.db.models import Q
                 events = events.filter(Q(message__icontains=query) | Q(symbol__icontains=query) | Q(timeframe__icontains=query) | Q(level__icontains=query))
+            if level in {"info", "notice", "warning", "error", "success"}:
+                events = events.filter(level=level)
             if after:
                 events = events.filter(id__gt=after)
             events = list(events.order_by("id")[:limit])
