@@ -67,7 +67,7 @@ class Command(BaseCommand):
             connection.ensure_connection(max_retries=1)
         except Exception as exc:
             raise CommandError(
-                f"Celery broker is not reachable from the market-data worker: {exc}
+                f"Celery broker is not reachable from the market-data worker: {exc}"
             ) from exc
 
         self.stdout.write(
