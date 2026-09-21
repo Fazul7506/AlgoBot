@@ -578,211 +578,187 @@ body.sidebar-collapsed .app-shell {
 }
 
 
+/* FINAL DESKTOP SIDEBAR RAIL — presentation only. */
+@media (min-width: 901px) {
 /* FINAL PERMANENT SIDEBAR RAIL — presentation only.
- * This is intentionally the last sidebar contract in this stylesheet.
- * The rail itself never scrolls or translates; only its <nav> may scroll.
- * The existing DOM, links, collapse state, broker/account UI and handlers remain unchanged.
- */
-#app-sidebar.app-sidebar {
-  position: fixed !important;
-  top: 0 !important;
-  right: auto !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  width: 260px !important;
-  min-width: 260px !important;
-  height: 100vh !important;
-  height: 100dvh !important;
-  max-height: 100vh !important;
-  max-height: 100dvh !important;
-  margin: 0 !important;
-  padding: 10px !important;
-  overflow: hidden !important;
-  overflow-anchor: none !important;
-  overscroll-behavior: none !important;
-  transform: none !important;
-  translate: none !important;
-  will-change: auto !important;
-  display: flex !important;
-  flex-direction: column !important;
-  box-sizing: border-box !important;
-  z-index: 3000 !important;
-}
-
-#app-sidebar.app-sidebar > nav {
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  min-width: 0 !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  overflow-anchor: none !important;
-  overscroll-behavior: contain !important;
-  -webkit-overflow-scrolling: touch !important;
-  touch-action: pan-y !important;
-}
-
-#app-sidebar.app-sidebar .sidebar-header {
-  flex: 0 0 54px !important;
-  min-height: 54px !important;
-  position: relative !important;
-  width: 100% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 8px !important;
-  box-sizing: border-box !important;
-}
-
-#app-sidebar.app-sidebar .sidebar-header .brand {
-  position: relative !important;
-  inset: auto !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  min-width: 0 !important;
-  width: auto !important;
-  height: auto !important;
-  margin: 0 !important;
-  gap: 4px !important;
-}
-
-#app-sidebar.app-sidebar .sidebar-header .brand-mark {
-  flex: 0 0 28px !important;
-  width: 28px !important;
-  height: 28px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  margin: 0 !important;
-}
-
-#app-sidebar.app-sidebar .sidebar-header .brand-favicon {
-  display: block !important;
-  width: 28px !important;
-  height: 28px !important;
-  flex: 0 0 28px !important;
-  object-fit: contain !important;
-}
-
-#app-sidebar.app-sidebar .sidebar-header .brand-name {
-  display: inline !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  white-space: nowrap !important;
-}
-
-/* Collapsed state: the header shows ONLY favicon.ico visually.
- * The existing expand button remains available on hover/focus over the icon.
- */
-#app-sidebar.app-sidebar.is-collapsed,
-body.sidebar-collapsed #app-sidebar.app-sidebar {
-  width: 78px !important;
-  min-width: 78px !important;
-  padding-left: 14px !important;
-  padding-right: 14px !important;
-  transform: none !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed .sidebar-header,
-body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header {
-  justify-content: center !important;
-  gap: 0 !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand,
-body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand {
-  width: 48px !important;
-  min-width: 48px !important;
-  height: 48px !important;
-  flex: 0 0 48px !important;
-  justify-content: center !important;
-  gap: 0 !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand-name,
-body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand-name {
-  display: none !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand-mark,
-body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand-mark {
-  width: 40px !important;
-  height: 40px !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand-favicon,
-body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand-favicon {
-  width: 32px !important;
-  height: 32px !important;
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-}
-
-#app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle {
-  position: relative !important;
-  inset: auto !important;
-  flex: 0 0 36px !important;
-  width: 36px !important;
-  min-width: 36px !important;
-  height: 36px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  display: grid !important;
-  place-items: center !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle,
-body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 48px !important;
-  min-width: 48px !important;
-  height: 48px !important;
-  opacity: 0 !important;
-  z-index: 5 !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed .sidebar-header:hover > .sidebar-toggle,
-#app-sidebar.app-sidebar.is-collapsed .sidebar-header:focus-within > .sidebar-toggle,
-#app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:hover,
-#app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:focus-visible,
-body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header:hover > .sidebar-toggle,
-body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header:focus-within > .sidebar-toggle,
-body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle:hover,
-body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle:focus-visible {
-  opacity: 1 !important;
-}
-
-/* The page begins beside the fixed rail at every viewport size. */
-.app-shell {
-  margin-left: 260px !important;
-}
-.app-shell.sidebar-collapsed,
-#app-sidebar.app-sidebar.is-collapsed + .app-shell,
-body.sidebar-collapsed .app-shell {
-  margin-left: 78px !important;
-}
-
-/* The legacy mobile off-canvas trigger is presentation-only and must not
- * reintroduce a competing navigation surface over the permanent rail.
- */
-.mobile-menu-button {
-  display: none !important;
-}
-
-@media (max-width: 420px) {
-  #app-sidebar.app-sidebar {
+   * This is intentionally the last sidebar contract in this stylesheet.
+   * The rail itself never scrolls or translates; only its <nav> may scroll.
+   * The existing DOM, links, collapse state, broker/account UI and handlers remain unchanged.
+   */
+    #app-sidebar.app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    right: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
     width: 260px !important;
     min-width: 260px !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    padding: 10px !important;
+    overflow: hidden !important;
+    overflow-anchor: none !important;
+    overscroll-behavior: none !important;
+    transform: none !important;
+    translate: none !important;
+    will-change: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+    z-index: 3000 !important;
   }
+  
+  #app-sidebar.app-sidebar > nav {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overflow-anchor: none !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+  }
+  
+  #app-sidebar.app-sidebar .sidebar-header {
+    flex: 0 0 54px !important;
+    min-height: 54px !important;
+    position: relative !important;
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    box-sizing: border-box !important;
+  }
+  
+  #app-sidebar.app-sidebar .sidebar-header .brand {
+    position: relative !important;
+    inset: auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    min-width: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    gap: 4px !important;
+  }
+  
+  #app-sidebar.app-sidebar .sidebar-header .brand-mark {
+    flex: 0 0 28px !important;
+    width: 28px !important;
+    height: 28px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+  }
+  
+  #app-sidebar.app-sidebar .sidebar-header .brand-favicon {
+    display: block !important;
+    width: 28px !important;
+    height: 28px !important;
+    flex: 0 0 28px !important;
+    object-fit: contain !important;
+  }
+  
+  #app-sidebar.app-sidebar .sidebar-header .brand-name {
+    display: inline !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    white-space: nowrap !important;
+  }
+  
+  /* Collapsed state: the header shows ONLY favicon.ico visually.
+   * The existing expand button remains available on hover/focus over the icon.
+   */
   #app-sidebar.app-sidebar.is-collapsed,
   body.sidebar-collapsed #app-sidebar.app-sidebar {
     width: 78px !important;
     min-width: 78px !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+    transform: none !important;
   }
+  
+  #app-sidebar.app-sidebar.is-collapsed .sidebar-header,
+  body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header {
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+  
+  #app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand,
+  body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand {
+    width: 48px !important;
+    min-width: 48px !important;
+    height: 48px !important;
+    flex: 0 0 48px !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+  
+  #app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand-name,
+  body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand-name {
+    display: none !important;
+  }
+  
+  #app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand-mark,
+  body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand-mark {
+    width: 40px !important;
+    height: 40px !important;
+  }
+  
+  #app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand-favicon,
+  body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header .brand-favicon {
+    width: 32px !important;
+    height: 32px !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle {
+    position: relative !important;
+    inset: auto !important;
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: grid !important;
+    place-items: center !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  
+  #app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle,
+  body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    height: 48px !important;
+    opacity: 0 !important;
+    z-index: 5 !important;
+  }
+  
+  #app-sidebar.app-sidebar.is-collapsed .sidebar-header:hover > .sidebar-toggle,
+  #app-sidebar.app-sidebar.is-collapsed .sidebar-header:focus-within > .sidebar-toggle,
+  #app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:hover,
+  #app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:focus-visible,
+  body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header:hover > .sidebar-toggle,
+  body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header:focus-within > .sidebar-toggle,
+  body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle:hover,
+  body.sidebar-collapsed #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle:focus-visible {
+    opacity: 1 !important;
+  }
+  
+  /* The page begins beside the fixed rail at every viewport size. */
   .app-shell {
     margin-left: 260px !important;
   }
@@ -791,511 +767,539 @@ body.sidebar-collapsed .app-shell {
   body.sidebar-collapsed .app-shell {
     margin-left: 78px !important;
   }
-}
-
-
-/* FINAL DOCKED SIDEBAR ZONES — presentation only.
- * The page/document scroll can never move the sidebar header or account dock.
- * The rail is the viewport anchor; only the navigation list is scrollable.
- * This deliberately keeps the existing links, account switcher, logout form,
- * collapse handler and all broker/trading behavior unchanged.
- */
-#app-sidebar.app-sidebar {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: auto !important;
-  bottom: 0 !important;
-  overflow: hidden !important;
-  touch-action: none !important;
-  contain: layout paint size !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-header {
-  position: absolute !important;
-  top: 10px !important;
-  left: 10px !important;
-  right: 10px !important;
-  width: auto !important;
-  height: 54px !important;
-  min-height: 54px !important;
-  max-height: 54px !important;
-  margin: 0 !important;
-  z-index: 12 !important;
-}
-
-#app-sidebar.app-sidebar > nav {
-  position: absolute !important;
-  top: 64px !important;
-  left: 10px !important;
-  right: 10px !important;
-  bottom: 116px !important;
-  width: auto !important;
-  height: auto !important;
-  max-height: none !important;
-  margin: 0 !important;
-  padding: 0 2px 10px !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  touch-action: pan-y !important;
-  overscroll-behavior: contain !important;
-  -webkit-overflow-scrolling: touch !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-user {
-  position: absolute !important;
-  left: 10px !important;
-  right: 10px !important;
-  bottom: 10px !important;
-  width: auto !important;
-  height: auto !important;
-  max-height: 106px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  z-index: 12 !important;
-  flex: none !important;
-  overflow: visible !important;
-  transform: none !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-user,
-#app-sidebar.app-sidebar > .sidebar-header,
-#app-sidebar.app-sidebar > nav {
-  transform: none !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-user * {
-  transform: none !important;
-}
-
-/* Never allow a navigation gesture to become a rail/page gesture. */
-#app-sidebar.app-sidebar > .sidebar-header,
-#app-sidebar.app-sidebar > .sidebar-user {
-  touch-action: manipulation !important;
-}
-
-@media (max-width: 420px) {
-  #app-sidebar.app-sidebar > nav {
-    top: 64px !important;
-    bottom: 116px !important;
+  
+  /* The legacy mobile off-canvas trigger is presentation-only and must not
+   * reintroduce a competing navigation surface over the permanent rail.
+   */
+  .mobile-menu-button {
+    display: none !important;
   }
-}
-
-
-/* FINAL VIEWPORT-DOCK HARDENING — presentation only.
- * Lock every sidebar zone to the viewport so rapid document scrolling cannot
- * expose/reveal/reposition the account dock or navigation rail.
- */
-
-#app-sidebar.app-sidebar {
-  position: fixed !important;
-  inset: 0 auto auto 0 !important;
-  width: 260px !important;
-  min-width: 260px !important;
-  height: 100vh !important;
-  max-height: 100vh !important;
-  overflow: hidden !important;
-  transform: none !important;
-  translate: none !important;
-  will-change: auto !important;
-  contain: none !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-header {
-  position: absolute !important;
-  top: 10px !important;
-  left: 10px !important;
-  right: 10px !important;
-  bottom: auto !important;
-  transform: none !important;
-  translate: none !important;
-}
-
-#app-sidebar.app-sidebar > nav {
-  position: absolute !important;
-  top: 64px !important;
-  left: 10px !important;
-  right: 10px !important;
-  bottom: 116px !important;
-  transform: none !important;
-  translate: none !important;
-  overflow-y: auto !important;
-  overscroll-behavior: contain !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-user {
-  position: absolute !important;
-  left: 10px !important;
-  right: 10px !important;
-  bottom: 10px !important;
-  top: auto !important;
-  transform: none !important;
-  translate: none !important;
-  overflow: visible !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed,
-body.sidebar-collapsed #app-sidebar.app-sidebar {
-  width: 78px !important;
-  min-width: 78px !important;
-}
-
-@media (max-width: 420px) {
+  
+  @media (max-width: 420px) {
+    #app-sidebar.app-sidebar {
+      width: 260px !important;
+      min-width: 260px !important;
+    }
+    #app-sidebar.app-sidebar.is-collapsed,
+    body.sidebar-collapsed #app-sidebar.app-sidebar {
+      width: 78px !important;
+      min-width: 78px !important;
+    }
+    .app-shell {
+      margin-left: 260px !important;
+    }
+    .app-shell.sidebar-collapsed,
+    #app-sidebar.app-sidebar.is-collapsed + .app-shell,
+    body.sidebar-collapsed .app-shell {
+      margin-left: 78px !important;
+    }
+  }
+  
+  
+  /* FINAL DOCKED SIDEBAR ZONES — presentation only.
+   * The page/document scroll can never move the sidebar header or account dock.
+   * The rail is the viewport anchor; only the navigation list is scrollable.
+   * This deliberately keeps the existing links, account switcher, logout form,
+   * collapse handler and all broker/trading behavior unchanged.
+   */
   #app-sidebar.app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: auto !important;
+    bottom: 0 !important;
+    overflow: hidden !important;
+    touch-action: none !important;
+    contain: layout paint size !important;
+  }
+  
+  #app-sidebar.app-sidebar > .sidebar-header {
+    position: absolute !important;
+    top: 10px !important;
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    max-height: 54px !important;
+    margin: 0 !important;
+    z-index: 12 !important;
+  }
+  
+  #app-sidebar.app-sidebar > nav {
+    position: absolute !important;
+    top: 64px !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: 116px !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 2px 10px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    touch-action: pan-y !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  #app-sidebar.app-sidebar > .sidebar-user {
+    position: absolute !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: 10px !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: 106px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 12 !important;
+    flex: none !important;
+    overflow: visible !important;
+    transform: none !important;
+  }
+  
+  #app-sidebar.app-sidebar > .sidebar-user,
+  #app-sidebar.app-sidebar > .sidebar-header,
+  #app-sidebar.app-sidebar > nav {
+    transform: none !important;
+  }
+  
+  #app-sidebar.app-sidebar > .sidebar-user * {
+    transform: none !important;
+  }
+  
+  /* Never allow a navigation gesture to become a rail/page gesture. */
+  #app-sidebar.app-sidebar > .sidebar-header,
+  #app-sidebar.app-sidebar > .sidebar-user {
+    touch-action: manipulation !important;
+  }
+  
+  @media (max-width: 420px) {
+    #app-sidebar.app-sidebar > nav {
+      top: 64px !important;
+      bottom: 116px !important;
+    }
+  }
+  
+  
+  /* FINAL VIEWPORT-DOCK HARDENING — presentation only.
+   * Lock every sidebar zone to the viewport so rapid document scrolling cannot
+   * expose/reveal/reposition the account dock or navigation rail.
+   */
+  
+  #app-sidebar.app-sidebar {
+    position: fixed !important;
+    inset: 0 auto auto 0 !important;
     width: 260px !important;
     min-width: 260px !important;
     height: 100vh !important;
     max-height: 100vh !important;
+    overflow: hidden !important;
+    transform: none !important;
+    translate: none !important;
+    will-change: auto !important;
+    contain: none !important;
   }
+  
+  #app-sidebar.app-sidebar > .sidebar-header {
+    position: absolute !important;
+    top: 10px !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: auto !important;
+    transform: none !important;
+    translate: none !important;
+  }
+  
+  #app-sidebar.app-sidebar > nav {
+    position: absolute !important;
+    top: 64px !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: 116px !important;
+    transform: none !important;
+    translate: none !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+  }
+  
+  #app-sidebar.app-sidebar > .sidebar-user {
+    position: absolute !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: 10px !important;
+    top: auto !important;
+    transform: none !important;
+    translate: none !important;
+    overflow: visible !important;
+  }
+  
   #app-sidebar.app-sidebar.is-collapsed,
   body.sidebar-collapsed #app-sidebar.app-sidebar {
     width: 78px !important;
     min-width: 78px !important;
   }
-}
-
-
-/* CANONICAL CHATGPT-STYLE SIDEBAR DOCK — presentation only.
- * One viewport rail, three isolated zones: fixed header, scrollable nav,
- * fixed account dock. Main-document scrolling cannot move any sidebar zone.
- */
-#app-sidebar.app-sidebar {
-  position: fixed !important;
-  inset: 0 auto 0 0 !important;
-  width: 260px !important;
-  min-width: 260px !important;
-  height: 100dvh !important;
-  max-height: 100dvh !important;
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-  overflow-anchor: none !important;
-  transform: none !important;
-  translate: none !important;
-  transition: width .22s ease !important;
-  isolation: isolate !important;
-  contain: layout paint size !important;
-  z-index: 3000 !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-header {
-  position: absolute !important;
-  inset: 10px 10px auto 10px !important;
-  width: auto !important;
-  height: 54px !important;
-  min-height: 54px !important;
-  max-height: 54px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  z-index: 30 !important;
-  transform: none !important;
-  translate: none !important;
-  transition: none !important;
-}
-
-#app-sidebar.app-sidebar > nav {
-  position: absolute !important;
-  top: 64px !important;
-  right: 10px !important;
-  bottom: 154px !important;
-  left: 10px !important;
-  width: auto !important;
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: none !important;
-  margin: 0 !important;
-  padding: 0 2px 10px !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  overscroll-behavior: contain !important;
-  overflow-anchor: none !important;
-  -webkit-overflow-scrolling: touch !important;
-  touch-action: pan-y !important;
-  transform: none !important;
-  translate: none !important;
-  z-index: 10 !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-user {
-  position: absolute !important;
-  inset: auto 10px 10px 10px !important;
-  width: auto !important;
-  min-width: 0 !important;
-  min-height: 120px !important;
-  max-height: 140px !important;
-  height: auto !important;
-  margin: 0 !important;
-  padding: 10px 0 0 !important;
-  box-sizing: border-box !important;
-  overflow: hidden !important;
-  z-index: 30 !important;
-  transform: none !important;
-  translate: none !important;
-  transition: none !important;
-  touch-action: manipulation !important;
-  border-top: 1px solid var(--line) !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-user .algobot-sidebar-account {
-  min-width: 0 !important;
-  max-width: 100% !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-user .sidebar-user-actions {
-  flex: 0 0 auto !important;
-  transform: none !important;
-  translate: none !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-header *,
-#app-sidebar.app-sidebar > .sidebar-user * {
-  transform: none !important;
-}
-
-@media (max-width: 420px) {
+  
+  @media (max-width: 420px) {
+    #app-sidebar.app-sidebar {
+      width: 260px !important;
+      min-width: 260px !important;
+      height: 100vh !important;
+      max-height: 100vh !important;
+    }
+    #app-sidebar.app-sidebar.is-collapsed,
+    body.sidebar-collapsed #app-sidebar.app-sidebar {
+      width: 78px !important;
+      min-width: 78px !important;
+    }
+  }
+  
+  
+  /* CANONICAL CHATGPT-STYLE SIDEBAR DOCK — presentation only.
+   * One viewport rail, three isolated zones: fixed header, scrollable nav,
+   * fixed account dock. Main-document scrolling cannot move any sidebar zone.
+   */
   #app-sidebar.app-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
     width: 260px !important;
     min-width: 260px !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+    overflow-anchor: none !important;
+    transform: none !important;
+    translate: none !important;
+    transition: width .22s ease !important;
+    isolation: isolate !important;
+    contain: layout paint size !important;
+    z-index: 3000 !important;
   }
-  #app-sidebar.app-sidebar.is-collapsed,
-  body.sidebar-collapsed #app-sidebar.app-sidebar {
-    width: 78px !important;
-    min-width: 78px !important;
+  
+  #app-sidebar.app-sidebar > .sidebar-header {
+    position: absolute !important;
+    inset: 10px 10px auto 10px !important;
+    width: auto !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    max-height: 54px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 30 !important;
+    transform: none !important;
+    translate: none !important;
+    transition: none !important;
   }
+  
   #app-sidebar.app-sidebar > nav {
+    position: absolute !important;
+    top: 64px !important;
+    right: 10px !important;
     bottom: 154px !important;
-  }
-}
-
-
-/* FINAL VIEWPORT-ANCHOR OVERRIDE — presentation only.
- * IMPORTANT: the main document/page is the scroll owner. The sidebar is a
- * separate viewport rail. Header and account dock are independently viewport
- * anchored so document scrolling cannot pull either one.
- */
-#app-sidebar.app-sidebar > .sidebar-header {
-  position: fixed !important;
-  top: 10px !important;
-  left: 10px !important;
-  width: 240px !important;
-  height: 54px !important;
-  min-height: 54px !important;
-  max-height: 54px !important;
-  margin: 0 !important;
-  z-index: 3002 !important;
-  transform: none !important;
-  translate: none !important;
-}
-
-#app-sidebar.app-sidebar > nav {
-  position: fixed !important;
-  top: 64px !important;
-  left: 10px !important;
-  width: 240px !important;
-  height: calc(100dvh - 218px) !important;
-  max-height: calc(100dvh - 218px) !important;
-  margin: 0 !important;
-  padding: 0 2px 10px !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  z-index: 3001 !important;
-  transform: none !important;
-  translate: none !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-user {
-  position: fixed !important;
-  left: 10px !important;
-  bottom: 10px !important;
-  width: 240px !important;
-  max-width: 240px !important;
-  height: 138px !important;
-  min-height: 120px !important;
-  max-height: 138px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  z-index: 3003 !important;
-  transform: none !important;
-  translate: none !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
-body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header {
-  left: 14px !important;
-  width: 50px !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed > nav,
-body.sidebar-collapsed #app-sidebar.app-sidebar > nav {
-  left: 14px !important;
-  width: 50px !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
-body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
-  left: 14px !important;
-  width: 50px !important;
-  max-width: 50px !important;
-}
-
-@media (max-width: 420px) {
-  #app-sidebar.app-sidebar > .sidebar-header,
-  #app-sidebar.app-sidebar > nav,
-  #app-sidebar.app-sidebar > .sidebar-user {
     left: 10px !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 2px 10px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    overflow-anchor: none !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+    transform: none !important;
+    translate: none !important;
+    z-index: 10 !important;
   }
-
-  #app-sidebar.app-sidebar > .sidebar-header,
-  #app-sidebar.app-sidebar > nav,
+  
   #app-sidebar.app-sidebar > .sidebar-user {
-    width: 240px !important;
+    position: absolute !important;
+    inset: auto 10px 10px 10px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 120px !important;
+    max-height: 140px !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 10px 0 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    z-index: 30 !important;
+    transform: none !important;
+    translate: none !important;
+    transition: none !important;
+    touch-action: manipulation !important;
+    border-top: 1px solid var(--line) !important;
   }
-
+  
+  #app-sidebar.app-sidebar > .sidebar-user .algobot-sidebar-account {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+  
+  #app-sidebar.app-sidebar > .sidebar-user .sidebar-user-actions {
+    flex: 0 0 auto !important;
+    transform: none !important;
+    translate: none !important;
+  }
+  
+  #app-sidebar.app-sidebar > .sidebar-header *,
+  #app-sidebar.app-sidebar > .sidebar-user * {
+    transform: none !important;
+  }
+  
+  @media (max-width: 420px) {
+    #app-sidebar.app-sidebar {
+      width: 260px !important;
+      min-width: 260px !important;
+    }
+    #app-sidebar.app-sidebar.is-collapsed,
+    body.sidebar-collapsed #app-sidebar.app-sidebar {
+      width: 78px !important;
+      min-width: 78px !important;
+    }
+    #app-sidebar.app-sidebar > nav {
+      bottom: 154px !important;
+    }
+  }
+  
+  
+  /* FINAL VIEWPORT-ANCHOR OVERRIDE — presentation only.
+   * IMPORTANT: the main document/page is the scroll owner. The sidebar is a
+   * separate viewport rail. Header and account dock are independently viewport
+   * anchored so document scrolling cannot pull either one.
+   */
+  #app-sidebar.app-sidebar > .sidebar-header {
+    position: fixed !important;
+    top: 10px !important;
+    left: 10px !important;
+    width: 240px !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    max-height: 54px !important;
+    margin: 0 !important;
+    z-index: 3002 !important;
+    transform: none !important;
+    translate: none !important;
+  }
+  
+  #app-sidebar.app-sidebar > nav {
+    position: fixed !important;
+    top: 64px !important;
+    left: 10px !important;
+    width: 240px !important;
+    height: calc(100dvh - 218px) !important;
+    max-height: calc(100dvh - 218px) !important;
+    margin: 0 !important;
+    padding: 0 2px 10px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    z-index: 3001 !important;
+    transform: none !important;
+    translate: none !important;
+  }
+  
+  #app-sidebar.app-sidebar > .sidebar-user {
+    position: fixed !important;
+    left: 10px !important;
+    bottom: 10px !important;
+    width: 240px !important;
+    max-width: 240px !important;
+    height: 138px !important;
+    min-height: 120px !important;
+    max-height: 138px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 3003 !important;
+    transform: none !important;
+    translate: none !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+  
   #app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
-  #app-sidebar.app-sidebar.is-collapsed > nav,
-  #app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
-  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header,
-  body.sidebar-collapsed #app-sidebar.app-sidebar > nav,
-  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header {
     left: 14px !important;
     width: 50px !important;
   }
-}
-
-
-/* FINAL MAIN-PAGE / SIDEBAR SCROLL CONTRACT — presentation only.
- *
- * The right-hand application page remains the document scroll surface.
- * The sidebar is a separate viewport-locked rail. Its header and account
- * switcher are independently fixed, while ONLY its nav owns sidebar scrolling.
- *
- * Do not convert the right-hand page into a sidebar scroll container here:
- * existing page/document scrolling remains intact. This block only removes
- * containing-block/transform conditions that could make fixed sidebar zones
- * track document scrolling.
- */
-#app-sidebar.app-sidebar {
-  position: fixed !important;
-  top: 0 !important;
-  right: auto !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  transform: none !important;
-  translate: none !important;
-  filter: none !important;
-  backdrop-filter: none !important;
-  perspective: none !important;
-  will-change: auto !important;
-  contain: none !important;
-  content-visibility: visible !important;
-  overflow: hidden !important;
-  overflow-anchor: none !important;
-  overscroll-behavior: none !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-header,
-#app-sidebar.app-sidebar > .sidebar-user {
-  position: fixed !important;
-  transform: none !important;
-  translate: none !important;
-  will-change: auto !important;
-  filter: none !important;
-  backdrop-filter: none !important;
-  perspective: none !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-header {
-  top: 10px !important;
-  right: auto !important;
-  bottom: auto !important;
-  left: 10px !important;
-  width: 240px !important;
-}
-
-#app-sidebar.app-sidebar > nav {
-  position: fixed !important;
-  top: 64px !important;
-  right: auto !important;
-  bottom: auto !important;
-  left: 10px !important;
-  width: 240px !important;
-  height: calc(100dvh - 218px) !important;
-  max-height: calc(100dvh - 218px) !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  overscroll-behavior: contain !important;
-  overflow-anchor: none !important;
-  touch-action: pan-y !important;
-  transform: none !important;
-  translate: none !important;
-}
-
-#app-sidebar.app-sidebar > .sidebar-user {
-  top: auto !important;
-  right: auto !important;
-  bottom: 10px !important;
-  left: 10px !important;
-  width: 240px !important;
-  max-width: 240px !important;
-  height: 138px !important;
-  min-height: 120px !important;
-  max-height: 138px !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
-  z-index: 3003 !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
-body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header {
-  left: 14px !important;
-  width: 50px !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed > nav,
-body.sidebar-collapsed #app-sidebar.app-sidebar > nav {
-  left: 14px !important;
-  width: 50px !important;
-}
-
-#app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
-body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
-  left: 14px !important;
-  width: 50px !important;
-  max-width: 50px !important;
-}
-
-@media (max-width: 420px) {
-  #app-sidebar.app-sidebar > .sidebar-header,
-  #app-sidebar.app-sidebar > nav,
-  #app-sidebar.app-sidebar > .sidebar-user {
-    left: 10px !important;
-    width: 240px !important;
-  }
-
-  #app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
+  
   #app-sidebar.app-sidebar.is-collapsed > nav,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > nav {
+    left: 14px !important;
+    width: 50px !important;
+  }
+  
   #app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
-  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header,
-  body.sidebar-collapsed #app-sidebar.app-sidebar > nav,
   body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
     left: 14px !important;
     width: 50px !important;
     max-width: 50px !important;
   }
+  
+  @media (max-width: 420px) {
+    #app-sidebar.app-sidebar > .sidebar-header,
+    #app-sidebar.app-sidebar > nav,
+    #app-sidebar.app-sidebar > .sidebar-user {
+      left: 10px !important;
+    }
+  
+    #app-sidebar.app-sidebar > .sidebar-header,
+    #app-sidebar.app-sidebar > nav,
+    #app-sidebar.app-sidebar > .sidebar-user {
+      width: 240px !important;
+    }
+  
+    #app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
+    #app-sidebar.app-sidebar.is-collapsed > nav,
+    #app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
+    body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header,
+    body.sidebar-collapsed #app-sidebar.app-sidebar > nav,
+    body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
+      left: 14px !important;
+      width: 50px !important;
+    }
+  }
+  
+  
+  /* FINAL MAIN-PAGE / SIDEBAR SCROLL CONTRACT — presentation only.
+   *
+   * The right-hand application page remains the document scroll surface.
+   * The sidebar is a separate viewport-locked rail. Its header and account
+   * switcher are independently fixed, while ONLY its nav owns sidebar scrolling.
+   *
+   * Do not convert the right-hand page into a sidebar scroll container here:
+   * existing page/document scrolling remains intact. This block only removes
+   * containing-block/transform conditions that could make fixed sidebar zones
+   * track document scrolling.
+   */
+  #app-sidebar.app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    right: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    translate: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    perspective: none !important;
+    will-change: auto !important;
+    contain: none !important;
+    content-visibility: visible !important;
+    overflow: hidden !important;
+    overflow-anchor: none !important;
+    overscroll-behavior: none !important;
+  }
+  
+  #app-sidebar.app-sidebar > .sidebar-header,
+  #app-sidebar.app-sidebar > .sidebar-user {
+    position: fixed !important;
+    transform: none !important;
+    translate: none !important;
+    will-change: auto !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    perspective: none !important;
+  }
+  
+  #app-sidebar.app-sidebar > .sidebar-header {
+    top: 10px !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: 10px !important;
+    width: 240px !important;
+  }
+  
+  #app-sidebar.app-sidebar > nav {
+    position: fixed !important;
+    top: 64px !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: 10px !important;
+    width: 240px !important;
+    height: calc(100dvh - 218px) !important;
+    max-height: calc(100dvh - 218px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    overflow-anchor: none !important;
+    touch-action: pan-y !important;
+    transform: none !important;
+    translate: none !important;
+  }
+  
+  #app-sidebar.app-sidebar > .sidebar-user {
+    top: auto !important;
+    right: auto !important;
+    bottom: 10px !important;
+    left: 10px !important;
+    width: 240px !important;
+    max-width: 240px !important;
+    height: 138px !important;
+    min-height: 120px !important;
+    max-height: 138px !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    z-index: 3003 !important;
+  }
+  
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header {
+    left: 14px !important;
+    width: 50px !important;
+  }
+  
+  #app-sidebar.app-sidebar.is-collapsed > nav,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > nav {
+    left: 14px !important;
+    width: 50px !important;
+  }
+  
+  #app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
+  body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
+    left: 14px !important;
+    width: 50px !important;
+    max-width: 50px !important;
+  }
+  
+  @media (max-width: 420px) {
+    #app-sidebar.app-sidebar > .sidebar-header,
+    #app-sidebar.app-sidebar > nav,
+    #app-sidebar.app-sidebar > .sidebar-user {
+      left: 10px !important;
+      width: 240px !important;
+    }
+  
+    #app-sidebar.app-sidebar.is-collapsed > .sidebar-header,
+    #app-sidebar.app-sidebar.is-collapsed > nav,
+    #app-sidebar.app-sidebar.is-collapsed > .sidebar-user,
+    body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-header,
+    body.sidebar-collapsed #app-sidebar.app-sidebar > nav,
+    body.sidebar-collapsed #app-sidebar.app-sidebar > .sidebar-user {
+      left: 14px !important;
+      width: 50px !important;
+      max-width: 50px !important;
+    }
+  }
+  
+  
+  /* MOBILE ACCOUNT SWITCHER — stable presentation anchor for rapid document scrolling. */
+   * The account switcher is the only affected surface. On mobile Chromium/WebKit,
+   * browser chrome can expand/retract while the document is being scrolled, which
+   * changes the dynamic viewport height. Anchoring this dock to the small viewport
+   * keeps its screen position stable instead of making it jump with that chrome.
+   * The main document, sidebar nav, header, collapse behavior and account logic
+   * remain untouched.
+   */
 }
 
-
-/* MOBILE ACCOUNT SWITCHER — stable presentation anchor for rapid document scrolling. */
- * The account switcher is the only affected surface. On mobile Chromium/WebKit,
- * browser chrome can expand/retract while the document is being scrolled, which
- * changes the dynamic viewport height. Anchoring this dock to the small viewport
- * keeps its screen position stable instead of making it jump with that chrome.
- * The main document, sidebar nav, header, collapse behavior and account logic
- * remain untouched.
- */
 @media (max-width: 900px) {
   @supports (height: 100svh) {
     #app-sidebar.app-sidebar > .sidebar-user {
