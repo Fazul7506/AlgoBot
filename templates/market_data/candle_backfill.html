@@ -22,7 +22,7 @@
       <div class="rb-start-copy">
         <span class="rb-eyebrow">OPERATOR CONTROL</span>
         <strong>{% if run %}Retry failed backfill{% else %}Start initial backfill{% endif %}</strong>
-        <small>Runs against the active, tradable Deriv symbol catalogue only. No market data is generated locally.</small>
+        <small>Celery also schedules this warm-up automatically. Manual retry is available only as an operator override. No market data is generated locally.</small>
       </div>
       <label class="rb-symbol-field">
         <span>Scope</span>
@@ -56,8 +56,8 @@
     <div class="rb-summary-item"><span>DURATION</span><strong data-duration>{% if run_payload and run_payload.started_at %}{{ run_payload.duration_seconds }}s{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>REQUESTED</span><strong data-requested>{% if run %}{{ run.requested_at|date:"d/m/Y, H:i:s" }}{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>STARTED</span><strong data-started>{% if run and run.started_at %}{{ run.started_at|date:"d/m/Y, H:i:s" }}{% else %}—{% endif %}</strong></div>
-    <div class="rb-summary-item"><span>TRIGGER</span><strong>Manual</strong></div>
-    <div class="rb-summary-item"><span>SOURCE</span><strong data-source>{% if run_payload and run_payload.accepted_at %}Deriv · market_data worker{% elif run %}market_data queue{% else %}—{% endif %}</strong></div>
+    <div class="rb-summary-item"><span>TRIGGER</span><strong data-trigger>{% if run_payload %}{% if run_payload.trigger == "automatic" %}Automatic{% else %}Manual{% endif %}{% else %}—{% endif %}</strong></div>
+    <div class="rb-summary-item"><span>SOURCE</span><strong data-source>{% if run_payload %}Celery broker-history worker{% else %}—{% endif %}</strong></div>
   </section>
 
   <section class="rb-notices" data-notices aria-live="polite">
