@@ -58,6 +58,8 @@
     <div class="rb-summary-item"><span>STARTED</span><strong data-started>{% if run and run.started_at %}{{ run.started_at|date:"d/m/Y, H:i:s" }}{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>TRIGGER</span><strong data-trigger>{% if run_payload %}{% if run_payload.trigger == "automatic" %}Automatic{% else %}Manual{% endif %}{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>SOURCE</span><strong data-source>{% if run_payload %}Celery broker-history worker{% else %}—{% endif %}</strong></div>
+    <div class="rb-summary-item"><span>DELIVERY</span><strong data-delivery>{% if run_payload and run_payload.delivery_queue %}{{ run_payload.delivery_queue }}{% else %}—{% endif %}</strong></div>
+    <div class="rb-summary-item"><span>TASK ID</span><strong data-task-id>{% if run_payload and run_payload.task_id %}{{ run_payload.task_id }}{% else %}—{% endif %}</strong></div>
   </section>
 
   <section class="rb-render-grid" aria-label="Render-aligned service contract">
