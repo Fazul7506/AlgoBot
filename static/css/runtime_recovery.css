@@ -2308,3 +2308,55 @@ body {
     max-width: min(360px, 72vw) !important;
   }
 }
+
+
+/* FINAL CHATGPT-LIKE MOBILE SIDEBAR CONTRACT — user-visible boundary and controls.
+ * The mobile drawer ends at the requested viewport boundary; the page-level
+ * hamburger remains the only drawer control. No sidebar X/close control exists.
+ */
+@media (max-width: 900px) {
+  #app-sidebar.app-sidebar,
+  #app-sidebar.app-sidebar.is-collapsed,
+  body.sidebar-collapsed #app-sidebar.app-sidebar {
+    width: 60vw !important;
+    min-width: 0 !important;
+    max-width: 60vw !important;
+    transform: translate3d(-105%, 0, 0) !important;
+    margin-left: 0 !important;
+  }
+
+  #app-sidebar.app-sidebar.is-open {
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-header {
+    justify-content: flex-start !important;
+    gap: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  #app-sidebar.app-sidebar > .sidebar-header .brand {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    max-width: 100% !important;
+    width: auto !important;
+    flex: 0 1 auto !important;
+  }
+
+  .mobile-menu-button,
+  body:has(#app-sidebar.app-sidebar.is-open) .mobile-menu-button {
+    left: max(10px, env(safe-area-inset-left)) !important;
+    right: auto !important;
+    top: max(10px, env(safe-area-inset-top)) !important;
+  }
+
+  /* The desktop collapse control is removed from the authenticated DOM.
+     Keep this guard for cached/legacy markup so an old fragment can never
+     render an overlapping close/X control. */
+  #app-sidebar.app-sidebar .sidebar-toggle,
+  #app-sidebar.app-sidebar [data-sidebar-toggle] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
