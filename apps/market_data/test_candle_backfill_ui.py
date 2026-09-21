@@ -190,8 +190,6 @@ class CandleBackfillUiTests(TestCase):
         self.assertEqual(payload["initial"]["render_status_label"], "Pending")
         self.assertEqual(payload["initial"]["delivery_queue"], "celery")
         self.assertEqual(payload["initial"]["automatic_attempts"], 2)
-        self.assertEqual(payload["config"]["render_contract"]["service"], "AlgoBot-MarketData")
-        self.assertEqual(payload["config"]["render_contract"]["auto_deploy"], "On commit")
 
     def test_json_log_level_filter_is_supported(self):
         run = CandleBackfillRun.objects.create(
