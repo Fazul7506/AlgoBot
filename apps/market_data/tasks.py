@@ -70,6 +70,7 @@ BACKFILL_RUNNING_STALE_AFTER = timedelta(minutes=60)
 BACKFILL_DISPATCH_STALE_AFTER = timedelta(minutes=2)
 BACKFILL_RECEIVED_STALE_AFTER = timedelta(minutes=5)
 BACKFILL_MAX_RECOVERY_ATTEMPTS = 3
+BACKFILL_AUTOMATIC_RETRY_AFTER = timedelta(minutes=15)
 
 
 def _active_symbols(symbol=None):
@@ -89,8 +90,12 @@ def _active_symbols(symbol=None):
 def _worker_identity():
     return socket.gethostname() or "unknown-worker"
 
+def _recovery_backfill_queue(recovery_attempts):
+    """Alternate recovery delivery so a missing dedicated consumer cannot trap the job forever."""
+    return "celery" if int(recovery_attempts or 0) % 2 else "market_data"
+
 def _preferred_backfill_queue():
-    """Use market_data when consumed; fail over to the general Celery queue when it is not."""
+    """Select the first delivery queue; recovery deliberately alternates queues."""
     app = _celery_app()
     if not app:
         return "market_data"
@@ -530,6 +535,104 @@ def backfill_research_candles(count=250, symbol=None):
         close_old_connections()
 
 
+@_task
+def ensure_initial_candle_backfill(count=5000):
+    """Let Celery Beat create/retry the singleton initial warm-up without a browser click."""
+    from django.db import close_old_connections, transaction
+    from .models import CandleBackfillEvent, CandleBackfillRun
+
+    close_old_connections()
+    now = timezone.now()
+    try:
+        with transaction.atomic():
+            run = CandleBackfillRun.objects.select_for_update().filter(scope="initial").first()
+            if run and run.status == "completed":
+                return {"status": "completed", "run_id": run.pk}
+            if run and run.status == "running":
+                return {"status": "running", "run_id": run.pk}
+
+            trigger = "automatic"
+            symbol = (run.symbol if run else "") or ""
+            automatic_attempts = int((run.result or {}).get("automatic_attempts", 0) or 0) if run else 0
+            if run and run.status == "failed":
+                last_auto = (run.result or {}).get("last_automatic_dispatch_at")
+                if last_auto:
+                    try:
+                        last_auto_at = timezone.datetime.fromisoformat(last_auto)
+                        if timezone.is_naive(last_auto_at):
+                            last_auto_at = timezone.make_aware(last_auto_at, timezone.utc)
+                        if now - last_auto_at < BACKFILL_AUTOMATIC_RETRY_AFTER:
+                            return {"status": "cooldown", "run_id": run.pk}
+                    except (TypeError, ValueError):
+                        pass
+
+            if run is None:
+                run = CandleBackfillRun(scope="initial")
+            automatic_attempts += 1
+            run.status = "running"
+            run.count = int(count)
+            run.task_id = ""
+            run.requested_by = None
+            run.requested_at = now
+            run.started_at = None
+            run.dispatch_at = None
+            run.accepted_at = None
+            run.last_heartbeat_at = None
+            run.current_symbol = ""
+            run.current_timeframe = ""
+            run.worker_hostname = ""
+            run.completed_at = None
+            run.error = ""
+            run.result = {
+                "symbols_total": 0,
+                "symbols_completed": 0,
+                "symbols_succeeded": 0,
+                "symbols_failed": 0,
+                "percent": 0,
+                "results": {},
+                "trigger": trigger,
+                "automatic_attempts": automatic_attempts,
+                "last_automatic_dispatch_at": now.isoformat(),
+            }
+            run.save()
+            CandleBackfillRun.objects.filter(pk=run.pk).update(requested_at=now)
+            run.refresh_from_db()
+
+        queue_name = "market_data"
+        task = run_initial_candle_backfill.apply_async(
+            args=(run.pk,),
+            kwargs={"count": int(count), "symbol": symbol or None},
+            queue=queue_name,
+        )
+        run.task_id = task.id
+        run.dispatch_at = timezone.now()
+        run.save(update_fields=["task_id", "dispatch_at"])
+        CandleBackfillEvent.objects.create(
+            run=run,
+            level="notice",
+            event_type="dispatch",
+            message="Celery Beat automatically dispatched the initial broker candle backfill to the market-data worker.",
+            task_id=task.id,
+            payload={"queue": queue_name, "trigger": trigger, "automatic_attempts": automatic_attempts},
+        )
+        return {"status": "dispatched", "run_id": run.pk, "task_id": task.id, "queue": queue_name}
+    except Exception as exc:
+        logger.exception("Automatic initial candle backfill dispatch failed")
+        try:
+            with transaction.atomic():
+                run = CandleBackfillRun.objects.select_for_update().filter(scope="initial").first()
+                if run and run.status == "running" and not run.started_at:
+                    run.status = "failed"
+                    run.error = f"Automatic Celery dispatch failed: {exc}"
+                    run.completed_at = timezone.now()
+                    run.save(update_fields=["status", "error", "completed_at"])
+        except Exception:
+            logger.exception("Unable to persist automatic candle backfill dispatch failure")
+        return {"status": "failed", "error": str(exc)}
+    finally:
+        close_old_connections()
+
+
 @_task(acks_late=True, reject_on_worker_lost=True)
 def run_initial_candle_backfill(run_id, count=5000, symbol=None):
     """Run the one-time historical warm-up from an available market-data Celery consumer."""
@@ -695,7 +798,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             run.completed_at = None
             run.error = "Worker delivery was not confirmed within the recovery window; the job is being re-published automatically."
             run.save(update_fields=["task_id", "dispatch_at", "started_at", "accepted_at", "last_heartbeat_at", "completed_at", "error", "result"])
-            CandleBackfillEvent.objects.create(run=run, level="notice", event_type="recovered", message=run.error, task_id=old_task_id, payload={"old_task_id": old_task_id})
+            CandleBackfillEvent.objects.create(run=run, level="notice", event_type="recovered", message=run.error, task_id=old_task_id, payload={"old_task_id": old_task_id, "queue": _recovery_backfill_queue(recovery_attempts)})
 
         if old_task_id:
             try:
@@ -709,7 +812,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             task = run_initial_candle_backfill.apply_async(
                 args=(run_id,),
                 kwargs={"count": count, "symbol": symbol},
-                queue=_preferred_backfill_queue(),
+                queue=_recovery_backfill_queue(recovery_attempts),
             )
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
@@ -727,7 +830,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     current.error = f"Automatic Celery retry failed: {exc}"
                     current.completed_at = timezone.now()
                     current.save(update_fields=["status", "error", "completed_at"])
-                    CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": "market_data"})
+                    CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts)})
             logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
         return {"recovered": recovered}
     finally:
