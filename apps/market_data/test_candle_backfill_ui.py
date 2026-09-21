@@ -88,12 +88,9 @@ class CandleBackfillUiTests(TestCase):
             queue="market_data",
         )
 
-    def test_dispatch_fails_over_to_general_celery_worker_when_market_data_has_no_consumer(self):
-        published = SimpleNamespace(id="general-queue-task")
+    def test_manual_dispatch_uses_the_dedicated_market_data_queue(self):
+        published = SimpleNamespace(id="market-data-task")
         with patch(
-            "apps.market_data.views._preferred_backfill_queue",
-            return_value="celery",
-        ), patch(
             "apps.market_data.tasks.run_initial_candle_backfill.apply_async",
             return_value=published,
         ) as publish:
@@ -104,16 +101,16 @@ class CandleBackfillUiTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         run = CandleBackfillRun.objects.get(scope="initial")
-        self.assertEqual(run.task_id, "general-queue-task")
+        self.assertEqual(run.task_id, "market-data-task")
         publish.assert_called_once_with(
             args=(run.pk,),
             kwargs={"count": 5000, "symbol": None},
-            queue="celery",
+            queue="market_data",
         )
         self.assertTrue(
             CandleBackfillEvent.objects.filter(
                 run=run,
-                message__icontains="general Celery worker",
+                message__icontains="market-data worker",
             ).exists()
         )
 
@@ -165,6 +162,54 @@ class CandleBackfillUiTests(TestCase):
         self.assertEqual(run.symbol, "R_100")
         self.assertEqual(run.task_id, "retry-task")
         self.assertGreater(run.requested_at, old_requested)
+
+    def test_json_payload_exposes_render_aligned_state_and_actual_delivery_queue(self):
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="running",
+            count=5000,
+            task_id="render-task",
+            accepted_at=timezone.now(),
+            started_at=None,
+            result={"trigger": "automatic", "automatic_attempts": 2},
+        )
+        CandleBackfillEvent.objects.create(
+            run=run,
+            event_type="worker_received",
+            level="info",
+            message="received via celery",
+            task_id="render-task",
+            payload={"queue": "celery"},
+        )
+        response = self.client.get(
+            reverse("initial_candle_backfill"),
+            {"format": "json", "scope": "initial"},
+        )
+        payload = response.json()
+        self.assertEqual(payload["initial"]["render_status"], "pending")
+        self.assertEqual(payload["initial"]["render_status_label"], "Pending")
+        self.assertEqual(payload["initial"]["delivery_queue"], "celery")
+        self.assertEqual(payload["initial"]["automatic_attempts"], 2)
+        self.assertEqual(payload["config"]["render_contract"]["service"], "AlgoBot-MarketData")
+        self.assertEqual(payload["config"]["render_contract"]["auto_deploy"], "On commit")
+
+    def test_json_log_level_filter_is_supported(self):
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="failed",
+            count=5000,
+            error="Deriv timeout",
+        )
+        CandleBackfillEvent.objects.create(run=run, level="info", event_type="dispatch", message="queued")
+        error_event = CandleBackfillEvent.objects.create(run=run, level="error", event_type="failed", message="failed")
+        response = self.client.get(
+            reverse("initial_candle_backfill"),
+            {"format": "json", "scope": "initial", "level": "error"},
+        )
+        events = response.json()["events"]
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["id"], error_event.id)
+        self.assertEqual(events[0]["level"], "error")
 
     def test_json_received_state_is_not_reported_as_running(self):
         run = CandleBackfillRun.objects.create(
