@@ -2275,3 +2275,36 @@ body {
     z-index: 4002 !important;
   }
 }
+
+
+/* FINAL SIDEBAR BOUNDARY — presentation only.
+ * Desktop rail stops at the existing 260px boundary. Mobile/tablet retain
+ * their existing off-canvas geometry. No navigation or application behavior
+ * is changed.
+ */
+@media (min-width: 901px) {
+  #app-sidebar.app-sidebar {
+    width: 260px !important;
+    min-width: 260px !important;
+    max-width: 260px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .app-shell {
+    margin-left: 260px !important;
+    min-width: 0 !important;
+  }
+
+  .app-shell.sidebar-collapsed,
+  #app-sidebar.app-sidebar.is-collapsed + .app-shell,
+  body.sidebar-collapsed .app-shell {
+    margin-left: 78px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  #app-sidebar.app-sidebar {
+    max-width: min(360px, 72vw) !important;
+  }
+}

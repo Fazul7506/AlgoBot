@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from .constants import TIMEFRAMES
 from .models import CandleBackfillEvent, CandleBackfillRun, MarketSymbol
+from .tasks import _preferred_backfill_queue
 
 BACKFILL_COUNT = 5000
 
@@ -254,13 +255,19 @@ def initial_candle_backfill(request):
             )
             run.refresh_from_db()
 
+        queue_name = _preferred_backfill_queue()
+        dispatch_message = (
+            "Backfill requested; publishing to the market_data Celery queue."
+            if queue_name == "market_data"
+            else "Backfill requested; market_data has no active consumer, so the general Celery worker is handling delivery."
+        )
         CandleBackfillEvent.objects.create(
             run=run,
             level="notice",
             event_type="dispatch",
-            message="Backfill requested; publishing to the dedicated market_data Celery queue.",
+            message=dispatch_message,
             symbol=symbol,
-            payload={"count": count, "queue": "market_data"},
+            payload={"count": count, "queue": queue_name},
         )
 
         from .tasks import run_initial_candle_backfill
@@ -268,7 +275,7 @@ def initial_candle_backfill(request):
             task = run_initial_candle_backfill.apply_async(
                 args=(run.pk,),
                 kwargs={"count": count, "symbol": symbol or None},
-                queue="market_data",
+                queue=queue_name,
             )
             run.task_id = task.id
             run.dispatch_at = timezone.now()
@@ -280,7 +287,7 @@ def initial_candle_backfill(request):
                 message=f"Celery accepted the publish request: {task.id}",
                 symbol=symbol,
                 task_id=task.id,
-                payload={"queue": "market_data"},
+                payload={"queue": queue_name},
             )
         except Exception as exc:
             run.status = "failed"

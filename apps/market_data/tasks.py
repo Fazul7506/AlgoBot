@@ -89,6 +89,27 @@ def _active_symbols(symbol=None):
 def _worker_identity():
     return socket.gethostname() or "unknown-worker"
 
+def _preferred_backfill_queue():
+    """Use market_data when consumed; fail over to the general Celery queue when it is not."""
+    app = _celery_app()
+    if not app:
+        return "market_data"
+    try:
+        active_queues = app.control.inspect(timeout=1).active_queues() or {}
+    except Exception:
+        return "market_data"
+    for queues in active_queues.values():
+        for queue in queues or []:
+            if str(queue.get("name", "")) == "market_data":
+                return "market_data"
+    if active_queues:
+        for queues in active_queues.values():
+            for queue in queues or []:
+                if str(queue.get("name", "")) == "celery":
+                    return "celery"
+    return "market_data"
+
+
 
 @task_received.connect
 def _record_candle_backfill_worker_received(sender=None, request=None, **kwargs):
@@ -511,7 +532,7 @@ def backfill_research_candles(count=250, symbol=None):
 
 @_task(acks_late=True, reject_on_worker_lost=True)
 def run_initial_candle_backfill(run_id, count=5000, symbol=None):
-    """Run the one-time historical warm-up from the dedicated market-data worker."""
+    """Run the one-time historical warm-up from an available market-data Celery consumer."""
     from django.db import close_old_connections, transaction
     from .models import CandleBackfillRun
 
@@ -688,7 +709,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             task = run_initial_candle_backfill.apply_async(
                 args=(run_id,),
                 kwargs={"count": count, "symbol": symbol},
-                queue="market_data",
+                queue=_preferred_backfill_queue(),
             )
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
