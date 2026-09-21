@@ -60,6 +60,53 @@
     <div class="rb-summary-item"><span>SOURCE</span><strong data-source>{% if run_payload %}Celery broker-history worker{% else %}—{% endif %}</strong></div>
   </section>
 
+  <section class="rb-render-grid" aria-label="Render-aligned service contract">
+    <article class="rb-render-card">
+      <div class="rb-render-card-head"><span class="rb-eyebrow">RENDER SERVICE</span><span class="rb-service-dot">●</span></div>
+      <h2>{{ backfill_config.render_contract.service }}</h2>
+      <dl>
+        <div><dt>Type</dt><dd>{{ backfill_config.render_contract.service_type }}</dd></div>
+        <div><dt>Runtime</dt><dd>{{ backfill_config.render_contract.runtime }}</dd></div>
+        <div><dt>Queue</dt><dd><code>{{ backfill_config.render_contract.queue }}</code></dd></div>
+        <div><dt>Worker</dt><dd>1 concurrent consumer · prefetch 1</dd></div>
+      </dl>
+    </article>
+    <article class="rb-render-card">
+      <div class="rb-render-card-head"><span class="rb-eyebrow">DEPLOYMENT</span><span class="rb-contract-badge">SOURCE CONTROLLED</span></div>
+      <h2>Git-linked worker contract</h2>
+      <dl>
+        <div><dt>Branch</dt><dd><code>{{ backfill_config.render_contract.branch }}</code></dd></div>
+        <div><dt>Auto deploy</dt><dd>{{ backfill_config.render_contract.auto_deploy }}</dd></div>
+        <div><dt>Preflight</dt><dd><code>{{ backfill_config.render_contract.preflight }}</code></dd></div>
+        <div><dt>Lifecycle</dt><dd>Build → preflight → worker start</dd></div>
+      </dl>
+    </article>
+    <article class="rb-render-card">
+      <div class="rb-render-card-head"><span class="rb-eyebrow">TASK RUN</span><span class="rb-contract-badge">DURABLE</span></div>
+      <h2>Queue → worker → broker history</h2>
+      <dl>
+        <div><dt>Scheduled</dt><dd>{{ backfill_config.render_contract.schedule }}</dd></div>
+        <div><dt>Recovery</dt><dd>{{ backfill_config.render_contract.recovery }}</dd></div>
+        <div><dt>Automatic retry</dt><dd>{{ backfill_config.render_contract.automatic_retry }}</dd></div>
+        <div><dt>Evidence</dt><dd>Run state + timestamps + logs + broker progress</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <section class="rb-run-lifecycle" aria-label="Task run lifecycle">
+    <div class="rb-lifecycle-head">
+      <div><span class="rb-eyebrow">RENDER-ALIGNED RUN LIFECYCLE</span><h2>One durable task run, observed end to end</h2></div>
+      <small>Presentation follows Render's pending → running → completed/failed task model; Django/Celery remains the execution authority.</small>
+    </div>
+    <div class="rb-lifecycle-track">
+      <div class="rb-lifecycle-step"><span>01</span><strong>Pending</strong><small>Scheduled or dispatched</small></div>
+      <i class="material-symbols-rounded">arrow_forward</i>
+      <div class="rb-lifecycle-step"><span>02</span><strong>Running</strong><small>Worker heartbeat + broker work</small></div>
+      <i class="material-symbols-rounded">arrow_forward</i>
+      <div class="rb-lifecycle-step"><span>03</span><strong>Terminal</strong><small>Completed or failed</small></div>
+    </div>
+  </section>
+
   <section class="rb-notices" data-notices aria-live="polite">
     {% if page_error %}<div class="rb-notice error"><span class="material-symbols-rounded">error</span><span>{{ page_error }}</span></div>{% endif %}
     {% if run_payload %}
@@ -85,10 +132,21 @@
 
   <section class="rb-log-panel" data-log-panel>
     <div class="rb-log-toolbar">
-      <div class="rb-log-select" data-log-filter>All logs <span class="material-symbols-rounded">expand_more</span></div>
-      <button type="button" class="rb-log-control rb-tail-active" data-tail><span class="material-symbols-rounded">bolt</span> Live tail <span class="material-symbols-rounded">expand_more</span></button>
+      <label class="rb-log-select-wrap" aria-label="Filter logs by level">
+        <span class="material-symbols-rounded">filter_list</span>
+        <select class="rb-log-select" data-log-filter>
+          <option value="">All logs</option>
+          <option value="info">Info</option>
+          <option value="notice">Notice</option>
+          <option value="warning">Warning</option>
+          <option value="error">Error</option>
+          <option value="success">Success</option>
+        </select>
+      </label>
+      <button type="button" class="rb-log-control rb-tail-active" data-tail><span class="material-symbols-rounded">bolt</span> Live tail</button>
+      <button type="button" class="rb-icon-btn" data-refresh aria-label="Refresh logs"><span class="material-symbols-rounded">refresh</span></button>
       <button type="button" class="rb-icon-btn" data-expand aria-label="Expand logs"><span class="material-symbols-rounded">open_in_full</span></button>
-      <button type="button" class="rb-icon-btn" data-copy aria-label="Copy visible logs"><span class="material-symbols-rounded">more_horiz</span></button>
+      <button type="button" class="rb-icon-btn" data-copy aria-label="Copy visible logs"><span class="material-symbols-rounded">content_copy</span></button>
     </div>
     <div class="rb-search"><span class="material-symbols-rounded">search</span><input data-log-search type="search" placeholder="Search logs" autocomplete="off"></div>
     <div class="rb-log-head"><span>Operation logs</span><span data-log-count>{% if run_payload %}{{ run_payload.event_count }} lines{% else %}0 lines{% endif %}</span></div>
@@ -101,7 +159,7 @@
     </div>
   </section>
 
-  <section class="rb-details-grid">
+  <section class="rb-details-grid rb-details-primary">
     <article class="rb-detail-card">
       <span class="rb-eyebrow">BACKFILL CRITERIA</span>
       <h3>{{ backfill_config.eligible_symbol_count }} eligible Deriv symbols</h3>
@@ -125,5 +183,5 @@
   </section>
 </section>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20260919-renderclone5">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20260919-renderclone5" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20260921-renderclone6">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20260921-renderclone6" defer></script>{% endblock %}
