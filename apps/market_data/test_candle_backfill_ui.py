@@ -35,12 +35,12 @@ class CandleBackfillUiTests(TestCase):
         )
         self.client.force_login(self.user)
 
-    def test_empty_page_exposes_start_control_without_criteria_panel(self):
+    def test_empty_page_exposes_start_control_and_truthful_criteria(self):
         response = self.client.get(reverse("initial_candle_backfill"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Start backfill")
-        self.assertNotContains(response, "BACKFILL CRITERIA")
-        self.assertNotContains(response, "broker=deriv")
+        self.assertContains(response, "BACKFILL CRITERIA")
+        self.assertContains(response, "broker=deriv")
         self.assertContains(response, "Not started")
         self.assertContains(response, "No initial run exists")
         self.assertNotContains(response, "Loading live state")
