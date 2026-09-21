@@ -275,9 +275,9 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("document.body.style.position='fixed'", js)
         self.assertIn("window.scrollTo(0,mobileScrollY)", js)
         self.assertIn("css/runtime_recovery.css", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
-        self.assertIn("v=20260921-sidebar-boundary2", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn("v=20260921-sidebar-chatgpt2", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
         self.assertIn("js/base_shell.js", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
-        self.assertIn("v=20260921-sidebar-no-x1", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn("v=20260921-sidebar-chatgpt2", (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8"))
 
 
     def test_mobile_header_reuses_former_desktop_control_space(self):
@@ -290,7 +290,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("left: calc(min(360px, 72vw) - 56px) !important;", css)
         self.assertIn("max-width: calc(100% - 56px) !important;", css)
         self.assertIn("css/runtime_recovery.css", html)
-        self.assertIn("v=20260921-sidebar-boundary2", html)
+        self.assertIn("v=20260921-sidebar-chatgpt2", html)
 
 
     def test_sidebar_isolation_keeps_document_scroll_separate_from_nav(self):
@@ -306,9 +306,9 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("isolateFromDocumentScroll", js)
         self.assertIn("document.addEventListener('scroll', isolateFromDocumentScroll", js)
         self.assertIn("css/runtime_recovery.css", template)
-        self.assertIn("v=20260921-sidebar-boundary2", template)
+        self.assertIn("v=20260921-sidebar-chatgpt2", template)
         self.assertIn("js/base_shell.js", template)
-        self.assertIn("v=20260921-sidebar-no-x1", template)
+        self.assertIn("v=20260921-sidebar-chatgpt2", template)
 
 
     def test_final_mobile_drawer_contract_is_authoritative(self):
@@ -327,9 +327,9 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("document.addEventListener('scroll', isolateFromDocumentScroll", js)
         self.assertNotIn("window.addEventListener('scroll', isolateFromDocumentScroll, {passive:true, capture:true})", js)
         self.assertIn("css/runtime_recovery.css", template)
-        self.assertIn("v=20260921-sidebar-boundary2", template)
+        self.assertIn("v=20260921-sidebar-chatgpt2", template)
         self.assertIn("js/base_shell.js", template)
-        self.assertIn("v=20260921-sidebar-no-x1", template)
+        self.assertIn("v=20260921-sidebar-chatgpt2", template)
 
 
     def test_mobile_sidebar_matches_requested_boundary_and_has_no_x_control(self):
