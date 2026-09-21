@@ -360,26 +360,7 @@ def initial_candle_backfill(request):
         "eligible_symbol_count": len(eligible_symbols),
         "native_timeframes": native_timeframes,
         "tick_derived_timeframes": tick_derived_timeframes,
-        # Render-aligned service metadata mirrors the checked-in Blueprint
-        # without changing the worker, queue, schedule, or broker behavior.
-        "render_contract": {
-            "service": "AlgoBot-MarketData",
-            "service_type": "Background worker",
-            "runtime": "Python",
-            "branch": "main",
-            "auto_deploy": "On commit",
-            "queue": "market_data",
-            "concurrency": "1",
-            "prefetch_multiplier": "1",
-            "max_tasks_per_child": "20",
-            "build_command": "pip install -r requirements/base.txt",
-            "preflight": "python manage.py check_market_data_worker",
-            "start_command": "python manage.py migrate --fake-initial --noinput && CELERY_BROKER_URL=\"$REDIS_URL\" CELERY_RESULT_BACKEND=\"$REDIS_URL\" python manage.py check_market_data_worker && celery -A deriv_platform.celery worker --loglevel=INFO --include=apps.market_data.tasks -Q market_data --concurrency=1 --prefetch-multiplier=1 --max-tasks-per-child=20",
-            "shutdown": "60 seconds",
-            "schedule": "Celery Beat · every 5 minutes",
-            "recovery": "Automatic reconciliation · every 2 minutes",
-            "automatic_retry": "15 minutes after a failed automatic dispatch",
-        },
+
     }
     if request.GET.get("format") == "json":
         scope = request.GET.get("scope", "initial")
