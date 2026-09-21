@@ -121,6 +121,12 @@ def _record_candle_backfill_worker_received(sender=None, request=None, **kwargs)
             ).first()
             if not run or (run.task_id and task_id and run.task_id != task_id):
                 return
+            delivery_info = getattr(request, "delivery_info", None) or {}
+            queue_name = (
+                delivery_info.get("routing_key")
+                or delivery_info.get("exchange")
+                or "unknown"
+            )
             run.accepted_at = run.accepted_at or now
             run.worker_hostname = worker
             run.last_heartbeat_at = now
@@ -129,10 +135,10 @@ def _record_candle_backfill_worker_received(sender=None, request=None, **kwargs)
                 run=run,
                 level="info",
                 event_type="worker_received",
-                message=f"Market-data worker received candle backfill task {task_id}",
+                message=f"Market-data worker received candle backfill task {task_id} via {queue_name}",
                 task_id=task_id,
                 worker_hostname=worker,
-                payload={"queue": "market_data"},
+                payload={"queue": queue_name},
             )
     except Exception:
         logger.exception(
