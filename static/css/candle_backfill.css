@@ -20,7 +20,6 @@
 @media(max-width:850px){.rb-start-form{align-items:stretch;flex-direction:column}.rb-symbol-field{min-width:0}.rb-start-btn{justify-content:center}}
 @media(max-width:650px){.rb-work-progress{text-align:left}.rb-start-copy{min-width:0}}
 
-@media(max-width:650px){.rb-lifecycle-track{align-items:stretch;flex-direction:column}.rb-lifecycle-track>i{transform:rotate(90deg);align-self:center}.rb-log-toolbar{gap:8px}.rb-log-select-wrap{min-width:130px}}
 
 /* FINAL RESPONSIVE LAYOUT CORRECTION — presentation only.
  * Keep every existing control/data contract intact while preventing long
@@ -121,7 +120,6 @@
     max-width: 100%;
   }
 
-  .rb-render-card dl > div {
     grid-template-columns: 76px minmax(0, 1fr);
   }
 
