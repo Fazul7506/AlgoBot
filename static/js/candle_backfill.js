@@ -97,7 +97,7 @@
     text("[data-duration]", run.started_at ? formatDuration(run.duration_seconds) : "—");
     text("[data-requested]", formatDate(run.requested_at));
     text("[data-started]", formatDate(run.started_at));
-    text("[data-source]", run.accepted_at ? "Deriv · market_data worker" : "market_data queue");
+    text("[data-source]", run.accepted_at ? "Deriv · Celery worker" : "Celery queue");
     text("[data-worker-state]", run.worker_state || run.celery_state || "DISPATCHING");
     text("[data-heartbeat]", run.last_heartbeat_at ? "Heartbeat " + formatDate(run.last_heartbeat_at) : "Heartbeat —");
     const progress = run.progress || {};
