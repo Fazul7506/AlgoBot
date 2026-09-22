@@ -115,10 +115,12 @@ def send_telegram(conn, text, *, return_result=False):
 
 
 def _format_money(value, currency):
+    code = str(currency or "").strip().upper()
+    symbol = "$" if code == "USD" else f"{code} " if code else ""
     try:
-        return f"{float(value):,.2f} {currency}"
+        return f"{symbol}{float(value):,.2f}"
     except (TypeError, ValueError):
-        return f"{value or 0} {currency}"
+        return f"{symbol}{value or 0}"
 
 
 def _account_snapshot(user):
