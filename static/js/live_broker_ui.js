@@ -4,7 +4,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const list = v => Array.isArray(v) ? v : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : []));
   const safe = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const money = v => v == null || v === '' || Number.isNaN(Number(v)) ? 'Unavailable' : Number(v).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8});
+  const money = (v, currency = 'USD') => { if (v == null || v === '' || Number.isNaN(Number(v))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(v, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(v).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8})}`; };
   const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '';
   let accounts = [], terminalSyncBusy = false;
 
