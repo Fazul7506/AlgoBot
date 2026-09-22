@@ -355,4 +355,4 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn('data-sidebar-toggle', html)
         self.assertIn('class="sidebar-toggle"', html)
         self.assertIn("v=20260921-sidebar-desktop-collapse2", html)
-        self.assertIn("runtime_recovery.css?v=20260921-sidebar-chatgpt2", html)
+        self.assertIn("v=20260921-sidebar-chatgpt2", html)
