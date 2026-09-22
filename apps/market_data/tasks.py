@@ -531,16 +531,11 @@ def ensure_initial_candle_backfill(count=5000):
             if run and run.status == "completed":
                 return {"status": "completed", "run_id": run.pk}
             if run and run.status == "running":
-                # Beat normally runs the dedicated reconciler every two minutes.
-                # Keep the five-minute safety task capable of healing the same
-                # durable run if a recovery tick was delayed or missed. The
-                # reconciler remains the single recovery implementation.
-                recovery = reconcile_candle_backfill_runs(max_age_seconds=300)
-                return {
-                    "status": "running",
-                    "run_id": run.pk,
-                    "recovery": recovery,
-                }
+                # Recovery has one owner: the dedicated reconciler. Do not
+                # invoke it from inside this task while the run row is locked;
+                # that creates control-plane/recovery contention and can make
+                # a healthy dispatch appear stuck.
+                return {"status": "running", "run_id": run.pk}
 
             trigger = "automatic"
             symbol = (run.symbol if run else "") or ""
