@@ -20,9 +20,9 @@
 
   // Cover the common server-rendered and client-rendered money shapes while
   // deliberately leaving plain currency labels such as "USD" untouched.
-  const numeric = '(-?(?:\\\\d{1,3}(?:,\\\\d{3})+|\\\\d+)(?:\\\\.\\\\d+)?)';
-  const moneyPattern = new RegExp('(^|[\\\\s(])USD(?:[\\\\s\\\\u00a0:]+)'+numeric+'(?=$|[\\\\s\\\\u00a0,)])','gi');
-  const suffixPattern = new RegExp(numeric+'[\\\\s\\\\u00a0]+USD(?=$|[\\\\s\\\\u00a0,)])','gi');
+  const numeric = '(-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\\\.\\d+)?)';
+  const moneyPattern = new RegExp('(^|[\\s(])USD(?:[\\s\\u00a0:]+)'+numeric+'(?=$|[\\s\\u00a0,)])','gi');
+  const suffixPattern = new RegExp(numeric+'[\\s\\u00a0]+USD(?=$|[\\s\\u00a0,)])','gi');
 
   function transformTextNode(node) {
     const parent = node.parentElement;
