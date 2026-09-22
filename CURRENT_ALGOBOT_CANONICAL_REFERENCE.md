@@ -1,7 +1,7 @@
 # AlgoBot — Current Canonical Reference
 
 **Status:** Active source-of-truth reference
-**Updated:** 2026-09-04
+**Updated:** 2026-09-22
 
 This document replaces the older audit/session references for day-to-day implementation decisions. Historical documents may remain in Git history, but runtime code must follow the canonical replacements below.
 
@@ -71,3 +71,11 @@ The shared page shell is now aligned with the AI predictions workspace contract.
 - Canonical API routing: `deriv_platform/urls.py`
 - Shared module shell: `templates/components/enterprise_page.html`
 - Predictions workspace: `static/js/predictions_workspace_fix.js`
+
+
+## Repository hygiene decisions (2026-09-22)
+
+- Retired scaffold-only Django apps are removed from runtime configuration after reference tracing.
+- Committed Python bytecode and unreferenced backtesting recovery code are not part of the source tree.
+- Deriv execution, broker-authoritative contract discovery, account state, and migration history remain canonical and are not replaced with synthetic fallbacks.
+- Portfolio, enterprise, and risk surfaces must expose persisted/live state or explicit `no_data`/`not_configured` states rather than fabricated metrics.
