@@ -281,8 +281,6 @@ def strategy_signals(request):
             # A missing live quote remains missing. No stale or fabricated value
             # is substituted into a trading signal.
             pass
-        except Exception:
-            pass
     feed_latency_ms = round((time.monotonic() - live_started) * 1000, 1)
     baselines = _analysis_baselines(request, symbols, timeframe, account=account)
     now = timezone.now(); rows = []
