@@ -18,8 +18,11 @@
 
   window.AlgoBotMoney = Object.freeze({symbols, symbolFor, format});
 
-  const moneyPattern = /(^|[\\s(])USD[\\s]+(-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?)(?=$|[\\s,)])/gi;
-  const suffixPattern = /(-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?)[\\s]+USD(?=$|[\\s,)])/gi;
+  // Cover the common server-rendered and client-rendered money shapes while
+  // deliberately leaving plain currency labels such as "USD" untouched.
+  const numeric = '(-?(?:\\\\d{1,3}(?:,\\\\d{3})+|\\\\d+)(?:\\\\.\\\\d+)?)';
+  const moneyPattern = new RegExp('(^|[\\\\s(])USD(?:[\\\\s\\\\u00a0:]+)'+numeric+'(?=$|[\\\\s\\\\u00a0,)])','gi');
+  const suffixPattern = new RegExp(numeric+'[\\\\s\\\\u00a0]+USD(?=$|[\\\\s\\\\u00a0,)])','gi');
 
   function transformTextNode(node) {
     const parent = node.parentElement;
@@ -27,8 +30,8 @@
     const text = node.nodeValue || '';
     if (!/USD/i.test(text) || !/\\d/.test(text)) return;
     const next = text
-      .replace(moneyPattern, '$1$$2')
-      .replace(suffixPattern, '$$1');
+      .replace(moneyPattern, '$1$2')
+      .replace(suffixPattern, '$1');
     if (next !== text) node.nodeValue = next;
   }
 
