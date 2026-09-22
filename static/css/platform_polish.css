@@ -73,3 +73,36 @@ html[data-theme="light"] :where(.modal,.dialog,[role="dialog"],dialog) { backgro
 @media(max-width:850px){.builder-stepper{grid-template-columns:1fr 1fr}.builder-grid{grid-template-columns:1fr}.safety-grid{grid-template-columns:1fr 1fr}}@media(max-width:520px){.form-grid,.safety-grid,.builder-stepper{grid-template-columns:1fr}.builder-actions .btn{flex:1 1 100%}}
 @media(max-width:800px){.developer-hero,.hm-header{align-items:stretch; flex-direction:column}.api-key-row{grid-template-columns:1fr}.api-key-actions{justify-content:flex-start}.scope-picker{grid-template-columns:1fr}.smart-money-heatmap{padding:14px}.hm-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:430px){.hm-grid{grid-template-columns:1fr;}}
+
+/* Money presentation polish — presentation only; broker currency codes remain
+   authoritative in API/state and are converted to symbols by money_display.js. */
+.money-value,
+[data-kpi="balance"],
+[data-kpi="equity"],
+[data-kpi="pnl"],
+[data-kpi="margin"],
+[data-kpi-state="balance"],
+[data-kpi-state="equity"] {
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em;
+}
+
+[data-kpi="balance"],
+[data-kpi="equity"],
+[data-kpi="pnl"] {
+  font-weight: 750;
+}
+
+.money-value {
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .money-value,
+  [data-kpi="balance"],
+  [data-kpi="equity"],
+  [data-kpi="pnl"],
+  [data-kpi="margin"] {
+    font-size: clamp(0.95rem, 4vw, 1.15rem);
+  }
+}
