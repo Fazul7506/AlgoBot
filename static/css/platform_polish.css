@@ -97,6 +97,39 @@ html[data-theme="light"] :where(.modal,.dialog,[role="dialog"],dialog) { backgro
   white-space: nowrap;
 }
 
+/* Money is a first-class data type in the UI: compact, tabular and visually
+   distinct without changing the broker/API value or currency code. */
+.money-value,
+[data-kpi="balance"],
+[data-kpi="equity"],
+[data-kpi="available"],
+[data-kpi="pnl"],
+[data-balance],
+[data-equity],
+[data-pnl] {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-weight: 760;
+  letter-spacing: -0.012em;
+  text-rendering: optimizeLegibility;
+}
+
+.money-value::first-letter,
+[data-kpi="balance"]::first-letter,
+[data-kpi="equity"]::first-letter,
+[data-kpi="available"]::first-letter,
+[data-kpi="pnl"]::first-letter {
+  font-weight: 850;
+}
+
+/* Keep money cards calm and readable on dense dashboards. */
+:where(.kpi-card,.metric-card,.stat-card,.summary-card) :where(.money-value,[data-kpi="balance"],[data-kpi="equity"],[data-kpi="available"],[data-kpi="pnl"]) {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 700px) {
   .money-value,
   [data-kpi="balance"],
