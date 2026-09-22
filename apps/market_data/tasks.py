@@ -71,6 +71,7 @@ BACKFILL_DISPATCH_STALE_AFTER = timedelta(minutes=2)
 BACKFILL_RECEIVED_STALE_AFTER = timedelta(minutes=5)
 BACKFILL_MAX_RECOVERY_ATTEMPTS = 3
 BACKFILL_AUTOMATIC_RETRY_AFTER = timedelta(minutes=15)
+BACKFILL_QUEUE = "market_data"
 
 
 def _active_symbols(symbol=None):
@@ -89,10 +90,6 @@ def _active_symbols(symbol=None):
 
 def _worker_identity():
     return socket.gethostname() or "unknown-worker"
-
-def _recovery_backfill_queue(recovery_attempts):
-    """Alternate recovery delivery so a missing dedicated consumer cannot trap the job forever."""
-    return "celery" if int(recovery_attempts or 0) % 2 else "market_data"
 
 
 @task_received.connect
@@ -583,7 +580,7 @@ def ensure_initial_candle_backfill(count=5000):
             CandleBackfillRun.objects.filter(pk=run.pk).update(requested_at=now)
             run.refresh_from_db()
 
-        queue_name = "market_data"
+        queue_name = BACKFILL_QUEUE
         task = run_initial_candle_backfill.apply_async(
             args=(run.pk,),
             kwargs={"count": int(count), "symbol": symbol or None},
@@ -792,7 +789,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             run.completed_at = None
             run.error = "Worker delivery was not confirmed within the recovery window; the job is being re-published automatically."
             run.save(update_fields=["task_id", "dispatch_at", "started_at", "accepted_at", "last_heartbeat_at", "completed_at", "error", "result"])
-            CandleBackfillEvent.objects.create(run=run, level="notice", event_type="recovered", message=run.error, task_id=old_task_id, payload={"old_task_id": old_task_id, "queue": _recovery_backfill_queue(recovery_attempts)})
+            CandleBackfillEvent.objects.create(run=run, level="notice", event_type="recovered", message=run.error, task_id=old_task_id, payload={"old_task_id": old_task_id, "queue": BACKFILL_QUEUE})
 
         if old_task_id:
             try:
@@ -806,7 +803,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             task = run_initial_candle_backfill.apply_async(
                 args=(run_id,),
                 kwargs={"count": count, "symbol": symbol},
-                queue=_recovery_backfill_queue(recovery_attempts),
+                queue=BACKFILL_QUEUE,
             )
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
