@@ -28,7 +28,7 @@
     if (!/USD/i.test(text) || !/\\d/.test(text)) return;
     const next = text
       .replace(moneyPattern, '$1$$2')
-      .replace(suffixPattern, '$1');
+      .replace(suffixPattern, '$$1');
     if (next !== text) node.nodeValue = next;
   }
 
