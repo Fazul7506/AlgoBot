@@ -30,7 +30,90 @@
     const text = node.nodeValue || '';
     if (!/USD/i.test(text) || !/\d/.test(text)) return;
     const next = text
-      .replace(moneyPattern, (_, prefix, amount) => `${prefix}${amount}`)
+      .replace(moneyPattern, (_, prefix, amount) => prefix + '
+      .replace(suffixPattern, (_, amount) => ';
+    if (next !== text) node.nodeValue = next;
+  }
+
+  function scan(root=document) {
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    const nodes=[];
+    while(walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(transformTextNode);
+  }
+
+  function boot() {
+    scan();
+    const observer=new MutationObserver(records => {
+      for (const record of records) {
+        if (record.type === 'characterData') transformTextNode(record.target);
+        else record.addedNodes.forEach(node => {
+          if (node.nodeType === Node.TEXT_NODE) transformTextNode(node);
+          else if (node.nodeType === Node.ELEMENT_NODE) scan(node);
+        });
+      }
+    });
+    observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true});
+  else boot();
+})(); + amount)
+      .replace(suffixPattern, (_, amount) => `${amount}`);
+    if (next !== text) node.nodeValue = next;
+  }
+
+  function scan(root=document) {
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    const nodes=[];
+    while(walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(transformTextNode);
+  }
+
+  function boot() {
+    scan();
+    const observer=new MutationObserver(records => {
+      for (const record of records) {
+        if (record.type === 'characterData') transformTextNode(record.target);
+        else record.addedNodes.forEach(node => {
+          if (node.nodeType === Node.TEXT_NODE) transformTextNode(node);
+          else if (node.nodeType === Node.ELEMENT_NODE) scan(node);
+        });
+      }
+    });
+    observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true});
+  else boot();
+})(); + amount);
+    if (next !== text) node.nodeValue = next;
+  }
+
+  function scan(root=document) {
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    const nodes=[];
+    while(walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(transformTextNode);
+  }
+
+  function boot() {
+    scan();
+    const observer=new MutationObserver(records => {
+      for (const record of records) {
+        if (record.type === 'characterData') transformTextNode(record.target);
+        else record.addedNodes.forEach(node => {
+          if (node.nodeType === Node.TEXT_NODE) transformTextNode(node);
+          else if (node.nodeType === Node.ELEMENT_NODE) scan(node);
+        });
+      }
+    });
+    observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true});
+  else boot();
+})(); + amount)
       .replace(suffixPattern, (_, amount) => `${amount}`);
     if (next !== text) node.nodeValue = next;
   }
