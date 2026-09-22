@@ -38,6 +38,10 @@
   }
   function emitError(error, options={}) {
     if (options?.notifyOnError === false) return;
+    // A signed-out public page can legitimately encounter a protected endpoint
+    // from a stale/third-party page module. Do not turn that expected 401 into a
+    // global error toast; the server remains authoritative for authenticated use.
+    if (Number(error?.status) === 401 && document.body?.dataset.authenticated !== 'true') return;
     window.dispatchEvent(new CustomEvent('algobot:api-error',{detail:{url:error.url,method:error.method,status:error.status,code:error.code,message:error.message,retryable:error.retryable}}));
   }
   function normalizeOrderPayload(body) {
