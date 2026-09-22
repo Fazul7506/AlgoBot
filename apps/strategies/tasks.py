@@ -16,5 +16,3 @@ def calculate_strategy_performance(strategy_id):
     return StrategyPerformanceService().recalculate(Strategy.objects.get(id=strategy_id)).id
 @_task
 def optimize_strategy(strategy_id): return {'strategy_id': strategy_id, 'status': 'queued'}
-@_task
-def cleanup_old_execution_logs(days=30): return 0

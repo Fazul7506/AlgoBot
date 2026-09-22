@@ -42,7 +42,52 @@ class TradingSessionRiskService:
         return True,''
 
 class RiskMonitoringService:
-    def dashboard(self,user): return {'risk_score':0,'today_profit_loss':0,'current_drawdown':0,'maximum_drawdown':0,'portfolio_exposure':ExposureService().summary(user)['overall'],'margin_level':0,'free_margin':0,'open_risk':0,'daily_loss_remaining':0,'circuit_breaker_status':False}
+    """Expose risk telemetry derived from persisted account and risk state."""
+    def dashboard(self, user):
+        from apps.brokers.models import BrokerAccount
+        from .models import DrawdownHistory
+
+        profile = RiskRepository().profile_for_user(user)
+        exposure = ExposureService().summary(user)
+        accounts = list(BrokerAccount.objects.filter(user=user, status="active").only("balance", "equity", "margin", "free_margin"))
+
+        latest = DrawdownService().state(user, profile)
+        current_drawdown = Decimal(str(latest.get("drawdown_percent") or 0))
+        maximum_drawdown = DrawdownHistory.objects.filter(user=user).order_by("-drawdown_percent").values_list("drawdown_percent", flat=True).first() or Decimal("0")
+
+        total_balance = sum((Decimal(str(account.balance or 0)) for account in accounts), Decimal("0"))
+        total_free_margin = sum((Decimal(str(account.free_margin or 0)) for account in accounts), Decimal("0"))
+        total_margin = sum((Decimal(str(account.margin or 0)) for account in accounts), Decimal("0"))
+        margin_level = (total_balance / total_margin * Decimal("100")) if total_margin > 0 else None
+
+        exposure_value = Decimal(str(exposure.get("overall") or 0))
+        exposure_ratio = (exposure_value / total_balance) if total_balance > 0 else Decimal("0")
+        margin_risk = Decimal("1") if margin_level is None else max(Decimal("0"), Decimal("1") - margin_level / Decimal("100"))
+        risk_score = self._risk_score(drawdown=current_drawdown, exposure=exposure_ratio, margin=margin_risk)
+
+        return {
+            "risk_score": risk_score,
+            "today_profit_loss": None,
+            "current_drawdown": current_drawdown,
+            "maximum_drawdown": maximum_drawdown,
+            "portfolio_exposure": exposure_value,
+            "margin_level": margin_level,
+            "free_margin": total_free_margin,
+            "open_risk": exposure_value,
+            "daily_loss_remaining": None,
+            "circuit_breaker_status": None,
+            "drawdown_state": latest,
+            "account_count": len(accounts),
+        }
+
+    @staticmethod
+    def _risk_score(*, drawdown, exposure, margin):
+        return RiskService().score(
+            drawdown=min(max(float(drawdown), 0.0), 1.0),
+            exposure=min(max(float(exposure), 0.0), 1.0),
+            margin=min(max(float(margin), 0.0), 1.0),
+        )
+
 
 # public aliases
 RiskRepository=RiskRepository; PositionSizingService=PositionSizingService; DrawdownService=DrawdownService; ExposureService=ExposureService; CorrelationService=CorrelationService; PortfolioRiskService=PortfolioRiskService

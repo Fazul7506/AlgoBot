@@ -291,9 +291,5 @@ class FailoverService:
     def fallback_account(self, order): return SmartOrderRouter().route(order.user, order.symbol)
 
 
-class AccountService:
-    pass
-
-
 class PositionService:
     def exposure(self, account): return Position.objects.filter(account=account, status='open')

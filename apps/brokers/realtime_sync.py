@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from decimal import Decimal, InvalidOperation
 
@@ -11,6 +12,8 @@ from django.db import close_old_connections
 from django.utils import timezone
 
 from .services import BrokerRegistry
+
+logger = logging.getLogger(__name__)
 
 
 class BrokerRealtimeSync:
@@ -84,10 +87,11 @@ class BrokerRealtimeSync:
         try:
             from apps.execution.reconciliation import reconcile_execution_event
             await sync_to_async(reconcile_execution_event)(user=self.account.user, event={"proposal_open_contract": contract})
-        except Exception:
-            # A broker event must not kill the realtime stream. Unknown or
-            # schema-incompatible events remain visible through the event bus.
-            return
+        except Exception as exc:
+            logger.exception(
+                "Broker execution event reconciliation failed",
+                extra={"account_id": self.account_id, "contract_id": contract.get("contract_id"), "error": str(exc)},
+            )
 
     async def _broadcast(self, event_type, payload):
         if self.channel_layer:
@@ -113,7 +117,7 @@ class BrokerRealtimeSync:
             try:
                 account.balance = Decimal(str(raw_balance))
             except (InvalidOperation, TypeError, ValueError):
-                pass
+                logger.warning("Ignoring invalid broker balance", extra={"account_id": self.account_id, "raw_balance": raw_balance})
         account.account_id = account_id
         if currency:
             account.currency = str(currency)
@@ -140,7 +144,7 @@ class BrokerRealtimeSync:
             try:
                 unrealized += Decimal(str(contract.get("profit") or 0))
             except (InvalidOperation, TypeError, ValueError):
-                pass
+                logger.warning("Ignoring invalid broker contract profit", extra={"account_id": self.account_id, "contract_id": contract.get("contract_id")})
             normalized.append(self._normalize_contract(contract))
         equity = account.balance + unrealized
         account.equity = equity
@@ -170,8 +174,12 @@ class BrokerRealtimeSync:
         try:
             from apps.market_data.services import MarketDataService
             await sync_to_async(MarketDataService().tick_service.ingest)({"symbol": symbol, "quote": quote, "bid": tick.get("bid"), "ask": tick.get("ask"), "epoch": epoch, "volume": tick.get("volume", 0)})
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.exception(
+                "Broker tick persistence failed",
+                extra={"account_id": self.account_id, "symbol": symbol, "epoch": epoch, "error": str(exc)},
+            )
+            return None
         return {"symbol": symbol, "price": quote, "bid": tick.get("bid"), "ask": tick.get("ask"), "epoch": epoch, "timestamp": time.time()}
 
 
