@@ -20,6 +20,7 @@
   window.AlgoBotServiceRuntime=Object.freeze({register,begin,end,run,withTimeout,request,cancel,isRetryable:retryable,recordError,recentErrors:n=>errors.slice(-Math.max(1,n||20)),snapshot,accountId});
   window.addEventListener('algobot:api-error',event=>{
     const detail=event.detail||{};
+    if (document.body?.dataset.authenticated !== 'true' && (Number(detail.status) === 401 || String(detail.code||'').toUpperCase() === 'AUTH_REQUIRED')) return;
     const entry=recordError(detail);
     // Page controllers own transient network/timeout/cancellation recovery.
     // Do not promote those expected transport events into the global workspace
