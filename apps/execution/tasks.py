@@ -83,28 +83,3 @@ def process_execution_queue(batch_size=10):
 @shared_task
 def retry_failed_orders():
     return process_execution_queue()
-
-
-@shared_task
-def synchronize_positions():
-    return 0
-
-
-@shared_task
-def synchronize_contracts():
-    return 0
-
-
-@shared_task
-def archive_completed_trades():
-    return 0
-
-
-@shared_task
-def clean_execution_logs(days=30):
-    return 0
-
-
-@shared_task
-def refresh_account_state():
-    return 0
