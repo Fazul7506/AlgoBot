@@ -28,7 +28,7 @@
     const parent = node.parentElement;
     if (!parent || /^(SCRIPT|STYLE|TEXTAREA|INPUT|CODE|PRE)$/i.test(parent.tagName)) return;
     const text = node.nodeValue || '';
-    if (!/USD/i.test(text) || !/\\d/.test(text)) return;
+    if (!/USD/i.test(text) || !/\d/.test(text)) return;
     const next = text
       .replace(moneyPattern, '$1$2')
       .replace(suffixPattern, '$1');
