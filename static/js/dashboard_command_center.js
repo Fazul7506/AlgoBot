@@ -6,7 +6,7 @@
   const $ = (selector) => document.querySelector(selector);
   const list = (value) => Array.isArray(value) ? value : (Array.isArray(value?.data) ? value.data : (Array.isArray(value?.results) ? value.results : []));
   const esc = (value) => { const node = document.createElement('div'); node.textContent = String(value ?? ''); return node.innerHTML; };
-  const money = (value) => value == null || value === '' || Number.isNaN(Number(value)) ? 'Unavailable' : Number(value).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 8});
+  const money = (value, currency = 'USD') => { if (value == null || value === '' || Number.isNaN(Number(value))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8})}`; };
   const setText = (selector, value) => { const node = $(selector); if (node) node.textContent = value; };
   const setHtml = (selector, value) => { const node = $(selector); if (node) node.innerHTML = value; };
   const empty = (message) => `<div class="empty-state">${esc(message)}</div>`;
@@ -66,10 +66,10 @@
     const currency = account.currency || '';
     const pnl = account.net_profit_loss ?? account.net_pnl ?? account.profit_loss ?? account.pnl;
     const equity = account.equity ?? (pnl != null && account.balance != null ? Number(account.balance) + Number(pnl) : null);
-    setText('[data-kpi="balance"]', `${currency} ${money(account.balance)}`.trim());
-    setText('[data-kpi="equity"]', `${currency} ${money(equity)}`.trim());
-    setText('[data-kpi="available"]', `${currency} ${money(account.free_margin ?? account.available_margin ?? account.available)}`.trim());
-    setText('[data-kpi="pnl"]', pnl == null ? 'Unavailable' : `${currency} ${money(pnl)}`.trim());
+    setText('[data-kpi="balance"]', money(account.balance, currency));
+    setText('[data-kpi="equity"]', money(equity, currency));
+    setText('[data-kpi="available"]', money(account.free_margin ?? account.available_margin ?? account.available, currency));
+    setText('[data-kpi="pnl"]', pnl == null ? 'Unavailable' : money(pnl, currency));
     setText('[data-kpi-state="balance"]', 'Authoritative broker snapshot');
     setText('[data-kpi-state="equity"]', account.equity == null ? 'Not reported by broker' : 'Authoritative broker equity');
     const broker = account.broker?.name || account.broker_name || 'Broker';
