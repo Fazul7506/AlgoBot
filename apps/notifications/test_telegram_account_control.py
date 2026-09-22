@@ -30,9 +30,9 @@ class TelegramAccountControlTests(TestCase):
         text = result["reply"]["text"]
         self.assertIn("AlgoBot accounts (1)", text)
         self.assertIn("Deriv — CR123456", text)
-        self.assertIn("Balance: 1,250.50 USD", text)
-        self.assertIn("Equity: 1,275.75 USD", text)
-        self.assertIn("Free margin: 1,200.00 USD", text)
+        self.assertIn("Balance: $1,250.50", text)
+        self.assertIn("Equity: $1,275.75", text)
+        self.assertIn("Free margin: $1,200.00", text)
         self.assertNotIn("access_token", text)
         self.assertNotIn("refresh_token", text)
 
