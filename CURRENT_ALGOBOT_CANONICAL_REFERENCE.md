@@ -1,7 +1,7 @@
 # AlgoBot — Current Canonical Reference
 
 **Status:** Active source-of-truth reference
-**Updated:** 2026-09-04
+**Updated:** 2026-09-22
 
 This document replaces the older audit/session references for day-to-day implementation decisions. Historical documents may remain in Git history, but runtime code must follow the canonical replacements below.
 
@@ -71,3 +71,14 @@ The shared page shell is now aligned with the AI predictions workspace contract.
 - Canonical API routing: `deriv_platform/urls.py`
 - Shared module shell: `templates/components/enterprise_page.html`
 - Predictions workspace: `static/js/predictions_workspace_fix.js`
+
+
+## 8. Repository hygiene decisions (2026-09-22)
+
+- Tracked Python bytecode artifacts are not source and must remain untracked.
+- Obsolete Deriv legacy-routing environment placeholders are removed when no runtime reference exists.
+- Scaffold-only Django apps with no models, migrations, routes, tasks, templates, or runtime references are removed from both the tree and `INSTALLED_APPS` together.
+- Duplicate or malformed template blocks are repaired at the canonical template rather than retaining compatibility copies.
+- Backtesting submission has one browser owner: `static/js/backtesting_workspace_fix.js`; recovery scripts must not register a second submit handler.
+- Applied migrations are preserved; cleanup must validate the migration graph and a clean database after every structural change.
+- CI hygiene, Django checks, template compilation, frontend/static validation, migration validation, and the full test suite are required gates for cleanup changes.
