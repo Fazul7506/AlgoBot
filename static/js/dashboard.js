@@ -6,7 +6,7 @@
   const $ = selector => document.querySelector(selector);
   const list = value => Array.isArray(value) ? value : (Array.isArray(value?.results) ? value.results : (Array.isArray(value?.data) ? value.data : []));
   const esc = value => String(value ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
-  const money = value => value == null || value === '' || Number.isNaN(Number(value)) ? 'Unavailable' : Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8});
+  const money = (value, currency = 'USD') => { if (value == null || value === '' || Number.isNaN(Number(value))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8})}`; };
 
   let loading = false;
   let refreshTimer = null;
@@ -49,10 +49,10 @@
     liveAccount = {...(liveAccount || {}), ...account};
     const currency = liveAccount.currency || '';
     const pnl = liveAccount.net_profit_loss ?? liveAccount.net_pnl ?? liveAccount.profit_loss ?? liveAccount.pnl;
-    setText('[data-kpi="balance"]', `${currency} ${money(liveAccount.balance)}`.trim());
-    setText('[data-kpi="equity"]', `${currency} ${money(liveAccount.equity)}`.trim());
-    setText('[data-kpi="available"]', `${currency} ${money(liveAccount.free_margin ?? liveAccount.available_margin ?? liveAccount.available)}`.trim());
-    setText('[data-kpi="pnl"]', pnl == null ? 'Unavailable' : `${currency} ${money(pnl)}`.trim());
+    setText('[data-kpi="balance"]', money(liveAccount.balance, currency));
+    setText('[data-kpi="equity"]', money(liveAccount.equity, currency));
+    setText('[data-kpi="available"]', money(liveAccount.free_margin ?? liveAccount.available_margin ?? liveAccount.available, currency));
+    setText('[data-kpi="pnl"]', pnl == null ? 'Unavailable' : money(pnl, currency));
     setText('[data-kpi-state="balance"]', liveAccount.is_connected === false ? 'Last known broker data' : 'Live broker balance');
     setText('[data-kpi-state="equity"]', liveAccount.equity == null ? 'Deriv does not expose a native equity field; shown when derivable from open contracts' : 'Live broker equity');
   }
