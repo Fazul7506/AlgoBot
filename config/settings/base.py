@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     "rest_framework", "rest_framework_simplejwt", "corsheaders", "django_filters", "core", "apps.ai_engine", "apps.analysis", "apps.automation", "apps.backtesting", "apps.brokers",
     "apps.contracts", "apps.copy_trading", "apps.deployment", "apps.developer", "apps.enterprise", "apps.execution",
     "apps.feature_store", "apps.health", "apps.indicators", "apps.market_data", "apps.monitoring", "apps.notifications", "apps.observability",
-    "apps.optimization", "apps.paper_trading", "apps.portfolio", "apps.risk", "apps.signals", "apps.simulation",
+    "apps.optimization", "apps.paper_trading", "apps.portfolio", "apps.risk", "apps.simulation",
     "apps.smart_money", "apps.strategies", "apps.tenants",
     "apps.trading", "apps.training",
 ]
