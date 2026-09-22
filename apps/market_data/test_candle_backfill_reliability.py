@@ -343,8 +343,6 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertEqual(result["queue"], "market_data")
         publish.assert_called_once()
 
-    def test_recovery_alternates_to_general_celery_queue(self):
-        from .tasks import _recovery_backfill_queue
-        self.assertEqual(_recovery_backfill_queue(0), "market_data")
-        self.assertEqual(_recovery_backfill_queue(1), "celery")
-        self.assertEqual(_recovery_backfill_queue(2), "market_data")
+    def test_all_backfill_delivery_uses_the_dedicated_market_data_queue(self):
+        from .tasks import BACKFILL_QUEUE
+        self.assertEqual(BACKFILL_QUEUE, "market_data")
