@@ -75,6 +75,7 @@ urlpatterns = [
     path("accounts/login/", RedirectView.as_view(url="/login/", permanent=False)),
     path("dashboard/", login_required(dashboard_page), name="dashboard_page"),
     path("billing/", login_required(lambda request: render(request, "core/billing.html")), name="billing_page"),
+    path("saas/", login_required(lambda request: render(request, "saas/control_center.html")), name="saas_page"),
     path("markets/", login_required(markets_page), name="markets_page"),
     path("market-scanner/", login_required(lambda request: render(request, "core/market_scanner.html")), name="market_scanner_page"),
     path("strategies/", login_required(strategies_page), name="strategies_page"),
