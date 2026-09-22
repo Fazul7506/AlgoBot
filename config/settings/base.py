@@ -35,18 +35,12 @@ CSRF_FAILURE_VIEW = "django.views.csrf.csrf_failure"
 INSTALLED_APPS = [
     "daphne", "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
-    "rest_framework", "rest_framework_simplejwt", "corsheaders", "django_filters", "core",
-    "apps.admin_portal", "apps.ai_engine", "apps.alerts", "apps.analysis",
-    "apps.audit", "apps.automation", "apps.backtesting", "apps.brokers", "apps.community",
-    "apps.contracts", "apps.copy_trading", "apps.deployment", "apps.developer",
-    "apps.developer_api", "apps.enterprise", "apps.execution", "apps.feature_flags",
-    "apps.feature_store", "apps.followers", "apps.health", "apps.indicators", "apps.journal",
-    "apps.leaderboards", "apps.licensing", "apps.logging_system", "apps.market_data", "apps.marketplace",
-    "apps.metrics", "apps.monitoring", "apps.notifications", "apps.observability",
-    "apps.optimization", "apps.organizations", "apps.paper_trading", "apps.portfolio", "apps.providers",
-    "apps.rbac", "apps.referrals", "apps.reports", "apps.risk", "apps.signals", "apps.simulation",
-    "apps.smart_money", "apps.strategies", "apps.subscriptions", "apps.support", "apps.tenants",
-    "apps.trading", "apps.training", "apps.usage", "apps.workspace",
+    "rest_framework", "rest_framework_simplejwt", "corsheaders", "django_filters", "core", "apps.ai_engine", "apps.analysis", "apps.automation", "apps.backtesting", "apps.brokers",
+    "apps.contracts", "apps.copy_trading", "apps.deployment", "apps.developer", "apps.enterprise", "apps.execution",
+    "apps.feature_store", "apps.health", "apps.indicators", "apps.market_data", "apps.monitoring", "apps.notifications", "apps.observability",
+    "apps.optimization", "apps.paper_trading", "apps.portfolio", "apps.risk", "apps.signals", "apps.simulation",
+    "apps.smart_money", "apps.strategies", "apps.tenants",
+    "apps.trading", "apps.training",
 ]
 
 MIDDLEWARE = [
