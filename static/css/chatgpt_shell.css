@@ -175,3 +175,29 @@
     opacity: 1;
   }
 }
+
+
+/* Final responsive authority: phones, touch tablets and narrow browser
+ * viewports must use the drawer shell. */
+@media (max-width: 1100px), (pointer: coarse) and (hover: none) {
+  .mobile-menu-button { display:grid !important; place-items:center !important; }
+  .app-sidebar {
+    position:fixed !important; inset:0 auto 0 0 !important;
+    width:min(320px,86vw) !important; max-width:320px !important;
+    height:100dvh !important; max-height:100dvh !important;
+    margin:0 !important; padding:10px !important;
+    transform:translateX(-105%) !important; z-index:200 !important;
+    box-sizing:border-box !important; overflow:hidden !important;
+    box-shadow:18px 0 60px rgba(0,0,0,.35) !important;
+  }
+  .app-sidebar.is-open { transform:translateX(0) !important; }
+  .app-sidebar.is-collapsed { width:min(320px,86vw) !important; }
+  .app-sidebar .sidebar-toggle { display:none !important; }
+  .app-shell, body.sidebar-collapsed .app-shell { margin-left:0 !important; }
+  .topbar { padding-left:64px !important; }
+  .sidebar-backdrop { z-index:190 !important; }
+}
+@media (min-width: 1101px) and (pointer: fine) {
+  .app-sidebar { transform:none !important; }
+  .mobile-menu-button { display:none !important; }
+}
