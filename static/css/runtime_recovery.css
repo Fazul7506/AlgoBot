@@ -2310,6 +2310,7 @@ body {
 }
 
 
+/* No sidebar X/close control exists. The page-level mobile menu button owns drawer access. */
 /* FINAL CHATGPT-LIKE MOBILE SIDEBAR CONTRACT — user-visible boundary and controls.
  * The mobile drawer ends at the requested viewport boundary. The desktop
  * collapse/expand control remains available only at 901px+; the page-level
