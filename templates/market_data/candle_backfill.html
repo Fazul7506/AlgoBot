@@ -132,6 +132,60 @@
     </article>
   </section>
 
+  <section class="rb-contract-panel" aria-labelledby="backfill-contract-title">
+    <div class="rb-contract-head">
+      <div>
+        <span class="rb-eyebrow">BACKFILL CONTROL PLANE</span>
+        <h2 id="backfill-contract-title">Production-grade data contract</h2>
+        <p>These controls make the existing ingestion guarantees visible to the operator without introducing an alternate execution path.</p>
+      </div>
+      <span class="rb-contract-badge"><span class="material-symbols-rounded">verified</span> Broker authoritative</span>
+    </div>
+
+    <div class="rb-contract-grid">
+      <article class="rb-contract-card">
+        <div class="rb-contract-icon"><span class="material-symbols-rounded">rule</span></div>
+        <div><span class="rb-eyebrow">ELIGIBILITY GATE</span><h3>{{ backfill_config.eligible_symbol_count }} markets in scope</h3><p>{{ backfill_config.eligibility_rule }}. Eligibility is re-evaluated when a run starts.</p></div>
+        <span class="rb-contract-state"><i></i> Enforced</span>
+      </article>
+      <article class="rb-contract-card">
+        <div class="rb-contract-icon"><span class="material-symbols-rounded">candlestick_chart</span></div>
+        <div><span class="rb-eyebrow">TIMEFRAME INTEGRITY</span><h3>{{ backfill_config.native_timeframes|length }} native + tick research</h3><p>Native Deriv OHLC remains authoritative for minute-and-higher candles; tick-derived research uses persisted broker ticks.</p></div>
+        <span class="rb-contract-state"><i></i> Enforced</span>
+      </article>
+      <article class="rb-contract-card">
+        <div class="rb-contract-icon"><span class="material-symbols-rounded">speed</span></div>
+        <div><span class="rb-eyebrow">BROKER BUDGET</span><h3>{{ backfill_config.count }} records / series</h3><p>Requests are paced at {{ backfill_config.request_interval_seconds }}s minimum between broker-history operations.</p></div>
+        <span class="rb-contract-state"><i></i> Guarded</span>
+      </article>
+      <article class="rb-contract-card">
+        <div class="rb-contract-icon"><span class="material-symbols-rounded">dns</span></div>
+        <div><span class="rb-eyebrow">WORKER ISOLATION</span><h3>{{ backfill_config.queue }} · C{{ backfill_config.worker_concurrency }} · P{{ backfill_config.prefetch_multiplier }}</h3><p>The production market-data worker consumes the dedicated queue with one active consumer and one prefetched task.</p></div>
+        <span class="rb-contract-state"><i></i> Isolated</span>
+      </article>
+    </div>
+
+    <div class="rb-gates">
+      <div class="rb-gates-column"><span class="rb-eyebrow">DATA QUALITY GATES</span>
+        {% for gate in backfill_config.quality_gates %}<div class="rb-gate-row"><span class="material-symbols-rounded">check_circle</span><span>{{ gate }}</span></div>{% endfor %}
+      </div>
+      <div class="rb-gates-column"><span class="rb-eyebrow">RECOVERY &amp; RESEARCH GUARANTEES</span>
+        {% for item in backfill_config.recovery_contract %}<div class="rb-gate-row"><span class="material-symbols-rounded">shield</span><span>{{ item }}</span></div>{% endfor %}
+        {% for item in backfill_config.research_contract %}<div class="rb-gate-row"><span class="material-symbols-rounded">database</span><span>{{ item }}</span></div>{% endfor %}
+      </div>
+    </div>
+
+    <div class="rb-pipeline" aria-label="Historical data pipeline">
+      <div class="rb-pipeline-step"><span>01</span><strong>Eligibility</strong><small>Active + tradable Deriv symbols</small></div>
+      <span class="rb-pipeline-arrow">→</span>
+      <div class="rb-pipeline-step"><span>02</span><strong>Broker history</strong><small>Native OHLC / persisted ticks</small></div>
+      <span class="rb-pipeline-arrow">→</span>
+      <div class="rb-pipeline-step"><span>03</span><strong>Validation</strong><small>Integrity + duplicate safety</small></div>
+      <span class="rb-pipeline-arrow">→</span>
+      <div class="rb-pipeline-step"><span>04</span><strong>Persistence</strong><small>Research-ready Django data</small></div>
+    </div>
+  </section>
+
   <section class="rb-details-grid rb-details-secondary">
     <article class="rb-detail-card"><span class="rb-eyebrow">WORKER TELEMETRY</span><h3>Database-backed lifecycle</h3><p>Worker acceptance, start time, heartbeat, symbol progress, timeframe results and terminal state are persisted in Django. Celery <code>PENDING</code> cannot overwrite confirmed application lifecycle evidence.</p></article>
     <article class="rb-detail-card"><span class="rb-eyebrow">ADMIN CONSISTENCY</span><h3>Same run, same evidence</h3><p>Django admin reads the same run and durable event records shown here. Deleting the singleton run intentionally returns this page to <strong>Not started</strong> and exposes the Start backfill control.</p><a href="{% url 'admin:market_data_candlebackfillrun_changelist' %}">Open Django admin →</a></article>
