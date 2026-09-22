@@ -80,3 +80,71 @@
     min-height: auto;
   }
 }
+
+
+/* FINAL PUBLIC HOMEPAGE DESKTOP CONTRACT.
+ * The public landing page is intentionally full-width. The existing content,
+ * routes and interactions remain unchanged; this only removes the legacy
+ * centered desktop constraint and guarantees the page owns the viewport width.
+ */
+html, body {
+  width: 100%;
+  min-width: 0;
+}
+
+.app-shell.public-shell {
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  min-width: 0 !important;
+}
+
+.app-shell.public-shell > .topbar,
+.app-shell.public-shell > #app-content {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.app-shell.public-shell > #app-content {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.app-shell.public-shell .landing-page {
+  display: block;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: clamp(28px, 4vw, 64px) clamp(24px, 5vw, 80px) 80px !important;
+  box-sizing: border-box !important;
+}
+
+@media (min-width: 901px) {
+  .app-shell.public-shell .landing-hero {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: calc(100dvh - 150px) !important;
+    margin: 0 !important;
+    padding: clamp(56px, 6vw, 96px) !important;
+    box-sizing: border-box !important;
+  }
+
+  .app-shell.public-shell .landing-features {
+    width: 100% !important;
+    max-width: none !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell.public-shell .landing-page {
+    width: 100% !important;
+    padding: 24px 16px 56px !important;
+  }
+
+  .app-shell.public-shell .landing-hero {
+    min-height: auto !important;
+  }
+}
