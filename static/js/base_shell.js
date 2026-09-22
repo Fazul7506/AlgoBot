@@ -34,7 +34,13 @@
   window.alert=message=>showDjangoMessage(String(message??''),'info');
 
   function friendlyApiMessage(detail) { if(!detail)return'The requested operation could not be completed.'; const code=String(detail.code||'').toUpperCase(); if(code==='API_TIMEOUT')return'The server took too long to respond. Please try again.'; if(code==='NETWORK_ERROR')return'The data connection is temporarily unavailable. Please try again.'; if(code==='EDGE_CHALLENGE')return'The production connection is temporarily unavailable. Please try again.'; const message=String(detail.message||'').replace(/\s+/g,' ').trim(); if(!message||/^[[{]/.test(message)||message.length>500)return'The requested operation could not be completed.'; return message; }
-  function bindApiMessages() { window.addEventListener('algobot:api-error',event=>{const detail=event.detail||{}; const level=Number(detail.status)>=500||['API_TIMEOUT','NETWORK_ERROR'].includes(detail.code)?'error':'warning'; showDjangoMessage(friendlyApiMessage(detail),level);}); }
+  function bindApiMessages() { window.addEventListener('algobot:api-error',event=>{const detail=event.detail||{};
+    // Anonymous public pages are intentionally quiet. Protected API endpoints
+    // may legitimately return 401/403 when stale page code or a browser tab
+    // races navigation; that state must not become a visible workspace error.
+    if (document.body?.dataset.authenticated !== 'true' && (Number(detail.status) === 401 || String(detail.code||'').toUpperCase() === 'AUTH_REQUIRED')) return;
+    const level=Number(detail.status)>=500||['API_TIMEOUT','NETWORK_ERROR','SERVICE_TIMEOUT'].includes(detail.code)?'error':'warning'; showDjangoMessage(friendlyApiMessage(detail),level);
+  }); }
 
   function currentPath() { return window.location.pathname.replace(/\/+$/,'')||'/'; }
   function navigationLinks() { return [...document.querySelectorAll('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')]; }
