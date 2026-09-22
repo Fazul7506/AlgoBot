@@ -361,3 +361,11 @@ class CandleBackfillReliabilityTests(TestCase):
     def test_all_backfill_delivery_uses_the_dedicated_market_data_queue(self):
         from .tasks import BACKFILL_QUEUE
         self.assertEqual(BACKFILL_QUEUE, "market_data")
+
+
+class CandleBackfillRecoveryWatchdogContractTests(unittest.TestCase):
+    def test_dispatch_stale_window_has_server_side_watchdog(self):
+        from . import tasks
+        self.assertEqual(tasks.BACKFILL_DISPATCH_STALE_AFTER.total_seconds(), 90)
+        self.assertEqual(tasks.BACKFILL_RECOVERY_WATCHDOG_DELAY_SECONDS, 120)
+        self.assertIn("_arm_initial_backfill_recovery_watchdog", tasks.__dict__)
