@@ -332,21 +332,18 @@ class CandleBackfillReliabilityTests(TestCase):
 
     @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
     @patch("apps.market_data.tasks.reconcile_candle_backfill_runs")
-    def test_automatic_safety_task_reconciles_running_backfill(self, reconcile):
+    def test_automatic_safety_task_does_not_run_recovery_inline(self, reconcile):
         run = CandleBackfillRun.objects.create(
             scope="initial",
             status="running",
             count=5000,
-            task_id="stalled-task",
+            task_id="active-task",
         )
-        reconcile.return_value = {"recovered": [{"run_id": run.pk, "task_id": "recovered"}]}
 
         result = ensure_initial_candle_backfill(count=5000)
 
-        self.assertEqual(result["status"], "running")
-        self.assertEqual(result["run_id"], run.pk)
-        self.assertEqual(result["recovery"]["recovered"][0]["task_id"], "recovered")
-        reconcile.assert_called_once_with(max_age_seconds=300)
+        self.assertEqual(result, {"status": "running", "run_id": run.pk})
+        reconcile.assert_not_called()
 
     @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
     def test_automatic_initial_dispatch_marks_trigger_automatic(self):
