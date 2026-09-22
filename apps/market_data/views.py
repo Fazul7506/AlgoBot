@@ -320,6 +320,28 @@ def initial_candle_backfill(request):
         "eligible_symbol_count": len(eligible_symbols),
         "native_timeframes": native_timeframes,
         "tick_derived_timeframes": tick_derived_timeframes,
+        "broker": "Deriv",
+        "eligibility_rule": "broker=deriv · active · tradable",
+        "queue": "market_data",
+        "request_interval_seconds": 0.75,
+        "worker_concurrency": 1,
+        "prefetch_multiplier": 1,
+        "quality_gates": [
+            "Broker-authoritative OHLC",
+            "Duplicate-safe persistence",
+            "Chronological epoch integrity",
+            "Explicit failed-series reporting",
+        ],
+        "research_contract": [
+            "Native OHLC for minute-and-higher timeframes",
+            "Persisted Deriv ticks for tick-derived research",
+            "No synthetic market prices",
+        ],
+        "recovery_contract": [
+            "Single market_data queue",
+            "Durable lifecycle telemetry",
+            "Controlled automatic recovery",
+        ],
 
     }
     if request.GET.get("format") == "json":
