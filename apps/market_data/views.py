@@ -263,7 +263,7 @@ def initial_candle_backfill(request):
             payload={"count": count, "queue": queue_name},
         )
 
-        from .tasks import _arm_initial_backfill_recovery_watchdog, run_initial_candle_backfill
+        from .tasks import run_initial_candle_backfill
         try:
             task = run_initial_candle_backfill.apply_async(
                 args=(run.pk,),
@@ -282,7 +282,6 @@ def initial_candle_backfill(request):
                 task_id=task.id,
                 payload={"queue": queue_name},
             )
-            _arm_initial_backfill_recovery_watchdog()
         except Exception as exc:
             run.status = "failed"
             run.error = f"Unable to dispatch Celery task: {exc}"
