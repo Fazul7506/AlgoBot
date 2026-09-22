@@ -153,3 +153,34 @@
     min-width: 0;
   }
 }
+
+
+/* Professional backfill control plane — presentation only. */
+.rb-contract-panel{margin-top:16px;border:1px solid #252b33;border-radius:10px;background:#0b0e12;overflow:hidden}
+.rb-contract-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;padding:20px;border-bottom:1px solid #252b33}
+.rb-contract-head h2{font-size:17px;margin:7px 0 6px;color:#e6ebf0}
+.rb-contract-head p{margin:0;max-width:760px;color:#7f8b97;font-size:11px;line-height:1.6}
+.rb-contract-badge{display:inline-flex;align-items:center;gap:6px;border:1px solid #315844;border-radius:999px;padding:7px 10px;color:#a8ddb9;background:#0c1711;font-size:10px;font-weight:800;white-space:nowrap}
+.rb-contract-badge .material-symbols-rounded{font-size:15px}
+.rb-contract-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border-bottom:1px solid #252b33}
+.rb-contract-card{position:relative;min-width:0;padding:18px;border-right:1px solid #252b33}
+.rb-contract-card:last-child{border-right:0}
+.rb-contract-icon{width:34px;height:34px;display:grid;place-items:center;border:1px solid #2d3540;border-radius:7px;background:#11161c;margin-bottom:14px}
+.rb-contract-icon .material-symbols-rounded{font-size:18px;color:#9fb0c1}
+.rb-contract-card h3{font-size:13px;color:#e0e6ec;margin:7px 0 6px}
+.rb-contract-card p{margin:0;color:#77838f;font-size:10px;line-height:1.55;min-height:47px}
+.rb-contract-state{display:inline-flex;align-items:center;gap:5px;margin-top:13px;color:#91cda3;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+.rb-contract-state i{width:6px;height:6px;border-radius:50%;background:#5ed69f;box-shadow:0 0 8px rgba(94,214,159,.45)}
+.rb-gates{display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #252b33}
+.rb-gates-column{padding:18px;border-right:1px solid #252b33}
+.rb-gates-column:last-child{border-right:0}
+.rb-gate-row{display:flex;align-items:flex-start;gap:8px;margin-top:10px;color:#b9c3cd;font-size:10px;line-height:1.45}
+.rb-gate-row .material-symbols-rounded{font-size:15px;color:#91cda3;flex:0 0 auto}
+.rb-pipeline{display:flex;align-items:stretch;gap:8px;padding:16px;overflow:auto}
+.rb-pipeline-step{min-width:150px;flex:1;border:1px solid #262d35;border-radius:7px;background:#0f1318;padding:12px}
+.rb-pipeline-step>span{display:block;color:#66727e;font:700 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;margin-bottom:8px}
+.rb-pipeline-step strong{display:block;color:#dce3e9;font-size:11px;margin-bottom:4px}
+.rb-pipeline-step small{display:block;color:#707c88;font-size:9px;line-height:1.4}
+.rb-pipeline-arrow{align-self:center;color:#4f5b67;font-size:16px}
+@media(max-width:1050px){.rb-contract-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.rb-contract-card:nth-child(2){border-right:0}.rb-contract-card:nth-child(-n+2){border-bottom:1px solid #252b33}}
+@media(max-width:700px){.rb-contract-head{flex-direction:column}.rb-contract-grid{grid-template-columns:1fr}.rb-contract-card{border-right:0;border-bottom:1px solid #252b33}.rb-contract-card:last-child{border-bottom:0}.rb-gates{grid-template-columns:1fr}.rb-gates-column{border-right:0;border-bottom:1px solid #252b33}.rb-gates-column:last-child{border-bottom:0}.rb-pipeline{padding:12px}.rb-pipeline-step{min-width:145px}}
