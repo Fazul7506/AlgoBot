@@ -36,10 +36,11 @@ app.conf.beat_schedule = {
         "schedule": crontab(minute="*/30"),
         "kwargs": {"count": 250},
     },
-    "candle-backfill-recovery-every-2-minutes": {
+    "candle-backfill-recovery-every-minute": {
         "task": "apps.market_data.tasks.reconcile_candle_backfill_runs",
-        "schedule": crontab(minute="*/2"),
+        "schedule": 60.0,
         "kwargs": {"max_age_seconds": 300},
+        "options": {"queue": "celery", "expires": 50},
     },
     "ai-training-every-6-hours": {
         "task": "apps.ai_engine.tasks.scheduled_ai_training",
