@@ -271,10 +271,6 @@ def run_walk_forward(data, window='rolling', folds=3):
     return WalkForwardService().run(data, window=window, folds=folds)
 
 
-@_task
-def prepare_replay():
-    return {'status': 'ready'}
-
 
 @_task
 def generate_dataset(events, trades, purpose='ai_training', fmt='json'):

@@ -41,26 +41,6 @@ def calculate_statistics(symbol):
     return MarketStatisticsService().calculate(symbol).id
 
 
-@_task
-def cleanup_old_cache():
-    return True
-
-
-@_task
-def archive_historical_data():
-    return True
-
-
-@_task
-def prepare_replay(symbol):
-    return {"symbol": symbol, "ready": True}
-
-
-@_task
-def subscription_cleanup():
-    return True
-
-
 logger = logging.getLogger(__name__)
 
 # Keep the long-running broker-history queue deliberately below Deriv's shared

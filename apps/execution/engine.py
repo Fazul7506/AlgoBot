@@ -6,6 +6,7 @@ from .services import OrderService, OrderValidationService, ExecutionQueueServic
 from .repositories import ExecutionLogRepository
 from . import constants as c
 from apps.brokers.services import BrokerRegistry
+from apps.brokers.exceptions import BrokerConnectionError, BrokerOrderError
 from apps.brokers.models import BrokerAccount
 
 
@@ -114,9 +115,80 @@ class ExecutionEngine:
         await asyncio.to_thread(order.save, update_fields=['status','updated_at'])
         adapter=BrokerRegistry().adapter(account.broker, account)
         broker_order=SimpleNamespace(symbol=order.symbol,stake=order.stake,quantity=order.stake,direction=order.direction,order_type=order.order_type,price=order.price,contract_type=getattr(order,'contract_type',None),routing_context=validation)
-        response=await adapter.place_order(broker_order); order.broker_response=response or {}; order.broker_reference=str((response or {}).get('broker_order_id') or (response or {}).get('contract_id') or (response or {}).get('order_id','')); order.status=c.ORDER_STATUS_EXECUTED
-        await asyncio.to_thread(order.save, update_fields=['broker_response','broker_reference','status','updated_at'])
-        await ExecutionLogRepository().alog(order,'OrderExecuted','success','Broker accepted order',(time.perf_counter()-start)*1000,response); return order
+        response = await adapter.place_order(broker_order)
+        if not isinstance(response, dict):
+            raise BrokerOrderError("Broker returned an invalid execution response")
+
+        order.broker_response = response
+        order.broker_reference = str(
+            response.get("broker_order_id")
+            or response.get("contract_id")
+            or response.get("order_id")
+            or ""
+        )
+        broker_status = str(response.get("status") or "").strip().lower()
+        success_statuses = {"filled", "executed", "accepted", "partially_filled"}
+        rejected_statuses = {"rejected", "cancelled", "expired", "failed"}
+
+        if broker_status in success_statuses or (not broker_status and order.broker_reference):
+            order.status = c.ORDER_STATUS_EXECUTED
+            log_event = "OrderExecuted"
+            log_message = (
+                "Broker accepted order"
+                if broker_status
+                else "Broker returned an execution reference without a status"
+            )
+            log_status = "success"
+        elif broker_status in rejected_statuses:
+            order.status = c.ORDER_STATUS_FAILED
+            log_event = "OrderRejected"
+            log_message = f"Broker returned terminal status: {broker_status}"
+            log_status = "failed"
+        else:
+            # An unrecognised broker response is not proof of execution. Preserve
+            # the broker payload and force reconciliation instead of inventing a
+            # terminal state that could cause an unsafe retry or false fill.
+            context = dict(validation or {})
+            context["execution_state"] = "unknown_broker_response"
+            context["reconciliation_required"] = True
+            order.validation_context = context
+            order.status = c.ORDER_STATUS_QUEUED
+
+            await asyncio.to_thread(
+                order.save,
+                update_fields=[
+                    "broker_response",
+                    "broker_reference",
+                    "validation_context",
+                    "status",
+                    "updated_at",
+                ],
+            )
+            await ExecutionLogRepository().alog(
+                order,
+                "ExecutionStateUnknown",
+                "warning",
+                "Broker returned an unrecognised execution status; reconciliation is required",
+                (time.perf_counter() - start) * 1000,
+                response,
+            )
+            raise BrokerConnectionError(
+                "Broker execution state is unknown; reconciliation is required before retrying."
+            )
+
+        await asyncio.to_thread(
+            order.save,
+            update_fields=["broker_response", "broker_reference", "status", "updated_at"],
+        )
+        await ExecutionLogRepository().alog(
+            order,
+            log_event,
+            log_status,
+            log_message,
+            (time.perf_counter() - start) * 1000,
+            response,
+        )
+        return order
 
     def retry(self, order): return ExecutionQueueService().enqueue(order, queue_type='retry')
     def close_position(self, position, exit_price): return PositionService().close_position(position, exit_price)
