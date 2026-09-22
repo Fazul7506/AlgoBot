@@ -130,10 +130,14 @@ class ExecutionEngine:
         success_statuses = {"filled", "executed", "accepted", "partially_filled"}
         rejected_statuses = {"rejected", "cancelled", "expired", "failed"}
 
-        if broker_status in success_statuses:
+        if broker_status in success_statuses or (not broker_status and order.broker_reference):
             order.status = c.ORDER_STATUS_EXECUTED
             log_event = "OrderExecuted"
-            log_message = "Broker accepted order"
+            log_message = (
+                "Broker accepted order"
+                if broker_status
+                else "Broker returned an execution reference without a status"
+            )
             log_status = "success"
         elif broker_status in rejected_statuses:
             order.status = c.ORDER_STATUS_FAILED
