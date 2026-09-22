@@ -71,7 +71,7 @@ def reports(request):
     return Response(
         {
             "report_types": ["daily", "weekly", "monthly", "quarterly", "yearly", "executive", "investor", "risk", "tax"],
-            "formats": ["pdf", "excel", "csv", "json"],
+            "formats": ["csv", "json"],
         }
     )
 
