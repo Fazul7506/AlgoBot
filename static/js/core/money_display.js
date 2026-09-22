@@ -30,8 +30,8 @@
     const text = node.nodeValue || '';
     if (!/USD/i.test(text) || !/\d/.test(text)) return;
     const next = text
-      .replace(moneyPattern, '$1$$2')
-      .replace(suffixPattern, '$1');
+      .replace(moneyPattern, (_, prefix, amount) => `${prefix}${amount}`)
+      .replace(suffixPattern, (_, amount) => `${amount}`);
     if (next !== text) node.nodeValue = next;
   }
 
