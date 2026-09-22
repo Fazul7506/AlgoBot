@@ -181,11 +181,22 @@
       });
       if (query) params.set("q", query);
       if (level) params.set("level", level);
-      const response = await fetch(location.pathname + "?" + params.toString(), {
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: {"X-Requested-With": "XMLHttpRequest", "Cache-Control": "no-cache"},
-      });
+      // Never allow one stalled HTTP request to freeze the telemetry loop.
+      // The durable Django run/event records remain authoritative; the browser
+      // is only a live observer.
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 4500);
+      let response;
+      try {
+        response = await fetch(location.pathname + "?" + params.toString(), {
+          credentials: "same-origin",
+          cache: "no-store",
+          signal: controller.signal,
+          headers: {"X-Requested-With": "XMLHttpRequest", "Cache-Control": "no-cache"},
+        });
+      } finally {
+        window.clearTimeout(timeout);
+      }
       if (!response.ok) throw new Error("status " + response.status);
       const data = await response.json();
       telemetryFailures = 0;
@@ -282,6 +293,10 @@
     });
   }
 
+  // Refresh immediately when the operator returns to the tab.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refresh();
+  });
   refresh();
   window.setInterval(refresh, 1500);
 })();
