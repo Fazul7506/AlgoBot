@@ -8,6 +8,12 @@
   const apiBase = (configuredApiBase || ((window.location.hostname === 'algobot.dpdns.org' || window.location.hostname === 'www.algobot.dpdns.org') ? productionApiBase : '') || window.location.origin).replace(/\/+$/, '');
   const aliases = {'/trading/order/': '/api/orders/', '/trading/preview/': '/api/orders/preview/', '/trading/ai/predict/': '/api/ai/predict/'};
   const safeFallbackMethods = new Set(['GET','HEAD','OPTIONS']);
+  // Public HTML pages must never probe user-scoped APIs. DRF correctly returns
+  // 401/403 for unauthenticated protected endpoints; the browser should avoid
+  // creating those requests in the first place when no user session exists.
+  const protectedPublicPath = /^\\/api\\/(?:brokers(?:\\/|$)|orders(?:\\/|$)|positions(?:\\/|$)|dashboard(?:\\/|$)|ai(?:\\/|$)|predictions(?:\\/|$)|automation(?:\\/|$)|portfolio(?:\\/|$)|backtesting(?:\\/|$)|settings(?:\\/|$)|tenants(?:\\/|$)|billing(?:\\/|$)|notifications(?:\\/|$)|risk(?:\\/|$)|developer(?:\\/|$)|enterprise(?:\\/|$)|strategies(?:\\/|$)|signals(?:\\/|$))/;
+  const isSignedOut = () => document.body?.dataset.authenticated !== 'true';
+  const isProtectedPublicRequest = pathname => isSignedOut() && protectedPublicPath.test(String(pathname || ''));
   const sameOriginFallbackPath = (path, method='GET') => {
     const verb = String(method || 'GET').toUpperCase();
     if (!safeFallbackMethods.has(verb)) return null;
@@ -64,6 +70,12 @@
   async function guardedFetch(input, init={}) {
     const options=init, raw=typeof input === 'string' ? input : input?.url || '', url=resolveUrl(raw);
     const method=String(options.method || (typeof input === 'object' && input?.method) || 'GET').toUpperCase();
+    if (isProtectedPublicRequest(url.pathname)) {
+      const error = new APIError('Authentication is required for this workspace endpoint.', {status:401,url:url.toString(),method,code:'AUTH_REQUIRED'});
+      error.retryable = false;
+      // Expected anonymous state: no network call, no global error event.
+      throw error;
+    }
     const headers=new Headers((typeof input === 'object' && input?.headers) || {}); new Headers(options.headers || {}).forEach((value,key)=>headers.set(key,value)); headers.set('Accept',headers.get('Accept') || 'application/json');
     const selectedId=window.AlgoBotAccountContext?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id; if (selectedId != null && !headers.has('X-Algobot-Account-ID')) headers.set('X-Algobot-Account-ID',String(selectedId));
     let body=options.body; if (url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') body=normalizeOrderPayload(body);
