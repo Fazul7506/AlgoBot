@@ -81,6 +81,10 @@
   }
 
   function boot() {
+    // Public pages must remain network-silent for authenticated workspace data.
+    // In particular, never prefetch /api/brokers/accounts/ for a signed-out
+    // visitor: a 401 is expected there, not a page error.
+    if (document.body?.dataset.authenticated !== 'true') return;
     if (!install()) {
       window.addEventListener('algobot:service-facade-ready', install, {once:true});
       setTimeout(install, 50);
