@@ -6,6 +6,7 @@ from .services import OrderService, OrderValidationService, ExecutionQueueServic
 from .repositories import ExecutionLogRepository
 from . import constants as c
 from apps.brokers.services import BrokerRegistry
+from apps.brokers.exceptions import BrokerConnectionError, BrokerOrderError
 from apps.brokers.models import BrokerAccount
 
 
