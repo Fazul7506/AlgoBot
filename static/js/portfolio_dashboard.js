@@ -6,7 +6,7 @@
   const $ = selector => document.querySelector(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' })[c]);
   const list = value => window.AlgoBotFrontendData?.list(value) || [];
-  const money = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'Unavailable';
+  const money = (value, currency = 'USD') => { if (!Number.isFinite(Number(value))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
 
   function connected() {
     const state = window.AlgoBotBrokerState?.get();
@@ -43,10 +43,10 @@
       const allocation = Object.entries(bySymbol).sort((a, b) => b[1] - a[1]);
       root.innerHTML = `
         <section class="kpi-grid compact" aria-label="Broker portfolio overview">
-          <article class="kpi-card"><span>Account balance</span><strong>${esc(currency)} ${money(account?.balance)}</strong></article>
-          <article class="kpi-card"><span>Broker equity</span><strong>${esc(currency)} ${money(account?.equity)}</strong></article>
-          <article class="kpi-card"><span>Open P/L</span><strong>${esc(currency)} ${money(pnl)}</strong></article>
-          <article class="kpi-card"><span>Gross exposure</span><strong>${esc(currency)} ${money(exposure)}</strong></article>
+          <article class="kpi-card"><span>Account balance</span><strong>${money(account?.balance, currency)}</strong></article>
+          <article class="kpi-card"><span>Broker equity</span><strong>${money(account?.equity, currency)}</strong></article>
+          <article class="kpi-card"><span>Open P/L</span><strong>${money(pnl, currency)}</strong></article>
+          <article class="kpi-card"><span>Gross exposure</span><strong>${money(exposure, currency)}</strong></article>
         </section>
         <section class="command-grid">
           <article class="panel"><div class="panel-head"><div><p class="eyebrow">Broker positions</p><h2>Current exposure</h2></div><a href="/positions/">Open positions</a></div>${positions.length ? `<div class="table-wrap"><table class="enterprise-table"><thead><tr><th>Symbol</th><th>Side</th><th>Size</th><th>Current</th><th>P/L</th></tr></thead><tbody>${positions.slice(0, 20).map(p => `<tr><td>${esc(p.symbol)}</td><td>${esc(p.direction || '—')}</td><td>${esc(p.size ?? '—')}</td><td>${esc(p.current_price ?? '—')}</td><td>${esc(p.profit ?? '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="ds-state"><strong>No open positions</strong><p>The connected broker currently reports no open positions.</p></div>'}</article>
