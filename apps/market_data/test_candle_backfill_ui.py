@@ -56,6 +56,12 @@ class CandleBackfillUiTests(TestCase):
         self.assertEqual(payload["config"]["count"], 5000)
         self.assertEqual(payload["config"]["eligible_symbol_count"], 1)
         self.assertIn("1m", payload["config"]["native_timeframes"])
+        self.assertEqual(payload["config"]["broker"], "Deriv")
+        self.assertEqual(payload["config"]["queue"], "market_data")
+        self.assertEqual(payload["config"]["worker_concurrency"], 1)
+        self.assertEqual(payload["config"]["prefetch_multiplier"], 1)
+        self.assertIn("Broker-authoritative OHLC", payload["config"]["quality_gates"])
+        self.assertIn("No synthetic market prices", payload["config"]["research_contract"])
 
     def test_start_button_creates_dispatchable_run(self):
         published = SimpleNamespace(id="ui-start-task")
