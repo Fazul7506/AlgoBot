@@ -67,8 +67,12 @@ logger = logging.getLogger(__name__)
 # market-data request budget. The Render market-data worker is single-consumer.
 BACKFILL_REQUEST_INTERVAL_SECONDS = 0.75
 BACKFILL_RUNNING_STALE_AFTER = timedelta(minutes=60)
-BACKFILL_DISPATCH_STALE_AFTER = timedelta(minutes=2)
+BACKFILL_DISPATCH_STALE_AFTER = timedelta(seconds=90)
 BACKFILL_RECEIVED_STALE_AFTER = timedelta(minutes=5)
+# Beat remains the normal periodic recovery owner, but every accepted dispatch
+# also arms one delayed recovery check on the general Celery queue. This closes
+# the failure mode where Beat is unhealthy while the general worker is healthy.
+BACKFILL_RECOVERY_WATCHDOG_DELAY_SECONDS = 120
 BACKFILL_MAX_RECOVERY_ATTEMPTS = 3
 BACKFILL_AUTOMATIC_RETRY_AFTER = timedelta(minutes=15)
 BACKFILL_QUEUE = "market_data"
@@ -517,6 +521,26 @@ def backfill_research_candles(count=250, symbol=None):
         close_old_connections()
 
 
+def _arm_initial_backfill_recovery_watchdog():
+    """Schedule one delayed invocation of the canonical recovery reconciler.
+
+    This is a server-side safety net for the case where Celery Beat stops while
+    the general worker continues accepting jobs. The reconciler remains the
+    only recovery implementation; the watchdog merely guarantees that it gets
+    a chance to run after a dispatch.
+    """
+    try:
+        reconcile_candle_backfill_runs.apply_async(
+            kwargs={"max_age_seconds": 300},
+            queue="celery",
+            countdown=BACKFILL_RECOVERY_WATCHDOG_DELAY_SECONDS,
+        )
+        return True
+    except Exception:
+        logger.exception("Unable to arm initial candle backfill recovery watchdog")
+        return False
+
+
 @_task
 def ensure_initial_candle_backfill(count=5000):
     """Let Celery Beat create/retry the singleton initial warm-up without a browser click."""
@@ -601,7 +625,8 @@ def ensure_initial_candle_backfill(count=5000):
             task_id=task.id,
             payload={"queue": queue_name, "trigger": trigger, "automatic_attempts": automatic_attempts},
         )
-        return {"status": "dispatched", "run_id": run.pk, "task_id": task.id, "queue": queue_name}
+        watchdog_armed = _arm_initial_backfill_recovery_watchdog()
+        return {"status": "dispatched", "run_id": run.pk, "task_id": task.id, "queue": queue_name, "watchdog_armed": watchdog_armed}
     except Exception as exc:
         logger.exception("Automatic initial candle backfill dispatch failed")
         try:
