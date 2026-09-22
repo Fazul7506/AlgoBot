@@ -147,6 +147,7 @@ class BrokerRealtimeSync:
                 logger.warning("Ignoring invalid broker contract profit", extra={"account_id": self.account_id, "contract_id": contract.get("contract_id")})
             normalized.append(self._normalize_contract(contract))
         equity = account.balance + unrealized
+        account.equity = equity
         realtime = dict((account.credentials or {}).get("realtime") or {})
         realtime.update({"unrealized_pnl": str(unrealized), "equity": str(equity), "updated_at": timezone.now().isoformat()})
         credentials = dict(account.credentials or {})
