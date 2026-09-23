@@ -92,8 +92,6 @@ class IntaSendRecurringCustomerValidationTests(TestCase):
 
         self.assertEqual(result["url"], "https://payment.intasend.com/subscriptions/charge/sub-1:test-token:opaque-token")
         get.assert_called_once()
-        self.assertEqual(post.call_args_list[3].args[0], "https://api.intasend.com/api/v1/subscriptions/subscription-1/unsubscribe/")
-        self.assertEqual(post.call_count, 4)
         customer_payload = post.call_args_list[0].kwargs["json"]
         self.assertEqual(customer_payload["first_name"], "Billing")
         self.assertEqual(customer_payload["last_name"], "Customer")
@@ -141,3 +139,5 @@ class IntaSendRecurringCustomerValidationTests(TestCase):
         self.assertEqual(result["error_classification"], "provider generated invalid setup URL")
         self.assertIn("not currently available", result["error"])
         get.assert_called_once()
+        self.assertEqual(post.call_args_list[3].args[0], "https://api.intasend.com/api/v1/subscriptions/subscription-1/unsubscribe/")
+        self.assertEqual(post.call_count, 4)
