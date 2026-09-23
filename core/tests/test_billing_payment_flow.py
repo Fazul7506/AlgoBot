@@ -325,3 +325,42 @@ class BillingPaymentFlowTests(TestCase):
         )
         self.assertEqual(result["url"], "")
         self.assertIn("sandbox API URL", result["error"])
+
+
+    @override_settings(
+        INTASEND_PUBLIC_KEY="ISPubKey_test",
+        INTASEND_API_BASE_URL="https://sandbox.intasend.com",
+    )
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
+    def test_intasend_stale_checkout_url_is_not_reused(self, create_checkout):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        invoice = Invoice.objects.create(
+            user=self.user,
+            amount_cents=99900,
+            currency="KES",
+            metadata={
+                "plan": "BASIC",
+                "provider": "intasend",
+                "reference": f"IS-{self.user.id}-BASIC-stale",
+                "state": "checkout_open",
+                "checkout_url": "https://payment.intasend.com/subscriptions/charge/stale",
+                "checkout_url_created_at": (timezone.now() - timedelta(minutes=5)).isoformat(),
+            },
+        )
+        create_checkout.return_value = {
+            "url": "https://payment.intasend.com/subscriptions/charge/fresh",
+            "subscription_id": "FRESH-SUBSCRIPTION",
+            "reference": invoice.metadata["reference"],
+        }
+
+        request = Mock(user=self.user)
+        url, error = _checkout(request, "BASIC", "intasend")
+
+        self.assertIsNone(error)
+        self.assertEqual(url, "https://payment.intasend.com/subscriptions/charge/fresh")
+        create_checkout.assert_called_once()
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.metadata["checkout_url"], "https://payment.intasend.com/subscriptions/charge/fresh")
+        self.assertEqual(invoice.metadata["checkout_url_created_at"], invoice.metadata["checkout_url_created_at"])

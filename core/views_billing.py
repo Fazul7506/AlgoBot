@@ -179,9 +179,36 @@ def _checkout(request, plan_name, provider=None):
             .first()
         )
         metadata = dict(existing.metadata or {}) if existing else {}
-        if existing and metadata.get("state") == "checkout_open" and metadata.get("checkout_url"):
-            return str(metadata["checkout_url"]), None
         now = timezone.now()
+
+        # Hosted IntaSend subscription setup links are provider-owned and may
+        # become invalid independently of the local invoice state. Never cache
+        # one forever: only reuse a live checkout link during the short window
+        # that protects against duplicate browser clicks for the same attempt.
+        checkout_url = str(metadata.get("checkout_url") or "").strip()
+        checkout_created_at = metadata.get("checkout_url_created_at")
+        checkout_is_recent = False
+        if checkout_url and checkout_created_at:
+            try:
+                checkout_created_at_dt = datetime.fromisoformat(str(checkout_created_at))
+                if checkout_created_at_dt.tzinfo is None:
+                    checkout_created_at_dt = timezone.make_aware(checkout_created_at_dt)
+                checkout_is_recent = (now - checkout_created_at_dt).total_seconds() <= lease_seconds
+            except (TypeError, ValueError, OverflowError):
+                checkout_is_recent = False
+        if (
+            existing
+            and selected != PaymentService.INTASEND
+            and metadata.get("state") == "checkout_open"
+            and checkout_url
+        ) or (
+            existing
+            and selected == PaymentService.INTASEND
+            and metadata.get("state") == "checkout_open"
+            and checkout_url
+            and checkout_is_recent
+        ):
+            return checkout_url, None
         lock_until = metadata.get("checkout_lock_until")
         if existing and metadata.get("state") == "checkout_attempting" and lock_until:
             try:
@@ -256,6 +283,7 @@ def _checkout(request, plan_name, provider=None):
         "provider_plan_id": result.get("provider_plan_id"),
         "provider_customer_id": result.get("provider_customer_id"),
         "checkout_url": checkout_url,
+        "checkout_url_created_at": now.isoformat(),
         "error": "",
         "error_classification": "",
     }
