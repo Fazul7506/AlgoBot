@@ -317,12 +317,19 @@ def billing_change_plan(request):
     if not plan: return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
     with transaction.atomic():
         subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
-    current_active = subscription.is_active and (not subscription.expires_at or subscription.expires_at > timezone.now())
-    if subscription.plan == plan["plan"] and current_active: return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
-    if plan["plan"] == "FREE":
-        subscription.plan = "FREE"; subscription.price_cents = 0; subscription.currency = plan["currency"].lower(); subscription.recurring = False; subscription.is_active = True; subscription.expires_at = None; subscription.renewed_at = timezone.now()
-        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at"])
-        return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
+        current_active = subscription.is_active and (not subscription.expires_at or subscription.expires_at > timezone.now())
+        if subscription.plan == plan["plan"] and current_active:
+            return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
+        if plan["plan"] == "FREE":
+            subscription.plan = "FREE"
+            subscription.price_cents = 0
+            subscription.currency = plan["currency"].lower()
+            subscription.recurring = False
+            subscription.is_active = True
+            subscription.expires_at = None
+            subscription.renewed_at = timezone.now()
+            subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at"])
+            return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
     url, error = _checkout(request, requested, request.data.get("provider"))
     if error: return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return Response({"url": url, "plan": requested, "payment_required": True})
@@ -346,9 +353,14 @@ def billing_cancel(request):
     """Stop future renewal while preserving access through the paid cycle."""
     with transaction.atomic():
         subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
-    if subscription.plan == "FREE": return Response({"status": "already_free", "plan": "FREE", "expires_at": None})
-    if not subscription.is_active: return Response({"status": "already_cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None})
-    subscription.recurring = False
-    if not subscription.expires_at: subscription.expires_at = timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30)))
-    subscription.save(update_fields=["recurring", "expires_at"])
-    return Response({"status": "cancelled_at_period_end", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat()})
+        if subscription.plan == "FREE":
+            return Response({"status": "already_free", "plan": "FREE", "expires_at": None})
+        if not subscription.is_active:
+            return Response({"status": "already_cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None})
+        subscription.recurring = False
+        if not subscription.expires_at:
+            subscription.expires_at = timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30)))
+        subscription.cancelled_at = timezone.now()
+        subscription.cancellation_reason = "user_requested"
+        subscription.save(update_fields=["recurring", "expires_at", "cancelled_at", "cancellation_reason"])
+        return Response({"status": "cancelled_at_period_end", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat()})
