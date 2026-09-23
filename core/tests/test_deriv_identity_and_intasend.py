@@ -60,7 +60,7 @@ class IntaSendRecurringCustomerValidationTests(TestCase):
     @override_settings(
         INTASEND_PUBLIC_KEY="live-public",
         INTASEND_SECRET_KEY="live-secret",
-        INTASEND_API_BASE_URL="https://api.intasend.com",
+        INTASEND_API_BASE_URL="https://payment.intasend.com",
     )
     @patch("core.services.payment_service.requests.get")
     @patch("core.services.payment_service.requests.post")
@@ -99,7 +99,7 @@ class IntaSendRecurringCustomerValidationTests(TestCase):
     @override_settings(
         INTASEND_PUBLIC_KEY="live-public",
         INTASEND_SECRET_KEY="live-secret",
-        INTASEND_API_BASE_URL="https://api.intasend.com",
+        INTASEND_API_BASE_URL="https://payment.intasend.com",
     )
     @patch("core.services.payment_service.requests.get")
     @patch("core.services.payment_service.requests.post")
