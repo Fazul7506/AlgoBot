@@ -128,6 +128,22 @@ class BillingHardeningTests(TestCase):
 
     @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
     @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
+    def test_authenticated_checkout_start_works_with_django_simple_lazy_object(self, create_checkout):
+        create_checkout.return_value = {
+            "url": "https://checkout.example/pay",
+            "invoice_id": "IS-SIMPLE-LAZY-1",
+            "reference": "IS-SIMPLE-LAZY-REF",
+        }
+        response = self.client.get(reverse("billing_checkout_start") + "?plan=BASIC&provider=intasend")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "https://checkout.example/pay")
+        invoice = Invoice.objects.get(user=self.user, metadata__plan="BASIC")
+        self.assertEqual(invoice.external_id, "IS-SIMPLE-LAZY-1")
+        self.assertEqual(invoice.metadata["state"], "checkout_open")
+        create_checkout.assert_called_once()
+
+    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
     def test_failed_checkout_does_not_activate_subscription(self, create_checkout):
         create_checkout.return_value = {
             "url": "",
