@@ -315,7 +315,8 @@ def billing_change_plan(request):
     requested = str(request.data.get("plan") or "").upper().strip()
     plan = _plan(requested)
     if not plan: return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
-    subscription, _ = Subscription.objects.get_or_create(user=request.user)
+    with transaction.atomic():
+        subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
     current_active = subscription.is_active and (not subscription.expires_at or subscription.expires_at > timezone.now())
     if subscription.plan == plan["plan"] and current_active: return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
     if plan["plan"] == "FREE":
@@ -343,7 +344,8 @@ def billing_reconcile(request):
 @permission_classes([IsAuthenticated])
 def billing_cancel(request):
     """Stop future renewal while preserving access through the paid cycle."""
-    subscription, _ = Subscription.objects.get_or_create(user=request.user)
+    with transaction.atomic():
+        subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
     if subscription.plan == "FREE": return Response({"status": "already_free", "plan": "FREE", "expires_at": None})
     if not subscription.is_active: return Response({"status": "already_cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None})
     subscription.recurring = False
