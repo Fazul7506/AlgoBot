@@ -52,10 +52,13 @@ class Subscription(models.Model):
     max_strategies = models.IntegerField(default=1)
     max_concurrent_trades = models.IntegerField(default=5)
     api_calls_per_day = models.IntegerField(default=1000)
-    stripe_price_id = models.CharField(max_length=255, blank=True)
     price_cents = models.IntegerField(default=0)
-    currency = models.CharField(max_length=10, default='usd')
+    currency = models.CharField(max_length=10, default='kes')
     recurring = models.BooleanField(default=True)
+    provider = models.CharField(max_length=32, blank=True)
+    provider_subscription_id = models.CharField(max_length=255, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     renewed_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField(null=True, blank=True)
@@ -164,8 +167,10 @@ class Payment(models.Model):
     """Payment records linked to their invoice."""
     STATUS_CHOICES = [
         ('PENDING', 'Pending'),
+        ('PROCESSING', 'Processing'),
         ('COMPLETED', 'Completed'),
         ('FAILED', 'Failed'),
+        ('CANCELLED', 'Cancelled'),
         ('REFUNDED', 'Refunded'),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
@@ -221,3 +226,25 @@ class EncryptedCredential(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.service_name}"
+
+
+class PaymentWebhookEvent(models.Model):
+    """Durable provider webhook receipt for deduplication, replay, and audit."""
+    provider = models.CharField(max_length=32)
+    event_key = models.CharField(max_length=255)
+    payload_hash = models.CharField(max_length=64)
+    external_id = models.CharField(max_length=255, blank=True)
+    received_status = models.CharField(max_length=32, blank=True)
+    processed_status = models.CharField(max_length=32, blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+    received_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['provider', 'event_key'], name='core_webhook_provider_event_uniq')]
+        indexes = [models.Index(fields=['provider', 'external_id']), models.Index(fields=['provider', '-received_at'])]
+
+    def __str__(self):
+        return f"{self.provider}:{self.event_key}"
