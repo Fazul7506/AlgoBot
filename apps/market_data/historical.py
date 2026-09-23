@@ -45,14 +45,41 @@ def _ws_url() -> str:
     return url
 
 
+def _validate_history_count(count: int) -> int:
+    value = int(count)
+    if value < 1 or value > 5000:
+        raise ValueError("Historical Deriv requests must request between 1 and 5000 items per page")
+    return value
+
+
 async def _request(payload: dict) -> dict:
-    async with websockets.connect(_ws_url(), open_timeout=10, close_timeout=10) as ws:
-        await ws.send(json.dumps(payload))
-        raw = await asyncio.wait_for(ws.recv(), timeout=15)
-    response = json.loads(raw)
-    if response.get("error"):
-        raise RuntimeError(response["error"].get("message", "Deriv rejected historical market-data request"))
-    return response
+    """Execute one bounded Deriv history request with safe transient retries."""
+    last_error = None
+    for attempt in range(3):
+        try:
+            async with websockets.connect(
+                _ws_url(), open_timeout=10, close_timeout=10,
+                ping_interval=20, ping_timeout=5
+            ) as ws:
+                await ws.send(json.dumps(payload))
+                raw = await asyncio.wait_for(ws.recv(), timeout=15)
+            response = json.loads(raw)
+            error = response.get("error")
+            if error:
+                code = str(error.get("code") or "").lower()
+                message = str(error.get("message") or "Deriv rejected historical market-data request")
+                if not any(marker in code or marker in message.lower()
+                           for marker in ("rate", "limit", "timeout", "temporarily", "busy", "server")):
+                    raise RuntimeError(message)
+                last_error = RuntimeError(message)
+            else:
+                return response
+        except (asyncio.TimeoutError, OSError, websockets.WebSocketException, json.JSONDecodeError) as exc:
+            last_error = RuntimeError("Deriv historical market-data request failed temporarily")
+            last_error.__cause__ = exc
+        if attempt < 2:
+            await asyncio.sleep(1.5 * (2 ** attempt))
+    raise last_error or RuntimeError("Deriv historical market-data request failed")
 
 
 async def _fetch_candles(symbol: str, count: int, granularity: int) -> list[dict]:
