@@ -225,6 +225,21 @@ class PaymentReconciler:
         configured = str(getattr(settings, "INTASEND_WEBHOOK_CHALLENGE", "") or "")
         if not configured or str(data.get("challenge", "")) != configured:
             return None
+        if data.get("subscription_id") and isinstance(data.get("payments"), list):
+            from core.models import Subscription
+            subscription = Subscription.objects.filter(provider_subscription_id=str(data["subscription_id"])).select_related("user").first()
+            if not subscription:
+                return {"received": True, "provider": "intasend", "unresolved_subscription": True}
+            results = []
+            for item in data["payments"]:
+                invoice_data = item.get("invoice") if isinstance(item, dict) else {}
+                invoice_data = invoice_data if isinstance(invoice_data, dict) else {}
+                recurring_id = invoice_data.get("invoice_id") or item.get("transaction_id")
+                if not recurring_id:
+                    continue
+                metadata = {"user_id": subscription.user_id, "plan": subscription.plan, "provider": "intasend", "subscription_id": str(data["subscription_id"]), "subscription_event": True, "provider_payload": data}
+                results.append(cls.reconcile(provider="intasend", external_id=str(recurring_id), status=invoice_data.get("state"), amount=invoice_data.get("value") or invoice_data.get("amount") or invoice_data.get("net_amount"), currency=invoice_data.get("currency", subscription.currency or "KES"), metadata=metadata))
+            return {"received": True, "provider": "intasend", "subscription_id": str(data["subscription_id"]), "payments": results}
         invoice_id = data.get("invoice_id") or data.get("id")
         api_ref = data.get("api_ref") or data.get("reference")
         external_id = invoice_id or api_ref
