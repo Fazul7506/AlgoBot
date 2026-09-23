@@ -150,7 +150,7 @@ class Invoice(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invoices')
     external_id = models.CharField(max_length=255, unique=True, db_index=True, null=True, blank=True)
     amount_cents = models.IntegerField()
-    currency = models.CharField(max_length=10, default='usd')
+    currency = models.CharField(max_length=10, default='kes')
     paid = models.BooleanField(default=False)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -160,7 +160,7 @@ class Invoice(models.Model):
         indexes = [models.Index(fields=['user', '-created_at'])]
 
     def __str__(self):
-        return f"Invoice {self.external_id or self.pk} - ${self.amount_cents/100:.2f}"
+        return f"Invoice {self.external_id or self.pk} - {self.currency.upper()} {self.amount_cents / 100:.2f}"
 
 
 class Payment(models.Model):
