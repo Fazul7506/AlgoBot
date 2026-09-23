@@ -243,6 +243,9 @@ class PaymentReconciler:
                         subscription.save(update_fields=["provider", "provider_subscription_id"])
             if not subscription:
                 return {"received": True, "provider": "intasend", "unresolved_subscription": True, "retryable": True}
+            event, created = cls._record_webhook("intasend", data, raw, str(data["subscription_id"]), data.get("status"))
+            if not created and event.processed_at:
+                return {"received": True, "duplicate": True, "provider": "intasend", "subscription_id": str(data["subscription_id"])}
             results = []
             for item in data["payments"]:
                 invoice_data = item.get("invoice") if isinstance(item, dict) else {}
@@ -252,6 +255,7 @@ class PaymentReconciler:
                     continue
                 metadata = {"user_id": subscription.user_id, "plan": subscription.plan, "provider": "intasend", "subscription_id": str(data["subscription_id"]), "subscription_event": True, "provider_payload": data}
                 results.append(cls.reconcile(provider="intasend", external_id=str(recurring_id), status=invoice_data.get("state"), amount=invoice_data.get("value") or invoice_data.get("amount") or invoice_data.get("net_amount"), currency=invoice_data.get("currency", subscription.currency or "KES"), metadata=metadata))
+            cls._finish_webhook(event, "RECURRING_PROCESSED")
             return {"received": True, "provider": "intasend", "subscription_id": str(data["subscription_id"]), "payments": results}
         invoice_id = data.get("invoice_id") or data.get("id")
         api_ref = data.get("api_ref") or data.get("reference")
