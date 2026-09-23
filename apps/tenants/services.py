@@ -11,11 +11,23 @@ class OrganizationService:
 class WorkspaceService:
     def create(self,organization,name,**kw): return Workspace.objects.create(organization=organization,name=name,**kw)
 class SubscriptionService:
-    def upgrade(self,tenant,plan,billing_cycle='monthly',price=0): return Subscription.objects.update_or_create(tenant=tenant,defaults={'plan':plan,'billing_cycle':billing_cycle,'price':price,'status':'active'})[0]
-class BillingService:
-    providers=('intasend','pesapal')
-    def create_invoice(self,subscription,amount): return {'tenant_id':subscription.tenant_id,'amount':str(amount),'status':'open'}
-    def pay(self,provider,amount,metadata=None): return {'provider':provider,'amount':str(amount),'status':'succeeded','metadata':metadata or {}}
+    """Projection helper; payment authority lives in core billing."""
+    PLAN_MAP = {"FREE": "free", "BASIC": "starter", "PRO": "professional", "ENTERPRISE": "enterprise"}
+
+    def sync_from_core(self, tenant, core_subscription):
+        from decimal import Decimal
+        plan = self.PLAN_MAP.get(str(core_subscription.plan).upper(), "free")
+        return Subscription.objects.update_or_create(
+            tenant=tenant,
+            defaults={
+                "plan": plan,
+                "status": "active" if core_subscription.is_active else "expired",
+                "billing_cycle": "monthly",
+                "price": Decimal(core_subscription.price_cents or 0) / Decimal("100"),
+                "renewal_date": core_subscription.expires_at.date() if core_subscription.expires_at else None,
+                "trial_end": None,
+            },
+        )[0]
 class LicenseService:
     def issue(self,subscription,**limits): return License.objects.update_or_create(subscription=subscription,defaults={'license_key':get_random_string(32),**limits})[0]
 class RBACService:
