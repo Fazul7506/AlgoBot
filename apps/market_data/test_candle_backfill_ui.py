@@ -88,11 +88,12 @@ class CandleBackfillUiTests(TestCase):
                 run=run, event_type="dispatch"
             ).exists()
         )
-        publish.assert_called_once_with(
-            args=(run.pk,),
-            kwargs={"count": 5000, "symbol": None},
-            queue="market_data",
-        )
+        publish.assert_called_once()
+        call = publish.call_args
+        self.assertEqual(call.kwargs["args"], (run.pk,))
+        self.assertEqual(call.kwargs["kwargs"], {"count": 5000, "symbol": None})
+        self.assertEqual(call.kwargs["queue"], "market_data")
+        self.assertEqual(call.kwargs["task_id"], run.task_id)
 
     def test_manual_dispatch_uses_the_dedicated_market_data_queue(self):
         published = SimpleNamespace(id="market-data-task")
@@ -108,11 +109,12 @@ class CandleBackfillUiTests(TestCase):
         self.assertEqual(response.status_code, 302)
         run = CandleBackfillRun.objects.get(scope="initial")
         self.assertEqual(run.task_id, "market-data-task")
-        publish.assert_called_once_with(
-            args=(run.pk,),
-            kwargs={"count": 5000, "symbol": None},
-            queue="market_data",
-        )
+        publish.assert_called_once()
+        call = publish.call_args
+        self.assertEqual(call.kwargs["args"], (run.pk,))
+        self.assertEqual(call.kwargs["kwargs"], {"count": 5000, "symbol": None})
+        self.assertEqual(call.kwargs["queue"], "market_data")
+        self.assertEqual(call.kwargs["task_id"], run.task_id)
         self.assertTrue(
             CandleBackfillEvent.objects.filter(
                 run=run,
