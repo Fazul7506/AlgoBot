@@ -186,7 +186,7 @@ class BillingPaymentFlowTests(TestCase):
         self.assertEqual(payload["mobile_tarrif"], "MOBILE-PAYS")
         self.assertEqual(payload["card_tarrif"], "CARD-PAYS")
 
-    @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test_example", INTASEND_API_BASE_URL="https://api.intasend.com")
+    @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test_example", INTASEND_API_BASE_URL="https://payment.intasend.com")
     def test_intasend_rejects_test_key_on_live_api_endpoint(self):
         result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
         self.assertEqual(result["url"], "")
@@ -194,7 +194,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_live_example",
-        INTASEND_API_BASE_URL="https://api.intasend.com",
+        INTASEND_API_BASE_URL="https://payment.intasend.com",
     )
     @patch("core.services.payment_service.requests.post")
     def test_intasend_http_500_is_classified_and_sanitized(self, post):
@@ -222,7 +222,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_live_example",
-        INTASEND_API_BASE_URL="https://api.intasend.com",
+        INTASEND_API_BASE_URL="https://payment.intasend.com",
     )
     @patch("core.services.payment_service.requests.post")
     def test_intasend_http_400_and_422_are_classified_as_malformed_request(self, post):
@@ -241,7 +241,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_live_example",
-        INTASEND_API_BASE_URL="https://api.intasend.com",
+        INTASEND_API_BASE_URL="https://payment.intasend.com",
     )
     @patch("core.services.payment_service.requests.post")
     def test_intasend_timeout_is_classified_without_retrying_post(self, post):
@@ -256,7 +256,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_live_example",
-        INTASEND_API_BASE_URL="https://api.intasend.com",
+        INTASEND_API_BASE_URL="https://payment.intasend.com",
     )
     @patch("core.services.payment_service.requests.post")
     def test_intasend_basic_50000_kes_payload_uses_major_units_and_supported_fields(self, post):
@@ -280,11 +280,11 @@ class BillingPaymentFlowTests(TestCase):
         self.assertNotIn("recurring", payload)
         self.assertNotIn("mobile_tarrif", payload)
         self.assertNotIn("card_tarrif", payload)
-        self.assertEqual(post.call_args.args[0], "https://api.intasend.com/api/v1/checkout/")
+        self.assertEqual(post.call_args.args[0], "https://payment.intasend.com/api/v1/checkout/")
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_live_example",
-        INTASEND_API_BASE_URL="https://api.intasend.com",
+        INTASEND_API_BASE_URL="https://payment.intasend.com",
     )
     @patch("core.services.payment_service.requests.post")
     def test_intasend_authentication_uses_public_key_header_only_for_checkout(self, post):
@@ -316,7 +316,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_test_example",
-        INTASEND_API_BASE_URL="https://api.intasend.com",
+        INTASEND_API_BASE_URL="https://payment.intasend.com",
     )
     def test_intasend_test_key_live_endpoint_is_configuration_failure(self):
         result = PaymentService().create_intasend_checkout(
