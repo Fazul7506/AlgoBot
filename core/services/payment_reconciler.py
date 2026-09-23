@@ -231,7 +231,7 @@ class PaymentReconciler:
         if not external_id:
             return None
         event, created = cls._record_webhook("intasend", data, raw, external_id, data.get("state"))
-        if not created:
+        if not created and event.processed_at:
             return {"received": True, "duplicate": True, "provider": "intasend", "external_id": str(external_id)}
         verified = PaymentService().get_intasend_payment_status(str(invoice_id)) if invoice_id else None
         if not verified:
@@ -264,7 +264,7 @@ class PaymentReconciler:
             return None
         event, created = cls._record_webhook("pesapal", data, raw, tracking_id, verified.get("payment_status_description"))
         ack = {"orderNotificationType": data.get("OrderNotificationType") or data.get("orderNotificationType") or "IPNCHANGE", "orderTrackingId": str(tracking_id), "orderMerchantReference": merchant_reference, "status": 200}
-        if not created:
+        if not created and event.processed_at:
             return {"received": True, "duplicate": True, "provider": "pesapal", "external_id": str(tracking_id), "ipn_ack": ack}
         result = cls.reconcile(provider="pesapal", external_id=str(tracking_id), status=verified.get("payment_status_description"), amount=verified.get("amount"), currency=verified.get("currency", "KES"), metadata={"merchant_reference": merchant_reference, "pesapal": verified})
         if result is not None:
