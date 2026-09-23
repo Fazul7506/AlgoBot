@@ -1,12 +1,12 @@
 """Authenticated billing API and provider checkout callback pages."""
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -136,7 +136,7 @@ def billing_success_page(request):
     if invoice and provider:
         try:
             result = _reconcile_invoice(invoice, provider)
-        except Exception:
+        except (IntegrityError, ValueError, KeyError, Invoice.DoesNotExist):
             result = {"paid": bool(invoice.paid), "state": "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
     elif invoice:
         result = {"paid": bool(invoice.paid), "state": "COMPLETE" if invoice.paid else "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
@@ -160,40 +160,52 @@ def _checkout(request, plan_name, provider=None):
     if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL}:
         return None, "Unsupported payment provider."
 
-    # Reuse an unresolved checkout invoice for this exact user/plan/provider.
-    # This prevents a browser retry from creating a second internal invoice.
-    existing = (
-        Invoice.objects.filter(
-            user=request.user,
-            paid=False,
+    # Serialize checkout initiation per user, but never hold a DB lock across the provider HTTP call.
+    # A short-lived lease prevents concurrent browser retries from opening two provider checkouts.
+    lease_seconds = 120
+    with transaction.atomic():
+        request_user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+        existing = (
+            Invoice.objects.filter(
+                user=request_user,
+                paid=False,
+                amount_cents=plan["price_cents"],
+                currency=plan["currency"],
+                metadata__plan=plan["plan"],
+                metadata__provider=selected,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        metadata = dict(existing.metadata or {}) if existing else {}
+        if existing and metadata.get("state") == "checkout_open" and metadata.get("checkout_url"):
+            return str(metadata["checkout_url"]), None
+        now = timezone.now()
+        lock_until = metadata.get("checkout_lock_until")
+        if existing and metadata.get("state") == "checkout_attempting" and lock_until:
+            try:
+                lock_expiry = datetime.fromisoformat(str(lock_until))
+            except (TypeError, ValueError):
+                lock_expiry = None
+            if lock_expiry and lock_expiry > now:
+                return None, "A checkout is already being started. Please wait for the current checkout attempt."
+        invoice = existing or Invoice.objects.create(
+            user=request_user,
             amount_cents=plan["price_cents"],
             currency=plan["currency"],
-            metadata__plan=plan["plan"],
-            metadata__provider=selected,
+            metadata={"plan": plan["plan"], "provider": selected},
         )
-        .order_by("-created_at")
-        .first()
-    )
-    metadata = dict(existing.metadata or {}) if existing else {}
-    if existing and metadata.get("state") == "checkout_open" and metadata.get("checkout_url"):
-        return str(metadata["checkout_url"]), None
-
-    invoice = existing or Invoice.objects.create(
-        user=request.user,
-        amount_cents=plan["price_cents"],
-        currency=plan["currency"],
-        metadata={"plan": plan["plan"], "provider": selected},
-    )
-    reference = str(metadata.get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request.user, plan["plan"]))
-    invoice.metadata = {
-        **metadata,
-        "plan": plan["plan"],
-        "provider": selected,
-        "state": "checkout_attempting",
-        "reference": reference,
-        "attempt_count": int(metadata.get("attempt_count") or 0) + 1,
-    }
-    invoice.save(update_fields=["metadata"])
+        reference = str(metadata.get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request_user, plan["plan"]))
+        invoice.metadata = {
+            **metadata,
+            "plan": plan["plan"],
+            "provider": selected,
+            "state": "checkout_attempting",
+            "reference": reference,
+            "attempt_count": int(metadata.get("attempt_count") or 0) + 1,
+            "checkout_lock_until": (now + timedelta(seconds=lease_seconds)).isoformat(),
+        }
+        invoice.save(update_fields=["metadata"])
 
     try:
         result = RequestBoundPaymentService(request).create_checkout_session(
@@ -281,7 +293,7 @@ def billing_status(request):
     subscription, _ = Subscription.objects.get_or_create(user=request.user)
     snapshot = _subscription_snapshot(subscription)
     payments = []
-    for payment in Payment.objects.filter(user=request.user, status__in=["PENDING", "COMPLETED", "FAILED"]).select_related("invoice")[:10]:
+    for payment in Payment.objects.filter(user=request.user, status__in=["PENDING", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED", "REFUNDED"]).select_related("invoice")[:10]:
         invoice_meta = payment.invoice.metadata if payment.invoice else {}
         payments.append({"id": payment.id, "external_id": payment.external_id, "amount_cents": payment.amount_cents, "currency": payment.currency, "status": payment.status, "created_at": payment.created_at, "invoice_id": payment.invoice_id, "metadata": invoice_meta or {}})
     invoices = list(Invoice.objects.filter(user=request.user, paid=True)[:10].values("id", "external_id", "amount_cents", "currency", "paid", "metadata", "created_at"))
@@ -303,13 +315,21 @@ def billing_change_plan(request):
     requested = str(request.data.get("plan") or "").upper().strip()
     plan = _plan(requested)
     if not plan: return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
-    subscription, _ = Subscription.objects.get_or_create(user=request.user)
-    current_active = subscription.is_active and (not subscription.expires_at or subscription.expires_at > timezone.now())
-    if subscription.plan == plan["plan"] and current_active: return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
-    if plan["plan"] == "FREE":
-        subscription.plan = "FREE"; subscription.price_cents = 0; subscription.currency = plan["currency"].lower(); subscription.recurring = False; subscription.is_active = True; subscription.expires_at = None; subscription.renewed_at = timezone.now()
-        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at"])
-        return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
+    with transaction.atomic():
+        subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
+        current_active = subscription.is_active and (not subscription.expires_at or subscription.expires_at > timezone.now())
+        if subscription.plan == plan["plan"] and current_active:
+            return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
+        if plan["plan"] == "FREE":
+            subscription.plan = "FREE"
+            subscription.price_cents = 0
+            subscription.currency = plan["currency"].lower()
+            subscription.recurring = False
+            subscription.is_active = True
+            subscription.expires_at = None
+            subscription.renewed_at = timezone.now()
+            subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at"])
+            return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
     url, error = _checkout(request, requested, request.data.get("provider"))
     if error: return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return Response({"url": url, "plan": requested, "payment_required": True})
@@ -331,10 +351,16 @@ def billing_reconcile(request):
 @permission_classes([IsAuthenticated])
 def billing_cancel(request):
     """Stop future renewal while preserving access through the paid cycle."""
-    subscription, _ = Subscription.objects.get_or_create(user=request.user)
-    if subscription.plan == "FREE": return Response({"status": "already_free", "plan": "FREE", "expires_at": None})
-    if not subscription.is_active: return Response({"status": "already_cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None})
-    subscription.recurring = False
-    if not subscription.expires_at: subscription.expires_at = timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30)))
-    subscription.save(update_fields=["recurring", "expires_at"])
-    return Response({"status": "cancelled_at_period_end", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat()})
+    with transaction.atomic():
+        subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
+        if subscription.plan == "FREE":
+            return Response({"status": "already_free", "plan": "FREE", "expires_at": None})
+        if not subscription.is_active:
+            return Response({"status": "already_cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None})
+        subscription.recurring = False
+        if not subscription.expires_at:
+            subscription.expires_at = timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30)))
+        subscription.cancelled_at = timezone.now()
+        subscription.cancellation_reason = "user_requested"
+        subscription.save(update_fields=["recurring", "expires_at", "cancelled_at", "cancellation_reason"])
+        return Response({"status": "cancelled_at_period_end", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat()})

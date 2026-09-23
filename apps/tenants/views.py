@@ -1,10 +1,12 @@
 from decimal import Decimal
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from .constants import SUBSCRIPTION_PLANS, BILLING_CYCLES, ROLES
 from .models import Tenant, Organization, Workspace, Subscription, License, Team, TeamMember, UsageMetric
-from .services import TenantEngine, OrganizationService, WorkspaceService, SubscriptionService, LicenseService, InvitationService, QuotaService
+from .services import TenantEngine, OrganizationService, WorkspaceService, LicenseService, InvitationService, QuotaService
+from core.models import Subscription as CoreSubscription
 
 def _tenant_for(user):
     tenant = Tenant.objects.filter(owner=user).prefetch_related(
@@ -18,8 +20,7 @@ def _tenant_for(user):
 def _serialize_tenant(tenant):
     if not tenant:
         return None
-    sub = getattr(tenant, "subscription", None)
-    license_obj = getattr(sub, "license", None) if sub else None
+    sub = CoreSubscription.objects.filter(user=tenant.owner).first() if tenant.owner_id else None
     orgs = []
     for org in tenant.organizations.all():
         orgs.append({
@@ -37,15 +38,20 @@ def _serialize_tenant(tenant):
         "id": tenant.id, "name": tenant.name, "slug": tenant.slug,
         "status": tenant.status, "timezone": tenant.timezone, "currency": tenant.currency,
         "subscription": {
-            "plan": sub.plan, "status": sub.status, "billing_cycle": sub.billing_cycle,
-            "price": str(sub.price), "renewal_date": sub.renewal_date.isoformat() if sub.renewal_date else None,
-            "trial_end": sub.trial_end.isoformat() if sub.trial_end else None,
+            "plan": {"FREE": "free", "BASIC": "starter", "PRO": "professional", "ENTERPRISE": "enterprise"}.get(sub.plan, str(sub.plan).lower()),
+            "status": "active" if sub.is_active and (not sub.expires_at or sub.expires_at > timezone.now()) else "expired",
+            "billing_cycle": "monthly",
+            "price": str((Decimal(sub.price_cents or 0) / Decimal("100"))),
+            "renewal_date": sub.expires_at.date().isoformat() if sub.expires_at else None,
+            "trial_end": None,
         } if sub else None,
         "license": {
-            "active": license_obj.is_active, "max_users": license_obj.max_users,
-            "max_brokers": license_obj.max_brokers, "max_strategies": license_obj.max_strategies,
-            "expires_at": license_obj.expires_at.isoformat() if license_obj.expires_at else None,
-        } if license_obj else None,
+            "active": bool(sub and sub.is_active and (not sub.expires_at or sub.expires_at > timezone.now())),
+            "max_users": 1 if sub else 0,
+            "max_brokers": sub.max_concurrent_trades if sub else 0,
+            "max_strategies": sub.max_strategies if sub else 0,
+            "expires_at": sub.expires_at.isoformat() if sub and sub.expires_at else None,
+        } if sub else None,
         "organizations": orgs,
         "usage": usage,
     }
@@ -101,20 +107,6 @@ def create_workspace(request):
     ws=WorkspaceService().create(org,name,environment=data.get("environment","production"),default_broker=data.get("default_broker",""),timezone=data.get("timezone",tenant.timezone))
     return JsonResponse({"workspace":{"id":ws.id,"name":ws.name,"environment":ws.environment}},status=201)
 
-@login_required
-@require_http_methods(["POST"])
-def upgrade_subscription(request):
-    import json
-    tenant=_tenant_for(request.user)
-    if not tenant: return JsonResponse({"error":"Tenant not found."}, status=400)
-    data=json.loads(request.body or "{}"); plan=data.get("plan")
-    if plan not in SUBSCRIPTION_PLANS: return JsonResponse({"error":"Unsupported subscription plan."}, status=400)
-    cycle=data.get("billing_cycle","monthly")
-    if cycle not in BILLING_CYCLES: return JsonResponse({"error":"Unsupported billing cycle."}, status=400)
-    price=Decimal(str(data.get("price",0) or 0))
-    sub=SubscriptionService().upgrade(tenant,plan,cycle,price)
-    LicenseService().issue(sub,max_users=int(data.get("max_users",1)),max_brokers=int(data.get("max_brokers",1)),max_strategies=int(data.get("max_strategies",1)))
-    return JsonResponse({"subscription":{"plan":sub.plan,"status":sub.status,"billing_cycle":sub.billing_cycle,"price":str(sub.price)}})
 
 @login_required
 @require_http_methods(["POST"])

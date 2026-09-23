@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.contrib.auth.models import User
 from core.models import (
     UserProfile, Subscription, PasswordResetToken, BotSettings,
-    Invoice, Payment, ReferralReward, AuditLog, EncryptedCredential
+    Invoice, Payment, PaymentWebhookEvent, ReferralReward, AuditLog, EncryptedCredential
 )
 
 
@@ -22,7 +22,10 @@ class SubscriptionAdmin(admin.ModelAdmin):
     list_display = ['user', 'plan', 'is_active', 'created_at']
     list_filter = ['plan', 'is_active', 'created_at']
     search_fields = ['user__username']
-    readonly_fields = ['created_at', 'renewed_at']
+    readonly_fields = ['created_at', 'renewed_at', 'plan', 'max_strategies', 'max_concurrent_trades', 'api_calls_per_day', 'price_cents', 'currency', 'recurring', 'expires_at', 'is_active', 'provider', 'provider_subscription_id', 'cancelled_at', 'cancellation_reason']
+
+    def has_add_permission(self, request): return False
+    def has_delete_permission(self, request, obj=None): return False
 
 
 @admin.register(PasswordResetToken)
@@ -49,7 +52,10 @@ class InvoiceAdmin(admin.ModelAdmin):
     list_display = ['user', 'external_id', 'amount_cents', 'currency', 'paid', 'created_at']
     list_filter = ['paid', 'currency', 'created_at']
     search_fields = ['user__username', 'external_id']
-    readonly_fields = ['created_at']
+    readonly_fields = ['created_at', 'external_id', 'amount_cents', 'currency', 'paid', 'metadata']
+
+    def has_add_permission(self, request): return False
+    def has_delete_permission(self, request, obj=None): return False
 
 
 @admin.register(Payment)
@@ -58,7 +64,10 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = ['user', 'external_id', 'amount_cents', 'currency', 'status', 'created_at']
     list_filter = ['status', 'currency', 'created_at']
     search_fields = ['user__username', 'external_id']
-    readonly_fields = ['created_at']
+    readonly_fields = ['created_at', 'external_id', 'amount_cents', 'currency', 'status', 'invoice', 'user']
+
+    def has_add_permission(self, request): return False
+    def has_delete_permission(self, request, obj=None): return False
 
 
 @admin.register(ReferralReward)
@@ -86,3 +95,15 @@ class EncryptedCredentialAdmin(admin.ModelAdmin):
     list_filter = ['service_name', 'credential_type', 'updated_at']
     search_fields = ['user__username', 'service_name']
     readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(PaymentWebhookEvent)
+class PaymentWebhookEventAdmin(admin.ModelAdmin):
+    list_display = ["provider", "event_key", "external_id", "received_status", "processed_status", "received_at", "processed_at", "attempts"]
+    list_filter = ["provider", "received_status", "processed_status"]
+    search_fields = ["event_key", "external_id", "payload_hash"]
+    readonly_fields = [field.name for field in PaymentWebhookEvent._meta.fields]
+
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False

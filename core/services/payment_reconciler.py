@@ -1,12 +1,14 @@
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
+import hashlib
+import json
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from core.models import Invoice, Payment, ReferralReward, Subscription
+from core.models import Invoice, Payment, PaymentWebhookEvent, ReferralReward, Subscription
 from core.services.payment_service import PaymentService
 
 
@@ -14,7 +16,8 @@ class PaymentReconciler:
     """Persist provider callbacks using the canonical Payment model states."""
 
     SUCCESS = {"COMPLETE", "COMPLETED", "SUCCESS", "SUCCEEDED", "PAID"}
-    FAILED = {"FAILED", "FAILURE", "INVALID", "REVERSED", "CANCELLED", "CANCELED"}
+    FAILED = {"FAILED", "FAILURE", "INVALID", "REVERSED"}
+    PROCESSING = {"PROCESSING", "IN_PROGRESS", "IN-PROGRESS"}
 
     @staticmethod
     def normalize_status(value):
@@ -23,6 +26,10 @@ class PaymentReconciler:
             return "COMPLETED"
         if value in PaymentReconciler.FAILED:
             return "FAILED"
+        if value in PaymentReconciler.PROCESSING:
+            return "PROCESSING"
+        if value in {"CANCELLED", "CANCELED"}:
+            return "CANCELLED"
         return "PENDING"
 
     @staticmethod
@@ -82,7 +89,7 @@ class PaymentReconciler:
 
         normalized = cls.normalize_status(status)
         amount_minor = cls._minor_units(amount)
-        currency = str(currency or "KES").lower()
+        currency = str(currency or "KES").upper()
         with transaction.atomic():
             invoice = Invoice.objects.select_for_update().filter(external_id=external_id).first()
             if not invoice:
@@ -102,8 +109,14 @@ class PaymentReconciler:
                 return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "invoice_owner_mismatch"}
 
             expected_amount = int(invoice.amount_cents or 0)
+            expected_currency = str(invoice.currency or "KES").upper()
+            received_currency = str(currency or "KES").upper()
+            if amount_minor < 0:
+                return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "negative_amount"}
             if amount_minor and expected_amount and amount_minor != expected_amount:
                 return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "amount_mismatch", "expected_amount_cents": expected_amount, "received_amount_cents": amount_minor}
+            if expected_currency and received_currency and expected_currency != received_currency:
+                return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "currency_mismatch", "expected_currency": expected_currency, "received_currency": received_currency}
 
             if not invoice.external_id:
                 invoice.external_id = external_id
@@ -116,6 +129,8 @@ class PaymentReconciler:
 
             payment = Payment.objects.select_for_update().filter(external_id=external_id).first()
             was_completed = bool(payment and (payment.status == "COMPLETED" or invoice.paid))
+            if payment and cls._should_ignore_transition(payment.status, normalized):
+                normalized = payment.status
             if not payment:
                 payment = Payment.objects.create(user=user, invoice=invoice, external_id=external_id, amount_cents=amount_minor or invoice.amount_cents, currency=currency, status="PENDING")
             elif payment.user_id != user.id:
@@ -137,6 +152,51 @@ class PaymentReconciler:
 
         return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "payment_id": payment.id}
 
+    @staticmethod
+    def _should_ignore_transition(current, incoming):
+        current = str(current or "PENDING").upper()
+        incoming = str(incoming or "PENDING").upper()
+        if current in {"COMPLETED", "REFUNDED"} and incoming != current:
+            return True
+        if current in {"FAILED", "CANCELLED"} and incoming in {"PENDING", "PROCESSING"}:
+            return True
+        if current == "PROCESSING" and incoming == "PENDING":
+            return True
+        return False
+
+    @staticmethod
+    def _event_key(data, raw_payload):
+        for key in ("event_id", "eventId", "event_uuid", "uuid", "id"):
+            value = data.get(key) if isinstance(data, dict) else None
+            if value:
+                return str(value)[:255]
+        raw = raw_payload if isinstance(raw_payload, bytes) else str(raw_payload).encode()
+        return hashlib.sha256(raw).hexdigest()
+
+    @classmethod
+    def _record_webhook(cls, provider, data, raw_payload, external_id, received_status):
+        raw = raw_payload if isinstance(raw_payload, bytes) else json.dumps(data, sort_keys=True, default=str).encode()
+        event_key = cls._event_key(data, raw)
+        payload_hash = hashlib.sha256(raw).hexdigest()
+        try:
+            event, created = PaymentWebhookEvent.objects.get_or_create(
+                provider=provider, event_key=event_key,
+                defaults={"payload_hash": payload_hash, "external_id": str(external_id or ""),
+                          "received_status": str(received_status or "")[:32], "payload": data, "attempts": 1},
+            )
+        except IntegrityError:
+            event = PaymentWebhookEvent.objects.get(provider=provider, event_key=event_key)
+            created = False
+        return event, created
+
+    @staticmethod
+    def _finish_webhook(event, status="", error=""):
+        event.processed_status = str(status or "")[:32]
+        event.last_error = str(error or "")[:500]
+        event.processed_at = timezone.now() if not error else None
+        event.attempts = (event.attempts or 0) + 1
+        event.save(update_fields=["processed_status", "last_error", "processed_at", "attempts"])
+
     @classmethod
     def _activate_subscription_and_referral(cls, user, invoice, plan_key):
         plan = plan_key if plan_key in {choice[0] for choice in Subscription.PLAN_CHOICES} else ""
@@ -155,41 +215,93 @@ class PaymentReconciler:
         referrer = getattr(profile, "referred_by", None) if profile else None
         if not referrer:
             return
-        reward_amount = float(getattr(settings, "REFERRAL_CREDIT_AMOUNT", 0.0) or 0.0)
+        reward_amount = Decimal(str(getattr(settings, "REFERRAL_CREDIT_AMOUNT", "0") or "0"))
         if reward_amount <= 0:
-            reward_amount = (invoice.amount_cents / 100.0) * 0.05
+            reward_amount = (Decimal(invoice.amount_cents or 0) / Decimal("100")) * Decimal("0.05")
         reward, created = ReferralReward.objects.get_or_create(referrer=referrer, referee=user, defaults={"amount_credits": reward_amount})
         if created:
-            profile.referral_credits = (profile.referral_credits or 0.0) + reward_amount
+            profile.referral_credits = (profile.referral_credits or Decimal("0")) + reward_amount
             profile.save(update_fields=["referral_credits"])
 
     @classmethod
     def handle_intasend_webhook(cls, payload):
+        raw = payload if isinstance(payload, bytes) else json.dumps(payload, sort_keys=True, default=str).encode()
         data = PaymentService._parse_payload(payload)
-        challenge = str(data.get("challenge", ""))
-        configured_challenge = str(getattr(settings, "INTASEND_WEBHOOK_CHALLENGE", "") or "")
-        if configured_challenge and challenge != configured_challenge:
+        configured = str(getattr(settings, "INTASEND_WEBHOOK_CHALLENGE", "") or "")
+        if not configured or str(data.get("challenge", "")) != configured:
             return None
-        invoice_id = data.get("invoice_id")
+        if data.get("subscription_id") and isinstance(data.get("payments"), list):
+            from core.models import Subscription
+            subscription = Subscription.objects.filter(provider_subscription_id=str(data["subscription_id"])).select_related("user").first()
+            if not subscription:
+                invoice = Invoice.objects.filter(metadata__subscription_id=str(data["subscription_id"])).select_related("user").order_by("-created_at").first()
+                if invoice:
+                    subscription = Subscription.objects.filter(user=invoice.user).first()
+                    if subscription:
+                        subscription.provider = "intasend"
+                        subscription.provider_subscription_id = str(data["subscription_id"])[:255]
+                        subscription.save(update_fields=["provider", "provider_subscription_id"])
+            if not subscription:
+                return {"received": True, "provider": "intasend", "unresolved_subscription": True, "retryable": True}
+            event, created = cls._record_webhook("intasend", data, raw, str(data["subscription_id"]), data.get("status"))
+            if not created and event.processed_at:
+                return {"received": True, "duplicate": True, "provider": "intasend", "subscription_id": str(data["subscription_id"])}
+            results = []
+            for item in data["payments"]:
+                invoice_data = item.get("invoice") if isinstance(item, dict) else {}
+                invoice_data = invoice_data if isinstance(invoice_data, dict) else {}
+                recurring_id = invoice_data.get("invoice_id") or item.get("transaction_id")
+                if not recurring_id:
+                    continue
+                metadata = {"user_id": subscription.user_id, "plan": subscription.plan, "provider": "intasend", "subscription_id": str(data["subscription_id"]), "subscription_event": True, "provider_payload": data}
+                results.append(cls.reconcile(provider="intasend", external_id=str(recurring_id), status=invoice_data.get("state"), amount=invoice_data.get("value") or invoice_data.get("amount") or invoice_data.get("net_amount"), currency=invoice_data.get("currency", subscription.currency or "KES"), metadata=metadata))
+            cls._finish_webhook(event, "RECURRING_PROCESSED")
+            return {"received": True, "provider": "intasend", "subscription_id": str(data["subscription_id"]), "payments": results}
+        invoice_id = data.get("invoice_id") or data.get("id")
         api_ref = data.get("api_ref") or data.get("reference")
         external_id = invoice_id or api_ref
         if not external_id:
             return None
-        return cls.reconcile(provider="intasend", external_id=external_id, status=data.get("state"), amount=data.get("value") or data.get("amount") or data.get("net_amount"), currency=data.get("currency", "KES"), metadata=data)
+        event, created = cls._record_webhook("intasend", data, raw, external_id, data.get("state"))
+        if not created and event.processed_at:
+            return {"received": True, "duplicate": True, "provider": "intasend", "external_id": str(external_id)}
+        verified = PaymentService().get_intasend_payment_status(str(invoice_id)) if invoice_id else None
+        if not verified:
+            cls._finish_webhook(event, error="provider_status_unavailable")
+            return {"received": True, "provider": "intasend", "external_id": str(external_id), "retryable": True}
+        invoice_data = verified.get("invoice") if isinstance(verified, dict) else {}
+        invoice_data = invoice_data if isinstance(invoice_data, dict) else verified
+        result = cls.reconcile(
+            provider="intasend",
+            external_id=str(invoice_data.get("invoice_id") or invoice_data.get("id") or invoice_id),
+            status=invoice_data.get("state"),
+            amount=invoice_data.get("value") or invoice_data.get("amount") or invoice_data.get("net_amount"),
+            currency=invoice_data.get("currency", "KES"),
+            metadata={**data, **invoice_data},
+        )
+        if result is not None:
+            cls._finish_webhook(event, result.get("status", ""))
+        return result
 
     @classmethod
     def handle_pesapal_webhook(cls, payload):
+        raw = payload if isinstance(payload, bytes) else json.dumps(payload, sort_keys=True, default=str).encode()
         data = PaymentService._parse_payload(payload)
         tracking_id = data.get("OrderTrackingId") or data.get("orderTrackingId") or data.get("order_tracking_id")
         merchant_reference = data.get("OrderMerchantReference") or data.get("orderMerchantReference") or data.get("merchant_reference") or ""
         if not tracking_id:
             return None
-        status = PaymentService().get_pesapal_transaction_status(str(tracking_id))
-        if not status:
-            return None
-        result = cls.reconcile(provider="pesapal", external_id=tracking_id, status=status.get("payment_status_description"), amount=status.get("amount"), currency=status.get("currency", "KES"), metadata={"merchant_reference": merchant_reference, "pesapal": status})
+        verified = PaymentService().get_pesapal_transaction_status(str(tracking_id))
+        if not verified:
+            return {"received": True, "provider": "pesapal", "external_id": str(tracking_id), "retryable": True}
+        event, created = cls._record_webhook("pesapal", data, raw, tracking_id, verified.get("payment_status_description"))
+        ack = {"orderNotificationType": data.get("OrderNotificationType") or data.get("orderNotificationType") or "IPNCHANGE", "orderTrackingId": str(tracking_id), "orderMerchantReference": merchant_reference, "status": 200}
+        if not created and event.processed_at:
+            return {"received": True, "duplicate": True, "provider": "pesapal", "external_id": str(tracking_id), "ipn_ack": ack}
+        result = cls.reconcile(provider="pesapal", external_id=str(tracking_id), status=verified.get("payment_status_description"), amount=verified.get("amount"), currency=verified.get("currency", "KES"), metadata={"merchant_reference": merchant_reference, "pesapal": verified})
         if result is not None:
-            result["ipn_ack"] = {"orderNotificationType": data.get("OrderNotificationType") or data.get("orderNotificationType") or "IPNCHANGE", "orderTrackingId": tracking_id, "orderMerchantReference": merchant_reference, "status": 200}
+            cls._finish_webhook(event, result.get("status", ""))
+            result["ipn_ack"] = ack
         return result
 
     @classmethod
@@ -199,4 +311,4 @@ class PaymentReconciler:
         status = PaymentService().get_pesapal_transaction_status(str(tracking_id))
         if not status:
             return None
-        return cls.reconcile(provider="pesapal", external_id=tracking_id, status=status.get("payment_status_description"), amount=status.get("amount"), currency=status.get("currency", "KES"), metadata={"merchant_reference": merchant_reference, "pesapal": status})
+        return cls.reconcile(provider="pesapal", external_id=str(tracking_id), status=status.get("payment_status_description"), amount=status.get("amount"), currency=status.get("currency", "KES"), metadata={"merchant_reference": merchant_reference, "pesapal": status})

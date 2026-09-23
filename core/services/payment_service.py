@@ -352,7 +352,7 @@ class PaymentService:
         payload = {
             "id": reference,
             "currency": currency.upper(),
-            "amount": float(amount),
+            "amount": self._decimal_string(amount),
             "description": f"AlgoBot {getattr(subscription_plan, 'plan', subscription_plan)} subscription",
             "callback_url": callback_url,
             "cancellation_url": cancellation_url,

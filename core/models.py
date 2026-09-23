@@ -1,5 +1,6 @@
 """Core models for user profiles, subscriptions, and bot settings."""
 from django.db import models
+from django.db.models import Q
 from django.contrib.auth.models import User
 from django.utils import timezone
 import uuid
@@ -26,7 +27,7 @@ class UserProfile(models.Model):
     brevo_sender_email = models.EmailField(blank=True)
     referral_code = models.CharField(max_length=32, blank=True, unique=True, null=True)
     referred_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='referrals')
-    referral_credits = models.FloatField(default=0.0)
+    referral_credits = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     avatar_url = models.URLField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -52,10 +53,13 @@ class Subscription(models.Model):
     max_strategies = models.IntegerField(default=1)
     max_concurrent_trades = models.IntegerField(default=5)
     api_calls_per_day = models.IntegerField(default=1000)
-    stripe_price_id = models.CharField(max_length=255, blank=True)
     price_cents = models.IntegerField(default=0)
-    currency = models.CharField(max_length=10, default='usd')
+    currency = models.CharField(max_length=10, default='kes')
     recurring = models.BooleanField(default=True)
+    provider = models.CharField(max_length=32, blank=True)
+    provider_subscription_id = models.CharField(max_length=255, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     renewed_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField(null=True, blank=True)
@@ -63,6 +67,7 @@ class Subscription(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [models.CheckConstraint(condition=Q(price_cents__gte=0), name='core_subscription_price_nonnegative')]
 
     def __str__(self):
         return f"{self.user.username} - {self.plan}"
@@ -147,7 +152,7 @@ class Invoice(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invoices')
     external_id = models.CharField(max_length=255, unique=True, db_index=True, null=True, blank=True)
     amount_cents = models.IntegerField()
-    currency = models.CharField(max_length=10, default='usd')
+    currency = models.CharField(max_length=10, default='kes')
     paid = models.BooleanField(default=False)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -155,17 +160,20 @@ class Invoice(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [models.Index(fields=['user', '-created_at'])]
+        constraints = [models.CheckConstraint(condition=Q(amount_cents__gte=0), name='core_invoice_amount_nonnegative')]
 
     def __str__(self):
-        return f"Invoice {self.external_id or self.pk} - ${self.amount_cents/100:.2f}"
+        return f"Invoice {self.external_id or self.pk} - {self.currency.upper()} {self.amount_cents / 100:.2f}"
 
 
 class Payment(models.Model):
     """Payment records linked to their invoice."""
     STATUS_CHOICES = [
         ('PENDING', 'Pending'),
+        ('PROCESSING', 'Processing'),
         ('COMPLETED', 'Completed'),
         ('FAILED', 'Failed'),
+        ('CANCELLED', 'Cancelled'),
         ('REFUNDED', 'Refunded'),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
@@ -179,6 +187,7 @@ class Payment(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [models.Index(fields=['user', '-created_at'])]
+        constraints = [models.CheckConstraint(condition=Q(amount_cents__gte=0), name='core_payment_amount_nonnegative')]
 
     def __str__(self):
         return f"Payment {self.external_id or self.pk} - {self.status}"
@@ -188,7 +197,7 @@ class ReferralReward(models.Model):
     """Referral reward records"""
     referrer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='referral_rewards_given')
     referee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='referral_rewards_received')
-    amount_credits = models.FloatField()
+    amount_credits = models.DecimalField(max_digits=20, decimal_places=8)
     awarded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -221,3 +230,25 @@ class EncryptedCredential(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.service_name}"
+
+
+class PaymentWebhookEvent(models.Model):
+    """Durable provider webhook receipt for deduplication, replay, and audit."""
+    provider = models.CharField(max_length=32)
+    event_key = models.CharField(max_length=255)
+    payload_hash = models.CharField(max_length=64)
+    external_id = models.CharField(max_length=255, blank=True)
+    received_status = models.CharField(max_length=32, blank=True)
+    processed_status = models.CharField(max_length=32, blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+    received_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['provider', 'event_key'], name='core_webhook_provider_event_uniq')]
+        indexes = [models.Index(fields=['provider', 'external_id'], name="core_wh_provider_ext_idx"), models.Index(fields=['provider', '-received_at'], name="core_wh_provider_rcv_idx")]
+
+    def __str__(self):
+        return f"{self.provider}:{self.event_key}"

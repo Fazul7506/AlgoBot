@@ -163,3 +163,46 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(invoice.external_id, "IS-RETRY-1")
         self.assertEqual(invoice.metadata["state"], "checkout_open")
         self.assertEqual(create_checkout.call_count, 2)
+
+
+    def test_completed_payment_cannot_regress_to_pending_or_failed(self):
+        metadata = {"api_ref": f"IS-{self.user.id}-BASIC-MONO", "user_id": self.user.id, "plan": "BASIC"}
+        first = PaymentReconciler.reconcile(provider="intasend", external_id="MONO-1", status="COMPLETE", amount="999.00", currency="KES", metadata=metadata)
+        self.assertEqual(first["status"], "COMPLETED")
+        stale = PaymentReconciler.reconcile(provider="intasend", external_id="MONO-1", status="FAILED", amount="999.00", currency="KES", metadata=metadata)
+        self.assertEqual(stale["status"], "COMPLETED")
+        self.assertEqual(Payment.objects.get(external_id="MONO-1").status, "COMPLETED")
+        self.assertTrue(Invoice.objects.get(external_id="MONO-1").paid)
+
+    def test_currency_mismatch_is_rejected(self):
+        reference = f"IS-{self.user.id}-BASIC-CURRENCY"
+        invoice = Invoice.objects.create(user=self.user, amount_cents=99900, currency="KES", metadata={"plan": "BASIC", "provider": "intasend", "reference": reference})
+        result = PaymentReconciler.reconcile(
+            provider="intasend",
+            external_id="CURRENCY-1",
+            status="COMPLETE",
+            amount="999.00",
+            currency="USD",
+            metadata={"api_ref": reference, "plan": "BASIC", "user_id": self.user.id},
+        )
+        self.assertEqual(result["rejected"], "currency_mismatch")
+        invoice.refresh_from_db()
+        self.assertFalse(invoice.paid)
+
+    @override_settings(INTASEND_WEBHOOK_CHALLENGE="expected")
+    @patch("core.services.payment_reconciler.PaymentService.get_intasend_payment_status")
+    def test_intasend_webhook_requires_configured_challenge(self, get_status):
+        payload = {"invoice_id": "WEBHOOK-AUTH", "state": "COMPLETE", "challenge": "wrong"}
+        self.assertIsNone(PaymentReconciler.handle_intasend_webhook(payload))
+        get_status.assert_not_called()
+
+    @override_settings(INTASEND_WEBHOOK_CHALLENGE="expected")
+    @patch("core.services.payment_reconciler.PaymentService.get_intasend_payment_status")
+    def test_intasend_webhook_uses_provider_status_not_client_state(self, get_status):
+        reference = f"IS-{self.user.id}-BASIC-AUTH"
+        Invoice.objects.create(user=self.user, amount_cents=99900, currency="KES", metadata={"plan": "BASIC", "provider": "intasend", "reference": reference})
+        get_status.return_value = {"invoice": {"invoice_id": "WEBHOOK-AUTH", "state": "PENDING", "value": "999.00", "currency": "KES"}}
+        result = PaymentReconciler.handle_intasend_webhook({"invoice_id": "WEBHOOK-AUTH", "state": "COMPLETE", "value": "999.00", "currency": "KES", "api_ref": reference, "challenge": "expected"})
+        self.assertEqual(result["status"], "PENDING")
+        self.assertFalse(Invoice.objects.get(metadata__reference=reference).paid)
+

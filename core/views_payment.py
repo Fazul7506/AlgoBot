@@ -12,6 +12,8 @@ def intasend_webhook(request):
     result = PaymentReconciler.handle_intasend_webhook(request.body)
     if result is None:
         return HttpResponse(status=400)
+    if result.get("retryable"):
+        return HttpResponse(status=500)
     return JsonResponse(result)
 
 
@@ -20,10 +22,15 @@ def intasend_webhook(request):
 def pesapal_webhook(request):
     payload = request.body if request.method == "POST" else request.GET.dict()
     result = PaymentReconciler.handle_pesapal_webhook(payload)
+    if not (request.GET.get("OrderTrackingId") or request.POST.get("OrderTrackingId") or request.GET.get("orderTrackingId") or request.POST.get("orderTrackingId")):
+        return HttpResponse(status=400)
+    if result and result.get("retryable"):
+        return HttpResponse(status=500)
     ack = (result or {}).get("ipn_ack") if result else None
     if ack:
         return JsonResponse(ack)
-    return HttpResponse(status=400)
+    # A provider-status lookup failure is retryable; malformed notifications are not.
+    return HttpResponse(status=500)
 
 
 @require_http_methods(["GET"])

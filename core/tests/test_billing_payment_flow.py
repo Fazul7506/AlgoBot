@@ -19,7 +19,8 @@ class BillingPaymentFlowTests(TestCase):
         )
 
     @override_settings(INTASEND_WEBHOOK_CHALLENGE="testnet")
-    def test_intasend_webhook_reuses_checkout_invoice_when_provider_id_differs(self):
+    @patch("core.services.payment_reconciler.PaymentService.get_intasend_payment_status")
+    def test_intasend_webhook_reuses_checkout_invoice_when_provider_id_differs(self, get_status):
         reference = f"IS-{self.user.id}-BASIC-abc123"
         invoice = Invoice.objects.create(
             user=self.user,
@@ -27,6 +28,8 @@ class BillingPaymentFlowTests(TestCase):
             currency="KES",
             metadata={"plan": "BASIC", "provider": "intasend", "reference": reference},
         )
+
+        get_status.return_value = {"invoice": {"invoice_id": "PROVIDER-INVOICE-1", "state": "COMPLETE", "value": "999.00", "currency": "KES"}}
 
         result = PaymentReconciler.handle_intasend_webhook(
             {
