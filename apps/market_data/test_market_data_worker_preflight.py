@@ -27,6 +27,8 @@ class MarketDataWorkerPreflightTests(SimpleTestCase):
                 "queue": "market_data",
             }
         }
+        app.conf.task_queues = [type("Queue", (), {"name": "celery"})(), type("Queue", (), {"name": "market_data"})()]
+        app.conf.task_default_queue = "celery"
         connection = app.connection_for_read.return_value
         call_command("check_market_data_worker")
         connection.ensure_connection.assert_called_once_with(max_retries=1)
