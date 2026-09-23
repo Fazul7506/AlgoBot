@@ -16,7 +16,7 @@ class DerivIdentityProjectionTests(TestCase):
             password="pass12345",
             email="old@example.com",
         )
-        profile = UserProfile.objects.create(user=user)
+        profile = UserProfile.objects.get(user=user)
 
         identity = {
             "user_id": 42,
