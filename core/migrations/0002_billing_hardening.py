@@ -32,6 +32,8 @@ class Migration(migrations.Migration):
             name="cancellation_reason",
             field=models.CharField(blank=True, max_length=255),
         ),
+        migrations.AlterField(model_name="invoice", name="currency", field=models.CharField(default="kes", max_length=10)),
+        migrations.AlterField(model_name="payment", name="currency", field=models.CharField(default="kes", max_length=10)),
         migrations.AlterField(
             model_name="subscription",
             name="currency",
