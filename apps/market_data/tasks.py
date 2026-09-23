@@ -54,6 +54,11 @@ BACKFILL_AUTOMATIC_RETRY_AFTER = timedelta(minutes=15)
 BACKFILL_QUEUE = "market_data"
 
 
+def _recovery_backfill_queue(_attempts=0):
+    """Return the single authoritative queue used for all candle backfill execution."""
+    return BACKFILL_QUEUE
+
+
 def _active_symbols(symbol=None):
     from .models import MarketSymbol
 
@@ -431,7 +436,12 @@ def _mark_backfill_run(
         return run
 
 
-@_task(acks_late=True, reject_on_worker_lost=True)
+@_task(
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=2 * 60 * 60,
+    time_limit=2 * 60 * 60 + 5 * 60,
+)
 def backfill_research_candles(count=250, symbol=None):
     """Keep research history warm without competing with the initial warm-up."""
     from django.db import close_old_connections
@@ -599,7 +609,12 @@ def ensure_initial_candle_backfill(count=5000):
         close_old_connections()
 
 
-@_task(acks_late=True, reject_on_worker_lost=True)
+@_task(
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=4 * 60 * 60,
+    time_limit=4 * 60 * 60 + 5 * 60,
+)
 def run_initial_candle_backfill(run_id, count=5000, symbol=None):
     """Run the one-time historical warm-up from an available market-data Celery consumer."""
     from django.db import close_old_connections, transaction
@@ -805,7 +820,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     current.error = f"Automatic Celery retry failed: {exc}"
                     current.completed_at = timezone.now()
                     current.save(update_fields=["status", "error", "completed_at"])
-                    CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts)})
+                    CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts), "recovery_attempts": recovery_attempts},)
             logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
         return {"recovered": recovered}
     finally:
