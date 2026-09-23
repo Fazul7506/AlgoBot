@@ -362,6 +362,14 @@ class PaymentService:
                     },
                     classification="provider generated invalid setup URL",
                 )
+                self._cancel_intasend_subscription_safely(
+                    base=base,
+                    subscription_id=str(subscription_id),
+                    reference=reference,
+                    plan=getattr(subscription_plan, "plan", ""),
+                    currency=currency,
+                    amount=amount,
+                )
                 return {
                     "url": "",
                     "provider": self.INTASEND,
@@ -732,6 +740,45 @@ class PaymentService:
             logger.info("payment_provider_diagnostic=%s", diagnostic)
         else:
             logger.error("payment_provider_diagnostic=%s", diagnostic)
+
+    def _cancel_intasend_subscription_safely(self, *, base, subscription_id, reference, plan, currency, amount):
+        """Cancel a provider subscription whose hosted setup URL is already 404.
+
+        The subscription has been created successfully at the API layer but
+        cannot be presented to the customer. Cancel it so repeated checkout
+        attempts do not accumulate unusable pending provider subscriptions.
+        Any cleanup failure is non-fatal to the checkout error path.
+        """
+        try:
+            response = requests.post(
+                f"{base}/api/v1/subscriptions/{subscription_id}/unsubscribe/",
+                headers={
+                    "Authorization": f"Bearer {self.intasend_secret_key}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                timeout=min(self.timeout, 5),
+            )
+            self._log_provider_diagnostic(
+                provider=self.INTASEND,
+                endpoint=self._endpoint_for_log(base, f"/api/v1/subscriptions/{subscription_id}/unsubscribe/"),
+                method="POST",
+                status_code=response.status_code,
+                request_id=self._provider_request_id(response),
+                merchant_reference=reference,
+                plan=plan,
+                currency=currency,
+                amount=amount,
+                recurring=True,
+                payload={"subscription_id": str(subscription_id)},
+                response={"cleanup": "subscription_cancelled" if response.ok else "subscription_cleanup_failed"},
+                classification="cleanup_success" if response.ok else "cleanup_failed",
+            )
+        except requests.RequestException as exc:
+            logger.warning(
+                "IntaSend invalid setup subscription cleanup failed: %s",
+                type(exc).__name__,
+            )
 
     @staticmethod
     def _setup_url_host(value):
