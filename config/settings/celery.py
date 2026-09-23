@@ -55,7 +55,7 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
 # from being created accidentally by a typo and makes the isolated market-data
 # consumer contract inspectable during worker preflight.
 CELERY_TASK_DEFAULT_QUEUE = "celery"
-CELERY_TASK_CREATE_MISSING_QUEUES = True
+CELERY_TASK_CREATE_MISSING_QUEUES = False
 CELERY_TASK_QUEUES = (
     Queue("celery"),
     Queue("market_data"),
@@ -81,11 +81,15 @@ CELERY_TASK_ANNOTATIONS = {
         "acks_late": True,
         "reject_on_worker_lost": True,
         "track_started": True,
+        "soft_time_limit": 2 * 60 * 60,
+        "time_limit": 2 * 60 * 60 + 5 * 60,
     },
     "apps.market_data.tasks.backfill_research_candles": {
         "acks_late": True,
         "reject_on_worker_lost": True,
         "track_started": True,
+        "soft_time_limit": 4 * 60 * 60,
+        "time_limit": 4 * 60 * 60 + 5 * 60,
     },
     "apps.market_data.tasks.reconcile_candle_backfill_runs": {
         "track_started": True,
