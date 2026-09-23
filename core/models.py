@@ -1,5 +1,6 @@
 """Core models for user profiles, subscriptions, and bot settings."""
 from django.db import models
+from django.db.models import Q
 from django.contrib.auth.models import User
 from django.utils import timezone
 import uuid
@@ -66,6 +67,7 @@ class Subscription(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [models.CheckConstraint(condition=Q(price_cents__gte=0), name='core_subscription_price_nonnegative')]
 
     def __str__(self):
         return f"{self.user.username} - {self.plan}"
@@ -158,6 +160,7 @@ class Invoice(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [models.Index(fields=['user', '-created_at'])]
+        constraints = [models.CheckConstraint(condition=Q(amount_cents__gte=0), name='core_invoice_amount_nonnegative')]
 
     def __str__(self):
         return f"Invoice {self.external_id or self.pk} - {self.currency.upper()} {self.amount_cents / 100:.2f}"
@@ -184,6 +187,7 @@ class Payment(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [models.Index(fields=['user', '-created_at'])]
+        constraints = [models.CheckConstraint(condition=Q(amount_cents__gte=0), name='core_payment_amount_nonnegative')]
 
     def __str__(self):
         return f"Payment {self.external_id or self.pk} - {self.status}"
