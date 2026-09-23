@@ -84,7 +84,7 @@ class PaymentReconciler:
 
         normalized = cls.normalize_status(status)
         amount_minor = cls._minor_units(amount)
-        currency = str(currency or "KES").lower()
+        currency = str(currency or "KES").upper()
         with transaction.atomic():
             invoice = Invoice.objects.select_for_update().filter(external_id=external_id).first()
             if not invoice:
@@ -104,8 +104,14 @@ class PaymentReconciler:
                 return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "invoice_owner_mismatch"}
 
             expected_amount = int(invoice.amount_cents or 0)
+            expected_currency = str(invoice.currency or "KES").upper()
+            received_currency = str(currency or "KES").upper()
+            if amount_minor < 0:
+                return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "negative_amount"}
             if amount_minor and expected_amount and amount_minor != expected_amount:
                 return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "amount_mismatch", "expected_amount_cents": expected_amount, "received_amount_cents": amount_minor}
+            if expected_currency and received_currency and expected_currency != received_currency:
+                return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "currency_mismatch", "expected_currency": expected_currency, "received_currency": received_currency}
 
             if not invoice.external_id:
                 invoice.external_id = external_id
