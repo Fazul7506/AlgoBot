@@ -54,6 +54,7 @@ class APISecurityHardeningTests(TestCase):
                 "status": "executed",
                 "broker_order_id": "FORGED",
                 "routing_context": {"account_type": "real"},
+                "client_order_id": "CLIENT-TEST-001",
             },
             context={"request": request},
         )
@@ -68,5 +69,6 @@ class APISecurityHardeningTests(TestCase):
         middleware = APIAwareCsrfViewMiddleware(lambda request: None)
         request = APIRequestFactory().post("/api/settings/")
         request.COOKIES[settings.SESSION_COOKIE_NAME] = "session-present"
-        middleware.process_view(request, lambda request: None, (), {})
-        self.assertFalse(getattr(request, "csrf_processing_done", False))
+        response = middleware.process_view(request, lambda request: None, (), {})
+        self.assertIsNotNone(response)
+        self.assertEqual(response.status_code, 403)
