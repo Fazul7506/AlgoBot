@@ -332,7 +332,7 @@ class PaymentService:
                         "setup_url_present": True,
                         "subscription_id": str(subscription_id),
                         "setup_url_host": self._setup_url_host(setup_url),
-                        "setup_url_route": urlsplit(str(setup_url)).path,
+                        "setup_url_route_valid": False,
                     },
                     classification="malformed provider response",
                 )
