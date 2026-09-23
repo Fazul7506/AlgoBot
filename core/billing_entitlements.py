@@ -67,7 +67,7 @@ def usage(user, metric, window="day"):
         try:
             from apps.brokers.models import BrokerAccount
             return BrokerAccount.objects.filter(user=user).values("broker_id").distinct().count()
-        except Exception: return 0
+        except DatabaseError: return 0
     if metric == "strategies":
         try:
             from apps.strategies.models import StrategyConfiguration
