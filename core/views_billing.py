@@ -179,35 +179,9 @@ def _checkout(request, plan_name, provider=None):
             .first()
         )
         metadata = dict(existing.metadata or {}) if existing else {}
+        if existing and metadata.get("state") == "checkout_open" and metadata.get("checkout_url"):
+            return str(metadata["checkout_url"]), None
         now = timezone.now()
-
-        # IntaSend subscription setup URLs are provider-owned links. Do not
-        # cache them forever: a previously generated hosted link can become
-        # unavailable while the local invoice remains open. The short reuse
-        # window still protects against duplicate browser clicks.
-        checkout_url = str(metadata.get("checkout_url") or "").strip()
-        checkout_url_created_at = metadata.get("checkout_url_created_at")
-        checkout_is_recent = False
-        if checkout_url and checkout_url_created_at:
-            try:
-                created_at = datetime.fromisoformat(str(checkout_url_created_at))
-                if created_at.tzinfo is None:
-                    created_at = timezone.make_aware(created_at)
-                checkout_is_recent = 0 <= (now - created_at).total_seconds() <= lease_seconds
-            except (TypeError, ValueError, OverflowError):
-                checkout_is_recent = False
-
-        if (
-            existing
-            and metadata.get("state") == "checkout_open"
-            and checkout_url
-            and (
-                selected != PaymentService.INTASEND
-                or checkout_is_recent
-            )
-        ):
-            return checkout_url, None
-
         lock_until = metadata.get("checkout_lock_until")
         if existing and metadata.get("state") == "checkout_attempting" and lock_until:
             try:
@@ -282,7 +256,6 @@ def _checkout(request, plan_name, provider=None):
         "provider_plan_id": result.get("provider_plan_id"),
         "provider_customer_id": result.get("provider_customer_id"),
         "checkout_url": checkout_url,
-        "checkout_url_created_at": now.isoformat(),
         "error": "",
         "error_classification": "",
     }

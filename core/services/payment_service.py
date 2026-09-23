@@ -298,84 +298,7 @@ class PaymentService:
             setup_url = subscribe_data.get("setup_url") or subscribe_data.get("url")
             subscription_id = subscribe_data.get("subscription_id") or subscribe_data.get("id")
             if not self._is_checkout_url(setup_url) or not subscription_id:
-                self._log_provider_diagnostic(
-                    provider=self.INTASEND,
-                    endpoint=self._endpoint_for_log(base, "/api/v1/subscriptions/"),
-                    method="POST",
-                    status_code=subscribe_response.status_code,
-                    request_id=request_id,
-                    merchant_reference=reference,
-                    plan=getattr(subscription_plan, "plan", ""),
-                    currency=currency,
-                    amount=amount,
-                    recurring=True,
-                    payload=subscribe_payload,
-                    response={"setup_url_present": bool(setup_url), "subscription_id_present": bool(subscription_id)},
-                    classification="malformed provider response",
-                )
                 return {"url": "", "provider": self.INTASEND, "error": "IntaSend returned incomplete subscription checkout data.", "error_classification": "malformed provider response"}
-
-            if not self._is_intasend_setup_url(setup_url):
-                self._log_provider_diagnostic(
-                    provider=self.INTASEND,
-                    endpoint=self._endpoint_for_log(base, "/api/v1/subscriptions/"),
-                    method="POST",
-                    status_code=subscribe_response.status_code,
-                    request_id=request_id,
-                    merchant_reference=reference,
-                    plan=getattr(subscription_plan, "plan", ""),
-                    currency=currency,
-                    amount=amount,
-                    recurring=True,
-                    payload=subscribe_payload,
-                    response={
-                        "setup_url_present": True,
-                        "subscription_id": str(subscription_id),
-                        "setup_url_host": self._setup_url_host(setup_url),
-                        "setup_url_route_valid": False,
-                    },
-                    classification="malformed provider response",
-                )
-                return {"url": "", "provider": self.INTASEND, "error": "IntaSend returned an unsupported subscription checkout URL.", "error_classification": "malformed provider response"}
-
-            setup_probe = self._probe_intasend_setup_url(setup_url)
-            if setup_probe.get("status_code") == 404:
-                self._log_provider_diagnostic(
-                    provider=self.INTASEND,
-                    endpoint=self._endpoint_for_log(base, "/api/v1/subscriptions/"),
-                    method="POST",
-                    status_code=subscribe_response.status_code,
-                    request_id=request_id,
-                    merchant_reference=reference,
-                    plan=getattr(subscription_plan, "plan", ""),
-                    currency=currency,
-                    amount=amount,
-                    recurring=True,
-                    payload=subscribe_payload,
-                    response={
-                        "subscription_id": str(subscription_id),
-                        "provider_status": subscribe_data.get("status"),
-                        "provider_plan_id": str(plan_id),
-                        "provider_customer_id": str(customer_id),
-                        "setup_url_host": self._setup_url_host(setup_url),
-                        "setup_url_http_status": 404,
-                    },
-                    classification="provider generated invalid setup URL",
-                )
-                self._cancel_intasend_subscription_safely(
-                    base=base,
-                    subscription_id=str(subscription_id),
-                    reference=reference,
-                    plan=getattr(subscription_plan, "plan", ""),
-                    currency=currency,
-                    amount=amount,
-                )
-                return {
-                    "url": "",
-                    "provider": self.INTASEND,
-                    "error": "IntaSend generated a subscription checkout link that is not currently available. Please try again.",
-                    "error_classification": "provider generated invalid setup URL",
-                }
 
             self._log_provider_diagnostic(
                 provider=self.INTASEND, endpoint=self._endpoint_for_log(base, "/api/v1/subscriptions/"),
@@ -383,15 +306,7 @@ class PaymentService:
                 merchant_reference=reference, plan=getattr(subscription_plan, "plan", ""),
                 currency=currency, amount=amount, recurring=True,
                 payload=subscribe_payload,
-                response={
-                    "setup_url_present": True,
-                    "subscription_id": str(subscription_id),
-                    "provider_status": subscribe_data.get("status"),
-                    "provider_plan_id": str(plan_id),
-                    "provider_customer_id": str(customer_id),
-                    "setup_url_host": self._setup_url_host(setup_url),
-                    "setup_url_probe_status": setup_probe.get("status_code"),
-                },
+                response={"setup_url_present": True, "subscription_id_present": True},
                 classification="success",
             )
             return {
@@ -736,91 +651,7 @@ class PaymentService:
         }
         if exception is not None:
             diagnostic["exception"] = type(exception).__name__
-        if classification in {"success", "cleanup_success"}:
-            logger.info("payment_provider_diagnostic=%s", diagnostic)
-        else:
-            logger.error("payment_provider_diagnostic=%s", diagnostic)
-
-    def _cancel_intasend_subscription_safely(self, *, base, subscription_id, reference, plan, currency, amount):
-        """Cancel a provider subscription whose hosted setup URL is already 404.
-
-        The subscription has been created successfully at the API layer but
-        cannot be presented to the customer. Cancel it so repeated checkout
-        attempts do not accumulate unusable pending provider subscriptions.
-        Any cleanup failure is non-fatal to the checkout error path.
-        """
-        try:
-            response = requests.post(
-                f"{base}/api/v1/subscriptions/{subscription_id}/unsubscribe/",
-                headers={
-                    "Authorization": f"Bearer {self.intasend_secret_key}",
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                },
-                timeout=min(self.timeout, 5),
-            )
-            self._log_provider_diagnostic(
-                provider=self.INTASEND,
-                endpoint=self._endpoint_for_log(base, f"/api/v1/subscriptions/{subscription_id}/unsubscribe/"),
-                method="POST",
-                status_code=response.status_code,
-                request_id=self._provider_request_id(response),
-                merchant_reference=reference,
-                plan=plan,
-                currency=currency,
-                amount=amount,
-                recurring=True,
-                payload={"subscription_id": str(subscription_id)},
-                response={"cleanup": "subscription_cancelled" if response.ok else "subscription_cleanup_failed"},
-                classification="cleanup_success" if response.ok else "cleanup_failed",
-            )
-        except requests.RequestException as exc:
-            logger.warning(
-                "IntaSend invalid setup subscription cleanup failed: %s",
-                type(exc).__name__,
-            )
-
-    @staticmethod
-    def _setup_url_host(value):
-        return (urlsplit(str(value or "").strip()).hostname or "").lower()
-
-    @classmethod
-    def _is_intasend_setup_url(cls, value):
-        parsed = urlsplit(str(value or "").strip())
-        host = (parsed.hostname or "").lower()
-        allowed_hosts = {"payment.intasend.com", "sandbox.intasend.com"}
-        return (
-            parsed.scheme == "https"
-            and host in allowed_hosts
-            and parsed.path.startswith("/subscriptions/charge/")
-            and len(parsed.path.rsplit("/", 1)[-1]) >= 8
-        )
-
-    def _probe_intasend_setup_url(self, setup_url):
-        """Check provider-owned setup links without exposing their token.
-
-        Only an explicit HTTP 404 is considered a broken provider-generated
-        link. Network errors and non-404 responses are left usable because a
-        transient probe failure must not break a checkout that the customer
-        can still open in their browser.
-        """
-        try:
-            response = requests.get(
-                str(setup_url),
-                headers={
-                    "Accept": "text/html,application/xhtml+xml",
-                    "User-Agent": "Mozilla/5.0 (compatible; AlgoBot payment checkout validator)",
-                },
-                allow_redirects=False,
-                timeout=min(self.timeout, 5),
-            )
-            return {
-                "status_code": int(response.status_code),
-                "location_host": self._setup_url_host(response.headers.get("Location", "")),
-            }
-        except requests.RequestException as exc:
-            logger.warning("IntaSend subscription setup URL probe failed: %s", type(exc).__name__)
-            return {"status_code": None, "location_host": ""}
+        logger.error("payment_provider_diagnostic=%s", diagnostic)
 
     @staticmethod
     def _is_checkout_url(value):

@@ -128,39 +128,6 @@ class BillingHardeningTests(TestCase):
 
     @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
     @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
-    def test_intasend_stale_checkout_url_is_not_reused(self, create_checkout):
-        invoice = Invoice.objects.create(
-            user=self.user,
-            amount_cents=50000,
-            currency="KES",
-            metadata={
-                "plan": "BASIC",
-                "provider": "intasend",
-                "reference": "IS-STALE-BASIC-1",
-                "state": "checkout_open",
-                "checkout_url": "https://payment.intasend.com/subscriptions/charge/stale-token",
-                "checkout_url_created_at": (timezone.now() - timedelta(minutes=5)).isoformat(),
-            },
-        )
-        create_checkout.return_value = {
-            "url": "https://payment.intasend.com/subscriptions/charge/fresh-token",
-            "session_id": "fresh-subscription",
-            "subscription_id": "fresh-subscription",
-            "reference": invoice.metadata["reference"],
-        }
-
-        response = self.client.get(reverse("billing_checkout_start") + "?plan=BASIC&provider=intasend")
-
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "https://payment.intasend.com/subscriptions/charge/fresh-token")
-        create_checkout.assert_called_once()
-        invoice.refresh_from_db()
-        self.assertEqual(invoice.metadata["checkout_url"], "https://payment.intasend.com/subscriptions/charge/fresh-token")
-        self.assertIn("checkout_url_created_at", invoice.metadata)
-
-
-    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
-    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
     def test_authenticated_checkout_start_works_with_django_simple_lazy_object(self, create_checkout):
         create_checkout.return_value = {
             "url": "https://checkout.example/pay",
