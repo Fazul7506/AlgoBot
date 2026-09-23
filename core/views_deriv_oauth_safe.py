@@ -52,13 +52,6 @@ def callback(request):
     if not valid:
         return _fail(request, "Deriv returned an invalid authorization response. Your dashboard was not opened; retry from Broker Management.", "deriv_oauth_invalid_token_response", error=reason)
     access_token = token_data["access_token"]
-    deriv_identity = {}
-    try:
-        deriv_identity = fetch_deriv_identity(access_token)
-    except Exception as exc:
-        # Identity enrichment is additive; a temporary identity endpoint failure
-        # must not invalidate a successfully authorized trading account.
-        logger.warning("deriv_oauth_identity_sync_unavailable", extra={"error": exc.__class__.__name__})
     try:
         selected, accounts = _verify_account(access_token)
         if not selected or not accounts:
@@ -69,6 +62,11 @@ def callback(request):
     except Exception as exc:
         logger.exception("deriv_oauth_broker_account_verification_failed")
         return _fail(request, "Deriv authorization succeeded, but AlgoBot could not verify the trading account. Your dashboard was not opened; retry from Broker Management.", "deriv_oauth_broker_account_verification_failed", error=exc.__class__.__name__)
+    deriv_identity = {}
+    try:
+        deriv_identity = fetch_deriv_identity(access_token)
+    except Exception as exc:
+        logger.warning("deriv_oauth_identity_sync_unavailable", extra={"error": exc.__class__.__name__})
     broker, _ = Broker.objects.get_or_create(broker_type="deriv", defaults={"name":"Deriv","status":"active","supports_live":True,"websocket_endpoint":settings.DERIV_AUTH_WS_BASE_URL})
     if request.user.is_authenticated:
         user = request.user
