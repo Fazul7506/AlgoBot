@@ -20,7 +20,7 @@ class BrokerDataProvenanceTests(TestCase):
         Candle.objects.create(
             symbol=self.market,
             timeframe="1m",
-            epoch=1900000000,
+            epoch=1900000020,
             open="100",
             high="101",
             low="99",
@@ -31,7 +31,7 @@ class BrokerDataProvenanceTests(TestCase):
             "R_100",
             "1m",
             [{
-                "epoch": 1900000000,
+                "epoch": 1900000020,
                 "open": 110,
                 "high": 112,
                 "low": 109,
@@ -39,7 +39,7 @@ class BrokerDataProvenanceTests(TestCase):
                 "volume": 12,
             }],
         )
-        candle = Candle.objects.get(symbol=self.market, timeframe="1m", epoch=1900000000)
+        candle = Candle.objects.get(symbol=self.market, timeframe="1m", epoch=1900000020)
         self.assertEqual(candle.source, "deriv_candles")
         self.assertEqual(str(candle.close), "111.00000000")
         self.assertEqual(result["source"], "deriv_candles")
@@ -48,7 +48,7 @@ class BrokerDataProvenanceTests(TestCase):
         Candle.objects.create(
             symbol=self.market,
             timeframe="1m",
-            epoch=1900000000,
+            epoch=1900000020,
             open="100",
             high="101",
             low="99",

@@ -2,6 +2,7 @@ import importlib
 import logging
 from datetime import timedelta, timezone as dt_timezone
 import socket
+from uuid import uuid4
 
 from celery.signals import task_received, task_unknown, task_rejected
 
@@ -52,6 +53,11 @@ BACKFILL_RECEIVED_STALE_AFTER = timedelta(minutes=5)
 BACKFILL_MAX_RECOVERY_ATTEMPTS = 3
 BACKFILL_AUTOMATIC_RETRY_AFTER = timedelta(minutes=15)
 BACKFILL_QUEUE = "market_data"
+
+
+def _recovery_backfill_queue(_attempts=0):
+    """Return the single authoritative queue used for all candle backfill execution."""
+    return BACKFILL_QUEUE
 
 
 def _active_symbols(symbol=None):
@@ -431,7 +437,12 @@ def _mark_backfill_run(
         return run
 
 
-@_task(acks_late=True, reject_on_worker_lost=True)
+@_task(
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=2 * 60 * 60,
+    time_limit=2 * 60 * 60 + 5 * 60,
+)
 def backfill_research_candles(count=250, symbol=None):
     """Keep research history warm without competing with the initial warm-up."""
     from django.db import close_old_connections
@@ -565,14 +576,16 @@ def ensure_initial_candle_backfill(count=5000):
             run.refresh_from_db()
 
         queue_name = BACKFILL_QUEUE
+        task_id = uuid4().hex
+        run.task_id = task_id
+        run.dispatch_at = timezone.now()
+        run.save(update_fields=["task_id", "dispatch_at"])
         task = run_initial_candle_backfill.apply_async(
             args=(run.pk,),
             kwargs={"count": int(count), "symbol": symbol or None},
             queue=queue_name,
+            task_id=task_id,
         )
-        run.task_id = task.id
-        run.dispatch_at = timezone.now()
-        run.save(update_fields=["task_id", "dispatch_at"])
         CandleBackfillEvent.objects.create(
             run=run,
             level="notice",
@@ -599,7 +612,12 @@ def ensure_initial_candle_backfill(count=5000):
         close_old_connections()
 
 
-@_task(acks_late=True, reject_on_worker_lost=True)
+@_task(
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=4 * 60 * 60,
+    time_limit=4 * 60 * 60 + 5 * 60,
+)
 def run_initial_candle_backfill(run_id, count=5000, symbol=None):
     """Run the one-time historical warm-up from an available market-data Celery consumer."""
     from django.db import close_old_connections, transaction
@@ -784,19 +802,25 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 logger.warning("Unable to revoke stale candle backfill task", extra={"task_id": old_task_id})
 
         try:
+            task_id = uuid4().hex
+            with transaction.atomic():
+                current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
+                if current.status != "running":
+                    return {"recovered": []}
+                current.task_id = task_id
+                current.dispatch_at = timezone.now()
+                current.error = ""
+                current.save(update_fields=["task_id", "dispatch_at", "error"])
             task = run_initial_candle_backfill.apply_async(
                 args=(run_id,),
                 kwargs={"count": count, "symbol": symbol},
                 queue=BACKFILL_QUEUE,
+                task_id=task_id,
             )
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
                 if current.status == "running":
-                    current.task_id = task.id
-                    current.dispatch_at = timezone.now()
-                    current.error = ""
-                    current.save(update_fields=["task_id", "dispatch_at", "error"])
-                    recovered.append({"scope": "initial", "run_id": run_id, "task_id": task.id})
+                    recovered.append({"scope": "initial", "run_id": run_id, "task_id": task_id})
         except Exception as exc:
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
@@ -805,7 +829,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     current.error = f"Automatic Celery retry failed: {exc}"
                     current.completed_at = timezone.now()
                     current.save(update_fields=["status", "error", "completed_at"])
-                    CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts)})
+                    CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts), "recovery_attempts": recovery_attempts},)
             logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
         return {"recovered": recovered}
     finally:

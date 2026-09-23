@@ -79,7 +79,7 @@ class CandleBackfillUiTests(TestCase):
         run = CandleBackfillRun.objects.get(scope="initial")
         self.assertEqual(run.status, "running")
         self.assertEqual(run.count, 5000)
-        self.assertEqual(run.task_id, "ui-start-task")
+        self.assertTrue(run.task_id)
         self.assertIsNotNone(run.dispatch_at)
         self.assertGreaterEqual(run.requested_at, before - timedelta(seconds=2))
         self.assertEqual(run.symbol, "")
@@ -88,11 +88,12 @@ class CandleBackfillUiTests(TestCase):
                 run=run, event_type="dispatch"
             ).exists()
         )
-        publish.assert_called_once_with(
-            args=(run.pk,),
-            kwargs={"count": 5000, "symbol": None},
-            queue="market_data",
-        )
+        publish.assert_called_once()
+        call = publish.call_args
+        self.assertEqual(call.kwargs["args"], (run.pk,))
+        self.assertEqual(call.kwargs["kwargs"], {"count": 5000, "symbol": None})
+        self.assertEqual(call.kwargs["queue"], "market_data")
+        self.assertEqual(call.kwargs["task_id"], run.task_id)
 
     def test_manual_dispatch_uses_the_dedicated_market_data_queue(self):
         published = SimpleNamespace(id="market-data-task")
@@ -107,12 +108,13 @@ class CandleBackfillUiTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         run = CandleBackfillRun.objects.get(scope="initial")
-        self.assertEqual(run.task_id, "market-data-task")
-        publish.assert_called_once_with(
-            args=(run.pk,),
-            kwargs={"count": 5000, "symbol": None},
-            queue="market_data",
-        )
+        self.assertTrue(run.task_id)
+        publish.assert_called_once()
+        call = publish.call_args
+        self.assertEqual(call.kwargs["args"], (run.pk,))
+        self.assertEqual(call.kwargs["kwargs"], {"count": 5000, "symbol": None})
+        self.assertEqual(call.kwargs["queue"], "market_data")
+        self.assertEqual(call.kwargs["task_id"], run.task_id)
         self.assertTrue(
             CandleBackfillEvent.objects.filter(
                 run=run,
@@ -153,7 +155,7 @@ class CandleBackfillUiTests(TestCase):
             error="Deriv timeout",
         )
         CandleBackfillRun.objects.filter(pk=run.pk).update(requested_at=old_requested)
-        published = SimpleNamespace(id="retry-task")
+        published = SimpleNamespace(id="ignored-celery-generated-id")
         with patch(
             "apps.market_data.tasks.run_initial_candle_backfill.apply_async",
             return_value=published,
@@ -166,7 +168,7 @@ class CandleBackfillUiTests(TestCase):
         run.refresh_from_db()
         self.assertEqual(run.status, "running")
         self.assertEqual(run.symbol, "R_100")
-        self.assertEqual(run.task_id, "retry-task")
+        self.assertTrue(run.task_id)
         self.assertGreater(run.requested_at, old_requested)
 
     def test_json_payload_exposes_render_aligned_state_and_actual_delivery_queue(self):
