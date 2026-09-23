@@ -53,9 +53,18 @@ class DerivOAuthTests(TestCase):
         accounts_response.json.return_value = {"data": accounts if accounts is not None else [{"account_id": "DOT90004580", "balance": 10000, "currency": "USD", "account_type": "demo", "status": "active"}]}
         get.return_value = accounts_response
 
+    @patch("core.views_deriv_oauth_safe.fetch_deriv_identity", return_value={
+        "user_id": 12345,
+        "loginid": "DOT90004580",
+        "email": "deriv-user@example.com",
+        "fullname": "Deriv User",
+        "country": "Kenya",
+        "username": "derivuser",
+        "access_token": "MUST-NOT-BE-PERSISTED",
+    })
     @patch("core.views_deriv_oauth_safe.requests.get")
     @patch("core.views_deriv_oauth_safe.requests.post")
-    def test_callback_persists_account_without_blocking_on_websocket(self, post, get):
+    def test_callback_persists_account_without_blocking_on_websocket(self, post, get, fetch_identity):
         self._oauth_session()
         self._mock_token_exchange(post)
         self._mock_account_response(get)
@@ -67,12 +76,21 @@ class DerivOAuthTests(TestCase):
         account = BrokerAccount.objects.get(user=user, account_id="DOT90004580")
         self.assertEqual(account.status, "active")
         self.assertEqual(account.credentials.get("connection_health"), "not_checked")
+        identity = account.credentials.get("deriv_identity")
+        self.assertEqual(identity["email"], "deriv-user@example.com")
+        self.assertEqual(identity["username"], "derivuser")
+        self.assertNotIn("access_token", identity)
+        self.assertEqual(user.email, "deriv-user@example.com")
+        self.assertEqual(user.first_name, "Deriv")
+        self.assertEqual(user.last_name, "User")
+        self.assertEqual(user.trading_profile.country, "Kenya")
         self.assertNotIn(SESSION_KEY, self.client.session)
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
         self.assertTrue(Subscription.objects.filter(user=user).exists())
         self.assertTrue(BotSettings.objects.filter(user=user).exists())
         post.assert_called_once()
         get.assert_called_once()
+        fetch_identity.assert_called_once_with("token")
 
     @patch("core.views_deriv_oauth_safe.requests.get")
     @patch("core.views_deriv_oauth_safe.requests.post")

@@ -212,7 +212,10 @@ class PaymentService:
         customer_payload = {
             "email": getattr(user, "email", "") or "",
             "first_name": getattr(user, "first_name", "") or getattr(user, "username", "Customer"),
-            "last_name": getattr(user, "last_name", "") or "",
+            # IntaSend validates last_name as non-blank for recurring customers.
+            # A user may legitimately have no surname in Django, so use a
+            # provider-safe neutral fallback rather than sending an empty field.
+            "last_name": getattr(user, "last_name", "") or "Customer",
             "reference": f"{reference}-CUSTOMER",
             "country": "KE" if currency.upper() == "KES" else "",
         }
