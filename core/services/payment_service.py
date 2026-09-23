@@ -736,7 +736,7 @@ class PaymentService:
         }
         if exception is not None:
             diagnostic["exception"] = type(exception).__name__
-        if classification == "success":
+        if classification in {"success", "cleanup_success"}:
             logger.info("payment_provider_diagnostic=%s", diagnostic)
         else:
             logger.error("payment_provider_diagnostic=%s", diagnostic)
