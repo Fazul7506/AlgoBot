@@ -180,13 +180,11 @@ def login_view(request):
                 'message': 'Invalid credentials'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        # Update last login
-        try:
-            profile = user.trading_profile
-            profile.last_login_at = timezone.now()
-            profile.save(update_fields=['last_login_at'])
-        except:
-            pass
+        # Update last login without silently discarding a missing/corrupt profile.
+        UserProfile.objects.update_or_create(
+            user=user,
+            defaults={'last_login_at': timezone.now()},
+        )
         
         # Generate JWT token
         refresh = RefreshToken.for_user(user)
