@@ -2,6 +2,7 @@ import importlib
 import logging
 from datetime import timedelta, timezone as dt_timezone
 import socket
+from uuid import uuid4
 
 from celery.signals import task_received, task_unknown, task_rejected
 
@@ -575,14 +576,16 @@ def ensure_initial_candle_backfill(count=5000):
             run.refresh_from_db()
 
         queue_name = BACKFILL_QUEUE
+        task_id = uuid4().hex
+        run.task_id = task_id
+        run.dispatch_at = timezone.now()
+        run.save(update_fields=["task_id", "dispatch_at"])
         task = run_initial_candle_backfill.apply_async(
             args=(run.pk,),
             kwargs={"count": int(count), "symbol": symbol or None},
             queue=queue_name,
+            task_id=task_id,
         )
-        run.task_id = task.id
-        run.dispatch_at = timezone.now()
-        run.save(update_fields=["task_id", "dispatch_at"])
         CandleBackfillEvent.objects.create(
             run=run,
             level="notice",
@@ -799,19 +802,25 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 logger.warning("Unable to revoke stale candle backfill task", extra={"task_id": old_task_id})
 
         try:
+            task_id = uuid4().hex
+            with transaction.atomic():
+                current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
+                if current.status != "running":
+                    return {"recovered": []}
+                current.task_id = task_id
+                current.dispatch_at = timezone.now()
+                current.error = ""
+                current.save(update_fields=["task_id", "dispatch_at", "error"])
             task = run_initial_candle_backfill.apply_async(
                 args=(run_id,),
                 kwargs={"count": count, "symbol": symbol},
                 queue=BACKFILL_QUEUE,
+                task_id=task_id,
             )
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
                 if current.status == "running":
-                    current.task_id = task.id
-                    current.dispatch_at = timezone.now()
-                    current.error = ""
-                    current.save(update_fields=["task_id", "dispatch_at", "error"])
-                    recovered.append({"scope": "initial", "run_id": run_id, "task_id": task.id})
+                    recovered.append({"scope": "initial", "run_id": run_id, "task_id": task_id})
         except Exception as exc:
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
