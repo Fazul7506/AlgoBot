@@ -4,6 +4,7 @@ from django.views.decorators.http import require_http_methods
 from .constants import SUBSCRIPTION_PLANS, BILLING_CYCLES, ROLES
 from .models import Tenant, Organization, Workspace, Subscription, License, Team, TeamMember, UsageMetric
 from .services import TenantEngine, OrganizationService, WorkspaceService, LicenseService, InvitationService, QuotaService
+from core.models import Subscription as CoreSubscription
 
 def _tenant_for(user):
     tenant = Tenant.objects.filter(owner=user).prefetch_related(
@@ -17,8 +18,8 @@ def _tenant_for(user):
 def _serialize_tenant(tenant):
     if not tenant:
         return None
-    sub = getattr(tenant, "subscription", None)
-    license_obj = getattr(sub, "license", None) if sub else None
+    sub = CoreSubscription.objects.filter(user=tenant.owner).first() if tenant.owner_id else None
+    license_obj = getattr(getattr(tenant, "subscription", None), "license", None) if getattr(tenant, "subscription", None) else None
     orgs = []
     for org in tenant.organizations.all():
         orgs.append({
@@ -36,9 +37,12 @@ def _serialize_tenant(tenant):
         "id": tenant.id, "name": tenant.name, "slug": tenant.slug,
         "status": tenant.status, "timezone": tenant.timezone, "currency": tenant.currency,
         "subscription": {
-            "plan": sub.plan, "status": sub.status, "billing_cycle": sub.billing_cycle,
-            "price": str(sub.price), "renewal_date": sub.renewal_date.isoformat() if sub.renewal_date else None,
-            "trial_end": sub.trial_end.isoformat() if sub.trial_end else None,
+            "plan": {"FREE": "free", "BASIC": "starter", "PRO": "professional", "ENTERPRISE": "enterprise"}.get(sub.plan, str(sub.plan).lower()),
+            "status": "active" if sub.is_active and (not sub.expires_at or sub.expires_at > __import__("django.utils.timezone", fromlist=["timezone"]).timezone.now()) else "expired",
+            "billing_cycle": "monthly",
+            "price": str((Decimal(sub.price_cents or 0) / Decimal("100"))),
+            "renewal_date": sub.expires_at.date().isoformat() if sub.expires_at else None,
+            "trial_end": None,
         } if sub else None,
         "license": {
             "active": license_obj.is_active, "max_users": license_obj.max_users,
