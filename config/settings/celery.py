@@ -5,6 +5,8 @@ request timeout. Publishing is deliberately bounded and non-retrying for web
 requests, while dedicated workers may reconnect normally.
 """
 
+from kombu import Queue
+
 from .cache import CELERY_BROKER_URL, CELERY_RESULT_BACKEND
 from .utils import env_bool
 
@@ -48,6 +50,16 @@ CELERY_WORKER_SEND_TASK_EVENTS = True
 CELERY_WORKER_ENABLE_REMOTE_CONTROL = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
+
+# Declare every production queue explicitly. This prevents a broker-side queue
+# from being created accidentally by a typo and makes the isolated market-data
+# consumer contract inspectable during worker preflight.
+CELERY_TASK_DEFAULT_QUEUE = "celery"
+CELERY_TASK_CREATE_MISSING_QUEUES = False
+CELERY_TASK_QUEUES = (
+    Queue("celery"),
+    Queue("market_data"),
+)
 
 # Explicit imports make the production worker deterministic even if Django's
 # autodiscovery behavior changes. This is especially important for the isolated
