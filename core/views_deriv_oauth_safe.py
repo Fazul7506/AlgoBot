@@ -10,7 +10,7 @@ from apps.brokers.models import Broker, BrokerAccount
 from core.account_context import select_account
 from core.models import BotSettings, Subscription, UserProfile
 from core.services.oauth_service import DerivOAuthService
-from core.views_broker_oauth import _account_id, _persist_deriv_account, _verify_account
+from core.views_broker_oauth import _account_id, _persist_deriv_account, _verify_account, fetch_deriv_identity, sync_deriv_user_identity
 
 logger = logging.getLogger("oauth")
 
@@ -52,6 +52,13 @@ def callback(request):
     if not valid:
         return _fail(request, "Deriv returned an invalid authorization response. Your dashboard was not opened; retry from Broker Management.", "deriv_oauth_invalid_token_response", error=reason)
     access_token = token_data["access_token"]
+    deriv_identity = {}
+    try:
+        deriv_identity = fetch_deriv_identity(access_token)
+    except Exception as exc:
+        # Identity enrichment is additive; a temporary identity endpoint failure
+        # must not invalidate a successfully authorized trading account.
+        logger.warning("deriv_oauth_identity_sync_unavailable", extra={"error": exc.__class__.__name__})
     try:
         selected, accounts = _verify_account(access_token)
         if not selected or not accounts:
@@ -82,6 +89,8 @@ def callback(request):
     auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     request.session.save()
     _ensure_defaults(user)
+    profile = UserProfile.objects.get(user=user)
+    sync_deriv_user_identity(user, deriv_identity, profile=profile)
     expires_in = int(token_data.get("expires_in", 3600))
     expires_at = DerivOAuthService.parse_token_expiry(expires_in)
     refresh_token = token_data.get("refresh_token", "")
@@ -96,7 +105,7 @@ def callback(request):
             if current_id == selected_account_id:
                 return _fail(request, "That Deriv account is already connected to another AlgoBot user. Your dashboard was not opened.", "deriv_oauth_account_ownership_conflict")
             continue
-        persisted = _persist_deriv_account(user=user, broker=broker, record=record, access_token=access_token, refresh_token=refresh_token, expires_at=expires_at, websocket_balance={}, websocket_health="not_checked")
+        persisted = _persist_deriv_account(user=user, broker=broker, record=record, access_token=access_token, refresh_token=refresh_token, expires_at=expires_at, websocket_balance={}, websocket_health="not_checked", deriv_identity=deriv_identity)
         if persisted:
             persisted_ids.append(current_id)
             if current_id == selected_account_id:
