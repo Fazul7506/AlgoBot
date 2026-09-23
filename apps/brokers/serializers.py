@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
+from . import constants as broker_constants
 from core.account_context import get_active_account
 
 class BrokerSerializer(serializers.ModelSerializer):
@@ -78,14 +79,14 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def validate_direction(self, value):
         value = str(value).strip().lower()
-        allowed = {choice[0] for choice in Order.DIRECTION_CHOICES}
+        allowed = set(broker_constants.DIRECTIONS)
         if value not in allowed:
             raise serializers.ValidationError(f'Unsupported order direction: {value}')
         return value
 
     def validate_order_type(self, value):
         value = str(value).strip().lower()
-        allowed = {choice[0] for choice in Order.ORDER_TYPE_CHOICES}
+        allowed = set(broker_constants.ORDER_TYPES)
         if value not in allowed:
             raise serializers.ValidationError(f'Unsupported order type: {value}')
         return value
