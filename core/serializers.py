@@ -17,10 +17,10 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    """User profile with extended information"""
+    """User profile with server-owned security/referral fields protected."""
     user = UserSerializer(read_only=True)
     deriv_account_id = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = UserProfile
         fields = [
@@ -31,30 +31,38 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'avatar_url', 'referral_code', 'referral_credits',
             'last_login_at', 'created_at', 'updated_at', 'deriv_account_id'
         ]
-        read_only_fields = ['id', 'user', 'email_verified', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id', 'user', 'email_verified', 'referral_code', 'referral_credits',
+            'last_login_at', 'created_at', 'updated_at', 'deriv_account_id'
+        ]
 
     def get_deriv_account_id(self, obj):
-        """Get connected Deriv account ID if available"""
-        try:
-            return obj.user.deriv_account.account_id
-        except:
-            return None
+        """Get connected Deriv account ID if available."""
+        return getattr(getattr(obj.user, 'deriv_account', None), 'account_id', None)
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
-    """Subscription plan information"""
+    """Subscription state; billing-owned fields are never client-writable."""
     class Meta:
         model = Subscription
         fields = [
             'id', 'plan', 'max_strategies', 'max_concurrent_trades',
             'api_calls_per_day', 'is_active', 'price_cents', 'currency',
-            'created_at', 'expires_at'
+            'recurring', 'provider', 'provider_subscription_id',
+            'cancelled_at', 'cancellation_reason', 'created_at', 'renewed_at',
+            'expires_at'
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = [
+            'id', 'plan', 'max_strategies', 'max_concurrent_trades',
+            'api_calls_per_day', 'is_active', 'price_cents', 'currency',
+            'recurring', 'provider', 'provider_subscription_id',
+            'cancelled_at', 'cancellation_reason', 'created_at', 'renewed_at',
+            'expires_at'
+        ]
 
 
 class BotSettingsSerializer(serializers.ModelSerializer):
-    """Bot settings and trading preferences"""
+    """Bot preferences with server-owned runtime state protected."""
     class Meta:
         model = BotSettings
         fields = [
@@ -66,13 +74,15 @@ class BotSettingsSerializer(serializers.ModelSerializer):
             'telegram_chat_id', 'telegram_username',
             'brevo_sender_email', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'status', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id', 'status', 'paper_balance', 'created_at', 'updated_at'
+        ]
 
 
 class AuditLogSerializer(serializers.ModelSerializer):
     """Audit log entry"""
     username = serializers.CharField(source='user.username', read_only=True)
-    
+
     class Meta:
         model = AuditLog
         fields = [
@@ -90,7 +100,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'id', 'user', 'external_id', 'amount_cents', 'currency',
             'paid', 'created_at'
         ]
-        read_only_fields = ['id', 'user', 'created_at']
+        read_only_fields = ['id', 'user', 'external_id', 'amount_cents', 'currency', 'paid', 'created_at']
 
 
 class PaymentSerializer(serializers.ModelSerializer):
@@ -101,21 +111,21 @@ class PaymentSerializer(serializers.ModelSerializer):
             'id', 'user', 'external_id', 'amount_cents', 'currency',
             'status', 'created_at'
         ]
-        read_only_fields = ['id', 'user', 'created_at']
+        read_only_fields = ['id', 'user', 'external_id', 'amount_cents', 'currency', 'status', 'created_at']
 
 
 class ReferralRewardSerializer(serializers.ModelSerializer):
     """Referral reward record"""
     referrer_username = serializers.CharField(source='referrer.username', read_only=True)
     referee_username = serializers.CharField(source='referee.username', read_only=True)
-    
+
     class Meta:
         model = ReferralReward
         fields = [
             'id', 'referrer', 'referrer_username', 'referee', 'referee_username',
             'amount_credits', 'awarded_at'
         ]
-        read_only_fields = ['id', 'awarded_at']
+        read_only_fields = ['id', 'referrer', 'referee', 'amount_credits', 'awarded_at']
 
 
 class EncryptedCredentialSerializer(serializers.ModelSerializer):
@@ -125,60 +135,45 @@ class EncryptedCredentialSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'service_name', 'credential_type', 'updated_at'
         ]
-        read_only_fields = ['id', 'updated_at']
+        read_only_fields = ['id', 'service_name', 'credential_type', 'updated_at']
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     """User registration serializer"""
-    password = serializers.CharField(
-        write_only=True,
-        required=True,
-        validators=[validate_password]
-    )
+    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password_confirm = serializers.CharField(write_only=True, required=True)
-    
+
     class Meta:
         model = User
         fields = ['username', 'email', 'first_name', 'last_name', 'password', 'password_confirm']
-        extra_kwargs = {
-            'email': {'required': True},
-        }
-    
+        extra_kwargs = {'email': {'required': True}}
+
     def validate(self, data):
-        """Validate passwords match"""
         if data['password'] != data['password_confirm']:
             raise serializers.ValidationError({"password": "Passwords must match."})
         return data
-    
+
     def create(self, validated_data):
-        """Create user and related objects"""
         validated_data.pop('password_confirm', None)
-        user = User.objects.create_user(**validated_data)
-        
-        # Create related objects via signals
-        return user
+        return User.objects.create_user(**validated_data)
 
 
 class LoginSerializer(serializers.Serializer):
     """User login serializer"""
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
-    
+
     def validate(self, data):
-        """Authenticate user"""
         from django.contrib.auth import authenticate
         username = data['username']
         password = data['password']
-
         user = authenticate(username=username, password=password)
         if not user:
-            # Fallback if the user submitted an email address instead of a username
             try:
                 user_obj = User.objects.get(email=username)
                 user = authenticate(username=user_obj.username, password=password)
             except User.DoesNotExist:
                 user = None
-
         if not user:
             raise serializers.ValidationError("Invalid username or password")
         data['user'] = user
@@ -188,9 +183,8 @@ class LoginSerializer(serializers.Serializer):
 class PasswordResetSerializer(serializers.Serializer):
     """Password reset request serializer"""
     email = serializers.EmailField()
-    
+
     def validate_email(self, value):
-        """Check if user exists"""
         if not User.objects.filter(email=value).exists():
             raise serializers.ValidationError("No user found with this email address.")
         return value
@@ -199,14 +193,10 @@ class PasswordResetSerializer(serializers.Serializer):
 class PasswordResetConfirmSerializer(serializers.Serializer):
     """Password reset confirmation serializer"""
     token = serializers.CharField()
-    new_password = serializers.CharField(
-        write_only=True,
-        validators=[validate_password]
-    )
+    new_password = serializers.CharField(write_only=True, validators=[validate_password])
     new_password_confirm = serializers.CharField(write_only=True)
-    
+
     def validate(self, data):
-        """Validate passwords match"""
         if data['new_password'] != data['new_password_confirm']:
             raise serializers.ValidationError({"new_password": "Passwords must match."})
         return data
@@ -215,14 +205,10 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 class ChangePasswordSerializer(serializers.Serializer):
     """Change password serializer"""
     old_password = serializers.CharField(write_only=True)
-    new_password = serializers.CharField(
-        write_only=True,
-        validators=[validate_password]
-    )
+    new_password = serializers.CharField(write_only=True, validators=[validate_password])
     new_password_confirm = serializers.CharField(write_only=True)
-    
+
     def validate(self, data):
-        """Validate passwords match"""
         if data['new_password'] != data['new_password_confirm']:
             raise serializers.ValidationError({"new_password": "Passwords must match."})
         return data
