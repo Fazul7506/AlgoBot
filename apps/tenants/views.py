@@ -1,5 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from .constants import SUBSCRIPTION_PLANS, BILLING_CYCLES, ROLES
 from .models import Tenant, Organization, Workspace, Subscription, License, Team, TeamMember, UsageMetric
@@ -38,7 +39,7 @@ def _serialize_tenant(tenant):
         "status": tenant.status, "timezone": tenant.timezone, "currency": tenant.currency,
         "subscription": {
             "plan": {"FREE": "free", "BASIC": "starter", "PRO": "professional", "ENTERPRISE": "enterprise"}.get(sub.plan, str(sub.plan).lower()),
-            "status": "active" if sub.is_active and (not sub.expires_at or sub.expires_at > __import__("django.utils.timezone", fromlist=["timezone"]).timezone.now()) else "expired",
+            "status": "active" if sub.is_active and (not sub.expires_at or sub.expires_at > timezone.now()) else "expired",
             "billing_cycle": "monthly",
             "price": str((Decimal(sub.price_cents or 0) / Decimal("100"))),
             "renewal_date": sub.expires_at.date().isoformat() if sub.expires_at else None,
