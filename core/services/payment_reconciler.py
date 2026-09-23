@@ -215,12 +215,12 @@ class PaymentReconciler:
         referrer = getattr(profile, "referred_by", None) if profile else None
         if not referrer:
             return
-        reward_amount = float(getattr(settings, "REFERRAL_CREDIT_AMOUNT", 0.0) or 0.0)
+        reward_amount = Decimal(str(getattr(settings, "REFERRAL_CREDIT_AMOUNT", "0") or "0"))
         if reward_amount <= 0:
-            reward_amount = (invoice.amount_cents / 100.0) * 0.05
+            reward_amount = (Decimal(invoice.amount_cents or 0) / Decimal("100")) * Decimal("0.05")
         reward, created = ReferralReward.objects.get_or_create(referrer=referrer, referee=user, defaults={"amount_credits": reward_amount})
         if created:
-            profile.referral_credits = (profile.referral_credits or 0.0) + reward_amount
+            profile.referral_credits = (profile.referral_credits or Decimal("0")) + reward_amount
             profile.save(update_fields=["referral_credits"])
 
     @classmethod
