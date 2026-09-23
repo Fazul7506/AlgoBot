@@ -7,7 +7,12 @@ class TenantServicesTests(TestCase):
     def test_tenant_subscription_license_and_quota(self):
         user = get_user_model().objects.create_user(username='owner')
         tenant = TenantEngine().create_tenant('Acme Capital', owner=user)
-        core_subscription = CoreSubscription.objects.create(user=user, plan='PRO', price_cents=99900, currency='kes', is_active=True)
+        core_subscription = CoreSubscription.objects.get(user=user)
+        core_subscription.plan = 'PRO'
+        core_subscription.price_cents = 99900
+        core_subscription.currency = 'kes'
+        core_subscription.is_active = True
+        core_subscription.save(update_fields=['plan', 'price_cents', 'currency', 'is_active'])
         subscription = SubscriptionService().sync_from_core(tenant, core_subscription)
         license_obj = LicenseService().issue(subscription, max_users=10, max_brokers=3, max_strategies=20)
         metric = QuotaService().enforce(tenant, 'api_calls')
