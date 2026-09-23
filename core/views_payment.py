@@ -23,7 +23,8 @@ def pesapal_webhook(request):
     ack = (result or {}).get("ipn_ack") if result else None
     if ack:
         return JsonResponse(ack)
-    return HttpResponse(status=400)
+    # A provider-status lookup failure is retryable; malformed notifications are not.
+    return HttpResponse(status=500)
 
 
 @require_http_methods(["GET"])
