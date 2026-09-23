@@ -31,7 +31,7 @@ class PaymentService:
         self.intasend_public_key = getattr(settings, "INTASEND_PUBLIC_KEY", "")
         self.intasend_secret_key = getattr(settings, "INTASEND_SECRET_KEY", "")
         self.intasend_webhook_challenge = getattr(settings, "INTASEND_WEBHOOK_CHALLENGE", "")
-        self.intasend_base_url = str(getattr(settings, "INTASEND_API_BASE_URL", "https://api.intasend.com") or "https://api.intasend.com").strip().rstrip("/")
+        self.intasend_base_url = self._normalize_intasend_base_url(getattr(settings, "INTASEND_API_BASE_URL", "https://payment.intasend.com"))
         self.intasend_mobile_tariff = str(getattr(settings, "INTASEND_MOBILE_TARIFF", "") or "").strip()
         self.intasend_card_tariff = str(getattr(settings, "INTASEND_CARD_TARIFF", "") or "").strip()
         self.pesapal_consumer_key = getattr(settings, "PESAPAL_CONSUMER_KEY", "")
@@ -600,6 +600,17 @@ class PaymentService:
             logger.warning("Non-positive PAYMENT_HTTP_TIMEOUT; using 20 seconds")
             return 20
         return timeout
+
+    @staticmethod
+    def _normalize_intasend_base_url(value):
+        raw = str(value or "https://payment.intasend.com").strip().strip('"').strip("'").rstrip("/")
+        parsed = urlsplit(raw)
+        if parsed.scheme == "https" and (parsed.hostname or "").lower() == "api.intasend.com":
+            logger.warning(
+                "IntaSend legacy API host configured; normalizing to current live host payment.intasend.com"
+            )
+            return "https://payment.intasend.com"
+        return raw or "https://payment.intasend.com"
 
     def _intasend_environment_error(self):
         key = str(self.intasend_public_key or "").strip().lower()
