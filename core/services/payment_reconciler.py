@@ -16,7 +16,8 @@ class PaymentReconciler:
     """Persist provider callbacks using the canonical Payment model states."""
 
     SUCCESS = {"COMPLETE", "COMPLETED", "SUCCESS", "SUCCEEDED", "PAID"}
-    FAILED = {"FAILED", "FAILURE", "INVALID", "REVERSED", "CANCELLED", "CANCELED"}
+    FAILED = {"FAILED", "FAILURE", "INVALID", "REVERSED"}
+    PROCESSING = {"PROCESSING", "IN_PROGRESS", "IN-PROGRESS"}
 
     @staticmethod
     def normalize_status(value):
@@ -25,6 +26,10 @@ class PaymentReconciler:
             return "COMPLETED"
         if value in PaymentReconciler.FAILED:
             return "FAILED"
+        if value in PaymentReconciler.PROCESSING:
+            return "PROCESSING"
+        if value in {"CANCELLED", "CANCELED"}:
+            return "CANCELLED"
         return "PENDING"
 
     @staticmethod
