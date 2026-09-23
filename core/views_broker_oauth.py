@@ -155,7 +155,7 @@ def sync_deriv_user_identity(user, identity: dict | None, profile=None):
             profile.avatar_url = avatar_url
             profile_changed.append("avatar_url")
         if profile_changed:
-            profile.save(update_fields=sorted(set(profile_changed) + ["updated_at"]))
+            profile.save(update_fields=sorted(set(profile_changed) | {"updated_at"}))
 
     return safe
 
