@@ -242,7 +242,7 @@ class PaymentReconciler:
                         subscription.provider_subscription_id = str(data["subscription_id"])[:255]
                         subscription.save(update_fields=["provider", "provider_subscription_id"])
             if not subscription:
-                return {"received": True, "provider": "intasend", "unresolved_subscription": True}
+                return {"received": True, "provider": "intasend", "unresolved_subscription": True, "retryable": True}
             results = []
             for item in data["payments"]:
                 invoice_data = item.get("invoice") if isinstance(item, dict) else {}
@@ -264,7 +264,7 @@ class PaymentReconciler:
         verified = PaymentService().get_intasend_payment_status(str(invoice_id)) if invoice_id else None
         if not verified:
             cls._finish_webhook(event, error="provider_status_unavailable")
-            return None
+            return {"received": True, "provider": "intasend", "external_id": str(external_id), "retryable": True}
         invoice_data = verified.get("invoice") if isinstance(verified, dict) else {}
         invoice_data = invoice_data if isinstance(invoice_data, dict) else verified
         result = cls.reconcile(
@@ -289,7 +289,7 @@ class PaymentReconciler:
             return None
         verified = PaymentService().get_pesapal_transaction_status(str(tracking_id))
         if not verified:
-            return None
+            return {"received": True, "provider": "pesapal", "external_id": str(tracking_id), "retryable": True}
         event, created = cls._record_webhook("pesapal", data, raw, tracking_id, verified.get("payment_status_description"))
         ack = {"orderNotificationType": data.get("OrderNotificationType") or data.get("orderNotificationType") or "IPNCHANGE", "orderTrackingId": str(tracking_id), "orderMerchantReference": merchant_reference, "status": 200}
         if not created and event.processed_at:
