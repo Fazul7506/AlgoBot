@@ -287,7 +287,7 @@ services:
     plan: starter
     buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt
     autoDeployTrigger: commit
-    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && CELERY_BROKER_URL="$REDIS_URL" CELERY_RESULT_BACKEND="$REDIS_URL" python manage.py check_market_data_worker && CELERY_BROKER_URL="$REDIS_URL" CELERY_RESULT_BACKEND="$REDIS_URL" exec celery -A deriv_platform.celery worker --loglevel=INFO --include=apps.market_data.tasks -Q market_data --concurrency=1 --prefetch-multiplier=1 --max-tasks-per-child=20 --hostname=market-data@%h
+    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && CELERY_BROKER_URL="$REDIS_URL" CELERY_RESULT_BACKEND="$REDIS_URL" python manage.py check_market_data_worker && CELERY_BROKER_URL="$REDIS_URL" CELERY_RESULT_BACKEND="$REDIS_URL" exec celery -A deriv_platform.celery worker --loglevel=INFO --include=apps.market_data.tasks --queues=market_data --concurrency=1 --prefetch-multiplier=1 --max-tasks-per-child=20 --hostname=market-data@%h
     maxShutdownDelaySeconds: 60
     envVars:
       - key: DJANGO_ENV
