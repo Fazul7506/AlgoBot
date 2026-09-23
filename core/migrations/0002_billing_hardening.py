@@ -99,8 +99,8 @@ class Migration(migrations.Migration):
                     )
                 ],
                 "indexes": [
-                    models.Index(fields=("provider", "external_id"), name="core_webhook_provider_external_idx"),
-                    models.Index(fields=("provider", "-received_at"), name="core_webhook_provider_received_idx"),
+                    models.Index(fields=("provider", "external_id"), name="core_wh_provider_ext_idx"),
+                    models.Index(fields=("provider", "-received_at"), name="core_wh_provider_rcv_idx"),
                 ],
             },
         ),
