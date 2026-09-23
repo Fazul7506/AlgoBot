@@ -155,6 +155,7 @@ class CandleBackfillUiTests(TestCase):
             error="Deriv timeout",
         )
         CandleBackfillRun.objects.filter(pk=run.pk).update(requested_at=old_requested)
+        published = SimpleNamespace(id="ignored-celery-generated-id")
         with patch(
             "apps.market_data.tasks.run_initial_candle_backfill.apply_async",
             return_value=published,
