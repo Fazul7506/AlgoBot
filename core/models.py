@@ -244,7 +244,7 @@ class PaymentWebhookEvent(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['provider', 'event_key'], name='core_webhook_provider_event_uniq')]
-        indexes = [models.Index(fields=['provider', 'external_id']), models.Index(fields=['provider', '-received_at'])]
+        indexes = [models.Index(fields=['provider', 'external_id'], name="core_wh_provider_ext_idx"), models.Index(fields=['provider', '-received_at'], name="core_wh_provider_rcv_idx")]
 
     def __str__(self):
         return f"{self.provider}:{self.event_key}"
