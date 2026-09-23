@@ -21,7 +21,6 @@ def _serialize_tenant(tenant):
     if not tenant:
         return None
     sub = CoreSubscription.objects.filter(user=tenant.owner).first() if tenant.owner_id else None
-    license_obj = getattr(getattr(tenant, "subscription", None), "license", None) if getattr(tenant, "subscription", None) else None
     orgs = []
     for org in tenant.organizations.all():
         orgs.append({
@@ -47,10 +46,12 @@ def _serialize_tenant(tenant):
             "trial_end": None,
         } if sub else None,
         "license": {
-            "active": license_obj.is_active, "max_users": license_obj.max_users,
-            "max_brokers": license_obj.max_brokers, "max_strategies": license_obj.max_strategies,
-            "expires_at": license_obj.expires_at.isoformat() if license_obj.expires_at else None,
-        } if license_obj else None,
+            "active": bool(sub and sub.is_active and (not sub.expires_at or sub.expires_at > timezone.now())),
+            "max_users": 1 if sub else 0,
+            "max_brokers": sub.max_concurrent_trades if sub else 0,
+            "max_strategies": sub.max_strategies if sub else 0,
+            "expires_at": sub.expires_at.isoformat() if sub and sub.expires_at else None,
+        } if sub else None,
         "organizations": orgs,
         "usage": usage,
     }
