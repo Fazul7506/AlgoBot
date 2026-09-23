@@ -6,7 +6,11 @@ helpers so there is one canonical OAuth entry point and one canonical live-
 connection path.
 """
 
+import asyncio
+import json
+
 import requests
+import websockets
 from django.conf import settings
 from django.utils import timezone
 
@@ -70,7 +74,93 @@ def _verify_account(access_token: str) -> tuple[dict | None, list[dict]]:
     return _select_account(payload), accounts
 
 
-def _persist_deriv_account(*, user, broker, record, access_token, refresh_token, expires_at, websocket_balance=None, websocket_health="not_checked"):
+async def _authorize_deriv_identity_async(access_token: str) -> dict:
+    """Authorize a Deriv WebSocket and return the provider identity payload."""
+    endpoint = getattr(settings, "DERIV_PUBLIC_WS_URL", "").strip()
+    if not endpoint:
+        raise ValueError("DERIV_PUBLIC_WS_URL is not configured")
+    async with websockets.connect(
+        endpoint,
+        open_timeout=10,
+        close_timeout=5,
+        ping_interval=None,
+    ) as ws:
+        await ws.send(json.dumps({"authorize": access_token, "req_id": 1}))
+        response = json.loads(await asyncio.wait_for(ws.recv(), 10))
+    if response.get("error"):
+        error = response["error"]
+        raise ValueError(str(error.get("message") or error.get("code") or "Deriv identity authorization failed"))
+    identity = response.get("authorize") or response.get("data") or {}
+    return identity if isinstance(identity, dict) else {}
+
+
+def fetch_deriv_identity(access_token: str) -> dict:
+    """Fetch non-secret identity attributes exposed by Deriv OAuth authorization."""
+    return asyncio.run(_authorize_deriv_identity_async(access_token))
+
+
+def _safe_deriv_identity(identity: dict | None) -> dict:
+    """Persist only provider identity attributes; never store OAuth tokens here."""
+    if not isinstance(identity, dict):
+        return {}
+    allowed = {
+        "user_id", "loginid", "email", "fullname", "first_name", "last_name",
+        "username", "country", "residence", "preferred_language", "language",
+        "timezone", "phone", "phone_number", "country_code", "avatar_url",
+    }
+    return {
+        key: value
+        for key, value in identity.items()
+        if key in allowed and value not in (None, "", [])
+        and isinstance(value, (str, int, float, bool))
+    }
+
+
+def sync_deriv_user_identity(user, identity: dict | None, profile=None):
+    """Project Deriv identity fields into AlgoBot's user/profile without replacing secrets."""
+    safe = _safe_deriv_identity(identity)
+    if not safe:
+        return {}
+
+    changed = []
+    email = str(safe.get("email") or "").strip()
+    if email:
+        user.email = email
+        changed.append("email")
+
+    first_name = str(safe.get("first_name") or "").strip()
+    last_name = str(safe.get("last_name") or "").strip()
+    fullname = str(safe.get("fullname") or "").strip()
+    if fullname and (not first_name or not last_name):
+        parts = fullname.split()
+        first_name = first_name or parts[0]
+        last_name = last_name or (" ".join(parts[1:]) if len(parts) > 1 else "")
+    if first_name:
+        user.first_name = first_name
+        changed.append("first_name")
+    if last_name:
+        user.last_name = last_name
+        changed.append("last_name")
+    if changed:
+        user.save(update_fields=sorted(set(changed)))
+
+    if profile is not None:
+        profile_changed = []
+        country = str(safe.get("country") or safe.get("residence") or "").strip()
+        avatar_url = str(safe.get("avatar_url") or "").strip()
+        if country:
+            profile.country = country
+            profile_changed.append("country")
+        if avatar_url:
+            profile.avatar_url = avatar_url
+            profile_changed.append("avatar_url")
+        if profile_changed:
+            profile.save(update_fields=sorted(set(profile_changed) + ["updated_at"]))
+
+    return safe
+
+
+def _persist_deriv_account(*, user, broker, record, access_token, refresh_token, expires_at, websocket_balance=None, websocket_health="not_checked", deriv_identity=None):
     """Persist one Deriv account returned by OAuth without preferred-account state."""
     account_id = _account_id(record)
     if not account_id:
@@ -88,7 +178,13 @@ def _persist_deriv_account(*, user, broker, record, access_token, refresh_token,
     broker_account.balance = balance_value
     broker_account.equity = equity_value
     broker_account.status = "active"
-    broker_account.credentials = {**(broker_account.credentials or {}), "account_type": account_type, "connection_health": websocket_health, **({"avatar_url": avatar_url} if avatar_url else {})}
+    broker_account.credentials = {
+        **(broker_account.credentials or {}),
+        "account_type": account_type,
+        "connection_health": websocket_health,
+        **({"avatar_url": avatar_url} if avatar_url else {}),
+        **({"deriv_identity": _safe_deriv_identity(deriv_identity)} if deriv_identity else {}),
+    }
     broker_account.set_access_token(access_token)
     broker_account.set_refresh_token(refresh_token or "")
     broker_account.expires_at = expires_at
