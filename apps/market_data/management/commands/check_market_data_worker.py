@@ -62,6 +62,22 @@ class Command(BaseCommand):
                 f"{REQUIRED_TASK} is routed to {configured_queue!r}, expected 'market_data'"
             )
 
+        configured_queues = {
+            getattr(queue, "name", str(queue))
+            for queue in (app.conf.task_queues or ())
+        }
+        if "market_data" not in configured_queues:
+            raise CommandError(
+                "Celery queue topology does not declare 'market_data'; "
+                "the isolated market-data worker cannot safely consume its queue."
+            )
+
+        default_queue = getattr(app.conf, "task_default_queue", None)
+        if default_queue != "celery":
+            raise CommandError(
+                f"Celery default queue is {default_queue!r}, expected 'celery'"
+            )
+
         try:
             connection = app.connection_for_read()
             connection.ensure_connection(max_retries=1)
@@ -74,6 +90,6 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 "Market-data Celery preflight OK: required environment present, "
                 "Redis broker/backend aligned, task registered, queue=market_data, "
-                "and broker reachable."
+                "queue topology declared, and broker reachable."
             )
         )
