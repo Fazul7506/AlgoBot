@@ -1,10 +1,8 @@
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from rest_framework.test import APIRequestFactory
 
 from core.api_authentication import BrowserSessionAuthentication
-from core.middleware.csrf import APIAwareCsrfViewMiddleware
 from core.serializers import SubscriptionSerializer, UserProfileSerializer
 from apps.execution.serializers import OrderSerializer
 from apps.brokers.models import Broker, BrokerAccount
