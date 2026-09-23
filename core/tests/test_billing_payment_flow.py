@@ -186,6 +186,11 @@ class BillingPaymentFlowTests(TestCase):
         self.assertEqual(payload["mobile_tarrif"], "MOBILE-PAYS")
         self.assertEqual(payload["card_tarrif"], "CARD-PAYS")
 
+    @override_settings(INTASEND_API_BASE_URL="https://api.intasend.com")
+    def test_legacy_intasend_api_host_is_normalized_to_current_live_host(self):
+        service = PaymentService()
+        self.assertEqual(service.intasend_base_url, "https://payment.intasend.com")
+
     @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test_example", INTASEND_API_BASE_URL="https://payment.intasend.com")
     def test_intasend_rejects_test_key_on_live_api_endpoint(self):
         result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
