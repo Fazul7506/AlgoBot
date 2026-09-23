@@ -8,6 +8,7 @@ from core.middleware.csrf import APIAwareCsrfViewMiddleware
 from core.serializers import SubscriptionSerializer, UserProfileSerializer
 from apps.execution.serializers import OrderSerializer
 from apps.brokers.models import Broker, BrokerAccount
+from apps.brokers.serializers import OrderSerializer as BrokerOrderSerializer
 
 
 class APISecurityHardeningTests(TestCase):
@@ -39,6 +40,26 @@ class APISecurityHardeningTests(TestCase):
         serializer = OrderSerializer(data={"broker_account":other_account.pk,"symbol":"R_100","direction":"buy","order_type":"market","stake":"1"}, context={"request":request})
         self.assertFalse(serializer.is_valid())
         self.assertIn("broker_account", serializer.errors)
+
+    def test_broker_order_serializer_rejects_server_execution_state(self):
+        request = APIRequestFactory().post("/api/orders/")
+        request.user = self.user
+        serializer = BrokerOrderSerializer(
+            data={
+                "account": self.account.pk,
+                "symbol": "R_100",
+                "direction": "buy",
+                "order_type": "market",
+                "stake": "1",
+                "status": "executed",
+                "broker_order_id": "FORGED",
+                "routing_context": {"account_type": "real"},
+            },
+            context={"request": request},
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        for field in ("status", "broker_order_id", "routing_context"):
+            self.assertNotIn(field, serializer.validated_data)
 
     def test_browser_session_authentication_retains_csrf_enforcement(self):
         self.assertTrue(hasattr(BrowserSessionAuthentication(), "enforce_csrf"))
