@@ -14,6 +14,7 @@ from datetime import timedelta
 import secrets
 
 from core.models import UserProfile, Subscription, BotSettings, PasswordResetToken
+from core.serializers import UserProfileSerializer, SubscriptionSerializer, BotSettingsSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -45,14 +46,7 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_profile(self, request):
         profile = self.get_object()
-        from rest_framework import serializers
-        
-        class UserProfileSerializer(serializers.ModelSerializer):
-            class Meta:
-                model = UserProfile
-                fields = '__all__'
-        
-        serializer = UserProfileSerializer(profile)
+        serializer = UserProfileSerializer(profile, context={'request': request})
         return Response(serializer.data)
 
 
@@ -70,14 +64,7 @@ class BotSettingsViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_settings(self, request):
         settings_obj = self.get_object()
-        from rest_framework import serializers
-        
-        class BotSettingsSerializer(serializers.ModelSerializer):
-            class Meta:
-                model = BotSettings
-                fields = '__all__'
-        
-        serializer = BotSettingsSerializer(settings_obj)
+        serializer = BotSettingsSerializer(settings_obj, context={'request': request})
         return Response(serializer.data)
 
 
@@ -95,14 +82,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_subscription(self, request):
         subscription = self.get_object()
-        from rest_framework import serializers
-        
-        class SubscriptionSerializer(serializers.ModelSerializer):
-            class Meta:
-                model = Subscription
-                fields = '__all__'
-        
-        serializer = SubscriptionSerializer(subscription)
+        serializer = SubscriptionSerializer(subscription, context={'request': request})
         return Response(serializer.data)
 
 
@@ -200,13 +180,11 @@ def login_view(request):
                 'message': 'Invalid credentials'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        # Update last login
-        try:
-            profile = user.trading_profile
-            profile.last_login_at = timezone.now()
-            profile.save(update_fields=['last_login_at'])
-        except:
-            pass
+        # Update last login without silently discarding a missing/corrupt profile.
+        UserProfile.objects.update_or_create(
+            user=user,
+            defaults={'last_login_at': timezone.now()},
+        )
         
         # Generate JWT token
         refresh = RefreshToken.for_user(user)

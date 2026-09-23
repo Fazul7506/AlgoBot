@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect
@@ -164,7 +165,7 @@ def _checkout(request, plan_name, provider=None):
     # A short-lived lease prevents concurrent browser retries from opening two provider checkouts.
     lease_seconds = 120
     with transaction.atomic():
-        request_user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+        request_user = get_user_model().objects.select_for_update().get(pk=request.user.pk)
         existing = (
             Invoice.objects.filter(
                 user=request_user,

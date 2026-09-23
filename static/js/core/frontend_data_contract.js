@@ -11,6 +11,19 @@
   // The web origin renders pages; the dedicated API origin owns all browser API traffic.
   const apiBase=(configuredApiBase||productionApiBase||window.location.origin).replace(/\/+$/,'');
   const nativeFetch=window.fetch.bind(window),safeMethods=new Set(['GET','HEAD','OPTIONS']);
+  const readCookie=(name)=>{
+    const prefix=`${encodeURIComponent(name)}=`;
+    const part=document.cookie.split('; ').find(v=>v.startsWith(prefix));
+    return part?decodeURIComponent(part.slice(prefix.length)):null;
+  };
+  const csrfToken=()=>readCookie('csrftoken');
+  const shouldSendCsrf=(target,method)=>{
+    if(safeMethods.has(method))return false;
+    try{
+      const host=new URL(target,window.location.origin).hostname;
+      return host===window.location.hostname||host==='algobot.dpdns.org'||host==='www.algobot.dpdns.org'||host==='api.algobot.dpdns.org';
+    }catch(_){return false}
+  };
   // Same-origin fallback is deliberately limited to idempotent transport only; execution/mutation requests never fall back.
   const sameOriginRetryPath=(path,method='GET',forceSameOrigin=false)=>{
     const verb=String(method||'GET').toUpperCase();
@@ -44,6 +57,10 @@
     const sameOrigin=targetOrigin===window.location.origin;
     const selectedId=brokerState()?.get?.()?.account?.id;
     if(selectedId&&!headers.has('X-Algobot-Account-ID'))headers.set('X-Algobot-Account-ID',String(selectedId));
+    if(shouldSendCsrf(target,method)&&!headers.has('X-CSRFToken')){
+      const token=csrfToken();
+      if(token)headers.set('X-CSRFToken',token);
+    }
     const requestInit={credentials:sameOrigin?'same-origin':'include',...options,headers,cache:'no-store',signal:controller.signal};
     const response=await nativeFetch(target,requestInit);
     return{response,text:await response.text()};

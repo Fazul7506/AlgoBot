@@ -1,5 +1,4 @@
 from decimal import Decimal, InvalidOperation
-from types import SimpleNamespace
 import logging
 from django.conf import settings
 from django.utils import timezone
@@ -9,7 +8,7 @@ from apps.trading.models import Position
 from apps.contracts.models import Contract
 from .serializers import OrderSerializer, PositionSerializer, ContractSerializer, ExecutionLogSerializer, ReconciliationEventSerializer
 from .engine import ExecutionEngine
-from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
+from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, BrokerRoutingError
 from core.billing_entitlements import check, check_live_order, effective_plan
 
 log = logging.getLogger(__name__)
@@ -70,15 +69,12 @@ class OrderViewSet(viewsets.ModelViewSet):
                 if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)): return response.Response({'status':'rejected','code':'LIVE_TRADING_DISABLED','detail':'Live-money trading is disabled by platform configuration.'}, status=status.HTTP_409_CONFLICT)
             try:
                 from apps.brokers.services import MarketDataFreshnessService
-                try: quote = MarketDataFreshnessService().latest(data.get('symbol'))
-                except Exception:
-                    from apps.market_data.models import Tick
-                    tick = Tick.objects.filter(symbol__symbol=data.get('symbol')).order_by('-epoch', '-received_at').first()
-                    if tick is None: raise ValueError(f'No persisted broker tick is available for {data.get("symbol")}.')
-                    age = max(0, (timezone.now() - tick.received_at).total_seconds()); max_age = int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30))
-                    if age > max_age: raise ValueError(f'Market data is stale ({int(age)}s old; limit {max_age}s).')
-                    quote = SimpleNamespace(last_price=tick.quote, bid=tick.bid, ask=tick.ask, spread=tick.spread, timestamp=tick.received_at)
-            except Exception as exc: return response.Response({'status':'rejected','code':'MARKET_DATA_GATE_FAILED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
+                quote = MarketDataFreshnessService().latest(data.get('symbol'))
+            except BrokerRoutingError as exc:
+                return response.Response({'status':'rejected','code':'MARKET_DATA_GATE_FAILED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
+            except Exception:
+                log.exception('Authoritative market-data lookup failed', extra={'user_id':request.user.id,'symbol':data.get('symbol')})
+                return response.Response({'status':'rejected','code':'MARKET_DATA_UNAVAILABLE','detail':'Authoritative broker market data could not be verified safely.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             stake = data.get('stake')
             try: stake_value = float(Decimal(str(stake)))
             except (InvalidOperation, TypeError, ValueError): stake_value = None
