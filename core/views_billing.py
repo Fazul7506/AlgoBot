@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -160,40 +160,52 @@ def _checkout(request, plan_name, provider=None):
     if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL}:
         return None, "Unsupported payment provider."
 
-    # Reuse an unresolved checkout invoice for this exact user/plan/provider.
-    # This prevents a browser retry from creating a second internal invoice.
-    existing = (
-        Invoice.objects.filter(
-            user=request.user,
-            paid=False,
+    # Serialize checkout initiation per user, but never hold a DB lock across the provider HTTP call.
+    # A short-lived lease prevents concurrent browser retries from opening two provider checkouts.
+    lease_seconds = 120
+    with transaction.atomic():
+        request_user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+        existing = (
+            Invoice.objects.filter(
+                user=request_user,
+                paid=False,
+                amount_cents=plan["price_cents"],
+                currency=plan["currency"],
+                metadata__plan=plan["plan"],
+                metadata__provider=selected,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        metadata = dict(existing.metadata or {}) if existing else {}
+        if existing and metadata.get("state") == "checkout_open" and metadata.get("checkout_url"):
+            return str(metadata["checkout_url"]), None
+        now = timezone.now()
+        lock_until = metadata.get("checkout_lock_until")
+        if existing and metadata.get("state") == "checkout_attempting" and lock_until:
+            try:
+                lock_expiry = timezone.datetime.fromisoformat(str(lock_until))
+            except (TypeError, ValueError):
+                lock_expiry = None
+            if lock_expiry and lock_expiry > now:
+                return None, "A checkout is already being started. Please wait for the current checkout attempt."
+        invoice = existing or Invoice.objects.create(
+            user=request_user,
             amount_cents=plan["price_cents"],
             currency=plan["currency"],
-            metadata__plan=plan["plan"],
-            metadata__provider=selected,
+            metadata={"plan": plan["plan"], "provider": selected},
         )
-        .order_by("-created_at")
-        .first()
-    )
-    metadata = dict(existing.metadata or {}) if existing else {}
-    if existing and metadata.get("state") == "checkout_open" and metadata.get("checkout_url"):
-        return str(metadata["checkout_url"]), None
-
-    invoice = existing or Invoice.objects.create(
-        user=request.user,
-        amount_cents=plan["price_cents"],
-        currency=plan["currency"],
-        metadata={"plan": plan["plan"], "provider": selected},
-    )
-    reference = str(metadata.get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request.user, plan["plan"]))
-    invoice.metadata = {
-        **metadata,
-        "plan": plan["plan"],
-        "provider": selected,
-        "state": "checkout_attempting",
-        "reference": reference,
-        "attempt_count": int(metadata.get("attempt_count") or 0) + 1,
-    }
-    invoice.save(update_fields=["metadata"])
+        reference = str(metadata.get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request_user, plan["plan"]))
+        invoice.metadata = {
+            **metadata,
+            "plan": plan["plan"],
+            "provider": selected,
+            "state": "checkout_attempting",
+            "reference": reference,
+            "attempt_count": int(metadata.get("attempt_count") or 0) + 1,
+            "checkout_lock_until": (now + timedelta(seconds=lease_seconds)).isoformat(),
+        }
+        invoice.save(update_fields=["metadata"])
 
     try:
         result = RequestBoundPaymentService(request).create_checkout_session(
