@@ -38,8 +38,8 @@
 </section>
 <section class="panel">
 <div class="panel-head"><h2>Billing & providers</h2></div>
-<div class="providers"><span>Stripe</span><span>PayPal</span><span>Flutterwave</span><span>M-Pesa</span><span>Paddle</span><span>Lemon Squeezy</span></div>
-<p class="muted">Payment execution remains provider/backend controlled. This dashboard only changes the platform subscription state exposed by the backend.</p>
+<div class="providers"><span>IntaSend</span><span>Pesapal</span></div>
+<p class="muted">Payment execution and subscription activation are controlled by the canonical billing backend. This dashboard does not grant paid access.</p>
 </section>
 <section class="panel">
 <div class="panel-head"><h2>Platform modules</h2></div>
@@ -66,7 +66,7 @@ const l=t.license;$('license').textContent=l?.active?'Active':'Not issued';$('li
 const ws=t.organizations.flatMap(o=>o.workspaces);$('org-count').textContent=t.organizations.length;$('ws-count').textContent=ws.length;
 $('orgs').innerHTML=t.organizations.map(o=>`<div class="org"><div class="org-head"><div><b>${o.name}</b><small>${o.country||'—'} · ${o.industry||'Trading'}</small></div><span>${o.teams.length} teams</span></div><div class="workspaces">${o.workspaces.map(w=>`<div class="workspace"><b>${w.name}</b><small>${w.environment} · ${w.default_broker||'No broker'}</small></div>`).join('')||'<div class="workspace">No workspaces yet.</div>'}</div></div>`).join('')||'No organizations yet.';
 $('usage').innerHTML=t.usage.map(u=>{const pct=u.quota?Math.min(100,(u.usage/u.quota)*100):0;return `<div class="usage-row"><span>${u.metric.replaceAll('_',' ')}</span><div class="bar"><i style="width:${pct}%"></i></div><b>${u.usage}/${u.quota||'∞'}</b></div>`}).join('')||'<div class="muted">No usage metrics recorded.</div>';
-const plans=['free','starter','professional','business','enterprise','custom'];$('plans').innerHTML=plans.map(p=>`<div class="plan-card ${s?.plan===p?'active':''}"><b>${p[0].toUpperCase()+p.slice(1)}</b><small>${s?.plan===p?'Current plan':'Platform plan'}</small><button data-plan="${p}">${s?.plan===p?'Current':'Select'}</button></div>`).join('');
+const plans=[['FREE','Free'],['BASIC','Basic'],['PRO','Professional'],['ENTERPRISE','Enterprise']];$('plans').innerHTML=plans.map(([key,label])=>`<div class="plan-card ${s?.plan===key.toLowerCase()?'active':''}"><b>${label}</b><small>${s?.plan===key.toLowerCase()?'Current plan':'Platform plan'}</small><button data-plan="${key}">${s?.plan===key.toLowerCase()?'Current':'Select'}</button></div>`).join('');
 $('team-list').innerHTML=t.organizations.flatMap(o=>o.teams.map(team=>`<div class="team"><b>${team.name}</b><small>${o.name} · ${team.members} members</small></div>`)).join('')||'No teams configured.'}
 async function refresh(){try{render(await get('/api/tenants/dashboard/'))}catch(e){$('state').textContent='API unavailable'}}
 function dialog(title,fields,submit){$('dialog-title').textContent=title;$('fields').innerHTML=fields;$('dialog').showModal();$('form').onsubmit=async e=>{e.preventDefault();try{await submit();$('dialog').close();refresh()}catch(x){alert(x.message)}}}
@@ -74,7 +74,7 @@ $('cancel').onclick=()=>$('dialog').close();
 $('create-tenant').onclick=()=>dialog('Create tenant',`<label>Name<input id="f-name" required></label><label>Timezone<input id="f-timezone" value="Africa/Nairobi"></label><label>Currency<input id="f-currency" value="USD"></label>`,()=>post('/api/tenants/',{name:$('f-name').value,timezone:$('f-timezone').value,currency:$('f-currency').value}));
 $('create-org').onclick=()=>dialog('Create organization',`<label>Name<input id="f-name" required></label><label>Industry<input id="f-industry"></label><label>Country<input id="f-country"></label>`,()=>post('/api/tenants/organizations/',{name:$('f-name').value,industry:$('f-industry').value,country:$('f-country').value}));
 $('invite').onclick=()=>dialog('Invite team member',`<label>Email<input id="f-email" type="email" required></label><label>Role<select id="f-role">${['viewer','analyst','trader','manager','administrator','developer'].map(x=>`<option>${x}</option>`).join('')}</select></label>`,()=>post('/api/tenants/invitations/',{email:$('f-email').value,role:$('f-role').value}));
-$('plans').onclick=async e=>{const p=e.target.dataset.plan;if(!p)return;if(!confirm(`Switch subscription to ${p}?`))return;try{await post('/api/tenants/subscription/upgrade/',{plan:p,billing_cycle:'monthly',price:0});refresh()}catch(x){alert(x.message)}};
+$('plans').onclick=async e=>{const p=e.target.dataset.plan;if(!p)return;if(!confirm(`Switch subscription to ${p}?`))return;try{const result=await post('/billing/change-plan/',{plan:p});if(result.url)location.href=result.url;else refresh()}catch(x){alert(x.message)}};
 refresh();setInterval(refresh,10000)})();
 </script>
 {% endblock %}
