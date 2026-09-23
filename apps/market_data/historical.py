@@ -59,7 +59,7 @@ async def _fetch_candles(symbol: str, count: int, granularity: int) -> list[dict
     payload = {
         "ticks_history": symbol,
         "end": "latest",
-        "count": min(max(int(count), 1), 5000),
+        "count": _validate_history_count(count),
         "style": "candles",
         "granularity": granularity,
     }
@@ -70,7 +70,7 @@ async def _fetch_ticks(symbol: str, count: int) -> list[dict]:
     payload = {
         "ticks_history": symbol,
         "end": "latest",
-        "count": min(max(int(count), 1), 5000),
+        "count": _validate_history_count(count),
         "style": "ticks",
     }
     history = (await _request(payload)).get("history", {})
@@ -91,27 +91,31 @@ def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
     """Idempotently persist broker OHLC bars without replacing valid history."""
     timeframe = normalize_timeframe(timeframe)
     market_symbol = _market_symbol(symbol)
-    rows: list[Candle] = []
+    unique_items: dict[int, Candle] = {}
+    seconds = TIMEFRAMES[timeframe]
     for item in items:
         try:
-            rows.append(
-                Candle(
-                    symbol=market_symbol,
-                    timeframe=timeframe,
-                    epoch=int(item["epoch"]),
-                    open=Decimal(str(item["open"])),
-                    high=Decimal(str(item["high"])),
-                    low=Decimal(str(item["low"])),
-                    close=Decimal(str(item["close"])),
-                    volume=Decimal(str(item.get("volume", 0) or 0)),
-                    source="deriv_candles",
-                )
+            epoch = int(item["epoch"])
+            open_price = Decimal(str(item["open"]))
+            high_price = Decimal(str(item["high"]))
+            low_price = Decimal(str(item["low"]))
+            close_price = Decimal(str(item["close"]))
+            volume = Decimal(str(item.get("volume", 0) or 0))
+            if seconds and epoch % seconds != 0:
+                raise ValueError("candle epoch is not aligned to its timeframe boundary")
+            if high_price < max(open_price, close_price) or low_price > min(open_price, close_price):
+                raise ValueError("invalid OHLC relationship")
+            unique_items[epoch] = Candle(
+                symbol=market_symbol, timeframe=timeframe, epoch=epoch,
+                open=open_price, high=high_price, low=low_price, close=close_price,
+                volume=volume, source="deriv_candles",
             )
         except (KeyError, TypeError, ValueError, ArithmeticError):
             logger.warning(
                 "Skipping malformed historical candle",
                 extra={"symbol": symbol, "timeframe": timeframe},
             )
+    rows = list(unique_items.values())
 
     if rows:
         epochs = [row.epoch for row in rows]
@@ -247,7 +251,7 @@ def fetch_and_store_ticks(symbol: str, count: int = 5000) -> dict:
     ) if rows else []
     built = {}
     for timeframe in TIMEFRAMES:
-        if timeframe == "tick" or TIMEFRAMES[timeframe] < 60:
+        if timeframe != "tick" and TIMEFRAMES[timeframe] < 60:
             built[timeframe] = _aggregate_ticks_to_candles(symbol, persisted_ticks, timeframe)
     built["tick"] = persist_tick_candles(symbol, items)
     return {
@@ -299,7 +303,9 @@ def fetch_and_store_all_timeframes(
     maintenance, but it must remain positive in production.
     """
     _market_symbol(symbol)
-    interval = max(float(request_interval), 0.0)
+    interval = float(request_interval)
+    if interval <= 0:
+        raise ValueError("request_interval must be greater than zero for production broker backfill")
     results = {}
     first_request = True
 
