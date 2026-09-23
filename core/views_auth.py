@@ -46,14 +46,7 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_profile(self, request):
         profile = self.get_object()
-        from rest_framework import serializers
-        
-        class UserProfileSerializer(serializers.ModelSerializer):
-            class Meta:
-                model = UserProfile
-                fields = '__all__'
-        
-        serializer = UserProfileSerializer(profile)
+        serializer = UserProfileSerializer(profile, context={'request': request})
         return Response(serializer.data)
 
 
@@ -71,14 +64,7 @@ class BotSettingsViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_settings(self, request):
         settings_obj = self.get_object()
-        from rest_framework import serializers
-        
-        class BotSettingsSerializer(serializers.ModelSerializer):
-            class Meta:
-                model = BotSettings
-                fields = '__all__'
-        
-        serializer = BotSettingsSerializer(settings_obj)
+        serializer = BotSettingsSerializer(settings_obj, context={'request': request})
         return Response(serializer.data)
 
 
@@ -96,14 +82,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_subscription(self, request):
         subscription = self.get_object()
-        from rest_framework import serializers
-        
-        class SubscriptionSerializer(serializers.ModelSerializer):
-            class Meta:
-                model = Subscription
-                fields = '__all__'
-        
-        serializer = SubscriptionSerializer(subscription)
+        serializer = SubscriptionSerializer(subscription, context={'request': request})
         return Response(serializer.data)
 
 
