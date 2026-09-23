@@ -1,6 +1,5 @@
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.market_data.models import MarketSymbol
 from apps.market_data.tasks import BACKFILL_REQUEST_INTERVAL_SECONDS, _active_symbols
 from apps.market_data.historical import fetch_and_store_all_timeframes
 
