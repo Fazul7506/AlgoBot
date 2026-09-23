@@ -108,7 +108,12 @@ async def _fetch_ticks(symbol: str, count: int) -> list[dict]:
 
 
 def _market_symbol(symbol: str) -> MarketSymbol:
-    market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True).first()
+    market_symbol = MarketSymbol.objects.filter(
+        symbol=symbol,
+        broker__iexact="deriv",
+        is_active=True,
+        is_tradable=True,
+    ).first()
     if not market_symbol:
         raise ValueError(f"Unknown active market symbol: {symbol}")
     return market_symbol
@@ -145,34 +150,32 @@ def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
     rows = list(unique_items.values())
 
     if rows:
-        epochs = [row.epoch for row in rows]
+        # The unique constraint makes the write idempotent, but a select-before-
+        # insert is not enough under concurrent API/backfill writers because a
+        # row can be inserted after the select. Insert missing rows with the
+        # database constraint as the arbiter, then upsert the authoritative
+        # broker values in the same transaction.
         with transaction.atomic():
-            existing = {
-                row.epoch: row
-                for row in Candle.objects.select_for_update().filter(
-                    symbol=market_symbol, timeframe=timeframe, epoch__in=epochs
+            Candle.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
+            stored = list(
+                Candle.objects.select_for_update().filter(
+                    symbol=market_symbol,
+                    timeframe=timeframe,
+                    epoch__in=[row.epoch for row in rows],
                 )
-            }
-            creates = []
-            updates = []
-            for row in rows:
-                current = existing.get(row.epoch)
-                if current is None:
-                    row.source = "deriv_candles"
-                    creates.append(row)
-                    continue
-                current.open = row.open
-                current.high = row.high
-                current.low = row.low
-                current.close = row.close
-                current.volume = row.volume
+            )
+            by_epoch = {row.epoch: row for row in rows}
+            for current in stored:
+                incoming = by_epoch[current.epoch]
+                current.open = incoming.open
+                current.high = incoming.high
+                current.low = incoming.low
+                current.close = incoming.close
+                current.volume = incoming.volume
                 current.source = "deriv_candles"
-                updates.append(current)
-            if creates:
-                Candle.objects.bulk_create(creates, batch_size=500)
-            if updates:
+            if stored:
                 Candle.objects.bulk_update(
-                    updates,
+                    stored,
                     ["open", "high", "low", "close", "volume", "source"],
                     batch_size=500,
                 )
@@ -226,8 +229,33 @@ def _aggregate_ticks_to_candles(symbol: str, ticks: list[Tick], timeframe: str) 
         for epoch, row in buckets.items()
     ]
     if rows:
+        # Repeated broker backfills must repair an existing derived bucket when
+        # newer ticks change its high/low/close. Ignore-conflicts alone would
+        # leave the first version permanently stale.
         with transaction.atomic():
             Candle.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
+            stored = list(
+                Candle.objects.select_for_update().filter(
+                    symbol=market_symbol,
+                    timeframe=timeframe,
+                    epoch__in=[row.epoch for row in rows],
+                )
+            )
+            incoming = {row.epoch: row for row in rows}
+            for current in stored:
+                row = incoming[current.epoch]
+                current.open = row.open
+                current.high = row.high
+                current.low = row.low
+                current.close = row.close
+                current.volume = row.volume
+                current.source = "tick_stream"
+            if stored:
+                Candle.objects.bulk_update(
+                    stored,
+                    ["open", "high", "low", "close", "volume", "source"],
+                    batch_size=500,
+                )
     return len(rows)
 
 
