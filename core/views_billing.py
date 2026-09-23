@@ -1,6 +1,6 @@
 """Authenticated billing API and provider checkout callback pages."""
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 from django.conf import settings
@@ -184,7 +184,7 @@ def _checkout(request, plan_name, provider=None):
         lock_until = metadata.get("checkout_lock_until")
         if existing and metadata.get("state") == "checkout_attempting" and lock_until:
             try:
-                lock_expiry = timezone.datetime.fromisoformat(str(lock_until))
+                lock_expiry = datetime.fromisoformat(str(lock_until))
             except (TypeError, ValueError):
                 lock_expiry = None
             if lock_expiry and lock_expiry > now:
