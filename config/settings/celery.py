@@ -55,7 +55,7 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
 # from being created accidentally by a typo and makes the isolated market-data
 # consumer contract inspectable during worker preflight.
 CELERY_TASK_DEFAULT_QUEUE = "celery"
-CELERY_TASK_CREATE_MISSING_QUEUES = False
+CELERY_TASK_CREATE_MISSING_QUEUES = True
 CELERY_TASK_QUEUES = (
     Queue("celery"),
     Queue("market_data"),
