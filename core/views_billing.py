@@ -293,7 +293,7 @@ def billing_status(request):
     subscription, _ = Subscription.objects.get_or_create(user=request.user)
     snapshot = _subscription_snapshot(subscription)
     payments = []
-    for payment in Payment.objects.filter(user=request.user, status__in=["PENDING", "COMPLETED", "FAILED"]).select_related("invoice")[:10]:
+    for payment in Payment.objects.filter(user=request.user, status__in=["PENDING", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED", "REFUNDED"]).select_related("invoice")[:10]:
         invoice_meta = payment.invoice.metadata if payment.invoice else {}
         payments.append({"id": payment.id, "external_id": payment.external_id, "amount_cents": payment.amount_cents, "currency": payment.currency, "status": payment.status, "created_at": payment.created_at, "invoice_id": payment.invoice_id, "metadata": invoice_meta or {}})
     invoices = list(Invoice.objects.filter(user=request.user, paid=True)[:10].values("id", "external_id", "amount_cents", "currency", "paid", "metadata", "created_at"))
