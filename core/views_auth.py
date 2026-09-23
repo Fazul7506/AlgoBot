@@ -14,6 +14,7 @@ from datetime import timedelta
 import secrets
 
 from core.models import UserProfile, Subscription, BotSettings, PasswordResetToken
+from core.serializers import UserProfileSerializer, SubscriptionSerializer, BotSettingsSerializer
 
 logger = logging.getLogger(__name__)
 
