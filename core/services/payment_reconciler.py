@@ -229,6 +229,14 @@ class PaymentReconciler:
             from core.models import Subscription
             subscription = Subscription.objects.filter(provider_subscription_id=str(data["subscription_id"])).select_related("user").first()
             if not subscription:
+                invoice = Invoice.objects.filter(metadata__subscription_id=str(data["subscription_id"])).select_related("user").order_by("-created_at").first()
+                if invoice:
+                    subscription = Subscription.objects.filter(user=invoice.user).first()
+                    if subscription:
+                        subscription.provider = "intasend"
+                        subscription.provider_subscription_id = str(data["subscription_id"])[:255]
+                        subscription.save(update_fields=["provider", "provider_subscription_id"])
+            if not subscription:
                 return {"received": True, "provider": "intasend", "unresolved_subscription": True}
             results = []
             for item in data["payments"]:
