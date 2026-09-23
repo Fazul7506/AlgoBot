@@ -22,7 +22,10 @@ class SubscriptionAdmin(admin.ModelAdmin):
     list_display = ['user', 'plan', 'is_active', 'created_at']
     list_filter = ['plan', 'is_active', 'created_at']
     search_fields = ['user__username']
-    readonly_fields = ['created_at', 'renewed_at']
+    readonly_fields = ['created_at', 'renewed_at', 'plan', 'max_strategies', 'max_concurrent_trades', 'api_calls_per_day', 'price_cents', 'currency', 'recurring', 'expires_at', 'is_active', 'provider', 'provider_subscription_id', 'cancelled_at', 'cancellation_reason']
+
+    def has_add_permission(self, request): return False
+    def has_delete_permission(self, request, obj=None): return False
 
 
 @admin.register(PasswordResetToken)
@@ -49,7 +52,10 @@ class InvoiceAdmin(admin.ModelAdmin):
     list_display = ['user', 'external_id', 'amount_cents', 'currency', 'paid', 'created_at']
     list_filter = ['paid', 'currency', 'created_at']
     search_fields = ['user__username', 'external_id']
-    readonly_fields = ['created_at']
+    readonly_fields = ['created_at', 'external_id', 'amount_cents', 'currency', 'paid', 'metadata']
+
+    def has_add_permission(self, request): return False
+    def has_delete_permission(self, request, obj=None): return False
 
 
 @admin.register(Payment)
@@ -58,7 +64,10 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = ['user', 'external_id', 'amount_cents', 'currency', 'status', 'created_at']
     list_filter = ['status', 'currency', 'created_at']
     search_fields = ['user__username', 'external_id']
-    readonly_fields = ['created_at']
+    readonly_fields = ['created_at', 'external_id', 'amount_cents', 'currency', 'status', 'invoice', 'user']
+
+    def has_add_permission(self, request): return False
+    def has_delete_permission(self, request, obj=None): return False
 
 
 @admin.register(ReferralReward)
