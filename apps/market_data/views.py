@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils import timezone
+from uuid import uuid4
 
 from .constants import TIMEFRAMES
 from .models import CandleBackfillEvent, CandleBackfillRun, MarketSymbol
@@ -264,22 +265,24 @@ def initial_candle_backfill(request):
         )
 
         from .tasks import run_initial_candle_backfill
+        task_id = uuid4().hex
+        run.task_id = task_id
+        run.dispatch_at = timezone.now()
+        run.save(update_fields=["task_id", "dispatch_at"])
         try:
             task = run_initial_candle_backfill.apply_async(
                 args=(run.pk,),
                 kwargs={"count": count, "symbol": symbol or None},
                 queue=queue_name,
+                task_id=task_id,
             )
-            run.task_id = task.id
-            run.dispatch_at = timezone.now()
-            run.save(update_fields=["task_id", "dispatch_at"])
             CandleBackfillEvent.objects.create(
                 run=run,
                 level="info",
                 event_type="dispatch",
-                message=f"Celery accepted the publish request: {task.id}",
+                message=f"Celery accepted the publish request: {task_id}",
                 symbol=symbol,
-                task_id=task.id,
+                task_id=task_id,
                 payload={"queue": queue_name},
             )
         except Exception as exc:
