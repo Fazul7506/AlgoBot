@@ -28,7 +28,7 @@ PESAPAL_CANCELLATION_URL = os.getenv("PESAPAL_CANCELLATION_URL", "").strip()
 INTASEND_PUBLIC_KEY = os.getenv("INTASEND_PUBLIC_KEY", "").strip()
 INTASEND_SECRET_KEY = os.getenv("INTASEND_SECRET_KEY", "").strip()
 INTASEND_WEBHOOK_CHALLENGE = os.getenv("INTASEND_WEBHOOK_CHALLENGE", "").strip()
-INTASEND_API_BASE_URL = os.getenv("INTASEND_API_BASE_URL", "https://payment.intasend.com").strip()
+INTASEND_API_BASE_URL = os.getenv("INTASEND_API_BASE_URL", "https://api.intasend.com").strip()
 # Leave checkout tariffs unset unless IntaSend has explicitly enabled and
 # supplied a tariff for this merchant account.  Supplying a made-up tariff can
 # cause IntaSend to reject an otherwise valid checkout request.

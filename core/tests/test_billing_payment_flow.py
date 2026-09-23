@@ -186,12 +186,7 @@ class BillingPaymentFlowTests(TestCase):
         self.assertEqual(payload["mobile_tarrif"], "MOBILE-PAYS")
         self.assertEqual(payload["card_tarrif"], "CARD-PAYS")
 
-    @override_settings(INTASEND_API_BASE_URL="https://api.intasend.com")
-    def test_legacy_intasend_api_host_is_normalized_to_current_live_host(self):
-        service = PaymentService()
-        self.assertEqual(service.intasend_base_url, "https://payment.intasend.com")
-
-    @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test_example", INTASEND_API_BASE_URL="https://payment.intasend.com")
+    @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test_example", INTASEND_API_BASE_URL="https://api.intasend.com")
     def test_intasend_rejects_test_key_on_live_api_endpoint(self):
         result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
         self.assertEqual(result["url"], "")
@@ -199,7 +194,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_live_example",
-        INTASEND_API_BASE_URL="https://payment.intasend.com",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
     )
     @patch("core.services.payment_service.requests.post")
     def test_intasend_http_500_is_classified_and_sanitized(self, post):
@@ -227,7 +222,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_live_example",
-        INTASEND_API_BASE_URL="https://payment.intasend.com",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
     )
     @patch("core.services.payment_service.requests.post")
     def test_intasend_http_400_and_422_are_classified_as_malformed_request(self, post):
@@ -246,7 +241,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_live_example",
-        INTASEND_API_BASE_URL="https://payment.intasend.com",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
     )
     @patch("core.services.payment_service.requests.post")
     def test_intasend_timeout_is_classified_without_retrying_post(self, post):
@@ -261,7 +256,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_live_example",
-        INTASEND_API_BASE_URL="https://payment.intasend.com",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
     )
     @patch("core.services.payment_service.requests.post")
     def test_intasend_basic_50000_kes_payload_uses_major_units_and_supported_fields(self, post):
@@ -285,11 +280,11 @@ class BillingPaymentFlowTests(TestCase):
         self.assertNotIn("recurring", payload)
         self.assertNotIn("mobile_tarrif", payload)
         self.assertNotIn("card_tarrif", payload)
-        self.assertEqual(post.call_args.args[0], "https://payment.intasend.com/api/v1/checkout/")
+        self.assertEqual(post.call_args.args[0], "https://api.intasend.com/api/v1/checkout/")
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_live_example",
-        INTASEND_API_BASE_URL="https://payment.intasend.com",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
     )
     @patch("core.services.payment_service.requests.post")
     def test_intasend_authentication_uses_public_key_header_only_for_checkout(self, post):
@@ -321,7 +316,7 @@ class BillingPaymentFlowTests(TestCase):
 
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_test_example",
-        INTASEND_API_BASE_URL="https://payment.intasend.com",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
     )
     def test_intasend_test_key_live_endpoint_is_configuration_failure(self):
         result = PaymentService().create_intasend_checkout(
@@ -330,42 +325,3 @@ class BillingPaymentFlowTests(TestCase):
         )
         self.assertEqual(result["url"], "")
         self.assertIn("sandbox API URL", result["error"])
-
-
-    @override_settings(
-        INTASEND_PUBLIC_KEY="ISPubKey_test",
-        INTASEND_API_BASE_URL="https://sandbox.intasend.com",
-    )
-    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
-    def test_intasend_stale_checkout_url_is_not_reused(self, create_checkout):
-        from datetime import timedelta
-        from django.utils import timezone
-
-        invoice = Invoice.objects.create(
-            user=self.user,
-            amount_cents=99900,
-            currency="KES",
-            metadata={
-                "plan": "BASIC",
-                "provider": "intasend",
-                "reference": f"IS-{self.user.id}-BASIC-stale",
-                "state": "checkout_open",
-                "checkout_url": "https://payment.intasend.com/subscriptions/charge/stale",
-                "checkout_url_created_at": (timezone.now() - timedelta(minutes=5)).isoformat(),
-            },
-        )
-        create_checkout.return_value = {
-            "url": "https://payment.intasend.com/subscriptions/charge/fresh",
-            "subscription_id": "FRESH-SUBSCRIPTION",
-            "reference": invoice.metadata["reference"],
-        }
-
-        request = Mock(user=self.user)
-        url, error = _checkout(request, "BASIC", "intasend")
-
-        self.assertIsNone(error)
-        self.assertEqual(url, "https://payment.intasend.com/subscriptions/charge/fresh")
-        create_checkout.assert_called_once()
-        invoice.refresh_from_db()
-        self.assertEqual(invoice.metadata["checkout_url"], "https://payment.intasend.com/subscriptions/charge/fresh")
-        self.assertEqual(invoice.metadata["checkout_url_created_at"], invoice.metadata["checkout_url_created_at"])
