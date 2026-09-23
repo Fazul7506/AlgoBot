@@ -26,7 +26,7 @@ class UserProfile(models.Model):
     brevo_sender_email = models.EmailField(blank=True)
     referral_code = models.CharField(max_length=32, blank=True, unique=True, null=True)
     referred_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='referrals')
-    referral_credits = models.FloatField(default=0.0)
+    referral_credits = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     avatar_url = models.URLField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -193,7 +193,7 @@ class ReferralReward(models.Model):
     """Referral reward records"""
     referrer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='referral_rewards_given')
     referee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='referral_rewards_received')
-    amount_credits = models.FloatField()
+    amount_credits = models.DecimalField(max_digits=20, decimal_places=8)
     awarded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
