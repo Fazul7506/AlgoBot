@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import Client, TestCase
 from rest_framework.test import APIRequestFactory
 
 from core.api_authentication import BrowserSessionAuthentication
@@ -66,11 +66,13 @@ class APISecurityHardeningTests(TestCase):
         self.assertTrue(hasattr(BrowserSessionAuthentication(), "enforce_csrf"))
 
     def test_api_csrf_middleware_does_not_bypass_session_cookie(self):
-        middleware = APIAwareCsrfViewMiddleware(lambda request: None)
-        request = APIRequestFactory().post(
+        client = Client(enforce_csrf_checks=True)
+        self.assertTrue(client.login(username="security-user", password="StrongPassword123!"))
+
+        response = client.patch(
             "/api/settings/",
-            HTTP_COOKIE=f"{settings.SESSION_COOKIE_NAME}=session-present",
+            data="{}",
+            content_type="application/json",
         )
-        response = middleware.process_view(request, lambda request: None, (), {})
-        self.assertIsNotNone(response)
+
         self.assertEqual(response.status_code, 403)
