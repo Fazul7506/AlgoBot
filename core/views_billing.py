@@ -136,7 +136,7 @@ def billing_success_page(request):
     if invoice and provider:
         try:
             result = _reconcile_invoice(invoice, provider)
-        except Exception:
+        except (IntegrityError, ValueError, KeyError, Invoice.DoesNotExist):
             result = {"paid": bool(invoice.paid), "state": "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
     elif invoice:
         result = {"paid": bool(invoice.paid), "state": "COMPLETE" if invoice.paid else "PENDING", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
