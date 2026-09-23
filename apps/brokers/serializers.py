@@ -46,14 +46,50 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
 class BrokerConnectionSerializer(serializers.ModelSerializer):
     class Meta: model=BrokerConnection; fields='__all__'
 class OrderSerializer(serializers.ModelSerializer):
-    contract_type=serializers.CharField(required=False,allow_blank=True,max_length=40)
-    class Meta: model=Order; fields='__all__'; read_only_fields=['user','broker','status','submitted_at','executed_at','broker_order_id']
-    def validate(self,attrs):
-        attrs=super().validate(attrs); account=attrs.get('account'); request=self.context.get('request'); user=getattr(request,'user',None)
-        if account is None:return attrs
-        if not user or not user.is_authenticated or account.user_id!=user.id: raise serializers.ValidationError({'account':'The selected broker account does not belong to the authenticated user.'})
-        if account.status!='active' or account.broker.status!='active': raise serializers.ValidationError({'account':'The selected broker account is not active.'})
+    contract_type = serializers.CharField(required=False, allow_blank=True, max_length=40)
+
+    class Meta:
+        model = Order
+        fields = [
+            'id', 'user', 'broker', 'account', 'strategy', 'symbol', 'direction',
+            'order_type', 'contract_type', 'stake', 'quantity', 'price', 'status',
+            'client_order_id', 'broker_order_id', 'routing_context',
+            'submitted_at', 'executed_at', 'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'user', 'broker', 'status', 'broker_order_id',
+            'routing_context', 'submitted_at', 'executed_at', 'created_at', 'updated_at'
+        ]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        account = attrs.get('account')
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if account is None:
+            return attrs
+        if not user or not user.is_authenticated or account.user_id != user.id:
+            raise serializers.ValidationError({
+                'account': 'The selected broker account does not belong to the authenticated user.'
+            })
+        if account.status != 'active' or account.broker.status != 'active':
+            raise serializers.ValidationError({'account': 'The selected broker account is not active.'})
         return attrs
+
+    def validate_direction(self, value):
+        value = str(value).strip().lower()
+        allowed = {choice[0] for choice in Order.DIRECTION_CHOICES}
+        if value not in allowed:
+            raise serializers.ValidationError(f'Unsupported order direction: {value}')
+        return value
+
+    def validate_order_type(self, value):
+        value = str(value).strip().lower()
+        allowed = {choice[0] for choice in Order.ORDER_TYPE_CHOICES}
+        if value not in allowed:
+            raise serializers.ValidationError(f'Unsupported order type: {value}')
+        return value
+
 class ExecutionReportSerializer(serializers.ModelSerializer):
     symbol=serializers.CharField(source='order.symbol',read_only=True); direction=serializers.CharField(source='order.direction',read_only=True); broker_order_id=serializers.CharField(source='order.broker_order_id',read_only=True)
     class Meta: model=ExecutionReport; fields=['id','order','execution_price','requested_price','slippage','latency','fees','status','raw_report','created_at','symbol','direction','broker_order_id']
