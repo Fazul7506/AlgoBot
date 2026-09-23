@@ -357,6 +357,10 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertEqual((run.result or {}).get("automatic_attempts"), 1)
         self.assertEqual(result["queue"], "market_data")
         publish.assert_called_once()
+        self.assertEqual(
+            publish.call_args.kwargs["task_id"],
+            run.task_id,
+        )
 
     def test_all_backfill_delivery_uses_the_dedicated_market_data_queue(self):
         from .tasks import BACKFILL_QUEUE
