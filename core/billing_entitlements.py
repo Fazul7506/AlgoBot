@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Dict
+from django.db import DatabaseError
 from django.db.models import Q
 from django.utils import timezone
 from core.models import AuditLog, Subscription
