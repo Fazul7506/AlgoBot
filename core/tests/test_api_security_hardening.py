@@ -67,8 +67,10 @@ class APISecurityHardeningTests(TestCase):
 
     def test_api_csrf_middleware_does_not_bypass_session_cookie(self):
         middleware = APIAwareCsrfViewMiddleware(lambda request: None)
-        request = APIRequestFactory().post("/api/settings/")
-        request.COOKIES[settings.SESSION_COOKIE_NAME] = "session-present"
+        request = APIRequestFactory().post(
+            "/api/settings/",
+            HTTP_COOKIE=f"{settings.SESSION_COOKIE_NAME}=session-present",
+        )
         response = middleware.process_view(request, lambda request: None, (), {})
         self.assertIsNotNone(response)
         self.assertEqual(response.status_code, 403)
