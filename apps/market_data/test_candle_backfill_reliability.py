@@ -77,13 +77,15 @@ class CandleBackfillReliabilityTests(TestCase):
         )
 
         with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as delay:
-            delay.return_value.id = "recovered-task-id"
+            delay.return_value.id = "ignored-celery-generated-id"
             result = reconcile_candle_backfill_runs(max_age_seconds=300)
 
         run.refresh_from_db()
         self.assertEqual(result["recovered"][0]["scope"], "initial")
         self.assertEqual(run.status, "running")
-        self.assertEqual(run.task_id, "recovered-task-id")
+        self.assertTrue(run.task_id)
+        self.assertEqual(run.task_id, result["recovered"][0]["task_id"])
+        self.assertEqual(delay.call_args.kwargs["task_id"], run.task_id)
         delay.assert_called_once()
 
     def test_recent_running_run_is_not_republished(self):
@@ -206,10 +208,13 @@ class CandleBackfillReliabilityTests(TestCase):
             accepted_at=timezone.now() - timedelta(minutes=6),
         )
         with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as publish:
-            publish.return_value.id = "recovered-received-task"
+            publish.return_value.id = "ignored-celery-generated-id"
             result = reconcile_candle_backfill_runs()
         run.refresh_from_db()
-        self.assertEqual(result["recovered"][0]["task_id"], "recovered-received-task")
+        run.refresh_from_db()
+        self.assertTrue(run.task_id)
+        self.assertEqual(result["recovered"][0]["task_id"], run.task_id)
+        self.assertEqual(publish.call_args.kwargs["task_id"], run.task_id)
         self.assertIsNone(run.started_at)
         publish.assert_called_once()
 
@@ -225,11 +230,12 @@ class CandleBackfillReliabilityTests(TestCase):
             requested_at=timezone.now() - timedelta(minutes=3),
         )
         with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as publish:
-            publish.return_value.id = "recovered-task-id"
+            publish.return_value.id = "ignored-celery-generated-id"
             result = reconcile_candle_backfill_runs()
         run.refresh_from_db()
-        self.assertEqual(result["recovered"][0]["task_id"], "recovered-task-id")
-        self.assertEqual(run.task_id, "recovered-task-id")
+        self.assertTrue(run.task_id)
+        self.assertEqual(result["recovered"][0]["task_id"], run.task_id)
+        self.assertEqual(publish.call_args.kwargs["task_id"], run.task_id)
         self.assertIsNone(run.started_at)
         self.assertTrue(
             CandleBackfillEvent.objects.filter(run=run, event_type="recovered").exists()
@@ -248,14 +254,17 @@ class CandleBackfillReliabilityTests(TestCase):
         )
 
         with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as publish:
-            publish.return_value.id = "recovered-once"
+            publish.return_value.id = "ignored-celery-generated-id"
             first = reconcile_candle_backfill_runs(max_age_seconds=300)
-            self.assertEqual(first["recovered"][0]["task_id"], "recovered-once")
+            run.refresh_from_db()
+            self.assertTrue(run.task_id)
+            self.assertEqual(first["recovered"][0]["task_id"], run.task_id)
+            self.assertEqual(publish.call_args.kwargs["task_id"], run.task_id)
 
             second = reconcile_candle_backfill_runs(max_age_seconds=300)
 
         run.refresh_from_db()
-        self.assertEqual(run.task_id, "recovered-once")
+        self.assertEqual(run.task_id, first["recovered"][0]["task_id"])
         self.assertEqual(second, {"recovered": []})
         publish.assert_called_once()
 
