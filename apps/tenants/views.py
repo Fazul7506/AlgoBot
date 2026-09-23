@@ -1,10 +1,9 @@
-from decimal import Decimal
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from .constants import SUBSCRIPTION_PLANS, BILLING_CYCLES, ROLES
 from .models import Tenant, Organization, Workspace, Subscription, License, Team, TeamMember, UsageMetric
-from .services import TenantEngine, OrganizationService, WorkspaceService, SubscriptionService, LicenseService, InvitationService, QuotaService
+from .services import TenantEngine, OrganizationService, WorkspaceService, LicenseService, InvitationService, QuotaService
 
 def _tenant_for(user):
     tenant = Tenant.objects.filter(owner=user).prefetch_related(
@@ -101,20 +100,6 @@ def create_workspace(request):
     ws=WorkspaceService().create(org,name,environment=data.get("environment","production"),default_broker=data.get("default_broker",""),timezone=data.get("timezone",tenant.timezone))
     return JsonResponse({"workspace":{"id":ws.id,"name":ws.name,"environment":ws.environment}},status=201)
 
-@login_required
-@require_http_methods(["POST"])
-def upgrade_subscription(request):
-    import json
-    tenant=_tenant_for(request.user)
-    if not tenant: return JsonResponse({"error":"Tenant not found."}, status=400)
-    data=json.loads(request.body or "{}"); plan=data.get("plan")
-    if plan not in SUBSCRIPTION_PLANS: return JsonResponse({"error":"Unsupported subscription plan."}, status=400)
-    cycle=data.get("billing_cycle","monthly")
-    if cycle not in BILLING_CYCLES: return JsonResponse({"error":"Unsupported billing cycle."}, status=400)
-    price=Decimal(str(data.get("price",0) or 0))
-    sub=SubscriptionService().upgrade(tenant,plan,cycle,price)
-    LicenseService().issue(sub,max_users=int(data.get("max_users",1)),max_brokers=int(data.get("max_brokers",1)),max_strategies=int(data.get("max_strategies",1)))
-    return JsonResponse({"subscription":{"plan":sub.plan,"status":sub.status,"billing_cycle":sub.billing_cycle,"price":str(sub.price)}})
 
 @login_required
 @require_http_methods(["POST"])
