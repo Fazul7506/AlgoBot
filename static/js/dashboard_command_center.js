@@ -14,6 +14,7 @@
   let busy = false;
   let timer = null;
   let lastLoadedAt = null;
+  let selectedAccountId = null;
   const REFRESH_MS = 45000;
   const ACCOUNT_TIMEOUT_MS = 15000;
   const SNAPSHOT_KEY = 'algobot:dashboard:last-verified-account:v2';
@@ -42,11 +43,20 @@
     if (text) text.textContent = label;
   }
 
+  function currentAccountId() {
+    if (selectedAccountId != null) return String(selectedAccountId);
+    const account = window.AlgoBotBrokerState?.get?.()?.account;
+    return account?.id != null ? String(account.id) : null;
+  }
+
   function readLastAccountSnapshot() {
     try {
       const raw = sessionStorage.getItem(SNAPSHOT_KEY);
       const value = raw ? JSON.parse(raw) : null;
-      return value && value.account ? value : null;
+      if (!value || !value.account) return null;
+      const requestedId = currentAccountId();
+      if (requestedId && value.account.id != null && String(value.account.id) !== requestedId) return null;
+      return value;
     } catch (_) { return null; }
   }
   function writeLastAccountSnapshot(account) {
@@ -63,6 +73,7 @@
       setHtml('[data-dashboard-brokers]', `<span><b></b>${esc(message || 'No connected broker account')}</span>`);
       return;
     }
+    selectedAccountId = account.id != null ? String(account.id) : selectedAccountId;
     const currency = account.currency || '';
     const pnl = account.net_profit_loss ?? account.net_pnl ?? account.profit_loss ?? account.pnl;
     const equity = account.equity ?? (pnl != null && account.balance != null ? Number(account.balance) + Number(pnl) : null);
@@ -113,6 +124,8 @@
     setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
     document.documentElement.dataset.dashboardLoading = 'true';
     try {
+        const active = window.AlgoBotBrokerState?.get?.()?.account;
+      if (active?.id != null) selectedAccountId = String(active.id);
       const responses = await Promise.allSettled([
         request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS),
         request('/api/positions/open/', {}, 8000),
@@ -153,7 +166,7 @@
   function boot() {
     $('[data-dashboard-refresh]')?.addEventListener('click', load);
     document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(timer); else { clearTimeout(timer); timer = setTimeout(load, 250); } });
-    window.addEventListener('algobot:account-changed', () => { clearTimeout(timer); timer = setTimeout(load, 250); });
+    window.addEventListener('algobot:account-changed', (event) => { selectedAccountId = event.detail?.id != null ? String(event.detail.id) : null; clearTimeout(timer); timer = setTimeout(load, 250); });
     load();
   }
 
