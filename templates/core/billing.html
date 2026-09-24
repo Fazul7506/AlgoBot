@@ -5,6 +5,11 @@
 <section class="billing-page">
   <header class="page-heading"><div><p class="eyebrow">ACCOUNT</p><h1>Billing</h1><p class="billing-subtitle">Manage your plan and pay securely with IntaSend or Pesapal.</p></div><button class="btn ghost" type="button" data-billing-refresh>Refresh</button></header>
   <section class="panel billing-alert" data-billing-alert hidden role="alert"></section>
+  <form id="billing-checkout-form" action="{% url 'billing_checkout_start' %}" method="post" hidden>
+    {% csrf_token %}
+    <input type="hidden" name="plan" data-checkout-form-plan>
+    <input type="hidden" name="provider" data-checkout-form-provider>
+  </form>
   <section class="card-grid billing-plan-grid" data-plan-grid><div class="panel">Loading plans…</div></section>
   <section class="billing-intasend-security" aria-label="IntaSend payment security">
     <p class="provider-label">IntaSend checkout security</p>
@@ -50,7 +55,16 @@
       if(active||name==='FREE')return `<article class="panel billing-plan-card"><p class="eyebrow">${esc(name)}</p><h2 class="billing-plan-price money-value">${money(p.price_cents,p.currency)}</h2><p>${p.recurring?'30-day subscription cycle':'No recurring charge'}</p><div class="billing-plan-actions">${active?'<button class="btn ghost" type="button" disabled>Current plan</button>':`<button class="btn primary" type="button" data-checkout-plan="${esc(name)}" data-provider="intasend">${name==='FREE'?'Use Free':'Choose plan'}</button>`}</div></article>`;
       return `<article class="panel billing-plan-card"><p class="eyebrow">${esc(name)}</p><h2 class="billing-plan-price money-value">${money(p.price_cents,p.currency)}</h2><p>30-day subscription cycle</p><span class="provider-label">Checkout provider</span><div class="billing-plan-actions"><button class="btn primary provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="intasend"><img class="provider-logo" src="/static/images/intasend-logo.svg" alt="IntaSend">Pay with IntaSend</button><button class="btn ghost provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="pesapal"><img class="provider-logo" src="/static/images/pesapal-logo.svg" alt="Pesapal">Pay with Pesapal</button></div></article>`;
     }).join('')||'<div class="panel">No billing plans are configured.</div>';
-    $('[data-plan-grid]').querySelectorAll('[data-checkout-plan]').forEach(b=>b.addEventListener('click',()=>window.location.assign(`/billing/checkout/start/?plan=${encodeURIComponent(b.dataset.checkoutPlan)}&provider=${encodeURIComponent(b.dataset.provider)}`)));
+    const checkoutForm=$('#billing-checkout-form');
+    const checkoutPlan=checkoutForm?.querySelector('[data-checkout-form-plan]');
+    const checkoutProvider=checkoutForm?.querySelector('[data-checkout-form-provider]');
+    $('[data-plan-grid]').querySelectorAll('[data-checkout-plan]').forEach(b=>b.addEventListener('click',()=>{
+      if(!checkoutForm||!checkoutPlan||!checkoutProvider)return;
+      b.disabled=true;
+      checkoutPlan.value=b.dataset.checkoutPlan||'';
+      checkoutProvider.value=b.dataset.provider||'';
+      checkoutForm.requestSubmit();
+    }));
   }
   async function load(){
     showError('');
