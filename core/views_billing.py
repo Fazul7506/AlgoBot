@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
+from django.urls import reverse
 
 from django.conf import settings
 from django.contrib import messages
@@ -281,9 +282,11 @@ def _checkout(request, plan_name, provider=None):
 
 @login_required
 def billing_checkout_start(request):
-    if request.method != "GET": return redirect("billing_page")
-    url, error = _checkout(request, request.GET.get("plan", ""), request.GET.get("provider") or None)
-    if url: return HttpResponseRedirect(url)
+    if request.method != "POST":
+        return HttpResponseRedirect(reverse("billing_page"))
+    url, error = _checkout(request, request.POST.get("plan", ""), request.POST.get("provider") or None)
+    if url:
+        return HttpResponseRedirect(url)
     messages.error(request, error or "Payment provider could not start checkout. No subscription was activated. Please try again.")
     return redirect("billing_page")
 

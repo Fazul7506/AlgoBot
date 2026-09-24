@@ -6,11 +6,23 @@ class PortfolioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Portfolio
         fields = "__all__"
-        read_only_fields = ("user", "net_asset_value", "created_at", "updated_at")
+        read_only_fields = (
+            "user", "net_asset_value", "current_balance", "equity",
+            "status", "created_at", "updated_at",
+        )
 
 
 class PortfolioAccountSerializer(serializers.ModelSerializer):
-    class Meta: model = PortfolioAccount; fields = "__all__"
+    class Meta:
+        model = PortfolioAccount
+        fields = "__all__"
+
+    def validate_broker_account(self, broker_account):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated or broker_account.user_id != user.id:
+            raise serializers.ValidationError("The selected broker account does not belong to the authenticated user.")
+        return broker_account
 
     def validate_portfolio(self, portfolio):
         request = self.context.get("request")
