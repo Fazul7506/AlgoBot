@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 from io import StringIO
-from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from apps.brokers.models import Broker, BrokerAccount
 from core.billing_entitlements import usage
@@ -42,6 +42,17 @@ class StrategyControlPlaneTests(TestCase):
             timeframe='M5',
             criteria={'rsi_min': 40},
         )
+
+    def test_strategy_catalogue_cannot_be_mutated_through_api(self):
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        response = client.post(
+            '/api/strategies/',
+            {'name': 'Forged', 'slug': 'forged', 'category': 'Momentum'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 405)
+        self.assertFalse(Strategy.objects.filter(slug='forged').exists())
 
     def test_only_one_current_configuration_is_selected_by_command(self):
         output = StringIO()

@@ -7,6 +7,10 @@ from core.serializers import SubscriptionSerializer, UserProfileSerializer
 from apps.execution.serializers import OrderSerializer
 from apps.brokers.models import Broker, BrokerAccount
 from apps.brokers.serializers import OrderSerializer as BrokerOrderSerializer
+from apps.risk.models import RiskProfile, RiskRule
+from apps.risk.serializers import RiskRuleSerializer
+from apps.portfolio.models import Portfolio, PortfolioAllocation, CashFlow
+from apps.portfolio.serializers import PortfolioAllocationSerializer, CashFlowSerializer
 
 
 class APISecurityHardeningTests(TestCase):
@@ -59,6 +63,36 @@ class APISecurityHardeningTests(TestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         for field in ("status", "broker_order_id", "routing_context"):
             self.assertNotIn(field, serializer.validated_data)
+
+    def test_risk_rule_serializer_rejects_foreign_profile(self):
+        other = get_user_model().objects.create_user(username="other-risk-user", password="StrongPassword123!")
+        profile = RiskProfile.objects.create(user=other, profile_name="Other")
+        request = APIRequestFactory().post("/api/risk/rules/")
+        request.user = self.user
+        serializer = RiskRuleSerializer(
+            data={"profile": profile.pk, "rule_name": "forged", "rule_type": "max_daily_loss", "value": "0.01"},
+            context={"request": request},
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("profile", serializer.errors)
+
+    def test_portfolio_writable_relations_reject_foreign_portfolio(self):
+        other = get_user_model().objects.create_user(username="other-portfolio-user", password="StrongPassword123!")
+        foreign = Portfolio.objects.create(user=other, name="Other Portfolio")
+        request = APIRequestFactory().post("/api/portfolio/allocation/")
+        request.user = self.user
+        allocation = PortfolioAllocationSerializer(
+            data={"portfolio": foreign.pk, "symbol": "R_100", "allocation_percent": "10"},
+            context={"request": request},
+        )
+        self.assertFalse(allocation.is_valid())
+        self.assertIn("portfolio", allocation.errors)
+        cashflow = CashFlowSerializer(
+            data={"portfolio": foreign.pk, "deposit": "100"},
+            context={"request": request},
+        )
+        self.assertFalse(cashflow.is_valid())
+        self.assertIn("portfolio", cashflow.errors)
 
     def test_browser_session_authentication_retains_csrf_enforcement(self):
         self.assertTrue(hasattr(BrowserSessionAuthentication(), "enforce_csrf"))
