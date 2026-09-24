@@ -97,26 +97,8 @@ class DerivTradingActionView(views.APIView):
                 multiplier=request.data.get("multiplier"),
                 subscribe=bool(request.data.get("subscribe", True)),
             ))
-        if action == "buy":
-            return self._execute(request, lambda ops: async_to_sync(ops.buy)(
-                proposal_id=request.data.get("proposal_id"), price=request.data.get("price")
-            ))
-        if action == "open-contract":
-            return self._execute(request, lambda ops: async_to_sync(ops.open_contract)(
-                request.data.get("contract_id"), bool(request.data.get("subscribe", True))
-            ))
-        if action == "sell":
-            return self._execute(request, lambda ops: async_to_sync(ops.sell)(
-                contract_id=request.data.get("contract_id"), price=request.data.get("price", 0)
-            ))
-        if action == "update":
-            return self._execute(request, lambda ops: async_to_sync(ops.update)(
-                contract_id=request.data.get("contract_id"), changes=request.data.get("changes") or {}
-            ))
         if action == "update-history":
             return self._execute(request, lambda ops: async_to_sync(ops.update_history)(request.data.get("contract_id")))
-        if action == "cancel":
-            return self._execute(request, lambda ops: async_to_sync(ops.cancel)(request.data.get("contract_id")))
         return response.Response({"status": "rejected", "code": "UNKNOWN_DERIV_ACTION", "retryable": False}, status=status.HTTP_404_NOT_FOUND)
 
     def get(self, request, action):
