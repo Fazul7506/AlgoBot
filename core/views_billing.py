@@ -245,6 +245,19 @@ def _checkout(request, plan_name, provider=None):
         if provider_result and provider_result.get("paid"):
             return None, "This checkout has already completed. Refresh billing to see the updated subscription."
         if provider_state not in {"FAILED", "CANCELLED", "REVERSED", "INVALID"}:
+            # For an IntaSend recurring checkout that is still PENDING or
+            # PROCESSING, the provider may return the current setup_url. Resume
+            # that authoritative checkout rather than trapping the user behind
+            # a stale local checkout_open state.
+            provider_payload = provider_result.get("provider_payload") if provider_result else None
+            resume_url = provider_payload.get("setup_url") if isinstance(provider_payload, dict) else None
+            parsed_resume_url = urlparse(str(resume_url or ""))
+            if (
+                provider_state in {"PENDING", "PROCESSING"}
+                and parsed_resume_url.scheme in {"http", "https"}
+                and parsed_resume_url.netloc
+            ):
+                return str(resume_url), None
             return None, "A checkout is already open. Complete it or wait for its provider status before starting another checkout."
 
         # The provider has reached a terminal non-success state. Atomically claim the
