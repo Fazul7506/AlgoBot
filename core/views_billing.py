@@ -83,7 +83,9 @@ def _provider_state(result, provider):
         data = {**data, **data["invoice"]}
     if provider == PaymentService.PESAPAL:
         return str(data.get("payment_status_description", "")).upper(), data
-    return str(data.get("state", "")).upper(), data
+    # IntaSend collection responses expose state while recurring subscription
+    # responses expose status. Support both authoritative response shapes.
+    return str(data.get("state") or data.get("status") or "").upper(), data
 
 
 def _reconcile_invoice(invoice, provider):
@@ -96,7 +98,15 @@ def _reconcile_invoice(invoice, provider):
         tracking = (invoice.metadata or {}).get("tracking_id") or invoice.external_id
         result = service.get_pesapal_transaction_status(str(tracking)) if tracking else None
     elif provider == service.INTASEND:
-        result = service.get_intasend_payment_status(invoice.external_id) if invoice.external_id else None
+        invoice_meta = invoice.metadata or {}
+        subscription_id = invoice_meta.get("subscription_id")
+        if subscription_id:
+            # Recurring plans create an IntaSend subscription; query that
+            # subscription directly instead of treating its ID as a collection
+            # invoice ID.
+            result = service.get_intasend_subscription_status(str(subscription_id))
+        else:
+            result = service.get_intasend_payment_status(invoice.external_id) if invoice.external_id else None
     else:
         return {"paid": False, "state": "UNSUPPORTED_PROVIDER", "invoice": invoice, "subscription": None}
     provider_state, payload = _provider_state(result, provider)
@@ -104,7 +114,12 @@ def _reconcile_invoice(invoice, provider):
     if provider == service.PESAPAL:
         metadata["merchant_reference"] = metadata.get("reference") or metadata.get("merchant_reference")
         metadata["tracking_id"] = (invoice.metadata or {}).get("tracking_id") or invoice.external_id
-    normalized = PaymentReconciler.normalize_status(provider_state)
+    # IntaSend recurring subscriptions report successful initial payment as
+    # ACTIVE (and may also report COMPLETE). Translate only those success
+    # states into the canonical payment state; never treat PENDING/PROCESSING
+    # as paid.
+    reconciler_state = "COMPLETE" if provider == service.INTASEND and provider_state in {"ACTIVE", "COMPLETE"} else provider_state
+    normalized = PaymentReconciler.normalize_status(reconciler_state)
     external_id = invoice.external_id or metadata.get("tracking_id")
     reconciled = PaymentReconciler.reconcile(provider=provider, external_id=external_id, status=normalized, amount=payload.get("amount") or payload.get("value") or payload.get("net_amount"), currency=payload.get("currency") or invoice.currency, metadata=metadata)
     subscription = Subscription.objects.filter(user=invoice.user).first()
