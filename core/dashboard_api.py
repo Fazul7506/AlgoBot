@@ -139,6 +139,9 @@ class DashboardViewSet(viewsets.ViewSet):
                     "equity": account.equity if account.equity != 0 else None,
                     "margin": account.margin if account.margin != 0 else None,
                     "free_margin": account.free_margin if account.free_margin != 0 else None,
+                    "net_profit_loss": stats["total_pnl"],
+                    "realized_pnl": stats["realized_pnl"],
+                    "unrealized_pnl": stats["unrealized_pnl"],
                     "last_synced_at": account.last_synced_at,
                     "data_freshness": (
                         "unknown" if account.last_synced_at is None
