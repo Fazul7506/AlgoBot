@@ -208,7 +208,11 @@ class PaymentService:
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-        base = self.intasend_base_url
+        # IntaSend documents the live subscription/customer/plan API under
+        # payment.intasend.com. Canonicalize only the recurring subscription
+        # flow so the provider-generated setup URL is issued by the same live
+        # checkout environment without changing one-time checkout behavior.
+        base = self._intasend_subscription_api_base_url()
         customer_payload = {
             "email": getattr(user, "email", "") or "",
             "first_name": getattr(user, "first_name", "") or getattr(user, "username", "Customer"),
@@ -323,6 +327,19 @@ class PaymentService:
                 classification="timeout/network failure", exception=exc,
             )
             return {"url": "", "provider": self.INTASEND, "error": "Payment provider is temporarily unavailable. Please try again.", "error_classification": "timeout/network failure"}
+
+    def _intasend_subscription_api_base_url(self):
+        """Return the canonical IntaSend base for recurring subscriptions."""
+        parsed = urlsplit(self.intasend_base_url)
+        if (parsed.hostname or "").lower() == "api.intasend.com":
+            return urlunsplit((
+                parsed.scheme or "https",
+                "payment.intasend.com",
+                parsed.path.rstrip("/"),
+                "",
+                "",
+            ))
+        return self.intasend_base_url
 
     def create_pesapal_checkout(self, user, subscription_plan):
         if not self.pesapal_consumer_key:
