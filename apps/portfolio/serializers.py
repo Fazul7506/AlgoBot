@@ -32,7 +32,7 @@ class PortfolioAllocationSerializer(serializers.ModelSerializer):
 
 
 class PortfolioPerformanceSerializer(serializers.ModelSerializer):
-    class Meta: model = PortfolioPerformance; fields = "__all__"; read_only_fields = "__all__"
+    class Meta: model = PortfolioPerformance; fields = "__all__"
 
 
 class PortfolioExposureSerializer(serializers.ModelSerializer):
