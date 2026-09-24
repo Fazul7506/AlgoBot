@@ -83,7 +83,7 @@
     setText('[data-kpi="pnl"]', pnl == null ? 'Unavailable' : money(pnl, currency));
     setText('[data-kpi-state="balance"]', 'Authoritative broker snapshot');
     setText('[data-kpi-state="equity"]', account.equity == null ? 'Not reported by broker' : 'Authoritative broker equity');
-    const broker = account.broker?.name || account.broker_name || 'Broker';
+    const broker = typeof account.broker === 'string' ? account.broker : (account.broker?.name || account.broker_name || 'Broker');
     const id = account.account_id || account.broker_account_id || account.loginid || 'Account';
     const sync = account.last_synced_at ? new Date(account.last_synced_at).toLocaleTimeString() : 'snapshot';
     setHtml('[data-dashboard-brokers]', `<span><b></b><strong>${esc(broker)}</strong> · ${esc(id)} · CONNECTED</span><small>Broker snapshot · ${esc(sync)}</small>`);
