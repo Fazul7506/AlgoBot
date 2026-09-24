@@ -23,7 +23,6 @@ class RiskAssessmentSerializer(serializers.ModelSerializer):
     class Meta:
         model=RiskAssessment
         fields='__all__'
-        read_only_fields='__all__'
 
 class ExposureSerializer(serializers.ModelSerializer):
     class Meta:
