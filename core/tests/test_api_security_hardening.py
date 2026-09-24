@@ -9,7 +9,8 @@ from apps.brokers.models import Broker, BrokerAccount
 from apps.brokers.serializers import OrderSerializer as BrokerOrderSerializer
 from apps.risk.models import RiskProfile, RiskRule
 from apps.risk.serializers import RiskRuleSerializer
-from apps.portfolio.models import Portfolio, PortfolioAllocation, CashFlow
+from apps.portfolio.models import Portfolio, PortfolioAllocation, PortfolioAccount, CashFlow
+from apps.portfolio.api import PortfolioAllocationViewSet
 from apps.portfolio.serializers import PortfolioAllocationSerializer, CashFlowSerializer
 
 
@@ -93,6 +94,43 @@ class APISecurityHardeningTests(TestCase):
         )
         self.assertFalse(cashflow.is_valid())
         self.assertIn("portfolio", cashflow.errors)
+
+    def test_portfolio_account_serializer_rejects_foreign_broker_account(self):
+        other = get_user_model().objects.create_user(username="other-broker-owner", password="StrongPassword123!")
+        foreign_account = BrokerAccount.objects.create(
+            user=other, broker=self.broker, account_id="FOREIGN-ACCOUNT",
+            status="active", credentials={"account_type": "demo"},
+        )
+        portfolio = Portfolio.objects.create(user=self.user, name="Owned Portfolio")
+        request = APIRequestFactory().post("/api/portfolio/account/")
+        request.user = self.user
+        from apps.portfolio.serializers import PortfolioAccountSerializer
+        serializer = PortfolioAccountSerializer(
+            data={"portfolio": portfolio.pk, "broker": self.broker.pk, "broker_account": foreign_account.pk},
+            context={"request": request},
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("broker_account", serializer.errors)
+
+    def test_derived_portfolio_allocation_endpoint_cannot_be_mutated_directly(self):
+        portfolio = Portfolio.objects.create(user=self.user, name="Owned Portfolio")
+        request = APIRequestFactory().post("/api/portfolio/allocation/")
+        request.user = self.user
+        response = PortfolioAllocationViewSet.as_view({"post": "create"})(request)
+        self.assertEqual(response.status_code, 405)
+        self.assertFalse(PortfolioAllocation.objects.filter(portfolio=portfolio).exists())
+
+    def test_portfolio_serializer_rejects_client_owned_financial_state(self):
+        from apps.portfolio.serializers import PortfolioSerializer
+        serializer = PortfolioSerializer(data={
+            "name": "Forged",
+            "current_balance": "999999",
+            "equity": "999999",
+            "status": "inactive",
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        for field in ("current_balance", "equity", "status"):
+            self.assertNotIn(field, serializer.validated_data)
 
     def test_browser_session_authentication_retains_csrf_enforcement(self):
         self.assertTrue(hasattr(BrowserSessionAuthentication(), "enforce_csrf"))
