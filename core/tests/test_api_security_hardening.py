@@ -70,7 +70,7 @@ class APISecurityHardeningTests(TestCase):
         request = APIRequestFactory().post("/api/risk/rules/")
         request.user = self.user
         serializer = RiskRuleSerializer(
-            data={"profile": profile.pk, "rule_name": "forged", "rule_type": "max_loss", "value": "0.01"},
+            data={"profile": profile.pk, "rule_name": "forged", "rule_type": "max_daily_loss", "value": "0.01"},
             context={"request": request},
         )
         self.assertFalse(serializer.is_valid())
