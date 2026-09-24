@@ -35,15 +35,15 @@ class PortfolioViewSet(viewsets.ModelViewSet):
 class PortfolioPerformanceViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PortfolioPerformanceSerializer
     def get_queryset(self): return PortfolioPerformance.objects.filter(portfolio__user=self.request.user)
-class PortfolioAllocationViewSet(viewsets.ModelViewSet):
+class PortfolioAllocationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PortfolioAllocationSerializer
     def get_queryset(self): return PortfolioAllocation.objects.filter(portfolio__user=self.request.user)
-class PortfolioExposureViewSet(viewsets.ModelViewSet):
+class PortfolioExposureViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PortfolioExposureSerializer
     def get_queryset(self): return PortfolioExposure.objects.filter(portfolio__user=self.request.user)
 class PortfolioForecastViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PortfolioForecastSerializer
     def get_queryset(self): return PortfolioForecast.objects.filter(portfolio__user=self.request.user)
-class CashFlowViewSet(viewsets.ModelViewSet):
+class CashFlowViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = CashFlowSerializer
     def get_queryset(self): return CashFlow.objects.filter(portfolio__user=self.request.user)
