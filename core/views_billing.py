@@ -83,7 +83,9 @@ def _provider_state(result, provider):
         data = {**data, **data["invoice"]}
     if provider == PaymentService.PESAPAL:
         return str(data.get("payment_status_description", "")).upper(), data
-    return str(data.get("state", "")).upper(), data
+    # IntaSend collection responses expose state while recurring subscription
+    # responses expose status. Support both authoritative response shapes.
+    return str(data.get("state") or data.get("status") or "").upper(), data
 
 
 def _reconcile_invoice(invoice, provider):
@@ -96,7 +98,15 @@ def _reconcile_invoice(invoice, provider):
         tracking = (invoice.metadata or {}).get("tracking_id") or invoice.external_id
         result = service.get_pesapal_transaction_status(str(tracking)) if tracking else None
     elif provider == service.INTASEND:
-        result = service.get_intasend_payment_status(invoice.external_id) if invoice.external_id else None
+        invoice_meta = invoice.metadata or {}
+        subscription_id = invoice_meta.get("subscription_id")
+        if subscription_id:
+            # Recurring plans create an IntaSend subscription; query that
+            # subscription directly instead of treating its ID as a collection
+            # invoice ID.
+            result = service.get_intasend_subscription_status(str(subscription_id))
+        else:
+            result = service.get_intasend_payment_status(invoice.external_id) if invoice.external_id else None
     else:
         return {"paid": False, "state": "UNSUPPORTED_PROVIDER", "invoice": invoice, "subscription": None}
     provider_state, payload = _provider_state(result, provider)
@@ -104,7 +114,12 @@ def _reconcile_invoice(invoice, provider):
     if provider == service.PESAPAL:
         metadata["merchant_reference"] = metadata.get("reference") or metadata.get("merchant_reference")
         metadata["tracking_id"] = (invoice.metadata or {}).get("tracking_id") or invoice.external_id
-    normalized = PaymentReconciler.normalize_status(provider_state)
+    # IntaSend recurring subscriptions report successful initial payment as
+    # ACTIVE (and may also report COMPLETE). Translate only those success
+    # states into the canonical payment state; never treat PENDING/PROCESSING
+    # as paid.
+    reconciler_state = "COMPLETE" if provider == service.INTASEND and provider_state in {"ACTIVE", "COMPLETE"} else provider_state
+    normalized = PaymentReconciler.normalize_status(reconciler_state)
     external_id = invoice.external_id or metadata.get("tracking_id")
     reconciled = PaymentReconciler.reconcile(provider=provider, external_id=external_id, status=normalized, amount=payload.get("amount") or payload.get("value") or payload.get("net_amount"), currency=payload.get("currency") or invoice.currency, metadata=metadata)
     subscription = Subscription.objects.filter(user=invoice.user).first()
@@ -230,6 +245,19 @@ def _checkout(request, plan_name, provider=None):
         if provider_result and provider_result.get("paid"):
             return None, "This checkout has already completed. Refresh billing to see the updated subscription."
         if provider_state not in {"FAILED", "CANCELLED", "REVERSED", "INVALID"}:
+            # For an IntaSend recurring checkout that is still PENDING or
+            # PROCESSING, the provider may return the current setup_url. Resume
+            # that authoritative checkout rather than trapping the user behind
+            # a stale local checkout_open state.
+            provider_payload = provider_result.get("provider_payload") if provider_result else None
+            resume_url = provider_payload.get("setup_url") if isinstance(provider_payload, dict) else None
+            parsed_resume_url = urlparse(str(resume_url or ""))
+            if (
+                provider_state in {"PENDING", "PROCESSING"}
+                and parsed_resume_url.scheme in {"http", "https"}
+                and parsed_resume_url.netloc
+            ):
+                return str(resume_url), None
             return None, "A checkout is already open. Complete it or wait for its provider status before starting another checkout."
 
         # The provider has reached a terminal non-success state. Atomically claim the

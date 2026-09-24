@@ -294,6 +294,116 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(invoice.metadata["state"], "checkout_open")
 
 
+    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
+    @patch("core.views_billing.PaymentService.get_intasend_subscription_status")
+    def test_failed_open_intasend_subscription_is_reconciled_and_restarted(self, get_status, create_checkout):
+        invoice = Invoice.objects.create(
+            user=self.user,
+            amount_cents=50000,
+            currency="KES",
+            metadata={
+                "plan": "BASIC",
+                "provider": "intasend",
+                "state": "checkout_open",
+                "reference": "IS-SUB-RETRY",
+                "subscription_id": "SUB-FAILED-1",
+            },
+            external_id="SUB-FAILED-1",
+        )
+        get_status.return_value = {
+            "subscription_id": "SUB-FAILED-1",
+            "status": "FAILED",
+            "reference": "IS-SUB-RETRY",
+            "plan": {"currency": "KES", "amount": "500.00"},
+        }
+        create_checkout.return_value = {
+            "url": "https://payment.intasend.com/subscriptions/charge/new",
+            "invoice_id": "SUB-NEW-1",
+            "session_id": "SUB-NEW-1",
+            "subscription_id": "SUB-NEW-1",
+            "reference": "IS-SUB-NEW",
+        }
+
+        response = self.client.post(
+            reverse("billing_checkout_start"),
+            {"plan": "BASIC", "provider": "intasend"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "https://payment.intasend.com/subscriptions/charge/new")
+        get_status.assert_called_once_with("SUB-FAILED-1")
+        create_checkout.assert_called_once()
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.external_id, "SUB-NEW-1")
+        self.assertEqual(invoice.metadata["state"], "checkout_open")
+
+    @patch("core.views_billing.PaymentService.get_intasend_subscription_status")
+    def test_active_intasend_subscription_reconciles_as_completed_payment(self, get_status):
+        invoice = Invoice.objects.create(
+            user=self.user,
+            amount_cents=50000,
+            currency="KES",
+            metadata={
+                "plan": "BASIC",
+                "provider": "intasend",
+                "reference": "IS-SUB-ACTIVE",
+                "subscription_id": "SUB-ACTIVE-1",
+            },
+            external_id="SUB-ACTIVE-1",
+        )
+        get_status.return_value = {
+            "subscription_id": "SUB-ACTIVE-1",
+            "status": "ACTIVE",
+            "reference": "IS-SUB-ACTIVE",
+            "plan": {"currency": "KES", "amount": "500.00"},
+        }
+
+        result = _reconcile_invoice(invoice, "intasend")
+
+        self.assertTrue(result["paid"])
+        self.assertEqual(result["state"], "ACTIVE")
+        invoice.refresh_from_db()
+        self.assertTrue(invoice.paid)
+        self.assertEqual(Payment.objects.get(invoice=invoice).status, "COMPLETED")
+
+
+    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
+    @patch("core.views_billing.PaymentService.get_intasend_subscription_status")
+    def test_pending_intasend_subscription_resumes_provider_checkout(self, get_status, create_checkout):
+        Invoice.objects.create(
+            user=self.user,
+            amount_cents=50000,
+            currency="KES",
+            metadata={
+                "plan": "BASIC",
+                "provider": "intasend",
+                "state": "checkout_open",
+                "reference": "IS-SUB-PENDING",
+                "subscription_id": "SUB-PENDING-1",
+            },
+            external_id="SUB-PENDING-1",
+        )
+        get_status.return_value = {
+            "subscription_id": "SUB-PENDING-1",
+            "status": "PENDING",
+            "setup_url": "https://payment.intasend.com/subscriptions/charge/resume",
+            "reference": "IS-SUB-PENDING",
+            "plan": {"currency": "KES", "amount": "500.00"},
+        }
+
+        response = self.client.post(
+            reverse("billing_checkout_start"),
+            {"plan": "BASIC", "provider": "intasend"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "https://payment.intasend.com/subscriptions/charge/resume")
+        get_status.assert_called_once_with("SUB-PENDING-1")
+        create_checkout.assert_not_called()
+
+
 class BillingCheckoutSecretPersistenceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="billing-secret", password="pass12345")
