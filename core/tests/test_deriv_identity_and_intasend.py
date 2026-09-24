@@ -75,7 +75,7 @@ class IntaSendRecurringCustomerValidationTests(TestCase):
         post.side_effect = [
             response({"id": "customer-1"}),
             response({"id": "plan-1"}),
-            response({"id": "subscription-1", "setup_url": "https://pay.example/setup"}),
+            response({"id": "subscription-1", "setup_url": "https://payment.intasend.com/subscriptions/charge/test-session"}),
         ]
 
         user = get_user_model().objects.create_user(
@@ -88,7 +88,7 @@ class IntaSendRecurringCustomerValidationTests(TestCase):
 
         result = PaymentService().create_intasend_subscription(user, plan)
 
-        self.assertEqual(result["url"], "https://pay.example/setup")
+        self.assertEqual(result["url"], "https://payment.intasend.com/subscriptions/charge/test-session")
         self.assertEqual(post.call_args_list[0].args[0], "https://payment.intasend.com/api/v1/subscriptions-customers/")
         self.assertEqual(post.call_args_list[1].args[0], "https://payment.intasend.com/api/v1/subscriptions-plans/")
         self.assertEqual(post.call_args_list[2].args[0], "https://payment.intasend.com/api/v1/subscriptions/")
