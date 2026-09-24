@@ -47,7 +47,7 @@ class PortfolioExposureSerializer(serializers.ModelSerializer):
 
 
 class PortfolioForecastSerializer(serializers.ModelSerializer):
-    class Meta: model = PortfolioForecast; fields = "__all__"; read_only_fields = "__all__"
+    class Meta: model = PortfolioForecast; fields = "__all__"
 
 
 class CashFlowSerializer(serializers.ModelSerializer):
