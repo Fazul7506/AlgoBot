@@ -89,6 +89,9 @@ class IntaSendRecurringCustomerValidationTests(TestCase):
         result = PaymentService().create_intasend_subscription(user, plan)
 
         self.assertEqual(result["url"], "https://pay.example/setup")
+        self.assertEqual(post.call_args_list[0].args[0], "https://payment.intasend.com/api/v1/subscriptions-customers/")
+        self.assertEqual(post.call_args_list[1].args[0], "https://payment.intasend.com/api/v1/subscriptions-plans/")
+        self.assertEqual(post.call_args_list[2].args[0], "https://payment.intasend.com/api/v1/subscriptions/")
         customer_payload = post.call_args_list[0].kwargs["json"]
         self.assertEqual(customer_payload["first_name"], "Billing")
         self.assertEqual(customer_payload["last_name"], "Customer")
