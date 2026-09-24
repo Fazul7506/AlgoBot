@@ -32,6 +32,15 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("if(name==='ENTERPRISE')", template)
         self.assertIn('data-checkout-plan="${esc(name)}"', template)
 
+    def test_billing_checkout_is_csrf_protected_post_not_get_navigation(self):
+        from pathlib import Path
+        template = Path("templates/core/billing.html").read_text(encoding="utf-8")
+        self.assertIn('id="billing-checkout-form"', template)
+        self.assertIn('method="post"', template)
+        self.assertIn("{% csrf_token %}", template)
+        self.assertIn("checkoutForm.requestSubmit()", template)
+        self.assertNotIn("/billing/checkout/start/?plan=", template)
+
     def test_terminal_template_uses_canonical_shell_navigation(self):
         from pathlib import Path
         template = Path("templates/core/trading.html").read_text(encoding="utf-8")
