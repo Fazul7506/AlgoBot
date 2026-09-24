@@ -208,10 +208,12 @@ class PaymentService:
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-        # IntaSend documents the live subscription/customer/plan API under
-        # payment.intasend.com. Canonicalize only the recurring subscription
-        # flow so the provider-generated setup URL is issued by the same live
-        # checkout environment without changing one-time checkout behavior.
+        # Use the configured IntaSend API base exactly as deployed. IntaSend's
+        # endpoint-specific subscription documentation and its generic
+        # authentication documentation currently publish different live hosts;
+        # silently rewriting the configured host can turn a reachable API call
+        # into a network timeout. The provider-generated setup_url is validated
+        # separately and is returned unchanged.
         base = self._intasend_subscription_api_base_url()
         customer_payload = {
             "email": getattr(user, "email", "") or "",
@@ -329,16 +331,15 @@ class PaymentService:
             return {"url": "", "provider": self.INTASEND, "error": "Payment provider is temporarily unavailable. Please try again.", "error_classification": "timeout/network failure"}
 
     def _intasend_subscription_api_base_url(self):
-        """Return the canonical IntaSend base for recurring subscriptions."""
-        parsed = urlsplit(self.intasend_base_url)
-        if (parsed.hostname or "").lower() == "api.intasend.com":
-            return urlunsplit((
-                parsed.scheme or "https",
-                "payment.intasend.com",
-                parsed.path.rstrip("/"),
-                "",
-                "",
-            ))
+        """Return the configured IntaSend API base for recurring subscriptions.
+
+        Do not silently rewrite the deployment's API host. IntaSend's current
+        documentation is inconsistent: the generic authentication page uses
+        ``payment.intasend.com`` while the subscription API reference publishes
+        ``api.intasend.com``. The application must honor the explicitly
+        configured endpoint so a provider-side host mismatch is observable
+        instead of becoming an opaque timeout.
+        """
         return self.intasend_base_url
 
     def create_pesapal_checkout(self, user, subscription_plan):

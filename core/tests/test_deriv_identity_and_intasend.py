@@ -89,9 +89,9 @@ class IntaSendRecurringCustomerValidationTests(TestCase):
         result = PaymentService().create_intasend_subscription(user, plan)
 
         self.assertEqual(result["url"], "https://payment.intasend.com/subscriptions/charge/test-session")
-        self.assertEqual(post.call_args_list[0].args[0], "https://payment.intasend.com/api/v1/subscriptions-customers/")
-        self.assertEqual(post.call_args_list[1].args[0], "https://payment.intasend.com/api/v1/subscriptions-plans/")
-        self.assertEqual(post.call_args_list[2].args[0], "https://payment.intasend.com/api/v1/subscriptions/")
+        self.assertEqual(post.call_args_list[0].args[0], "https://api.intasend.com/api/v1/subscriptions-customers/")
+        self.assertEqual(post.call_args_list[1].args[0], "https://api.intasend.com/api/v1/subscriptions-plans/")
+        self.assertEqual(post.call_args_list[2].args[0], "https://api.intasend.com/api/v1/subscriptions/")
         customer_payload = post.call_args_list[0].kwargs["json"]
         self.assertEqual(customer_payload["first_name"], "Billing")
         self.assertEqual(customer_payload["last_name"], "Customer")
@@ -125,7 +125,7 @@ class IntaSendCheckoutUrlHardeningTests(TestCase):
         self.assertEqual(result["error_classification"], "malformed provider response")
 
     @override_settings(INTASEND_API_BASE_URL="https://api.intasend.com")
-    def test_live_recurring_api_base_is_canonicalized_without_changing_configured_one_time_base(self):
+    def test_live_recurring_api_base_honors_configured_endpoint(self):
         service = PaymentService()
-        self.assertEqual(service._intasend_subscription_api_base_url(), "https://payment.intasend.com")
+        self.assertEqual(service._intasend_subscription_api_base_url(), "https://api.intasend.com")
         self.assertEqual(service.intasend_base_url, "https://api.intasend.com")
