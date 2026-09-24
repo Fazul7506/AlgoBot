@@ -129,8 +129,8 @@ class PaymentService:
                 return {"url": "", "provider": self.INTASEND, "error": self._checkout_http_error(self.INTASEND, response.status_code, data), "error_classification": classification}
             url = data.get("url") or data.get("checkout_url") or data.get("link") or ""
             invoice_id = data.get("invoice_id") or data.get("id") or data.get("checkout_id")
-            if not self._is_checkout_url(url):
-                logger.error("IntaSend checkout returned success without a checkout URL: %s", data)
+            if not self._is_checkout_url(url, self.INTASEND):
+                logger.error("IntaSend checkout returned success without a valid provider checkout URL")
                 return {"url": "", "provider": self.INTASEND, "error": "Payment provider returned no checkout URL"}
             self._log_provider_diagnostic(
                 provider=self.INTASEND,
@@ -301,7 +301,7 @@ class PaymentService:
 
             setup_url = subscribe_data.get("setup_url") or subscribe_data.get("url")
             subscription_id = subscribe_data.get("subscription_id") or subscribe_data.get("id")
-            if not self._is_checkout_url(setup_url) or not subscription_id:
+            if not self._is_checkout_url(setup_url, self.INTASEND) or not subscription_id:
                 return {"url": "", "provider": self.INTASEND, "error": "IntaSend returned incomplete subscription checkout data.", "error_classification": "malformed provider response"}
 
             self._log_provider_diagnostic(
@@ -670,10 +670,19 @@ class PaymentService:
             diagnostic["exception"] = type(exception).__name__
         logger.error("payment_provider_diagnostic=%s", diagnostic)
 
-    @staticmethod
-    def _is_checkout_url(value):
+    def _is_checkout_url(self, value, provider):
         parsed = urlsplit(str(value or "").strip())
-        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            return False
+        host = parsed.hostname.lower().rstrip(".")
+        if provider == self.INTASEND:
+            base_host = (urlsplit(self._intasend_subscription_api_base_url()).hostname or "").lower().rstrip(".")
+            allowed = {"payment.intasend.com", "sandbox.intasend.com"}
+            return host in allowed and ((base_host == "sandbox.intasend.com" and host == "sandbox.intasend.com") or (base_host != "sandbox.intasend.com" and host == "payment.intasend.com"))
+        if provider == self.PESAPAL:
+            base_host = (urlsplit(self.pesapal_base_url).hostname or "").lower().rstrip(".")
+            return host == base_host
+        return False
 
     @staticmethod
     def _provider_error(data):
