@@ -173,8 +173,29 @@ class PaymentReconciler:
         raw = raw_payload if isinstance(raw_payload, bytes) else str(raw_payload).encode()
         return hashlib.sha256(raw).hexdigest()
 
+    @staticmethod
+    def _sanitize_provider_payload(value, key=""):
+        if isinstance(value, dict):
+            clean = {}
+            for name, item in value.items():
+                name_lower = str(name).lower()
+                if name_lower in {"setup_url", "checkout_url", "payment_link", "authorization", "token", "access_token", "secret", "secret_key"}:
+                    clean[str(name)] = "[REDACTED]"
+                else:
+                    clean[str(name)] = PaymentReconciler._sanitize_provider_payload(item, str(name))
+            return clean
+        if isinstance(value, list):
+            return [PaymentReconciler._sanitize_provider_payload(item, key) for item in value[:100]]
+        if isinstance(value, str):
+            lowered = value.lower()
+            if "subscriptions/charge/" in lowered or "authorization:" in lowered:
+                return "[REDACTED]"
+            return value[:1000]
+        return value
+
     @classmethod
     def _record_webhook(cls, provider, data, raw_payload, external_id, received_status):
+        safe_data = cls._sanitize_provider_payload(data)
         raw = raw_payload if isinstance(raw_payload, bytes) else json.dumps(data, sort_keys=True, default=str).encode()
         event_key = cls._event_key(data, raw)
         payload_hash = hashlib.sha256(raw).hexdigest()
@@ -182,7 +203,7 @@ class PaymentReconciler:
             event, created = PaymentWebhookEvent.objects.get_or_create(
                 provider=provider, event_key=event_key,
                 defaults={"payload_hash": payload_hash, "external_id": str(external_id or ""),
-                          "received_status": str(received_status or "")[:32], "payload": data, "attempts": 1},
+                          "received_status": str(received_status or "")[:32], "payload": safe_data, "attempts": 1},
             )
         except IntegrityError:
             event = PaymentWebhookEvent.objects.get(provider=provider, event_key=event_key)
@@ -253,7 +274,7 @@ class PaymentReconciler:
                 recurring_id = invoice_data.get("invoice_id") or item.get("transaction_id")
                 if not recurring_id:
                     continue
-                metadata = {"user_id": subscription.user_id, "plan": subscription.plan, "provider": "intasend", "subscription_id": str(data["subscription_id"]), "subscription_event": True, "provider_payload": data}
+                metadata = {"user_id": subscription.user_id, "plan": subscription.plan, "provider": "intasend", "subscription_id": str(data["subscription_id"]), "subscription_event": True, "provider_payload": cls._sanitize_provider_payload(data)}
                 results.append(cls.reconcile(provider="intasend", external_id=str(recurring_id), status=invoice_data.get("state"), amount=invoice_data.get("value") or invoice_data.get("amount") or invoice_data.get("net_amount"), currency=invoice_data.get("currency", subscription.currency or "KES"), metadata=metadata))
             cls._finish_webhook(event, "RECURRING_PROCESSED")
             return {"received": True, "provider": "intasend", "subscription_id": str(data["subscription_id"]), "payments": results}
@@ -277,7 +298,7 @@ class PaymentReconciler:
             status=invoice_data.get("state"),
             amount=invoice_data.get("value") or invoice_data.get("amount") or invoice_data.get("net_amount"),
             currency=invoice_data.get("currency", "KES"),
-            metadata={**data, **invoice_data},
+            metadata=cls._sanitize_provider_payload({**data, **invoice_data}),
         )
         if result is not None:
             cls._finish_webhook(event, result.get("status", ""))
