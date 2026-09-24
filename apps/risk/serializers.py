@@ -28,7 +28,6 @@ class ExposureSerializer(serializers.ModelSerializer):
     class Meta:
         model=Exposure
         fields='__all__'
-        read_only_fields='__all__'
 
 class DrawdownHistorySerializer(serializers.ModelSerializer):
     class Meta:
