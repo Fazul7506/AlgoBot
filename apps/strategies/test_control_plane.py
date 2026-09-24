@@ -43,6 +43,17 @@ class StrategyControlPlaneTests(TestCase):
             criteria={'rsi_min': 40},
         )
 
+    def test_strategy_catalogue_cannot_be_mutated_through_api(self):
+        request = APIRequestFactory().post(
+            '/api/strategies/',
+            {'name': 'Forged', 'slug': 'forged', 'category': 'Momentum'},
+            format='json',
+        )
+        force_authenticate(request, user=self.user)
+        response = StrategyViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(response.status_code, 405)
+        self.assertFalse(Strategy.objects.filter(slug='forged').exists())
+
     def test_only_one_current_configuration_is_selected_by_command(self):
         output = StringIO()
         call_command('strategy', 'switch', user=self.user.pk, strategy='beta', stdout=output)
