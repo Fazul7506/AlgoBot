@@ -183,6 +183,9 @@ def _checkout(request, plan_name, provider=None):
         # or reuse them; a fresh provider response is required for each new checkout.
         metadata.pop("checkout_url", None)
         if existing and metadata.get("state") == "checkout_open":
+            if existing.metadata != metadata:
+                existing.metadata = metadata
+                existing.save(update_fields=["metadata"])
             return None, "A checkout is already open. Complete it or wait for its provider status before starting another checkout."
         now = timezone.now()
         lock_until = metadata.get("checkout_lock_until")
