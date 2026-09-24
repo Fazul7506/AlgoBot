@@ -117,7 +117,7 @@ class BillingPaymentFlowTests(TestCase):
     def test_intasend_checkout_carries_internal_reference_in_return_url(self, post):
         response = Mock()
         response.ok = True
-        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://sandbox.intasend.com/checkout/test-session"}
         post.return_value = response
 
         result = PaymentService().create_intasend_checkout(
@@ -125,7 +125,7 @@ class BillingPaymentFlowTests(TestCase):
             CheckoutPlan(plan="BASIC", price_cents=99900, currency="KES", recurring=False),
         )
 
-        self.assertEqual(result["url"], "https://checkout.example/pay")
+        self.assertEqual(result["url"], "https://sandbox.intasend.com/checkout/test-session")
         payload = post.call_args.kwargs["json"]
         self.assertNotIn("&", payload["redirect_url"])
         self.assertNotIn("provider=", payload["redirect_url"])
@@ -140,7 +140,7 @@ class BillingPaymentFlowTests(TestCase):
         response = Mock()
         response.ok = True
         response.headers = {}
-        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://sandbox.intasend.com/checkout/test-session"}
         post.return_value = response
         reference = f"IS-{self.user.id}-BASIC-invoice-ref"
 
@@ -158,7 +158,7 @@ class BillingPaymentFlowTests(TestCase):
     def test_intasend_omits_unconfigured_merchant_tariffs(self, post):
         response = Mock()
         response.ok = True
-        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://sandbox.intasend.com/checkout/test-session"}
         post.return_value = response
 
         PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
@@ -177,7 +177,7 @@ class BillingPaymentFlowTests(TestCase):
     def test_intasend_sends_configured_merchant_tariffs(self, post):
         response = Mock()
         response.ok = True
-        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://sandbox.intasend.com/checkout/test-session"}
         post.return_value = response
 
         PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
@@ -264,14 +264,14 @@ class BillingPaymentFlowTests(TestCase):
         response.ok = True
         response.status_code = 201
         response.headers = {}
-        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://payment.intasend.com/checkout/test-session"}
         post.return_value = response
 
         result = PaymentService().create_intasend_checkout(
             self.user,
             CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=False),
         )
-        self.assertEqual(result["url"], "https://checkout.example/pay")
+        self.assertEqual(result["url"], "https://payment.intasend.com/checkout/test-session")
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["amount"], "500.00")
         self.assertEqual(payload["currency"], "KES")
@@ -292,7 +292,7 @@ class BillingPaymentFlowTests(TestCase):
         response.ok = True
         response.status_code = 201
         response.headers = {}
-        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://checkout.example/pay"}
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://payment.intasend.com/checkout/test-session"}
         post.return_value = response
         PaymentService().create_intasend_checkout(
             self.user,

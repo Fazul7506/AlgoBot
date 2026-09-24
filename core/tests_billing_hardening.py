@@ -222,3 +222,39 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(result["status"], "PENDING")
         self.assertFalse(Invoice.objects.get(metadata__reference=reference).paid)
 
+
+
+class BillingCheckoutSecretPersistenceTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="billing-secret", password="pass12345")
+        self.client.login(username="billing-secret", password="pass12345")
+
+    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
+    def test_hosted_checkout_url_is_returned_but_never_persisted(self, create_checkout):
+        create_checkout.return_value = {
+            "url": "https://payment.intasend.com/subscriptions/charge/redacted",
+            "invoice_id": "SUB-SECRET-1",
+            "session_id": "SUB-SECRET-1",
+            "subscription_id": "SUB-SECRET-1",
+            "reference": "IS-SECRET-REF",
+        }
+        response = self.client.get(reverse("billing_checkout_start") + "?plan=BASIC&provider=intasend")
+        self.assertEqual(response.status_code, 302)
+        invoice = Invoice.objects.get(user=self.user)
+        self.assertNotIn("checkout_url", invoice.metadata)
+        status_response = self.client.get(reverse("billing_status"))
+        body = status_response.json()
+        self.assertNotIn("checkout_url", str(body))
+
+    def test_provider_payload_sanitizer_redacts_setup_urls_and_tokens(self):
+        safe = PaymentReconciler._sanitize_provider_payload({
+            "setup_url": "https://payment.intasend.com/subscriptions/charge/redacted",
+            "token": "secret-token",
+            "nested": {"checkout_url": "https://payment.intasend.com/subscriptions/charge/redacted"},
+            "subscription_id": "SUB-1",
+        })
+        self.assertEqual(safe["setup_url"], "[REDACTED]")
+        self.assertEqual(safe["token"], "[REDACTED]")
+        self.assertEqual(safe["nested"]["checkout_url"], "[REDACTED]")
+        self.assertEqual(safe["subscription_id"], "SUB-1")
