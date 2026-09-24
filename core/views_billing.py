@@ -165,6 +165,7 @@ def _checkout(request, plan_name, provider=None):
     # Serialize checkout initiation per user, but never hold a DB lock across the provider HTTP call.
     # A short-lived lease prevents concurrent browser retries from opening two provider checkouts.
     lease_seconds = 120
+    existing_open_id = None
     with transaction.atomic():
         request_user = get_user_model().objects.select_for_update().get(pk=request.user.pk)
         existing = (
@@ -184,36 +185,96 @@ def _checkout(request, plan_name, provider=None):
         # or reuse them; a fresh provider response is required for each new checkout.
         metadata.pop("checkout_url", None)
         if existing and metadata.get("state") == "checkout_open":
-            if existing.metadata != metadata:
-                existing.metadata = metadata
-                existing.save(update_fields=["metadata"])
+            existing_open_id = existing.pk
+        else:
+            now = timezone.now()
+            lock_until = metadata.get("checkout_lock_until")
+            if existing and metadata.get("state") == "checkout_attempting" and lock_until:
+                try:
+                    lock_expiry = datetime.fromisoformat(str(lock_until))
+                except (TypeError, ValueError):
+                    lock_expiry = None
+                if lock_expiry and lock_expiry > now:
+                    return None, "A checkout is already being started. Please wait for the current checkout attempt."
+            invoice = existing or Invoice.objects.create(
+                user=request_user,
+                amount_cents=plan["price_cents"],
+                currency=plan["currency"],
+                metadata={"plan": plan["plan"], "provider": selected},
+            )
+            reference = str(metadata.get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request_user, plan["plan"]))
+            invoice.metadata = {
+                **metadata,
+                "plan": plan["plan"],
+                "provider": selected,
+                "state": "checkout_attempting",
+                "reference": reference,
+                "attempt_count": int(metadata.get("attempt_count") or 0) + 1,
+                "checkout_lock_until": (now + timedelta(seconds=lease_seconds)).isoformat(),
+            }
+            invoice.save(update_fields=["metadata"])
+
+    # A previously opened hosted checkout is not reusable from our database because
+    # its URL is intentionally never persisted. Ask the provider for the authoritative
+    # status before deciding whether another checkout may be created.
+    if existing_open_id is not None:
+        existing_open = Invoice.objects.filter(pk=existing_open_id, user=request.user).first()
+        if not existing_open:
+            return None, "The existing checkout could not be found. Please refresh and try again."
+        try:
+            provider_result = _reconcile_invoice(existing_open, selected)
+        except Exception:
+            provider_result = None
+
+        provider_state = str((provider_result or {}).get("state") or "").upper()
+        if provider_result and provider_result.get("paid"):
+            return None, "This checkout has already completed. Refresh billing to see the updated subscription."
+        if provider_state not in {"FAILED", "CANCELLED", "REVERSED", "INVALID"}:
             return None, "A checkout is already open. Complete it or wait for its provider status before starting another checkout."
-        now = timezone.now()
-        lock_until = metadata.get("checkout_lock_until")
-        if existing and metadata.get("state") == "checkout_attempting" and lock_until:
-            try:
-                lock_expiry = datetime.fromisoformat(str(lock_until))
-            except (TypeError, ValueError):
-                lock_expiry = None
-            if lock_expiry and lock_expiry > now:
-                return None, "A checkout is already being started. Please wait for the current checkout attempt."
-        invoice = existing or Invoice.objects.create(
-            user=request_user,
-            amount_cents=plan["price_cents"],
-            currency=plan["currency"],
-            metadata={"plan": plan["plan"], "provider": selected},
-        )
-        reference = str(metadata.get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request_user, plan["plan"]))
-        invoice.metadata = {
-            **metadata,
-            "plan": plan["plan"],
-            "provider": selected,
-            "state": "checkout_attempting",
-            "reference": reference,
-            "attempt_count": int(metadata.get("attempt_count") or 0) + 1,
-            "checkout_lock_until": (now + timedelta(seconds=lease_seconds)).isoformat(),
-        }
-        invoice.save(update_fields=["metadata"])
+
+        # The provider has reached a terminal non-success state. Atomically claim the
+        # invoice for a fresh attempt so concurrent browser retries cannot both start one.
+        with transaction.atomic():
+            request_user = get_user_model().objects.select_for_update().get(pk=request.user.pk)
+            invoice = Invoice.objects.select_for_update().filter(pk=existing_open_id, user=request_user, paid=False).first()
+            if not invoice:
+                return None, "The existing checkout changed while it was being checked. Refresh billing and try again."
+            metadata = dict(invoice.metadata or {})
+            if metadata.get("state") == "checkout_open":
+                now = timezone.now()
+                metadata.update({
+                    "state": "checkout_attempting",
+                    "checkout_lock_until": (now + timedelta(seconds=lease_seconds)).isoformat(),
+                    "error": "",
+                    "error_classification": "",
+                })
+                invoice.metadata = metadata
+                invoice.save(update_fields=["metadata"])
+            elif metadata.get("state") == "checkout_attempting":
+                lock_until = metadata.get("checkout_lock_until")
+                try:
+                    lock_expiry = datetime.fromisoformat(str(lock_until))
+                except (TypeError, ValueError):
+                    lock_expiry = None
+                if lock_expiry and lock_expiry > timezone.now():
+                    return None, "A checkout is already being started. Please wait for the current checkout attempt."
+            reference = str(metadata.get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request_user, plan["plan"]))
+            invoice.metadata = {
+                **metadata,
+                "plan": plan["plan"],
+                "provider": selected,
+                "reference": reference,
+                "attempt_count": int(metadata.get("attempt_count") or 0) + 1,
+                "checkout_lock_until": (timezone.now() + timedelta(seconds=lease_seconds)).isoformat(),
+            }
+            invoice.save(update_fields=["metadata"])
+
+    else:
+        invoice = locals().get("invoice")
+        if invoice is None:
+            return None, "Checkout could not be initialized. Please refresh and try again."
+        request_user = get_user_model().objects.get(pk=request.user.pk)
+        reference = str((invoice.metadata or {}).get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request_user, plan["plan"]))
 
     try:
         result = RequestBoundPaymentService(request).create_checkout_session(
@@ -278,7 +339,6 @@ def _checkout(request, plan_name, provider=None):
         invoice.save(update_fields=["external_id", "metadata"])
         return None, "Payment provider could not start checkout. No subscription was activated. Please try again."
     return checkout_url, None
-
 
 @login_required
 def billing_checkout_start(request):
