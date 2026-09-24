@@ -8,7 +8,7 @@ from core.account_context import get_active_account
 from core.billing_entitlements import effective_plan
 
 
-class StrategyViewSet(viewsets.ModelViewSet):
+class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Strategy.objects.all()
     serializer_class = StrategySerializer
 
