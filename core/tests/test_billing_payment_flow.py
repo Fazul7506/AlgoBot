@@ -264,14 +264,14 @@ class BillingPaymentFlowTests(TestCase):
         response.ok = True
         response.status_code = 201
         response.headers = {}
-        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://sandbox.intasend.com/checkout/test-session"}
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://payment.intasend.com/checkout/test-session"}
         post.return_value = response
 
         result = PaymentService().create_intasend_checkout(
             self.user,
             CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=False),
         )
-        self.assertEqual(result["url"], "https://sandbox.intasend.com/checkout/test-session")
+        self.assertEqual(result["url"], "https://payment.intasend.com/checkout/test-session")
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["amount"], "500.00")
         self.assertEqual(payload["currency"], "KES")
@@ -292,7 +292,7 @@ class BillingPaymentFlowTests(TestCase):
         response.ok = True
         response.status_code = 201
         response.headers = {}
-        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://sandbox.intasend.com/checkout/test-session"}
+        response.json.return_value = {"invoice_id": "IS-INVOICE", "url": "https://payment.intasend.com/checkout/test-session"}
         post.return_value = response
         PaymentService().create_intasend_checkout(
             self.user,
