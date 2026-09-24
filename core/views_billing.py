@@ -179,8 +179,11 @@ def _checkout(request, plan_name, provider=None):
             .first()
         )
         metadata = dict(existing.metadata or {}) if existing else {}
-        if existing and metadata.get("state") == "checkout_open" and metadata.get("checkout_url"):
-            return str(metadata["checkout_url"]), None
+        # Hosted checkout URLs can contain bearer-like provider tokens. Never persist
+        # or reuse them; a fresh provider response is required for each new checkout.
+        metadata.pop("checkout_url", None)
+        if existing and metadata.get("state") == "checkout_open":
+            return None, "A checkout is already open. Complete it or wait for its provider status before starting another checkout."
         now = timezone.now()
         lock_until = metadata.get("checkout_lock_until")
         if existing and metadata.get("state") == "checkout_attempting" and lock_until:
@@ -255,7 +258,6 @@ def _checkout(request, plan_name, provider=None):
         "subscription_id": result.get("subscription_id"),
         "provider_plan_id": result.get("provider_plan_id"),
         "provider_customer_id": result.get("provider_customer_id"),
-        "checkout_url": checkout_url,
         "error": "",
         "error_classification": "",
     }
@@ -296,8 +298,12 @@ def billing_status(request):
     payments = []
     for payment in Payment.objects.filter(user=request.user, status__in=["PENDING", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED", "REFUNDED"]).select_related("invoice")[:10]:
         invoice_meta = payment.invoice.metadata if payment.invoice else {}
-        payments.append({"id": payment.id, "external_id": payment.external_id, "amount_cents": payment.amount_cents, "currency": payment.currency, "status": payment.status, "created_at": payment.created_at, "invoice_id": payment.invoice_id, "metadata": invoice_meta or {}})
-    invoices = list(Invoice.objects.filter(user=request.user, paid=True)[:10].values("id", "external_id", "amount_cents", "currency", "paid", "metadata", "created_at"))
+        safe_meta = {k: v for k, v in invoice_meta.items() if k not in {"checkout_url", "provider_payload", "provider_status"}}
+        payments.append({"id": payment.id, "external_id": payment.external_id, "amount_cents": payment.amount_cents, "currency": payment.currency, "status": payment.status, "created_at": payment.created_at, "invoice_id": payment.invoice_id, "metadata": safe_meta})
+    invoices = []
+    for item in Invoice.objects.filter(user=request.user, paid=True)[:10]:
+        safe_meta = {k: v for k, v in (item.metadata or {}).items() if k not in {"checkout_url", "provider_payload", "provider_status"}}
+        invoices.append({"id": item.id, "external_id": item.external_id, "amount_cents": item.amount_cents, "currency": item.currency, "paid": item.paid, "metadata": safe_meta, "created_at": item.created_at})
     return Response({"subscription": snapshot, "invoices": invoices, "payments": payments, "plans": _plans()})
 
 
