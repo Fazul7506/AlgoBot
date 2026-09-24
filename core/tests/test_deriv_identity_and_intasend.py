@@ -95,3 +95,37 @@ class IntaSendRecurringCustomerValidationTests(TestCase):
         customer_payload = post.call_args_list[0].kwargs["json"]
         self.assertEqual(customer_payload["first_name"], "Billing")
         self.assertEqual(customer_payload["last_name"], "Customer")
+
+
+class IntaSendCheckoutUrlHardeningTests(TestCase):
+    @override_settings(
+        INTASEND_PUBLIC_KEY="live-public",
+        INTASEND_SECRET_KEY="live-secret",
+        INTASEND_API_BASE_URL="https://api.intasend.com",
+    )
+    @patch("core.services.payment_service.requests.post")
+    def test_recurring_checkout_rejects_wrong_environment_host(self, post):
+        def response(payload, status=201):
+            result = Mock()
+            result.ok = status < 400
+            result.status_code = status
+            result.headers = {}
+            result.json.return_value = payload
+            return result
+
+        post.side_effect = [
+            response({"id": "customer-1"}),
+            response({"id": "plan-1"}),
+            response({"id": "subscription-1", "setup_url": "https://api.intasend.com/subscriptions/charge/redacted"}),
+        ]
+        user = get_user_model().objects.create_user(username="billing-host", email="host@example.com", first_name="Host", last_name="Test")
+        plan = SimpleNamespace(plan="BASIC", price_cents=50000, currency="KES", recurring=True)
+        result = PaymentService().create_intasend_subscription(user, plan)
+        self.assertEqual(result["url"], "")
+        self.assertEqual(result["error_classification"], "malformed provider response")
+
+    @override_settings(INTASEND_API_BASE_URL="https://api.intasend.com")
+    def test_live_recurring_api_base_is_canonicalized_without_changing_configured_one_time_base(self):
+        service = PaymentService()
+        self.assertEqual(service._intasend_subscription_api_base_url(), "https://payment.intasend.com")
+        self.assertEqual(service.intasend_base_url, "https://api.intasend.com")
