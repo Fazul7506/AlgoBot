@@ -69,6 +69,21 @@ class DerivTradingActionView(views.APIView):
             )
 
     def post(self, request, action):
+        # Direct broker-side trade mutations are intentionally not exposed here.
+        # The canonical execution API is /api/orders/, which performs server-side
+        # validation, entitlements, risk checks, idempotency, persistence, and
+        # broker reconciliation before/after execution. Keeping a second public
+        # mutation path would allow callers to bypass those safeguards.
+        if action in {"buy", "open-contract", "sell", "update", "cancel"}:
+            return response.Response(
+                {
+                    "status": "rejected",
+                    "code": "NON_CANONICAL_EXECUTION_ENDPOINT",
+                    "detail": "Direct Deriv execution actions are disabled. Submit trades through /api/orders/ so the canonical execution and risk pipeline is enforced.",
+                    "canonical_endpoint": "/api/orders/",
+                },
+                status=status.HTTP_410_GONE,
+            )
         if action == "proposal":
             return self._execute(request, lambda ops: async_to_sync(ops.proposal)(
                 symbol=request.data.get("symbol"),
