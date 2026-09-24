@@ -134,7 +134,7 @@ class BillingHardeningTests(TestCase):
             "invoice_id": "IS-SIMPLE-LAZY-1",
             "reference": "IS-SIMPLE-LAZY-REF",
         }
-        response = self.client.get(reverse("billing_checkout_start") + "?plan=BASIC&provider=intasend")
+        response = self.client.post(reverse("billing_checkout_start"), {"plan": "BASIC", "provider": "intasend"})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, "https://checkout.example/pay")
         invoice = Invoice.objects.get(user=self.user, metadata__plan="BASIC")
@@ -150,7 +150,7 @@ class BillingHardeningTests(TestCase):
             "error": "IntaSend is temporarily unavailable. Please try again.",
             "error_classification": "provider unavailable",
         }
-        response = self.client.get(reverse("billing_checkout_start") + "?plan=BASIC&provider=intasend")
+        response = self.client.post(reverse("billing_checkout_start"), {"plan": "BASIC", "provider": "intasend"})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("billing_page"))
         invoice = Invoice.objects.get(user=self.user)
@@ -167,11 +167,11 @@ class BillingHardeningTests(TestCase):
             {"url": "", "error": "provider failure", "error_classification": "provider unavailable"},
             {"url": "https://checkout.example/pay", "invoice_id": "IS-RETRY-1", "reference": "IS-RETRY-REF"},
         ]
-        first = self.client.get(reverse("billing_checkout_start") + "?plan=BASIC&provider=intasend")
+        first = self.client.post(reverse("billing_checkout_start"), {"plan": "BASIC", "provider": "intasend"})
         self.assertEqual(first.status_code, 302)
         self.assertEqual(Invoice.objects.filter(user=self.user, metadata__plan="BASIC").count(), 1)
 
-        second = self.client.get(reverse("billing_checkout_start") + "?plan=BASIC&provider=intasend")
+        second = self.client.post(reverse("billing_checkout_start"), {"plan": "BASIC", "provider": "intasend"})
         self.assertEqual(second.status_code, 302)
         self.assertEqual(second.url, "https://checkout.example/pay")
         self.assertEqual(Invoice.objects.filter(user=self.user, metadata__plan="BASIC").count(), 1)
@@ -239,7 +239,7 @@ class BillingCheckoutSecretPersistenceTests(TestCase):
             "subscription_id": "SUB-SECRET-1",
             "reference": "IS-SECRET-REF",
         }
-        response = self.client.get(reverse("billing_checkout_start") + "?plan=BASIC&provider=intasend")
+        response = self.client.post(reverse("billing_checkout_start"), {"plan": "BASIC", "provider": "intasend"})
         self.assertEqual(response.status_code, 302)
         invoice = Invoice.objects.get(user=self.user)
         self.assertNotIn("checkout_url", invoice.metadata)
