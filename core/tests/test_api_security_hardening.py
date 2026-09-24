@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIClient, APIRequestFactory
 
 from core.api_authentication import BrowserSessionAuthentication
 from core.serializers import SubscriptionSerializer, UserProfileSerializer
@@ -10,7 +10,6 @@ from apps.brokers.serializers import OrderSerializer as BrokerOrderSerializer
 from apps.risk.models import RiskProfile, RiskRule
 from apps.risk.serializers import RiskRuleSerializer
 from apps.portfolio.models import Portfolio, PortfolioAllocation, PortfolioAccount, CashFlow
-from apps.portfolio.api import PortfolioAllocationViewSet
 from apps.portfolio.serializers import PortfolioAllocationSerializer, CashFlowSerializer
 
 
@@ -114,9 +113,13 @@ class APISecurityHardeningTests(TestCase):
 
     def test_derived_portfolio_allocation_endpoint_cannot_be_mutated_directly(self):
         portfolio = Portfolio.objects.create(user=self.user, name="Owned Portfolio")
-        request = APIRequestFactory().post("/api/portfolio/allocation/")
-        request.user = self.user
-        response = PortfolioAllocationViewSet.as_view({"post": "create"})(request)
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        response = client.post(
+            "/api/portfolio/allocation/",
+            {"portfolio": portfolio.pk, "symbol": "R_100", "allocation_percent": "10"},
+            format="json",
+        )
         self.assertEqual(response.status_code, 405)
         self.assertFalse(PortfolioAllocation.objects.filter(portfolio=portfolio).exists())
 
