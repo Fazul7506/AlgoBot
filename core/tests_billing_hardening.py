@@ -224,6 +224,76 @@ class BillingHardeningTests(TestCase):
 
 
 
+    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
+    @patch("core.views_billing.PaymentService.get_intasend_payment_status")
+    def test_failed_open_checkout_is_reconciled_and_can_be_restarted(self, get_status, create_checkout):
+        invoice = Invoice.objects.create(
+            user=self.user,
+            amount_cents=50000,
+            currency="KES",
+            metadata={"plan": "BASIC", "provider": "intasend", "state": "checkout_open", "reference": "IS-RETRY-OLD"},
+            external_id="IS-OLD-FAILED",
+        )
+        get_status.return_value = {
+            "invoice": {
+                "invoice_id": "IS-OLD-FAILED",
+                "state": "FAILED",
+                "value": "500.00",
+                "currency": "KES",
+            }
+        }
+        create_checkout.return_value = {
+            "url": "https://checkout.example/new",
+            "invoice_id": "IS-NEW-1",
+            "reference": "IS-NEW-REF",
+        }
+
+        response = self.client.post(
+            reverse("billing_checkout_start"),
+            {"plan": "BASIC", "provider": "intasend"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "https://checkout.example/new")
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.external_id, "IS-NEW-1")
+        self.assertEqual(invoice.metadata["state"], "checkout_open")
+        self.assertEqual(invoice.metadata["reference"], "IS-NEW-REF")
+        create_checkout.assert_called_once()
+
+    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
+    @patch("core.views_billing.PaymentService.get_intasend_payment_status")
+    def test_pending_open_checkout_stays_blocked(self, get_status, create_checkout):
+        Invoice.objects.create(
+            user=self.user,
+            amount_cents=50000,
+            currency="KES",
+            metadata={"plan": "BASIC", "provider": "intasend", "state": "checkout_open", "reference": "IS-PENDING"},
+            external_id="IS-PENDING-1",
+        )
+        get_status.return_value = {
+            "invoice": {
+                "invoice_id": "IS-PENDING-1",
+                "state": "PENDING",
+                "value": "500.00",
+                "currency": "KES",
+            }
+        }
+
+        response = self.client.post(
+            reverse("billing_checkout_start"),
+            {"plan": "BASIC", "provider": "intasend"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("billing_page"))
+        create_checkout.assert_not_called()
+        invoice = Invoice.objects.get(user=self.user, external_id="IS-PENDING-1")
+        self.assertEqual(invoice.metadata["state"], "checkout_open")
+
+
 class BillingCheckoutSecretPersistenceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="billing-secret", password="pass12345")
