@@ -55,7 +55,7 @@
       const value = raw ? JSON.parse(raw) : null;
       if (!value || !value.account) return null;
       const requestedId = currentAccountId();
-      if (requestedId && value.account.id != null && String(value.account.id) !== requestedId) return null;
+      if (!requestedId || value.account.id == null || String(value.account.id) !== requestedId) return null;
       return value;
     } catch (_) { return null; }
   }
@@ -124,7 +124,7 @@
     setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
     document.documentElement.dataset.dashboardLoading = 'true';
     try {
-        const active = window.AlgoBotBrokerState?.get?.()?.account;
+      const active = window.AlgoBotBrokerState?.get?.()?.account;
       if (active?.id != null) selectedAccountId = String(active.id);
       const responses = await Promise.allSettled([
         request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS),
