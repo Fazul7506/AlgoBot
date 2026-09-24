@@ -450,6 +450,7 @@ class PaymentService:
             return None
 
     def get_intasend_payment_status(self, invoice_id: str) -> Optional[dict]:
+        """Return status for a non-recurring IntaSend collection invoice."""
         if not self.intasend_secret_key or not invoice_id:
             return None
         try:
@@ -465,11 +466,33 @@ class PaymentService:
             )
             data = self._json_or_error(response)
             if not response.ok:
-                logger.error("IntaSend status request failed: %s", data)
+                logger.error("IntaSend collection status request failed: %s", data)
                 return None
             return data
         except requests.RequestException:
-            logger.exception("IntaSend status request failed")
+            logger.exception("IntaSend collection status request failed")
+            return None
+
+    def get_intasend_subscription_status(self, subscription_id: str) -> Optional[dict]:
+        """Return the authoritative status for an IntaSend recurring subscription."""
+        if not self.intasend_secret_key or not subscription_id:
+            return None
+        try:
+            response = requests.get(
+                f"{self.intasend_base_url}/api/v1/subscriptions/{subscription_id}/",
+                headers={
+                    "Authorization": f"Bearer {self.intasend_secret_key}",
+                    "Accept": "application/json",
+                },
+                timeout=self.timeout,
+            )
+            data = self._json_or_error(response)
+            if not response.ok:
+                logger.error("IntaSend subscription status request failed: %s", data)
+                return None
+            return data
+        except requests.RequestException:
+            logger.exception("IntaSend subscription status request failed")
             return None
 
     def create_invoice_record(self, user, amount_cents: int, currency: str = "KES"):
