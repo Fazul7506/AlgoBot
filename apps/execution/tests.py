@@ -122,6 +122,16 @@ class DerivTerminalSafetyTests(SimpleTestCase):
         self.assertFalse(response.data["retryable"])
         self.assertTrue(response.data["reconciliation_required"])
 
+    def test_direct_deriv_execution_actions_are_disabled(self):
+        view = DerivTradingActionView()
+        for action in ("buy", "open-contract", "sell", "update", "cancel"):
+            request = self.factory.post(f"/api/deriv/{action}/", {}, format="json")
+            force_authenticate(request, user=self.user)
+            result = view.post(request, action)
+            self.assertEqual(result.status_code, 410)
+            self.assertEqual(result.data["code"], "NON_CANONICAL_EXECUTION_ENDPOINT")
+            self.assertEqual(result.data["canonical_endpoint"], "/api/orders/")
+
     def test_broker_rejection_is_not_reported_as_unknown(self):
         view = DerivTradingActionView()
         with patch.object(view, "_account", return_value=self.account), patch(
