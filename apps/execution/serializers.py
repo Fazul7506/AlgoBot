@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Order, ExecutionLog, ExecutionQueue, ReconciliationEvent
+from .models import Order, ExecutionLog, ExecutionQueue, ReconciliationEvent, BrokerTradeHistory
 from apps.trading.models import Position
 from apps.contracts.models import Contract
 
@@ -85,7 +85,7 @@ class BrokerTradeHistorySerializer(serializers.ModelSerializer):
     ai = serializers.SerializerMethodField()
 
     class Meta:
-        model = __import__("apps.execution.models", fromlist=["BrokerTradeHistory"]).BrokerTradeHistory
+        model = BrokerTradeHistory
         fields = "__all__"
         read_only_fields = fields
 
