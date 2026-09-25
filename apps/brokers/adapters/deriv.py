@@ -49,7 +49,7 @@ class DerivAdapter(BrokerAdapter):
         try:
             response = requests.post(
                 f"{settings.DERIV_OPTIONS_ACCOUNTS_URL}/{self._account_id()}/otp",
-                headers={"Authorization": f"Bearer {self._token()}", "Deriv-App-ID": self._app_id(), "Accept": "application/json"},
+                headers={"Authorization": f"Bearer {self._token()}", "Accept": "application/json"},
                 timeout=(3.05, self.timeout),
             )
             if response.status_code == 401:
