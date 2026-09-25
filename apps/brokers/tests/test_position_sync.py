@@ -2,13 +2,13 @@ import asyncio
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TransactionTestCase
 
 from apps.brokers.models import Broker, BrokerAccount, Position
 from apps.brokers.position_sync import _persist_snapshot_sync, BrokerPositionSyncService
 
 
-class PositionSyncPersistenceTests(TestCase):
+class PositionSyncPersistenceTests(TransactionTestCase):
     def setUp(self):
         user = get_user_model().objects.create_user(username="position-sync", password="pass")
         self.broker = Broker.objects.create(name="Deriv Sync", broker_type="deriv", status="active")
