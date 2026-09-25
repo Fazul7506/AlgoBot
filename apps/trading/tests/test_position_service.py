@@ -42,7 +42,7 @@ class PositionServiceTests(TestCase):
         }
         pos = PositionService().open_position(self.order, broker_contract=contract)
         self.assertEqual(pos.contract_id, "991")
-        self.assertEqual(pos.entry_price, Decimal("10"))
+        self.assertEqual(Decimal(str(pos.entry_price)), Decimal("10"))
 
         final = {
             **contract,
@@ -56,8 +56,8 @@ class PositionServiceTests(TestCase):
         PositionService().close_position(pos, broker_contract=final)
         pos.refresh_from_db()
         self.assertEqual(pos.status, "closed")
-        self.assertEqual(pos.profit, Decimal("1"))
-        self.assertEqual(pos.exit_price, Decimal("11"))
+        self.assertEqual(Decimal(str(pos.profit)), Decimal("1"))
+        self.assertEqual(Decimal(str(pos.exit_price)), Decimal("11"))
 
     def test_close_without_broker_confirmation_is_rejected(self):
         pos = Position.objects.create(
