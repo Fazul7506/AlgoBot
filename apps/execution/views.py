@@ -228,7 +228,8 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
                     try:
                         parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
                     except ValueError as exc:
-                        raise ValueError(f"Invalid {("date_to" if end else "date_from")} value.") from exc
+                        field = "date_to" if end else "date_from"
+                        raise ValueError(f"Invalid {field} value.") from exc
                     if parsed.tzinfo is None:
                         parsed = parsed.replace(tzinfo=dt_timezone.utc)
                     if end:
