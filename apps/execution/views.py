@@ -1,4 +1,4 @@
-from decimal import Decimal, InvalidOperation\nfrom datetime import datetime, time, timezone as dt_timezone
+from decimal import Decimal, InvalidOperation\nfrom datetime import datetime, timezone as dt_timezone
 import logging
 from django.conf import settings
 from django.utils import timezone
@@ -9,7 +9,7 @@ from apps.contracts.models import Contract
 from .serializers import OrderSerializer, PositionSerializer, ContractSerializer, ExecutionLogSerializer, ReconciliationEventSerializer, BrokerTradeHistorySerializer
 from .engine import ExecutionEngine
 from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, BrokerRoutingError
-from core.billing_entitlements import check, check_live_order, effective_plan\nfrom core.account_context import get_active_account\nfrom .trade_history import sync_deriv_trade_history, DerivTradeHistoryService
+from core.billing_entitlements import check, check_live_order, effective_plan\nfrom core.account_context import get_active_account\nfrom .trade_history import DerivTradeHistoryService
 
 log = logging.getLogger(__name__)
 
