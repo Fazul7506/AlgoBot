@@ -14,6 +14,9 @@ class Order(models.Model):
     strategy = models.CharField(max_length=120, blank=True)
     direction = models.CharField(max_length=12, choices=DIRECTION_CHOICES)
     order_type = models.CharField(max_length=32, choices=ORDER_TYPE_CHOICES, default='market')
+    contract_type = models.CharField(max_length=40, blank=True)
+    duration = models.PositiveIntegerField(null=True, blank=True)
+    duration_unit = models.CharField(max_length=1, blank=True)
     stake = models.DecimalField(max_digits=18, decimal_places=8)
     price = models.DecimalField(max_digits=18, decimal_places=8, null=True, blank=True)
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=c.ORDER_STATUS_DRAFT)
@@ -26,7 +29,7 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['user', 'status']), models.Index(fields=['broker_account', 'symbol'])]
+        indexes = [models.Index(fields=['user', 'status']), models.Index(fields=['broker_account', 'symbol']), models.Index(fields=['broker_account', 'contract_type'])]
         constraints = [models.UniqueConstraint(fields=['user', 'client_request_id'], condition=~models.Q(client_request_id=''), name='unique_execution_client_request')]
     def __str__(self): return f'{self.symbol} {self.direction} {self.stake}'
 
