@@ -114,8 +114,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         template = Path("templates/base.html").read_text(encoding="utf-8")
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("ensureCsrfCookie", client)
-        self.assertIn("frontend_data_contract.js?v=20260925-csrfbootstrap2", template)
-        self.assertNotIn("frontend_data_contract.js?v=20260913-sameorigin1", template)
+        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260925-csrfbootstrap2", template)
+        self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260913-sameorigin1", template)
 
     def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):
         from pathlib import Path
