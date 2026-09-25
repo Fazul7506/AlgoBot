@@ -6,10 +6,10 @@
   const $ = s => document.querySelector(s);
   const L = () => window.LightweightCharts;
   const WS = 'wss://api.derivws.com/trading/v1/options/ws/public';
-  const TF = [['1m',60],['2m',120],['5m',300],['10m',600],['15m',900],['30m',1800],['1h',3600],['2h',7200],['4h',14400],['8h',28800],['1d',86400]];
+  let TF = [['1m',60],['2m',120],['5m',300],['10m',600],['15m',900],['30m',1800],['1h',3600],['2h',7200],['4h',14400],['8h',28800],['1d',86400]];
   const OVERLAYS = [['sma20','SMA 20'],['ema50','EMA 50'],['wma20','WMA 20'],['bb20','Bollinger 20'],['vwap','VWAP']];
   const OSC = [['none','Off'],['rsi','RSI 14'],['macd','MACD 12/26/9'],['stoch','Stochastic 14/3'],['atr','ATR 14'],['cci','CCI 20'],['williams','Williams %R 14']];
-  const state = {chart:null,main:null,overlays:{},osc:[],symbol:'',tf:60,type:'ticks',points:[],candles:[],current:null,overlay:new Set(['sma20','ema50']),oscillator:'none',ws:null,reconnect:null,req:10,renderTimer:null};
+  const state = {chart:null,main:null,overlays:{},osc:[],symbol:'',tf:60,type:'ticks',points:[],candles:[],current:null,overlay:new Set(['sma20','ema50']),oscillator:'none',req:10,renderTimer:null};
   const accountsReady = () => !!(window.AlgoBotBrokerAccounts?.length || window.AlgoBotBrokerState?.get()?.account);
   const epoch = v => { const n=Number(v); return Number.isFinite(n)?(n>20000000000?Math.floor(n/1000):Math.floor(n)):null; };
   const fmt = v => Number.isFinite(Number(v)) ? Number(v).toLocaleString(undefined,{maximumFractionDigits:8}) : 'Unavailable';
@@ -40,7 +40,7 @@
     try{
       if(state.type==='candles'){const d=await request({ticks_history:state.symbol,end:'latest',count:500,style:'candles',granularity:state.tf});state.candles=normalizeCandles(d.candles);state.points=[];state.current=state.candles.at(-1)||null;}
       else{const d=await request({ticks_history:state.symbol,end:'latest',count:500,style:'ticks'});state.points=normalizeTicks(d.history);state.candles=[];state.current=null;}
-      draw(true);connect();
+      draw(true);
     }catch(e){
       try{const q=new URLSearchParams({symbol:state.symbol,mode:state.type,limit:'500',granularity:String(state.tf)});const d=await window.AlgoBotFrontendData.request(`/api/market/chart/history/?${q}`,{},12000);if(state.type==='candles'){state.candles=normalizeCandles(d.items);state.points=[];}else{state.points=(d.items||[]).map(x=>({time:epoch(x.epoch??x.time),price:Number(x.quote??x.price)})).filter(x=>x.time&&Number.isFinite(x.price)).slice(-500);}draw(true);connect();}catch(f){const raw=String(f?.message||e?.message||'');const cancelled=/abort|signal/i.test(raw);text('[data-chart-loading]',cancelled?'Live broker chart request was cancelled. Waiting for the live Deriv stream…':'Live broker chart temporarily unavailable. Use Refresh market to retry.');}
     }
@@ -73,13 +73,28 @@
     if(!state.chart)return;const x=L();if(state.main)try{state.chart.removeSeries(state.main);}catch(_){}state.main=state.type==='candles'?state.chart.addSeries(x.CandlestickSeries,{upColor:'#22c55e',downColor:'#ef4444',borderUpColor:'#22c55e',borderDownColor:'#ef4444',wickUpColor:'#22c55e',wickDownColor:'#ef4444'}):state.chart.addSeries(x.LineSeries,{color:'#60a5fa',lineWidth:2,priceLineVisible:false});state.main.setData(state.type==='candles'?state.candles:state.points.map(p=>({time:p.time,value:p.price})));indicators();const v=vals();if(v.length){const first=v[0],last=v.at(-1),mean=v.reduce((a,b)=>a+b,0)/v.length,vol=Math.sqrt(v.reduce((a,b)=>a+(b-mean)**2,0)/v.length);text('[data-trend]',last>=first?'Bullish':'Bearish');text('[data-volatility]',fmt(vol));text('[data-structure]',state.type==='candles'?'Deriv broker candles':'Deriv broker ticks');text('[data-chart-loading]',`Live Deriv data · ${v.length} ${state.type==='candles'?'candles':'ticks'}`);}if(fit)state.chart.timeScale().fitContent();}
   function livePrice(p){if(!state.main||!Number.isFinite(p))return;const last=state.type==='candles'?state.candles.at(-1)?.close:state.points.at(-1)?.price;text('[data-q="bid"]',fmt(p));text('[data-q="ask"]',fmt(p));if(last!=null&&Math.abs(p-last)>0){try{state.main.update(state.type==='candles'?state.candles.at(-1):{time:Math.floor(Date.now()/1000),value:p});}catch(_){} } }
   function onTick(t){const p=Number(t.quote),e=epoch(t.epoch)||Math.floor(Date.now()/1000);if(!Number.isFinite(p))return;if(state.type==='candles'){const bucket=Math.floor(e/state.tf)*state.tf;if(!state.current||state.current.time!==bucket){state.current={time:bucket,open:p,high:p,low:p,close:p,volume:1};state.candles.push(state.current);state.candles=state.candles.slice(-500);}else{state.current.high=Math.max(state.current.high,p);state.current.low=Math.min(state.current.low,p);state.current.close=p;}state.main?.update(state.current);}else{state.points.push({time:e,price:p});state.points=state.points.slice(-500);state.main?.update({time:e,value:p});}livePrice(p);clearTimeout(state.renderTimer);state.renderTimer=setTimeout(()=>{indicators();},300);}
-  function connect(){if(!state.symbol||!accountsReady()||document.visibilityState!=='visible')return;try{state.ws?.close();}catch(_){}state.ws=new WebSocket(WS);state.ws.onopen=()=>{state.ws.send(JSON.stringify({ticks:state.symbol,subscribe:1,req_id:++state.req}));text('[data-chart-loading]',`Connected directly to Deriv · ${state.symbol}`);};state.ws.onmessage=e=>{try{const d=JSON.parse(e.data);if(d.msg_type==='tick'&&!d.error)onTick(d.tick||{});}catch(_){}};state.ws.onclose=()=>{state.ws=null;if(document.visibilityState==='visible'){clearTimeout(state.reconnect);state.reconnect=setTimeout(connect,2500);}};state.ws.onerror=()=>text('[data-chart-loading]','Deriv market stream reconnecting…');}
+  function onWatchdogTick(event){const detail=event?.detail||{};if(String(detail.symbol||'')!==String(state.symbol||''))return;onTick({quote:detail.quote,epoch:detail.epoch});}
   function controls(){
     const tfBox=$('[data-chart-timeframes]');if(tfBox){tfBox.innerHTML=TF.map(x=>`<button type="button" data-pro-tf="${x[1]}" class="${x[1]===state.tf?'active':''}">${x[0]}</button>`).join('');tfBox.querySelectorAll('button').forEach(b=>b.onclick=()=>{state.tf=Number(b.dataset.proTf);tfBox.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));if(state.type==='candles')history();});}
     const old=$('.chart-indicators');if(old){old.innerHTML=`<div class="indicator-group"><span>Overlays</span>${OVERLAYS.map(x=>`<button type="button" data-pro-overlay="${x[0]}" class="${state.overlay.has(x[0])?'active':''}">${x[1]}</button>`).join('')}</div><div class="indicator-group"><label>Oscillator <select data-pro-osc>${OSC.map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('')}</select></label></div>`;old.querySelectorAll('[data-pro-overlay]').forEach(b=>b.onclick=()=>{const k=b.dataset.proOverlay;if(state.overlay.has(k))state.overlay.delete(k);else state.overlay.add(k);b.classList.toggle('active',state.overlay.has(k));indicators();});old.querySelector('[data-pro-osc]').onchange=e=>{state.oscillator=e.target.value;indicators();};}
     document.querySelectorAll('[data-chart-mode]').forEach(b=>b.onclick=()=>{state.type=b.dataset.chartMode;b.classList.toggle('active',true);document.querySelectorAll('[data-chart-mode]').forEach(x=>{if(x!==b)x.classList.remove('active');});if(tfBox)tfBox.style.display=state.type==='candles'?'':'none';history();});
     document.querySelectorAll('[data-chart-action]').forEach(b=>b.onclick=()=>{const a=b.dataset.chartAction;if(a==='fit')state.chart?.timeScale().fitContent();if(a==='live')state.chart?.timeScale().scrollToRealTime();if(a==='fullscreen')document.querySelector('.terminal-chart-panel')?.requestFullscreen?.();if(a==='screenshot'){const c=state.chart?.takeScreenshot(true,true);if(c){const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download=`algobot-${state.symbol}.png`;a.click();}}if(a==='export'){const r=bars();const h=state.type==='candles'?'time,open,high,low,close':'time,price';const body=r.map(x=>state.type==='candles'?[x.time,x.open,x.high,x.low,x.close].join(','):[x.time,x.close].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([h+'\n'+body],{type:'text/csv'}));a.download=`algobot-${state.symbol}.csv`;a.click();}});
   }
-  function start(){if(!$('#chart'))return;controls();const bootChart=()=>{if(!makeChart())return false;const s=$('#symbol');const wait=()=>{if(s?.value){state.symbol=s.value;history();}else setTimeout(wait,250);};wait();s?.addEventListener('change',()=>{state.symbol=s.value;history();});window.addEventListener('algobot:backend-accounts-loaded',()=>{if(s?.value){state.symbol=s.value;history();}});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state.symbol){history();connect();}else{try{state.ws?.close();}catch(_){}}});return true;};if(bootChart())return;window.addEventListener('load',()=>{if(!state.chart)bootChart();},{once:true});setTimeout(()=>{if(!state.chart)bootChart();},1500);}
+  async function loadBrokerTimeframes(){
+    try{
+      const data=await window.AlgoBotFrontendData?.request?.('/api/market/chart/capabilities/',{notifyOnError:false},7000);
+      const rows=Array.isArray(data?.timeframes)?data.timeframes:[];
+      const normalized=rows.map(x=>[String(x.label||''),Number(x.seconds)]).filter(x=>x[0]&&Number.isFinite(x[1])&&x[1]>0);
+      if(normalized.length) TF=normalized;
+    }catch(_){}
+    if(!TF.some(x=>x[1]===state.tf))state.tf=TF[0]?.[1]||60;
+  }
+  function start(){
+    if(!$('#chart'))return;
+    window.addEventListener('algobot:market-watchdog-tick',onWatchdogTick);
+    const bootChart=()=>{if(!makeChart())return false;controls();const s=$('#symbol');const wait=()=>{if(s?.value){state.symbol=s.value;history();}else setTimeout(wait,250);};wait();s?.addEventListener('change',()=>{state.symbol=s.value;history();});window.addEventListener('algobot:backend-accounts-loaded',()=>{if(s?.value){state.symbol=s.value;history();}});return true;};
+    void loadBrokerTimeframes().then(()=>{if(bootChart())return;window.addEventListener('load',()=>{if(!state.chart)bootChart();},{once:true});setTimeout(()=>{if(!state.chart)bootChart();},1500);});
+    window.addEventListener('pagehide',()=>{window.removeEventListener('algobot:market-watchdog-tick',onWatchdogTick);},{once:true});
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();

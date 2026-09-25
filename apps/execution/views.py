@@ -20,20 +20,38 @@ class OrderViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _environment(account): return str((account.credentials or {}).get('account_type') or '').lower().strip() if account else ''
     @staticmethod
-    def _safe_client_context(data):
+    def _safe_client_context(data, account):
         context = data.get('routing_context') or data.get('validation_context') or {}
-        return {'broker_source': context.get('broker_source') or 'connected_broker', 'contract_type': context.get('contract_type') or data.get('contract_type'), 'underlying_symbol': context.get('underlying_symbol') or data.get('symbol'), 'selected_strategy': context.get('selected_strategy') or data.get('strategy') or None, 'trigger': 'manual_terminal_command', 'execution_mode': 'manual_command', 'signal_id': context.get('signal_id')}
+        environment = str(getattr(account, 'account_type', '') or OrderViewSet._environment(account)).lower().strip()
+        return {
+            'broker_source': 'connected_broker',
+            'contract_type': str(data.get('contract_type') or '').strip().upper(),
+            'underlying_symbol': str(data.get('symbol') or '').strip(),
+            'selected_strategy': data.get('strategy') or None,
+            'trigger': 'manual_terminal_command',
+            'execution_mode': 'manual_command',
+            'signal_id': context.get('signal_id'),
+            'authoritative_account_id': account.id if account else None,
+            'currency': str(getattr(account, 'currency', '') or '').upper(),
+            'account_type': environment,
+            'duration': data.get('duration'),
+            'duration_unit': data.get('duration_unit') or '',
+        }
     def create(self, request, *args, **kwargs):
         client_request_id = str(request.data.get('client_request_id') or request.data.get('client_order_id') or '').strip()
         if client_request_id:
             existing = Order.objects.filter(user=request.user, client_request_id=client_request_id).first()
-            if existing: return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
+            if existing:
+                requested_account = str(request.data.get('broker_account') or '').strip()
+                if requested_account and str(existing.broker_account_id) != requested_account:
+                    return response.Response({'status':'rejected','code':'CLIENT_REQUEST_ACCOUNT_MISMATCH','detail':'This client request ID belongs to a different broker account and cannot be replayed in the current account context.','retryable':False}, status=status.HTTP_409_CONFLICT)
+                return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
         allowed_orders, used_orders, order_limit = check(request.user, 'orders')
         if not allowed_orders:
             plan = effective_plan(request.user)
             return response.Response({'status':'rejected','code':'ORDER_LIMIT_REACHED','detail':f'Your {plan.name} order allowance has been reached for today.','plan':plan.key,'used':used_orders,'limit':order_limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
-        data = dict(serializer.validated_data); account = data.get('broker_account'); environment = self._environment(account); data['validation_context'] = self._safe_client_context(request.data)
+        data = dict(serializer.validated_data); account = data.get('broker_account'); environment = self._environment(account); data['validation_context'] = self._safe_client_context(request.data, account)
         if environment == 'real':
             allowed, used, limit = check_live_order(request.user)
             if not allowed: return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)

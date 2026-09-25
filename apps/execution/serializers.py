@@ -8,18 +8,21 @@ class OrderSerializer(serializers.ModelSerializer):
     # Keep the wire contract tolerant of the existing BUY/SELL terminal labels.
     direction = serializers.CharField(max_length=12)
     order_type = serializers.CharField(max_length=32)
+    contract_type = serializers.CharField(max_length=40, required=False, allow_blank=True)
+    duration = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    duration_unit = serializers.ChoiceField(required=False, allow_blank=True, choices=['s','m','h','d','t'])
 
     class Meta:
         model = Order
         fields = [
             'id', 'user', 'broker_account', 'symbol', 'strategy', 'direction',
-            'order_type', 'stake', 'price', 'status', 'broker_reference',
-            'client_request_id', 'validation_context', 'broker_payload',
+            'order_type', 'contract_type', 'duration', 'duration_unit', 'stake', 'price', 'status', 'broker_reference',
+            'client_request_id', 'validation_context', 'broker_payload', 'submitted_at', 'executed_at',
             'broker_response', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'user', 'status', 'broker_reference', 'validation_context',
-            'broker_payload', 'broker_response', 'created_at', 'updated_at'
+            'broker_payload', 'broker_response', 'submitted_at', 'executed_at', 'created_at', 'updated_at'
         ]
 
     def validate_direction(self, value):

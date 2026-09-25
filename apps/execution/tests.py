@@ -1,6 +1,9 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, SimpleTestCase
@@ -76,6 +79,54 @@ class ExecutionQueueTaskTests(TestCase):
         queue.refresh_from_db()
         self.assertEqual(queue.status, 'done')
         self.assertEqual(result['succeeded'], 1)
+
+
+class TerminalExecutionContractTests(SimpleTestCase):
+    def test_terminal_contract_metadata_is_persisted_in_serializer_contract(self):
+        fields = OrderSerializer().fields
+        self.assertIn('contract_type', fields)
+        self.assertIn('duration', fields)
+        self.assertIn('duration_unit', fields)
+
+    def test_client_routing_context_cannot_override_account_currency_or_environment(self):
+        account = SimpleNamespace(
+            id=7,
+            currency='EUR',
+            account_type='real',
+            credentials={'account_type':'demo'},
+        )
+        context = OrderViewSet._safe_client_context(
+            {
+                'symbol':'R_100',
+                'contract_type':'CALL',
+                'routing_context':{
+                    'currency':'USD',
+                    'account_type':'demo',
+                    'broker_source':'attacker-controlled',
+                    'underlying_symbol':'OTHER',
+                },
+            },
+            account,
+        )
+        self.assertEqual(context['currency'], 'EUR')
+        self.assertEqual(context['account_type'], 'real')
+        self.assertEqual(context['underlying_symbol'], 'R_100')
+        self.assertEqual(context['broker_source'], 'connected_broker')
+
+    def test_unknown_broker_status_is_not_classified_as_execution_success(self):
+        source = (ROOT / 'apps' / 'execution' / 'engine.py').read_text()
+        self.assertNotIn("or (not broker_status and order.broker_reference)", source)
+        self.assertIn('"ExecutionStateUnknown"', source)
+        self.assertIn('reconciliation is required', source)
+
+    def test_shared_broker_ui_does_not_bind_terminal_account_selector(self):
+        source = (ROOT / 'static' / 'js' / 'live_broker_ui.js').read_text()
+        self.assertIn("!document.querySelector('.terminal-page')", source)
+
+    def test_chart_uses_single_live_tick_owner(self):
+        chart = (ROOT / 'static' / 'js' / 'deriv_pro_chart.js').read_text()
+        self.assertIn("algobot:market-watchdog-tick", chart)
+        self.assertNotIn("state.ws=new WebSocket", chart)
 
 
 class SignalValidationServiceTests(SimpleTestCase):

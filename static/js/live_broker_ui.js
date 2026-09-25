@@ -184,7 +184,7 @@
     ensureMaterialSymbols(); mount(); await syncAccounts();
     const chart = $('#chart'); if (!chart) return;
     const select = $('#account');
-    if (select) select.addEventListener('change', () => { const a = accounts.find(x => String(x.id) === String(select.value)); updateTerminalAccount(a); syncSelectedAccount(); });
+    if (select && !document.querySelector('.terminal-page')) select.addEventListener('change', () => { const a = accounts.find(x => String(x.id) === String(select.value)); updateTerminalAccount(a); syncSelectedAccount(); });
     if (window.AlgoBotBrokerUI) return;
     window.AlgoBotBrokerUI = {getAccounts:() => accounts, getCurrentAccount:current, syncAccounts, syncSelectedAccount, updateTerminalAccount, selectAccount};
     const symbol = await discoverSymbol();

@@ -200,10 +200,14 @@ class DerivAdapter(BrokerAdapter):
     async def subscribe_ticks(self, symbol, callback=None): return self._start_stream([{"ticks": symbol, "subscribe": 1, "req_id": 1}], callback=callback, authenticated=False, stream_name=f"ticks:{symbol}")
 
     async def place_order(self, order):
-        routing = order.routing_context or {}; account_type = str(routing.get("account_type") or self.credentials.get("account_type") or "demo").lower()
+        routing = order.routing_context or {}; account_type = str(getattr(self.account, "account_type", "") or "").lower().strip()
         if account_type == "real" and not settings.ALLOW_LIVE_TRADING: raise BrokerOrderError("Live-money trading is disabled by platform configuration")
         if str(getattr(order, "order_type", "market") or "market").lower() != "market": raise BrokerOrderError("Deriv execution currently supports market contract purchases only")
-        requested_contract = str(routing.get("contract_type") or getattr(order, "contract_type", None) or "").upper(); direction = str(getattr(order, "direction", "") or "").upper()
+        persisted_contract = str(getattr(order, "contract_type", None) or "").upper().strip()
+        routed_contract = str(routing.get("contract_type") or "").upper().strip()
+        if persisted_contract and routed_contract and persisted_contract != routed_contract:
+            raise BrokerOrderError("The persisted broker contract does not match the execution routing context")
+        requested_contract = persisted_contract or routed_contract; direction = str(getattr(order, "direction", "") or "").upper()
         if not requested_contract: requested_contract = {"BUY": "CALL", "SELL": "PUT", "CALL": "CALL", "PUT": "PUT", "RISE": "RISE", "FALL": "FALL"}.get(direction, "")
         elif requested_contract in {"BUY", "SELL"}: requested_contract = {"BUY": "CALL", "SELL": "PUT"}[requested_contract]
         if not requested_contract: raise BrokerOrderError("A broker contract type is required")
@@ -214,7 +218,7 @@ class DerivAdapter(BrokerAdapter):
             raise BrokerOrderError(f"Deriv contract {requested_contract} is an {expected_direction} opening contract; the {direction or 'selected'} direction is not valid")
         amount = float(order.stake or getattr(order, "quantity", 0) or 0)
         if amount <= 0: raise BrokerOrderError("A positive stake is required to place a Deriv order")
-        proposal_payload = {"proposal": 1, "amount": amount, "basis": "stake", "contract_type": requested_contract, "currency": routing.get("currency") or getattr(self.account, "currency", None) or "USD", "duration": int(routing.get("duration", 60)), "duration_unit": routing.get("duration_unit", "s"), "underlying_symbol": order.symbol}
+        proposal_payload = {"proposal": 1, "amount": amount, "basis": "stake", "contract_type": requested_contract, "currency": str(getattr(self.account, "currency", None) or "USD").upper(), "duration": int(routing.get("duration", 60)), "duration_unit": routing.get("duration_unit", "s"), "underlying_symbol": order.symbol}
         if routing.get("barrier") is not None: proposal_payload["barrier"] = str(routing["barrier"])
         if routing.get("multiplier") is not None: proposal_payload["multiplier"] = float(routing["multiplier"])
         if requested_contract == "ACCU":
