@@ -127,7 +127,7 @@ class TerminalRuntimeBoundaryTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("csrftoken", response.cookies)
-        self.assertNotEqual(response.cookies["csrftoken"]["value"], "")
+        self.assertNotEqual(response.cookies["csrftoken"].value, "")
 
 
 class TerminalAiTimeframeContractTests(SimpleTestCase):
