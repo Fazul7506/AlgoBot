@@ -8,7 +8,7 @@ class OrderSerializer(serializers.ModelSerializer):
     # Keep the wire contract tolerant of the existing BUY/SELL terminal labels.
     direction = serializers.CharField(max_length=12)
     order_type = serializers.CharField(max_length=32)
-    contract_type = serializers.CharField(max_length=40, required=True, allow_blank=False)
+    contract_type = serializers.CharField(max_length=40, required=False, allow_blank=True)
     duration = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     duration_unit = serializers.ChoiceField(required=False, allow_blank=True, choices=['s','m','h','d','t'])
 
