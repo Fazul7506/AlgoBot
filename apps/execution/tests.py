@@ -109,7 +109,7 @@ class BrokerAuthoritativePositionTests(APITestCase):
 
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.data['source'], 'broker')
-        self.assertEqual(result.data['data'][0]['broker_contract_id'], '12345')
+        self.assertEqual(result.data['data'][0]['contract_id'], '12345')
         self.assertEqual(result.data['data'][0]['symbol'], 'R_100')
         self.assertEqual(result.data['data'][0]['profit'], '0.85000000')
         sync.return_value.synchronize.assert_awaited_once_with(account)
