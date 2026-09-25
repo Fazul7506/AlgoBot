@@ -1,6 +1,9 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, SimpleTestCase
