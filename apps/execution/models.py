@@ -85,3 +85,48 @@ class ReconciliationEvent(models.Model):
         indexes = [models.Index(fields=['broker_account', 'status', '-detected_at']), models.Index(fields=['user', 'status', '-detected_at'])]
     def mark_reviewed(self, user):
         self.status = self.STATUS_REVIEWED; self.reviewed_at = timezone.now(); self.reviewed_by = user; self.save(update_fields=['status', 'reviewed_at', 'reviewed_by']); return self
+
+
+class BrokerTradeHistory(models.Model):
+    """Immutable broker-fact cache for the authenticated account's trade history."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="broker_trade_history")
+    broker_account = models.ForeignKey("brokers.BrokerAccount", on_delete=models.PROTECT, related_name="broker_trade_history")
+    broker_contract_id = models.CharField(max_length=160, null=True, blank=True, db_index=True)
+    broker_transaction_id = models.CharField(max_length=160, null=True, blank=True, db_index=True)
+    broker_order_id = models.CharField(max_length=160, null=True, blank=True)
+    reference_id = models.CharField(max_length=160, null=True, blank=True)
+    symbol = models.CharField(max_length=80, null=True, blank=True)
+    display_name = models.CharField(max_length=160, null=True, blank=True)
+    instrument_type = models.CharField(max_length=80, null=True, blank=True)
+    contract_type = models.CharField(max_length=80, null=True, blank=True)
+    direction = models.CharField(max_length=32, null=True, blank=True)
+    duration = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    duration_unit = models.CharField(max_length=8, null=True, blank=True)
+    barrier = models.CharField(max_length=160, null=True, blank=True)
+    buy_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    entry_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    sell_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    exit_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    stake = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    payout = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    profit_loss = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    currency = models.CharField(max_length=12, null=True, blank=True)
+    status = models.CharField(max_length=40, default="unknown")
+    purchase_time = models.DateTimeField(null=True, blank=True)
+    execution_time = models.DateTimeField(null=True, blank=True)
+    settlement_time = models.DateTimeField(null=True, blank=True)
+    expiry_time = models.DateTimeField(null=True, blank=True)
+    broker_timestamp = models.DateTimeField(null=True, blank=True)
+    raw_data = models.JSONField(default=dict, blank=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-broker_timestamp", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["broker_account", "broker_contract_id"], condition=~models.Q(broker_contract_id=""), name="unique_trade_contract_per_account"),
+            models.UniqueConstraint(fields=["broker_account", "broker_transaction_id"], condition=~models.Q(broker_transaction_id=""), name="unique_trade_transaction_per_account"),
+        ]
+        indexes = [
+            models.Index(fields=["broker_account", "broker_timestamp"], name="execution_t_account_time_idx"),
+            models.Index(fields=["broker_account", "symbol", "status"], name="execution_t_account_sym_status_idx"),
+        ]
