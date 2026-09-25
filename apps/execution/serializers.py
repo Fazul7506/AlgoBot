@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Order, ExecutionLog, ExecutionQueue, ReconciliationEvent, BrokerTradeHistory
-from apps.trading.models import Position
+from apps.brokers.models import Position
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -49,10 +49,22 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class PositionSerializer(serializers.ModelSerializer):
-    roi = serializers.DecimalField(max_digits=18, decimal_places=8, read_only=True)
+    roi = serializers.SerializerMethodField()
     class Meta:
         model = Position
-        fields = '__all__'
+        fields = [
+            'id','broker','account','contract_id','transaction_id','broker_order_id',
+            'symbol','display_name','contract_type','direction','size','stake',
+            'entry_price','current_price','exit_price','payout','profit','roi',
+            'currency','status','opened_at','expiry_time','closed_at','settlement_time',
+            'broker_timestamp','last_synced_at',
+        ]
+        read_only_fields = fields
+
+    def get_roi(self, obj):
+        if obj.profit is None or obj.stake in (None, 0):
+            return None
+        return (obj.profit / obj.stake) * 100
 
 
 class ExecutionLogSerializer(serializers.ModelSerializer):

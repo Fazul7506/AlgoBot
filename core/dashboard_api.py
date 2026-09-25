@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from apps.execution.models import Order
 from apps.notifications.models import Notification
 from apps.strategies.models import StrategySignal
-from apps.trading.models import Position
+from apps.brokers.models import Position
 from core.account_context import get_active_account
 
 
@@ -36,41 +36,38 @@ class DashboardViewSet(viewsets.ViewSet):
     def _positions_for_account(user, account):
         if not account:
             return Position.objects.none()
-        return Position.objects.filter(
-            order__user=user,
-            order__broker_account=account,
-        )
+        return Position.objects.filter(account=account)
 
     @staticmethod
     def _position_stats(positions):
-        """Return persisted local trade P/L without manufacturing unavailable values."""
+        """Summarize broker-backed position facts without manufacturing P/L."""
         aggregate = positions.aggregate(
             total=Count("id"),
-            open_count=Count("id", filter=Q(status="open")),
-            closed_count=Count("id", filter=Q(status="closed")),
-            wins=Count("id", filter=Q(status="closed", profit_loss__gt=0)),
-            losses=Count("id", filter=Q(status="closed", profit_loss__lt=0)),
-            total_pnl=Sum("profit_loss"),
-            realized_pnl=Sum("profit_loss", filter=Q(status="closed")),
-            unrealized_pnl=Sum("profit_loss", filter=Q(status="open")),
+            open_count=Count("id", filter=Q(status__in=["open", "active", "pending"])),
+            closed_count=Count("id", filter=Q(status__in=["closed", "expired", "settled"])),
+            wins=Count("id", filter=Q(status__in=["closed", "expired", "settled"], profit__gt=0)),
+            losses=Count("id", filter=Q(status__in=["closed", "expired", "settled"], profit__lt=0)),
+            total_pnl=Sum("profit"),
+            realized_pnl=Sum("profit", filter=Q(status__in=["closed", "expired", "settled"])),
+            unrealized_pnl=Sum("profit", filter=Q(status__in=["open", "active", "pending"])),
         )
         closed_count = aggregate["closed_count"] or 0
         wins = aggregate["wins"] or 0
         losses = aggregate["losses"] or 0
-        total_pnl = aggregate["total_pnl"] if aggregate["total_pnl"] is not None else Decimal("0")
-        realized_pnl = aggregate["realized_pnl"] if aggregate["realized_pnl"] is not None else Decimal("0")
-        unrealized_pnl = aggregate["unrealized_pnl"] if aggregate["unrealized_pnl"] is not None else Decimal("0")
+        realized_pnl = aggregate["realized_pnl"]
+        unrealized_pnl = aggregate["unrealized_pnl"]
+        total_pnl = aggregate["total_pnl"]
         return {
             "total_trades": aggregate["total"] or 0,
             "open_trades": aggregate["open_count"] or 0,
             "closed_trades": closed_count,
             "wins": wins,
             "losses": losses,
-            "win_rate": (Decimal(wins) / Decimal(closed_count) * Decimal("100")) if closed_count else Decimal("0"),
+            "win_rate": (Decimal(wins) / Decimal(closed_count) * Decimal("100")) if closed_count else None,
             "total_pnl": total_pnl,
             "realized_pnl": realized_pnl,
             "unrealized_pnl": unrealized_pnl,
-            "avg_pnl_per_closed_trade": (realized_pnl / Decimal(closed_count)) if closed_count else None,
+            "avg_pnl_per_closed_trade": (realized_pnl / Decimal(closed_count)) if closed_count and realized_pnl is not None else None,
         }
 
     @staticmethod

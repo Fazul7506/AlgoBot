@@ -8,13 +8,14 @@ from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
 from .models import Order, ExecutionLog, ReconciliationEvent, BrokerTradeHistory
-from apps.trading.models import Position
+from apps.brokers.models import Position
 from .serializers import OrderSerializer, PositionSerializer, ExecutionLogSerializer, ReconciliationEventSerializer, BrokerTradeHistorySerializer
 from .engine import ExecutionEngine
 from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, BrokerRoutingError
 from core.billing_entitlements import check, check_live_order, effective_plan
 from core.account_context import get_active_account
 from .trade_history import DerivTradeHistoryService, TradeHistorySyncError
+from apps.brokers.position_sync import BrokerPositionSyncService, PositionSyncError
 
 log = logging.getLogger(__name__)
 
@@ -118,12 +119,142 @@ class OrderViewSet(viewsets.ModelViewSet):
         ExecutionEngine().retry(order); return response.Response({'status':'queued'})
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = PositionSerializer; permission_classes=[permissions.IsAuthenticated]
-    def get_queryset(self): return Position.objects.filter(order__user=self.request.user)
-    @decorators.action(detail=False)
-    def open(self, request): return response.Response(self.get_serializer(self.get_queryset().filter(status='open'),many=True).data)
-    @decorators.action(detail=False)
-    def closed(self, request): return response.Response(self.get_serializer(self.get_queryset().filter(status='closed'),many=True).data)
+    serializer_class = PositionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        account = get_active_account(self.request.user, request=self.request)
+        if not account:
+            return Position.objects.none()
+        return Position.objects.filter(account=account).select_related('broker','account')
+
+    @staticmethod
+    def _apply_filters(qs, request):
+        symbol = str(request.query_params.get('symbol') or '').strip()
+        contract_type = str(request.query_params.get('contract_type') or '').strip()
+        direction = str(request.query_params.get('direction') or '').strip()
+        status_value = str(request.query_params.get('status') or '').strip()
+        currency = str(request.query_params.get('currency') or '').strip().upper()
+        query = str(request.query_params.get('q') or request.query_params.get('search') or '').strip()
+        if symbol:
+            qs = qs.filter(symbol__iexact=symbol)
+        if contract_type:
+            qs = qs.filter(contract_type__iexact=contract_type)
+        if direction:
+            qs = qs.filter(direction__iexact=direction)
+        if status_value:
+            qs = qs.filter(status__iexact=status_value)
+        if currency:
+            qs = qs.filter(currency__iexact=currency)
+        if query:
+            qs = qs.filter(Q(symbol__icontains=query) | Q(contract_id__icontains=query) | Q(transaction_id__icontains=query) | Q(contract_type__icontains=query))
+        ordering = str(request.query_params.get('ordering') or '-broker_timestamp')
+        allowed = {
+            'newest':'-broker_timestamp','oldest':'broker_timestamp',
+            'pnl':'-profit','-pnl':'profit','stake':'-stake','-stake':'stake',
+            'expiry':'expiry_time','-expiry':'-expiry_time',
+        }
+        ordering = allowed.get(ordering, ordering if ordering in {
+            'broker_timestamp','-broker_timestamp','profit','-profit','stake','-stake','expiry_time','-expiry_time'
+        } else '-broker_timestamp')
+        return qs.order_by(ordering, '-id')
+
+    @decorators.action(detail=False, methods=['get'])
+    def open(self, request):
+        account = get_active_account(request.user, request=request)
+        if not account:
+            return response.Response({
+                'status':'unavailable',
+                'code':'BROKER_ACCOUNT_UNAVAILABLE',
+                'detail':'No connected broker account is available for the authenticated user.',
+                'data':[],
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        try:
+            sync_result = asyncio.run(BrokerPositionSyncService().synchronize(account))
+            qs = self._apply_filters(self.get_queryset().filter(status__in=['open','active','pending']), request)
+            payload = self.get_serializer(qs, many=True).data
+            return response.Response({
+                'status':'empty' if not payload else 'ready',
+                'source':'broker',
+                'data':payload,
+                'meta':sync_result['meta'],
+            })
+        except PositionSyncError as exc:
+            if exc.code == 'BROKER_AUTHENTICATION_FAILED':
+                return response.Response({
+                    'status':'authentication_failure',
+                    'code':exc.code,
+                    'detail':str(exc),
+                    'data':[],
+                    'meta':{'account_id':account.pk,'broker_account_id':account.account_id},
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            qs = self._apply_filters(self.get_queryset().filter(status__in=['open','active','pending']), request)
+            payload = self.get_serializer(qs, many=True).data
+            if payload:
+                return response.Response({
+                    'status':'stale',
+                    'source':'broker_cache',
+                    'detail':str(exc),
+                    'data':payload,
+                    'meta':{'account_id':account.pk,'broker_account_id':account.account_id,'last_synced_at':account.last_synced_at.isoformat() if account.last_synced_at else None},
+                })
+            return response.Response({
+                'status':'unavailable',
+                'code':'BROKER_POSITION_SYNC_FAILED',
+                'detail':str(exc),
+                'data':[],
+                'meta':{'account_id':account.pk,'broker_account_id':account.account_id},
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    @decorators.action(detail=False, methods=['get'])
+    def closed(self, request):
+        account = get_active_account(request.user, request=request)
+        if not account:
+            return response.Response({
+                'status':'unavailable',
+                'code':'BROKER_ACCOUNT_UNAVAILABLE',
+                'detail':'No connected broker account is available for the authenticated user.',
+                'data':[],
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        try:
+            sync_result = asyncio.run(BrokerPositionSyncService().synchronize_closed(account))
+            qs = self._apply_filters(
+                self.get_queryset().filter(status__in=['closed','expired','settled','won','lost']),
+                request,
+            )
+            payload = self.get_serializer(qs, many=True).data
+            return response.Response({
+                'status':'empty' if not payload else 'ready',
+                'source':'broker',
+                'data':payload,
+                'meta':sync_result['meta'],
+            })
+        except PositionSyncError as exc:
+            if exc.code == 'BROKER_AUTHENTICATION_FAILED':
+                return response.Response({
+                    'status':'authentication_failure',
+                    'code':exc.code,
+                    'detail':str(exc),
+                    'data':[],
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            qs = self._apply_filters(
+                self.get_queryset().filter(status__in=['closed','expired','settled','won','lost']),
+                request,
+            )
+            payload = self.get_serializer(qs, many=True).data
+            if payload:
+                return response.Response({
+                    'status':'stale',
+                    'source':'broker_cache',
+                    'detail':str(exc),
+                    'data':payload,
+                })
+            return response.Response({
+                'status':'unavailable',
+                'code':exc.code,
+                'detail':str(exc),
+                'data':[],
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 class ExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ExecutionLogSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return ExecutionLog.objects.filter(order__user=self.request.user)

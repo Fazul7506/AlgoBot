@@ -4,9 +4,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection, Position
 from apps.execution.models import Order
-from apps.trading.models import Position
 from core.dashboard_api import DashboardViewSet
 
 
@@ -68,24 +67,18 @@ class DashboardAccountOverviewTests(TestCase):
         self.assertEqual(response.data["data"]["account"]["account_id"], self.account.account_id)
         self.assertEqual(response.data["data"]["account"]["currency"], "USD")
         self.assertEqual(response.data["data"]["trading_stats"]["total_trades"], 0)
-        self.assertEqual(response.data["data"]["trading_stats"]["total_pnl"], Decimal("0"))
+        self.assertIsNone(response.data["data"]["trading_stats"]["total_pnl"])
 
     def test_account_overview_uses_real_position_pnl_instead_of_synthetic_zeroes(self):
-        order = Order.objects.create(
-            user=self.user,
-            broker_account=self.account,
-            symbol="1HZ100V",
-            strategy="regression",
-            direction="buy",
-            stake="10",
-            status="executed",
-        )
         Position.objects.create(
-            order=order,
+            broker=self.broker,
+            account=self.account,
+            contract_id="TEST-CONTRACT-1",
             symbol="1HZ100V",
+            stake="10",
             entry_price="100",
             current_price="103",
-            profit_loss="3",
+            profit="3",
             status="closed",
         )
         response = self._get("account_overview")
@@ -99,36 +92,26 @@ class DashboardAccountOverviewTests(TestCase):
         self.assertEqual(stats["win_rate"], Decimal("100"))
 
     def test_dashboard_does_not_cross_account_boundary(self):
-        own_order = Order.objects.create(
-            user=self.user,
-            broker_account=self.account,
-            symbol="OWN",
-            direction="buy",
-            stake="10",
-            status="executed",
-        )
         Position.objects.create(
-            order=own_order,
+            broker=self.broker,
+            account=self.account,
+            contract_id="TEST-CONTRACT-OWN",
             symbol="OWN",
+            stake="10",
             entry_price="100",
             current_price="101",
-            profit_loss="1",
+            profit="1",
             status="closed",
         )
-        other_order = Order.objects.create(
-            user=self.other_user,
-            broker_account=self.other_account,
-            symbol="OTHER",
-            direction="buy",
-            stake="10",
-            status="executed",
-        )
         Position.objects.create(
-            order=other_order,
+            broker=self.broker,
+            account=self.other_account,
+            contract_id="TEST-CONTRACT-OTHER",
             symbol="OTHER",
+            stake="10",
             entry_price="100",
             current_price="50",
-            profit_loss="-50",
+            profit="-50",
             status="closed",
         )
 
