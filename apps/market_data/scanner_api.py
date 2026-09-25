@@ -1,4 +1,3 @@
-from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
@@ -88,9 +87,10 @@ def _technical_context(candles):
     if bands and bands["middle"]:
         width = ((bands["upper"] - bands["lower"]) / bands["middle"]) * 100
 
+    macd_values = macd or {}
     available = sum(
         value is not None
-        for value in (rsi, sma20, sma50, ema21, macd.get("macd"), atr)
+        for value in (rsi, sma20, sma50, ema21, macd_values.get("macd"), atr)
     )
     technical_status = "ready" if available >= 4 else "insufficient_data"
     return {
@@ -99,9 +99,9 @@ def _technical_context(candles):
         "sma_20": sma20,
         "sma_50": sma50,
         "ema_21": ema21,
-        "macd": macd.get("macd"),
-        "macd_signal": macd.get("signal"),
-        "macd_histogram": macd.get("histogram"),
+        "macd": macd_values.get("macd"),
+        "macd_signal": macd_values.get("signal"),
+        "macd_histogram": macd_values.get("histogram"),
         "atr_14": atr,
         "bollinger_width": width,
         "trend": trend,
