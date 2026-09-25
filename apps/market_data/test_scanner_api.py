@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from datetime import timedelta
+
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -107,7 +109,7 @@ class MarketScannerApiTests(TestCase):
 
     def test_stale_snapshot_is_not_classified_as_current_opportunity(self):
         snapshot = self.gainer.snapshot
-        snapshot.timestamp = timezone.now() - timezone.timedelta(seconds=61)
+        snapshot.timestamp = timezone.now() - timedelta(seconds=61)
         snapshot.save(update_fields=["timestamp"])
         response = self.client.get("/api/market/scanner/?direction=gainers")
         self.assertEqual(response.status_code, 200)
