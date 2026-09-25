@@ -108,8 +108,6 @@ class BotSettings(models.Model):
     risk_per_trade_pct = models.FloatField(default=0.01)
     max_concurrent_trades = models.IntegerField(default=5)
     min_win_rate = models.FloatField(default=0.50)
-    is_paper_trading = models.BooleanField(default=True)
-    paper_balance = models.FloatField(default=10000.0)
     email_notifications_enabled = models.BooleanField(default=True)
     telegram_notifications_enabled = models.BooleanField(default=False)
     telegram_chat_id = models.CharField(max_length=50, blank=True)
