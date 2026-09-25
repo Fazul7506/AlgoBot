@@ -67,6 +67,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="brokertradehistory",
-            index=models.Index(fields=["broker_account", "symbol", "status"], name="execution_t_account_sym_status_idx"),
+            index=models.Index(fields=["broker_account", "symbol", "status"], name="exec_t_acct_sym_status_idx"),
         ),
     ]
