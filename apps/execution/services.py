@@ -298,8 +298,9 @@ class TradeReconciliationService:
 
 class TradeSynchronizationService:
     async def synchronize(self, broker_account):
+        position_sync = await __import__("apps.brokers.position_sync", fromlist=["BrokerPositionSyncService"]).BrokerPositionSyncService().synchronize(broker_account)
         adapter = BrokerRegistry().adapter(broker_account.broker, broker_account)
-        positions = await adapter.get_positions()
+        positions = position_sync["positions"]
         orders = await adapter.get_orders()
         balance = await adapter.get_balance()
         reconciliation = await TradeReconciliationService().compare(broker_account, positions, orders, balance)
