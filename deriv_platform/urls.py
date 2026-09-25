@@ -24,6 +24,7 @@ from core.views import (
     verify_email_page, cookie_policy_page, licensing_page, contact_page,
     about_page, public_status_page, risk_page, orders_page, positions_page,
     signals_page, analysis_page, operations_module_page, strategy_builder_page,
+    csrf_token_bootstrap,
 )
 from core.views_trade_history import trade_history_page
 from core.views_automation import workflow_templates_page
@@ -131,6 +132,7 @@ urlpatterns = [
     path("forgot-password/", forgot_password_page, name="forgot_password_page"),
     path("reset-password/<str:token>/", reset_password_page, name="reset_password_page"),
     path("verify-email/", verify_email_page, name="verify_email_page"),
+    path("api/csrf/", csrf_token_bootstrap, name="csrf_token_bootstrap"),
     path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/register/", register, name="register"),
