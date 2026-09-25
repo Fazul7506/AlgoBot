@@ -128,5 +128,5 @@ class BrokerTradeHistory(models.Model):
         ]
         indexes = [
             models.Index(fields=["broker_account", "broker_timestamp"], name="execution_t_account_time_idx"),
-            models.Index(fields=["broker_account", "symbol", "status"], name="execution_t_account_sym_status_idx"),
+            models.Index(fields=["broker_account", "symbol", "status"], name="exec_t_acct_sym_status_idx"),
         ]
