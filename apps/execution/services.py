@@ -58,12 +58,6 @@ class PositionService:
     def update_position(self, position, current_price): position.current_price=current_price; position.profit_loss=(current_price-position.entry_price); position.save(update_fields=['current_price','profit_loss']); return position
     def close_position(self, position, exit_price): position.exit_price=exit_price; position.status='closed'; position.closed_at=timezone.now(); position.profit_loss=exit_price-position.entry_price; position.save(); ExecutionLogRepository().log(position.order,'PositionClosed','success','Position closed'); return position
 
-class ContractService:
-    def purchase(self, position, **data):
-        from apps.contracts.repositories import ContractRepository
-        contract=ContractRepository().create(position=position,**data); ExecutionLogRepository().log(position.order,'ContractPurchased','success',contract.contract_id); return contract
-    def expire(self, contract, settlement=None): contract.status='expired'; contract.settlement=settlement; contract.save(update_fields=['status','settlement','updated_at']); ExecutionLogRepository().log(contract.position.order,'ContractExpired','success',contract.contract_id); return contract
-
 class TradeLifecycleService:
     def archive(self, order): order.status=c.ORDER_STATUS_ARCHIVED; order.save(update_fields=['status','updated_at']); ExecutionLogRepository().log(order,'OrderArchived','success','Trade archived'); return order
 
