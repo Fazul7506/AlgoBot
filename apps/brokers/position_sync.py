@@ -181,7 +181,10 @@ class BrokerPositionSyncService:
                 raise PositionSyncError("The broker session is no longer authorized.", code="BROKER_AUTHENTICATION_FAILED") from exc
             except BrokerConnectionError as exc:
                 raise PositionSyncError("The broker connection failed while reconciling stale contracts.", code="BROKER_UNAVAILABLE") from exc
-            normalized.extend(item for item in (normalize_broker_position(r) for r in final_records if isinstance(r, dict)) if item is not None)
+            normalized.extend(
+                item for item in (normalize_broker_position(r) for r in final_records if isinstance(r, dict))
+                if item is not None and item.get("status") in {"closed", "expired", "settled", "won", "lost"}
+            )
 
         sync_meta = await sync_to_async(_persist_snapshot_sync, thread_sensitive=True)(account.pk, normalized)
         return {
