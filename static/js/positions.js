@@ -27,7 +27,7 @@
     const count = $('[data-record-count]');
     const pnl = $('[data-page-pnl]');
     const updated = $('[data-page-updated]');
-    if (count) count.textContent = String(state.rows.length);
+    if (count) count.textContent = state.status === 'unavailable' ? 'Unavailable' : String(state.rows.length);
     const known = state.rows.map(r => Number(r.profit)).filter(Number.isFinite);
     const currency = state.rows.find(r => r.currency)?.currency || '';
     if (pnl) pnl.textContent = known.length ? money(known.reduce((a,b)=>a+b,0),currency) : 'Unavailable';
@@ -48,7 +48,7 @@
     if (!tbody) return;
     const rows = filtered();
     if (!rows.length) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">' + (state.status === 'unavailable' ? 'Broker position data is unavailable.' : state.status === 'stale' ? 'No cached open positions are available.' : 'The broker reports no open positions.') + '</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">' + (state.status === 'loading' ? 'Synchronizing with the broker…' : state.status === 'unavailable' ? 'Broker position data is unavailable.' : state.status === 'stale' ? 'No cached open positions are available.' : 'The broker reports no open positions.') + '</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map(r => {
