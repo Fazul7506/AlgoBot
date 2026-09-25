@@ -196,7 +196,7 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         account = get_active_account(self.request.user, request=self.request, broker_type="deriv")
         ids = list(self.get_queryset().values_list("broker_contract_id", flat=True)) if account else []
         context["ai_by_contract"] = {
-            order.broker_reference: (order.validation_context or {})
+            order.broker_reference: {"context": order.validation_context or {}, "created_at": order.created_at}
             for order in Order.objects.filter(
                 user=self.request.user,
                 broker_account=account,
