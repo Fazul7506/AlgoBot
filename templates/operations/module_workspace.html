@@ -57,7 +57,7 @@
   <script id="module-endpoints" type="application/json">{{ module_endpoints_json|safe }}</script>
   <section class="card-grid">
     <article><h2>Execution principle</h2><p>Every trading action remains broker-neutral. The UI calls the platform API; broker adapters perform the actual routing.</p></article>
-    <article><h2>Safety</h2><p>Live execution should remain gated by account connection and risk controls. Use paper trading while validating a new strategy.</p></article>
+    <article><h2>Safety</h2><p>Live execution should remain gated by account connection and risk controls. Use the connected broker demo account while validating a new strategy.</p></article>
   </section>
 </div>
 {% endblock %}

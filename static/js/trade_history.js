@@ -100,8 +100,10 @@
     const stateValue = payload.state || 'unknown';
     state.textContent = stateValue === 'success' ? 'Broker synchronized' :
       stateValue === 'partial' ? 'Partial broker data' :
+      stateValue === 'cached' ? 'Cached broker data' :
       stateValue === 'stale' ? 'Stale · broker unavailable' :
       stateValue === 'empty' ? 'No broker trades' :
+      stateValue === 'authentication_failed' ? 'Authentication required' :
       stateValue === 'unavailable' ? 'Broker unavailable' : stateValue;
     if (payload.account) {
       currency.textContent = `Currency: ${payload.account.currency || '—'}`;

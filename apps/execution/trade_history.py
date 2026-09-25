@@ -19,6 +19,14 @@ from .models import BrokerTradeHistory
 
 class TradeHistorySyncError(Exception):
     code = "trade_history_unavailable"
+    retryable = True
+
+    def __init__(self, message, *, code=None, retryable=None):
+        super().__init__(message)
+        if code is not None:
+            self.code = code
+        if retryable is not None:
+            self.retryable = retryable
 
 
 def _decimal(value):
@@ -65,7 +73,7 @@ def normalize_deriv_trade(transaction_data, contract=None):
     purchase_time = _epoch_datetime(_first(contract, "purchase_time", "date_start")) or _epoch_datetime(
         _first(tx, "transaction_time", "timestamp")
     )
-    settlement_time = _epoch_datetime(_first(contract, "sell_time", "settlement_time"))
+    settlement_time = _epoch_datetime(_first(contract, "sell_time", "sell_spot_time", "exit_spot_time", "settlement_time"))
     expiry_time = _epoch_datetime(_first(contract, "date_expiry", "expiry_time"))
     broker_timestamp = _epoch_datetime(_first(tx, "transaction_time", "timestamp")) or purchase_time
 
@@ -84,9 +92,9 @@ def normalize_deriv_trade(transaction_data, contract=None):
         "barrier": _first(contract, "barrier", "barrier_spot"),
         "buy_price": _decimal(_first(contract, "buy_price", "purchase_price")),
         "entry_price": _decimal(_first(contract, "entry_spot", "entry_price")),
-        "sell_price": _decimal(_first(contract, "sell_price")),
+        "sell_price": _decimal(_first(contract, "sell_price", "sold_for")),
         "exit_price": _decimal(_first(contract, "exit_spot", "exit_price")),
-        "stake": _decimal(_first(contract, "buy_price", "stake", "amount") or _first(tx, "amount")),
+        "stake": _decimal(_first(contract, "buy_price", "stake", "amount")),
         "payout": _decimal(_first(contract, "payout")),
         "profit_loss": _decimal(_first(contract, "profit", "profit_loss")),
         "currency": _first(contract, "currency") or _first(tx, "currency"),
@@ -113,52 +121,106 @@ class DerivTradeHistoryService:
 
     async def sync(self, *, limit=100, date_from=None, date_to=None):
         adapter = BrokerRegistry().adapter(self.account.broker, self.account)
-        transactions = await adapter.get_trade_history(
-            limit=min(max(int(limit or 100), 1), 100),
-            date_from=date_from,
-            date_to=date_to,
-        )
-        if not isinstance(transactions, list):
-            raise TradeHistorySyncError("Deriv returned an invalid trade-history payload.")
+        try:
+            transactions = await adapter.get_trade_history(
+                limit=min(max(int(limit or 100), 1), 100),
+                date_from=date_from,
+                date_to=date_to,
+            )
+        except (BrokerAuthenticationError, BrokerConnectionError):
+            raise
+        except BrokerOrderError as exc:
+            raise TradeHistorySyncError(
+                "Deriv rejected the Trade History request.",
+                code="BROKER_HISTORY_REJECTED",
+                retryable=False,
+            ) from exc
 
+        if not isinstance(transactions, list):
+            raise TradeHistorySyncError(
+                "Deriv returned an invalid Trade History payload.",
+                code="BROKER_HISTORY_INVALID_PAYLOAD",
+                retryable=True,
+            )
+
+        # The statement endpoint contains account transactions, not only trades.
+        # Only rows carrying a broker contract ID are eligible for the trade ledger.
+        # Deposits, withdrawals and other account transactions are deliberately ignored.
         grouped = {}
         for tx in transactions:
             if not isinstance(tx, dict):
                 continue
             contract_id = tx.get("contract_id")
-            key = str(contract_id) if contract_id is not None else f"tx:{tx.get('transaction_id')}"
+            if contract_id is None:
+                continue
+            key = str(contract_id)
             if key not in grouped:
                 grouped[key] = tx
 
         partial = False
+        contract_failures = 0
         normalized = []
         for tx in grouped.values():
-            contract = {}
             contract_id = tx.get("contract_id")
-            if contract_id is None:
+            try:
+                contract = await self._contract(adapter, contract_id)
+            except (BrokerAuthenticationError, BrokerConnectionError):
+                raise
+            except BrokerOrderError:
+                partial = True
+                contract_failures += 1
+                continue
+            except Exception:
+                partial = True
+                contract_failures += 1
+                continue
+
+            # A statement row alone is not enough to create a trade-history row.
+            # Require Deriv's contract-level response before persisting execution facts.
+            if not isinstance(contract, dict) or str(contract.get("contract_id") or "") != str(contract_id):
+                partial = True
+                contract_failures += 1
+                continue
+
+            row = normalize_deriv_trade(tx, contract)
+            if not row["broker_contract_id"]:
                 partial = True
                 continue
-            if contract_id is not None:
-                try:
-                    contract = await self._contract(adapter, contract_id)
-                except (BrokerAuthenticationError, BrokerConnectionError):
-                    raise
-                except Exception:
-                    partial = True
-            row = normalize_deriv_trade(tx, contract)
-            if not row["broker_contract_id"] and not row["broker_transaction_id"]:
-                continue
             normalized.append(row)
+
+        if grouped and not normalized:
+            raise TradeHistorySyncError(
+                "Deriv returned trade transactions, but no contract details could be confirmed.",
+                code="BROKER_CONTRACT_DETAILS_UNAVAILABLE",
+                retryable=True,
+            )
 
         now = timezone.now()
         with transaction.atomic():
             for row in normalized:
-                lookup = (
-                    {"broker_account": self.account, "broker_contract_id": row["broker_contract_id"]}
-                    if row["broker_contract_id"]
-                    else {"broker_account": self.account, "broker_transaction_id": row["broker_transaction_id"]}
+                contract_lookup = (
+                    BrokerTradeHistory.objects.filter(
+                        broker_account=self.account,
+                        broker_contract_id=row["broker_contract_id"],
+                    ).first()
+                    if row["broker_contract_id"] else None
                 )
-                existing = BrokerTradeHistory.objects.filter(**lookup).first()
+                transaction_lookup = (
+                    BrokerTradeHistory.objects.filter(
+                        broker_account=self.account,
+                        broker_transaction_id=row["broker_transaction_id"],
+                    ).first()
+                    if row["broker_transaction_id"] else None
+                )
+
+                if contract_lookup and transaction_lookup and contract_lookup.pk != transaction_lookup.pk:
+                    raise TradeHistorySyncError(
+                        "Deriv returned conflicting contract and transaction identifiers.",
+                        code="BROKER_ID_CONFLICT",
+                        retryable=False,
+                    )
+
+                existing = contract_lookup or transaction_lookup
                 if existing:
                     for key, value in row.items():
                         setattr(existing, key, value)
@@ -175,7 +237,13 @@ class DerivTradeHistoryService:
 
         self.account.last_synced_at = now
         self.account.save(update_fields=["last_synced_at"])
-        return {"state": "partial" if partial else "success", "count": len(normalized), "last_synced_at": now}
+        return {
+            "state": "partial" if partial else ("empty" if not normalized else "success"),
+            "count": len(normalized),
+            "contract_transactions": len(grouped),
+            "contract_failures": contract_failures,
+            "last_synced_at": now,
+        }
 
 
 def sync_deriv_trade_history(account, **filters):

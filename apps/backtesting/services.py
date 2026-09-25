@@ -13,7 +13,7 @@ class SimulatedExecutionAdapter:
         side=signal.get('direction','long'); price=float(event.price)+(self.spread/2)*(1 if side=='long' else -1)+self.random.uniform(-self.slippage,self.slippage)
         return {'timestamp':event.timestamp,'symbol':event.symbol,'direction':side,'price':price,'quantity':float(signal.get('quantity',1)),'fees':abs(price)*float(signal.get('fee_rate',0))}
 class SharedTradingPipeline:
-    """Single execution pipeline for live, paper, backtest, replay, and AI dataset generation; swap only adapter."""
+    """Research/replay execution pipeline; live broker execution stays in the broker execution layer."""
     def __init__(self, strategy:Callable[[MarketEvent],dict|None]|None=None, adapter=None): self.strategy=strategy or (lambda e: None); self.adapter=adapter or SimulatedExecutionAdapter(); self.events=[]; self.orders=[]
     def on_event(self,event):
         self.events.append(event); signal=self.strategy(event)
@@ -56,11 +56,6 @@ class BacktestingEngine:
             if order: trades.append({'entry_time':order['timestamp'],'entry_price':order['price'],'direction':order['direction'],'profit':0,'fees':order['fees']})
         return {'mode':mode,'orders':self.pipeline.orders,'statistics':self.analytics.calculate(trades)}
 class SimulationEngine(BacktestingEngine): pass
-class PaperTradingEngine:
-    def __init__(self, pipeline=None, balance=100000): self.pipeline=pipeline or SharedTradingPipeline(); self.balance=balance; self.open=[]
-    def start(self): return {'status':'running','balance':self.balance}
-    def stop(self): return {'status':'stopped','balance':self.balance}
-    def on_market_event(self,event): return self.pipeline.on_event(event)
 class MonteCarloService:
     RUNS={100,500,1000,5000,10000}
     def run(self, trades, runs=100, seed=42):

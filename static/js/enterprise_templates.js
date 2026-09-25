@@ -49,7 +49,7 @@
     trading: ['/api/orders/', '/api/positions/open/', '/api/dashboard/signals/'],
     markets: ['/api/market/symbols/', '/api/market/snapshots/all_snapshots/', '/api/market/stats/'],
     strategies: ['/api/strategies/', '/api/strategies/signals/', '/api/strategies/performance/'],
-    backtesting: ['/api/backtests/', '/api/statistics/', '/api/paper/account/', '/api/optimization/results/'],
+    backtesting: ['/api/backtests/', '/api/statistics/', '/api/optimization/results/'],
     ai: ['/api/ai/models/', '/api/ai/predictions/', '/api/ai/recommendations/', '/api/ai/training-jobs/'],
     risk: ['/api/risk/profile/', '/api/risk/assessment/', '/api/risk/exposure/', '/api/risk/drawdown/', '/api/risk/kill-switch/'],
     portfolio: ['/api/portfolio/', '/api/portfolio/performance/', '/api/portfolio/exposure/', '/api/portfolio/allocation/'],

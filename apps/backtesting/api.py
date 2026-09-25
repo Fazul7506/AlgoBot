@@ -241,18 +241,6 @@ class StatisticsViewSet(viewsets.ReadOnlyModelViewSet):
 
 @decorators.api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-def paper_start(request): return response.Response({'status':'disabled','detail':'Paper trading is not a backtesting feature. Connect and use the broker demo account from Trading Terminal.'}, status=status.HTTP_410_GONE)
-
-@decorators.api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def paper_stop(request): return response.Response({'status':'disabled','detail':'Paper trading is not a backtesting feature. Use the connected broker demo account from Trading Terminal.'}, status=status.HTTP_410_GONE)
-
-@decorators.api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def paper_account(request): return response.Response({'status':'disabled','detail':'Backtesting does not create a synthetic account. Use the connected broker demo account in Trading Terminal.'}, status=status.HTTP_410_GONE)
-
-@decorators.api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
 def optimization_start(request):
     allowed, used, limit = check(request.user, 'backtests')
     if not allowed:

@@ -33,12 +33,6 @@ class DerivAdapter(BrokerAdapter):
             raise BrokerAuthenticationError("Deriv access token is unavailable")
         return token
 
-    def _app_id(self):
-        app_id = settings.DERIV_APP_ID or settings.DERIV_OAUTH_CLIENT_ID
-        if not app_id:
-            raise BrokerAuthenticationError("DERIV_APP_ID is not configured")
-        return app_id
-
     def _account_id(self):
         account_id = getattr(self.account, "account_id", None)
         if not account_id:
@@ -49,7 +43,7 @@ class DerivAdapter(BrokerAdapter):
         try:
             response = requests.post(
                 f"{settings.DERIV_OPTIONS_ACCOUNTS_URL}/{self._account_id()}/otp",
-                headers={"Authorization": f"Bearer {self._token()}", "Deriv-App-ID": self._app_id(), "Accept": "application/json"},
+                headers={"Authorization": f"Bearer {self._token()}", "Accept": "application/json"},
                 timeout=(3.05, self.timeout),
             )
             if response.status_code == 401:
