@@ -1,13 +1,17 @@
-/* Connected-broker market scanner. Preserves the existing catalogue and quote stream while adding professional discovery controls. */
 (() => {
   'use strict';
   if (window.__algoBotMarketWatch) return;
   window.__algoBotMarketWatch = true;
-  const $ = s => document.querySelector(s);
-  const list = v => window.AlgoBotFrontendData?.list(v) || [];
-  const esc = v => String(v ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
-  const money = v => Number.isFinite(Number(v)) ? Number(v).toLocaleString(undefined,{maximumFractionDigits:8}) : 'Unavailable';
-  const WS = 'wss://api.derivws.com/trading/v1/options/ws/public';
+
+  const $ = selector => document.querySelector(selector);
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  }[c]));
+  const list = value => Array.isArray(value) ? value : [];
+  const money = value => Number.isFinite(Number(value))
+    ? Number(value).toLocaleString(undefined, { maximumFractionDigits: 8 })
+    : 'Unavailable';
+
   const storedFavourites = () => {
     try {
       const value = JSON.parse(localStorage.getItem('algobot.market.favourites') || '[]');
@@ -16,20 +20,284 @@
       return [];
     }
   };
-  let rows=[], quotes=new Map(), selectedMarket='All', selectedSort='name', favourites=new Set(storedFavourites()), selectedTimeframe='60', socket=null, reconnect=null, req=3000;
-  const palette = market => { const k=String(market||'').toLowerCase(); if(k.includes('crypto')) return ['#f6a623','#bb5b12']; if(k.includes('forex')) return ['#3c91e6','#2553a4']; if(k.includes('commodity')) return ['#d69e2e','#8b5b15']; if(k.includes('stock')) return ['#8b5cf6','#5b21b6']; return ['#ff5a64','#b5203a']; };
-  const initials = r => String(r.display_name||r.symbol||'?').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase();
-  function persist(){try{localStorage.setItem('algobot.market.favourites',JSON.stringify([...favourites]));}catch(_){}}
-  function categories(){ const root=$('[data-market-categories]'); if(!root)return; const cats=['All',...new Set(rows.map(r=>r.market).filter(Boolean).sort())]; root.innerHTML=cats.map(c=>`<button type="button" class="${c===selectedMarket?'active':''}" data-market-category="${esc(c)}">${esc(c)}</button>`).join(''); root.querySelectorAll('[data-market-category]').forEach(b=>b.addEventListener('click',()=>{selectedMarket=b.dataset.marketCategory;categories();render();connect();})); }
-  function filtered(){ const q=String($('[data-market-search]')?.value||'').trim().toLowerCase(); let a=rows.filter(r=>(selectedMarket==='All'||r.market===selectedMarket)&&(!q||JSON.stringify(r).toLowerCase().includes(q))); if(selectedSort==='favourite') a.sort((x,y)=>Number(favourites.has(y.symbol))-Number(favourites.has(x.symbol))); else if(selectedSort==='price') a.sort((x,y)=>(quotes.get(y.symbol)?.price??-Infinity)-(quotes.get(x.symbol)?.price??-Infinity)); else a.sort((x,y)=>String(x.display_name||x.symbol).localeCompare(String(y.display_name||y.symbol))); return a.slice(0,120); }
-  function render(message=null){ const root=$('[data-market-list]'); if(!root)return; if(message){root.innerHTML=`<div class="market-empty">${esc(message)}</div>`;summary();return;} const items=filtered(); root.innerHTML=items.map(r=>{const [a,b]=palette(r.market),q=quotes.get(r.symbol),href=`/trading/?symbol=${encodeURIComponent(r.symbol)}${selectedTimeframe?`&timeframe=${encodeURIComponent(selectedTimeframe)}`:''}`,fav=favourites.has(r.symbol); return `<article class="market-card ${fav?'is-favourite':''}" data-symbol="${esc(r.symbol)}"><button class="icon-btn" type="button" data-favourite="${esc(r.symbol)}" aria-label="${fav?'Remove':'Add'} ${esc(r.symbol)} ${fav?'from':'to'} favourites">${fav?'★':'☆'}</button><span class="market-avatar" style="--avatar-a:${a};--avatar-b:${b}" aria-hidden="true">${esc(initials(r))}</span><div class="market-card-copy"><span class="eyebrow">${esc(r.market||'Broker market')}</span><h2>${esc(r.symbol)}</h2><p>${esc(r.display_name||r.symbol)}</p></div><div class="market-quote"><strong data-quote>${q?money(q.price):'Waiting…'}</strong><span data-bidask>${q?`Bid ${money(q.bid)} · Ask ${money(q.ask)} · ${q.live?'LIVE':'STALE'}`:'Waiting for live broker quote'}</span></div><div class="market-card-actions"><a class="btn primary small" href="${href}">Trade</a></div></article>`;}).join('')||'<div class="market-empty">No broker instruments match your filters.</div>'; root.querySelectorAll('[data-favourite]').forEach(b=>b.addEventListener('click',()=>{const s=b.dataset.favourite;if(favourites.has(s))favourites.delete(s);else favourites.add(s);persist();render();connect();})); summary(); }
-  function summary(){ const s=$('[data-scanner-total]'),f=$('[data-scanner-favourites]'),l=$('[data-scanner-live]'),m=$('[data-scanner-markets]'); if(s)s.textContent=filtered().length; if(f)f.textContent=rows.filter(r=>favourites.has(r.symbol)).length; if(l)l.textContent=[...quotes.values()].filter(q=>q.live).length; if(m)m.textContent=new Set(rows.map(r=>r.market).filter(Boolean)).size; }
-  function update(payload){const t=payload.tick||{},symbol=String(t.symbol||payload.echo_req?.ticks||''),price=Number(t.quote);if(!symbol||!Number.isFinite(price))return;quotes.set(symbol,{price,bid:Number(t.bid??price),ask:Number(t.ask??price),live:true});const card=document.querySelector(`[data-symbol="${CSS.escape(symbol)}"]`);if(card){card.querySelector('[data-quote]')?.replaceChildren(document.createTextNode(money(price)));card.querySelector('[data-bidask]')?.replaceChildren(document.createTextNode(`Bid ${money(t.bid??price)} · Ask ${money(t.ask??price)} · LIVE`));}summary();}
-  function close(){if(socket){try{socket.close();}catch(_){ }socket=null;}clearTimeout(reconnect);}
-  function connect(){const cards=[...document.querySelectorAll('[data-symbol]')].slice(0,12);if(!cards.length||document.visibilityState!=='visible')return;close();try{socket=new WebSocket(WS);socket.addEventListener('open',()=>cards.forEach(c=>socket?.send(JSON.stringify({ticks:c.dataset.symbol,subscribe:1,req_id:++req}))));socket.addEventListener('message',e=>{try{const p=JSON.parse(e.data);if(!p.error&&p.msg_type==='tick')update(p);}catch(_){}});socket.addEventListener('close',()=>{socket=null;if(document.visibilityState==='visible')reconnect=setTimeout(connect,2500);});}catch(_){reconnect=setTimeout(connect,2500);}}
-  async function loadSymbols(){const data=await window.AlgoBotFrontendData.request('/api/market/broker-catalogue/',{},10000);rows=list(data?.symbols??data).filter(r=>r?.is_active!==false&&r?.is_tradable!==false);if(!rows.length)throw new Error('Connected broker returned no active tradable instruments');categories();render();connect();}
-  function timeframes(){const s=$('[data-market-timeframe]');if(!s)return;const frames=[[60,'1 minute'],[120,'2 minutes'],[300,'5 minutes'],[600,'10 minutes'],[900,'15 minutes'],[1800,'30 minutes'],[3600,'1 hour'],[7200,'2 hours'],[14400,'4 hours'],[28800,'8 hours'],[86400,'1 day']];s.innerHTML=frames.map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');selectedTimeframe=s.value||'60';}
-  async function load(){render('Loading connected broker market catalogue…');try{timeframes();await loadSymbols();}catch(e){render(`Broker market catalogue unavailable: ${e.message}`);}}
-  function boot(){const search=$('[data-market-search]'),sort=$('[data-market-sort]');search?.addEventListener('input',()=>{render();connect();});sort?.addEventListener('change',e=>{selectedSort=e.target.value;render();connect();});$('[data-market-timeframe]')?.addEventListener('change',e=>{selectedTimeframe=e.target.value;render();});$('[data-market-refresh]')?.addEventListener('click',async e=>{e.currentTarget.disabled=true;try{await loadSymbols();}catch(err){if(rows.length)render();else render(`Broker catalogue refresh unavailable: ${err.message}`);}finally{e.currentTarget.disabled=false;}});document.addEventListener('visibilitychange',()=>document.visibilityState==='visible'?connect():close());window.addEventListener('beforeunload',close,{once:true});load();}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+
+  let rows = [];
+  const quotes = new Map();
+  let selectedMarket = 'All';
+  let selectedSort = 'name';
+  const favourites = new Set(storedFavourites());
+  let socket = null;
+  let reconnectTimer = null;
+  let staleTimer = null;
+
+  const persist = () => {
+    try {
+      localStorage.setItem(
+        'algobot.market.favourites',
+        JSON.stringify([...favourites])
+      );
+    } catch (_) {}
+  };
+
+  const statusText = state => ({
+    live: 'LIVE',
+    stale: 'STALE',
+    unavailable: 'QUOTE UNAVAILABLE'
+  }[state] || 'QUOTE UNAVAILABLE');
+
+  const categories = () => {
+    const root = $('[data-market-categories]');
+    if (!root) return;
+    const cats = ['All', ...new Set(rows.map(r => r.market).filter(Boolean).sort())];
+    root.innerHTML = cats.map(category =>
+      '<button type="button" class="' +
+      (category === selectedMarket ? 'active' : '') +
+      '" data-market-category="' + esc(category) + '">' +
+      esc(category) + '</button>'
+    ).join('');
+    root.querySelectorAll('[data-market-category]').forEach(button => {
+      button.addEventListener('click', () => {
+        selectedMarket = button.dataset.marketCategory;
+        categories();
+        render();
+        connect();
+      });
+    });
+  };
+
+  const filtered = () => {
+    const query = String($('[data-market-search]')?.value || '').trim().toLowerCase();
+    const result = rows.filter(row => {
+      const haystack = [
+        row.symbol, row.display_name, row.market, row.sub_market
+      ].join(' ').toLowerCase();
+      return (selectedMarket === 'All' || row.market === selectedMarket) &&
+        (!query || haystack.includes(query));
+    });
+    if (selectedSort === 'favourite') {
+      result.sort((a, b) =>
+        Number(favourites.has(b.symbol)) - Number(favourites.has(a.symbol)) ||
+        String(a.display_name || a.symbol).localeCompare(String(b.display_name || b.symbol))
+      );
+    } else if (selectedSort === 'price') {
+      result.sort((a, b) =>
+        (quotes.get(b.symbol)?.price ?? -Infinity) -
+        (quotes.get(a.symbol)?.price ?? -Infinity)
+      );
+    } else {
+      result.sort((a, b) =>
+        String(a.display_name || a.symbol).localeCompare(String(b.display_name || b.symbol))
+      );
+    }
+    return result.slice(0, 120);
+  };
+
+  const summary = () => {
+    const visible = filtered();
+    const total = $('[data-scanner-total]');
+    const fav = $('[data-scanner-favourites]');
+    const live = $('[data-scanner-live]');
+    const markets = $('[data-scanner-markets]');
+    if (total) total.textContent = visible.length;
+    if (fav) fav.textContent = rows.filter(row => favourites.has(row.symbol)).length;
+    if (live) live.textContent = [...quotes.values()].filter(q => q.state === 'live').length;
+    if (markets) markets.textContent = new Set(rows.map(row => row.market).filter(Boolean)).size;
+  };
+
+  const render = message => {
+    const root = $('[data-market-list]');
+    if (!root) return;
+    if (message) {
+      root.innerHTML = '<div class="market-empty">' + esc(message) + '</div>';
+      summary();
+      return;
+    }
+
+    const items = filtered();
+    root.innerHTML = items.map(row => {
+      const quote = quotes.get(row.symbol);
+      const state = quote?.state || 'unavailable';
+      const favourite = favourites.has(row.symbol);
+      const href = '/trading/?symbol=' + encodeURIComponent(row.symbol);
+      const quoteText = quote && state !== 'unavailable' ? money(quote.price) : 'Unavailable';
+      const bidAsk = quote && state !== 'unavailable'
+        ? 'Bid ' + money(quote.bid) + ' · Ask ' + money(quote.ask) + ' · ' + statusText(state)
+        : 'Waiting for broker market feed';
+
+      return '<article class="market-card ' + (favourite ? 'is-favourite' : '') +
+        '" data-symbol="' + esc(row.symbol) + '">' +
+        '<button class="icon-btn" type="button" data-favourite="' + esc(row.symbol) +
+        '" aria-label="' + (favourite ? 'Remove ' : 'Add ') + esc(row.symbol) +
+        ' ' + (favourite ? 'from' : 'to') + ' favourites">' +
+        (favourite ? '★' : '☆') + '</button>' +
+        '<span class="market-avatar" aria-hidden="true">' +
+        esc(String(row.display_name || row.symbol).split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase()) +
+        '</span>' +
+        '<div class="market-card-copy"><span class="eyebrow">' + esc(row.market || 'Broker market') +
+        '</span><h2>' + esc(row.symbol) + '</h2><p>' + esc(row.display_name || row.symbol) +
+        '</p></div>' +
+        '<div class="market-quote"><strong data-quote>' + quoteText +
+        '</strong><span data-bidask>' + esc(bidAsk) + '</span></div>' +
+        '<div class="market-card-actions"><a class="btn primary small" href="' + href +
+        '">Trade</a></div></article>';
+    }).join('') || '<div class="market-empty">No broker instruments match your filters.</div>';
+
+    root.querySelectorAll('[data-favourite]').forEach(button => {
+      button.addEventListener('click', () => {
+        const symbol = button.dataset.favourite;
+        if (favourites.has(symbol)) favourites.delete(symbol);
+        else favourites.add(symbol);
+        persist();
+        render();
+        connect();
+      });
+    });
+    summary();
+  };
+
+  const markStaleQuotes = () => {
+    const cutoff = Date.now() - 15000;
+    quotes.forEach((quote, symbol) => {
+      if (quote.state === 'live' && quote.receivedAt < cutoff) {
+        quote.state = 'stale';
+        const card = document.querySelector('[data-symbol="' + CSS.escape(symbol) + '"]');
+        if (card) {
+          const label = card.querySelector('[data-bidask]');
+          if (label) label.textContent = 'Bid ' + money(quote.bid) + ' · Ask ' +
+            money(quote.ask) + ' · STALE';
+        }
+      }
+    });
+    summary();
+  };
+
+  const close = () => {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    if (socket) {
+      try { socket.close(); } catch (_) {}
+      socket = null;
+    }
+  };
+
+  const wsUrl = () => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return protocol + '//' + window.location.host + '/ws/market-data/';
+  };
+
+  const connect = () => {
+    const symbols = filtered().slice(0, 12).map(row => row.symbol);
+    if (!symbols.length || document.visibilityState !== 'visible') {
+      close();
+      return;
+    }
+    close();
+    try {
+      socket = new WebSocket(wsUrl());
+      socket.addEventListener('open', () => {
+        socket?.send(JSON.stringify({ action: 'subscribe', symbols }));
+      });
+      socket.addEventListener('message', event => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type !== 'market.tick') return;
+          const tick = payload.payload || {};
+          const symbol = String(tick.symbol || '');
+          const price = Number(tick.quote);
+          if (!symbol || !Number.isFinite(price)) return;
+          quotes.set(symbol, {
+            price,
+            bid: Number.isFinite(Number(tick.bid)) ? Number(tick.bid) : price,
+            ask: Number.isFinite(Number(tick.ask)) ? Number(tick.ask) : price,
+            state: 'live',
+            receivedAt: Date.now()
+          });
+          const card = document.querySelector('[data-symbol="' + CSS.escape(symbol) + '"]');
+          if (card) {
+            card.querySelector('[data-quote]')?.replaceChildren(
+              document.createTextNode(money(price))
+            );
+            const quote = quotes.get(symbol);
+            card.querySelector('[data-bidask]')?.replaceChildren(
+              document.createTextNode(
+                'Bid ' + money(quote.bid) + ' · Ask ' + money(quote.ask) + ' · LIVE'
+              )
+            );
+          }
+          summary();
+        } catch (_) {}
+      });
+      socket.addEventListener('close', () => {
+        socket = null;
+        if (document.visibilityState === 'visible') {
+          reconnectTimer = setTimeout(connect, 2500);
+        }
+      });
+      socket.addEventListener('error', () => {
+        try { socket?.close(); } catch (_) {}
+      });
+    } catch (_) {
+      reconnectTimer = setTimeout(connect, 2500);
+    }
+  };
+
+  const loadSymbols = async () => {
+    const request = window.AlgoBotFrontendData?.request;
+    if (!request) throw new Error('AlgoBot market service is not ready.');
+    const data = await request('/api/market/broker-catalogue/', {}, 10000);
+    rows = list(data?.symbols).filter(
+      row => row?.is_active !== false && row?.is_tradable !== false
+    );
+    if (!rows.length) throw new Error('Connected broker returned no active tradable instruments.');
+    categories();
+    render();
+    connect();
+  };
+
+  const load = async () => {
+    render('Loading connected broker market catalogue…');
+    try {
+      await loadSymbols();
+    } catch (error) {
+      render('Broker market catalogue unavailable: ' + error.message);
+    }
+  };
+
+  const boot = () => {
+    $('[data-market-search]')?.addEventListener('input', () => {
+      render();
+      connect();
+    });
+    $('[data-market-sort]')?.addEventListener('change', event => {
+      selectedSort = event.target.value;
+      render();
+      connect();
+    });
+    $('[data-market-refresh]')?.addEventListener('click', async event => {
+      event.currentTarget.disabled = true;
+      try {
+        await loadSymbols();
+      } catch (error) {
+          if (rows.length) render();
+          else render('Broker catalogue refresh unavailable: ' + error.message);
+      } finally {
+        event.currentTarget.disabled = false;
+      }
+    });
+    document.addEventListener('visibilitychange', () =>
+      document.visibilityState === 'visible' ? connect() : close()
+    );
+    window.addEventListener('beforeunload', () => {
+      clearInterval(staleTimer);
+      close();
+    }, { once: true });
+    staleTimer = setInterval(markStaleQuotes, 5000);
+    load();
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
+  }
 })();
