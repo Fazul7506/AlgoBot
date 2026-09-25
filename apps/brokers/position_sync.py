@@ -119,7 +119,7 @@ def _persist_snapshot_sync(account_id: int, normalized: list[dict[str, Any]], *,
         # exit/profit/settlement fields unknown until the broker supplies them.
         stale = Position.objects.filter(
             account=account,
-            status__in=["open", "active", "pending"],
+            status__in=["open", "active", "pending", "unknown"],
         ).exclude(contract_id="")
         if broker_ids:
             stale = stale.exclude(contract_id__in=broker_ids)
@@ -161,9 +161,9 @@ class BrokerPositionSyncService:
         normalized = [item for item in (normalize_broker_position(r) for r in records) if item is not None]
         current_ids = {item["contract_id"] for item in normalized}
         stale_ids = await sync_to_async(list, thread_sensitive=True)(
-            Position.objects.filter(account_id=account.pk, status__in=["open", "active", "pending"]).exclude(contract_id="").exclude(contract_id__in=current_ids).values_list("contract_id", flat=True)
+            Position.objects.filter(account_id=account.pk, status__in=["open", "active", "pending"]).exclude(contract_id="").exclude(contract_id__in=current_ids).values_list("contract_id", flat=True)[:100]
         ) if current_ids else await sync_to_async(list, thread_sensitive=True)(
-            Position.objects.filter(account_id=account.pk, status__in=["open", "active", "pending"]).exclude(contract_id="").values_list("contract_id", flat=True)
+            Position.objects.filter(account_id=account.pk, status__in=["open", "active", "pending"]).exclude(contract_id="").values_list("contract_id", flat=True)[:100]
         )
         if stale_ids:
             async def fetch_final(contract_id):
