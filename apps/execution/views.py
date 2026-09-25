@@ -253,10 +253,13 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         if paginator is not None:
             page = paginator.paginate_queryset(qs, request, view=self)
             data = self.get_serializer(page, many=True).data
-            if sync_state == "unavailable" and not data:
+            cached_exists = BrokerTradeHistory.objects.filter(user=request.user, broker_account=account).exists()
+            if sync_state == "auth_failed" and not cached_exists:
+                return response.Response({"state": "authentication_failed", "error": sync_error}, status=status.HTTP_401_UNAUTHORIZED)
+            if sync_state == "unavailable" and not cached_exists:
                 return response.Response({"state": "unavailable", "error": sync_error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             payload = paginator.get_paginated_response(data).data
-            payload["state"] = sync_state if sync_state != "cached" else ("empty" if not data else "success")
+            payload["state"] = sync_state if sync_state not in {"cached", "auth_failed"} else ("empty" if not data and sync_state == "cached" else "stale")
             payload["account"] = {
                 "id": account.id,
                 "broker_account_id": account.account_id,
