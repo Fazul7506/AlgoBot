@@ -13,9 +13,14 @@ from asgiref.sync import sync_to_async
 from django.db import transaction
 from django.utils import timezone
 
+from .exceptions import BrokerAuthenticationError, BrokerConnectionError
+
 
 class PositionSyncError(RuntimeError):
     """Raised when the broker position snapshot cannot be obtained."""
+    def __init__(self, message, *, code="BROKER_POSITION_SYNC_FAILED"):
+        super().__init__(message)
+        self.code = code
 
 
 def _decimal(value):
@@ -116,7 +121,7 @@ def _persist_snapshot_sync(account_id: int, normalized: list[dict[str, Any]], *,
         ).exclude(contract_id="")
         if broker_ids:
             stale = stale.exclude(contract_id__in=broker_ids)
-        stale.update(status="closed", last_synced_at=synced_at)
+        stale.update(status="unknown", last_synced_at=synced_at)
 
     return {
         "status": "ready",
@@ -140,6 +145,10 @@ class BrokerPositionSyncService:
         adapter = BrokerRegistry().adapter(account.broker, account)
         try:
             records = await adapter.get_positions()
+        except BrokerAuthenticationError as exc:
+            raise PositionSyncError("The broker session is no longer authorized.", code="BROKER_AUTHENTICATION_FAILED") from exc
+        except BrokerConnectionError as exc:
+            raise PositionSyncError("The broker did not provide an authoritative position snapshot.", code="BROKER_UNAVAILABLE") from exc
         except Exception as exc:
             raise PositionSyncError("The broker did not provide an authoritative position snapshot.") from exc
 
@@ -147,6 +156,28 @@ class BrokerPositionSyncService:
             raise PositionSyncError("The broker returned an invalid position snapshot.")
 
         normalized = [item for item in (normalize_broker_position(r) for r in records) if item is not None]
+        current_ids = {item["contract_id"] for item in normalized}
+        stale_ids = await sync_to_async(list, thread_sensitive=True)(
+            Position.objects.filter(account_id=account.pk, status__in=["open", "active", "pending"]).exclude(contract_id="").exclude(contract_id__in=current_ids).values_list("contract_id", flat=True)
+        ) if current_ids else await sync_to_async(list, thread_sensitive=True)(
+            Position.objects.filter(account_id=account.pk, status__in=["open", "active", "pending"]).exclude(contract_id="").values_list("contract_id", flat=True)
+        )
+        if stale_ids:
+            async def fetch_final(contract_id):
+                try:
+                    return await adapter.get_trade_contract(contract_id)
+                except (BrokerAuthenticationError, BrokerConnectionError):
+                    raise
+                except NotImplementedError:
+                    return None
+            try:
+                final_records = await asyncio.gather(*(fetch_final(cid) for cid in stale_ids))
+            except BrokerAuthenticationError as exc:
+                raise PositionSyncError("The broker session is no longer authorized.", code="BROKER_AUTHENTICATION_FAILED") from exc
+            except BrokerConnectionError as exc:
+                raise PositionSyncError("The broker connection failed while reconciling stale contracts.", code="BROKER_UNAVAILABLE") from exc
+            normalized.extend(item for item in (normalize_broker_position(r) for r in final_records if isinstance(r, dict)) if item is not None)
+
         sync_meta = await sync_to_async(_persist_snapshot_sync, thread_sensitive=True)(account.pk, normalized)
         return {
             "positions": normalized,
