@@ -148,4 +148,8 @@ class ProductionRoutingRegressionTests(TestCase):
         accounts_response = self.client.get('/api/brokers/accounts/')
         positions_response = self.client.get('/api/positions/open/')
         self.assertEqual(accounts_response.status_code, 200)
-        self.assertEqual(positions_response.status_code, 200)
+        # No connected broker account exists in this route-isolation fixture;
+        # the positions endpoint must therefore report its explicit unavailable state
+        # rather than pretending that an empty broker snapshot is authoritative.
+        self.assertEqual(positions_response.status_code, 409)
+        self.assertEqual(positions_response.data['code'], 'NO_ACTIVE_BROKER_ACCOUNT')
