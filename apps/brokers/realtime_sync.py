@@ -87,6 +87,10 @@ class BrokerRealtimeSync:
         try:
             from apps.execution.reconciliation import reconcile_execution_event
             await sync_to_async(reconcile_execution_event)(user=self.account.user, event={"proposal_open_contract": contract})
+            from .position_sync import _persist_snapshot_sync, normalize_broker_position
+            normalized = normalize_broker_position(contract)
+            if normalized is not None:
+                await sync_to_async(_persist_snapshot_sync, thread_sensitive=True)(self.account.pk, [normalized])
         except Exception as exc:
             logger.exception(
                 "Broker execution event reconciliation failed",
@@ -136,18 +140,20 @@ class BrokerRealtimeSync:
     def _sync_portfolio(self, portfolio):
         close_old_connections()
         from .models import BrokerAccount
-        account = BrokerAccount.objects.get(pk=self.account_id)
+        from .position_sync import _persist_snapshot_sync, normalize_broker_position
+        account = BrokerAccount.objects.select_related("broker").get(pk=self.account_id)
         contracts = portfolio.get("contracts") or []
-        normalized = []
-        unrealized = Decimal("0")
-        for contract in contracts:
-            try:
-                unrealized += Decimal(str(contract.get("profit") or 0))
-            except (InvalidOperation, TypeError, ValueError):
-                logger.warning("Ignoring invalid broker contract profit", extra={"account_id": self.account_id, "contract_id": contract.get("contract_id")})
-            normalized.append(self._normalize_contract(contract))
+        normalized_records = [
+            item for item in (normalize_broker_position(contract) for contract in contracts)
+            if item is not None
+        ]
+        sync_meta = _persist_snapshot_sync(account.pk, normalized_records)
+        normalized = [self._normalize_contract(contract) for contract in contracts if contract.get("contract_id") not in (None, "")]
+        unrealized = sum(
+            (Decimal(str(item.get("profit"))) for item in normalized if item.get("profit") not in (None, "")),
+            Decimal("0"),
+        )
         equity = account.balance + unrealized
-        account.equity = equity
         realtime = dict((account.credentials or {}).get("realtime") or {})
         realtime.update({"unrealized_pnl": str(unrealized), "equity": str(equity), "updated_at": timezone.now().isoformat()})
         credentials = dict(account.credentials or {})
@@ -155,7 +161,7 @@ class BrokerRealtimeSync:
         account.credentials = credentials
         account.last_synced_at = timezone.now()
         account.save(update_fields=["equity", "credentials", "last_synced_at"])
-        return {"status": "ready", "account_id": account.account_id, "contracts": normalized, "unrealized_pnl": str(unrealized), "equity": str(equity), "balance": str(account.balance), "currency": account.currency, "timestamp": time.time()}
+        return {"status": "ready", "account_id": account.account_id, "contracts": normalized, "unrealized_pnl": str(unrealized), "equity": str(equity), "balance": str(account.balance), "currency": account.currency, "sync": sync_meta, "timestamp": time.time()}
 
     @staticmethod
     def _normalize_contract(contract):
