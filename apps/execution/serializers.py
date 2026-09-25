@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from .models import Order, ExecutionLog, ExecutionQueue, ReconciliationEvent, BrokerTradeHistory
 from apps.trading.models import Position
-from apps.contracts.models import Contract
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -53,12 +52,6 @@ class PositionSerializer(serializers.ModelSerializer):
     roi = serializers.DecimalField(max_digits=18, decimal_places=8, read_only=True)
     class Meta:
         model = Position
-        fields = '__all__'
-
-
-class ContractSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Contract
         fields = '__all__'
 
 
