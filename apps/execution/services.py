@@ -85,7 +85,7 @@ class PositionService:
                 "contract_type": str(contract.get("contract_type") or order.contract_type or ""),
                 "direction": str(contract.get("direction") or ""),
                 "stake": contract.get("buy_price"),
-                "size": contract.get("buy_price"),
+                "size": contract.get("amount") or contract.get("quantity"),
                 "entry_price": contract.get("buy_price"),
                 "current_price": contract.get("bid_price") if contract.get("bid_price") is not None else contract.get("current_spot"),
                 "payout": contract.get("payout"),
