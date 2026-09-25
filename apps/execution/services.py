@@ -10,6 +10,16 @@ from .models import Order, ExecutionQueue, ExecutionLog
 from .repositories import OrderRepository, ExecutionLogRepository, ExecutionQueueRepository
 from . import constants as c
 
+
+def _broker_datetime(value):
+    if value in (None, ''):
+        return None
+    try:
+        from datetime import datetime, timezone as dt_timezone
+        return datetime.fromtimestamp(int(value), tz=dt_timezone.utc)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
 class OrderValidationService:
     def validate(self, order):
         start=time.perf_counter(); errors=[]
@@ -52,11 +62,63 @@ class ExecutionQueueService:
     def retryable(self): return ExecutionQueue.objects.filter(status__in=[c.QUEUE_STATUS_PENDING,c.QUEUE_STATUS_RETRY], next_retry__lte=timezone.now()) | ExecutionQueue.objects.filter(status=c.QUEUE_STATUS_PENDING,next_retry__isnull=True)
 
 class PositionService:
-    def open_position(self, order, entry_price):
-        from apps.trading.repositories import PositionRepository
-        pos=PositionRepository().open_for_order(order,entry_price); ExecutionLogRepository().log(order,'PositionOpened','success','Position opened'); return pos
-    def update_position(self, position, current_price): position.current_price=current_price; position.profit_loss=(current_price-position.entry_price); position.save(update_fields=['current_price','profit_loss']); return position
-    def close_position(self, position, exit_price): position.exit_price=exit_price; position.status='closed'; position.closed_at=timezone.now(); position.profit_loss=exit_price-position.entry_price; position.save(); ExecutionLogRepository().log(position.order,'PositionClosed','success','Position closed'); return position
+    """Compatibility facade over the canonical broker-owned Position model."""
+    def open_position(self, order, entry_price=None, broker_contract=None):
+        from apps.brokers.models import Position
+        contract = dict(broker_contract or {})
+        contract_id = contract.get('contract_id') or getattr(order, 'broker_reference', None)
+        if not contract_id:
+            raise ValueError('A broker contract ID is required before a position can be created.')
+        position, _ = Position.objects.update_or_create(
+            account=order.broker_account,
+            contract_id=str(contract_id),
+            defaults={
+                'broker': order.broker_account.broker,
+                'transaction_id': str(contract.get('transaction_id') or ''),
+                'broker_order_id': str(contract.get('order_id') or order.broker_reference or ''),
+                'symbol': str(contract.get('underlying_symbol') or order.symbol or ''),
+                'contract_type': str(contract.get('contract_type') or order.contract_type or ''),
+                'direction': str(contract.get('direction') or order.direction or ''),
+                'stake': contract.get('buy_price'),
+                'size': contract.get('buy_price'),
+                'entry_price': contract.get('buy_price') if contract.get('buy_price') is not None else entry_price,
+                'current_price': contract.get('bid_price') if contract.get('bid_price') is not None else contract.get('current_spot'),
+                'payout': contract.get('payout'),
+                'profit': contract.get('profit'),
+                'currency': str(contract.get('currency') or order.broker_account.currency or ''),
+                'status': str(contract.get('status') or 'open'),
+                'opened_at': _broker_datetime(contract.get('date_start') or contract.get('purchase_time')),
+                'expiry_time': _broker_datetime(contract.get('date_expiry')),
+                'closed_at': _broker_datetime(contract.get('sell_spot_time') or contract.get('exit_spot_time')),
+                'raw_data': contract,
+                'last_synced_at': timezone.now(),
+            },
+        )
+        ExecutionLogRepository().log(order,'PositionOpened','success','Broker-authoritative position synchronized')
+        return position
+
+    def update_position(self, position, current_price):
+        if current_price is None:
+            return position
+        position.current_price=current_price
+        position.save(update_fields=['current_price','last_synced_at'])
+        return position
+
+    def close_position(self, position, exit_price=None, broker_contract=None):
+        contract = dict(broker_contract or {})
+        if contract.get('contract_id') and str(contract['contract_id']) != str(position.contract_id):
+            raise ValueError('Broker contract mismatch.')
+        if exit_price is not None and contract.get('exit_spot') is None and contract.get('sell_spot') is None:
+            raise ValueError('Exit price must come from an authoritative broker contract.')
+        position.status = str(contract.get('status') or 'closed')
+        position.exit_price = contract.get('exit_spot') or contract.get('sell_spot') or exit_price
+        position.profit = contract.get('profit')
+        position.payout = contract.get('payout')
+        position.closed_at = _broker_datetime(contract.get('sell_spot_time') or contract.get('exit_spot_time'))
+        position.raw_data = contract or position.raw_data
+        position.last_synced_at = timezone.now()
+        position.save(update_fields=['status','exit_price','profit','payout','closed_at','raw_data','last_synced_at'])
+        return position
 
 class TradeLifecycleService:
     def archive(self, order): order.status=c.ORDER_STATUS_ARCHIVED; order.save(update_fields=['status','updated_at']); ExecutionLogRepository().log(order,'OrderArchived','success','Trade archived'); return order
