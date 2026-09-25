@@ -12,7 +12,7 @@ class BrokerOrderRiskGateTests(TestCase):
     def setUp(self):
         User = get_user_model()
         self.user = User.objects.create_user('risk-gate@example.com', password='pass')
-        self.broker = Broker.objects.create(name='Paper Trading', broker_type='paper', status='active')
+        self.broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active')
         self.account = BrokerAccount.objects.create(
             user=self.user,
             broker=self.broker,
