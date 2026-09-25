@@ -12,6 +12,14 @@ from .repositories import OrderRepository, ExecutionLogRepository, ExecutionQueu
 from . import constants as c
 
 
+def _broker_decimal(value):
+    if value in (None, ''):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
 def _broker_datetime(value):
     if value in (None, ''):
         return None
@@ -85,12 +93,12 @@ class PositionService:
                 "symbol": str(contract.get("underlying_symbol") or order.symbol or ""),
                 "contract_type": str(contract.get("contract_type") or order.contract_type or ""),
                 "direction": str(contract.get("direction") or ""),
-                "stake": contract.get("buy_price"),
-                "size": contract.get("amount") or contract.get("quantity"),
-                "entry_price": contract.get("buy_price"),
-                "current_price": contract.get("bid_price") if contract.get("bid_price") is not None else contract.get("current_spot"),
-                "payout": contract.get("payout"),
-                "profit": contract.get("profit"),
+                "stake": _broker_decimal(contract.get("buy_price")),
+                "size": _broker_decimal(contract.get("amount") if contract.get("amount") is not None else contract.get("quantity")),
+                "entry_price": _broker_decimal(contract.get("buy_price")),
+                "current_price": _broker_decimal(contract.get("bid_price") if contract.get("bid_price") is not None else contract.get("current_spot")),
+                "payout": _broker_decimal(contract.get("payout")),
+                "profit": _broker_decimal(contract.get("profit")),
                 "currency": str(contract.get("currency") or order.broker_account.currency or ""),
                 "status": str(contract.get("status") or ("closed" if contract.get("is_sold") else "open")),
                 "opened_at": _broker_datetime(contract.get("date_start") or contract.get("purchase_time")),
@@ -112,9 +120,9 @@ class PositionService:
             current_price = contract.get("current_spot")
         if current_price is None:
             return position
-        position.current_price = current_price
-        position.profit = contract.get("profit")
-        position.payout = contract.get("payout")
+        position.current_price = _broker_decimal(current_price)
+        position.profit = _broker_decimal(contract.get("profit"))
+        position.payout = _broker_decimal(contract.get("payout"))
         position.status = str(contract.get("status") or ("closed" if contract.get("is_sold") else position.status))
         position.last_synced_at = timezone.now()
         position.raw_data = contract
@@ -135,7 +143,7 @@ class PositionService:
             raise ValueError("The broker has not confirmed a terminal position state.")
 
         position.status = broker_status
-        position.exit_price = contract.get("exit_spot") or contract.get("sell_spot")
+        position.exit_price = _broker_decimal(contract.get("exit_spot") or contract.get("sell_spot"))
         position.profit = contract.get("profit")
         position.payout = contract.get("payout")
         position.closed_at = _broker_datetime(contract.get("sell_spot_time") or contract.get("exit_spot_time"))
