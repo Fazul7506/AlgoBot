@@ -10,6 +10,7 @@ from .serializers import MarketSymbolSerializer, TickSerializer, CandleSerialize
 from .deriv_sync import fetch_tick, sync_active_symbols
 from .services import MarketDataService
 from .historical import persist_broker_chart_history
+from . import broker_native
 from .constants import TIMEFRAMES
 from apps.brokers.services import BrokerRegistry
 from apps.brokers.exceptions import BrokerConnectionError, BrokerAuthenticationError, BrokerOrderError
@@ -42,28 +43,65 @@ async def _bounded_market_data(adapter, symbol, timeout=7.0):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
-def markets(request): return Response({"markets": sorted(set(MarketSymbol.objects.values_list("market", flat=True)))})
+@permission_classes([IsAuthenticated])
+def markets(request):
+    account = _connected_account(request.user, request=request)
+    if not account:
+        return Response({"detail": "Connect a broker before loading markets."}, status=status.HTTP_409_CONFLICT)
+    values = (
+        MarketSymbol.objects
+        .filter(broker=account.broker.broker_type, is_active=True, is_tradable=True)
+        .values_list("market", flat=True)
+        .distinct()
+        .order_by("market")
+    )
+    return Response({
+        "status": "ok",
+        "broker": account.broker.name,
+        "account_id": account.account_id,
+        "markets": list(values),
+    })
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def symbols(request):
-    queryset = MarketSymbol.objects.filter(is_active=True, is_tradable=True).order_by("market", "symbol")
-    return Response(MarketSymbolSerializer(queryset[:_limit(request, default=100, maximum=500)], many=True).data)
+    account = _connected_account(request.user, request=request)
+    if not account:
+        return Response({"detail": "Connect a broker before loading its market universe."}, status=status.HTTP_409_CONFLICT)
+    queryset = (
+        MarketSymbol.objects
+        .filter(broker=account.broker.broker_type, is_active=True, is_tradable=True)
+        .order_by("market", "symbol")
+    )
+    data = MarketSymbolSerializer(queryset[:_limit(request, default=100, maximum=500)], many=True).data
+    return Response({
+        "status": "ok",
+        "broker": account.broker.name,
+        "account_id": account.account_id,
+        "source": "broker_market_catalogue",
+        "symbols": data,
+        "count": len(data),
+    })
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def broker_catalogue(request):
-    try:
-        queryset = MarketSymbol.objects.filter(is_active=True, is_tradable=True).order_by("market", "symbol")
-        data = MarketSymbolSerializer(queryset, many=True).data
-        return Response({"status": "ok", "source": "backend_market_catalogue", "symbols": data, "count": len(data)})
-    except Exception as exc:
-        return Response({"status": "error", "code": "MARKET_CATALOGUE_READ_FAILED", "detail": "Market catalogue could not be read.", "error_type": exc.__class__.__name__}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    """Compatibility alias for the canonical broker-native catalogue."""
+    return broker_native.catalogue(request)
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
-def symbol_detail(request, symbol): return Response(MarketSymbolSerializer(get_object_or_404(MarketSymbol, symbol=symbol, is_active=True)).data)
+@permission_classes([IsAuthenticated])
+def symbol_detail(request, symbol):
+    account = _connected_account(request.user, request=request)
+    if not account:
+        return Response({"detail": "Connect a broker before loading symbol details."}, status=status.HTTP_409_CONFLICT)
+    row = get_object_or_404(
+        MarketSymbol,
+        symbol=symbol,
+        broker=account.broker.broker_type,
+        is_active=True,
+    )
+    return Response(MarketSymbolSerializer(row).data)
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
