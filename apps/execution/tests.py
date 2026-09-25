@@ -119,6 +119,10 @@ class TerminalExecutionContractTests(SimpleTestCase):
         self.assertIn('"ExecutionStateUnknown"', source)
         self.assertIn('reconciliation is required', source)
 
+    def test_shared_broker_ui_does_not_bind_terminal_account_selector(self):
+        source = (ROOT / 'static' / 'js' / 'live_broker_ui.js').read_text()
+        self.assertIn("!document.querySelector('.terminal-page')", source)
+
     def test_chart_uses_single_live_tick_owner(self):
         chart = (ROOT / 'static' / 'js' / 'deriv_pro_chart.js').read_text()
         self.assertIn("algobot:market-watchdog-tick", chart)
