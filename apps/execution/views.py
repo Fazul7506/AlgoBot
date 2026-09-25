@@ -180,6 +180,14 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
                 'meta':sync_result['meta'],
             })
         except PositionSyncError as exc:
+            if exc.code == 'BROKER_AUTHENTICATION_FAILED':
+                return response.Response({
+                    'status':'authentication_failure',
+                    'code':exc.code,
+                    'detail':str(exc),
+                    'data':[],
+                    'meta':{'account_id':account.pk,'broker_account_id':account.account_id},
+                }, status=status.HTTP_401_UNAUTHORIZED)
             qs = self._apply_filters(self.get_queryset().filter(status__in=['open','active','pending']), request)
             payload = self.get_serializer(qs, many=True).data
             if payload:
