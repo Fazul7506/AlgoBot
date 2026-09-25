@@ -22,7 +22,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _safe_client_context(data, account):
         context = data.get('routing_context') or data.get('validation_context') or {}
-        environment = OrderViewSet._environment(account)
+        environment = str(getattr(account, 'account_type', '') or OrderViewSet._environment(account)).lower().strip()
         return {
             'broker_source': 'connected_broker',
             'contract_type': str(data.get('contract_type') or '').strip().upper(),
@@ -41,7 +41,11 @@ class OrderViewSet(viewsets.ModelViewSet):
         client_request_id = str(request.data.get('client_request_id') or request.data.get('client_order_id') or '').strip()
         if client_request_id:
             existing = Order.objects.filter(user=request.user, client_request_id=client_request_id).first()
-            if existing: return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
+            if existing:
+                requested_account = str(request.data.get('broker_account') or '').strip()
+                if requested_account and str(existing.broker_account_id) != requested_account:
+                    return response.Response({'status':'rejected','code':'CLIENT_REQUEST_ACCOUNT_MISMATCH','detail':'This client request ID belongs to a different broker account and cannot be replayed in the current account context.','retryable':False}, status=status.HTTP_409_CONFLICT)
+                return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
         allowed_orders, used_orders, order_limit = check(request.user, 'orders')
         if not allowed_orders:
             plan = effective_plan(request.user)
