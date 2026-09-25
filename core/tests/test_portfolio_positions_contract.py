@@ -12,7 +12,8 @@ class PortfolioPositionsTemplateContractTests(TestCase):
         response = self.client.get(reverse("positions_page"))
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn("Connect a broker", content)
+        self.assertIn("Authoritative positions synchronized from the selected broker account.", content)
+        self.assertIn("Waiting for broker synchronization.", content)
         self.assertNotIn("25000", content)
         self.assertNotIn("12345", content)
 
