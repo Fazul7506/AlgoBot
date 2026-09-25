@@ -8,6 +8,7 @@ from django.http import Http404,HttpResponse
 from django.shortcuts import render,redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import ensure_csrf_cookie
 from apps.brokers.models import Broker,BrokerAccount
 from core.services.oauth_service import DerivOAuthService
 logger=logging.getLogger(__name__)
@@ -26,6 +27,8 @@ def markets_page(request): return render(request,'core/markets.html')
 @login_required
 def strategies_page(request): return render(request,'core/strategies.html')
 @login_required
+@never_cache
+@ensure_csrf_cookie
 def trading_page(request): return render(request,'core/trading.html')
 @login_required
 def backtesting_page(request): return render(request,'core/backtesting.html')
