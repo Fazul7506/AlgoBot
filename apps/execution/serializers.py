@@ -86,11 +86,12 @@ class BrokerTradeHistorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BrokerTradeHistory
-        fields = "__all__"
-        read_only_fields = fields
+        fields = [field.name for field in BrokerTradeHistory._meta.fields] + ["ai"]
+        read_only_fields = tuple(field.name for field in BrokerTradeHistory._meta.fields)
 
     def get_ai(self, obj):
-        context = (self.context.get("ai_by_contract") or {}).get(obj.broker_contract_id) or {}
+        linked = (self.context.get("ai_by_contract") or {}).get(obj.broker_contract_id) or {}
+        context = linked.get("context") or {}
         ai = context.get("ai_consensus") or context.get("ai_decision")
         if not ai:
             return None
@@ -98,4 +99,5 @@ class BrokerTradeHistorySerializer(serializers.ModelSerializer):
             "source": context.get("ai_source") or "AI analysis",
             "prediction": context.get("ai_prediction") or ai.get("prediction") or ai.get("decision"),
             "confidence": ai.get("confidence"),
+            "analysis_timestamp": linked.get("created_at"),
         }
