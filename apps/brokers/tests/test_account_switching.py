@@ -17,6 +17,7 @@ class AccountSwitchingTests(TestCase):
             broker_type='deriv',
             status='active',
             supports_live=False,
+            metadata={'auth': 'oauth'},
         )
         self.account_one = BrokerAccount.objects.create(
             user=self.user,
@@ -30,6 +31,10 @@ class AccountSwitchingTests(TestCase):
             account_id='DEMO-TWO',
             credentials={'account_type': 'demo'},
         )
+        self.account_one.set_access_token('ci-test-token-one')
+        self.account_two.set_access_token('ci-test-token-two')
+        self.account_one.save(update_fields=['access_token'])
+        self.account_two.save(update_fields=['access_token'])
         BrokerConnection.objects.create(
             broker=self.broker,
             broker_account=self.account_one,
