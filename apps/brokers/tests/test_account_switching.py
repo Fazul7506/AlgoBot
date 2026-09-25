@@ -13,8 +13,8 @@ class AccountSwitchingTests(TestCase):
             password='test-password',
         )
         self.broker = Broker.objects.create(
-            name='Paper Switching Test',
-            broker_type='paper',
+            name='Deriv Switching Test',
+            broker_type='deriv',
             status='active',
             supports_live=False,
         )
