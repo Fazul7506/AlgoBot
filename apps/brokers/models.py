@@ -76,7 +76,41 @@ class ExecutionReport(models.Model):
     order=models.ForeignKey(Order,on_delete=models.CASCADE,related_name='execution_reports'); execution_price=models.DecimalField(max_digits=20,decimal_places=8,null=True,blank=True); requested_price=models.DecimalField(max_digits=20,decimal_places=8,null=True,blank=True); slippage=models.DecimalField(max_digits=20,decimal_places=8,default=0); latency=models.FloatField(default=0); fees=models.DecimalField(max_digits=20,decimal_places=8,default=0); status=models.CharField(max_length=32,choices=choices(c.ORDER_STATUSES),default='submitted'); raw_report=models.JSONField(default=dict,blank=True); created_at=models.DateTimeField(auto_now_add=True)
 
 class Position(models.Model):
-    broker=models.ForeignKey(Broker,on_delete=models.PROTECT,related_name='positions'); account=models.ForeignKey(BrokerAccount,on_delete=models.PROTECT,related_name='positions'); symbol=models.CharField(max_length=40,db_index=True); direction=models.CharField(max_length=16,choices=choices(c.DIRECTIONS)); size=models.DecimalField(max_digits=20,decimal_places=8); entry_price=models.DecimalField(max_digits=20,decimal_places=8); current_price=models.DecimalField(max_digits=20,decimal_places=8,default=0); profit=models.DecimalField(max_digits=20,decimal_places=8,default=0); status=models.CharField(max_length=24,default='open',db_index=True); opened_at=models.DateTimeField(default=timezone.now); closed_at=models.DateTimeField(null=True,blank=True)
+    """Canonical broker-authoritative position snapshot."""
+    broker=models.ForeignKey(Broker,on_delete=models.PROTECT,related_name='positions')
+    account=models.ForeignKey(BrokerAccount,on_delete=models.PROTECT,related_name='positions')
+    contract_id=models.CharField(max_length=160,blank=True,db_index=True)
+    transaction_id=models.CharField(max_length=160,blank=True,db_index=True)
+    broker_order_id=models.CharField(max_length=160,blank=True,db_index=True)
+    symbol=models.CharField(max_length=80,blank=True,db_index=True)
+    display_name=models.CharField(max_length=160,blank=True)
+    contract_type=models.CharField(max_length=80,blank=True)
+    direction=models.CharField(max_length=32,blank=True)
+    size=models.DecimalField(max_digits=20,decimal_places=8,null=True,blank=True)
+    stake=models.DecimalField(max_digits=20,decimal_places=8,null=True,blank=True)
+    entry_price=models.DecimalField(max_digits=20,decimal_places=8,null=True,blank=True)
+    current_price=models.DecimalField(max_digits=20,decimal_places=8,null=True,blank=True)
+    exit_price=models.DecimalField(max_digits=20,decimal_places=8,null=True,blank=True)
+    payout=models.DecimalField(max_digits=20,decimal_places=8,null=True,blank=True)
+    profit=models.DecimalField(max_digits=20,decimal_places=8,null=True,blank=True)
+    currency=models.CharField(max_length=12,blank=True)
+    status=models.CharField(max_length=40,default='unknown',db_index=True)
+    opened_at=models.DateTimeField(null=True,blank=True)
+    expiry_time=models.DateTimeField(null=True,blank=True)
+    closed_at=models.DateTimeField(null=True,blank=True)
+    settlement_time=models.DateTimeField(null=True,blank=True)
+    broker_timestamp=models.DateTimeField(null=True,blank=True,db_index=True)
+    last_synced_at=models.DateTimeField(null=True,blank=True,db_index=True)
+    raw_data=models.JSONField(default=dict,blank=True)
+    class Meta:
+        ordering=['-broker_timestamp','-id']
+        indexes=[
+            models.Index(fields=['account','status','-broker_timestamp'],name='bro_pos_acct_status_time_idx'),
+            models.Index(fields=['account','symbol','status'],name='bro_pos_acct_symbol_status_idx'),
+        ]
+        constraints=[
+            models.UniqueConstraint(fields=['account','contract_id'],condition=~Q(contract_id=''),name='unique_broker_position_contract'),
+        ]
 
 class TradeReconciliation(models.Model):
     broker=models.ForeignKey(Broker,on_delete=models.CASCADE,related_name='reconciliations'); trade=models.JSONField(default=dict,blank=True); matched=models.BooleanField(default=False); difference=models.JSONField(default=dict,blank=True); repaired=models.BooleanField(default=False); timestamp=models.DateTimeField(auto_now_add=True)
