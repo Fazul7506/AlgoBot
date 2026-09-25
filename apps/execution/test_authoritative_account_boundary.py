@@ -53,7 +53,18 @@ class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
             validation_context={'execution_mode': 'manual_command'},
         )
 
-        adapter = SimpleNamespace(place_order=AsyncMock(return_value={'broker_order_id': 'BROKER-1'}))
+        # The production execution engine requires an explicit terminal broker
+        # status before it can mark an order executed. A broker reference alone
+        # is deliberately insufficient because an ambiguous response must enter
+        # reconciliation rather than become a false fill.
+        adapter = SimpleNamespace(
+            place_order=AsyncMock(
+                return_value={
+                    'broker_order_id': 'BROKER-1',
+                    'status': 'filled',
+                }
+            )
+        )
         with patch('apps.execution.engine.BrokerRegistry.adapter', return_value=adapter), \
              patch('apps.risk.engine.RiskEngine.approve_or_raise'):
             __import__('asyncio').run(ExecutionEngine().execute(order))
