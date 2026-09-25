@@ -142,8 +142,12 @@ class BrokerPositionSyncService:
         from .services import BrokerRegistry
         from .models import Position
 
-        if not account or not account.is_connection_eligible:
-            raise PositionSyncError("The selected broker account is not connected and ready.")
+        if not account:
+            raise PositionSyncError("No connected broker account is available.", code="BROKER_ACCOUNT_UNAVAILABLE")
+        if getattr(account, "credential_status", "ready") != "ready":
+            raise PositionSyncError("The broker credentials are expired, revoked, or unavailable.", code="BROKER_AUTHENTICATION_FAILED")
+        if not account.is_connection_eligible:
+            raise PositionSyncError("The selected broker account is not connected and ready.", code="BROKER_UNAVAILABLE")
 
         adapter = BrokerRegistry().adapter(account.broker, account)
         try:
@@ -195,8 +199,12 @@ class BrokerPositionSyncService:
     async def synchronize_closed(self, account, limit=100):
         from .services import BrokerRegistry
 
-        if not account or not account.is_connection_eligible:
-            raise PositionSyncError("The selected broker account is not connected and ready.")
+        if not account:
+            raise PositionSyncError("No connected broker account is available.", code="BROKER_ACCOUNT_UNAVAILABLE")
+        if getattr(account, "credential_status", "ready") != "ready":
+            raise PositionSyncError("The broker credentials are expired, revoked, or unavailable.", code="BROKER_AUTHENTICATION_FAILED")
+        if not account.is_connection_eligible:
+            raise PositionSyncError("The selected broker account is not connected and ready.", code="BROKER_UNAVAILABLE")
 
         adapter = BrokerRegistry().adapter(account.broker, account)
         try:
