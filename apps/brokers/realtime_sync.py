@@ -99,7 +99,15 @@ class BrokerRealtimeSync:
 
     async def _broadcast(self, event_type, payload):
         if self.channel_layer:
-            await self.channel_layer.group_send(self.group_name, {"type": "broker.event", "event_type": event_type, "payload": payload})
+            envelope = {
+                "account_id": self.account_id,
+                "broker_account_id": self.account.account_id,
+                "payload": payload or {},
+            }
+            await self.channel_layer.group_send(
+                self.group_name,
+                {"type": "broker.event", "event_type": event_type, "payload": envelope},
+            )
 
     @sync_to_async
     def _persist_connection_status(self, message):
