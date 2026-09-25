@@ -88,7 +88,9 @@ class MarketScannerApiTests(TestCase):
         self.assertNotIn("OTHER", symbols)
         gain = next(row for row in payload["results"] if row["symbol"] == "GAIN")
         self.assertEqual(gain["technical_source"], "persisted_broker_candles")
-        self.assertIsNotNone(gain["rsi"])\n        loser = next(row for row in payload["results"] if row["symbol"] == "LOSS")\n        self.assertEqual(loser["technical_status"], "insufficient_data")
+        self.assertIsNotNone(gain["rsi"])
+        loser = next(row for row in payload["results"] if row["symbol"] == "LOSS")
+        self.assertEqual(loser["technical_status"], "insufficient_data")
 
     def test_gainer_filter_excludes_non_positive_change(self):
         response = self.client.get("/api/market/scanner/?direction=gainers")
