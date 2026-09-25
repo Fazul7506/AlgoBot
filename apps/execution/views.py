@@ -1,15 +1,20 @@
-from decimal import Decimal, InvalidOperation\nfrom datetime import datetime, timezone as dt_timezone
+from decimal import Decimal, InvalidOperation
+from datetime import datetime, timezone as dt_timezone
 import logging
 from django.conf import settings
 from django.utils import timezone
-from rest_framework import viewsets, permissions, decorators, response, status\nfrom rest_framework.pagination import PageNumberPagination\nfrom django.db.models import Q
+from rest_framework import viewsets, permissions, decorators, response, status
+from rest_framework.pagination import PageNumberPagination
+from django.db.models import Q
 from .models import Order, ExecutionLog, ReconciliationEvent, BrokerTradeHistory
 from apps.trading.models import Position
 from apps.contracts.models import Contract
 from .serializers import OrderSerializer, PositionSerializer, ContractSerializer, ExecutionLogSerializer, ReconciliationEventSerializer, BrokerTradeHistorySerializer
 from .engine import ExecutionEngine
 from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, BrokerRoutingError
-from core.billing_entitlements import check, check_live_order, effective_plan\nfrom core.account_context import get_active_account\nfrom .trade_history import DerivTradeHistoryService
+from core.billing_entitlements import check, check_live_order, effective_plan
+from core.account_context import get_active_account
+from .trade_history import DerivTradeHistoryService
 
 log = logging.getLogger(__name__)
 
