@@ -1,4 +1,5 @@
 import asyncio
+from decimal import Decimal
 from unittest.mock import AsyncMock, Mock, patch
 
 from django.contrib.auth import get_user_model
@@ -113,8 +114,8 @@ class DerivTradeHistoryAsyncOrmTests(TransactionTestCase):
             broker_contract_id="987654",
         )
         self.assertEqual(row.symbol, "1HZ100V")
-        self.assertEqual(row.stake, "1.25")
-        self.assertEqual(row.profit_loss, "0.75")
+        self.assertEqual(row.stake, Decimal("1.25"))
+        self.assertEqual(row.profit_loss, Decimal("0.75"))
         self.assertIsNotNone(account.__class__.objects.get(pk=account.pk).last_synced_at)
 
 
