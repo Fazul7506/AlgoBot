@@ -86,7 +86,7 @@ def normalize_broker_position(record: dict[str, Any]) -> dict[str, Any] | None:
 
 
 @transaction.atomic
-def _persist_snapshot_sync(account_id: int, normalized: list[dict[str, Any]]) -> dict[str, Any]:
+def _persist_snapshot_sync(account_id: int, normalized: list[dict[str, Any]], *, full_snapshot: bool = True) -> dict[str, Any]:
     from .models import BrokerAccount, Position
 
     account = BrokerAccount.objects.select_related("broker").get(pk=account_id)
@@ -104,16 +104,19 @@ def _persist_snapshot_sync(account_id: int, normalized: list[dict[str, Any]]) ->
             defaults={"broker": account.broker, **defaults},
         )
 
-    # A successful portfolio snapshot is authoritative for what remains open.
-    # Existing rows absent from that snapshot are no longer open, but no
-    # synthetic close/settlement price or timestamp is created.
-    stale = Position.objects.filter(
-        account=account,
-        status__in=["open", "active", "pending"],
-    ).exclude(contract_id="")
-    if broker_ids:
-        stale = stale.exclude(contract_id__in=broker_ids)
-    stale.update(status="closed", last_synced_at=synced_at)
+    if full_snapshot:
+        # A complete broker portfolio snapshot is authoritative for which
+        # contracts are currently open. A contract absent from that snapshot
+        # is no longer open, but its final lifecycle/result must not be
+        # fabricated. Keep the row for historical reconciliation while leaving
+        # exit/profit/settlement fields unknown until the broker supplies them.
+        stale = Position.objects.filter(
+            account=account,
+            status__in=["open", "active", "pending"],
+        ).exclude(contract_id="")
+        if broker_ids:
+            stale = stale.exclude(contract_id__in=broker_ids)
+        stale.update(status="closed", last_synced_at=synced_at)
 
     return {
         "status": "ready",
@@ -155,6 +158,6 @@ class BrokerPositionSyncService:
         if normalized is None:
             raise PositionSyncError("The broker contract did not contain a stable contract ID.")
         meta = await sync_to_async(_persist_snapshot_sync, thread_sensitive=True)(
-            account.pk, [normalized]
+            account.pk, [normalized], full_snapshot=False
         )
         return {"position": normalized, "meta": meta}
