@@ -36,8 +36,6 @@
         <label>Max concurrent trades<input name="max_concurrent_trades" type="number" min="1" step="1"></label>
         <label>Minimum win rate<input name="min_win_rate" type="number" min="0" max="1" step="0.01"></label>
       </div>
-      <label><input type="checkbox" name="is_paper_trading"> Paper trading mode</label>
-
       <div class="form-actions">
         <button type="submit" class="button button-primary" data-save-settings>Save settings</button>
         <span role="status" aria-live="polite" data-settings-message></span>
@@ -72,7 +70,7 @@
     const data = await response.json();
     set('first_name', data.user.first_name); set('last_name', data.user.last_name); set('email', data.user.email);
     Object.entries(data.profile).forEach(([key, value]) => key.includes('notifications') ? check(key, value) : set(key, value));
-    Object.entries(data.trading).forEach(([key, value]) => key === 'is_paper_trading' ? check(key, value) : set(key, value));
+    Object.entries(data.trading).forEach(([key, value]) => set(key, value));
     status.textContent = 'Ready';
     brokerCopy.textContent = 'Broker connection is managed separately and is required before live trading data or execution controls become active.';
   }
@@ -88,7 +86,6 @@
       const value = field(k).value;
       trading[k] = ['max_daily_loss_pct','risk_per_trade_pct','min_win_rate'].includes(k) ? Number(value) : (k === 'max_concurrent_trades' ? Number(value) : value);
     });
-    trading.is_paper_trading = field('is_paper_trading').checked;
     const response = await fetch('/api/settings/', {method:'PATCH', credentials:'same-origin', headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'}, body:JSON.stringify({profile,trading})});
     const data = await response.json().catch(() => ({}));
     if (!response.ok) { message.textContent = data.detail || 'Unable to save settings.'; return; }
