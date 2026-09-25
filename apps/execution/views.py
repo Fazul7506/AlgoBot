@@ -208,12 +208,53 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
 
     @decorators.action(detail=False, methods=['get'])
     def closed(self, request):
-        qs = self._apply_filters(self.get_queryset().filter(status__in=['closed','expired','settled']), request)
-        return response.Response({
-            'status':'empty' if not qs.exists() else 'ready',
-            'source':'broker_cache',
-            'data':self.get_serializer(qs, many=True).data,
-        })
+        account = get_active_account(request.user, request=request)
+        if not account:
+            return response.Response({
+                'status':'unavailable',
+                'code':'BROKER_ACCOUNT_UNAVAILABLE',
+                'detail':'No connected broker account is available for the authenticated user.',
+                'data':[],
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        try:
+            sync_result = asyncio.run(BrokerPositionSyncService().synchronize_closed(account))
+            qs = self._apply_filters(
+                self.get_queryset().filter(status__in=['closed','expired','settled','won','lost']),
+                request,
+            )
+            payload = self.get_serializer(qs, many=True).data
+            return response.Response({
+                'status':'empty' if not payload else 'ready',
+                'source':'broker',
+                'data':payload,
+                'meta':sync_result['meta'],
+            })
+        except PositionSyncError as exc:
+            if exc.code == 'BROKER_AUTHENTICATION_FAILED':
+                return response.Response({
+                    'status':'authentication_failure',
+                    'code':exc.code,
+                    'detail':str(exc),
+                    'data':[],
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            qs = self._apply_filters(
+                self.get_queryset().filter(status__in=['closed','expired','settled','won','lost']),
+                request,
+            )
+            payload = self.get_serializer(qs, many=True).data
+            if payload:
+                return response.Response({
+                    'status':'stale',
+                    'source':'broker_cache',
+                    'detail':str(exc),
+                    'data':payload,
+                })
+            return response.Response({
+                'status':'unavailable',
+                'code':exc.code,
+                'detail':str(exc),
+                'data':[],
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 class ExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ExecutionLogSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return ExecutionLog.objects.filter(order__user=self.request.user)
