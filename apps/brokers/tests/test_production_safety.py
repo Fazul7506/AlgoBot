@@ -10,9 +10,9 @@ class ProductionSafetyModelTests(TestCase):
         User = get_user_model()
         self.user_a = User.objects.create_user('audit-a@example.com', password='pass')
         self.user_b = User.objects.create_user('audit-b@example.com', password='pass')
-        self.broker = Broker.objects.create(name='Paper Trading', broker_type='paper', status='active')
-        self.account_a = BrokerAccount.objects.create(user=self.user_a, broker=self.broker, account_id='PAPER-A')
-        self.account_b = BrokerAccount.objects.create(user=self.user_b, broker=self.broker, account_id='PAPER-B')
+        self.broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active')
+        self.account_a = BrokerAccount.objects.create(user=self.user_a, broker=self.broker, account_id='DERIV-DEMO-A')
+        self.account_b = BrokerAccount.objects.create(user=self.user_b, broker=self.broker, account_id='DERIV-DEMO-B')
 
     def test_connection_is_scoped_to_account(self):
         first = BrokerConnection.objects.create(broker=self.broker, broker_account=self.account_a, status='connected')
