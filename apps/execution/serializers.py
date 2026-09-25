@@ -90,11 +90,7 @@ class BrokerTradeHistorySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_ai(self, obj):
-        from .models import Order
-        order = Order.objects.filter(broker_account=obj.broker_account, broker_reference=obj.broker_contract_id).order_by("-id").first() if obj.broker_contract_id else None
-        if not order:
-            return None
-        context = order.validation_context or {}
+        context = (self.context.get("ai_by_contract") or {}).get(obj.broker_contract_id) or {}
         ai = context.get("ai_consensus") or context.get("ai_decision")
         if not ai:
             return None
@@ -102,5 +98,4 @@ class BrokerTradeHistorySerializer(serializers.ModelSerializer):
             "source": context.get("ai_source") or "AI analysis",
             "prediction": context.get("ai_prediction") or ai.get("prediction") or ai.get("decision"),
             "confidence": ai.get("confidence"),
-            "analysis_timestamp": order.created_at,
         }
