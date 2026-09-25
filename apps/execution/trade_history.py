@@ -59,10 +59,8 @@ def normalize_deriv_trade(transaction_data, contract=None):
             status = "sold"
         elif contract.get("is_expired"):
             status = "expired"
-        elif contract_id:
-            status = "open"
         else:
-            status = "transaction"
+            status = "unknown"
 
     purchase_time = _epoch_datetime(_first(contract, "purchase_time", "date_start")) or _epoch_datetime(
         _first(tx, "transaction_time", "timestamp")
@@ -137,6 +135,9 @@ class DerivTradeHistoryService:
         for tx in grouped.values():
             contract = {}
             contract_id = tx.get("contract_id")
+            if contract_id is None:
+                partial = True
+                continue
             if contract_id is not None:
                 try:
                     contract = await self._contract(adapter, contract_id)
