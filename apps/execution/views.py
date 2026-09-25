@@ -2,14 +2,14 @@ from decimal import Decimal, InvalidOperation\nfrom datetime import datetime, ti
 import logging
 from django.conf import settings
 from django.utils import timezone
-from rest_framework import viewsets, permissions, decorators, response, status\nfrom django.db.models import Q
+from rest_framework import viewsets, permissions, decorators, response, status\nfrom rest_framework.pagination import PageNumberPagination\nfrom django.db.models import Q
 from .models import Order, ExecutionLog, ReconciliationEvent, BrokerTradeHistory
 from apps.trading.models import Position
 from apps.contracts.models import Contract
 from .serializers import OrderSerializer, PositionSerializer, ContractSerializer, ExecutionLogSerializer, ReconciliationEventSerializer, BrokerTradeHistorySerializer
 from .engine import ExecutionEngine
 from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, BrokerRoutingError
-from core.billing_entitlements import check, check_live_order, effective_plan\nfrom core.account_context import get_active_account\nfrom .trade_history import sync_deriv_trade_history
+from core.billing_entitlements import check, check_live_order, effective_plan\nfrom core.account_context import get_active_account\nfrom .trade_history import sync_deriv_trade_history, DerivTradeHistoryService
 
 log = logging.getLogger(__name__)
 
@@ -139,7 +139,7 @@ class ReconciliationEventViewSet(viewsets.ReadOnlyModelViewSet):
         event.mark_reviewed(request.user); return response.Response(self.get_serializer(event).data)
 
 
-class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+class TradeHistoryPagination(PageNumberPagination):\n    page_size = 25\n    page_size_query_param = "page_size"\n    max_page_size = 100\n\n\nclass TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     """Serve only broker-synchronized history for the authenticated active account."""
     serializer_class = BrokerTradeHistorySerializer
     permission_classes = [permissions.IsAuthenticated]
