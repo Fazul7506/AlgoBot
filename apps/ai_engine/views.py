@@ -163,11 +163,26 @@ async def _bounded_market_data(account, symbol):
 
 
 def _persisted_market_context(symbol, timeframe):
-    """Return fresh broker-ingested data; never fabricate browser market data."""
+    """Return fresh broker-ingested data; never fabricate browser market data.
+
+    The AI API uses its historical model convention (M1/H1/etc.), while the
+    canonical market-data store uses broker/candle labels (1m/1h/etc.). Keep
+    that translation at this boundary so AI analysis uses the selected chart
+    timeframe without creating a second candle taxonomy.
+    """
     max_age = int(getattr(settings, "BROKER_MARKET_DATA_MAX_AGE_SECONDS", 30))
     now = timezone.now()
     tick = Tick.objects.filter(symbol__symbol=symbol).order_by("-epoch", "-received_at").first()
-    candles = list(reversed(list(Candle.objects.filter(symbol__symbol=symbol, timeframe=timeframe).order_by("-epoch")[:60])))
+    raw_timeframe = str(timeframe or "M1").strip()
+    aliases = {"TICK": "tick"}
+    if raw_timeframe.upper() not in aliases:
+        import re
+        match = re.fullmatch(r"([SMHD])(\\d+)", raw_timeframe.upper())
+        if match:
+            unit, amount = match.groups()
+            aliases[raw_timeframe.upper()] = f"{amount}{unit.lower()}"
+    candle_timeframe = aliases.get(raw_timeframe.upper(), raw_timeframe.lower())
+    candles = list(reversed(list(Candle.objects.filter(symbol__symbol=symbol, timeframe=candle_timeframe).order_by("-epoch")[:60])))
     candle_payload = [{"open": float(c.open), "high": float(c.high), "low": float(c.low), "close": float(c.close), "volume": float(c.volume or 0), "epoch": c.epoch} for c in candles]
     if tick is not None:
         age = max(0, (now - tick.received_at).total_seconds())
