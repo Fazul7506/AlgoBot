@@ -139,10 +139,17 @@ class ReconciliationEventViewSet(viewsets.ReadOnlyModelViewSet):
         event.mark_reviewed(request.user); return response.Response(self.get_serializer(event).data)
 
 
-class TradeHistoryPagination(PageNumberPagination):\n    page_size = 25\n    page_size_query_param = "page_size"\n    max_page_size = 100\n\n\nclass TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+class TradeHistoryPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     """Serve only broker-synchronized history for the authenticated active account."""
     serializer_class = BrokerTradeHistorySerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = TradeHistoryPagination
 
     def get_queryset(self):
         account = get_active_account(self.request.user, request=self.request, broker_type="deriv")
