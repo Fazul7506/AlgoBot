@@ -90,7 +90,7 @@ class BrokerRealtimeSync:
             from .position_sync import _persist_snapshot_sync, normalize_broker_position
             normalized = normalize_broker_position(contract)
             if normalized is not None:
-                await sync_to_async(_persist_snapshot_sync, thread_sensitive=True)(self.account.pk, [normalized])
+                await sync_to_async(_persist_snapshot_sync, thread_sensitive=True)(self.account.pk, [normalized], full_snapshot=False)
         except Exception as exc:
             logger.exception(
                 "Broker execution event reconciliation failed",
