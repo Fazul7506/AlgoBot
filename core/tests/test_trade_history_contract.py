@@ -10,5 +10,6 @@ class TradeHistoryContractTests(TestCase):
         response = self.client.get(reverse("trade_history_page"))
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn("Confirmed execution reports", content)
-        self.assertIn("Connect a broker", content)
+        self.assertIn("Confirmed broker records", content)
+        self.assertIn("Deriv-authoritative contracts and transaction evidence", content)
+        self.assertIn("AlgoBot never invents fills", content)

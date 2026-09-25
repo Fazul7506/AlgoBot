@@ -1,7 +1,6 @@
 from rest_framework import serializers
-from .models import Order, ExecutionLog, ExecutionQueue, ReconciliationEvent
+from .models import Order, ExecutionLog, ExecutionQueue, ReconciliationEvent, BrokerTradeHistory
 from apps.trading.models import Position
-from apps.contracts.models import Contract
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -56,12 +55,6 @@ class PositionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class ContractSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Contract
-        fields = '__all__'
-
-
 class ExecutionLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExecutionLog
@@ -79,3 +72,25 @@ class ReconciliationEventSerializer(serializers.ModelSerializer):
         model = ReconciliationEvent
         fields = '__all__'
         read_only_fields = ('user', 'broker_account', 'detected_at', 'reviewed_at', 'reviewed_by')
+
+
+class BrokerTradeHistorySerializer(serializers.ModelSerializer):
+    ai = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BrokerTradeHistory
+        fields = [field.name for field in BrokerTradeHistory._meta.fields] + ["ai"]
+        read_only_fields = tuple(field.name for field in BrokerTradeHistory._meta.fields)
+
+    def get_ai(self, obj):
+        linked = (self.context.get("ai_by_contract") or {}).get(obj.broker_contract_id) or {}
+        context = linked.get("context") or {}
+        ai = context.get("ai_consensus") or context.get("ai_decision")
+        if not ai:
+            return None
+        return {
+            "source": context.get("ai_source") or "AI analysis",
+            "prediction": context.get("ai_prediction") or ai.get("prediction") or ai.get("decision"),
+            "confidence": ai.get("confidence"),
+            "analysis_timestamp": linked.get("created_at"),
+        }

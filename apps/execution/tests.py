@@ -69,7 +69,7 @@ class ExecutionQueueTaskTests(TestCase):
 
     def test_queued_order_is_claimed_and_completed(self):
         user = get_user_model().objects.create_user(username='queue-regression', password='test-password')
-        broker = Broker.objects.create(name='Queue Broker', broker_type='paper', status='active', supports_live=False)
+        broker = Broker.objects.create(name='Queue Broker', broker_type='deriv', status='active', supports_live=False)
         account = BrokerAccount.objects.create(user=user, broker=broker, account_id='QUEUE', status='active', credentials={'account_type': 'demo'})
         order = Order.objects.create(user=user, broker_account=account, symbol='R_10', direction='buy', order_type='market', stake='1', status='queued')
         queue = ExecutionQueue.objects.create(order=order, status='pending')

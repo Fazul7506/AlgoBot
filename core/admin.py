@@ -40,8 +40,8 @@ class PasswordResetTokenAdmin(admin.ModelAdmin):
 @admin.register(BotSettings)
 class BotSettingsAdmin(admin.ModelAdmin):
     """Admin for bot settings"""
-    list_display = ['user', 'is_enabled', 'status', 'default_strategy', 'is_paper_trading']
-    list_filter = ['is_enabled', 'status', 'is_paper_trading']
+    list_display = ['user', 'is_enabled', 'status', 'default_strategy']
+    list_filter = ['is_enabled', 'status']
     search_fields = ['user__username']
     readonly_fields = ['created_at', 'updated_at']
 

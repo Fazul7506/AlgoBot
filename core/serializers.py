@@ -69,13 +69,12 @@ class BotSettingsSerializer(serializers.ModelSerializer):
             'id', 'is_enabled', 'status', 'default_strategy',
             'max_daily_loss_pct', 'risk_per_trade_pct',
             'max_concurrent_trades', 'min_win_rate',
-            'is_paper_trading', 'paper_balance',
             'email_notifications_enabled', 'telegram_notifications_enabled',
             'telegram_chat_id', 'telegram_username',
             'brevo_sender_email', 'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'status', 'paper_balance', 'created_at', 'updated_at'
+            'id', 'status', 'created_at', 'updated_at'
         ]
 
 

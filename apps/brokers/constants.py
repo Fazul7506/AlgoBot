@@ -1,6 +1,5 @@
 BROKER_DERIV = 'deriv'
-BROKER_PAPER = 'paper'
-PRODUCTION_BROKERS = [BROKER_DERIV, BROKER_PAPER]
+PRODUCTION_BROKERS = [BROKER_DERIV]
 SCAFFOLD_BROKERS = ['binance', 'bybit', 'oanda', 'interactive_brokers', 'metatrader_gateway', 'dxtrade', 'ctrader', 'alpaca', 'forex_com', 'pepperstone', 'ic_markets', 'exness', 'mt5', 'mt4']
 BROKER_TYPES = PRODUCTION_BROKERS + SCAFFOLD_BROKERS
 BROKER_STATUSES = ['active', 'disabled', 'maintenance', 'degraded', 'offline', 'coming_soon']

@@ -13,9 +13,9 @@ class AccountSwitchingTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.user)
         self.broker = Broker.objects.create(
-            name='Paper Trading', broker_type='paper', status='active',
+            name='Deriv', broker_type='deriv', status='active',
             supports_demo=True, supports_live=True,
-            metadata={'auth': 'none', 'avatar_url': 'https://example.com/broker-avatar.png'},
+            metadata={'auth': 'oauth', 'avatar_url': 'https://example.com/broker-avatar.png'},
         )
 
     def make_account(self, account_id, account_type='demo', connected=True, status='active'):
@@ -23,6 +23,8 @@ class AccountSwitchingTests(TestCase):
             user=self.user, broker=self.broker, account_id=account_id,
             status=status, credentials={'account_type': account_type},
         )
+        account.set_access_token(f'ci-test-token-{account_id}')
+        account.save(update_fields=['access_token'])
         if connected:
             BrokerConnection.objects.create(
                 broker=self.broker, broker_account=account, status='connected',

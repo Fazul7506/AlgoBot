@@ -16,9 +16,9 @@ User = get_user_model()
 class TradingFoundationTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='phase1-user', password='test-password')
-        self.paper = Broker.objects.create(
-            name='Paper Trading',
-            broker_type='paper',
+        self.broker = Broker.objects.create(
+            name='Deriv Test',
+            broker_type='deriv',
             status='active',
             supports_demo=True,
             supports_live=False,
@@ -26,13 +26,15 @@ class TradingFoundationTests(TestCase):
         )
 
     def make_account(self, account_id, account_type='demo', broker=None, latency=50):
-        broker = broker or self.paper
+        broker = broker or self.broker
         account = BrokerAccount.objects.create(
             user=self.user,
             broker=broker,
             account_id=account_id,
             credentials={'account_type': account_type},
         )
+        account.set_access_token('ci-test-token')
+        account.save(update_fields=['access_token'])
         BrokerConnection.objects.create(
             broker=broker,
             broker_account=account,

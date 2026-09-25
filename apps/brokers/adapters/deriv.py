@@ -172,6 +172,14 @@ class DerivAdapter(BrokerAdapter):
         for key in ("date_from", "date_to"):
             if filters.get(key) is not None: payload[key] = filters[key]
         return (await self._request(payload, authenticated=True)).get("statement", {}).get("transactions", [])
+    async def get_trade_contract(self, contract_id):
+        if contract_id is None:
+            raise BrokerOrderError("A Deriv contract id is required for contract history.")
+        response = await self._request({"proposal_open_contract": 1, "contract_id": int(contract_id)}, authenticated=True)
+        contract = response.get("proposal_open_contract") or {}
+        if not contract.get("contract_id"):
+            raise BrokerOrderError("Deriv returned no contract for the requested history record.")
+        return contract
     async def get_market_data(self, symbol, **params):
         tick = (await self._request({"ticks": symbol})).get("tick")
         if not tick: raise BrokerConnectionError("Deriv did not return a tick")
