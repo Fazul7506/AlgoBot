@@ -4,7 +4,7 @@ import logging
 from apps.market_data.models import MarketSymbol
 from urllib.parse import urlparse
 from django.conf import settings
-from django.http import Http404,HttpResponse
+from django.http import Http404,HttpResponse,JsonResponse
 from django.shortcuts import render,redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
@@ -30,6 +30,10 @@ def strategies_page(request): return render(request,'core/strategies.html')
 @never_cache
 @ensure_csrf_cookie
 def trading_page(request): return render(request,'core/trading.html')
+@login_required
+@ensure_csrf_cookie
+def csrf_token_bootstrap(request):
+    return JsonResponse({'csrf': 'ready'})
 @login_required
 def backtesting_page(request): return render(request,'core/backtesting.html')
 @login_required
