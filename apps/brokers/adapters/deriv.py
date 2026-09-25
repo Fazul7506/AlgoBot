@@ -144,7 +144,7 @@ class DerivAdapter(BrokerAdapter):
 
     async def get_accounts(self):
         try:
-            response = await asyncio.to_thread(requests.get, settings.DERIV_OPTIONS_ACCOUNTS_URL, headers={"Authorization": f"Bearer {self._token()}", "Deriv-App-ID": self._app_id(), "Accept": "application/json"}, timeout=(3.05, self.timeout))
+            response = await asyncio.to_thread(requests.get, settings.DERIV_OPTIONS_ACCOUNTS_URL, headers={"Authorization": f"Bearer {self._token()}", "Accept": "application/json"}, timeout=(3.05, self.timeout))
             if response.status_code in {401, 403}: raise BrokerAuthenticationError("Deriv rejected the stored OAuth credential")
             response.raise_for_status(); data = response.json().get("data", []); return data if isinstance(data, list) else [data]
         except BrokerAuthenticationError: raise

@@ -9,6 +9,7 @@ import asyncio
 from datetime import datetime, timezone as dt_timezone
 from decimal import Decimal, InvalidOperation
 
+from asgiref.sync import sync_to_async
 from django.db import transaction
 from django.utils import timezone
 
@@ -119,6 +120,50 @@ class DerivTradeHistoryService:
             return {}
         return await adapter.get_trade_contract(contract_id)
 
+    def _persist_normalized(self, normalized, now):
+        """Persist broker-confirmed rows in a synchronous Django DB context."""
+        with transaction.atomic():
+            for row in normalized:
+                contract_lookup = (
+                    BrokerTradeHistory.objects.filter(
+                        broker_account=self.account,
+                        broker_contract_id=row["broker_contract_id"],
+                    ).first()
+                    if row["broker_contract_id"] else None
+                )
+                transaction_lookup = (
+                    BrokerTradeHistory.objects.filter(
+                        broker_account=self.account,
+                        broker_transaction_id=row["broker_transaction_id"],
+                    ).first()
+                    if row["broker_transaction_id"] else None
+                )
+
+                if contract_lookup and transaction_lookup and contract_lookup.pk != transaction_lookup.pk:
+                    raise TradeHistorySyncError(
+                        "Deriv returned conflicting contract and transaction identifiers.",
+                        code="BROKER_ID_CONFLICT",
+                        retryable=False,
+                    )
+
+                existing = contract_lookup or transaction_lookup
+                if existing:
+                    for key, value in row.items():
+                        setattr(existing, key, value)
+                    existing.user_id = self.account.user_id
+                    existing.last_synced_at = now
+                    existing.save()
+                else:
+                    BrokerTradeHistory.objects.create(
+                        user_id=self.account.user_id,
+                        broker_account=self.account,
+                        last_synced_at=now,
+                        **row,
+                    )
+
+        self.account.last_synced_at = now
+        self.account.save(update_fields=["last_synced_at"])
+
     async def sync(self, *, limit=100, date_from=None, date_to=None):
         adapter = BrokerRegistry().adapter(self.account.broker, self.account)
         try:
@@ -196,47 +241,10 @@ class DerivTradeHistoryService:
             )
 
         now = timezone.now()
-        with transaction.atomic():
-            for row in normalized:
-                contract_lookup = (
-                    BrokerTradeHistory.objects.filter(
-                        broker_account=self.account,
-                        broker_contract_id=row["broker_contract_id"],
-                    ).first()
-                    if row["broker_contract_id"] else None
-                )
-                transaction_lookup = (
-                    BrokerTradeHistory.objects.filter(
-                        broker_account=self.account,
-                        broker_transaction_id=row["broker_transaction_id"],
-                    ).first()
-                    if row["broker_transaction_id"] else None
-                )
-
-                if contract_lookup and transaction_lookup and contract_lookup.pk != transaction_lookup.pk:
-                    raise TradeHistorySyncError(
-                        "Deriv returned conflicting contract and transaction identifiers.",
-                        code="BROKER_ID_CONFLICT",
-                        retryable=False,
-                    )
-
-                existing = contract_lookup or transaction_lookup
-                if existing:
-                    for key, value in row.items():
-                        setattr(existing, key, value)
-                    existing.user_id = self.account.user_id
-                    existing.last_synced_at = now
-                    existing.save()
-                else:
-                    BrokerTradeHistory.objects.create(
-                        user_id=self.account.user_id,
-                        broker_account=self.account,
-                        last_synced_at=now,
-                        **row,
-                    )
-
-        self.account.last_synced_at = now
-        self.account.save(update_fields=["last_synced_at"])
+        # Broker I/O is asynchronous, but Django ORM/transactions are synchronous.
+        # Keep every database operation inside one sync boundary so this coroutine
+        # never touches the ORM directly and cannot raise SynchronousOnlyOperation.
+        await sync_to_async(self._persist_normalized, thread_sensitive=True)(normalized, now)
         return {
             "state": "partial" if partial else ("empty" if not normalized else "success"),
             "count": len(normalized),
