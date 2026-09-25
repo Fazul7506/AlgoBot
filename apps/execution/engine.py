@@ -111,8 +111,8 @@ class ExecutionEngine:
             if decision not in {'buy','sell'} or decision != str(order.direction).lower() or confidence < 65.0 or int(consensus.get('models_used', 0) or 0) < 1: raise PermissionError('Strategy ensemble consensus validation failed at execution boundary')
         from apps.risk.engine import RiskEngine
         RiskEngine().approve_or_raise(order, validation.get('risk_context') or validation)
-        start=time.perf_counter(); order.status=c.ORDER_STATUS_SENT
-        await asyncio.to_thread(order.save, update_fields=['status','updated_at'])
+        start=time.perf_counter(); order.status=c.ORDER_STATUS_SENT; order.submitted_at=timezone.now()
+        await asyncio.to_thread(order.save, update_fields=['status','submitted_at','updated_at'])
         adapter=BrokerRegistry().adapter(account.broker, account)
         broker_order=SimpleNamespace(symbol=order.symbol,stake=order.stake,quantity=order.stake,direction=order.direction,order_type=order.order_type,price=order.price,contract_type=getattr(order,'contract_type',None),routing_context=validation)
         response = await adapter.place_order(broker_order)
@@ -130,14 +130,20 @@ class ExecutionEngine:
         success_statuses = {"filled", "executed", "accepted", "partially_filled"}
         rejected_statuses = {"rejected", "cancelled", "expired", "failed"}
 
-        if broker_status in success_statuses or (not broker_status and order.broker_reference):
+        if broker_status in {'filled', 'executed'}:
             order.status = c.ORDER_STATUS_EXECUTED
+            order.executed_at = timezone.now()
             log_event = "OrderExecuted"
             log_message = (
                 "Broker accepted order"
                 if broker_status
                 else "Broker returned an execution reference without a status"
             )
+            log_status = "success"
+        elif broker_status == 'accepted' or broker_status == 'partially_filled':
+            order.status = c.ORDER_STATUS_ACCEPTED
+            log_event = "OrderAccepted"
+            log_message = f"Broker returned non-terminal execution status: {broker_status}"
             log_status = "success"
         elif broker_status in rejected_statuses:
             order.status = c.ORDER_STATUS_FAILED
@@ -178,7 +184,7 @@ class ExecutionEngine:
 
         await asyncio.to_thread(
             order.save,
-            update_fields=["broker_response", "broker_reference", "status", "updated_at"],
+            update_fields=["broker_response", "broker_reference", "status", "executed_at", "updated_at"],
         )
         await ExecutionLogRepository().alog(
             order,
