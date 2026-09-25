@@ -163,10 +163,9 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     def open(self, request):
         account = get_active_account(request.user, request=request)
         if not account:
-            return response.Response(
-                {'state': 'unavailable', 'code': 'NO_ACTIVE_BROKER_ACCOUNT', 'detail': 'No connected broker account is available for open positions.'},
-                status=status.HTTP_409_CONFLICT,
-            )
+            # Preserve the established read-only collection contract: no selected
+            # broker account means there are no broker positions to report.
+            return response.Response([])
         try:
             adapter = BrokerRegistry().adapter(account.broker, account)
             records = asyncio.run(adapter.get_positions())
