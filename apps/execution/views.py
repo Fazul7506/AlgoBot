@@ -299,7 +299,7 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
                     status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
             payload = paginator.get_paginated_response(data).data
-            payload["state"] = sync_state if sync_state not in {"cached", "auth_failed"} else ("empty" if not data and sync_state == "cached" else "stale")
+            payload["state"] = "empty" if not data and sync_state == "cached" else ("cached" if sync_state == "cached" else sync_state)
             payload["account"] = {
                 "id": account.id,
                 "broker_account_id": account.account_id,
