@@ -1,4 +1,6 @@
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
+from django.contrib.auth import get_user_model
+from django.urls import reverse
 
 
 class BillingTerminalUiContractTests(SimpleTestCase):
@@ -113,3 +115,41 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("accounts", client)
         self.assertIn("select", client)
         self.assertNotIn("window.fetch = guardedFetch", client)
+
+
+class TerminalRuntimeBoundaryTests(TestCase):
+    def test_authenticated_terminal_issues_csrf_cookie_before_api_mutations(self):
+        user_model = get_user_model()
+        user = user_model.objects.create_user(username="terminal-csrf-test", password="test-password")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("trading_page"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("csrftoken", response.cookies)
+        self.assertNotEqual(response.cookies["csrftoken"]["value"], "")
+
+
+class TerminalAiTimeframeContractTests(SimpleTestCase):
+    def test_terminal_ai_uses_chart_timeframe_instead_of_hardcoded_m1(self):
+        from pathlib import Path
+        ai = Path("static/js/trading_terminal_ai.js").read_text(encoding="utf-8")
+        self.assertIn("selectedTimeframe='M1'", ai)
+        self.assertIn("algobot:chart-timeframe-changed", ai)
+        self.assertIn("timeframe:selectedTimeframe", ai)
+        self.assertNotIn("timeframe:'M1'", ai)
+
+    def test_chart_publishes_selected_timeframe_to_terminal_consumers(self):
+        from pathlib import Path
+        chart = Path("static/js/deriv_pro_chart.js").read_text(encoding="utf-8")
+        self.assertIn("algobot:chart-timeframe-changed", chart)
+        self.assertIn("seconds:state.tf", chart)
+        self.assertIn("label:x[0]", chart)
+
+    def test_ai_candle_lookup_reconciles_model_and_canonical_market_timeframes(self):
+        from pathlib import Path
+        views = Path("apps/ai_engine/views.py").read_text(encoding="utf-8")
+        self.assertIn("candle_timeframe", views)
+        self.assertIn("raw_timeframe.upper()", views)
+        self.assertIn("amount}{unit.lower()}", views)
+        self.assertIn("timeframe=candle_timeframe", views)
