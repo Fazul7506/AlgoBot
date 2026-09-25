@@ -16,7 +16,7 @@ from apps.execution.models import ExecutionQueue, Order
 from apps.execution.signal_validation import SignalValidationService
 from apps.execution.tasks import process_execution_queue
 from .serializers import OrderSerializer
-from .views import OrderViewSet
+from .views import OrderViewSet, PositionViewSet
 from .engine import ExecutionEngine
 
 
@@ -61,6 +61,59 @@ class OrderSerializerRegressionTests(APITestCase):
         self.assertIs(result, order)
         execute.assert_awaited_once_with(order)
         enqueue.assert_not_called()
+
+
+class BrokerAuthoritativePositionTests(APITestCase):
+    def test_open_positions_are_read_from_selected_broker_not_local_position_model(self):
+        request = APIRequestFactory().get('/api/positions/open/')
+        user = get_user_model().objects.create_user(username='broker-position-test', password='test-password')
+        force_authenticate(request, user=user)
+        account = SimpleNamespace(
+            id=7,
+            account_id='CR123',
+            currency='USD',
+            broker=SimpleNamespace(name='Deriv', broker_type='deriv'),
+        )
+        records = [{
+            'contract_id': '12345',
+            'underlying_symbol': 'R_100',
+            'contract_type': 'CALL',
+            'entry_spot': '100.25',
+            'bid_price': '101.10',
+            'profit': '0.85',
+            'purchase_time': 1750000000,
+        }]
+        adapter = SimpleNamespace(get_positions=AsyncMock(return_value=records))
+        with patch('apps.execution.views.get_active_account', return_value=account),              patch('apps.execution.views.BrokerRegistry') as registry:
+            registry.return_value.adapter.return_value = adapter
+            result = PositionViewSet.as_view({'get': 'open'})(request)
+
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data[0]['source'], 'broker')
+        self.assertEqual(result.data[0]['broker_reference'], '12345')
+        self.assertEqual(result.data[0]['symbol'], 'R_100')
+        self.assertEqual(result.data[0]['direction'], 'BUY')
+        self.assertEqual(result.data[0]['profit'], '0.85')
+        adapter.get_positions.assert_awaited_once()
+
+    def test_open_positions_return_unavailable_when_broker_state_cannot_be_read(self):
+        request = APIRequestFactory().get('/api/positions/open/')
+        user = get_user_model().objects.create_user(username='broker-position-error-test', password='test-password')
+        force_authenticate(request, user=user)
+        account = SimpleNamespace(
+            id=8,
+            account_id='CR124',
+            currency='USD',
+            broker=SimpleNamespace(name='Deriv', broker_type='deriv'),
+        )
+        adapter = SimpleNamespace(get_positions=AsyncMock(side_effect=BrokerConnectionError('broker unavailable')))
+        with patch('apps.execution.views.get_active_account', return_value=account),              patch('apps.execution.views.BrokerRegistry') as registry:
+            registry.return_value.adapter.return_value = adapter
+            result = PositionViewSet.as_view({'get': 'open'})(request)
+
+        self.assertEqual(result.status_code, 503)
+        self.assertEqual(result.data['code'], 'BROKER_POSITIONS_UNAVAILABLE')
+        self.assertEqual(result.data['source'], 'broker')
 
 
 class ExecutionQueueTaskTests(TestCase):
