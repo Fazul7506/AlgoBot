@@ -127,18 +127,13 @@ class ExecutionEngine:
             or ""
         )
         broker_status = str(response.get("status") or "").strip().lower()
-        success_statuses = {"filled", "executed", "accepted", "partially_filled"}
         rejected_statuses = {"rejected", "cancelled", "expired", "failed"}
 
         if broker_status in {'filled', 'executed'}:
             order.status = c.ORDER_STATUS_EXECUTED
             order.executed_at = timezone.now()
             log_event = "OrderExecuted"
-            log_message = (
-                "Broker accepted order"
-                if broker_status
-                else "Broker returned an execution reference without a status"
-            )
+            log_message = f"Broker returned terminal execution status: {broker_status}"
             log_status = "success"
         elif broker_status == 'accepted' or broker_status == 'partially_filled':
             order.status = c.ORDER_STATUS_ACCEPTED
