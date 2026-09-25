@@ -67,6 +67,14 @@ class MarketScannerApiTests(TestCase):
             )
             for i in range(1, 61)
         ])
+        Candle.objects.bulk_create([
+            Candle(
+                symbol=self.loser, timeframe="1m", open=i, high=i + 1,
+                low=i - 1, close=i, volume=100, epoch=1_800_000_000 + i * 60,
+                source="deriv_candles",
+            )
+            for i in range(1, 21)
+        ])
 
     def test_scanner_returns_backend_snapshot_and_technical_data(self):
         response = self.client.get("/api/market/scanner/")
@@ -80,7 +88,7 @@ class MarketScannerApiTests(TestCase):
         self.assertNotIn("OTHER", symbols)
         gain = next(row for row in payload["results"] if row["symbol"] == "GAIN")
         self.assertEqual(gain["technical_source"], "persisted_broker_candles")
-        self.assertIsNotNone(gain["rsi"])
+        self.assertIsNotNone(gain["rsi"])\n        loser = next(row for row in payload["results"] if row["symbol"] == "LOSS")\n        self.assertEqual(loser["technical_status"], "insufficient_data")
 
     def test_gainer_filter_excludes_non_positive_change(self):
         response = self.client.get("/api/market/scanner/?direction=gainers")
