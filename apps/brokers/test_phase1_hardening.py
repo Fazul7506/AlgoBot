@@ -33,6 +33,8 @@ class TradingFoundationTests(TestCase):
             account_id=account_id,
             credentials={'account_type': account_type},
         )
+        account.set_access_token('ci-test-token')
+        account.save(update_fields=['access_token'])
         BrokerConnection.objects.create(
             broker=broker,
             broker_account=account,
