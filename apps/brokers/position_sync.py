@@ -189,6 +189,65 @@ class BrokerPositionSyncService:
             "meta": sync_meta,
         }
 
+    async def synchronize_closed(self, account, limit=100):
+        from .services import BrokerRegistry
+
+        if not account or not account.is_connection_eligible:
+            raise PositionSyncError("The selected broker account is not connected and ready.")
+
+        adapter = BrokerRegistry().adapter(account.broker, account)
+        try:
+            history = await adapter.get_trade_history(limit=max(1, min(int(limit), 100)))
+        except BrokerAuthenticationError as exc:
+            raise PositionSyncError("The broker session is no longer authorized.", code="BROKER_AUTHENTICATION_FAILED") from exc
+        except BrokerConnectionError as exc:
+            raise PositionSyncError("The broker did not provide authoritative trade history.", code="BROKER_UNAVAILABLE") from exc
+        except Exception as exc:
+            raise PositionSyncError("The broker did not provide authoritative trade history.") from exc
+
+        if not isinstance(history, list):
+            raise PositionSyncError("The broker returned an invalid trade-history response.")
+
+        contract_ids = []
+        seen = set()
+        for row in history:
+            if not isinstance(row, dict):
+                continue
+            contract_id = row.get("contract_id")
+            if contract_id in (None, ""):
+                continue
+            key = str(contract_id)
+            if key not in seen:
+                seen.add(key)
+                contract_ids.append(key)
+
+        async def fetch_final(contract_id):
+            try:
+                return await adapter.get_trade_contract(contract_id)
+            except (BrokerAuthenticationError, BrokerConnectionError):
+                raise
+            except NotImplementedError:
+                return None
+            except Exception:
+                return None
+
+        try:
+            records = await asyncio.gather(*(fetch_final(cid) for cid in contract_ids))
+        except BrokerAuthenticationError as exc:
+            raise PositionSyncError("The broker session is no longer authorized.", code="BROKER_AUTHENTICATION_FAILED") from exc
+        except BrokerConnectionError as exc:
+            raise PositionSyncError("The broker connection failed while retrieving closed contracts.", code="BROKER_UNAVAILABLE") from exc
+
+        normalized = [
+            item for item in (normalize_broker_position(record) for record in records if isinstance(record, dict))
+            if item is not None and item.get("status") in {"closed", "expired", "settled", "won", "lost"}
+        ]
+        meta = await sync_to_async(_persist_snapshot_sync, thread_sensitive=True)(
+            account.pk, normalized, full_snapshot=False
+        )
+        meta["history_count"] = len(history)
+        return {"positions": normalized, "meta": meta}
+
     async def synchronize_contract(self, account, contract):
         normalized = normalize_broker_position(contract)
         if normalized is None:
