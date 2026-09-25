@@ -12,6 +12,7 @@ from apps.trading.models import Position
 from .serializers import OrderSerializer, PositionSerializer, ExecutionLogSerializer, ReconciliationEventSerializer, BrokerTradeHistorySerializer
 from .engine import ExecutionEngine
 from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, BrokerRoutingError
+from apps.brokers.services import BrokerRegistry
 from core.billing_entitlements import check, check_live_order, effective_plan
 from core.account_context import get_active_account
 from .trade_history import DerivTradeHistoryService, TradeHistorySyncError
@@ -119,11 +120,81 @@ class OrderViewSet(viewsets.ModelViewSet):
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PositionSerializer; permission_classes=[permissions.IsAuthenticated]
-    def get_queryset(self): return Position.objects.filter(order__user=self.request.user)
+
+    def get_queryset(self):
+        return Position.objects.filter(order__user=self.request.user)
+
+    @staticmethod
+    def _broker_position_payload(account, record):
+        if not isinstance(record, dict):
+            return None
+        contract_id = record.get('contract_id') or record.get('broker_order_id') or record.get('order_id') or record.get('id')
+        symbol = record.get('symbol') or record.get('underlying_symbol') or record.get('underlying')
+        contract_type = str(record.get('contract_type') or record.get('contract') or '').upper() or None
+        direction = record.get('direction') or record.get('side')
+        if not direction:
+            direction = {
+                'CALL': 'BUY', 'RISE': 'BUY', 'MULTUP': 'BUY', 'ACCU': 'BUY',
+                'PUT': 'SELL', 'FALL': 'SELL', 'MULTDOWN': 'SELL',
+            }.get(contract_type)
+        return {
+            'id': f"broker:{contract_id}" if contract_id not in (None, '') else None,
+            'broker_reference': str(contract_id) if contract_id not in (None, '') else None,
+            'broker_contract_id': str(contract_id) if contract_id not in (None, '') else None,
+            'broker': getattr(getattr(account, 'broker', None), 'name', None),
+            'account_id': getattr(account, 'id', None),
+            'broker_account_id': getattr(account, 'account_id', None),
+            'currency': record.get('currency') or getattr(account, 'currency', None),
+            'symbol': symbol,
+            'direction': str(direction).upper() if direction else None,
+            'side': str(direction).upper() if direction else None,
+            'contract_type': contract_type,
+            'size': record.get('size') if record.get('size') is not None else record.get('amount'),
+            'entry_price': record.get('entry_spot') if record.get('entry_spot') is not None else record.get('entry_price'),
+            'current_price': record.get('bid_price') if record.get('bid_price') is not None else record.get('current_price'),
+            'profit': record.get('profit'),
+            'status': 'open',
+            'opened_at': record.get('purchase_time') if record.get('purchase_time') is not None else record.get('date_start'),
+            'expires_at': record.get('date_expiry'),
+            'source': 'broker',
+        }
+
     @decorators.action(detail=False)
-    def open(self, request): return response.Response(self.get_serializer(self.get_queryset().filter(status='open'),many=True).data)
+    def open(self, request):
+        account = get_active_account(request.user, request=request)
+        if not account:
+            return response.Response(
+                {'state': 'unavailable', 'code': 'NO_ACTIVE_BROKER_ACCOUNT', 'detail': 'No connected broker account is available for open positions.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        try:
+            adapter = BrokerRegistry().adapter(account.broker, account)
+            records = asyncio.run(adapter.get_positions())
+        except BrokerAuthenticationError as exc:
+            return response.Response(
+                {'state': 'authentication_failed', 'code': 'BROKER_AUTHENTICATION_FAILED', 'detail': str(exc), 'source': 'broker'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        except (BrokerConnectionError, BrokerOrderError) as exc:
+            return response.Response(
+                {'state': 'unavailable', 'code': 'BROKER_POSITIONS_UNAVAILABLE', 'detail': str(exc), 'source': 'broker', 'retryable': True},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except Exception:
+            log.exception('broker_positions_fetch_failed', extra={'user_id': request.user.id, 'account_id': account.id})
+            return response.Response(
+                {'state': 'unavailable', 'code': 'BROKER_POSITIONS_UNAVAILABLE', 'detail': 'The broker did not provide authoritative open-position data.', 'source': 'broker', 'retryable': True},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        payload = [
+            normalized for record in (records or [])
+            if (normalized := self._broker_position_payload(account, record)) is not None
+        ]
+        return response.Response(payload)
+
     @decorators.action(detail=False)
-    def closed(self, request): return response.Response(self.get_serializer(self.get_queryset().filter(status='closed'),many=True).data)
+    def closed(self, request):
+        return response.Response(self.get_serializer(self.get_queryset().filter(status='closed'),many=True).data)
 class ExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ExecutionLogSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return ExecutionLog.objects.filter(order__user=self.request.user)
