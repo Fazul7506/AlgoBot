@@ -33,12 +33,6 @@ class DerivAdapter(BrokerAdapter):
             raise BrokerAuthenticationError("Deriv access token is unavailable")
         return token
 
-    def _app_id(self):
-        app_id = settings.DERIV_APP_ID or settings.DERIV_OAUTH_CLIENT_ID
-        if not app_id:
-            raise BrokerAuthenticationError("DERIV_APP_ID is not configured")
-        return app_id
-
     def _account_id(self):
         account_id = getattr(self.account, "account_id", None)
         if not account_id:
