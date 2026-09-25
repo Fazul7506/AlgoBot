@@ -9,8 +9,7 @@ from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
 from .models import Order, ExecutionLog, ReconciliationEvent, BrokerTradeHistory
 from apps.trading.models import Position
-from apps.contracts.models import Contract
-from .serializers import OrderSerializer, PositionSerializer, ContractSerializer, ExecutionLogSerializer, ReconciliationEventSerializer, BrokerTradeHistorySerializer
+from .serializers import OrderSerializer, PositionSerializer, ExecutionLogSerializer, ReconciliationEventSerializer, BrokerTradeHistorySerializer
 from .engine import ExecutionEngine
 from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, BrokerRoutingError
 from core.billing_entitlements import check, check_live_order, effective_plan
@@ -125,9 +124,6 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     def open(self, request): return response.Response(self.get_serializer(self.get_queryset().filter(status='open'),many=True).data)
     @decorators.action(detail=False)
     def closed(self, request): return response.Response(self.get_serializer(self.get_queryset().filter(status='closed'),many=True).data)
-class ContractViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=ContractSerializer; permission_classes=[permissions.IsAuthenticated]
-    def get_queryset(self): return Contract.objects.filter(position__order__user=self.request.user)
 class ExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ExecutionLogSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return ExecutionLog.objects.filter(order__user=self.request.user)
