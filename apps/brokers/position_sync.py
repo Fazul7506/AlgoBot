@@ -140,6 +140,7 @@ class BrokerPositionSyncService:
 
     async def synchronize(self, account):
         from .services import BrokerRegistry
+        from .models import Position
 
         if not account or not account.is_connection_eligible:
             raise PositionSyncError("The selected broker account is not connected and ready.")
@@ -171,6 +172,8 @@ class BrokerPositionSyncService:
                 except (BrokerAuthenticationError, BrokerConnectionError):
                     raise
                 except NotImplementedError:
+                    return None
+                except Exception:
                     return None
             try:
                 final_records = await asyncio.gather(*(fetch_final(cid) for cid in stale_ids))
