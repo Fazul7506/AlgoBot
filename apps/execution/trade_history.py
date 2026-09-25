@@ -73,7 +73,7 @@ def normalize_deriv_trade(transaction_data, contract=None):
     purchase_time = _epoch_datetime(_first(contract, "purchase_time", "date_start")) or _epoch_datetime(
         _first(tx, "transaction_time", "timestamp")
     )
-    settlement_time = _epoch_datetime(_first(contract, "sell_time", "settlement_time"))
+    settlement_time = _epoch_datetime(_first(contract, "sell_time", "sell_spot_time", "exit_spot_time", "settlement_time"))
     expiry_time = _epoch_datetime(_first(contract, "date_expiry", "expiry_time"))
     broker_timestamp = _epoch_datetime(_first(tx, "transaction_time", "timestamp")) or purchase_time
 
@@ -92,9 +92,9 @@ def normalize_deriv_trade(transaction_data, contract=None):
         "barrier": _first(contract, "barrier", "barrier_spot"),
         "buy_price": _decimal(_first(contract, "buy_price", "purchase_price")),
         "entry_price": _decimal(_first(contract, "entry_spot", "entry_price")),
-        "sell_price": _decimal(_first(contract, "sell_price")),
+        "sell_price": _decimal(_first(contract, "sell_price", "sold_for")),
         "exit_price": _decimal(_first(contract, "exit_spot", "exit_price")),
-        "stake": _decimal(_first(contract, "buy_price", "stake", "amount") or _first(tx, "amount")),
+        "stake": _decimal(_first(contract, "buy_price", "stake", "amount")),
         "payout": _decimal(_first(contract, "payout")),
         "profit_loss": _decimal(_first(contract, "profit", "profit_loss")),
         "currency": _first(contract, "currency") or _first(tx, "currency"),
