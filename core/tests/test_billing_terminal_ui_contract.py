@@ -99,6 +99,16 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("request(`/api/brokers/accounts/${target.id}/select/", live_ui)
         self.assertIn("context.selectAccount(id)", live_ui)
 
+    def test_frontend_transport_bootstraps_csrf_before_mutations(self):
+        from pathlib import Path
+        client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
+        self.assertIn("ensureCsrfCookie", client)
+        self.assertIn("apiBase+'/api/csrf/'", client)
+        self.assertIn("credentials:'include'", client)
+        self.assertIn("CSRF_BOOTSTRAP_FAILED", client)
+        self.assertIn("await ensureCsrfCookie(target,method,controller)", client)
+        self.assertNotIn("mutationsNeverFallback:false", client)
+
     def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):
         from pathlib import Path
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
@@ -126,6 +136,18 @@ class TerminalRuntimeBoundaryTests(TestCase):
         response = self.client.get(reverse("trading_page"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertIn("csrftoken", response.cookies)
+        self.assertNotEqual(response.cookies["csrftoken"].value, "")
+
+    def test_authenticated_csrf_bootstrap_endpoint_issues_shared_cookie(self):
+        user_model = get_user_model()
+        user = user_model.objects.create_user(username="terminal-csrf-bootstrap-test", password="test-password")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("csrf_token_bootstrap"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"csrf": "ready"})
         self.assertIn("csrftoken", response.cookies)
         self.assertNotEqual(response.cookies["csrftoken"].value, "")
 
