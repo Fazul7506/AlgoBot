@@ -42,7 +42,6 @@ def account_settings_api(request):
                 "risk_per_trade_pct": bot.risk_per_trade_pct,
                 "max_concurrent_trades": bot.max_concurrent_trades,
                 "min_win_rate": bot.min_win_rate,
-                "is_paper_trading": bot.is_paper_trading,
             },
         })
 
@@ -60,7 +59,7 @@ def account_settings_api(request):
     }
     allowed_trading = {
         "default_strategy", "max_daily_loss_pct", "risk_per_trade_pct",
-        "max_concurrent_trades", "min_win_rate", "is_paper_trading",
+        "max_concurrent_trades", "min_win_rate",
     }
 
     for field in allowed_profile:
