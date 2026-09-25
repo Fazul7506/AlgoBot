@@ -14,7 +14,7 @@ from .engine import ExecutionEngine
 from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError, BrokerRoutingError
 from core.billing_entitlements import check, check_live_order, effective_plan
 from core.account_context import get_active_account
-from .trade_history import DerivTradeHistoryService
+from .trade_history import DerivTradeHistoryService, TradeHistorySyncError
 
 log = logging.getLogger(__name__)
 
@@ -221,33 +221,67 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             try:
                 date_from = request.query_params.get("date_from")
                 date_to = request.query_params.get("date_to")
+
                 def epoch(value, end=False):
                     if not value:
                         return None
-                    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                    try:
+                        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid {("date_to" if end else "date_from")} value.") from exc
                     if parsed.tzinfo is None:
                         parsed = parsed.replace(tzinfo=dt_timezone.utc)
                     if end:
                         parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
                     return int(parsed.timestamp())
+
+                try:
+                    from_epoch = epoch(date_from)
+                    to_epoch = epoch(date_to, True)
+                except ValueError as exc:
+                    return response.Response(
+                        {"state": "invalid_request", "code": "INVALID_DATE_RANGE", "detail": str(exc)},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if from_epoch is not None and to_epoch is not None and from_epoch > to_epoch:
+                    return response.Response(
+                        {"state": "invalid_request", "code": "INVALID_DATE_RANGE", "detail": "date_from must not be later than date_to."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
                 result = asyncio.run(
                     DerivTradeHistoryService(account).sync(
-                        limit=100, date_from=epoch(date_from), date_to=epoch(date_to, True)
+                        limit=100, date_from=from_epoch, date_to=to_epoch
                     )
                 )
                 sync_state = result["state"]
             except BrokerAuthenticationError as exc:
-                sync_error = {"code": "BROKER_AUTHENTICATION_FAILED", "detail": str(exc)}
+                sync_error = {"code": "BROKER_AUTHENTICATION_FAILED", "detail": str(exc), "retryable": False}
                 sync_state = "auth_failed"
             except BrokerConnectionError as exc:
-                sync_error = {"code": "BROKER_UNAVAILABLE", "detail": str(exc)}
+                sync_error = {"code": "BROKER_UNAVAILABLE", "detail": str(exc), "retryable": True}
                 sync_state = "unavailable"
             except BrokerOrderError as exc:
-                sync_error = {"code": "BROKER_HISTORY_REJECTED", "detail": str(exc)}
+                sync_error = {"code": "BROKER_HISTORY_REJECTED", "detail": str(exc), "retryable": False}
+                sync_state = "unavailable"
+            except TradeHistorySyncError as exc:
+                sync_error = {"code": exc.code, "detail": str(exc), "retryable": bool(exc.retryable)}
                 sync_state = "unavailable"
             except Exception as exc:
-                log.exception("trade_history_sync_failed", extra={"user_id": request.user.id, "account_id": account.id})
-                sync_error = {"code": "TRADE_HISTORY_SYNC_FAILED", "detail": "Broker Trade History could not be synchronized."}
+                log.exception(
+                    "trade_history_sync_failed",
+                    extra={
+                        "user_id": request.user.id,
+                        "account_id": account.id,
+                        "exception_type": type(exc).__name__,
+                    },
+                )
+                sync_error = {
+                    "code": "TRADE_HISTORY_SYNC_INTERNAL_ERROR",
+                    "detail": "Trade History synchronization failed before broker data could be confirmed.",
+                    "retryable": True,
+                }
                 sync_state = "unavailable"
 
         qs = self.filter_queryset(self.get_queryset())
@@ -259,7 +293,10 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             if sync_state == "auth_failed" and not cached_exists:
                 return response.Response({"state": "authentication_failed", "error": sync_error}, status=status.HTTP_401_UNAUTHORIZED)
             if sync_state == "unavailable" and not cached_exists:
-                return response.Response({"state": "unavailable", "error": sync_error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return response.Response(
+                    {"state": "unavailable", "error": sync_error},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
             payload = paginator.get_paginated_response(data).data
             payload["state"] = sync_state if sync_state not in {"cached", "auth_failed"} else ("empty" if not data and sync_state == "cached" else "stale")
             payload["account"] = {
