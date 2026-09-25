@@ -5,6 +5,7 @@ from django.db.models import Avg
 from django.utils import timezone
 from asgiref.sync import sync_to_async
 from apps.brokers.services import BrokerRegistry
+from apps.brokers.position_sync import BrokerPositionSyncService
 from .exceptions import OrderValidationError, NonRetryableExecutionError
 from .models import Order, ExecutionQueue, ExecutionLog
 from .repositories import OrderRepository, ExecutionLogRepository, ExecutionQueueRepository
@@ -298,7 +299,7 @@ class TradeReconciliationService:
 
 class TradeSynchronizationService:
     async def synchronize(self, broker_account):
-        position_sync = await __import__("apps.brokers.position_sync", fromlist=["BrokerPositionSyncService"]).BrokerPositionSyncService().synchronize(broker_account)
+        position_sync = await BrokerPositionSyncService().synchronize(broker_account)
         adapter = BrokerRegistry().adapter(broker_account.broker, broker_account)
         positions = position_sync["positions"]
         orders = await adapter.get_orders()
