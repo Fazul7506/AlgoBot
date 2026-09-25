@@ -79,3 +79,28 @@ class ReconciliationEventSerializer(serializers.ModelSerializer):
         model = ReconciliationEvent
         fields = '__all__'
         read_only_fields = ('user', 'broker_account', 'detected_at', 'reviewed_at', 'reviewed_by')
+
+
+class BrokerTradeHistorySerializer(serializers.ModelSerializer):
+    ai = serializers.SerializerMethodField()
+
+    class Meta:
+        model = __import__("apps.execution.models", fromlist=["BrokerTradeHistory"]).BrokerTradeHistory
+        fields = "__all__"
+        read_only_fields = fields
+
+    def get_ai(self, obj):
+        from .models import Order
+        order = Order.objects.filter(broker_account=obj.broker_account, broker_reference=obj.broker_contract_id).order_by("-id").first() if obj.broker_contract_id else None
+        if not order:
+            return None
+        context = order.validation_context or {}
+        ai = context.get("ai_consensus") or context.get("ai_decision")
+        if not ai:
+            return None
+        return {
+            "source": context.get("ai_source") or "AI analysis",
+            "prediction": context.get("ai_prediction") or ai.get("prediction") or ai.get("decision"),
+            "confidence": ai.get("confidence"),
+            "analysis_timestamp": order.created_at,
+        }
