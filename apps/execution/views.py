@@ -1,6 +1,7 @@
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timezone as dt_timezone
 import logging
+import asyncio
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import viewsets, permissions, decorators, response, status
@@ -233,15 +234,15 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
                     if end:
                         parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
                     return int(parsed.timestamp())
-                result = __import__("asyncio").run(
-                    __import__("apps.execution.trade_history", fromlist=["DerivTradeHistoryService"]).DerivTradeHistoryService(account).sync(
+                result = asyncio.run(
+                    DerivTradeHistoryService(account).sync(
                         limit=100, date_from=epoch(date_from), date_to=epoch(date_to, True)
                     )
                 )
                 sync_state = result["state"]
             except BrokerAuthenticationError as exc:
                 sync_error = {"code": "BROKER_AUTHENTICATION_FAILED", "detail": str(exc)}
-                sync_state = "unavailable"
+                sync_state = "auth_failed"
             except BrokerConnectionError as exc:
                 sync_error = {"code": "BROKER_UNAVAILABLE", "detail": str(exc)}
                 sync_state = "unavailable"
