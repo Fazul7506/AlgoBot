@@ -57,7 +57,7 @@ class PositionSerializer(serializers.ModelSerializer):
             'symbol','display_name','contract_type','direction','size','stake',
             'entry_price','current_price','exit_price','payout','profit','roi',
             'currency','status','opened_at','expiry_time','closed_at','settlement_time',
-            'broker_timestamp','last_synced_at','raw_data',
+            'broker_timestamp','last_synced_at',
         ]
         read_only_fields = fields
 
