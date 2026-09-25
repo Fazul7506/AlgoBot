@@ -19,13 +19,19 @@ class BrokerAdapterContractTests(TestCase):
 class OrderRoutingTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user('phase13@example.com', 'phase13@example.com', 'pass')
-        broker = Broker.objects.create(name='Deriv', broker_type='deriv')
+        broker = Broker.objects.create(
+            name='Deriv',
+            broker_type='deriv',
+            metadata={'auth': 'oauth'},
+        )
         self.account = BrokerAccount.objects.create(
             user=self.user,
             broker=broker,
             account_id='DERIV-DEMO-1',
             credentials={'account_type': 'demo'},
         )
+        self.account.set_access_token('ci-test-token')
+        self.account.save(update_fields=['access_token'])
         BrokerConnection.objects.create(broker=broker, broker_account=self.account, status='connected')
 
     def test_registry_returns_adapter_without_engine_changes(self):
