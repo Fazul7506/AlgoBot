@@ -13,7 +13,7 @@ class AccountSwitchingTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.user)
         self.broker = Broker.objects.create(
-            name='Paper Trading', broker_type='paper', status='active',
+            name='Deriv', broker_type='deriv', status='active',
             supports_demo=True, supports_live=True,
             metadata={'auth': 'none', 'avatar_url': 'https://example.com/broker-avatar.png'},
         )
