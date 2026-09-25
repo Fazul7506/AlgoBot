@@ -16,6 +16,22 @@ class OrderValidationService:
         if not order.symbol: errors.append('Symbol exists validation failed')
         if not order.broker_account_id or not order.broker_account.is_connected: errors.append('Broker connected validation failed')
         if order.stake <= 0: errors.append('Stake within limits validation failed')
+        broker_type = str(getattr(getattr(order.broker_account, 'broker', None), 'broker_type', '') or '').lower()
+        if broker_type == 'deriv' and not str(getattr(order, 'contract_type', '') or '').strip():
+            errors.append('Broker contract type is required for Deriv execution')
+        duration = getattr(order, 'duration', None)
+        duration_unit = str(getattr(order, 'duration_unit', '') or '').strip().lower()
+        if duration is not None and not duration_unit:
+            errors.append('Duration unit is required when a duration is supplied')
+        if duration_unit and duration is None:
+            errors.append('Duration is required when a duration unit is supplied')
+        if duration is not None and duration <= 0:
+            errors.append('Duration must be positive')
+        routing = getattr(order, 'validation_context', {}) or {}
+        requested_currency = str(routing.get('currency') or '').upper()
+        account_currency = str(getattr(order.broker_account, 'currency', '') or '').upper()
+        if requested_currency and account_currency and requested_currency != account_currency:
+            errors.append('Order currency does not match the authoritative broker account currency')
         if order.broker_account_id and order.broker_account.balance < order.stake: errors.append('Sufficient balance validation failed')
         if order.order_type not in c.ORDER_TYPES: errors.append('Contract supported/order type validation failed')
         ExecutionLogRepository().log(order,'OrderValidated','failed' if errors else 'success','; '.join(errors), (time.perf_counter()-start)*1000)
