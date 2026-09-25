@@ -17,12 +17,12 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'broker_account', 'symbol', 'strategy', 'direction',
             'order_type', 'contract_type', 'duration', 'duration_unit', 'stake', 'price', 'status', 'broker_reference',
-            'client_request_id', 'validation_context', 'broker_payload',
+            'client_request_id', 'validation_context', 'broker_payload', 'submitted_at', 'executed_at',
             'broker_response', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'user', 'status', 'broker_reference', 'validation_context',
-            'broker_payload', 'broker_response', 'created_at', 'updated_at'
+            'broker_payload', 'broker_response', 'submitted_at', 'executed_at', 'created_at', 'updated_at'
         ]
 
     def validate_direction(self, value):
