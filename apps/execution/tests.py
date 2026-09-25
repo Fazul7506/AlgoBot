@@ -10,7 +10,8 @@ from django.test import TestCase, SimpleTestCase
 from rest_framework.test import APITestCase, APIRequestFactory, force_authenticate
 
 from apps.brokers.exceptions import BrokerConnectionError, BrokerOrderError
-from apps.brokers.models import Broker, BrokerAccount
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection, Position
+from apps.brokers.position_sync import PositionSyncError
 from apps.execution.deriv_views import DerivTradingActionView
 from apps.execution.models import ExecutionQueue, Order
 from apps.execution.signal_validation import SignalValidationService
@@ -64,56 +65,74 @@ class OrderSerializerRegressionTests(APITestCase):
 
 
 class BrokerAuthoritativePositionTests(APITestCase):
-    def test_open_positions_are_read_from_selected_broker_not_local_position_model(self):
-        request = APIRequestFactory().get('/api/positions/open/')
-        user = get_user_model().objects.create_user(username='broker-position-test', password='test-password')
-        force_authenticate(request, user=user)
-        account = SimpleNamespace(
-            id=7,
-            account_id='CR123',
+    def _account(self, username):
+        user = get_user_model().objects.create_user(username=username, password='test-password')
+        broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active')
+        account = BrokerAccount.objects.create(
+            user=user,
+            broker=broker,
+            account_id=f'CR-{username}',
             currency='USD',
-            broker=SimpleNamespace(name='Deriv', broker_type='deriv'),
+            status='active',
         )
-        records = [{
-            'contract_id': '12345',
-            'underlying_symbol': 'R_100',
-            'contract_type': 'CALL',
-            'entry_spot': '100.25',
-            'bid_price': '101.10',
-            'profit': '0.85',
-            'purchase_time': 1750000000,
-        }]
-        adapter = SimpleNamespace(get_positions=AsyncMock(return_value=records))
-        with patch('apps.execution.views.get_active_account', return_value=account),              patch('apps.execution.views.BrokerRegistry') as registry:
-            registry.return_value.adapter.return_value = adapter
+        BrokerConnection.objects.create(broker=broker, broker_account=account, status='connected')
+        return user, account
+
+    def test_open_positions_are_read_from_selected_broker_not_local_position_model(self):
+        user, account = self._account('broker-position-test')
+        Position.objects.create(
+            broker=account.broker,
+            account=account,
+            contract_id='12345',
+            transaction_id='TX-12345',
+            symbol='R_100',
+            contract_type='CALL',
+            stake='100.25',
+            entry_price='100.25',
+            current_price='101.10',
+            profit='0.85',
+            currency='USD',
+            status='open',
+        )
+        request = APIRequestFactory().get('/api/positions/open/')
+        force_authenticate(request, user=user)
+
+        with patch('apps.execution.views.get_active_account', return_value=account), \
+             patch('apps.execution.views.BrokerPositionSyncService') as sync:
+            sync.return_value.synchronize = AsyncMock(return_value={
+                'meta': {
+                    'account_id': account.pk,
+                    'broker_account_id': account.account_id,
+                }
+            })
             result = PositionViewSet.as_view({'get': 'open'})(request)
 
         self.assertEqual(result.status_code, 200)
-        self.assertEqual(result.data[0]['source'], 'broker')
-        self.assertEqual(result.data[0]['broker_reference'], '12345')
-        self.assertEqual(result.data[0]['symbol'], 'R_100')
-        self.assertEqual(result.data[0]['direction'], 'BUY')
-        self.assertEqual(result.data[0]['profit'], '0.85')
-        adapter.get_positions.assert_awaited_once()
+        self.assertEqual(result.data['source'], 'broker')
+        self.assertEqual(result.data['data'][0]['broker_contract_id'], '12345')
+        self.assertEqual(result.data['data'][0]['symbol'], 'R_100')
+        self.assertEqual(result.data['data'][0]['profit'], '0.85000000')
+        sync.return_value.synchronize.assert_awaited_once_with(account)
 
     def test_open_positions_return_unavailable_when_broker_state_cannot_be_read(self):
+        user, account = self._account('broker-position-error-test')
         request = APIRequestFactory().get('/api/positions/open/')
-        user = get_user_model().objects.create_user(username='broker-position-error-test', password='test-password')
         force_authenticate(request, user=user)
-        account = SimpleNamespace(
-            id=8,
-            account_id='CR124',
-            currency='USD',
-            broker=SimpleNamespace(name='Deriv', broker_type='deriv'),
-        )
-        adapter = SimpleNamespace(get_positions=AsyncMock(side_effect=BrokerConnectionError('broker unavailable')))
-        with patch('apps.execution.views.get_active_account', return_value=account),              patch('apps.execution.views.BrokerRegistry') as registry:
-            registry.return_value.adapter.return_value = adapter
+
+        with patch('apps.execution.views.get_active_account', return_value=account), \
+             patch('apps.execution.views.BrokerPositionSyncService') as sync:
+            sync.return_value.synchronize = AsyncMock(
+                side_effect=PositionSyncError(
+                    'broker unavailable',
+                    code='BROKER_UNAVAILABLE',
+                )
+            )
             result = PositionViewSet.as_view({'get': 'open'})(request)
 
         self.assertEqual(result.status_code, 503)
-        self.assertEqual(result.data['code'], 'BROKER_POSITIONS_UNAVAILABLE')
-        self.assertEqual(result.data['source'], 'broker')
+        self.assertEqual(result.data['code'], 'BROKER_POSITION_SYNC_FAILED')
+        self.assertEqual(result.data['status'], 'unavailable')
+        sync.return_value.synchronize.assert_awaited_once_with(account)
 
 
 class ExecutionQueueTaskTests(TestCase):
