@@ -228,18 +228,18 @@ def _revise_signal(signal, live_tick, now, market, account):
     status = "LIVE_REVIEW"
     direction = baseline_direction
     if analysis_age > ANALYSIS_BASELINE_MAX_AGE_SECONDS:
-        status = "ANALYSIS_STALE"; direction = "HOLD"; evidence.append("analysis_baseline_stale")
+        status = "ANALYSIS_STALE"; direction = None; evidence.append("analysis_baseline_stale")
     elif live_age > LIVE_TICK_MAX_AGE_SECONDS:
-        status = "LIVE_DATA_STALE"; direction = "HOLD"; evidence.append("live_tick_stale")
+        status = "LIVE_DATA_STALE"; direction = None; evidence.append("live_tick_stale")
     elif baseline_direction in {"BUY", "SELL"} and live_price is not None and entry is not None:
         favorable = (baseline_direction == "BUY" and live_price >= entry) or (baseline_direction == "SELL" and live_price <= entry)
         if favorable:
             evidence.append("live_price_confirms_analysis_entry_side")
         else:
-            direction = "HOLD"; status = "LIVE_CONFIRMATION_FAILED"; evidence.append("live_price_conflicts_with_analysis_entry_side")
+            direction = None; status = "LIVE_CONFIRMATION_FAILED"; evidence.append("live_price_conflicts_with_analysis_entry_side")
     elif baseline_direction in {"BUY", "SELL"}:
         status = "LIVE_CONFIRMATION_UNAVAILABLE"
-        direction = "HOLD"
+        direction = None
         evidence.append("analysis_entry_price_unavailable")
     threshold = _as_float(metadata.get("live_confidence_threshold"))
     if threshold is None:
