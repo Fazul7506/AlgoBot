@@ -3,10 +3,12 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
+from rest_framework.test import APIRequestFactory, force_authenticate
 from django.utils import timezone
 
 from apps.market_data.signal_views import _analysis_baselines, _revise_signal
 from apps.strategies.models import Strategy, StrategyConfiguration, StrategySignal
+from apps.strategies.views import StrategyViewSet
 
 
 class SignalRevisionIntegrityTests(SimpleTestCase):
@@ -120,3 +122,35 @@ class SignalBaselineIsolationTests(TestCase):
         baselines = _analysis_baselines(request, ["R_100"], "M1")
         self.assertEqual(baselines["R_100"].configuration.user_id, owner.id)
         self.assertEqual(baselines["R_100"].signal, "BUY")
+
+
+class StrategySignalsApiIsolationTests(TestCase):
+    def test_strategy_signal_endpoint_excludes_other_users(self):
+        User = get_user_model()
+        owner = User.objects.create_user(username="api-signal-owner", password="pass")
+        other = User.objects.create_user(username="api-signal-other", password="pass")
+        strategy = Strategy.objects.create(
+            name="API Isolation Strategy",
+            slug="api-isolation-strategy",
+            category="Trend Following",
+        )
+        owner_config = StrategyConfiguration.objects.create(
+            strategy=strategy, user=owner, symbol="R_100", timeframe="M1"
+        )
+        other_config = StrategyConfiguration.objects.create(
+            strategy=strategy, user=other, symbol="R_100", timeframe="M1"
+        )
+        StrategySignal.objects.create(
+            strategy=strategy, configuration=owner_config, symbol="R_100",
+            signal="BUY", confidence=80
+        )
+        StrategySignal.objects.create(
+            strategy=strategy, configuration=other_config, symbol="R_100",
+            signal="SELL", confidence=95
+        )
+        request = APIRequestFactory().get("/api/strategies/signals/")
+        force_authenticate(request, user=owner)
+        response = StrategyViewSet.as_view({"get": "signals"})(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["signal"], "BUY")
