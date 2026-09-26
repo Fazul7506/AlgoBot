@@ -56,7 +56,7 @@ class SignalRevisionIntegrityTests(SimpleTestCase):
             self._account(),
         )
         self.assertEqual(result["confidence"], 82.0)
-        self.assertEqual(result["direction"], "HOLD")
+        self.assertIsNone(result["direction"])
         self.assertFalse(result["execution_ready"])
         self.assertEqual(result["status"], "LIVE_CONFIRMATION_FAILED")
 
