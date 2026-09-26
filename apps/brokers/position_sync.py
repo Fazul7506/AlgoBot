@@ -144,9 +144,11 @@ class BrokerPositionSyncService:
 
         if not account:
             raise PositionSyncError("No connected broker account is available.", code="BROKER_ACCOUNT_UNAVAILABLE")
-        if getattr(account, "credential_status", "ready") != "ready":
+        credential_status = await sync_to_async(lambda: getattr(account, "credential_status", "ready"), thread_sensitive=True)()
+        if credential_status != "ready":
             raise PositionSyncError("The broker credentials are expired, revoked, or unavailable.", code="BROKER_AUTHENTICATION_FAILED")
-        if not account.is_connection_eligible:
+        connection_eligible = await sync_to_async(lambda: account.is_connection_eligible, thread_sensitive=True)()
+        if not connection_eligible:
             raise PositionSyncError("The selected broker account is not connected and ready.", code="BROKER_UNAVAILABLE")
 
         adapter = BrokerRegistry().adapter(account.broker, account)
@@ -201,9 +203,11 @@ class BrokerPositionSyncService:
 
         if not account:
             raise PositionSyncError("No connected broker account is available.", code="BROKER_ACCOUNT_UNAVAILABLE")
-        if getattr(account, "credential_status", "ready") != "ready":
+        credential_status = await sync_to_async(lambda: getattr(account, "credential_status", "ready"), thread_sensitive=True)()
+        if credential_status != "ready":
             raise PositionSyncError("The broker credentials are expired, revoked, or unavailable.", code="BROKER_AUTHENTICATION_FAILED")
-        if not account.is_connection_eligible:
+        connection_eligible = await sync_to_async(lambda: account.is_connection_eligible, thread_sensitive=True)()
+        if not connection_eligible:
             raise PositionSyncError("The selected broker account is not connected and ready.", code="BROKER_UNAVAILABLE")
 
         adapter = BrokerRegistry().adapter(account.broker, account)
