@@ -119,8 +119,10 @@ class BrokerAuthoritativePositionTests(APITestCase):
         request = APIRequestFactory().get('/api/positions/open/')
         force_authenticate(request, user=user)
 
-        with patch('apps.execution.views.get_active_account', return_value=account), \\
-             patch('apps.execution.views.BrokerPositionSyncService') as sync:
+        with (
+            patch('apps.execution.views.get_active_account', return_value=account),
+            patch('apps.execution.views.BrokerPositionSyncService') as sync,
+        ):
             sync.return_value.synchronize = AsyncMock(side_effect=RuntimeError('unexpected sync failure'))
             result = PositionViewSet.as_view({'get': 'open'})(request)
 
