@@ -1,10 +1,12 @@
 from types import SimpleNamespace
 from datetime import timedelta
 
-from django.test import SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
-from apps.market_data.signal_views import _revise_signal
+from apps.market_data.signal_views import _analysis_baselines, _revise_signal
+from apps.strategies.models import Strategy, StrategyConfiguration, StrategySignal
 
 
 class SignalRevisionIntegrityTests(SimpleTestCase):
@@ -85,3 +87,36 @@ class SignalRevisionIntegrityTests(SimpleTestCase):
         self.assertEqual(result["direction"], "HOLD")
         self.assertEqual(result["status"], "ANALYSIS_STALE")
         self.assertFalse(result["execution_ready"])
+
+
+class SignalBaselineIsolationTests(TestCase):
+    def test_baselines_are_scoped_to_the_authenticated_user(self):
+        User = get_user_model()
+        owner = User.objects.create_user(username="signal-owner", password="pass")
+        other = User.objects.create_user(username="signal-other", password="pass")
+        strategy = Strategy.objects.create(
+            name="Isolation Strategy",
+            slug="isolation-strategy",
+            category="Trend Following",
+        )
+        owner_config = StrategyConfiguration.objects.create(
+            strategy=strategy, user=owner, symbol="R_100", timeframe="M1"
+        )
+        other_config = StrategyConfiguration.objects.create(
+            strategy=strategy, user=other, symbol="R_100", timeframe="M1"
+        )
+        StrategySignal.objects.create(
+            strategy=strategy, configuration=owner_config, symbol="R_100",
+            signal="BUY", confidence=80
+        )
+        StrategySignal.objects.create(
+            strategy=strategy, configuration=other_config, symbol="R_100",
+            signal="SELL", confidence=95
+        )
+        request = SimpleNamespace(
+            session={},
+            user=owner,
+        )
+        baselines = _analysis_baselines(request, ["R_100"], "M1")
+        self.assertEqual(baselines["R_100"].configuration.user_id, owner.id)
+        self.assertEqual(baselines["R_100"].signal, "BUY")
