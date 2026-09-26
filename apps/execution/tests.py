@@ -114,6 +114,21 @@ class BrokerAuthoritativePositionTests(APITestCase):
         self.assertEqual(result.data['data'][0]['profit'], '0.85000000')
         sync.return_value.synchronize.assert_awaited_once_with(account)
 
+    def test_open_positions_return_structured_503_for_unexpected_sync_exception(self):
+        user, account = self._account('broker-position-internal-error-test')
+        request = APIRequestFactory().get('/api/positions/open/')
+        force_authenticate(request, user=user)
+
+        with patch('apps.execution.views.get_active_account', return_value=account), \\
+             patch('apps.execution.views.BrokerPositionSyncService') as sync:
+            sync.return_value.synchronize = AsyncMock(side_effect=RuntimeError('unexpected sync failure'))
+            result = PositionViewSet.as_view({'get': 'open'})(request)
+
+        self.assertEqual(result.status_code, 503)
+        self.assertEqual(result.data['code'], 'BROKER_POSITION_SYNC_INTERNAL_ERROR')
+        self.assertEqual(result.data['status'], 'unavailable')
+        self.assertEqual(result.data['data'], [])
+
     def test_open_positions_return_unavailable_when_broker_state_cannot_be_read(self):
         user, account = self._account('broker-position-error-test')
         request = APIRequestFactory().get('/api/positions/open/')
