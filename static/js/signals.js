@@ -77,13 +77,13 @@
     }
     $('focusInstrument').textContent = row.display_name || row.instrument || row.symbol || '—'; $('focusState').textContent = stateText(row.status); $('focusState').className=`signal-state ${tone(row.direction)}${row.status==='WAITING_FOR_ANALYSIS'?' waiting':''}`;
     $('focusPrice').textContent=num(row.live?.price); $('focusSource').textContent=row.live?.source==='deriv_public_websocket'?`Deriv live · ${row.live?.epoch?new Date(Number(row.live.epoch)*1000).toLocaleTimeString():'now'}`:'No live tick';
-    $('focusConfidence').textContent=pct(row.confidence??0); $('focusConfidenceBar').style.width=`${Math.max(0,Math.min(100,Number(row.confidence)||0))}%`; $('focusBaseline').textContent=row.baseline_direction?`${row.baseline_direction} · ${pct(row.baseline_confidence)}`:'No baseline';
+    $('focusConfidence').textContent=pct(row.confidence); const confidenceNumber=Number(row.confidence); $('focusConfidenceBar').style.width=Number.isFinite(confidenceNumber)?`${Math.max(0,Math.min(100,confidenceNumber))}%`:'0%'; $('focusBaseline').textContent=row.baseline_direction?`${row.baseline_direction} · ${pct(row.baseline_confidence)}`:'No baseline';
     $('focusDirection').textContent=row.direction||'HOLD'; $('focusDirection').className=tone(row.direction); $('focusThreshold').textContent=pct(row.live_confidence_threshold); $('focusAge').textContent=row.live?.age_seconds==null?'—':`${row.live.age_seconds}s`;
     $('focusEntry').textContent=num(row.entry_price); $('focusStop').textContent=num(row.stop_loss); $('focusTake').textContent=num(row.take_profit); $('focusTf').textContent=row.timeframe||'—'; $('focusEvidence').innerHTML=(row.evidence||[]).map(item=>`<span class="evidence-chip">${esc(stateText(item))}</span>`).join('')||'<span class="muted">No confirmation evidence.</span>'; renderSpec(row);
   }
   function renderTape(rows) {
     const el=$('liveTape'); if(!el)return; $('marketCount').textContent=`${rows.length} markets`;
-    el.innerHTML=rows.slice(0,20).map(row=>`<button type="button" class="tape-row" data-symbol="${esc(row.symbol)}"><span><strong>${esc(row.symbol)}</strong><small>${esc(row.market||'Deriv')}</small></span><strong>${esc(num(row.live?.price))}</strong><span class="tape-signal ${tone(row.direction)}">${esc(row.direction||'HOLD')}</span><span>${esc(pct(row.confidence))}</span></button>`).join('')||'<div class="empty">No broker quotes returned for this scan.</div>';
+    el.innerHTML=rows.slice(0,20).map(row=>`<button type="button" class="tape-row" data-symbol="${esc(row.symbol)}"><span><strong>${esc(row.symbol)}</strong><small>${esc(row.market||'Deriv')}</small></span><strong>${esc(num(row.live?.price))}</strong><span class="tape-signal ${tone(row.direction)}">${esc(row.direction || '—')}</span><span>${esc(pct(row.confidence))}</span></button>`).join('')||'<div class="empty">No broker quotes returned for this scan.</div>';
     el.querySelectorAll('[data-symbol]').forEach(b=>b.addEventListener('click',()=>focus(S.rows.find(r=>r.symbol===b.dataset.symbol))));
   }
   function renderTable(rows) {
