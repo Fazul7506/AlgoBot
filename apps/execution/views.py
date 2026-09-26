@@ -268,6 +268,17 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
                 'detail':str(exc),
                 'data':[],
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception as exc:
+            log.exception(
+                "closed_positions_sync_internal_error",
+                extra={"user_id": request.user.id, "account_id": account.id},
+            )
+            return response.Response({
+                'status':'unavailable',
+                'code':'BROKER_POSITION_SYNC_INTERNAL_ERROR',
+                'detail':'Broker closed-position synchronization failed before authoritative data could be confirmed.',
+                'data':[],
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 class ExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ExecutionLogSerializer; permission_classes=[permissions.IsAuthenticated]
     def get_queryset(self): return ExecutionLog.objects.filter(order__user=self.request.user)
