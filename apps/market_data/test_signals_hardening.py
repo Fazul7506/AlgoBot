@@ -70,7 +70,7 @@ class SignalRevisionIntegrityTests(SimpleTestCase):
             self._account(),
         )
         self.assertIsNone(result["entry_price"])
-        self.assertEqual(result["direction"], "HOLD")
+        self.assertIsNone(result["direction"])
         self.assertFalse(result["execution_ready"])
         self.assertEqual(result["status"], "LIVE_CONFIRMATION_UNAVAILABLE")
 
