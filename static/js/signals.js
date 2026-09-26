@@ -73,7 +73,7 @@
     if (!row) {
       ['focusInstrument','focusPrice','focusSource','focusBaseline','focusDirection','focusThreshold','focusAge','focusEntry','focusStop','focusTake','focusTf'].forEach(id => { if ($(id)) $(id).textContent = '—'; });
       if ($('focusInstrument')) $('focusInstrument').textContent = 'Select a market'; if ($('focusState')) { $('focusState').textContent='WAITING'; $('focusState').className='signal-state waiting'; }
-      if ($('focusConfidence')) $('focusConfidence').textContent='0%'; if ($('focusConfidenceBar')) $('focusConfidenceBar').style.width='0%'; if ($('focusEvidence')) $('focusEvidence').innerHTML='<span class="muted">Select a market to inspect its live state.</span>'; renderSpec(null); return;
+      if ($('focusConfidence')) $('focusConfidence').textContent='—'; if ($('focusConfidenceBar')) $('focusConfidenceBar').style.width='0%'; if ($('focusEvidence')) $('focusEvidence').innerHTML='<span class="muted">Select a market to inspect its live state.</span>'; renderSpec(null); return;
     }
     $('focusInstrument').textContent = row.display_name || row.instrument || row.symbol || '—'; $('focusState').textContent = stateText(row.status); $('focusState').className=`signal-state ${tone(row.direction)}${row.status==='WAITING_FOR_ANALYSIS'?' waiting':''}`;
     $('focusPrice').textContent=num(row.live?.price); $('focusSource').textContent=row.live?.source==='deriv_public_websocket'?`Deriv live · ${row.live?.epoch?new Date(Number(row.live.epoch)*1000).toLocaleTimeString():'now'}`:'No live tick';
