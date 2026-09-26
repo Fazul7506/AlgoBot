@@ -206,6 +206,19 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
                 'meta':{'account_id':account.pk,'broker_account_id':account.account_id},
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
+        except Exception as exc:
+            log.exception(
+                "positions_sync_internal_error",
+                extra={"user_id": request.user.id, "account_id": account.id},
+            )
+            return response.Response({
+                'status': 'unavailable',
+                'code': 'BROKER_POSITION_SYNC_INTERNAL_ERROR',
+                'detail': 'Broker position synchronization failed before authoritative position data could be confirmed.',
+                'data': [],
+                'meta': {'account_id': account.pk, 'broker_account_id': account.account_id},
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
     @decorators.action(detail=False, methods=['get'])
     def closed(self, request):
         account = get_active_account(request.user, request=request)
