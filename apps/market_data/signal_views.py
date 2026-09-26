@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import time
 from decimal import InvalidOperation
 
@@ -22,6 +23,8 @@ DEFAULT_CONFIDENCE_THRESHOLD = 70.0
 MAX_SCAN_SYMBOLS = 80
 LIVE_TICK_SCAN_TIMEOUT_SECONDS = 12.0
 LIVE_SNAPSHOT_MAX_AGE_SECONDS = 5
+
+log = logging.getLogger(__name__)
 
 
 def _selected_deriv_account(request):
@@ -256,7 +259,7 @@ def _revise_signal(signal, live_tick, now, market, account):
     }
 
 
-def strategy_signals(request):
+def _strategy_signals_impl(request):
     """Return broker-sourced signal data without HTML login redirects."""
     if not request.user.is_authenticated:
         return JsonResponse({"status": "error", "code": "AUTHENTICATION_REQUIRED", "message": "Authentication is required to read live signals."}, status=401)
@@ -316,3 +319,26 @@ def strategy_signals(request):
     live_data_available_count = sum(1 for r in rows if r.get("live"))
     stale_count = sum(1 for r in rows if r.get("status") == "LIVE_DATA_STALE")
     return JsonResponse({"status": "ok", "source": "deriv_public_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency, "balance": account_risk_context.get("balance"), "available_funds": account_risk_context.get("available_funds"), "recommended_stake": account_risk_context.get("recommended_stake"), "risk_budget": account_risk_context.get("risk_budget")}, "account_risk_context": account_risk_context, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "account_trading_enabled": account_credentials_valid, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
+
+
+def strategy_signals(request):
+    """Return the canonical Signals JSON contract without leaking HTML errors."""
+    try:
+        return _strategy_signals_impl(request)
+    except Exception:
+        log.exception(
+            "Signals API failed",
+            extra={
+                "user_id": getattr(request.user, "pk", None),
+                "symbol": str(request.GET.get("symbol") or "")[:40],
+                "timeframe": str(request.GET.get("timeframe") or "M1")[:16],
+            },
+        )
+        return JsonResponse(
+            {
+                "status": "error",
+                "code": "SIGNAL_SERVICE_ERROR",
+                "message": "Signal service temporarily unavailable.",
+            },
+            status=500,
+        )
