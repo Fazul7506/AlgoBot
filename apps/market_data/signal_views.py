@@ -5,7 +5,6 @@ from decimal import InvalidOperation
 
 import websockets
 from django.conf import settings
-from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
 
@@ -58,7 +57,7 @@ def _analysis_timeframe(signal):
 
 
 def _analysis_baselines(request, symbols, timeframe, account=None):
-    qs = StrategySignal.objects.select_related("strategy", "configuration").filter(Q(configuration__user=request.user) | Q(configuration__isnull=True), symbol__in=symbols).order_by("-timestamp")
+    qs = StrategySignal.objects.select_related("strategy", "configuration").filter(configuration__user=request.user, symbol__in=symbols).order_by("-timestamp")
     baselines = {}
     selected = request.session.get("active_broker_account_id")
     selected_id = int(selected) if str(selected).isdigit() else None
@@ -217,28 +216,38 @@ def _revise_signal(signal, live_tick, now, market, account):
     live_age = max(0, int(time.time()) - live_epoch)
     live_price = _as_float(live_tick.get("quote"))
     entry = _as_float(signal.entry_price)
+    # Confidence is owned by the persisted StrategySignal. The live quote is
+    # a confirmation/freshness gate and must not manufacture a second confidence
+    # score by blending the quote into the strategy confidence.
     revised = base_confidence
+    confidence_source = "strategy_signal"
     evidence = ["analysis_baseline_loaded", "deriv_public_live_tick"]
     status = "LIVE_REVIEW"
     direction = baseline_direction
     if analysis_age > ANALYSIS_BASELINE_MAX_AGE_SECONDS:
-        revised = min(revised, 50.0); status = "ANALYSIS_STALE"; direction = "HOLD"; evidence.append("analysis_baseline_stale")
+        status = "ANALYSIS_STALE"; direction = "HOLD"; evidence.append("analysis_baseline_stale")
     elif live_age > LIVE_TICK_MAX_AGE_SECONDS:
-        revised = min(revised, 45.0); status = "LIVE_DATA_STALE"; direction = "HOLD"; evidence.append("live_tick_stale")
+        status = "LIVE_DATA_STALE"; direction = "HOLD"; evidence.append("live_tick_stale")
     elif baseline_direction in {"BUY", "SELL"} and live_price is not None and entry is not None:
         favorable = (baseline_direction == "BUY" and live_price >= entry) or (baseline_direction == "SELL" and live_price <= entry)
-        revised = round((base_confidence * 0.80) + ((100.0 if favorable else 0.0) * 0.20), 2)
-        if favorable: evidence.append("live_price_confirms_analysis_entry_side")
-        else: direction = "HOLD"; status = "LIVE_CONFIRMATION_FAILED"; evidence.append("live_price_conflicts_with_analysis_entry_side")
+        if favorable:
+            evidence.append("live_price_confirms_analysis_entry_side")
+        else:
+            direction = "HOLD"; status = "LIVE_CONFIRMATION_FAILED"; evidence.append("live_price_conflicts_with_analysis_entry_side")
     elif baseline_direction in {"BUY", "SELL"}:
+        status = "LIVE_CONFIRMATION_UNAVAILABLE"
+        direction = "HOLD"
         evidence.append("analysis_entry_price_unavailable")
-    threshold = _as_float(metadata.get("live_confidence_threshold")) or DEFAULT_CONFIDENCE_THRESHOLD
+    threshold = _as_float(metadata.get("live_confidence_threshold"))
+    if threshold is None:
+        threshold = DEFAULT_CONFIDENCE_THRESHOLD
     execution_ready = direction in {"BUY", "SELL"} and revised >= threshold and status == "LIVE_REVIEW"
-    if not execution_ready and direction in {"BUY", "SELL"}: status = "LIVE_CONFIDENCE_BELOW_GATE"
+    if not execution_ready and direction in {"BUY", "SELL"}:
+        status = "LIVE_CONFIDENCE_BELOW_GATE"
     return {
         "analysis_signal_id": signal.id, "analysis_timestamp": signal.timestamp.isoformat(), "analysis_age_seconds": analysis_age,
         "baseline_direction": baseline_direction, "baseline_confidence": round(base_confidence, 2), "direction": direction,
-        "confidence": round(revised, 2), "live_confidence_threshold": round(threshold, 2), "execution_ready": execution_ready,
+        "confidence": round(revised, 2), "confidence_source": confidence_source, "live_confidence_threshold": round(threshold, 2), "execution_ready": execution_ready,
         "status": status, "evidence": evidence, "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
         "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None, "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
         "strategy": signal.strategy.name, "strategy_version": signal.strategy.version, "timeframe": _analysis_timeframe(signal),
