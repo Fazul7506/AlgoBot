@@ -84,7 +84,7 @@ class SignalRevisionIntegrityTests(SimpleTestCase):
             self._account(),
         )
         self.assertEqual(result["confidence"], 82.0)
-        self.assertEqual(result["direction"], "HOLD")
+        self.assertIsNone(result["direction"])
         self.assertEqual(result["status"], "ANALYSIS_STALE")
         self.assertFalse(result["execution_ready"])
 
