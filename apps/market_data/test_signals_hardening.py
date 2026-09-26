@@ -1,0 +1,87 @@
+from types import SimpleNamespace
+from datetime import timedelta
+
+from django.test import SimpleTestCase
+from django.utils import timezone
+
+from apps.market_data.signal_views import _revise_signal
+
+
+class SignalRevisionIntegrityTests(SimpleTestCase):
+    def _signal(self, **overrides):
+        strategy = SimpleNamespace(name="Test Strategy", version="1.0", category="Test")
+        values = {
+            "id": 7,
+            "signal": "BUY",
+            "confidence": 82,
+            "entry_price": 100,
+            "stop_loss": None,
+            "take_profit": None,
+            "timestamp": timezone.now(),
+            "metadata": {},
+            "strategy": strategy,
+            "configuration": None,
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    def _market(self):
+        return SimpleNamespace(market="Synthetic", sub_market="Synthetic", display_name="Test Index")
+
+    def _account(self):
+        return SimpleNamespace(currency="USD", account_type="demo", broker=SimpleNamespace(name="Deriv"))
+
+    def test_live_confirmation_does_not_manufacture_confidence(self):
+        now = timezone.now()
+        result = _revise_signal(
+            self._signal(),
+            {"quote": 101, "epoch": int(now.timestamp()), "_source": "deriv_public_websocket"},
+            now,
+            self._market(),
+            self._account(),
+        )
+        self.assertEqual(result["confidence"], 82.0)
+        self.assertEqual(result["confidence_source"], "strategy_signal")
+        self.assertTrue(result["execution_ready"])
+
+    def test_conflicting_live_price_fails_closed_without_rewriting_confidence(self):
+        now = timezone.now()
+        result = _revise_signal(
+            self._signal(),
+            {"quote": 99, "epoch": int(now.timestamp()), "_source": "deriv_public_websocket"},
+            now,
+            self._market(),
+            self._account(),
+        )
+        self.assertEqual(result["confidence"], 82.0)
+        self.assertEqual(result["direction"], "HOLD")
+        self.assertFalse(result["execution_ready"])
+        self.assertEqual(result["status"], "LIVE_CONFIRMATION_FAILED")
+
+    def test_missing_entry_price_does_not_create_a_confirmation_direction(self):
+        now = timezone.now()
+        result = _revise_signal(
+            self._signal(entry_price=None),
+            {"quote": 101, "epoch": int(now.timestamp()), "_source": "deriv_public_websocket"},
+            now,
+            self._market(),
+            self._account(),
+        )
+        self.assertIsNone(result["entry_price"])
+        self.assertEqual(result["direction"], "HOLD")
+        self.assertFalse(result["execution_ready"])
+        self.assertEqual(result["status"], "LIVE_CONFIRMATION_UNAVAILABLE")
+
+    def test_stale_analysis_is_not_actionable(self):
+        now = timezone.now()
+        result = _revise_signal(
+            self._signal(timestamp=now - timedelta(seconds=901)),
+            {"quote": 101, "epoch": int(now.timestamp()), "_source": "deriv_public_websocket"},
+            now,
+            self._market(),
+            self._account(),
+        )
+        self.assertEqual(result["confidence"], 82.0)
+        self.assertEqual(result["direction"], "HOLD")
+        self.assertEqual(result["status"], "ANALYSIS_STALE")
+        self.assertFalse(result["execution_ready"])
