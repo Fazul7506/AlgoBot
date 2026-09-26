@@ -1,5 +1,6 @@
 import asyncio
 from decimal import Decimal
+from unittest.mock import AsyncMock, PropertyMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase
@@ -49,6 +50,25 @@ class PositionSyncPersistenceTests(TransactionTestCase):
         old.refresh_from_db()
         self.assertEqual(old.status, "unknown")
         self.assertNotEqual(old.status, "closed")
+
+    def test_synchronize_evaluates_connection_eligibility_outside_async_orm_context(self):
+        from apps.brokers.models import BrokerConnection
+
+        BrokerConnection.objects.create(
+            broker=self.broker,
+            broker_account=self.account,
+            status="connected",
+        )
+        adapter = type("Adapter", (), {"get_positions": AsyncMock(return_value=[])})()
+        service = BrokerPositionSyncService()
+        with (
+            patch.object(BrokerAccount, "credential_status", new_callable=PropertyMock, return_value="ready"),
+            patch("apps.brokers.position_sync.BrokerRegistry.adapter", return_value=adapter),
+        ):
+            result = asyncio.run(service.synchronize(self.account))
+
+        self.assertEqual(result["meta"]["status"], "ready")
+        adapter.get_positions.assert_awaited_once()
 
     def test_single_contract_sync_never_closes_unrelated_position(self):
         old = self._position("OLD")
