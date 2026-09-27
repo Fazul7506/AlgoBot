@@ -19,7 +19,7 @@
         retryable: true
       }));
     }
-    return request(url, options, timeout);
+    return canonicalRequest(url, options, timeout);
   };
 
   const typeOf = a => String(a?.account_type || a?.credentials?.account_type || 'demo').toLowerCase();
@@ -135,7 +135,7 @@
     if (!a) return;
     terminalSyncBusy = true;
     try {
-      const r = await request(`/api/brokers/accounts/${a.id}/sync/`, {method:'POST'}, 8000);
+      const r = await canonicalRequest(`/api/brokers/accounts/${a.id}/sync/`, {method:'POST'}, 8000);
       if (r.account) {
         accounts = accounts.map(x => x.id === r.account.id ? r.account : x);
         render();
@@ -159,7 +159,7 @@
   }
 
   function discoverSymbol() {
-    return request('/api/markets/symbols/', {}, 5000).then(list).then(rows => {
+    return canonicalRequest('/api/markets/symbols/', {}, 5000).then(list).then(rows => {
       const active = rows.filter(x => x?.symbol && x.is_active !== false && x.is_tradable !== false);
       const s = $('[data-symbol]');
       const requested = new URLSearchParams(window.location.search).get('symbol');
