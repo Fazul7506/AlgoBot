@@ -150,6 +150,22 @@ class TerminalRuntimeBoundaryTests(TestCase):
         self.assertTrue(response.json().get("access"))
         self.assertGreater(response.json().get("expires_in", 0), 0)
 
+    def test_terminal_bearer_token_authenticates_protected_api_without_csrf(self):
+        user_model = get_user_model()
+        user = user_model.objects.create_user(username="terminal-bearer-api-test", password="test-password")
+        self.client.force_login(user)
+
+        token_response = self.client.get(reverse("browser_api_token"))
+        token = token_response.json()["access"]
+
+        response = self.client.get(
+            "/api/brokers/accounts/",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("csrftoken", response.cookies)
+
 
 class TerminalAiTimeframeContractTests(SimpleTestCase):
     def test_terminal_ai_uses_chart_timeframe_instead_of_hardcoded_m1(self):
