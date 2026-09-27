@@ -99,22 +99,23 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("request(`/api/brokers/accounts/${target.id}/select/", live_ui)
         self.assertIn("context.selectAccount(id)", live_ui)
 
-    def test_frontend_transport_bootstraps_csrf_before_mutations(self):
+    def test_frontend_transport_uses_bearer_auth_without_csrf_headers(self):
         from pathlib import Path
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
-        self.assertIn("ensureCsrfCookie", client)
-        self.assertIn("apiBase+'/api/csrf/'", client)
-        self.assertIn("credentials:'include'", client)
-        self.assertIn("CSRF_BOOTSTRAP_FAILED", client)
-        self.assertIn("await ensureCsrfCookie(target,method,controller)", client)
-        self.assertNotIn("mutationsNeverFallback:false", client)
+        self.assertIn("browserApiTokenUrl", client)
+        self.assertIn("/api/auth/browser-token/", client)
+        self.assertIn("ensureApiAccessToken", client)
+        self.assertIn("headers.set('Authorization'", client)
+        self.assertNotIn("ensureCsrfCookie", client)
+        self.assertNotIn("X-CSRFToken", client)
+        self.assertNotIn("/api/csrf/", client)
 
-    def test_frontend_data_contract_cache_buster_changes_with_csrf_transport(self):
+    def test_frontend_data_contract_cache_buster_matches_bearer_transport(self):
         from pathlib import Path
         template = Path("templates/base.html").read_text(encoding="utf-8")
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
-        self.assertIn("ensureCsrfCookie", client)
-        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260925-csrfbootstrap2", template)
+        self.assertIn("ensureApiAccessToken", client)
+        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260927-bearerauth1", template)
         self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260913-sameorigin1", template)
 
     def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):
@@ -148,28 +149,43 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
 class TerminalRuntimeBoundaryTests(TestCase):
-    def test_authenticated_terminal_issues_csrf_cookie_before_api_mutations(self):
+    def test_authenticated_terminal_loads_without_csrf_cookie_bootstrap(self):
         user_model = get_user_model()
-        user = user_model.objects.create_user(username="terminal-csrf-test", password="test-password")
+        user = user_model.objects.create_user(username="terminal-bearer-test", password="test-password")
         self.client.force_login(user)
 
         response = self.client.get(reverse("trading_page"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("csrftoken", response.cookies)
-        self.assertNotEqual(response.cookies["csrftoken"].value, "")
+        self.assertNotIn("/api/csrf/", response.content.decode("utf-8"))
+        self.assertNotIn("ensure_csrf_cookie", response.content.decode("utf-8"))
 
-    def test_authenticated_csrf_bootstrap_endpoint_issues_shared_cookie(self):
+    def test_authenticated_browser_api_token_issues_short_lived_jwt(self):
         user_model = get_user_model()
-        user = user_model.objects.create_user(username="terminal-csrf-bootstrap-test", password="test-password")
+        user = user_model.objects.create_user(username="terminal-token-test", password="test-password")
         self.client.force_login(user)
 
-        response = self.client.get(reverse("csrf_token_bootstrap"))
+        response = self.client.get(reverse("browser_api_token"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"csrf": "ready"})
-        self.assertIn("csrftoken", response.cookies)
-        self.assertNotEqual(response.cookies["csrftoken"].value, "")
+        self.assertTrue(response.json().get("access"))
+        self.assertGreater(response.json().get("expires_in", 0), 0)
+
+    def test_terminal_bearer_token_authenticates_protected_api_without_csrf(self):
+        user_model = get_user_model()
+        user = user_model.objects.create_user(username="terminal-bearer-api-test", password="test-password")
+        self.client.force_login(user)
+
+        token_response = self.client.get(reverse("browser_api_token"))
+        token = token_response.json()["access"]
+
+        response = self.client.get(
+            "/api/brokers/accounts/",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("csrftoken", response.cookies)
 
 
 class TerminalAiTimeframeContractTests(SimpleTestCase):
