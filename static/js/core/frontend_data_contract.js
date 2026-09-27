@@ -11,19 +11,37 @@
   // The web origin renders pages; the dedicated API origin owns all browser API traffic.
   const apiBase=(configuredApiBase||productionApiBase||window.location.origin).replace(/\/+$/,'');
   const nativeFetch=window.fetch.bind(window),safeMethods=new Set(['GET','HEAD','OPTIONS']);
-  const readCookie=(name)=>{
-    const prefix=`${encodeURIComponent(name)}=`;
-    const part=document.cookie.split('; ').find(v=>v.startsWith(prefix));
-    return part?decodeURIComponent(part.slice(prefix.length)):null;
-  };
-  const csrfToken=()=>readCookie('csrftoken');
-  const shouldSendCsrf=(target,method)=>{
-    if(safeMethods.has(method))return false;
-    try{
-      const host=new URL(target,window.location.origin).hostname;
-      return host===window.location.hostname||host==='algobot.dpdns.org'||host==='www.algobot.dpdns.org'||host==='api.algobot.dpdns.org';
-    }catch(_){return false}
-  };
+  let apiAccessToken=null;
+  let apiTokenPromise=null;
+  const browserApiTokenUrl=()=>apiBase+'/api/auth/browser-token/';
+  async function ensureApiAccessToken(controller,force=false){
+    if(apiAccessToken&&!force)return apiAccessToken;
+    if(apiTokenPromise&&!force)return apiTokenPromise;
+    apiTokenPromise=(async()=>{
+      let response;
+      try{
+        response=await nativeFetch(browserApiTokenUrl(),{method:'GET',credentials:'include',headers:{Accept:'application/json'},cache:'no-store',signal:controller.signal});
+      }catch(error){
+        const failure=new Error(error?.name==='AbortError'?'Authentication bootstrap timed out':'Unable to initialize API authentication.');
+        failure.code=error?.name==='AbortError'?'API_AUTH_BOOTSTRAP_TIMEOUT':'API_AUTH_BOOTSTRAP_FAILED';
+        failure.status=0;
+        failure.retryable=false;
+        throw failure;
+      }
+      let payload={};
+      try{payload=await response.json()}catch(_){payload={}};
+      if(!response.ok||!payload.access){
+        const failure=new Error(payload.detail||payload.message||('API authentication bootstrap failed ('+response.status+').'));
+        failure.code='API_AUTH_BOOTSTRAP_FAILED';
+        failure.status=response.status;
+        failure.retryable=false;
+        throw failure;
+      }
+      apiAccessToken=String(payload.access);
+      return apiAccessToken;
+    })().finally(()=>{apiTokenPromise=null});
+    return apiTokenPromise;
+  }
   // Same-origin fallback is deliberately limited to idempotent transport only; execution/mutation requests never fall back.
   const sameOriginRetryPath=(path,method='GET',forceSameOrigin=false)=>{
     const verb=String(method||'GET').toUpperCase();
@@ -49,41 +67,17 @@
   const statusMessage=(status,payload)=>payload?.detail||payload?.message||({401:'Your session has expired. Sign in again.',403:'You are not authorized to perform this action.',404:'The requested API endpoint was not found.',405:'The API endpoint does not accept this HTTP method.',409:'The requested operation conflicts with the current account state.',429:'The request limit or plan quota has been reached.',500:'The server encountered an internal error.',502:'The broker/API gateway returned an invalid response.',503:'The backend service is temporarily unavailable.',504:'The backend service timed out.'}[status]||`HTTP ${status} request failure`);
   const notifyApiError=(options,detail)=>{if(options?.notifyOnError===false)return;window.dispatchEvent(new CustomEvent('algobot:api-error',{detail}))};
 
-  async function ensureCsrfCookie(target,method,controller){
-    if(!shouldSendCsrf(target,method)||csrfToken())return;
-    const bootstrapUrl=apiBase+'/api/csrf/';
-    let response;
-    try{
-      response=await nativeFetch(bootstrapUrl,{method:'GET',credentials:'include',headers:{Accept:'application/json'},cache:'no-store',signal:controller.signal});
-    }catch(error){
-      const failure=new Error(error?.name==='AbortError'?'CSRF bootstrap timed out':'Unable to initialize the CSRF protection token.');
-      failure.code=error?.name==='AbortError'?'CSRF_BOOTSTRAP_TIMEOUT':'CSRF_BOOTSTRAP_FAILED';
-      failure.retryable=false;
-      throw failure;
-    }
-    if(!response.ok||!csrfToken()){
-      const failure=new Error(response.ok?'CSRF protection token was not issued by the server.':'CSRF bootstrap failed ('+response.status+').');
-      failure.code='CSRF_BOOTSTRAP_FAILED';
-      failure.status=response.status;
-      failure.retryable=false;
-      throw failure;
-    }
-  }
-
   async function fetchOnce(url,options,controller){
     const method=(options.method||'GET').toUpperCase();
     const headers=new Headers({Accept:'application/json, text/html',...(options.headers||{})});
     const target=resolveUrl(url);
     const targetOrigin=new URL(target,window.location.origin).origin;
-    await ensureCsrfCookie(target,method,controller);
     const sameOrigin=targetOrigin===window.location.origin;
     const selectedId=brokerState()?.get?.()?.account?.id;
     if(selectedId&&!headers.has('X-Algobot-Account-ID'))headers.set('X-Algobot-Account-ID',String(selectedId));
-    if(shouldSendCsrf(target,method)&&!headers.has('X-CSRFToken')){
-      const token=csrfToken();
-      if(token)headers.set('X-CSRFToken',token);
-    }
-    const requestInit={credentials:sameOrigin?'same-origin':'include',...options,headers,cache:'no-store',signal:controller.signal};
+    const accessToken=await ensureApiAccessToken(controller);
+    if(accessToken&&!headers.has('Authorization'))headers.set('Authorization','Bearer '+accessToken);
+    const requestInit={credentials:'include',...options,headers,cache:'no-store',signal:controller.signal};
     const response=await nativeFetch(target,requestInit);
     return{response,text:await response.text()};
   }
@@ -121,10 +115,25 @@
           }
         }
       }finally{clearTimeout(timer)}
-      const{response,text}=result,parsed=parsePayload(response,text),payload=parsed?.django?parsed.payload:parsed;
-      if(!response.ok){const error=new Error(parsed?.django?parsed.message||statusMessage(response.status,payload):statusMessage(response.status,payload));error.status=response.status;error.code=payload.code||(isCloudflareChallenge(response,text)?'EDGE_CHALLENGE':'API_ERROR');error.isEdgeChallenge=error.code==='EDGE_CHALLENGE';error.retryable=safeMethods.has(method)&&response.status>=500;notifyApiError(options,{url:rawUrl,method,status:response.status,code:error.code,message:error.message,retryable:error.retryable,edgeChallenge:error.isEdgeChallenge,retry});throw error}
-      if(method==='GET')cache.set(key,{payload,at:Date.now()});
-      return payload;
+      const{response,text}=result;
+      if(response.status===401&&apiAccessToken){
+        apiAccessToken=null;
+        try{
+          controller=new AbortController();
+          const retryToken=await ensureApiAccessToken(controller,true);
+          const retryHeaders=new Headers({Accept:'application/json',...(options.headers||{})});
+          if(selectedId&&!retryHeaders.has('X-Algobot-Account-ID'))retryHeaders.set('X-Algobot-Account-ID',String(selectedId));
+          retryHeaders.set('Authorization','Bearer '+retryToken);
+          const retryResponse=await nativeFetch(resolveUrl(url),{credentials:'include',...options,headers:retryHeaders,cache:'no-store',signal:controller.signal});
+          const retryText=await retryResponse.text();
+          result={response:retryResponse,text:retryText};
+        }catch(_){ }
+      }
+      const finalResponse=result.response, finalText=result.text;
+      const finalParsed=parsePayload(finalResponse,finalText),finalPayload=finalParsed?.django?finalParsed.payload:finalParsed;
+      if(!finalResponse.ok){const error=new Error(finalParsed?.django?finalParsed.message||statusMessage(finalResponse.status,finalPayload):statusMessage(finalResponse.status,finalPayload));error.status=finalResponse.status;error.code=finalPayload.code||(isCloudflareChallenge(finalResponse,finalText)?'EDGE_CHALLENGE':'API_ERROR');error.isEdgeChallenge=error.code==='EDGE_CHALLENGE';error.retryable=safeMethods.has(method)&&finalResponse.status>=500;notifyApiError(options,{url:rawUrl,method,status:finalResponse.status,code:error.code,message:error.message,retryable:error.retryable,edgeChallenge:error.isEdgeChallenge,retry});throw error}
+      if(method==='GET')cache.set(key,{payload:finalPayload,at:Date.now()});
+      return finalPayload;
     })();
     if(method==='GET')inflight.set(key,promise);
     try{return await promise}finally{if(inflight.get(key)===promise)inflight.delete(key)}
