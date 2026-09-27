@@ -157,7 +157,8 @@ class TerminalRuntimeBoundaryTests(TestCase):
         response = self.client.get(reverse("trading_page"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotIn("csrftoken", response.cookies)
+        self.assertNotIn("/api/csrf/", response.content.decode("utf-8"))
+        self.assertNotIn("ensure_csrf_cookie", response.content.decode("utf-8"))
 
     def test_authenticated_browser_api_token_issues_short_lived_jwt(self):
         user_model = get_user_model()
