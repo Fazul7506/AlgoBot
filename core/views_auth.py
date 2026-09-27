@@ -86,6 +86,22 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def browser_api_token(request):
+    """Issue a short-lived JWT to an already authenticated browser session.
+
+    The token is returned only in the authenticated API response and is kept
+    client-side in memory. Subsequent API requests use Bearer authentication,
+    so browser-session API mutations do not depend on Django CSRF cookies.
+    """
+    refresh = RefreshToken.for_user(request.user)
+    return Response({
+        'access': str(refresh.access_token),
+        'expires_in': int(settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME', timedelta(hours=1)).total_seconds()),
+    }, status=status.HTTP_200_OK)
+
+
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def register(request):
