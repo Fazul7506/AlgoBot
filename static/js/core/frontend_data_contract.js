@@ -31,7 +31,7 @@
       let payload={};
       try{payload=await response.json()}catch(_){payload={}};
       if(!response.ok||!payload.access){
-        const failure=new Error(payload.detail||payload.message||`API authentication bootstrap failed (${response.status}).`);
+        const failure=new Error(payload.detail||payload.message||('API authentication bootstrap failed ('+response.status+').'));
         failure.code='API_AUTH_BOOTSTRAP_FAILED';
         failure.status=response.status;
         failure.retryable=false;
@@ -76,7 +76,7 @@
     const selectedId=brokerState()?.get?.()?.account?.id;
     if(selectedId&&!headers.has('X-Algobot-Account-ID'))headers.set('X-Algobot-Account-ID',String(selectedId));
     const accessToken=await ensureApiAccessToken(controller);
-    if(accessToken&&!headers.has('Authorization'))headers.set('Authorization',\`Bearer ${accessToken}\`);
+    if(accessToken&&!headers.has('Authorization'))headers.set('Authorization','Bearer '+accessToken);
     const requestInit={credentials:'include',...options,headers,cache:'no-store',signal:controller.signal};
     const response=await nativeFetch(target,requestInit);
     return{response,text:await response.text()};
@@ -115,7 +115,7 @@
           }
         }
       }finally{clearTimeout(timer)}
-      const{response,text}=result,parsed=parsePayload(response,text),payload=parsed?.django?parsed.payload:parsed;
+      const{response,text}=result;
       if(response.status===401&&apiAccessToken){
         apiAccessToken=null;
         try{
@@ -123,7 +123,7 @@
           const retryToken=await ensureApiAccessToken(controller,true);
           const retryHeaders=new Headers({Accept:'application/json',...(options.headers||{})});
           if(selectedId&&!retryHeaders.has('X-Algobot-Account-ID'))retryHeaders.set('X-Algobot-Account-ID',String(selectedId));
-          retryHeaders.set('Authorization',\`Bearer ${retryToken}\`);
+          retryHeaders.set('Authorization','Bearer '+retryToken);
           const retryResponse=await nativeFetch(resolveUrl(url),{credentials:'include',...options,headers:retryHeaders,cache:'no-store',signal:controller.signal});
           const retryText=await retryResponse.text();
           result={response:retryResponse,text:retryText};
