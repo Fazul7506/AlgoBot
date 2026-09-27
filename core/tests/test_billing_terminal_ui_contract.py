@@ -135,6 +135,18 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("window.fetch = guardedFetch", client)
 
 
+class TerminalLegacyTransportContractTests(SimpleTestCase):
+    def test_live_broker_ui_uses_canonical_frontend_transport(self):
+        from pathlib import Path
+        client = Path("static/js/live_broker_ui.js").read_text(encoding="utf-8")
+        self.assertIn("AlgoBotFrontendData?.request", client)
+        self.assertNotIn("fetch(url, {credentials:'same-origin'", client)
+        self.assertNotIn("X-CSRFToken", client)
+        self.assertNotIn("csrftoken=", client)
+        template = Path("templates/base.html").read_text(encoding="utf-8")
+        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20260927-canonicaltransport1", template)
+        self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
+
 class TerminalRuntimeBoundaryTests(TestCase):
     def test_authenticated_terminal_issues_csrf_cookie_before_api_mutations(self):
         user_model = get_user_model()
