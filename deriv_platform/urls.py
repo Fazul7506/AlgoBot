@@ -24,7 +24,6 @@ from core.views import (
     verify_email_page, cookie_policy_page, licensing_page, contact_page,
     about_page, public_status_page, risk_page, orders_page, positions_page,
     signals_page, analysis_page, operations_module_page, strategy_builder_page,
-    csrf_token_bootstrap,
 )
 from core.views_trade_history import trade_history_page
 from core.views_automation import workflow_templates_page
