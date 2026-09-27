@@ -5,30 +5,22 @@
   const list = v => Array.isArray(v) ? v : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : []));
   const safe = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const money = (v, currency = 'USD') => { if (v == null || v === '' || Number.isNaN(Number(v))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(v, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(v).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8})}`; };
-  const csrf = () => document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '';
   let accounts = [], terminalSyncBusy = false;
 
   function ensureMaterialSymbols() {
     document.documentElement.classList.add('material-symbols-ready');
   }
 
-  async function request(url, options = {}, timeout = 5000) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-    try {
-      const headers = {Accept:'application/json', ...(options.headers || {})};
-      if (options.method && options.method !== 'GET') headers['X-CSRFToken'] = csrf();
-      const r = await fetch(url, {credentials:'same-origin', ...options, headers, signal:controller.signal});
-      const text = await r.text();
-      let data = {};
-      try { data = text ? JSON.parse(text) : {}; } catch { data = {detail:text}; }
-      if (!r.ok) throw new Error(data.detail || data.message || `Request failed (${r.status})`);
-      return data;
-    } catch (e) {
-      if (e.name === 'AbortError') throw new Error('Broker request timed out');
-      throw e;
-    } finally { clearTimeout(timer); }
-  }
+  const canonicalRequest = (url, options = {}, timeout = 5000) => {
+    const request = window.AlgoBotFrontendData?.request;
+    if (typeof request !== 'function') {
+      return Promise.reject(Object.assign(new Error('Canonical frontend transport is not ready.'), {
+        code: 'FRONTEND_TRANSPORT_UNAVAILABLE',
+        retryable: true
+      }));
+    }
+    return request(url, options, timeout);
+  };
 
   const typeOf = a => String(a?.account_type || a?.credentials?.account_type || 'demo').toLowerCase();
   const current = () => accounts.find(a => a.is_default || a.is_preferred) || accounts[0] || null;
