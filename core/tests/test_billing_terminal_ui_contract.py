@@ -144,8 +144,8 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("csrftoken=", client)
         template = Path("templates/base.html").read_text(encoding="utf-8")
-        self.assertIn("live_broker_ui.js?v=20260927-canonicaltransport1", template)
-        self.assertNotIn("live_broker_ui.js?v=20260827-logoutmodal1", template)
+        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20260927-canonicaltransport1", template)
+        self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
 class TerminalRuntimeBoundaryTests(TestCase):
     def test_authenticated_terminal_issues_csrf_cookie_before_api_mutations(self):
