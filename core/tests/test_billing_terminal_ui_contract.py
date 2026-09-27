@@ -110,6 +110,14 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("/api/csrf/", client)
 
+    def test_frontend_data_contract_cache_buster_matches_bearer_transport(self):
+        from pathlib import Path
+        template = Path("templates/base.html").read_text(encoding="utf-8")
+        client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
+        self.assertIn("ensureApiAccessToken", client)
+        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260927-bearerauth1", template)
+        self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260913-sameorigin1", template)
+
     def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):
         from pathlib import Path
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
@@ -128,6 +136,18 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("window.fetch = guardedFetch", client)
 
 
+class TerminalLegacyTransportContractTests(SimpleTestCase):
+    def test_live_broker_ui_uses_canonical_frontend_transport(self):
+        from pathlib import Path
+        client = Path("static/js/live_broker_ui.js").read_text(encoding="utf-8")
+        self.assertIn("AlgoBotFrontendData?.request", client)
+        self.assertNotIn("fetch(url, {credentials:'same-origin'", client)
+        self.assertNotIn("X-CSRFToken", client)
+        self.assertNotIn("csrftoken=", client)
+        template = Path("templates/base.html").read_text(encoding="utf-8")
+        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20260927-canonicaltransport1", template)
+        self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
+
 class TerminalRuntimeBoundaryTests(TestCase):
     def test_authenticated_terminal_loads_without_csrf_cookie_bootstrap(self):
         user_model = get_user_model()
@@ -137,7 +157,8 @@ class TerminalRuntimeBoundaryTests(TestCase):
         response = self.client.get(reverse("trading_page"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotIn("csrftoken", response.cookies)
+        self.assertNotIn("/api/csrf/", response.content.decode("utf-8"))
+        self.assertNotIn("ensure_csrf_cookie", response.content.decode("utf-8"))
 
     def test_authenticated_browser_api_token_issues_short_lived_jwt(self):
         user_model = get_user_model()
