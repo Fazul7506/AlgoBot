@@ -4,7 +4,7 @@ import logging
 from apps.market_data.models import MarketSymbol
 from urllib.parse import urlparse
 from django.conf import settings
-from django.http import Http404,HttpResponse,JsonResponse
+from django.http import Http404,HttpResponse
 from django.shortcuts import render,redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
