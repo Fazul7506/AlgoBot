@@ -53,6 +53,7 @@ class PositionSyncPersistenceTests(TransactionTestCase):
 
     def test_synchronize_evaluates_connection_eligibility_outside_async_orm_context(self):
         from apps.brokers.models import BrokerConnection
+        from apps.brokers.services import BrokerRegistry
 
         BrokerConnection.objects.create(
             broker=self.broker,
@@ -63,7 +64,7 @@ class PositionSyncPersistenceTests(TransactionTestCase):
         service = BrokerPositionSyncService()
         with (
             patch.object(BrokerAccount, "credential_status", new_callable=PropertyMock, return_value="ready"),
-            patch("apps.brokers.position_sync.BrokerRegistry.adapter", return_value=adapter),
+            patch.object(BrokerRegistry, "adapter", return_value=adapter),
         ):
             result = asyncio.run(service.synchronize(self.account))
 
