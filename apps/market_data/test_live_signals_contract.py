@@ -38,22 +38,8 @@ class LiveSignalsContractTests(TestCase):
 
     @patch("apps.market_data.signal_views._live_deriv_ticks")
     def test_fresh_persisted_deriv_stream_quote_is_preferred(self, live_ticks):
-        MarketSnapshot.objects.create(
-            symbol=self.market,
-            last_price="101.25000",
-            bid="101.24000",
-            ask="101.26000",
-            timestamp=timezone.now(),
-        )
-        StrategySignal.objects.create(
-            strategy=self.strategy,
-            configuration=self.config,
-            symbol="R_100",
-            signal="BUY",
-            confidence=80,
-            entry_price="100.00000",
-            timestamp=timezone.now(),
-        )
+        MarketSnapshot.objects.create(symbol=self.market, last_price="101.25000", bid="101.24000", ask="101.26000", timestamp=timezone.now())
+        StrategySignal.objects.create(strategy=self.strategy, configuration=self.config, symbol="R_100", signal="BUY", confidence=80, entry_price="100.00000", timestamp=timezone.now())
         response = self.client.get("/api/strategy-signals/?symbol=R_100&timeframe=M1")
         self.assertEqual(response.status_code, 200)
         row = response.json()["data"][0]
@@ -69,7 +55,7 @@ class LiveSignalsContractTests(TestCase):
         row = response.json()["data"][0]
         self.assertEqual(row["status"], "WAITING_FOR_ANALYSIS")
         self.assertFalse(row["execution_ready"])
-        self.assertEqual(row["confidence"], 0)
+        self.assertIsNone(row["confidence"])
 
     @patch("apps.market_data.signal_views._live_deriv_ticks")
     def test_stale_analysis_cannot_be_trading_ready(self, live_ticks):
