@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 
 from core.views_auth import (
-    CustomTokenObtainPairView, register, login_view, change_password,
+    CustomTokenObtainPairView, register, login_view, change_password, browser_api_token,
     UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet,
 )
 from core.browser_views import browser_logout
@@ -132,7 +132,7 @@ urlpatterns = [
     path("forgot-password/", forgot_password_page, name="forgot_password_page"),
     path("reset-password/<str:token>/", reset_password_page, name="reset_password_page"),
     path("verify-email/", verify_email_page, name="verify_email_page"),
-    path("api/csrf/", csrf_token_bootstrap, name="csrf_token_bootstrap"),
+    path("api/auth/browser-token/", browser_api_token, name="browser_api_token"),
     path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/register/", register, name="register"),
