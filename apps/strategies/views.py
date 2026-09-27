@@ -216,5 +216,5 @@ class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
     @decorators.action(detail=False, methods=['get'])
     def signals(self, request):
         strategy_ids = self._user_configs().values_list('strategy_id', flat=True).distinct()
-        signals = StrategySignal.objects.filter(strategy_id__in=strategy_ids).select_related('strategy').order_by('-timestamp')[:100]
+        signals = StrategySignal.objects.filter(configuration__user=request.user, strategy_id__in=strategy_ids).select_related('strategy', 'configuration').order_by('-timestamp')[:100]
         return response.Response(StrategySignalSerializer(signals, many=True).data)

@@ -1,12 +1,81 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Open positions | AlgoBot{% endblock %}
+{% block title %}Positions | AlgoBot{% endblock %}
 {% block mobile_title %}Positions{% endblock %}
 {% block content %}
-<section class="data-page panel" data-data-page="positions-page" data-api-root="/api/">
-<header class="page-heading"><div><p class="eyebrow">Broker portfolio</p><h1>Open positions</h1><p>Live positions are shown only from the authenticated broker-backed API.</p></div><div><a class="btn primary" href="/trading/">Open trading terminal</a></div></header>
-<div class="kpi-grid compact"><article class="kpi-card"><span>Total positions</span><strong data-record-count>—</strong></article><article class="kpi-card"><span>Status</span><strong data-page-status>Waiting</strong></article><article class="kpi-card"><span>Last update</span><strong data-page-updated>—</strong></article><article class="kpi-card"><span>Gross P/L magnitude</span><strong data-page-risk>—</strong></article></div>
-<section class="panel"><div class="panel-head"><div><h2>Broker positions</h2><p>Search and inspect the current broker-backed position set.</p></div><input type="search" data-page-search placeholder="Search positions" aria-label="Search positions"></div><div class="table-wrap"><table class="enterprise-table" data-page-table><thead></thead><tbody><tr><td>Connect a broker to load positions.</td></tr></tbody></table></div></section>
+<section class="data-page positions-page panel" data-data-page="positions-page">
+  <header class="page-heading positions-heading">
+    <div>
+      <p class="eyebrow">Broker portfolio</p>
+      <h1>Positions</h1>
+      <p>Authoritative positions synchronized from the selected broker account.</p>
+    </div>
+    <div class="positions-actions">
+      <button class="btn ghost" type="button" data-position-refresh>Synchronize</button>
+      <a class="btn primary" href="/trading/">Open trading terminal</a>
+    </div>
+  </header>
+
+  <div class="kpi-grid compact positions-kpis" aria-label="Position summary">
+    <article class="kpi-card"><span>Positions</span><strong data-record-count>—</strong></article>
+    <article class="kpi-card"><span>Broker state</span><strong data-page-status>Waiting</strong></article>
+    <article class="kpi-card"><span>Last synchronized</span><strong data-page-updated>—</strong></article>
+    <article class="kpi-card"><span>Known P/L</span><strong data-page-pnl>—</strong></article>
+  </div>
+
+  <section class="panel positions-panel">
+    <div class="panel-head positions-toolbar">
+      <div>
+        <h2>Open positions</h2>
+        <p data-position-state aria-live="polite">Waiting for broker synchronization.</p>
+      </div>
+      <div class="positions-filters" role="group" aria-label="Position filters">
+        <input type="search" data-page-search placeholder="Search symbol or contract ID" aria-label="Search positions">
+        <select data-position-status aria-label="Position status">
+          <option value="">All statuses</option>
+          <option value="open">Open</option>
+          <option value="active">Active</option>
+          <option value="pending">Pending</option>
+        </select>
+        <select data-position-order aria-label="Position sort">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="pnl">Highest P/L</option>
+          <option value="-pnl">Lowest P/L</option>
+          <option value="stake">Highest stake</option>
+          <option value="expiry">Nearest expiry</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="table-wrap positions-table-wrap">
+      <table class="enterprise-table positions-table" data-page-table>
+        <caption class="sr-only">Broker-authoritative open positions</caption>
+        <thead>
+          <tr>
+            <th scope="col">Instrument</th>
+            <th scope="col">Contract</th>
+            <th scope="col">Stake</th>
+            <th scope="col">Entry</th>
+            <th scope="col">Current</th>
+            <th scope="col">P/L</th>
+            <th scope="col">Expiry</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody><tr class="empty-row"><td colspan="8">Synchronizing broker positions…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <aside class="panel position-detail" data-position-detail hidden aria-labelledby="position-detail-title">
+    <div class="panel-head">
+      <div><p class="eyebrow">Broker contract</p><h2 id="position-detail-title">Position details</h2></div>
+      <button class="btn ghost" type="button" data-position-detail-close>Close</button>
+    </div>
+    <dl class="position-detail-grid" data-position-detail-grid></dl>
+  </aside>
 </section>
 {% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/positions.css' %}">{% endblock %}
 {% block extra_js %}<script src="{% static 'js/positions.js' %}" defer></script>{% endblock %}

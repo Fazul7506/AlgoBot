@@ -238,7 +238,7 @@ class DerivAdapter(BrokerAdapter):
     async def modify_order(self, order, **changes): raise BrokerOrderError("Use the Deriv contract_update operation for supported open-contract changes")
     async def cancel_order(self, order): raise BrokerOrderError("Deriv contracts cannot be cancelled through the generic order API")
     async def close_position(self, position):
-        contract_id = getattr(position, "broker_order_id", None)
+        contract_id = getattr(position, "contract_id", None)
         if not contract_id: raise BrokerOrderError("A Deriv contract id is required to sell a position")
         return await self._request({"sell": int(contract_id), "price": 0}, authenticated=True)
     async def stream_positions(self, callback=None): return self._start_stream([{"portfolio": 1, "req_id": 1}, {"transaction": 1, "subscribe": 1, "req_id": 2}], callback=callback, authenticated=True, stream_name="portfolio")

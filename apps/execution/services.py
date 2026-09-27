@@ -5,10 +5,29 @@ from django.db.models import Avg
 from django.utils import timezone
 from asgiref.sync import sync_to_async
 from apps.brokers.services import BrokerRegistry
+from apps.brokers.position_sync import BrokerPositionSyncService
 from .exceptions import OrderValidationError, NonRetryableExecutionError
 from .models import Order, ExecutionQueue, ExecutionLog
 from .repositories import OrderRepository, ExecutionLogRepository, ExecutionQueueRepository
 from . import constants as c
+
+
+def _broker_decimal(value):
+    if value in (None, ''):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+def _broker_datetime(value):
+    if value in (None, ''):
+        return None
+    try:
+        from datetime import datetime, timezone as dt_timezone
+        return datetime.fromtimestamp(int(value), tz=dt_timezone.utc)
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 class OrderValidationService:
     def validate(self, order):
@@ -52,11 +71,87 @@ class ExecutionQueueService:
     def retryable(self): return ExecutionQueue.objects.filter(status__in=[c.QUEUE_STATUS_PENDING,c.QUEUE_STATUS_RETRY], next_retry__lte=timezone.now()) | ExecutionQueue.objects.filter(status=c.QUEUE_STATUS_PENDING,next_retry__isnull=True)
 
 class PositionService:
-    def open_position(self, order, entry_price):
-        from apps.trading.repositories import PositionRepository
-        pos=PositionRepository().open_for_order(order,entry_price); ExecutionLogRepository().log(order,'PositionOpened','success','Position opened'); return pos
-    def update_position(self, position, current_price): position.current_price=current_price; position.profit_loss=(current_price-position.entry_price); position.save(update_fields=['current_price','profit_loss']); return position
-    def close_position(self, position, exit_price): position.exit_price=exit_price; position.status='closed'; position.closed_at=timezone.now(); position.profit_loss=exit_price-position.entry_price; position.save(); ExecutionLogRepository().log(position.order,'PositionClosed','success','Position closed'); return position
+    """Compatibility facade over the canonical broker-owned Position model."""
+
+    def open_position(self, order, entry_price=None, broker_contract=None):
+        from apps.brokers.models import Position
+
+        contract = dict(broker_contract or {})
+        contract_id = contract.get("contract_id") or getattr(order, "broker_reference", None)
+        if not contract_id:
+            raise ValueError("A broker contract ID is required before a position can be created.")
+        if not contract:
+            raise ValueError("A broker contract response is required before a position can be created.")
+
+        position, _ = Position.objects.update_or_create(
+            account=order.broker_account,
+            contract_id=str(contract_id),
+            defaults={
+                "broker": order.broker_account.broker,
+                "transaction_id": str(contract.get("transaction_id") or ""),
+                "broker_order_id": str(contract.get("order_id") or order.broker_reference or ""),
+                "symbol": str(contract.get("underlying_symbol") or order.symbol or ""),
+                "contract_type": str(contract.get("contract_type") or order.contract_type or ""),
+                "direction": str(contract.get("direction") or ""),
+                "stake": _broker_decimal(contract.get("buy_price")),
+                "size": _broker_decimal(contract.get("amount") if contract.get("amount") is not None else contract.get("quantity")),
+                "entry_price": _broker_decimal(contract.get("buy_price")),
+                "current_price": _broker_decimal(contract.get("bid_price") if contract.get("bid_price") is not None else contract.get("current_spot")),
+                "payout": _broker_decimal(contract.get("payout")),
+                "profit": _broker_decimal(contract.get("profit")),
+                "currency": str(contract.get("currency") or order.broker_account.currency or ""),
+                "status": str(contract.get("status") or ("closed" if contract.get("is_sold") else "open")),
+                "opened_at": _broker_datetime(contract.get("date_start") or contract.get("purchase_time")),
+                "expiry_time": _broker_datetime(contract.get("date_expiry")),
+                "closed_at": _broker_datetime(contract.get("sell_spot_time") or contract.get("exit_spot_time")),
+                "raw_data": contract,
+                "last_synced_at": timezone.now(),
+            },
+        )
+        ExecutionLogRepository().log(order, "PositionOpened", "success", "Broker-authoritative position synchronized")
+        return position
+
+    def update_position(self, position, broker_contract=None):
+        contract = dict(broker_contract or {})
+        if not contract or str(contract.get("contract_id") or "") != str(position.contract_id):
+            raise ValueError("A matching broker contract is required to update a position.")
+        current_price = contract.get("bid_price")
+        if current_price is None:
+            current_price = contract.get("current_spot")
+        if current_price is None:
+            return position
+        position.current_price = _broker_decimal(current_price)
+        position.profit = _broker_decimal(contract.get("profit"))
+        position.payout = _broker_decimal(contract.get("payout"))
+        position.status = str(contract.get("status") or ("closed" if contract.get("is_sold") else position.status))
+        position.last_synced_at = timezone.now()
+        position.raw_data = contract
+        position.save(update_fields=["current_price", "profit", "payout", "status", "last_synced_at", "raw_data"])
+        return position
+
+    def close_position(self, position, broker_contract=None):
+        contract = dict(broker_contract or {})
+        if not contract or str(contract.get("contract_id") or "") != str(position.contract_id):
+            raise ValueError("A matching broker contract is required before a position can be closed.")
+
+        broker_status = str(contract.get("status") or "").strip().lower()
+        if contract.get("is_sold"):
+            broker_status = "closed"
+        elif contract.get("is_expired"):
+            broker_status = "expired"
+        if broker_status in {"", "open", "active", "pending"}:
+            raise ValueError("The broker has not confirmed a terminal position state.")
+
+        position.status = broker_status
+        position.exit_price = _broker_decimal(contract.get("exit_spot") or contract.get("sell_spot"))
+        position.profit = contract.get("profit")
+        position.payout = contract.get("payout")
+        position.closed_at = _broker_datetime(contract.get("sell_spot_time") or contract.get("exit_spot_time"))
+        position.settlement_time = _broker_datetime(contract.get("settlement_time"))
+        position.raw_data = contract
+        position.last_synced_at = timezone.now()
+        position.save(update_fields=["status", "exit_price", "profit", "payout", "closed_at", "settlement_time", "raw_data", "last_synced_at"])
+        return position
 
 class TradeLifecycleService:
     def archive(self, order): order.status=c.ORDER_STATUS_ARCHIVED; order.save(update_fields=['status','updated_at']); ExecutionLogRepository().log(order,'OrderArchived','success','Trade archived'); return order
@@ -212,8 +307,9 @@ class TradeReconciliationService:
 
 class TradeSynchronizationService:
     async def synchronize(self, broker_account):
+        position_sync = await BrokerPositionSyncService().synchronize(broker_account)
         adapter = BrokerRegistry().adapter(broker_account.broker, broker_account)
-        positions = await adapter.get_positions()
+        positions = position_sync["positions"]
         orders = await adapter.get_orders()
         balance = await adapter.get_balance()
         reconciliation = await TradeReconciliationService().compare(broker_account, positions, orders, balance)

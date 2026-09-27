@@ -40,7 +40,7 @@ INSTALLED_APPS = [
     "apps.feature_store", "apps.health", "apps.indicators", "apps.market_data", "apps.monitoring", "apps.notifications", "apps.observability",
     "apps.optimization", "apps.portfolio", "apps.risk", "apps.simulation",
     "apps.smart_money", "apps.strategies", "apps.tenants",
-    "apps.trading", "apps.training",
+    "apps.training",
 ]
 
 MIDDLEWARE = [
