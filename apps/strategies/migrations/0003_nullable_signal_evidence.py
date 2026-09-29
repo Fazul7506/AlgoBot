@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='strategyexecution',
             name='signal',
-            field=models.CharField(blank=True, choices=[('BUY', 'BUY'), ('SELL', 'SELL'), ('STRONG BUY', 'STRONG BUY'), ('STRONG SELL', 'STRONG SELL'), ('HOLD', 'HOLD'), ('EXIT', 'EXIT'), ('REDUCE POSITION', 'REDUCE POSITION'), ('ADD POSITION', 'ADD POSITION'), max_length=32, null=True),
+            field=models.CharField(blank=True, choices=[('BUY', 'BUY'), ('SELL', 'SELL'), ('STRONG BUY', 'STRONG BUY'), ('STRONG SELL', 'STRONG SELL'), ('HOLD', 'HOLD'), ('EXIT', 'EXIT'), ('REDUCE POSITION', 'REDUCE POSITION'), ('ADD POSITION', 'ADD POSITION')], max_length=32, null=True),
         ),
         migrations.AlterField(
             model_name='strategyexecution',
@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='strategysignal',
             name='signal',
-            field=models.CharField(blank=True, max_length=32, null=True),
+            field=models.CharField(blank=True, choices=choices=[('BUY', 'BUY'), ('SELL', 'SELL'), ('STRONG BUY', 'STRONG BUY'), ('STRONG SELL', 'STRONG SELL'), ('HOLD', 'HOLD'), ('EXIT', 'EXIT'), ('REDUCE POSITION', 'REDUCE POSITION'), ('ADD POSITION', 'ADD POSITION')], max_length=32, null=True),
         ),
         migrations.AlterField(
             model_name='strategysignal',
