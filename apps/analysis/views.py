@@ -9,6 +9,8 @@ from decimal import Decimal
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.http import JsonResponse
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 
 from apps.analysis.advanced import analyze_candles
 from apps.analysis.broker_intelligence import build_account_risk_context
@@ -155,7 +157,8 @@ def _broker_trade_spec(result, market, capabilities, account_context=None):
 
 
 
-@login_required
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def analysis_data(request):
     symbol = (request.GET.get("symbol") or "R_100").strip().upper()
     timeframe = (request.GET.get("timeframe") or "1m").strip()
