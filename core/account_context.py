@@ -1,15 +1,12 @@
 """Authoritative authenticated-user broker account context.
 
-The server-side session is authoritative. The browser may persist the last selected
-account for UX, but every requested account is revalidated against the authenticated
-user before it becomes active.
+The server-side session is the only active-account authority for browser/API
+requests. Client-supplied account IDs are never interpreted as active context.
+Account selection happens only through the authenticated account-select action.
 """
 from apps.brokers.models import BrokerAccount
 
 SESSION_KEY = "active_broker_account_id"
-REQUEST_HEADER = "HTTP_X_ALGOBOT_ACCOUNT_ID"
-REQUEST_PARAM = "account_id"
-
 
 def connected_accounts(user):
     return (
@@ -24,15 +21,6 @@ def connected_accounts(user):
     )
 
 
-def _requested_id(request):
-    if request is None:
-        return None
-    # This module is shared by normal Django HttpRequest/WSGI views and DRF
-    # requests. Django HttpRequest exposes GET; DRF also exposes the same query
-    # data through GET while adding query_params on its Request wrapper. Using
-    # GET here keeps the authoritative resolver valid for both request types.
-    return request.META.get(REQUEST_HEADER) or request.GET.get(REQUEST_PARAM)
-
 
 def _session(request):
     """Return a session mapping when session middleware is installed."""
@@ -40,16 +28,14 @@ def _session(request):
 
 
 def get_active_account(user, request=None, broker_type=None):
-    """Resolve the authenticated user's explicitly requested/session account."""
+    """Resolve the authenticated user's server-side active broker account.
+
+    Request headers and query parameters are transport metadata, not account
+    authority. Only the authenticated Django session selects the active account.
+    """
     qs = connected_accounts(user)
     if broker_type:
         qs = qs.filter(broker__broker_type=broker_type)
-
-    requested_id = _requested_id(request)
-    if requested_id:
-        selected = qs.filter(pk=requested_id).first()
-        if selected:
-            return selected
 
     session = _session(request)
     selected_id = session.get(SESSION_KEY) if session is not None else None
