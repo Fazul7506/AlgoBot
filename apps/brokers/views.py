@@ -57,7 +57,12 @@ class JWTAuthenticatedPermission(permissions.IsAuthenticated):
 class BrokerViewSet(viewsets.ReadOnlyModelViewSet):
     queryset=Broker.objects.all();serializer_class=BrokerSerializer;permission_classes=[permissions.IsAuthenticated]
 class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=BrokerAccountSerializer;permission_classes=[JWTAuthenticatedPermission];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
+    serializer_class=BrokerAccountSerializer;permission_classes=[JWTAuthenticatedPermission]
+    # Prefer the short-lived browser JWT for API-origin requests. Session
+    # authentication remains the fallback for legacy/browser-session clients,
+    # while the authenticated Django session is still used by select_account()
+    # to persist the active account context.
+    authentication_classes=[JWTAuthentication,BrowserSessionAuthentication]
     def get_queryset(self):return BrokerAccount.objects.filter(user=self.request.user).select_related('broker').order_by('broker__name','account_id')
     def finalize_response(self,request, response_obj,*args,**kwargs):
         response_obj=super().finalize_response(request,response_obj,*args,**kwargs)

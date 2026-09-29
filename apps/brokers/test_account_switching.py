@@ -86,6 +86,23 @@ class AccountSwitchingTests(TestCase):
         result = client.post(f'/api/brokers/accounts/{second.pk}/select/', {}, content_type='application/json')
         self.assertEqual(result.status_code, 403)
 
+    def test_browser_jwt_switch_does_not_require_csrf_token(self):
+        self.make_account('DEMO-JWT-1', 'demo')
+        second = self.make_account('REAL-JWT-2', 'real')
+        client = __import__('django.test', fromlist=['Client']).Client(enforce_csrf_checks=True)
+        self.assertTrue(client.login(username='account-switch-user', password='test-password'))
+        token_response = client.get('/api/auth/browser-token/')
+        self.assertEqual(token_response.status_code, 200)
+        token = token_response.json()['access']
+        result = client.post(
+            f'/api/brokers/accounts/{second.pk}/select/',
+            {},
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {token}',
+        )
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data['active_account_id'], second.pk)
+
     def test_session_authenticated_switch_accepts_current_csrf_token(self):
         self.make_account('DEMO-CSRF-1', 'demo')
         second = self.make_account('REAL-CSRF-2', 'real')
