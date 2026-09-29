@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model
 from apps.strategies.registry import registry
 from apps.strategies.services import StrategyService, StrategyExecutionService
 from apps.strategies.models import StrategyConfiguration, StrategySignal
+from apps.strategies.built_in.base import BaseStrategy
+from types import SimpleNamespace
 
 class StrategyEngineTests(TestCase):
     def setUp(self): self.user=get_user_model().objects.create_user('s@example.com','s@example.com','pw'); StrategyService().sync_catalog()
@@ -18,3 +20,18 @@ class StrategyEngineTests(TestCase):
         self.assertEqual(execution.confidence, 80)
         self.assertEqual(StrategySignal.objects.filter(configuration=config).count(), 1)
 
+
+    def test_base_strategy_without_signal_does_not_expose_trade_levels(self):
+        strategy = BaseStrategy(
+            configuration=SimpleNamespace(parameters={}),
+            market_data={"close": 100},
+            indicator_data={},
+        )
+        strategy.initialize()
+        result = strategy.execute()
+        self.assertIsNone(result["signal"])
+        self.assertIsNone(result["confidence"])
+        self.assertIsNone(result["entry_price"])
+        self.assertIsNone(result["stop_loss"])
+        self.assertIsNone(result["take_profit"])
+        self.assertIsNone(result["position_size"])

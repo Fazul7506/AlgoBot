@@ -144,7 +144,7 @@ async def _live_deriv_ticks(symbols):
             max_size=2**20,
         ) as ws:
             for req_id, symbol in req_to_symbol.items():
-                await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
+                await ws.send(json.dumps({"ticks": symbol, "subscribe": 1, "req_id": req_id}))
 
             while len(results) < len(req_to_symbol):
                 remaining = deadline - time.monotonic()
@@ -161,6 +161,15 @@ async def _live_deriv_ticks(symbols):
                     continue
 
                 if payload.get("error"):
+                    error = payload.get("error") or {}
+                    log.warning(
+                        "Deriv public tick request failed",
+                        extra={
+                            "symbol": req_to_symbol.get(payload.get("req_id")),
+                            "code": str(error.get("code") or "")[:80],
+                            "error_message": str(error.get("message") or "")[:200],
+                        },
+                    )
                     continue
                 if payload.get("msg_type") != "tick":
                     continue
@@ -201,6 +210,29 @@ def _persisted_live_ticks(markets):
     return results
 
 
+
+
+def _signal_evidence(signal):
+    """Expose only evidence that was actually persisted by the strategy run."""
+    metadata = signal.metadata if isinstance(signal.metadata, dict) else {}
+    evidence = []
+    criteria = metadata.get("criteria")
+    if isinstance(criteria, dict):
+        for key, value in criteria.items():
+            if key in {"passed", "reasons"}:
+                continue
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                evidence.append({"condition": str(key), "observed": value, "result": "PASS" if bool(value) else "FAIL"})
+    indicators = metadata.get("indicators") or metadata.get("indicator_data")
+    if isinstance(indicators, dict):
+        for key, value in indicators.items():
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                evidence.append({"condition": str(key), "observed": value, "result": "OBSERVED"})
+    for key in ("market_regime", "trend", "momentum", "confirmation"):
+        value = metadata.get(key)
+        if isinstance(value, (str, int, float, bool)):
+            evidence.append({"condition": key, "observed": value, "result": "OBSERVED"})
+    return evidence[:30]
 
 def _revise_signal(signal, live_tick, now, market, account):
     metadata = signal.metadata if isinstance(signal.metadata, dict) else {}
@@ -244,7 +276,7 @@ def _revise_signal(signal, live_tick, now, market, account):
         "analysis_signal_id": signal.id, "analysis_timestamp": signal.timestamp.isoformat(), "analysis_age_seconds": analysis_age,
         "baseline_direction": baseline_direction or None, "baseline_confidence": round(base_confidence, 2) if base_confidence is not None else None, "direction": direction,
         "confidence": round(revised, 2) if revised is not None else None, "confidence_source": confidence_source, "live_confidence_threshold": round(threshold, 2), "execution_ready": execution_ready,
-        "status": status, "evidence": evidence, "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
+        "status": status, "evidence": evidence, "why": _signal_evidence(signal), "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
         "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None, "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
         "strategy": signal.strategy.name, "strategy_version": signal.strategy.version, "timeframe": _analysis_timeframe(signal),
         "analysis_metadata": metadata, "trade_context": _trade_context(signal, market, account),
@@ -282,9 +314,11 @@ def _strategy_signals_impl(request):
             for symbol, tick in fallback_ticks.items():
                 tick["_source"] = "deriv_public_websocket"
             live_ticks.update(fallback_ticks)
-        except BrokerConnectionError:
+        except BrokerConnectionError as exc:
             # A missing live quote remains missing. No stale or fabricated value
-            # is substituted into a trading signal.
+            # is substituted into a trading signal. Preserve the failure reason
+            # in server logs without exposing broker internals to the browser.
+            log.warning("Signals live Deriv feed unavailable", extra={"error": str(exc)[:200]})
             pass
     feed_latency_ms = round((time.monotonic() - live_started) * 1000, 1)
     baselines = _analysis_baselines(request, symbols, timeframe, account=account)
@@ -294,10 +328,10 @@ def _strategy_signals_impl(request):
         row = {"symbol": market.symbol, "instrument": market.display_name, "display_name": market.display_name, "market": market.market, "sub_market": market.sub_market, "broker": "deriv", "account_id": account.account_id, "account_type": account.account_type, "timeframe": timeframe, "source": "deriv_public_stream"}
         base_context = {"market_type": market.market, "sub_market": market.sub_market, "symbol": market.symbol, "instrument": market.display_name, "trade_type": None, "direction": None, "contract_type": None, "contract_family": None, "duration": None, "duration_unit": None, "barrier": None, "stake": account_risk_context.get("recommended_stake"), "risk_budget": account_risk_context.get("risk_budget"), "payout": None, "currency": account.currency, "account_type": account.account_type, "broker": account.broker.name, "timeframe": timeframe}
         if not live_tick:
-            row.update({"direction": None, "confidence": None, "status": "LIVE_DATA_UNAVAILABLE", "execution_ready": False, "evidence": ["broker_tick_not_received"], "trade_context": base_context})
+            row.update({"direction": None, "confidence": None, "status": "LIVE_DATA_UNAVAILABLE", "execution_ready": False, "evidence": ["broker_tick_not_received"], "why": [], "trade_context": base_context})
         elif not baseline:
             live_age = max(0, int(time.time()) - int(live_tick.get("epoch")))
-            row.update({"direction": None, "confidence": None, "status": "WAITING_FOR_ANALYSIS", "execution_ready": False, "evidence": ["live_tick_received", "no_matching_analysis_baseline"], "live": {"price": _as_float(live_tick.get("quote")), "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": int(live_tick.get("epoch")), "age_seconds": live_age, "source": live_tick.get("_source", "deriv_public_websocket")}, "trade_context": base_context})
+            row.update({"direction": None, "confidence": None, "status": "WAITING_FOR_ANALYSIS", "execution_ready": False, "evidence": ["live_tick_received", "no_matching_analysis_baseline"], "why": [], "live": {"price": _as_float(live_tick.get("quote")), "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": int(live_tick.get("epoch")), "age_seconds": live_age, "source": live_tick.get("_source", "deriv_public_websocket")}, "trade_context": base_context})
         else:
             row.update(_revise_signal(baseline, live_tick, now, market, account))
         rows.append(row)
@@ -312,7 +346,7 @@ def _strategy_signals_impl(request):
     live_data_available_count = sum(1 for r in rows if r.get("live"))
     stale_count = sum(1 for r in rows if r.get("status") in {"LIVE_DATA_STALE", "ANALYSIS_STALE"})
     state = "ready" if actionable else "stale" if stale_count else "ready" if live_data_available_count else "unavailable"
-    return JsonResponse({"status": "ok", "state": state, "source": "deriv_public_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency, "balance": account_risk_context.get("balance"), "available_funds": account_risk_context.get("available_funds"), "recommended_stake": account_risk_context.get("recommended_stake"), "risk_budget": account_risk_context.get("risk_budget")}, "account_risk_context": account_risk_context, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "account_trading_enabled": account_credentials_valid, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
+    return JsonResponse({"status": "ok", "state": state, "source": "deriv_public_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency, "balance": account_risk_context.get("balance"), "available_funds": account_risk_context.get("available_funds"), "recommended_stake": account_risk_context.get("recommended_stake"), "risk_budget": account_risk_context.get("risk_budget")}, "account_risk_context": account_risk_context, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "account_trading_enabled": account_credentials_valid, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "broker_feed_state": ("LIVE" if live_data_available_count == len(rows) and rows else "PARTIAL" if live_data_available_count else "UNAVAILABLE"), "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
 
 
 def strategy_signals(request):

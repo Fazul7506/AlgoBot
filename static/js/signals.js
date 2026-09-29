@@ -10,7 +10,52 @@
   const label = value => String(value ?? '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—';
   const tone = value => { const v = String(value || '').toUpperCase(); return v === 'BUY' ? 'buy' : v === 'SELL' ? 'sell' : 'hold'; };
   const stateText = value => String(value || 'WAITING').replaceAll('_', ' ');
-  const S = { rows: [], last: null, scanning: false, specRequest: 0 };
+  const S = { rows: [], last: null, scanning: false, specRequest: 0, page: 1 };
+
+  function populateViewOptions(rows) {
+    const strategies = [...new Set(rows.map(r => r.strategy).filter(Boolean))].sort();
+    const statuses = [...new Set(rows.map(r => r.status).filter(Boolean))].sort();
+    const fill = (id, values, emptyLabel) => {
+      const el=$(id); if(!el) return;
+      const current=el.value;
+      el.innerHTML=`<option value="">${esc(emptyLabel)}</option>`+values.map(v=>`<option value="${esc(v)}">${esc(label(v))}</option>`).join('');
+      if(values.includes(current)) el.value=current;
+    };
+    fill('signalsStrategy',strategies,'All strategies');
+    fill('signalsStatus',statuses,'All statuses');
+  }
+  function filteredRows() {
+    const q=String($('signalsSearch')?.value||'').trim().toLowerCase();
+    const symbol=$('signalsSymbol')?.value||'', strategy=$('signalsStrategy')?.value||'';
+    const direction=String($('signalsDirection')?.value||'').toUpperCase();
+    const status=$('signalsStatus')?.value||'', minConfidence=Number($('signalsConfidence')?.value||0);
+    const sort=$('signalsSort')?.value||'symbol';
+    let rows=S.rows.filter(r => {
+      const hay=[r.symbol,r.display_name,r.strategy,r.status,r.market].filter(Boolean).join(' ').toLowerCase();
+      return (!q||hay.includes(q)) && (!symbol||r.symbol===symbol) && (!strategy||r.strategy===strategy)
+        && (!direction||String(r.direction||'').toUpperCase()===direction) && (!status||r.status===status)
+        && (!minConfidence||Number(r.confidence)>=minConfidence);
+    });
+    rows.sort((a,b)=>{
+      if(sort==='confidence') return (Number(b.confidence)||-Infinity)-(Number(a.confidence)||-Infinity);
+      if(sort==='live_age') return (Number(a.live?.age_seconds)||Infinity)-(Number(b.live?.age_seconds)||Infinity);
+      if(sort==='timestamp') return String(b.analysis_timestamp||'').localeCompare(String(a.analysis_timestamp||''));
+      return String(a.symbol||'').localeCompare(String(b.symbol||''));
+    });
+    const size=Number($('signalsPageSize')?.value||20), pages=Math.max(1,Math.ceil(rows.length/size));
+    S.page=Math.min(Math.max(1,S.page),pages);
+    const start=(S.page-1)*size;
+    if($('signalsPrev'))$('signalsPrev').disabled=S.page<=1;
+    if($('signalsNext'))$('signalsNext').disabled=S.page>=pages;
+    const pager=$('signalsPager'); if(pager) pager.textContent=`Page ${S.page} of ${pages} · ${rows.length} matching`;
+    return {rows:rows.slice(start,start+size),total:rows.length};
+  }
+  function renderView() {
+    const view=filteredRows();
+    renderTape(view.rows); renderTable(view.rows);
+    if(view.rows.length) focus(view.rows.find(r=>r.execution_ready)||view.rows.find(r=>r.direction==='BUY'||r.direction==='SELL')||view.rows.find(r=>r.live)||view.rows[0]);
+    else focus(null);
+  }
 
   function setStatus(message, live = false) {
     if ($('signalsFeed')) $('signalsFeed').textContent = message;
@@ -72,14 +117,48 @@
     if (!row) {
       ['focusInstrument','focusPrice','focusSource','focusBaseline','focusDirection','focusThreshold','focusAge','focusEntry','focusStop','focusTake','focusTf'].forEach(id => { if ($(id)) $(id).textContent = '—'; });
       if ($('focusInstrument')) $('focusInstrument').textContent = 'Select a market'; if ($('focusState')) { $('focusState').textContent='WAITING'; $('focusState').className='signal-state waiting'; }
-      if ($('focusConfidence')) $('focusConfidence').textContent='—'; if ($('focusConfidenceBar')) $('focusConfidenceBar').style.width='0%'; if ($('focusEvidence')) $('focusEvidence').innerHTML='<span class="muted">Select a market to inspect its live state.</span>'; renderSpec(null); return;
+      if ($('focusConfidence')) $('focusConfidence').textContent='—'; if ($('focusConfidenceBar')) $('focusConfidenceBar').style.width='0%'; if ($('focusEvidence')) $('focusEvidence').innerHTML='<span class="muted">Select a market to inspect its live state.</span>'; renderSpec(null); renderWhyHow(null); return;
     }
     $('focusInstrument').textContent = row.display_name || row.instrument || row.symbol || '—'; $('focusState').textContent = stateText(row.status); $('focusState').className=`signal-state ${tone(row.direction)}${row.status==='WAITING_FOR_ANALYSIS'?' waiting':''}`;
     $('focusPrice').textContent=num(row.live?.price); $('focusSource').textContent=row.live?.source==='deriv_public_websocket'?`Deriv live · ${row.live?.epoch?new Date(Number(row.live.epoch)*1000).toLocaleTimeString():'now'}`:'No live tick';
     $('focusConfidence').textContent=pct(row.confidence); const confidenceNumber=Number(row.confidence); $('focusConfidenceBar').style.width=Number.isFinite(confidenceNumber)?`${Math.max(0,Math.min(100,confidenceNumber))}%`:'0%'; $('focusBaseline').textContent=row.baseline_direction?`${row.baseline_direction} · ${pct(row.baseline_confidence)}`:'No baseline';
     $('focusDirection').textContent=row.direction || '—'; $('focusDirection').className=tone(row.direction); $('focusThreshold').textContent=pct(row.live_confidence_threshold); $('focusAge').textContent=row.live?.age_seconds==null?'—':`${row.live.age_seconds}s`;
-    $('focusEntry').textContent=num(row.entry_price); $('focusStop').textContent=num(row.stop_loss); $('focusTake').textContent=num(row.take_profit); $('focusTf').textContent=row.timeframe||'—'; $('focusEvidence').innerHTML=(row.evidence||[]).map(item=>`<span class="evidence-chip">${esc(stateText(item))}</span>`).join('')||'<span class="muted">No confirmation evidence.</span>'; renderSpec(row);
+    $('focusEntry').textContent=num(row.entry_price); $('focusStop').textContent=num(row.stop_loss); $('focusTake').textContent=num(row.take_profit); $('focusTf').textContent=row.timeframe||'—'; $('focusEvidence').innerHTML=(row.evidence||[]).map(item=>`<span class="evidence-chip">${esc(stateText(item))}</span>`).join('')||'<span class="muted">No confirmation evidence.</span>'; renderSpec(row); renderWhyHow(row);
   }
+  function renderWhyHow(row) {
+    const why = $('signalWhy'), source = $('whySource'), lifecycle = $('signalLifecycleDetail'), lifecycleState = $('lifecycleState');
+    if (!row) {
+      if (why) why.innerHTML='<p class="muted">Select a market to inspect actual persisted strategy evidence.</p>';
+      if (source) source.textContent='Select a signal';
+      if (lifecycleState) lifecycleState.textContent='Awaiting signal';
+      return;
+    }
+    if (source) source.textContent = row.strategy ? `Strategy · ${row.strategy_version || 'persisted version'}` : 'Broker / market state';
+    if (why) {
+      const items = Array.isArray(row.why) ? row.why : [];
+      const base = [
+        ['Broker account', row.account_id ? `${row.account_type || 'account'} · ${row.account_id}` : null, row.broker || null],
+        ['Signal source', row.strategy ? `Strategy · ${row.strategy}` : null, row.analysis_timestamp],
+        ['Market data', row.live?.source || null, row.live?.epoch ? new Date(Number(row.live.epoch)*1000).toLocaleString() : null],
+        ['Confirmation', row.evidence?.join(', ') || null, row.status]
+      ];
+      const all = [...base, ...items.map(item => [item.condition, item.observed, item.result])].filter(x => x[1] != null && x[1] !== '');
+      why.innerHTML = all.length ? all.map(x => `<div class="evidence-row"><span>${esc(label(x[0]))}</span><strong>${esc(typeof x[1] === 'object' ? JSON.stringify(x[1]) : x[1])}</strong><small>${esc(x[2] || 'OBSERVED')}</small></div>`).join('') : '<p class="muted">No persisted evidence is available for this signal.</p>';
+    }
+    const stages = [
+      ['Market data', row.live ? 'PASS' : 'UNAVAILABLE'],
+      ['Analysis baseline', row.analysis_signal_id ? (row.status === 'ANALYSIS_STALE' ? 'STALE' : 'PASS') : 'UNAVAILABLE'],
+      ['Strategy evaluation', row.analysis_signal_id ? 'PASS' : 'UNAVAILABLE'],
+      ['Confirmation', row.execution_ready ? 'PASS' : row.status === 'LIVE_CONFIRMATION_FAILED' ? 'FAILED' : 'WAIT'],
+      ['Broker contract', row.trade_context?.contract_type ? 'PASS' : 'REQUIRED'],
+      ['Manual execution', 'USER DECISION'],
+      ['Broker settlement', 'NOT LINKED'],
+      ['Positions / Trade History', 'NOT LINKED']
+    ];
+    if (lifecycle) lifecycle.innerHTML=stages.map(x=>`<div class="lifecycle-step"><span>${esc(x[1])}</span><strong>${esc(x[0])}</strong></div>`).join('');
+    if (lifecycleState) lifecycleState.textContent = row.status ? stateText(row.status) : 'Awaiting signal';
+  }
+
   function renderTape(rows) {
     const el=$('liveTape'); if(!el)return; $('marketCount').textContent=`${rows.length} markets`;
     el.innerHTML=rows.slice(0,20).map(row=>`<button type="button" class="tape-row" data-symbol="${esc(row.symbol)}"><span><strong>${esc(row.symbol)}</strong><small>${esc(row.market||'Deriv')}</small></span><strong>${esc(num(row.live?.price))}</strong><span class="tape-signal ${tone(row.direction)}">${esc(row.direction || '—')}</span><span>${esc(pct(row.confidence))}</span></button>`).join('')||'<div class="empty">No broker quotes returned for this scan.</div>';
@@ -91,14 +170,23 @@
     tbody.querySelectorAll('tr[data-symbol]').forEach(r=>r.addEventListener('click',()=>focus(S.rows.find(item=>item.symbol===r.dataset.symbol))));
   }
   function renderHealth(data) {
-    const live=Number(data.live_data_available_count||0), total=Number(data.count||0), stale=Number(data.stale_count||0); if($('signalsBalance'))$('signalsBalance').textContent=data.account?.balance!=null?money(data.account.balance,data.account.currency||'USD'):'—'; if($('signalsRiskBudget'))$('signalsRiskBudget').textContent=data.account?.risk_budget!=null?'Risk budget '+money(data.account.risk_budget,data.account.currency||'USD'):'Risk budget —'; if($('signalsFeed'))$('signalsFeed').textContent=live===total&&total>0?'LIVE':live>0?'PARTIAL':'UNAVAILABLE'; if($('signalsFeedAge'))$('signalsFeedAge').textContent=live>0?`${live}/${total} live Deriv quotes · ${num(data.feed_latency_ms,0)} ms`:'No current Deriv quotes received'; if($('signalsReady'))$('signalsReady').textContent=String(data.actionable_count??0); if($('signalsBaseline'))$('signalsBaseline').textContent=`${S.rows.filter(r=>r.analysis_signal_id).length}/${S.rows.length} matched`; if($('scanTimestamp'))$('scanTimestamp').textContent=`Scanned ${new Date().toLocaleTimeString()}${stale?` · ${stale} stale`:''}`;
+    const live=Number(data.live_data_available_count||0), total=Number(data.count||0), stale=Number(data.stale_count||0); if($('signalsBalance'))$('signalsBalance').textContent=data.account?.balance!=null?money(data.account.balance,data.account.currency||'USD'):'—'; if($('signalsRiskBudget'))$('signalsRiskBudget').textContent=data.account?.risk_budget!=null?'Risk budget '+money(data.account.risk_budget,data.account.currency||'USD'):'Risk budget —'; if($('signalsFeed'))$('signalsFeed').textContent=data.broker_feed_state|| (live===total&&total>0?'LIVE':live>0?'PARTIAL':'UNAVAILABLE'); if($('signalsFeedAge'))$('signalsFeedAge').textContent=live>0?`${live}/${total} live Deriv quotes · ${num(data.feed_latency_ms,0)} ms`:'No current Deriv quotes received'; if($('signalsReady'))$('signalsReady').textContent=String(data.actionable_count??0); if($('signalsBaseline'))$('signalsBaseline').textContent=`${S.rows.filter(r=>r.analysis_signal_id).length}/${S.rows.length} matched`; if($('scanTimestamp'))$('scanTimestamp').textContent=`Scanned ${new Date().toLocaleTimeString()}${stale?` · ${stale} stale`:''}`;
   }
   async function scan() {
     if(S.scanning)return; S.scanning=true; const controls=[$('signalsScan'),$('signalsRefresh')].filter(Boolean); controls.forEach(b=>{b.disabled=true;b.setAttribute('aria-busy','true')}); const symbol=$('signalsSymbol')?.value||'', timeframe=$('signalsTimeframe')?.value||'M1', limit=$('signalsLimit')?.value||'40';
-    try { setStatus('Reading the continuous Deriv public market-data stream…'); const data=await request(`/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol?`&symbol=${encodeURIComponent(symbol)}`:''}`); if(data.status!=='ok')throw new Error(data.message||'Live signal service returned an invalid response.'); S.rows=Array.isArray(data.data)?data.data:[]; S.last=data; populateSymbols(S.rows); if($('signalsAccount'))$('signalsAccount').textContent=data.account?.id||'—'; if($('signalsAccountType'))$('signalsAccountType').textContent=`${data.account?.type||'account'} · ${data.account?.currency||''}`; renderHealth(data); setStatus(Number(data.live_data_available_count||0)>0?'LIVE':'NO LIVE QUOTES',Number(data.live_data_available_count||0)>0); renderTape(S.rows); renderTable(S.rows); focus(S.rows.find(r=>r.execution_ready)||S.rows.find(r=>r.direction==='BUY'||r.direction==='SELL')||S.rows.find(r=>r.live)||S.rows[0]); }
+    try { setStatus('Reading the continuous Deriv public market-data stream…'); const data=await request(`/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol?`&symbol=${encodeURIComponent(symbol)}`:''}`); if(data.status!=='ok')throw new Error(data.message||'Live signal service returned an invalid response.'); S.rows=Array.isArray(data.data)?data.data:[]; S.last=data; populateSymbols(S.rows); populateViewOptions(S.rows); S.page=1; if($('signalsAccount'))$('signalsAccount').textContent=data.account?.id||'—'; if($('signalsAccountType'))$('signalsAccountType').textContent=`${data.account?.type||'account'} · ${data.account?.currency||''}`; renderHealth(data); setStatus(Number(data.live_data_available_count||0)>0?'LIVE':'NO LIVE QUOTES',Number(data.live_data_available_count||0)>0); renderView(); }
     catch(error){const message=error?.message||'Market data unavailable.';S.rows=[];setStatus(message);if($('signalsReady'))$('signalsReady').textContent='0';if($('signalsBaseline'))$('signalsBaseline').textContent='Unavailable';if($('scanTimestamp'))$('scanTimestamp').textContent=`Scan failed · ${new Date().toLocaleTimeString()}`;if($('signalsTable'))$('signalsTable').innerHTML=`<tr><td colspan="10">${esc(message)}</td></tr>`;if($('liveTape'))$('liveTape').innerHTML=`<div class="empty">${esc(message)}</div>`;focus(null)}
     finally{S.scanning=false;controls.forEach(b=>{b.disabled=false;b.removeAttribute('aria-busy')})}
   }
-  function boot(){ $('signalsScan')?.addEventListener('click',scan);$('signalsRefresh')?.addEventListener('click',scan);$('signalsSymbol')?.addEventListener('change',scan);$('signalsTimeframe')?.addEventListener('change',scan);$('signalsLimit')?.addEventListener('change',scan);const resetForAccountChange=()=>{S.rows=[];S.last=null;focus(null);renderTape([]);renderTable([]);setStatus('Account changed — refreshing the Deriv public market-data feed…');scan()};window.addEventListener('algobot:account-synced',resetForAccountChange);window.addEventListener('algobot:account-changed',resetForAccountChange);scan(); }
+  function boot(){
+    $('signalsScan')?.addEventListener('click',scan); $('signalsRefresh')?.addEventListener('click',scan);
+    $('signalsSymbol')?.addEventListener('change',()=>{S.page=1;renderView()}); $('signalsTimeframe')?.addEventListener('change',scan);
+    $('signalsLimit')?.addEventListener('change',scan);
+    ['signalsSearch','signalsStrategy','signalsDirection','signalsStatus','signalsConfidence','signalsSort','signalsPageSize'].forEach(id=>$(id)?.addEventListener('input',()=>{S.page=1;renderView()}));
+    ['signalsStrategy','signalsDirection','signalsStatus','signalsConfidence','signalsSort','signalsPageSize'].forEach(id=>$(id)?.addEventListener('change',()=>{S.page=1;renderView()}));
+    $('signalsPrev')?.addEventListener('click',()=>{S.page--;renderView()}); $('signalsNext')?.addEventListener('click',()=>{S.page++;renderView()});
+    const resetForAccountChange=()=>{S.rows=[];S.last=null;S.page=1;focus(null);renderTape([]);renderTable([]);setStatus('Account changed — refreshing the Deriv public market-data feed…');scan()};
+    window.addEventListener('algobot:account-synced',resetForAccountChange); window.addEventListener('algobot:account-changed',resetForAccountChange); scan();
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();

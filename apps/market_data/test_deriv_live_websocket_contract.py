@@ -40,7 +40,7 @@ class DerivLiveWebSocketContractTests(SimpleTestCase):
             ticks, _latency = asyncio.run(_live_deriv_ticks(["R_100"]))
 
         self.assertEqual(ticks["R_100"]["quote"], 123.45)
-        self.assertEqual(socket.sent, [{"ticks": "R_100", "subscribe": 0, "req_id": 1}])
+        self.assertEqual(socket.sent, [{"ticks": "R_100", "subscribe": 1, "req_id": 1}])
         self.assertNotIn("authorize", socket.sent[0])
 
     def test_public_socket_errors_do_not_become_account_authentication_errors(self):

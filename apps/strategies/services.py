@@ -100,7 +100,7 @@ class StrategyService:
                 trend = 'up' if quote > history[max(0, len(history)-20)] else 'down' if quote < history[max(0, len(history)-20)] else 'sideways'
                 market_data = {'symbol': symbol, 'open': quote, 'high': quote, 'low': quote, 'close': quote, 'volume': float(current['volume'] or 0), 'epoch': int(current['epoch'])}
                 indicator_data = {'sma5': sum(history[-5:]) / min(5, len(history)), 'sma20': sum(history[-20:]) / min(20, len(history)), 'ret1': (quote / history[-2] - 1) if len(history) > 1 and history[-2] else 0.0, 'range': 0.0, 'rsi': LiveMarketContextService._rsi(history), 'trend': trend, 'source': 'historical_tick'}
-                strategy = strategy_cls(configuration=config, market_data=market_data, indicator_data=indicator_data); strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or 'HOLD').upper()
+                strategy = strategy_cls(configuration=config, market_data=market_data, indicator_data=indicator_data); strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or '').upper()
                 if signal not in {'BUY', 'SELL'}: continue
                 profit = 1.0 if (signal == 'BUY' and next_quote > quote) or (signal == 'SELL' and next_quote < quote) else -1.0
                 trades.append({'index': index + 1, 'signal': signal, 'mode': mode, 'entry_price': quote, 'exit_price': next_quote, 'profit': profit, 'entry_epoch': int(current['epoch']), 'exit_epoch': int(nxt['epoch'])})
@@ -113,7 +113,7 @@ class StrategyService:
                 trend = 'up' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] > indicators['sma20'] else 'down' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] < indicators['sma20'] else 'sideways'
                 indicator_data = {**indicators, 'trend': trend, 'rsi': LiveMarketContextService._rsi(closes)}
                 strategy = strategy_cls(configuration=config, market_data=market_data, indicator_data=indicator_data)
-                strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or 'HOLD').upper()
+                strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or '').upper()
                 if signal not in {'BUY', 'SELL'}: continue
                 next_candle = candles[index + 1]
                 entry = float(current['close'])
@@ -130,7 +130,7 @@ class StrategyExecutionService:
         """Execute only a strategy-produced trade signal; never a manual terminal order."""
         if not (config.enabled and config.is_active and config.strategy.enabled): return None
         if (result.get('criteria') or {}).get('passed', True) is not True: return None
-        signal = str(result.get('signal') or 'HOLD').upper()
+        signal = str(result.get('signal') or '').upper()
         if signal not in {'BUY', 'SELL'}: return None
         account = getattr(config, 'broker_account', None)
         if account is None: return None
