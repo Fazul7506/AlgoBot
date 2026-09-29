@@ -425,12 +425,14 @@ def _analysis_markets():
     return markets
 
 
-@login_required
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def analysis_markets(request):
     return JsonResponse({"markets": _analysis_markets()})
 
 
-@login_required
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def analysis_contracts(request):
     symbol = (request.GET.get("symbol") or "").strip().upper()
     if not symbol:
@@ -469,7 +471,8 @@ def analysis_contracts(request):
     )
 
 
-@login_required
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def broker_account_context(request):
     """Return the selected broker account's fresh balance and risk context."""
     account = get_active_account(request.user, request=request)
@@ -499,7 +502,8 @@ def broker_account_context(request):
     return JsonResponse({"status": "ok", "account": context, "broker_data": broker_data})
 
 
-@login_required
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def broker_proposal(request):
     """Return a live Deriv proposal using the selected account and risk-capped amount.
 
