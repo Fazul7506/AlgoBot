@@ -98,10 +98,10 @@ class BaseStrategy:
             'signal': signal,
             'confidence': confidence,
             'criteria': self.criteria_result,
-            'entry_price': self.market_data.get('price') or self.market_data.get('close'),
-            'stop_loss': self.calculate_stop_loss(),
-            'take_profit': self.calculate_take_profit(),
-            'position_size': str(self.calculate_position_size()),
+            'entry_price': (self.market_data.get('price') or self.market_data.get('close')) if signal is not None else None,
+            'stop_loss': self.calculate_stop_loss() if signal is not None else None,
+            'take_profit': self.calculate_take_profit() if signal is not None else None,
+            'position_size': str(self.calculate_position_size()) if signal is not None else None,
         }
 
     def shutdown(self):
