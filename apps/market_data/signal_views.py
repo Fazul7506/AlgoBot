@@ -10,9 +10,9 @@ from django.http import JsonResponse
 from django.utils import timezone
 
 from apps.brokers.exceptions import BrokerConnectionError
-from apps.brokers.models import BrokerAccount
 from apps.analysis.broker_intelligence import build_account_risk_context
 from apps.strategies.models import StrategySignal
+from core.account_context import get_active_account
 
 from .models import MarketSnapshot, MarketSymbol
 from .deriv_sync import sync_active_symbols
@@ -28,13 +28,8 @@ log = logging.getLogger(__name__)
 
 
 def _selected_deriv_account(request):
-    qs = BrokerAccount.objects.filter(user=request.user, status="active", broker__status="active", broker__broker_type="deriv").select_related("broker")
-    selected_id = request.session.get("active_broker_account_id")
-    if selected_id:
-        account = qs.filter(pk=selected_id).first()
-        if account:
-            return account
-    return qs.order_by("-last_synced_at", "-id").first()
+    """Use the canonical server-side active account context."""
+    return get_active_account(request.user, request=request, broker_type="deriv")
 
 
 def _as_float(value):
@@ -55,24 +50,21 @@ def _meta_first(metadata, *keys):
 def _analysis_timeframe(signal):
     if signal.configuration and signal.configuration.timeframe:
         return str(signal.configuration.timeframe)
-    metadata = signal.metadata if isinstance(signal.metadata, dict) else {}
-    return str(metadata.get("timeframe") or metadata.get("interval") or "M1")
+    return None
 
 
 def _analysis_baselines(request, symbols, timeframe, account=None):
-    qs = StrategySignal.objects.select_related("strategy", "configuration").filter(configuration__user=request.user, symbol__in=symbols).order_by("-timestamp")
+    """Return only signals bound to the authenticated active broker account."""
+    if account is None:
+        return {}
+    qs = (StrategySignal.objects.select_related("strategy", "configuration")
+          .filter(configuration__user=request.user, configuration__broker_account=account,
+                  symbol__in=symbols, timestamp__lte=timezone.now())
+          .order_by("-timestamp"))
     baselines = {}
-    selected = request.session.get("active_broker_account_id")
-    selected_id = int(selected) if str(selected).isdigit() else None
-    account_id = getattr(account, "pk", None)
     for signal in qs:
         if timeframe and _analysis_timeframe(signal) != timeframe:
             continue
-        signal_account_id = signal.configuration.broker_account_id if signal.configuration else None
-        if signal_account_id:
-            expected_id = selected_id or account_id
-            if expected_id is None or signal_account_id != expected_id:
-                continue
         if signal.symbol not in baselines:
             baselines[signal.symbol] = signal
     return baselines
@@ -212,8 +204,9 @@ def _persisted_live_ticks(markets):
 
 def _revise_signal(signal, live_tick, now, market, account):
     metadata = signal.metadata if isinstance(signal.metadata, dict) else {}
-    baseline_direction = str(signal.signal or "HOLD").upper()
-    base_confidence = max(0.0, min(100.0, _as_float(signal.confidence) or 0.0))
+    baseline_direction = str(signal.signal or "").upper()
+    raw_confidence = _as_float(signal.confidence)
+    base_confidence = max(0.0, min(100.0, raw_confidence)) if raw_confidence is not None else None
     analysis_age = max(0, int((now - signal.timestamp).total_seconds()))
     live_epoch = int(live_tick.get("epoch"))
     live_age = max(0, int(time.time()) - live_epoch)
@@ -223,7 +216,7 @@ def _revise_signal(signal, live_tick, now, market, account):
     # a confirmation/freshness gate and must not manufacture a second confidence
     # score by blending the quote into the strategy confidence.
     revised = base_confidence
-    confidence_source = "strategy_signal"
+    confidence_source = "strategy_signal" if base_confidence is not None else None
     evidence = ["analysis_baseline_loaded", "deriv_public_live_tick"]
     status = "LIVE_REVIEW"
     direction = baseline_direction
@@ -244,13 +237,13 @@ def _revise_signal(signal, live_tick, now, market, account):
     threshold = _as_float(metadata.get("live_confidence_threshold"))
     if threshold is None:
         threshold = DEFAULT_CONFIDENCE_THRESHOLD
-    execution_ready = direction in {"BUY", "SELL"} and revised >= threshold and status == "LIVE_REVIEW"
+    execution_ready = direction in {"BUY", "SELL"} and revised is not None and revised >= threshold and status == "LIVE_REVIEW"
     if not execution_ready and direction in {"BUY", "SELL"}:
         status = "LIVE_CONFIDENCE_BELOW_GATE"
     return {
         "analysis_signal_id": signal.id, "analysis_timestamp": signal.timestamp.isoformat(), "analysis_age_seconds": analysis_age,
-        "baseline_direction": baseline_direction, "baseline_confidence": round(base_confidence, 2), "direction": direction,
-        "confidence": round(revised, 2), "confidence_source": confidence_source, "live_confidence_threshold": round(threshold, 2), "execution_ready": execution_ready,
+        "baseline_direction": baseline_direction or None, "baseline_confidence": round(base_confidence, 2) if base_confidence is not None else None, "direction": direction,
+        "confidence": round(revised, 2) if revised is not None else None, "confidence_source": confidence_source, "live_confidence_threshold": round(threshold, 2), "execution_ready": execution_ready,
         "status": status, "evidence": evidence, "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
         "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None, "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
         "strategy": signal.strategy.name, "strategy_version": signal.strategy.version, "timeframe": _analysis_timeframe(signal),
@@ -317,8 +310,9 @@ def _strategy_signals_impl(request):
 
     actionable = [r for r in rows if r.get("execution_ready")]
     live_data_available_count = sum(1 for r in rows if r.get("live"))
-    stale_count = sum(1 for r in rows if r.get("status") == "LIVE_DATA_STALE")
-    return JsonResponse({"status": "ok", "source": "deriv_public_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency, "balance": account_risk_context.get("balance"), "available_funds": account_risk_context.get("available_funds"), "recommended_stake": account_risk_context.get("recommended_stake"), "risk_budget": account_risk_context.get("risk_budget")}, "account_risk_context": account_risk_context, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "account_trading_enabled": account_credentials_valid, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
+    stale_count = sum(1 for r in rows if r.get("status") in {"LIVE_DATA_STALE", "ANALYSIS_STALE"})
+    state = "ready" if actionable else "stale" if stale_count else "ready" if live_data_available_count else "unavailable"
+    return JsonResponse({"status": "ok", "state": state, "source": "deriv_public_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency, "balance": account_risk_context.get("balance"), "available_funds": account_risk_context.get("available_funds"), "recommended_stake": account_risk_context.get("recommended_stake"), "risk_budget": account_risk_context.get("risk_budget")}, "account_risk_context": account_risk_context, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "account_trading_enabled": account_credentials_valid, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
 
 
 def strategy_signals(request):
