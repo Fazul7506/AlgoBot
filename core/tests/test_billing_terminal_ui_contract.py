@@ -76,8 +76,9 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("/api/brokers/accounts/active/", context)
         self.assertNotIn("(storedId&&rows.find(a=>accountId(a)===storedId))", context)
         self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||", context)
-        self.assertIn("rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);", context)
-        self.assertNotIn("activeRequestFailed&&rememberedId&&rows.find", context)
+        self.assertIn("clearTransientState", context)
+        self.assertNotIn("X-Algobot-Account-ID", context)
+        self.assertNotIn("rememberedId", context)
         self.assertIn("function getSelectedId(){return accountId(getSelected())||null}", context)
 
     def test_sidebar_and_terminal_ai_use_canonical_account_context(self):
@@ -106,8 +107,10 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("/api/auth/browser-token/", client)
         self.assertIn("ensureApiAccessToken", client)
         self.assertIn("headers.set('Authorization'", client)
+        self.assertIn("credentials:'omit'", client)
         self.assertNotIn("ensureCsrfCookie", client)
         self.assertNotIn("X-CSRFToken", client)
+        self.assertNotIn("X-Algobot-Account-ID", client)
         self.assertNotIn("/api/csrf/", client)
 
     def test_frontend_data_contract_cache_buster_matches_bearer_transport(self):
