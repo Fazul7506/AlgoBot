@@ -167,7 +167,7 @@ async def _live_deriv_ticks(symbols):
                         extra={
                             "symbol": req_to_symbol.get(payload.get("req_id")),
                             "code": str(error.get("code") or "")[:80],
-                            "message": str(error.get("message") or "")[:200],
+                            "error_message": str(error.get("message") or "")[:200],
                         },
                     )
                     continue
