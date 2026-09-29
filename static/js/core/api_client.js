@@ -65,7 +65,6 @@
     const options=init, raw=typeof input === 'string' ? input : input?.url || '', url=resolveUrl(raw);
     const method=String(options.method || (typeof input === 'object' && input?.method) || 'GET').toUpperCase();
     const headers=new Headers((typeof input === 'object' && input?.headers) || {}); new Headers(options.headers || {}).forEach((value,key)=>headers.set(key,value)); headers.set('Accept',headers.get('Accept') || 'application/json');
-    const selectedId=window.AlgoBotAccountContext?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id; if (selectedId != null && !headers.has('X-Algobot-Account-ID')) headers.set('X-Algobot-Account-ID',String(selectedId));
     let body=options.body; if (url.pathname === '/api/orders/' || url.pathname === '/api/orders/preview/') body=normalizeOrderPayload(body);
     const controller=new AbortController(), callerSignal=options.signal, timeoutMs=Number.isFinite(Number(options.__algoTimeoutMs)) ? Math.max(1000,Number(options.__algoTimeoutMs)) : 30000;
     const timer=setTimeout(()=>controller.abort(new Error('API request timeout')),timeoutMs), signal=callerSignal && typeof AbortSignal.any === 'function' ? AbortSignal.any([callerSignal,controller.signal]) : controller.signal;
