@@ -5,7 +5,6 @@
   const STORAGE_KEY='algobot:selected-account-id:v1';
   const list=value=>Array.isArray(value)?value:(Array.isArray(value?.results)?value.results:(Array.isArray(value?.accounts)?value.accounts:[]));
   let accounts=[],selected=null,busy=null;
-  const storageGet=()=>{try{return localStorage.getItem(STORAGE_KEY)}catch(_){return null}};
   const storageSet=id=>{try{id==null?localStorage.removeItem(STORAGE_KEY):localStorage.setItem(STORAGE_KEY,String(id))}catch(_){}};
   const accountId=a=>a?.id==null?null:String(a.id);
   const canonical=()=>window.AlgoBotFrontendData?.request;
@@ -14,17 +13,14 @@
   async function load(force=false){
     if(busy&&!force)return busy;const request=canonical();if(!request)return selected;
     busy=(async()=>{
-      const rememberedId=storageGet();
       const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},10000)).filter(a=>a?.id);accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
-      let serverSelected=null,activeRequestFailed=false;
+      let serverSelected=null;
       const listedActive=rows.find(a=>a.is_active===true||a.is_preferred===true||a.is_default===true);
       if(listedActive) serverSelected=listedActive;
-      else if(rows.length>1 && rememberedId){
-        try{
-          const active=await request('/api/brokers/accounts/active/',{notifyOnError:false,headers:{'X-Algobot-Account-ID':String(rememberedId)}},5000);
-          serverSelected=active?.active_account||active?.account||null;
-        }catch(_){activeRequestFailed=true}
-      }
+      try{
+        const active=await request('/api/brokers/accounts/active/',{notifyOnError:false},5000);
+        serverSelected=active?.active_account||active?.account||null;
+      }catch(_){ }
       const serverId=accountId(serverSelected);
       // The original connected-account fallback remains intact for compatibility.
       let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
@@ -37,11 +33,38 @@
       if(!target){selected=null;storageSet(null);window.AlgoBotBrokerState?.reset('no-connected-broker-account');window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));return null}
       const hydrated=serverSelected&&accountId(serverSelected)===accountId(target)?serverSelected:target;
       accounts=accounts.map(a=>accountId(a)===accountId(hydrated)?{...a,...hydrated,is_active:true}:{...a,is_active:false,is_preferred:false});
-      if(!accounts.some(a=>accountId(a)===accountId(hydrated)))accounts=[hydrated,...accounts];window.AlgoBotBrokerAccounts=accounts.slice();return setSelected(hydrated,activeRequestFailed?'account-context-recovered':'account-context-hydrated',true);
+      if(!accounts.some(a=>accountId(a)===accountId(hydrated)))accounts=[hydrated,...accounts];window.AlgoBotBrokerAccounts=accounts.slice();return setSelected(hydrated,'account-context-hydrated',true);
     })().finally(()=>{busy=null});return busy;
   }
+  function clearTransientState(reason='account-switching'){
+    const state=window.AlgoBotBrokerState;
+    if(!state)return;
+    state.transition(state.STATES.SYNCING,{account:null,connection:null,balances:null,positions:[],orders:[],trades:[],market:{},lastError:null},reason);
+  }
+
   async function selectAccount(id){
-    if(busy)await busy.catch(()=>{});const target=accounts.find(a=>accountId(a)===String(id));if(!target)throw new Error('The selected broker account is no longer available. Refresh the account list.');if(target.switch_enabled===false)throw new Error('Broker account switching is disabled by platform configuration.');const request=canonical();if(!request)throw new Error('The broker account service is not ready.');const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();const payload=['demo','real'].includes(requestedType)?{account_type:requestedType}:{};const confirmedResponse=await request(`/api/brokers/accounts/${encodeURIComponent(target.id)}/select/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),notifyOnError:false},8000);const confirmed=confirmedResponse?.active_account||confirmedResponse?.account;if(!confirmed?.id||accountId(confirmed)!==accountId(target))throw new Error('Broker did not confirm the selected account.');accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_preferred:false,is_active:false});window.AlgoBotBrokerAccounts=accounts.slice();return setSelected(confirmed,'account-switch',true);
+    if(busy)await busy.catch(()=>{});
+    const target=accounts.find(a=>accountId(a)===String(id));
+    if(!target)throw new Error('The selected broker account is no longer available. Refresh the account list.');
+    if(target.switch_enabled===false)throw new Error('Broker account switching is disabled by platform configuration.');
+    const request=canonical();if(!request)throw new Error('The broker account service is not ready.');
+    const previous=selected;
+    clearTransientState('account-switch-started');
+    try{
+      const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
+      const payload=['demo','real'].includes(requestedType)?{account_type:requestedType}:{};
+      const confirmedResponse=await request('/api/brokers/accounts/'+encodeURIComponent(target.id)+'/select/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),notifyOnError:false},8000);
+      const confirmed=confirmedResponse?.active_account||confirmedResponse?.account;
+      if(!confirmed?.id||accountId(confirmed)!==accountId(target))throw new Error('Broker did not confirm the selected account.');
+      accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_preferred:false,is_active:false});
+      window.AlgoBotBrokerAccounts=accounts.slice();
+      return setSelected(confirmed,'account-switch',true);
+    }catch(error){
+      selected=null;
+      try{await load(true);}catch(_){window.AlgoBotBrokerState?.reset('account-switch-failed');}
+      if(previous&&!selected)window.AlgoBotBrokerState?.reset('account-switch-failed');
+      throw error;
+    }
   }
   function getSelected(){return selected||window.AlgoBotBrokerState?.get?.().account||null}
   function getSelectedId(){return accountId(getSelected())||null}

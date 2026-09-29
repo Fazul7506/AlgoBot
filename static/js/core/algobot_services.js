@@ -40,9 +40,7 @@
 
   const request = async (name, url, options = {}, timeout = 25000) => {
     const service = serviceFor(name);
-    const currentAccountId = accountId();
     const requestOptions = { ...options, headers: { Accept: 'application/json', ...(options.headers || {}) } };
-    if (currentAccountId && !requestOptions.headers['X-Algobot-Account-ID']) requestOptions.headers['X-Algobot-Account-ID'] = String(currentAccountId);
     try {
       if (data()?.request) return await data().request(url, { ...requestOptions, notifyOnError: false }, timeout);
       const response = await runtime()?.withTimeout?.(({ signal }) => fetch(url, { ...requestOptions, credentials: 'same-origin', signal }), timeout, service);

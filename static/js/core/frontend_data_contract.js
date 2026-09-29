@@ -73,11 +73,18 @@
     const target=resolveUrl(url);
     const targetOrigin=new URL(target,window.location.origin).origin;
     const sameOrigin=targetOrigin===window.location.origin;
-    const selectedId=brokerState()?.get?.()?.account?.id;
-    if(selectedId&&!headers.has('X-Algobot-Account-ID'))headers.set('X-Algobot-Account-ID',String(selectedId));
+    const sessionAccountSelect=/^\/api\/brokers\/accounts\/[^/]+\/select\/$/.test(new URL(target,window.location.origin).pathname);
+    if(sessionAccountSelect){
+      const match=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+      const csrfToken=match?decodeURIComponent(match[1]):'';
+      if(csrfToken&&!headers.has('X-CSRFToken'))headers.set('X-CSRFToken',csrfToken);
+      const requestInit={credentials:'include',...options,headers,cache:'no-store',signal:controller.signal};
+      const response=await nativeFetch(target,requestInit);
+      return{response,text:await response.text()};
+    }
     const accessToken=await ensureApiAccessToken(controller);
     if(accessToken&&!headers.has('Authorization'))headers.set('Authorization','Bearer '+accessToken);
-    const requestInit={credentials:'include',...options,headers,cache:'no-store',signal:controller.signal};
+    const requestInit={credentials:'omit',...options,headers,cache:'no-store',signal:controller.signal};
     const response=await nativeFetch(target,requestInit);
     return{response,text:await response.text()};
   }
@@ -122,9 +129,8 @@
           controller=new AbortController();
           const retryToken=await ensureApiAccessToken(controller,true);
           const retryHeaders=new Headers({Accept:'application/json',...(options.headers||{})});
-          if(selectedId&&!retryHeaders.has('X-Algobot-Account-ID'))retryHeaders.set('X-Algobot-Account-ID',String(selectedId));
           retryHeaders.set('Authorization','Bearer '+retryToken);
-          const retryResponse=await nativeFetch(resolveUrl(url),{credentials:'include',...options,headers:retryHeaders,cache:'no-store',signal:controller.signal});
+          const retryResponse=await nativeFetch(resolveUrl(url),{credentials:'omit',...options,headers:retryHeaders,cache:'no-store',signal:controller.signal});
           const retryText=await retryResponse.text();
           result={response:retryResponse,text:retryText};
         }catch(_){ }

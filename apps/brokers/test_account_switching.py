@@ -77,11 +77,31 @@ class AccountSwitchingTests(TestCase):
         self.assertEqual(result.status_code, 409)
         self.assertIn('not real', result.data['detail'])
 
-    @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
-    def test_session_switch_does_not_require_api_csrf_token(self):
-        first = self.make_account('DEMO-API-1', 'demo')
-        second = self.make_account('REAL-API-2', 'real')
-        result = self.client.post(f'/api/brokers/accounts/{second.pk}/select/', {}, format='json')
+
+    def test_session_authenticated_switch_requires_csrf_token(self):
+        self.make_account('DEMO-CSRF-1', 'demo')
+        second = self.make_account('REAL-CSRF-2', 'real')
+        client = __import__('django.test', fromlist=['Client']).Client(enforce_csrf_checks=True)
+        self.assertTrue(client.login(username='account-switch-user', password='test-password'))
+        result = client.post(f'/api/brokers/accounts/{second.pk}/select/', {}, content_type='application/json')
+        self.assertEqual(result.status_code, 403)
+
+    def test_session_authenticated_switch_accepts_current_csrf_token(self):
+        self.make_account('DEMO-CSRF-1', 'demo')
+        second = self.make_account('REAL-CSRF-2', 'real')
+        client = __import__('django.test', fromlist=['Client']).Client(enforce_csrf_checks=True)
+        self.assertTrue(client.login(username='account-switch-user', password='test-password'))
+        page = client.get('/trading/')
+        self.assertEqual(page.status_code, 200)
+        csrf_token = client.cookies['csrftoken'].value
+
+        result = client.post(
+            f'/api/brokers/accounts/{second.pk}/select/',
+            {},
+            content_type='application/json',
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.data['active_account_id'], second.pk)
-        self.assertNotEqual(first.pk, second.pk)
+

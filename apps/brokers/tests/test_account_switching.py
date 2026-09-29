@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 from django.contrib.sessions.middleware import SessionMiddleware
 
-from core.account_context import REQUEST_HEADER, SESSION_KEY, get_active_account, select_account
+from core.account_context import SESSION_KEY, get_active_account, select_account
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 
 
@@ -64,18 +64,19 @@ class AccountSwitchingTests(TestCase):
         self.assertEqual(request.session[SESSION_KEY], self.account_two.pk)
         self.assertEqual(get_active_account(self.user, request=request), self.account_two)
 
-    def test_query_parameter_can_select_an_account_on_normal_django_request(self):
+    def test_query_parameter_cannot_override_session_active_account(self):
         request = self._request(
             f'/api/brokers/accounts/active/?account_id={self.account_two.pk}'
         )
-        self.assertEqual(get_active_account(self.user, request=request), self.account_two)
+        select_account(request, self.account_one)
+        self.assertEqual(get_active_account(self.user, request=request), self.account_one)
 
-    def test_request_header_can_select_an_account_without_replacing_session(self):
+    def test_request_header_cannot_override_session_active_account(self):
         request = self._request()
         select_account(request, self.account_one)
-        request.META[REQUEST_HEADER] = str(self.account_two.pk)
+        request.META["HTTP_X_ALGOBOT_ACCOUNT_ID"] = str(self.account_two.pk)
 
-        self.assertEqual(get_active_account(self.user, request=request), self.account_two)
+        self.assertEqual(get_active_account(self.user, request=request), self.account_one)
         self.assertEqual(request.session[SESSION_KEY], self.account_one.pk)
 
     def test_account_has_no_persistent_preference_field(self):

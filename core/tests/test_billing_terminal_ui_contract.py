@@ -59,6 +59,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("window.AlgoBotAPI", client)
         self.assertNotIn("bootstrappedCsrfToken", client)
         self.assertNotIn("X-CSRFToken", client)
+        self.assertNotIn("X-Algobot-Account-ID", client)
 
     def test_terminal_account_switch_uses_canonical_api_client(self):
         from pathlib import Path
@@ -76,8 +77,9 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("/api/brokers/accounts/active/", context)
         self.assertNotIn("(storedId&&rows.find(a=>accountId(a)===storedId))", context)
         self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||", context)
-        self.assertIn("rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);", context)
-        self.assertNotIn("activeRequestFailed&&rememberedId&&rows.find", context)
+        self.assertIn("clearTransientState", context)
+        self.assertNotIn("X-Algobot-Account-ID", context)
+        self.assertNotIn("rememberedId", context)
         self.assertIn("function getSelectedId(){return accountId(getSelected())||null}", context)
 
     def test_sidebar_and_terminal_ai_use_canonical_account_context(self):
@@ -99,15 +101,19 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("request(`/api/brokers/accounts/${target.id}/select/", live_ui)
         self.assertIn("context.selectAccount(id)", live_ui)
 
-    def test_frontend_transport_uses_bearer_auth_without_csrf_headers(self):
+    def test_frontend_transport_uses_bearer_auth_with_scoped_session_csrf(self):
         from pathlib import Path
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("browserApiTokenUrl", client)
         self.assertIn("/api/auth/browser-token/", client)
         self.assertIn("ensureApiAccessToken", client)
         self.assertIn("headers.set('Authorization'", client)
+        self.assertIn("credentials:'omit'", client)
         self.assertNotIn("ensureCsrfCookie", client)
-        self.assertNotIn("X-CSRFToken", client)
+        self.assertIn("sessionAccountSelect", client)
+        self.assertIn("X-CSRFToken", client)
+        self.assertIn("credentials:'include'", client)
+        self.assertNotIn("X-Algobot-Account-ID", client)
         self.assertNotIn("/api/csrf/", client)
 
     def test_frontend_data_contract_cache_buster_matches_bearer_transport(self):
@@ -115,7 +121,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         template = Path("templates/base.html").read_text(encoding="utf-8")
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("ensureApiAccessToken", client)
-        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260927-bearerauth1", template)
+        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260929-bearerauth2", template)
         self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260913-sameorigin1", template)
 
     def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):
@@ -125,6 +131,12 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("forceSameOrigin=false", client)
         self.assertIn("window.location.origin", client)
         self.assertIn("Execution", client)
+
+    def test_websocket_account_switch_requires_http_session_selection(self):
+        from pathlib import Path
+        realtime = Path("core/realtime.py").read_text(encoding="utf-8")
+        self.assertIn("ACCOUNT_CONTEXT_NOT_ACTIVE", realtime)
+        self.assertIn("session_account = await self.selected_account()", realtime)
 
     def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
         from pathlib import Path

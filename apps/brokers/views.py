@@ -63,7 +63,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         response_obj=super().finalize_response(request,response_obj,*args,**kwargs)
         response_obj['Cache-Control']='private, no-store, max-age=0'
         response_obj['Pragma']='no-cache'
-        response_obj['Vary']='Cookie, X-Algobot-Account-ID'
+        response_obj['Vary']='Cookie'
         return response_obj
     @decorators.action(detail=True,methods=['post'])
     def select(self,request,pk=None):
