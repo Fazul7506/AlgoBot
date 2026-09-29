@@ -156,7 +156,9 @@ class StrategyExecutionService:
             if market_data is None or indicator_data is None: market_data, indicator_data, handoff = LiveMarketContextService().build(config)
             else: handoff = {'source': 'caller_supplied', 'timeframe': config.timeframe}
             if not market_data or market_data.get('close') is None: raise RuntimeError('No live market price was supplied to strategy execution')
-            cls = registry.get(config.strategy.slug); strat = cls(config, market_data, indicator_data); strat.initialize(); strat.validate(); result = strat.execute(); StrategyValidationService().validate_signal(result['signal'])
+            cls = registry.get(config.strategy.slug); strat = cls(config, market_data, indicator_data); strat.initialize(); strat.validate(); result = strat.execute();
+            if result.get('signal') is not None:
+                StrategyValidationService().validate_signal(result['signal'])
             criteria_passed = (result.get('criteria') or {}).get('passed', True); ai_enabled = (config.parameters or {}).get('ai_ensemble_enabled', True); ai_consensus = None; ai_error = None
             if ai_enabled and criteria_passed:
                 try:
@@ -179,7 +181,7 @@ class StrategyExecutionService:
             if not criteria_passed: result['signal'] = None; result['confidence'] = None; result['ai_blocked_by_criteria'] = True
             auto_execution = self._auto_execute_if_allowed(config, result)
             if auto_execution: result['auto_execution'] = auto_execution
-            execution.signal = result['signal']; execution.confidence = result.get('confidence', 0); execution.status = 'completed'; execution.completed_at = timezone.now(); execution.latency_ms = (time.perf_counter() - start) * 1000; execution.context = result; execution.save()
+            execution.signal = result.get('signal'); execution.confidence = result.get('confidence'); execution.status = 'completed'; execution.completed_at = timezone.now(); execution.latency_ms = (time.perf_counter() - start) * 1000; execution.context = result; execution.save()
             if result.get('signal') in {'BUY', 'SELL'} and result.get('confidence') is not None:
                 StrategySignalRepository().create(strategy=config.strategy, configuration=config, symbol=config.symbol, signal=result['signal'], confidence=result.get('confidence'), entry_price=result.get('entry_price'), stop_loss=result.get('stop_loss'), take_profit=result.get('take_profit'), metadata=result)
             return execution
