@@ -101,7 +101,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("request(`/api/brokers/accounts/${target.id}/select/", live_ui)
         self.assertIn("context.selectAccount(id)", live_ui)
 
-    def test_frontend_transport_uses_bearer_auth_without_csrf_headers(self):
+    def test_frontend_transport_uses_bearer_auth_with_scoped_session_csrf(self):
         from pathlib import Path
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("browserApiTokenUrl", client)
