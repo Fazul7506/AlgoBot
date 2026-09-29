@@ -15,7 +15,19 @@
     <article class="live-status-card"><span>Analysis coverage</span><strong id="signalsBaseline">—</strong><small>Latest matching baseline</small></article>
     <article class="live-status-card"><span>Trading-ready</span><strong id="signalsReady">0</strong><small>Execution is manual</small></article>
   </section>
-  <section class="signal-command panel"><div><strong>Signal scanner</strong><span>Current prices come directly from Deriv. Missing broker data is shown as a missing quote, never fabricated.</span></div><div class="signal-filters"><select id="signalsSymbol" aria-label="Instrument"><option value="">All instruments</option></select><select id="signalsTimeframe" aria-label="Analysis timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select><select id="signalsLimit" aria-label="Market limit"><option>20</option><option selected>40</option><option>60</option><option>80</option></select></div></section>
+  <section class="signal-command panel"><div><strong>Signal scanner</strong><span>Current prices come directly from Deriv. Missing broker data is shown as a missing quote, never fabricated.</span></div><div class="signal-filters">
+    <input id="signalsSearch" type="search" placeholder="Search symbol / strategy" aria-label="Search signals">
+    <select id="signalsSymbol" aria-label="Instrument"><option value="">All instruments</option></select>
+    <select id="signalsStrategy" aria-label="Strategy"><option value="">All strategies</option></select>
+    <select id="signalsDirection" aria-label="Direction"><option value="">All directions</option><option value="BUY">BUY</option><option value="SELL">SELL</option></select>
+    <select id="signalsStatus" aria-label="Signal status"><option value="">All statuses</option></select>
+    <select id="signalsConfidence" aria-label="Confidence"><option value="">Any confidence</option><option value="70">70%+</option><option value="80">80%+</option><option value="90">90%+</option></select>
+    <select id="signalsSort" aria-label="Sort signals"><option value="symbol">Symbol</option><option value="confidence">Confidence</option><option value="live_age">Live age</option><option value="timestamp">Signal time</option></select>
+    <select id="signalsTimeframe" aria-label="Analysis timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select>
+    <select id="signalsLimit" aria-label="Market limit"><option>20</option><option selected>40</option><option>60</option><option>80</option></select>
+    <select id="signalsPageSize" aria-label="Rows per page"><option>10</option><option selected>20</option><option>40</option></select>
+    <button class="btn" id="signalsPrev" type="button">Previous</button><button class="btn" id="signalsNext" type="button">Next</button>
+  </div></section>
   <section class="signal-overview">
     <article class="signal-focus panel">
       <div class="panel-title"><div><span class="eyebrow">SELECTED SIGNAL</span><h2 id="focusInstrument">Live market</h2></div><span id="focusState" class="signal-state waiting">WAITING</span></div>
