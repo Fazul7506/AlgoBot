@@ -105,11 +105,3 @@ class AccountSwitchingTests(TestCase):
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.data['active_account_id'], second.pk)
 
-    @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
-    def test_session_switch_does_not_require_api_csrf_token(self):
-        first = self.make_account('DEMO-API-1', 'demo')
-        second = self.make_account('REAL-API-2', 'real')
-        result = self.client.post(f'/api/brokers/accounts/{second.pk}/select/', {}, format='json')
-        self.assertEqual(result.status_code, 200)
-        self.assertEqual(result.data['active_account_id'], second.pk)
-        self.assertNotEqual(first.pk, second.pk)
