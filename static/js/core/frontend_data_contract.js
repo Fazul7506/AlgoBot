@@ -73,8 +73,6 @@
     const target=resolveUrl(url);
     const targetOrigin=new URL(target,window.location.origin).origin;
     const sameOrigin=targetOrigin===window.location.origin;
-    const selectedId=brokerState()?.get?.()?.account?.id;
-    if(selectedId&&!headers.has('X-Algobot-Account-ID'))headers.set('X-Algobot-Account-ID',String(selectedId));
     const accessToken=await ensureApiAccessToken(controller);
     if(accessToken&&!headers.has('Authorization'))headers.set('Authorization','Bearer '+accessToken);
     const requestInit={credentials:'omit',...options,headers,cache:'no-store',signal:controller.signal};
