@@ -6,7 +6,6 @@ import json
 import time
 from decimal import Decimal
 
-from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
