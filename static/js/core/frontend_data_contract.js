@@ -75,7 +75,7 @@
     const sameOrigin=targetOrigin===window.location.origin;
     const sessionAccountSelect=/^\/api\/brokers\/accounts\/[^/]+\/select\/$/.test(new URL(target,window.location.origin).pathname);
     if(sessionAccountSelect){
-      const match=document.cookie.match(/(?:^|;\\s*)csrftoken=([^;]+)/);
+      const match=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
       const csrfToken=match?decodeURIComponent(match[1]):'';
       if(csrfToken&&!headers.has('X-CSRFToken'))headers.set('X-CSRFToken',csrfToken);
       const requestInit={credentials:'include',...options,headers,cache:'no-store',signal:controller.signal};
