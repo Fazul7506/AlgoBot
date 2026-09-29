@@ -115,7 +115,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("headers.set('Authorization'", client)
         self.assertIn("credentials:sessionAccountSelect?'include':'omit'", client)
         self.assertNotIn("X-CSRFToken", client)
-        self.assertNotIn("csrftoken", client)
+        self.assertNotIn("document.cookie.match", client)
+        self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("X-Algobot-Account-ID", client)
         self.assertNotIn("/api/csrf/", client)
 
@@ -124,7 +125,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         template = Path("templates/base.html").read_text(encoding="utf-8")
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("ensureApiAccessToken", client)
-        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260929-bearerauth2", template)
+        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260929-bearerauth3", template)
+        self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260929-bearerauth2", template)
         self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260913-sameorigin1", template)
 
     def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):
