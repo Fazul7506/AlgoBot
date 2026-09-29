@@ -51,7 +51,7 @@ class AnalysisSmokeTests(TestCase):
                 volume=1,
                 epoch=epoch,
             )
-        get_active.return_value = type("Account", (), {\n            "account_id": "CR123", "account_type": "demo", "currency": "USD",\n            "credential_status": "ready", "token_status": "active",\n            "broker": type("Broker", (), {"broker_type": "deriv"})(),\n        })()\n        sync_account.return_value = (get_active.return_value, {})\n        fetch_contracts.return_value = {
+        fetch_contracts.return_value = {
             "available_contract_types": ["MULTUP", "MULTDOWN"],
             "available_contract_families": ["multiplier"],
             "expiry_types": ["intraday"],
@@ -115,7 +115,7 @@ class AnalysisSmokeTests(TestCase):
         response = self.client.get(reverse("analysis-contracts"), {"symbol": market.symbol})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["capabilities"]["available_contract_types"], ["MULTUP"])
-        fetch_contracts.assert_called_once_with(get_active.return_value, "R_100")\n        self.assertEqual(response.json()["account"]["credential_status"], "ready")\n        self.assertEqual(response.json()["capabilities"]["market_types"], ["synthetic_index"])
+        fetch_contracts.assert_called_once_with(get_active.return_value, "R_100")\n        sync_account.assert_awaited_once_with(get_active.return_value)\n        self.assertEqual(response.json()["account"]["credential_status"], "ready")\n        self.assertEqual(response.json()["capabilities"]["market_types"], ["synthetic_index"])
 
     def test_analysis_market_endpoint_is_user_authenticated(self):
         response = self.client.get(reverse("analysis-markets"))
