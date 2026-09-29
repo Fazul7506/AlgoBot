@@ -144,7 +144,7 @@ async def _live_deriv_ticks(symbols):
             max_size=2**20,
         ) as ws:
             for req_id, symbol in req_to_symbol.items():
-                await ws.send(json.dumps({"ticks": symbol, "subscribe": 0, "req_id": req_id}))
+                await ws.send(json.dumps({"ticks": symbol, "subscribe": 1, "req_id": req_id}))
 
             while len(results) < len(req_to_symbol):
                 remaining = deadline - time.monotonic()
@@ -161,6 +161,15 @@ async def _live_deriv_ticks(symbols):
                     continue
 
                 if payload.get("error"):
+                    error = payload.get("error") or {}
+                    log.warning(
+                        "Deriv public tick request failed",
+                        extra={
+                            "symbol": req_to_symbol.get(payload.get("req_id")),
+                            "code": str(error.get("code") or "")[:80],
+                            "message": str(error.get("message") or "")[:200],
+                        },
+                    )
                     continue
                 if payload.get("msg_type") != "tick":
                     continue
@@ -282,9 +291,11 @@ def _strategy_signals_impl(request):
             for symbol, tick in fallback_ticks.items():
                 tick["_source"] = "deriv_public_websocket"
             live_ticks.update(fallback_ticks)
-        except BrokerConnectionError:
+        except BrokerConnectionError as exc:
             # A missing live quote remains missing. No stale or fabricated value
-            # is substituted into a trading signal.
+            # is substituted into a trading signal. Preserve the failure reason
+            # in server logs without exposing broker internals to the browser.
+            log.warning("Signals live Deriv feed unavailable", extra={"error": str(exc)[:200]})
             pass
     feed_latency_ms = round((time.monotonic() - live_started) * 1000, 1)
     baselines = _analysis_baselines(request, symbols, timeframe, account=account)
