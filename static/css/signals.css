@@ -12,18 +12,9 @@
 html[data-theme="light"] .live-status-card,html[data-theme="light"] .panel{box-shadow:0 8px 24px rgba(15,23,42,.08)}
 
 
-/* Signal interpretation / lifecycle additions */
-.signals-explanation-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
-.signal-evidence-detail{display:grid;gap:8px}
-.evidence-row{display:grid;grid-template-columns:minmax(100px,.7fr) minmax(120px,1.5fr) auto;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:8px}
-.evidence-row span,.evidence-row small{color:var(--muted)}
-.signal-how{margin:0;padding-left:22px;display:grid;gap:10px;color:var(--text)}
-.signal-lifecycle-panel{margin-top:12px}
-.signal-lifecycle-detail{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
-.lifecycle-step{border:1px solid var(--line);border-radius:8px;padding:10px;min-width:0}
-.lifecycle-step span{display:block;font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
-.lifecycle-step strong{font-size:12px}
-@media(max-width:900px){.signals-explanation-grid{grid-template-columns:1fr}.signal-lifecycle-detail{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media(max-width:560px){.signal-lifecycle-detail{grid-template-columns:repeat(2,minmax(0,1fr))}.evidence-row{grid-template-columns:1fr}.signal-how{padding-left:20px}}
-
+.signal-research-contract{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.signal-research-contract>div{min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.signal-research-contract span{display:block;color:var(--muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.04em}
+.signal-research-contract strong{display:block;color:var(--text);margin-top:4px;overflow-wrap:anywhere}
+.signal-research-contract small{display:block;grid-column:1/-1;color:var(--muted);font-size:.68rem;line-height:1.4;margin-top:2px}
 .signals-pager{display:inline-flex;align-items:center;min-height:40px;padding:0 8px;color:var(--muted);font-size:.72rem;white-space:nowrap}
