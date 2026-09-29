@@ -113,7 +113,7 @@ class StrategyService:
                 trend = 'up' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] > indicators['sma20'] else 'down' if indicators.get('sma5') is not None and indicators.get('sma20') is not None and indicators['sma5'] < indicators['sma20'] else 'sideways'
                 indicator_data = {**indicators, 'trend': trend, 'rsi': LiveMarketContextService._rsi(closes)}
                 strategy = strategy_cls(configuration=config, market_data=market_data, indicator_data=indicator_data)
-                strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or 'HOLD').upper()
+                strategy.initialize(); result = strategy.execute(); signal = str(result.get('signal') or '').upper()
                 if signal not in {'BUY', 'SELL'}: continue
                 next_candle = candles[index + 1]
                 entry = float(current['close'])
@@ -130,7 +130,7 @@ class StrategyExecutionService:
         """Execute only a strategy-produced trade signal; never a manual terminal order."""
         if not (config.enabled and config.is_active and config.strategy.enabled): return None
         if (result.get('criteria') or {}).get('passed', True) is not True: return None
-        signal = str(result.get('signal') or 'HOLD').upper()
+        signal = str(result.get('signal') or '').upper()
         if signal not in {'BUY', 'SELL'}: return None
         account = getattr(config, 'broker_account', None)
         if account is None: return None
