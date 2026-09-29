@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -94,26 +94,59 @@ class AnalysisSmokeTests(TestCase):
         self.assertEqual(response.json()["source"], "market_data.Candle")
 
 
-    @patch.object(views, "fetch_contracts_for")
-    def test_analysis_contracts_returns_deriv_capabilities(self, fetch_contracts):
+    @patch.object(views, "_authenticated_contract_capabilities")
+    @patch.object(views.SynchronizationService, "sync_account", new_callable=AsyncMock)
+    @patch.object(views, "get_active_account")
+    def test_analysis_contracts_returns_authenticated_deriv_capabilities(self, get_active, sync_account, fetch_contracts):
         market = MarketSymbol.objects.create(
             symbol="R_100",
             display_name="Volatility 100",
             market="Volatility Indices",
         )
+        get_active.return_value = type(
+            "Account",
+            (),
+            {
+                "account_id": "CR123",
+                "account_type": "demo",
+                "currency": "USD",
+                "credential_status": "ready",
+                "token_status": "active",
+                "broker": type("Broker", (), {"broker_type": "deriv"})(),
+            },
+        )()
+        sync_account.return_value = (get_active.return_value, {})
         fetch_contracts.return_value = {
             "symbol": "R_100",
-            "source": "deriv_public_websocket",
-            "available": [{"underlying_symbol": "R_100", "contract_type": "MULTUP", "contract_category": "multiplier", "market": "synthetic_index", "submarket": "volatility", "exchange_name": "DERIV", "expiry_type": "intraday", "sentiment": "up", "barriers": 0}],
+            "source": "deriv_authenticated_contracts_for",
+            "available": [
+                {
+                    "underlying_symbol": "R_100",
+                    "contract_type": "MULTUP",
+                    "contract_category": "multiplier",
+                    "market": "synthetic_index",
+                    "submarket": "volatility",
+                    "exchange_name": "DERIV",
+                    "expiry_type": "intraday",
+                    "sentiment": "up",
+                    "barriers": 0,
+                }
+            ],
             "available_contract_types": ["MULTUP"],
             "available_contract_families": ["multiplier"],
+            "market_types": ["synthetic_index"],
+            "submarkets": ["volatility"],
             "expiry_types": ["intraday"],
             "sentiments": ["up"],
+            "barriers": ["0"],
         }
         response = self.client.get(reverse("analysis-contracts"), {"symbol": market.symbol})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["capabilities"]["available_contract_types"], ["MULTUP"])
-        fetch_contracts.assert_called_once_with("R_100")
+        fetch_contracts.assert_called_once_with(get_active.return_value, "R_100")
+        sync_account.assert_awaited_once_with(get_active.return_value)
+        self.assertEqual(response.json()["account"]["credential_status"], "ready")
+        self.assertEqual(response.json()["capabilities"]["market_types"], ["synthetic_index"])
 
     def test_analysis_market_endpoint_is_user_authenticated(self):
         response = self.client.get(reverse("analysis-markets"))

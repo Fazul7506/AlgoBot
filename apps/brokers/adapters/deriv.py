@@ -185,7 +185,7 @@ class DerivAdapter(BrokerAdapter):
             raise BrokerConnectionError("Deriv did not return a live signal tick")
         return {"symbol": symbol, "price": tick.get("quote"), "bid": tick.get("bid"), "ask": tick.get("ask"), "epoch": tick.get("epoch"), "pip_size": tick.get("pip_size")}
     async def get_trade_capabilities(self, symbol):
-        response = await self._request({"contracts_for": symbol}); root = response.get("contracts_for") or {}; available = root.get("available") or []
+        response = await self._request({"contracts_for": symbol}, authenticated=True); root = response.get("contracts_for") or {}; available = root.get("available") or []
         return [item for item in available if isinstance(item, dict) and item.get("contract_type")]
 
     async def get_chart_history(self, symbol, mode="ticks", count=120, granularity=None):
