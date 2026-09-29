@@ -77,6 +77,29 @@ class AccountSwitchingTests(TestCase):
         self.assertEqual(result.status_code, 409)
         self.assertIn('not real', result.data['detail'])
 
+
+    def test_session_authenticated_switch_requires_csrf_token(self):
+        self.make_account('DEMO-CSRF-1', 'demo')
+        second = self.make_account('REAL-CSRF-2', 'real')
+        client = __import__('django.test', fromlist=['Client']).Client(enforce_csrf_checks=True)
+        self.assertTrue(client.login(username='account-switch-user', password='test-password'))
+        result = client.post(f'/api/brokers/accounts/{second.pk}/select/', {}, content_type='application/json')
+        self.assertEqual(result.status_code, 403)
+
+    def test_bearer_api_switch_does_not_depend_on_session_cookie_csrf(self):
+        self.make_account('DEMO-BEARER-1', 'demo')
+        second = self.make_account('REAL-BEARER-2', 'real')
+        session_client = __import__('django.test', fromlist=['Client']).Client()
+        self.assertTrue(session_client.login(username='account-switch-user', password='test-password'))
+        token_response = session_client.get('/api/auth/browser-token/')
+        self.assertEqual(token_response.status_code, 200)
+        token = token_response.json()['access']
+        bearer_client = APIClient()
+        bearer_client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        result = bearer_client.post(f'/api/brokers/accounts/{second.pk}/select/', {}, format='json')
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data['active_account_id'], second.pk)
+
     @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
     def test_session_switch_does_not_require_api_csrf_token(self):
         first = self.make_account('DEMO-API-1', 'demo')
