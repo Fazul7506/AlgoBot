@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import MarketSymbol
+from apps.brokers.models import Order, Position
 from apps.strategies.models import StrategySignal
 from core.account_context import get_active_account
 
@@ -139,18 +140,41 @@ def signal_lifecycle(request):
     for signal in qs[:_limit(request, 100, 100)]:
         age_seconds = max(0, int((now - signal.timestamp).total_seconds()))
         lifecycle = "active" if age_seconds <= SIGNAL_ACTIVE_SECONDS else "expired"
+        order = Order.objects.filter(
+            user=request.user,
+            account=account,
+            symbol=signal.symbol,
+            routing_context__signal_id=str(signal.id),
+        ).order_by("-created_at").first()
+        position = None
+        if order is not None and order.broker_order_id:
+            position = Position.objects.filter(
+                account=account,
+                broker_order_id=order.broker_order_id,
+            ).order_by("-broker_timestamp", "-id").first()
+        execution_state = "not_executed"
+        if order is not None:
+            execution_state = "executed" if order.status in {"filled", "executed", "completed", "reconciled"} else str(order.status or "pending")
+        settlement_state = None
+        if position is not None:
+            settlement_state = "settled" if position.settlement_time or position.closed_at else "open"
         data.append({
             "id": signal.id,
             "symbol": signal.symbol,
-            "direction": _signal_direction(signal),
+            "direction": _signal_direction(signal) or None,
             "confidence": signal.confidence,
             "strategy": signal.strategy.name,
             "timeframe": signal.configuration.timeframe if signal.configuration else "",
-            "market_regime": "",
+            "market_regime": (signal.metadata or {}).get("market_regime") if isinstance(signal.metadata, dict) else None,
             "created_at": signal.timestamp.isoformat(),
             "age_seconds": age_seconds,
             "lifecycle": lifecycle,
-            "was_executed": False,
+            "execution_state": execution_state,
+            "settlement_state": settlement_state,
+            "order_id": order.id if order else None,
+            "broker_order_id": order.broker_order_id if order else None,
+            "contract_id": position.contract_id if position else None,
+            "transaction_id": position.transaction_id if position else None,
         })
     return Response({
         "status": "ok",
