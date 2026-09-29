@@ -10,7 +10,52 @@
   const label = value => String(value ?? '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—';
   const tone = value => { const v = String(value || '').toUpperCase(); return v === 'BUY' ? 'buy' : v === 'SELL' ? 'sell' : 'hold'; };
   const stateText = value => String(value || 'WAITING').replaceAll('_', ' ');
-  const S = { rows: [], last: null, scanning: false, specRequest: 0 };
+  const S = { rows: [], last: null, scanning: false, specRequest: 0, page: 1 };
+
+  function populateViewOptions(rows) {
+    const strategies = [...new Set(rows.map(r => r.strategy).filter(Boolean))].sort();
+    const statuses = [...new Set(rows.map(r => r.status).filter(Boolean))].sort();
+    const fill = (id, values, emptyLabel) => {
+      const el=$(id); if(!el) return;
+      const current=el.value;
+      el.innerHTML=`<option value="">${esc(emptyLabel)}</option>`+values.map(v=>`<option value="${esc(v)}">${esc(label(v))}</option>`).join('');
+      if(values.includes(current)) el.value=current;
+    };
+    fill('signalsStrategy',strategies,'All strategies');
+    fill('signalsStatus',statuses,'All statuses');
+  }
+  function filteredRows() {
+    const q=String($('signalsSearch')?.value||'').trim().toLowerCase();
+    const symbol=$('signalsSymbol')?.value||'', strategy=$('signalsStrategy')?.value||'';
+    const direction=String($('signalsDirection')?.value||'').toUpperCase();
+    const status=$('signalsStatus')?.value||'', minConfidence=Number($('signalsConfidence')?.value||0);
+    const sort=$('signalsSort')?.value||'symbol';
+    let rows=S.rows.filter(r => {
+      const hay=[r.symbol,r.display_name,r.strategy,r.status,r.market].filter(Boolean).join(' ').toLowerCase();
+      return (!q||hay.includes(q)) && (!symbol||r.symbol===symbol) && (!strategy||r.strategy===strategy)
+        && (!direction||String(r.direction||'').toUpperCase()===direction) && (!status||r.status===status)
+        && (!minConfidence||Number(r.confidence)>=minConfidence);
+    });
+    rows.sort((a,b)=>{
+      if(sort==='confidence') return (Number(b.confidence)||-Infinity)-(Number(a.confidence)||-Infinity);
+      if(sort==='live_age') return (Number(a.live?.age_seconds)||Infinity)-(Number(b.live?.age_seconds)||Infinity);
+      if(sort==='timestamp') return String(b.analysis_timestamp||'').localeCompare(String(a.analysis_timestamp||''));
+      return String(a.symbol||'').localeCompare(String(b.symbol||''));
+    });
+    const size=Number($('signalsPageSize')?.value||20), pages=Math.max(1,Math.ceil(rows.length/size));
+    S.page=Math.min(Math.max(1,S.page),pages);
+    const start=(S.page-1)*size;
+    if($('signalsPrev'))$('signalsPrev').disabled=S.page<=1;
+    if($('signalsNext'))$('signalsNext').disabled=S.page>=pages;
+    const pager=$('signalsPager'); if(pager) pager.textContent=`Page ${S.page} of ${pages} · ${rows.length} matching`;
+    return {rows:rows.slice(start,start+size),total:rows.length};
+  }
+  function renderView() {
+    const view=filteredRows();
+    renderTape(view.rows); renderTable(view.rows);
+    if(view.rows.length) focus(view.rows.find(r=>r.execution_ready)||view.rows.find(r=>r.direction==='BUY'||r.direction==='SELL')||view.rows.find(r=>r.live)||view.rows[0]);
+    else focus(null);
+  }
 
   function setStatus(message, live = false) {
     if ($('signalsFeed')) $('signalsFeed').textContent = message;
@@ -129,10 +174,19 @@
   }
   async function scan() {
     if(S.scanning)return; S.scanning=true; const controls=[$('signalsScan'),$('signalsRefresh')].filter(Boolean); controls.forEach(b=>{b.disabled=true;b.setAttribute('aria-busy','true')}); const symbol=$('signalsSymbol')?.value||'', timeframe=$('signalsTimeframe')?.value||'M1', limit=$('signalsLimit')?.value||'40';
-    try { setStatus('Reading the continuous Deriv public market-data stream…'); const data=await request(`/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol?`&symbol=${encodeURIComponent(symbol)}`:''}`); if(data.status!=='ok')throw new Error(data.message||'Live signal service returned an invalid response.'); S.rows=Array.isArray(data.data)?data.data:[]; S.last=data; populateSymbols(S.rows); if($('signalsAccount'))$('signalsAccount').textContent=data.account?.id||'—'; if($('signalsAccountType'))$('signalsAccountType').textContent=`${data.account?.type||'account'} · ${data.account?.currency||''}`; renderHealth(data); setStatus(Number(data.live_data_available_count||0)>0?'LIVE':'NO LIVE QUOTES',Number(data.live_data_available_count||0)>0); renderTape(S.rows); renderTable(S.rows); focus(S.rows.find(r=>r.execution_ready)||S.rows.find(r=>r.direction==='BUY'||r.direction==='SELL')||S.rows.find(r=>r.live)||S.rows[0]); }
+    try { setStatus('Reading the continuous Deriv public market-data stream…'); const data=await request(`/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol?`&symbol=${encodeURIComponent(symbol)}`:''}`); if(data.status!=='ok')throw new Error(data.message||'Live signal service returned an invalid response.'); S.rows=Array.isArray(data.data)?data.data:[]; S.last=data; populateSymbols(S.rows); populateViewOptions(S.rows); S.page=1; if($('signalsAccount'))$('signalsAccount').textContent=data.account?.id||'—'; if($('signalsAccountType'))$('signalsAccountType').textContent=`${data.account?.type||'account'} · ${data.account?.currency||''}`; renderHealth(data); setStatus(Number(data.live_data_available_count||0)>0?'LIVE':'NO LIVE QUOTES',Number(data.live_data_available_count||0)>0); renderView(); }
     catch(error){const message=error?.message||'Market data unavailable.';S.rows=[];setStatus(message);if($('signalsReady'))$('signalsReady').textContent='0';if($('signalsBaseline'))$('signalsBaseline').textContent='Unavailable';if($('scanTimestamp'))$('scanTimestamp').textContent=`Scan failed · ${new Date().toLocaleTimeString()}`;if($('signalsTable'))$('signalsTable').innerHTML=`<tr><td colspan="10">${esc(message)}</td></tr>`;if($('liveTape'))$('liveTape').innerHTML=`<div class="empty">${esc(message)}</div>`;focus(null)}
     finally{S.scanning=false;controls.forEach(b=>{b.disabled=false;b.removeAttribute('aria-busy')})}
   }
-  function boot(){ $('signalsScan')?.addEventListener('click',scan);$('signalsRefresh')?.addEventListener('click',scan);$('signalsSymbol')?.addEventListener('change',scan);$('signalsTimeframe')?.addEventListener('change',scan);$('signalsLimit')?.addEventListener('change',scan);const resetForAccountChange=()=>{S.rows=[];S.last=null;focus(null);renderTape([]);renderTable([]);setStatus('Account changed — refreshing the Deriv public market-data feed…');scan()};window.addEventListener('algobot:account-synced',resetForAccountChange);window.addEventListener('algobot:account-changed',resetForAccountChange);scan(); }
+  function boot(){
+    $('signalsScan')?.addEventListener('click',scan); $('signalsRefresh')?.addEventListener('click',scan);
+    $('signalsSymbol')?.addEventListener('change',()=>{S.page=1;renderView()}); $('signalsTimeframe')?.addEventListener('change',scan);
+    $('signalsLimit')?.addEventListener('change',scan);
+    ['signalsSearch','signalsStrategy','signalsDirection','signalsStatus','signalsConfidence','signalsSort','signalsPageSize'].forEach(id=>$(id)?.addEventListener('input',()=>{S.page=1;renderView()}));
+    ['signalsStrategy','signalsDirection','signalsStatus','signalsConfidence','signalsSort','signalsPageSize'].forEach(id=>$(id)?.addEventListener('change',()=>{S.page=1;renderView()}));
+    $('signalsPrev')?.addEventListener('click',()=>{S.page--;renderView()}); $('signalsNext')?.addEventListener('click',()=>{S.page++;renderView()});
+    const resetForAccountChange=()=>{S.rows=[];S.last=null;S.page=1;focus(null);renderTape([]);renderTable([]);setStatus('Account changed — refreshing the Deriv public market-data feed…');scan()};
+    window.addEventListener('algobot:account-synced',resetForAccountChange); window.addEventListener('algobot:account-changed',resetForAccountChange); scan();
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
