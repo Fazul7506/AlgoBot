@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.brokers.models import Broker, BrokerAccount
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from apps.strategies.models import Strategy, StrategyConfiguration, StrategySignal
 
 from .models import MarketSnapshot, MarketSymbol
@@ -16,7 +16,22 @@ class LiveSignalsContractTests(TestCase):
         self.client = self.client_class()
         self.user = get_user_model().objects.create_user(username="signals-contract", password="test-pass")
         self.broker = Broker.objects.create(name="Deriv", broker_type="deriv", status="active", supports_live=True)
-        self.account = BrokerAccount.objects.create(user=self.user, broker=self.broker, account_id="VRTC-SIGNALS", status="active", token_status="active")
+        self.account = BrokerAccount.objects.create(
+            user=self.user,
+            broker=self.broker,
+            account_id="VRTC-SIGNALS",
+            status="active",
+            token_status="active",
+            credentials={"account_type": "demo"},
+        )
+        self.account.set_access_token("test-access-token")
+        self.account.save(update_fields=["access_token"])
+        BrokerConnection.objects.create(
+            broker=self.broker,
+            broker_account=self.account,
+            status="connected",
+            connected_at=timezone.now(),
+        )
         self.assertTrue(self.client.login(username="signals-contract", password="test-pass"))
         self.market = MarketSymbol.objects.create(symbol="R_100", display_name="Volatility 100", market="Derived Indices", broker="deriv", is_active=True, is_tradable=True)
         self.strategy = Strategy.objects.create(name="Live Test", slug="live-test", category="Trend Following", version="1", enabled=True)
