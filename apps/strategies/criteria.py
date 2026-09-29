@@ -24,7 +24,7 @@ class CriteriaEngine:
         except (InvalidOperation, TypeError, ValueError):
             raise CriteriaEvaluationError(f'Criteria {key!r} must be numeric')
 
-    def evaluate(self, criteria, market_data, indicator_data, signal='HOLD', confidence=0):
+    def evaluate(self, criteria, market_data, indicator_data, signal=None, confidence=None):
         if criteria in (None, {}):
             return True, []
         if not isinstance(criteria, dict):
@@ -34,9 +34,9 @@ class CriteriaEngine:
         indicators = indicator_data or {}
         market = market_data or {}
 
-        if 'rsi_min' in criteria and self._number(indicators.get('rsi', 50), 'rsi_min') < self._number(criteria['rsi_min'], 'rsi_min'):
+        if 'rsi_min' in criteria and self._number(indicators.get('rsi'), 'rsi_min') < self._number(criteria['rsi_min'], 'rsi_min'):
             reasons.append('RSI is below rsi_min')
-        if 'rsi_max' in criteria and self._number(indicators.get('rsi', 50), 'rsi_max') > self._number(criteria['rsi_max'], 'rsi_max'):
+        if 'rsi_max' in criteria and self._number(indicators.get('rsi'), 'rsi_max') > self._number(criteria['rsi_max'], 'rsi_max'):
             reasons.append('RSI is above rsi_max')
         if 'price_min' in criteria and self._number(market.get('close'), 'price_min') < self._number(criteria['price_min'], 'price_min'):
             reasons.append('price is below price_min')
@@ -44,9 +44,9 @@ class CriteriaEngine:
             reasons.append('price is above price_max')
         if 'min_confidence' in criteria and self._number(confidence, 'min_confidence') < self._number(criteria['min_confidence'], 'min_confidence'):
             reasons.append('confidence is below min_confidence')
-        if 'max_range' in criteria and self._number(indicators.get('range', 0), 'max_range') > self._number(criteria['max_range'], 'max_range'):
+        if 'max_range' in criteria and self._number(indicators.get('range'), 'max_range') > self._number(criteria['max_range'], 'max_range'):
             reasons.append('range is above max_range')
-        if 'min_range' in criteria and self._number(indicators.get('range', 0), 'min_range') < self._number(criteria['min_range'], 'min_range'):
+        if 'min_range' in criteria and self._number(indicators.get('range'), 'min_range') < self._number(criteria['min_range'], 'min_range'):
             reasons.append('range is below min_range')
 
         required_trend = criteria.get('trend')
