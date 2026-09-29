@@ -156,22 +156,34 @@ class StrategyExecutionService:
             if market_data is None or indicator_data is None: market_data, indicator_data, handoff = LiveMarketContextService().build(config)
             else: handoff = {'source': 'caller_supplied', 'timeframe': config.timeframe}
             if not market_data or market_data.get('close') is None: raise RuntimeError('No live market price was supplied to strategy execution')
-            cls = registry.get(config.strategy.slug); strat = cls(config, market_data, indicator_data); strat.initialize(); strat.validate(); result = strat.execute(); StrategyValidationService().validate_signal(result['signal'])
+            cls = registry.get(config.strategy.slug); strat = cls(config, market_data, indicator_data); strat.initialize(); strat.validate(); result = strat.execute();
+            if result.get('signal') is not None:
+                StrategyValidationService().validate_signal(result['signal'])
             criteria_passed = (result.get('criteria') or {}).get('passed', True); ai_enabled = (config.parameters or {}).get('ai_ensemble_enabled', True); ai_consensus = None; ai_error = None
             if ai_enabled and criteria_passed:
                 try:
                     from apps.ai_engine.services import PredictionService, RecommendationService
-                    ai_context = {'market_data': market_data, 'indicators': indicator_data, 'strategy': {'confidence': result.get('confidence', 0)}, 'risk': (config.parameters or {}).get('risk', {}), 'candles': handoff.get('candles', [])}
-                    prediction = PredictionService().predict(config.symbol, config.timeframe, ai_context); recommendation = RecommendationService().recommend(config.symbol, prediction); ai_consensus = (prediction.payload or {}).get('consensus') or {}; result = {**result, 'strategy_signal': result['signal'], 'strategy_confidence': result.get('confidence', 0), 'signal': recommendation.recommendation if recommendation.recommendation in {'BUY', 'SELL'} else 'HOLD', 'confidence': recommendation.confidence, 'ai_consensus': ai_consensus, 'ai_prediction_id': prediction.pk, 'ai_recommendation_id': recommendation.pk, 'market_data_handoff': {k: v for k, v in handoff.items() if k != 'candles'}}
+                    ai_context = {'market_data': market_data, 'indicators': indicator_data, 'strategy': {'confidence': result.get('confidence')}, 'risk': (config.parameters or {}).get('risk', {}), 'candles': handoff.get('candles', [])}
+                    strategy_signal = result.get('signal')
+                    strategy_confidence = result.get('confidence')
+                    prediction = PredictionService().predict(config.symbol, config.timeframe, ai_context)
+                    recommendation = RecommendationService().recommend(config.symbol, prediction)
+                    ai_consensus = (prediction.payload or {}).get('consensus') or {}
+                    result = {**result, 'strategy_signal': strategy_signal, 'strategy_confidence': strategy_confidence,
+                              'ai_recommendation': recommendation.recommendation if recommendation.recommendation in {'BUY', 'SELL'} else None,
+                              'ai_confidence': recommendation.confidence, 'ai_consensus': ai_consensus,
+                              'ai_prediction_id': prediction.pk, 'ai_recommendation_id': recommendation.pk,
+                              'market_data_handoff': {k: v for k, v in handoff.items() if k != 'candles'}}
                 except Exception as exc:
                     ai_error = f'{exc.__class__.__name__}: {exc}'; log.warning('AI enhancement unavailable; preserving strategy result', extra={'strategy': config.strategy.slug, 'error': ai_error})
             result['ai_enabled'] = ai_enabled; result['ai_consensus'] = ai_consensus
             if ai_error: result['ai_error'] = ai_error
-            if not criteria_passed: result['signal'] = 'HOLD'; result['ai_blocked_by_criteria'] = True
+            if not criteria_passed: result['signal'] = None; result['confidence'] = None; result['ai_blocked_by_criteria'] = True
             auto_execution = self._auto_execute_if_allowed(config, result)
             if auto_execution: result['auto_execution'] = auto_execution
-            execution.signal = result['signal']; execution.confidence = result.get('confidence', 0); execution.status = 'completed'; execution.completed_at = timezone.now(); execution.latency_ms = (time.perf_counter() - start) * 1000; execution.context = result; execution.save()
-            StrategySignalRepository().create(strategy=config.strategy, configuration=config, symbol=config.symbol, signal=result['signal'], confidence=result.get('confidence', 0), entry_price=result.get('entry_price'), stop_loss=result.get('stop_loss'), take_profit=result.get('take_profit'), metadata=result)
+            execution.signal = result.get('signal'); execution.confidence = result.get('confidence'); execution.status = 'completed'; execution.completed_at = timezone.now(); execution.latency_ms = (time.perf_counter() - start) * 1000; execution.context = result; execution.save()
+            if result.get('signal') in {'BUY', 'SELL'} and result.get('confidence') is not None:
+                StrategySignalRepository().create(strategy=config.strategy, configuration=config, symbol=config.symbol, signal=result['signal'], confidence=result.get('confidence'), entry_price=result.get('entry_price'), stop_loss=result.get('stop_loss'), take_profit=result.get('take_profit'), metadata=result)
             return execution
         except Exception as exc:
             execution.status = 'failed'; execution.error = str(exc); execution.completed_at = timezone.now(); execution.latency_ms = (time.perf_counter() - start) * 1000; execution.save(); log.exception('Strategy execution failed'); return execution

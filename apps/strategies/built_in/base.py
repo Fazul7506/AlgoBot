@@ -36,15 +36,30 @@ class BaseStrategy:
         }
 
     def generate_signal(self):
-        return 'HOLD'
+        # The base contract has no strategy evidence of its own. A fabricated
+        # HOLD is not a valid production signal.
+        return None
 
-    def calculate_confidence(self):
-        score = 50
-        if self.indicator_data.get('agreement'):
-            score += int(self.indicator_data.get('agreement', 0)) * 10
-        if self.indicator_data.get('trend_strength'):
-            score += min(20, int(self.indicator_data.get('trend_strength', 0)))
-        return max(0, min(100, score))
+    def calculate_confidence(self, signal=None):
+        signal = str(signal or '').upper()
+        if signal not in {'BUY', 'SELL'}:
+            return None
+        evidence = 0
+        rsi = self.indicator_data.get('rsi')
+        trend = str(self.indicator_data.get('trend') or '').lower()
+        try:
+            rsi = float(rsi) if rsi is not None else None
+        except (TypeError, ValueError):
+            rsi = None
+        if rsi is not None and ((signal == 'BUY' and rsi < 30) or (signal == 'SELL' and rsi > 70)):
+            evidence += 1
+        if (signal == 'BUY' and trend in {'up', 'uptrend', 'bullish'}) or (signal == 'SELL' and trend in {'down', 'downtrend', 'bearish'}):
+            evidence += 1
+        if evidence == 0:
+            return None
+        # Deterministic confidence from observed strategy evidence, not a
+        # placeholder/default percentage.
+        return 40.0 if evidence == 1 else 80.0
 
     def calculate_stop_loss(self):
         return self._price_delta(-0.01)
@@ -70,12 +85,14 @@ class BaseStrategy:
 
     def execute(self):
         signal = self.generate_signal()
-        confidence = self.calculate_confidence()
-        if signal not in SIGNAL_TYPES:
-            signal = 'HOLD'
+        confidence = self.calculate_confidence(signal)
+        if signal not in SIGNAL_TYPES or signal is None:
+            signal = None
+            confidence = None
 
-        if not self.evaluate_criteria(signal, confidence):
-            signal = 'HOLD'
+        if signal is not None and not self.evaluate_criteria(signal, confidence):
+            signal = None
+            confidence = None
 
         return {
             'signal': signal,

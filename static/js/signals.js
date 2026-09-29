@@ -33,9 +33,8 @@
     // Read-only fallback: keep Signals usable even when the shared client did not
     // initialise. This never changes mutation/authentication behaviour.
     const rawPath = String(path || '/');
-    const selectedId = window.AlgoBotAccountContext?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id;
     const headers = new Headers({'Accept':'application/json'});
-    if (selectedId != null) headers.set('X-Algobot-Account-ID', String(selectedId));
+    // Active-account authority stays server-side in the authenticated Django session.
     const response = await fetch(new URL(rawPath, `${apiBase()}/`).toString(), {method:'GET', credentials:'include', headers});
     let payload = {};
     try { payload = await response.json(); } catch (_) { payload = {detail: await response.text()}; }
@@ -97,9 +96,9 @@
   async function scan() {
     if(S.scanning)return; S.scanning=true; const controls=[$('signalsScan'),$('signalsRefresh')].filter(Boolean); controls.forEach(b=>{b.disabled=true;b.setAttribute('aria-busy','true')}); const symbol=$('signalsSymbol')?.value||'', timeframe=$('signalsTimeframe')?.value||'M1', limit=$('signalsLimit')?.value||'40';
     try { setStatus('Reading the continuous Deriv public market-data stream…'); const data=await request(`/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol?`&symbol=${encodeURIComponent(symbol)}`:''}`); if(data.status!=='ok')throw new Error(data.message||'Live signal service returned an invalid response.'); S.rows=Array.isArray(data.data)?data.data:[]; S.last=data; populateSymbols(S.rows); if($('signalsAccount'))$('signalsAccount').textContent=data.account?.id||'—'; if($('signalsAccountType'))$('signalsAccountType').textContent=`${data.account?.type||'account'} · ${data.account?.currency||''}`; renderHealth(data); setStatus(Number(data.live_data_available_count||0)>0?'LIVE':'NO LIVE QUOTES',Number(data.live_data_available_count||0)>0); renderTape(S.rows); renderTable(S.rows); focus(S.rows.find(r=>r.execution_ready)||S.rows.find(r=>r.direction==='BUY'||r.direction==='SELL')||S.rows.find(r=>r.live)||S.rows[0]); }
-    catch(error){S.rows=[];setStatus(error?.message||'Deriv public live market-data feed unavailable.');if($('signalsReady'))$('signalsReady').textContent='0';if($('signalsBaseline'))$('signalsBaseline').textContent='Unavailable';if($('scanTimestamp'))$('scanTimestamp').textContent=`Scan failed · ${new Date().toLocaleTimeString()}`;renderTape([]);renderTable([]);focus(null)}
+    catch(error){const message=error?.message||'Market data unavailable.';S.rows=[];setStatus(message);if($('signalsReady'))$('signalsReady').textContent='0';if($('signalsBaseline'))$('signalsBaseline').textContent='Unavailable';if($('scanTimestamp'))$('scanTimestamp').textContent=`Scan failed · ${new Date().toLocaleTimeString()}`;if($('signalsTable'))$('signalsTable').innerHTML=`<tr><td colspan="10">${esc(message)}</td></tr>`;if($('liveTape'))$('liveTape').innerHTML=`<div class="empty">${esc(message)}</div>`;focus(null)}
     finally{S.scanning=false;controls.forEach(b=>{b.disabled=false;b.removeAttribute('aria-busy')})}
   }
-  function boot(){ $('signalsScan')?.addEventListener('click',scan);$('signalsRefresh')?.addEventListener('click',scan);$('signalsSymbol')?.addEventListener('change',scan);$('signalsTimeframe')?.addEventListener('change',scan);$('signalsLimit')?.addEventListener('change',scan);window.addEventListener('algobot:account-synced',()=>{S.rows=[];setStatus('Account changed — refreshing the Deriv public market-data feed…');scan()});window.addEventListener('algobot:account-changed',()=>{S.rows=[];setStatus('Account changed — refreshing the Deriv public market-data feed…');scan()});scan(); }
+  function boot(){ $('signalsScan')?.addEventListener('click',scan);$('signalsRefresh')?.addEventListener('click',scan);$('signalsSymbol')?.addEventListener('change',scan);$('signalsTimeframe')?.addEventListener('change',scan);$('signalsLimit')?.addEventListener('change',scan);const resetForAccountChange=()=>{S.rows=[];S.last=null;focus(null);renderTape([]);renderTable([]);setStatus('Account changed — refreshing the Deriv public market-data feed…');scan()};window.addEventListener('algobot:account-synced',resetForAccountChange);window.addEventListener('algobot:account-changed',resetForAccountChange);scan(); }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();

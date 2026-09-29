@@ -8,6 +8,7 @@ from rest_framework.response import Response
 
 from .models import MarketSymbol
 from apps.strategies.models import StrategySignal
+from core.account_context import get_active_account
 
 SNAPSHOT_FRESHNESS_SECONDS = 30
 SIGNAL_ACTIVE_SECONDS = 300
@@ -56,7 +57,13 @@ def market_intelligence(request):
     if symbol_filter:
         symbols = symbols.filter(symbol=symbol_filter)
     symbol_values = list(symbols.values_list("symbol", flat=True))
-    signals = StrategySignal.objects.filter(symbol__in=symbol_values).select_related("strategy", "configuration").order_by("-timestamp")
+    account = get_active_account(request.user, request=request)
+    signals = StrategySignal.objects.filter(
+        configuration__user=request.user,
+        configuration__broker_account=account,
+        symbol__in=symbol_values,
+        timestamp__lte=now,
+    ).select_related("strategy", "configuration").order_by("-timestamp") if account else StrategySignal.objects.none()
     signals_by_symbol = {}
     for signal in signals:
         signals_by_symbol.setdefault(signal.symbol, []).append(signal)
@@ -121,10 +128,13 @@ def market_intelligence(request):
 def signal_lifecycle(request):
     """Expose deterministic signal lifecycle state from persisted strategy signals."""
     symbol = str(request.query_params.get("symbol") or "").strip()
-    qs = StrategySignal.objects.select_related("strategy", "configuration").all().order_by("-timestamp")
+    now = timezone.now()
+    account = get_active_account(request.user, request=request)
+    qs = (StrategySignal.objects.select_related("strategy", "configuration")
+          .filter(configuration__user=request.user, configuration__broker_account=account, timestamp__lte=now)
+          .order_by("-timestamp")) if account else StrategySignal.objects.none()
     if symbol:
         qs = qs.filter(symbol=symbol)
-    now = timezone.now()
     data = []
     for signal in qs[:_limit(request, 100, 100)]:
         age_seconds = max(0, int((now - signal.timestamp).total_seconds()))
