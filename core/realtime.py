@@ -121,6 +121,9 @@ class PortfolioConsumer(AuthenticatedStateConsumer):
             account = await self.get_account(requested_id)
             if not account:
                 await self.send_json({"type": "account.switch.rejected", "error": {"code": "ACCOUNT_NOT_AVAILABLE", "message": "The requested account is not available to the authenticated user."}}); return
+            session_account = await self.selected_account()
+            if not session_account or session_account.id != account.id:
+                await self.send_json({"type": "account.switch.rejected", "error": {"code": "ACCOUNT_CONTEXT_NOT_ACTIVE", "message": "Select the account through the authenticated account-switch API before changing the live broker stream."}}); return
             await self._switch_broker_stream(account); return
         await super().receive_json(content, **kwargs)
 
