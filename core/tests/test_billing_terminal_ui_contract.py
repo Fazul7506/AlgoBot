@@ -129,6 +129,12 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("window.location.origin", client)
         self.assertIn("Execution", client)
 
+    def test_websocket_account_switch_requires_http_session_selection(self):
+        from pathlib import Path
+        realtime = Path("core/realtime.py").read_text(encoding="utf-8")
+        self.assertIn("ACCOUNT_CONTEXT_NOT_ACTIVE", realtime)
+        self.assertIn("session_account = await self.selected_account()", realtime)
+
     def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
         from pathlib import Path
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
