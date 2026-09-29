@@ -26,6 +26,70 @@ ANALYSIS_MARKETS_CACHE_SECONDS = 15
 ANALYSIS_CACHE_SECONDS = 3
 
 
+
+def _select_validated_contract(capabilities, direction=None, timeframe=None):
+    """Select one broker-published contract for research display.
+
+    This is a broker-capability selection, not a claim of profitability or
+    seasonal superiority. Only an entry returned by Deriv's contracts_for
+    response can be selected. Direction and timeframe are used as observable
+    research context; no seasonal assumption is invented.
+    """
+    if not isinstance(capabilities, dict):
+        return None
+    available = capabilities.get("available") or []
+    if not isinstance(available, list):
+        return None
+    direction = str(direction or "").upper()
+    if direction not in {"BUY", "SELL"}:
+        return None
+    preferred_sentiment = "up" if direction == "BUY" else "down"
+    timeframe = str(timeframe or "").upper()
+
+    directional_types = {
+        "BUY": {"CALL", "RISE", "HIGHER", "UPORDOWN", "MULTUP", "TURBOSLONG", "VANILLALONGCALL"},
+        "SELL": {"PUT", "FALL", "LOWER", "UPORDOWN", "MULTDOWN", "TURBOSSHORT", "VANILLALONGPUT"},
+    }
+
+    def score(item):
+        contract_type = str(item.get("contract_type") or "").upper()
+        sentiment = str(item.get("sentiment") or "").lower()
+        expiry = str(item.get("expiry_type") or "").lower()
+        value = 0
+        if preferred_sentiment and sentiment == preferred_sentiment:
+            value += 100
+        if direction and contract_type in directional_types.get(direction, set()):
+            value += 50
+        if timeframe in {"M1", "M5", "M15", "M30", "H1", "H4"} and expiry == "intraday":
+            value += 10
+        if timeframe == "D1" and expiry == "daily":
+            value += 10
+        return value
+
+    candidates = [
+        item for item in available
+        if isinstance(item, dict)
+        and item.get("contract_type")
+        and item.get("contract_category")
+        and (not preferred_sentiment or str(item.get("sentiment") or "").lower() == preferred_sentiment or str(item.get("contract_type") or "").upper() in directional_types.get(direction, set()))
+    ]
+    if not candidates:
+        return None
+    selected = sorted(
+        candidates,
+        key=lambda item: (-score(item), str(item.get("contract_type") or ""), str(item.get("contract_category") or "")),
+    )[0]
+    return {
+        "contract_type": str(selected.get("contract_type")),
+        "contract_family": str(selected.get("contract_category")),
+        "expiry_type": selected.get("expiry_type"),
+        "sentiment": selected.get("sentiment"),
+        "symbol": selected.get("underlying_symbol"),
+        "source": "deriv_contracts_for",
+        "selection_basis": "broker capability + signal direction + timeframe",
+    }
+
+
 def _broker_trade_spec(result, market, capabilities, account_context=None):
     """Build a complete analysis specification from broker capabilities + verified candles.
 
@@ -386,6 +450,9 @@ def analysis_contracts(request):
             },
             status=503,
         )
+    direction = str(request.GET.get("direction") or "").upper()
+    timeframe = str(request.GET.get("timeframe") or "").upper()
+    selected_contract = _select_validated_contract(capabilities, direction=direction, timeframe=timeframe)
     return JsonResponse(
         {
             "status": "ok",
@@ -395,6 +462,7 @@ def analysis_contracts(request):
             "market": market.market,
             "sub_market": market.sub_market,
             "capabilities": capabilities,
+            "selected_contract": selected_contract,
         }
     )
 

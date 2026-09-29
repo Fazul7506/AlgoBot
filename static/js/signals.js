@@ -2,191 +2,298 @@
   'use strict';
   if (window.__algoBotLiveSignalsPage) return;
   window.__algoBotLiveSignalsPage = true;
+
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const num = (value, digits = 5) => value == null || Number.isNaN(Number(value)) ? '—' : Number(value).toLocaleString(undefined, {maximumFractionDigits: digits});
-  const money = (value, currency = 'USD') => value == null || value === '' || Number.isNaN(Number(value)) ? '—' : (typeof window.AlgoBotMoney?.format === 'function' ? window.AlgoBotMoney.format(value, currency) : `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : String(currency || '').toUpperCase() + ' '}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8})}`);
+  const num = (value, digits = 5) => value == null || Number.isNaN(Number(value))
+    ? '—'
+    : Number(value).toLocaleString(undefined, {maximumFractionDigits: digits});
   const pct = value => value == null || Number.isNaN(Number(value)) ? '—' : `${Number(value).toFixed(1)}%`;
   const label = value => String(value ?? '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—';
-  const tone = value => { const v = String(value || '').toUpperCase(); return v === 'BUY' ? 'buy' : v === 'SELL' ? 'sell' : 'hold'; };
+  const tone = value => {
+    const v = String(value || '').toUpperCase();
+    return v === 'BUY' ? 'buy' : v === 'SELL' ? 'sell' : 'hold';
+  };
   const stateText = value => String(value || 'WAITING').replaceAll('_', ' ');
-  const S = { rows: [], last: null, scanning: false, specRequest: 0, page: 1 };
+  const S = {rows: [], scanning: false, page: 1, contractRequest: 0};
 
-  function populateViewOptions(rows) {
-    const strategies = [...new Set(rows.map(r => r.strategy).filter(Boolean))].sort();
-    const statuses = [...new Set(rows.map(r => r.status).filter(Boolean))].sort();
-    const fill = (id, values, emptyLabel) => {
-      const el=$(id); if(!el) return;
-      const current=el.value;
-      el.innerHTML=`<option value="">${esc(emptyLabel)}</option>`+values.map(v=>`<option value="${esc(v)}">${esc(label(v))}</option>`).join('');
-      if(values.includes(current)) el.value=current;
-    };
-    fill('signalsStrategy',strategies,'All strategies');
-    fill('signalsStatus',statuses,'All statuses');
-  }
-  function filteredRows() {
-    const q=String($('signalsSearch')?.value||'').trim().toLowerCase();
-    const symbol=$('signalsSymbol')?.value||'', strategy=$('signalsStrategy')?.value||'';
-    const direction=String($('signalsDirection')?.value||'').toUpperCase();
-    const status=$('signalsStatus')?.value||'', minConfidence=Number($('signalsConfidence')?.value||0);
-    const sort=$('signalsSort')?.value||'symbol';
-    let rows=S.rows.filter(r => {
-      const hay=[r.symbol,r.display_name,r.strategy,r.status,r.market].filter(Boolean).join(' ').toLowerCase();
-      return (!q||hay.includes(q)) && (!symbol||r.symbol===symbol) && (!strategy||r.strategy===strategy)
-        && (!direction||String(r.direction||'').toUpperCase()===direction) && (!status||r.status===status)
-        && (!minConfidence||Number(r.confidence)>=minConfidence);
-    });
-    rows.sort((a,b)=>{
-      if(sort==='confidence') return (Number(b.confidence)||-Infinity)-(Number(a.confidence)||-Infinity);
-      if(sort==='live_age') return (Number(a.live?.age_seconds)||Infinity)-(Number(b.live?.age_seconds)||Infinity);
-      if(sort==='timestamp') return String(b.analysis_timestamp||'').localeCompare(String(a.analysis_timestamp||''));
-      return String(a.symbol||'').localeCompare(String(b.symbol||''));
-    });
-    const size=Number($('signalsPageSize')?.value||20), pages=Math.max(1,Math.ceil(rows.length/size));
-    S.page=Math.min(Math.max(1,S.page),pages);
-    const start=(S.page-1)*size;
-    if($('signalsPrev'))$('signalsPrev').disabled=S.page<=1;
-    if($('signalsNext'))$('signalsNext').disabled=S.page>=pages;
-    const pager=$('signalsPager'); if(pager) pager.textContent=`Page ${S.page} of ${pages} · ${rows.length} matching`;
-    return {rows:rows.slice(start,start+size),total:rows.length};
-  }
-  function renderView() {
-    const view=filteredRows();
-    renderTape(view.rows); renderTable(view.rows);
-    if(view.rows.length) focus(view.rows.find(r=>r.execution_ready)||view.rows.find(r=>r.direction==='BUY'||r.direction==='SELL')||view.rows.find(r=>r.live)||view.rows[0]);
-    else focus(null);
-  }
-
-  function setStatus(message, live = false) {
-    if ($('signalsFeed')) $('signalsFeed').textContent = message;
-    if ($('signalsFeedAge')) $('signalsFeedAge').textContent = live ? 'Fresh Deriv public market snapshot' : 'Waiting for broker snapshot';
-  }
-  function apiBase() {
-    const configured = (document.querySelector('meta[name="algobot-api-base"]')?.content || '').trim();
-    return (configured || window.location.origin).replace(/\/+$/, '');
-  }
   async function getApiClient() {
     if (window.AlgoBotAPI?.apiClient) return window.AlgoBotAPI.apiClient;
-    // The page must remain functional if another deferred shell script delays the
-    // canonical client. api_client.js also emits this event when it finishes.
-    await new Promise(resolve => { let done = false; const finish = () => { if (!done) { done = true; resolve(); } }; window.addEventListener('algobot:api-ready', finish, {once:true}); setTimeout(finish, 1200); });
+    await new Promise(resolve => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      window.addEventListener('algobot:api-ready', finish, {once: true});
+      setTimeout(finish, 1200);
+    });
     return window.AlgoBotAPI?.apiClient || null;
   }
+
   async function request(path) {
     const client = await getApiClient();
-    if (client) return client.get(path, {credentials:'include', __algoTimeoutMs:15000});
-    // Read-only fallback: keep Signals usable even when the shared client did not
-    // initialise. This never changes mutation/authentication behaviour.
-    const rawPath = String(path || '/');
-    const headers = new Headers({'Accept':'application/json'});
-    // Active-account authority stays server-side in the authenticated Django session.
-    const response = await fetch(new URL(rawPath, `${apiBase()}/`).toString(), {method:'GET', credentials:'include', headers});
+    if (client) return client.get(path, {credentials: 'include', __algoTimeoutMs: 15000});
+    const response = await fetch(new URL(path, window.location.origin), {
+      method: 'GET',
+      credentials: 'include',
+      headers: {'Accept': 'application/json'}
+    });
     let payload = {};
-    try { payload = await response.json(); } catch (_) { payload = {detail: await response.text()}; }
-    if (!response.ok) throw new Error(payload?.message || payload?.detail || `Signals API request failed (${response.status})`);
+    try { payload = await response.json(); } catch (_) {}
+    if (!response.ok) throw new Error(payload?.message || `Signals API request failed (${response.status})`);
     return payload;
   }
-  function populateSymbols(rows) {
-    const select = $('signalsSymbol'); if (!select) return;
-    const current = select.value; const symbols = [...new Map(rows.map(row => [row.symbol, row])).values()];
-    select.innerHTML = '<option value="">All instruments</option>' + symbols.map(row => `<option value="${esc(row.symbol)}">${esc(row.symbol)} · ${esc(row.display_name || row.instrument)}</option>`).join('');
-    if (symbols.some(row => row.symbol === current)) select.value = current;
+
+  function populateSelect(id, values, emptyLabel) {
+    const el = $(id);
+    if (!el) return;
+    const current = el.value;
+    el.innerHTML = `<option value="">${esc(emptyLabel)}</option>` +
+      values.map(v => `<option value="${esc(v)}">${esc(label(v))}</option>`).join('');
+    if (values.includes(current)) el.value = current;
   }
-  function setSpec(id, value) { if ($(id)) $(id).textContent = value == null || value === '' ? 'Broker data not returned' : label(value); }
-  async function renderSpec(row) {
-    const requestId = ++S.specRequest;
-    if (!row) { ['specMarketType','specSubMarket','specInstrument','specTradeType','specDirection','specContractType','specContractFamily','specDuration','specDurationUnit','specBarrier','specStake','specPayout','specStrategy','specCategory','specRisk','specExecution','specEntryCondition','specConfirmation','specRegime','specQuoteSource'].forEach(id => setSpec(id, null)); if ($('specSource')) $('specSource').textContent='Waiting for a selected market'; return; }
-    const c = row.trade_context || {};
-    let cap = {};
-    try {
-      const response = await request(`/analysis/contracts/?symbol=${encodeURIComponent(row.symbol)}`);
-      cap = response.capabilities || {};
-    } catch (_) { cap = {}; }
-    if (requestId !== S.specRequest) return;
-    const types = (cap.available_contract_types || []).join(' / ');
-    const families = (cap.available_contract_families || []).join(' / ');
-    const expiry = (cap.expiry_types || []).join(' / ');
-    setSpec('specMarketType', c.market_type || row.market); setSpec('specSubMarket', c.sub_market || row.sub_market); setSpec('specInstrument', c.instrument || row.symbol);
-    setSpec('specTradeType', c.trade_type || 'Analysis baseline required'); setSpec('specDirection', c.direction || row.direction || '—'); setSpec('specContractType', c.contract_type || types || 'No broker contract types returned'); setSpec('specContractFamily', c.contract_family || families || 'No broker contract family returned');
-    setSpec('specDuration', c.duration || 'Proposal required'); setSpec('specDurationUnit', c.duration_unit || expiry || 'Proposal required'); setSpec('specBarrier', c.barrier || 'Broker proposal required'); setSpec('specStake', c.stake || 'Proposal required'); setSpec('specPayout', c.payout || 'Proposal required');
-    setSpec('specStrategy', c.strategy || 'No matching strategy baseline'); setSpec('specCategory', c.strategy_category || 'No matching strategy baseline'); setSpec('specRisk', c.risk_profile || 'Risk configuration required'); setSpec('specExecution', c.execution_mode || 'Manual until execution gate passes');
-    setSpec('specEntryCondition', c.entry_condition || 'Confirmation gate required'); setSpec('specConfirmation', c.confirmation || 'Fresh broker quote + baseline confirmation required'); setSpec('specRegime', c.market_regime || 'Analysis baseline required'); setSpec('specQuoteSource', c.quote_type || row.live?.source || row.source);
-    if ($('specSource')) $('specSource').textContent = `${c.broker || 'Deriv'} · ${c.account_type || 'account'} · ${c.currency || ''} · contract capabilities confirmed`;
+
+  function populateFilters(rows) {
+    populateSelect('signalsStrategy', [...new Set(rows.map(r => r.strategy).filter(Boolean))].sort(), 'All strategies');
+    populateSelect('signalsStatus', [...new Set(rows.map(r => r.status).filter(Boolean))].sort(), 'All statuses');
+    const symbol = $('signalsSymbol');
+    if (symbol) {
+      const current = symbol.value;
+      const values = [...new Map(rows.map(r => [r.symbol, r])).values()];
+      symbol.innerHTML = '<option value="">All instruments</option>' +
+        values.map(r => `<option value="${esc(r.symbol)}">${esc(r.symbol)} · ${esc(r.display_name || r.instrument)}</option>`).join('');
+      if (values.some(r => r.symbol === current)) symbol.value = current;
+    }
   }
-  function focus(row) {
-    if (!row) {
-      ['focusInstrument','focusPrice','focusSource','focusBaseline','focusDirection','focusThreshold','focusAge','focusEntry','focusStop','focusTake','focusTf'].forEach(id => { if ($(id)) $(id).textContent = '—'; });
-      if ($('focusInstrument')) $('focusInstrument').textContent = 'Select a market'; if ($('focusState')) { $('focusState').textContent='WAITING'; $('focusState').className='signal-state waiting'; }
-      if ($('focusConfidence')) $('focusConfidence').textContent='—'; if ($('focusConfidenceBar')) $('focusConfidenceBar').style.width='0%'; if ($('focusEvidence')) $('focusEvidence').innerHTML='<span class="muted">Select a market to inspect its live state.</span>'; renderSpec(null); renderWhyHow(null); return;
-    }
-    $('focusInstrument').textContent = row.display_name || row.instrument || row.symbol || '—'; $('focusState').textContent = stateText(row.status); $('focusState').className=`signal-state ${tone(row.direction)}${row.status==='WAITING_FOR_ANALYSIS'?' waiting':''}`;
-    $('focusPrice').textContent=num(row.live?.price); $('focusSource').textContent=row.live?.source==='deriv_public_websocket'?`Deriv live · ${row.live?.epoch?new Date(Number(row.live.epoch)*1000).toLocaleTimeString():'now'}`:'No live tick';
-    $('focusConfidence').textContent=pct(row.confidence); const confidenceNumber=Number(row.confidence); $('focusConfidenceBar').style.width=Number.isFinite(confidenceNumber)?`${Math.max(0,Math.min(100,confidenceNumber))}%`:'0%'; $('focusBaseline').textContent=row.baseline_direction?`${row.baseline_direction} · ${pct(row.baseline_confidence)}`:'No baseline';
-    $('focusDirection').textContent=row.direction || '—'; $('focusDirection').className=tone(row.direction); $('focusThreshold').textContent=pct(row.live_confidence_threshold); $('focusAge').textContent=row.live?.age_seconds==null?'—':`${row.live.age_seconds}s`;
-    $('focusEntry').textContent=num(row.entry_price); $('focusStop').textContent=num(row.stop_loss); $('focusTake').textContent=num(row.take_profit); $('focusTf').textContent=row.timeframe||'—'; $('focusEvidence').innerHTML=(row.evidence||[]).map(item=>`<span class="evidence-chip">${esc(stateText(item))}</span>`).join('')||'<span class="muted">No confirmation evidence.</span>'; renderSpec(row); renderWhyHow(row);
+
+  function filteredRows() {
+    const q = String($('signalsSearch')?.value || '').trim().toLowerCase();
+    const symbol = $('signalsSymbol')?.value || '';
+    const strategy = $('signalsStrategy')?.value || '';
+    const direction = String($('signalsDirection')?.value || '').toUpperCase();
+    const status = $('signalsStatus')?.value || '';
+    const minimum = Number($('signalsConfidence')?.value || 0);
+    const sort = $('signalsSort')?.value || 'symbol';
+
+    const rows = S.rows.filter(r => {
+      const hay = [r.symbol, r.display_name, r.strategy, r.status, r.market].filter(Boolean).join(' ').toLowerCase();
+      return (!q || hay.includes(q)) &&
+        (!symbol || r.symbol === symbol) &&
+        (!strategy || r.strategy === strategy) &&
+        (!direction || String(r.direction || '').toUpperCase() === direction) &&
+        (!status || r.status === status) &&
+        (!minimum || Number(r.confidence) >= minimum);
+    });
+
+    rows.sort((a, b) => {
+      if (sort === 'confidence') return (Number(b.confidence) || -Infinity) - (Number(a.confidence) || -Infinity);
+      if (sort === 'live_age') return (Number(a.live?.age_seconds) || Infinity) - (Number(b.live?.age_seconds) || Infinity);
+      if (sort === 'timestamp') return String(b.analysis_timestamp || '').localeCompare(String(a.analysis_timestamp || ''));
+      return String(a.symbol || '').localeCompare(String(b.symbol || ''));
+    });
+
+    const size = Number($('signalsPageSize')?.value || 20);
+    const pages = Math.max(1, Math.ceil(rows.length / size));
+    S.page = Math.min(Math.max(1, S.page), pages);
+    const start = (S.page - 1) * size;
+    if ($('signalsPrev')) $('signalsPrev').disabled = S.page <= 1;
+    if ($('signalsNext')) $('signalsNext').disabled = S.page >= pages;
+    if ($('signalsPager')) $('signalsPager').textContent = `Page ${S.page} of ${pages} · ${rows.length} matching`;
+    return rows.slice(start, start + size);
   }
-  function renderWhyHow(row) {
-    const why = $('signalWhy'), source = $('whySource'), lifecycle = $('signalLifecycleDetail'), lifecycleState = $('lifecycleState');
-    if (!row) {
-      if (why) why.innerHTML='<p class="muted">Select a market to inspect actual persisted strategy evidence.</p>';
-      if (source) source.textContent='Select a signal';
-      if (lifecycleState) lifecycleState.textContent='Awaiting signal';
-      return;
-    }
-    if (source) source.textContent = row.strategy ? `Strategy · ${row.strategy_version || 'persisted version'}` : 'Broker / market state';
-    if (why) {
-      const items = Array.isArray(row.why) ? row.why : [];
-      const base = [
-        ['Broker account', row.account_id ? `${row.account_type || 'account'} · ${row.account_id}` : null, row.broker || null],
-        ['Signal source', row.strategy ? `Strategy · ${row.strategy}` : null, row.analysis_timestamp],
-        ['Market data', row.live?.source || null, row.live?.epoch ? new Date(Number(row.live.epoch)*1000).toLocaleString() : null],
-        ['Confirmation', row.evidence?.join(', ') || null, row.status]
-      ];
-      const all = [...base, ...items.map(item => [item.condition, item.observed, item.result])].filter(x => x[1] != null && x[1] !== '');
-      why.innerHTML = all.length ? all.map(x => `<div class="evidence-row"><span>${esc(label(x[0]))}</span><strong>${esc(typeof x[1] === 'object' ? JSON.stringify(x[1]) : x[1])}</strong><small>${esc(x[2] || 'OBSERVED')}</small></div>`).join('') : '<p class="muted">No persisted evidence is available for this signal.</p>';
-    }
-    const stages = [
-      ['Market data', row.live ? 'PASS' : 'UNAVAILABLE'],
-      ['Analysis baseline', row.analysis_signal_id ? (row.status === 'ANALYSIS_STALE' ? 'STALE' : 'PASS') : 'UNAVAILABLE'],
-      ['Strategy evaluation', row.analysis_signal_id ? 'PASS' : 'UNAVAILABLE'],
-      ['Confirmation', row.execution_ready ? 'PASS' : row.status === 'LIVE_CONFIRMATION_FAILED' ? 'FAILED' : 'WAIT'],
-      ['Broker contract', row.trade_context?.contract_type ? 'PASS' : 'REQUIRED'],
-      ['Manual execution', 'USER DECISION'],
-      ['Broker settlement', 'NOT LINKED'],
-      ['Positions / Trade History', 'NOT LINKED']
-    ];
-    if (lifecycle) lifecycle.innerHTML=stages.map(x=>`<div class="lifecycle-step"><span>${esc(x[1])}</span><strong>${esc(x[0])}</strong></div>`).join('');
-    if (lifecycleState) lifecycleState.textContent = row.status ? stateText(row.status) : 'Awaiting signal';
+
+  function renderTable(rows) {
+    const tbody = $('signalsTable');
+    if (!tbody) return;
+    tbody.innerHTML = rows.map(row => `<tr data-symbol="${esc(row.symbol)}">
+      <td><strong>${esc(row.display_name || row.symbol)}</strong><small>${esc(row.symbol)}</small></td>
+      <td>${esc(row.market || '—')}<small>${esc(row.sub_market || '')}</small></td>
+      <td>${esc(row.timeframe || '—')}</td>
+      <td>${esc(num(row.live?.price))}</td>
+      <td class="${tone(row.baseline_direction)}">${esc(row.baseline_direction || '—')}</td>
+      <td class="${tone(row.direction)}">${esc(row.direction || '—')}</td>
+      <td><strong>${esc(pct(row.confidence))}</strong></td>
+      <td><span class="status-pill ${tone(row.direction)}">${esc(stateText(row.status))}</span></td>
+    </tr>`).join('') || '<tr><td colspan="8">No research rows match the selected filters.</td></tr>';
+
+    tbody.querySelectorAll('tr[data-symbol]').forEach(row => {
+      row.addEventListener('click', () => focus(S.rows.find(item => item.symbol === row.dataset.symbol) || null));
+    });
   }
 
   function renderTape(rows) {
-    const el=$('liveTape'); if(!el)return; $('marketCount').textContent=`${rows.length} markets`;
-    el.innerHTML=rows.slice(0,20).map(row=>`<button type="button" class="tape-row" data-symbol="${esc(row.symbol)}"><span><strong>${esc(row.symbol)}</strong><small>${esc(row.market||'Deriv')}</small></span><strong>${esc(num(row.live?.price))}</strong><span class="tape-signal ${tone(row.direction)}">${esc(row.direction || '—')}</span><span>${esc(pct(row.confidence))}</span></button>`).join('')||'<div class="empty">No broker quotes returned for this scan.</div>';
-    el.querySelectorAll('[data-symbol]').forEach(b=>b.addEventListener('click',()=>focus(S.rows.find(r=>r.symbol===b.dataset.symbol))));
+    const tape = $('liveTape');
+    if (!tape) return;
+    $('marketCount').textContent = `${rows.length} markets`;
+    tape.innerHTML = rows.slice(0, 20).map(row => `<button type="button" class="tape-row" data-symbol="${esc(row.symbol)}">
+      <span><strong>${esc(row.symbol)}</strong><small>${esc(row.market || 'Deriv')}</small></span>
+      <strong>${esc(num(row.live?.price))}</strong>
+      <span class="tape-signal ${tone(row.direction)}">${esc(row.direction || '—')}</span>
+      <span>${esc(pct(row.confidence))}</span>
+    </button>`).join('') || '<div class="empty">No current Deriv quotes returned for this scan.</div>';
+    tape.querySelectorAll('[data-symbol]').forEach(button => {
+      button.addEventListener('click', () => focus(S.rows.find(r => r.symbol === button.dataset.symbol) || null));
+    });
   }
-  function renderTable(rows) {
-    const tbody=$('signalsTable'); if(!tbody)return;
-    tbody.innerHTML=rows.map(row=>{const c=row.trade_context||{};return `<tr data-symbol="${esc(row.symbol)}"><td><strong>${esc(row.display_name||row.symbol)}</strong><small>${esc(row.symbol)}</small></td><td>${esc(c.market_type||row.market||'—')}<small>${esc(c.sub_market||row.sub_market||'')}</small></td><td>${esc(c.trade_type||row.direction||'—')}</td><td>${esc(c.contract_type||'Broker capabilities on selection')}</td><td>${esc(row.timeframe||'—')}</td><td>${esc(num(row.live?.price))}</td><td class="${tone(row.baseline_direction)}">${esc(row.baseline_direction||'—')}</td><td class="${tone(row.direction)}">${esc(row.direction || '—')}</td><td><strong>${esc(pct(row.confidence))}</strong></td><td><span class="status-pill ${tone(row.direction)}">${esc(stateText(row.status))}</span></td></tr>`}).join('')||'<tr><td colspan="10">No broker signal rows returned.</td></tr>';
-    tbody.querySelectorAll('tr[data-symbol]').forEach(r=>r.addEventListener('click',()=>focus(S.rows.find(item=>item.symbol===r.dataset.symbol))));
+
+  function renderEvidence(row) {
+    const why = $('signalWhy');
+    const source = $('whySource');
+    if (!row) {
+      if (source) source.textContent = 'Select a signal';
+      if (why) why.innerHTML = '<p class="muted">Select a market to inspect persisted strategy evidence.</p>';
+      return;
+    }
+    if (source) source.textContent = row.strategy ? `Strategy · ${row.strategy_version || 'persisted'}` : 'Market state';
+    const items = Array.isArray(row.why) ? row.why : [];
+    const base = [
+      ['Broker account', row.account_id ? `${row.account_type || 'account'} · ${row.account_id}` : null, row.broker],
+      ['Market data', row.live?.source, row.live?.epoch ? new Date(Number(row.live.epoch) * 1000).toLocaleString() : null],
+      ['Signal state', row.status, row.analysis_timestamp],
+      ['Confirmation', Array.isArray(row.evidence) ? row.evidence.join(', ') : null, row.execution_ready ? 'PASS' : 'WAIT']
+    ];
+    const all = [...base, ...items.map(item => [item.condition, item.observed, item.result])]
+      .filter(item => item[1] !== null && item[1] !== undefined && item[1] !== '');
+    if (why) {
+      why.innerHTML = all.length
+        ? all.map(item => `<div class="evidence-row"><span>${esc(label(item[0]))}</span><strong>${esc(typeof item[1] === 'object' ? JSON.stringify(item[1]) : item[1])}</strong><small>${esc(item[2] || 'OBSERVED')}</small></div>`).join('')
+        : '<p class="muted">No persisted evidence is available for this signal.</p>';
+    }
   }
+
+  async function renderValidatedContract(row) {
+    const requestId = ++S.contractRequest;
+    const type = $('focusContract');
+    const family = $('focusContractFamily');
+    const reason = $('focusContractReason');
+    if (!row || !row.direction || !['BUY', 'SELL'].includes(String(row.direction).toUpperCase())) {
+      if (type) type.textContent = 'Not selected';
+      if (family) family.textContent = 'Not selected';
+      if (reason) reason.textContent = 'A contract is not selected until a validated BUY/SELL research direction exists.';
+      return;
+    }
+    if (type) type.textContent = 'Checking broker capabilities…';
+    if (family) family.textContent = 'Checking broker capabilities…';
+    try {
+      const data = await request(`/analysis/contracts/?symbol=${encodeURIComponent(row.symbol)}&direction=${encodeURIComponent(row.direction)}&timeframe=${encodeURIComponent(row.timeframe || 'M1')}`);
+      if (requestId !== S.contractRequest) return;
+      const selected = data.selected_contract;
+      if (!selected) {
+        if (type) type.textContent = 'Unavailable';
+        if (family) family.textContent = 'Unavailable';
+        if (reason) reason.textContent = 'Deriv returned no direction-compatible contract for this research state.';
+        return;
+      }
+      if (type) type.textContent = selected.contract_type;
+      if (family) family.textContent = selected.contract_family;
+      if (reason) reason.textContent = `Validated by current Deriv contracts_for data · ${selected.selection_basis}. This is not a profitability or seasonal ranking.`;
+    } catch (_) {
+      if (requestId !== S.contractRequest) return;
+      if (type) type.textContent = 'Unavailable';
+      if (family) family.textContent = 'Unavailable';
+      if (reason) reason.textContent = 'Broker contract capabilities are currently unavailable.';
+    }
+  }
+
+  function focus(row) {
+    if (!row) {
+      ['focusInstrument','focusPrice','focusSource','focusBaseline','focusDirection','focusThreshold','focusAge','focusEntry','focusStop','focusTake','focusTf'].forEach(id => { if ($(id)) $(id).textContent = '—'; });
+      if ($('focusInstrument')) $('focusInstrument').textContent = 'Select a market';
+      if ($('focusState')) { $('focusState').textContent = 'WAITING'; $('focusState').className = 'signal-state waiting'; }
+      if ($('focusConfidence')) $('focusConfidence').textContent = '—';
+      if ($('focusConfidenceBar')) $('focusConfidenceBar').style.width = '0%';
+      if ($('focusEvidence')) $('focusEvidence').innerHTML = '<span class="muted">Select a market to inspect its live state.</span>';
+      renderEvidence(null);
+      renderValidatedContract(null);
+      return;
+    }
+    $('focusInstrument').textContent = row.display_name || row.instrument || row.symbol || '—';
+    $('focusState').textContent = stateText(row.status);
+    $('focusState').className = `signal-state ${tone(row.direction)}${row.status === 'WAITING_FOR_ANALYSIS' ? ' waiting' : ''}`;
+    $('focusPrice').textContent = num(row.live?.price);
+    $('focusSource').textContent = row.live?.source === 'deriv_public_websocket'
+      ? `Deriv live · ${row.live?.epoch ? new Date(Number(row.live.epoch) * 1000).toLocaleTimeString() : 'now'}`
+      : 'No live tick';
+    $('focusConfidence').textContent = pct(row.confidence);
+    const confidence = Number(row.confidence);
+    $('focusConfidenceBar').style.width = Number.isFinite(confidence) ? `${Math.max(0, Math.min(100, confidence))}%` : '0%';
+    $('focusBaseline').textContent = row.baseline_direction ? `${row.baseline_direction} · ${pct(row.baseline_confidence)}` : 'No baseline';
+    $('focusDirection').textContent = row.direction || '—';
+    $('focusDirection').className = tone(row.direction);
+    $('focusThreshold').textContent = pct(row.live_confidence_threshold);
+    $('focusAge').textContent = row.live?.age_seconds == null ? '—' : `${row.live.age_seconds}s`;
+    $('focusEntry').textContent = num(row.entry_price);
+    $('focusStop').textContent = num(row.stop_loss);
+    $('focusTake').textContent = num(row.take_profit);
+    $('focusTf').textContent = row.timeframe || '—';
+    $('focusEvidence').innerHTML = (row.evidence || []).map(item => `<span class="evidence-chip">${esc(label(item))}</span>`).join('') || '<span class="muted">No confirmation evidence.</span>';
+    renderEvidence(row);
+    renderValidatedContract(row);
+  }
+
   function renderHealth(data) {
-    const live=Number(data.live_data_available_count||0), total=Number(data.count||0), stale=Number(data.stale_count||0); if($('signalsBalance'))$('signalsBalance').textContent=data.account?.balance!=null?money(data.account.balance,data.account.currency||'USD'):'—'; if($('signalsRiskBudget'))$('signalsRiskBudget').textContent=data.account?.risk_budget!=null?'Risk budget '+money(data.account.risk_budget,data.account.currency||'USD'):'Risk budget —'; if($('signalsFeed'))$('signalsFeed').textContent=data.broker_feed_state|| (live===total&&total>0?'LIVE':live>0?'PARTIAL':'UNAVAILABLE'); if($('signalsFeedAge'))$('signalsFeedAge').textContent=live>0?`${live}/${total} live Deriv quotes · ${num(data.feed_latency_ms,0)} ms`:'No current Deriv quotes received'; if($('signalsReady'))$('signalsReady').textContent=String(data.actionable_count??0); if($('signalsBaseline'))$('signalsBaseline').textContent=`${S.rows.filter(r=>r.analysis_signal_id).length}/${S.rows.length} matched`; if($('scanTimestamp'))$('scanTimestamp').textContent=`Scanned ${new Date().toLocaleTimeString()}${stale?` · ${stale} stale`:''}`;
+    const live = Number(data.live_data_available_count || 0);
+    const total = Number(data.count || 0);
+    if ($('signalsAccount')) $('signalsAccount').textContent = data.account?.id || '—';
+    if ($('signalsAccountType')) $('signalsAccountType').textContent = `${data.account?.type || 'account'} · ${data.account?.currency || ''}`;
+    if ($('signalsFeed')) $('signalsFeed').textContent = data.broker_feed_state || (live === total && total ? 'LIVE' : live ? 'PARTIAL' : 'UNAVAILABLE');
+    if ($('signalsFeedAge')) $('signalsFeedAge').textContent = live ? `${live}/${total} live Deriv quotes · ${num(data.feed_latency_ms, 0)} ms` : 'No current Deriv quotes received';
+    if ($('signalsReady')) $('signalsReady').textContent = String(data.actionable_count ?? 0);
+    if ($('signalsBaseline')) $('signalsBaseline').textContent = `${S.rows.filter(r => r.analysis_signal_id).length}/${S.rows.length} matched`;
+    if ($('scanTimestamp')) $('scanTimestamp').textContent = `Scanned ${new Date().toLocaleTimeString()}`;
   }
+
   async function scan() {
-    if(S.scanning)return; S.scanning=true; const controls=[$('signalsScan'),$('signalsRefresh')].filter(Boolean); controls.forEach(b=>{b.disabled=true;b.setAttribute('aria-busy','true')}); const symbol=$('signalsSymbol')?.value||'', timeframe=$('signalsTimeframe')?.value||'M1', limit=$('signalsLimit')?.value||'40';
-    try { setStatus('Reading the continuous Deriv public market-data stream…'); const data=await request(`/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol?`&symbol=${encodeURIComponent(symbol)}`:''}`); if(data.status!=='ok')throw new Error(data.message||'Live signal service returned an invalid response.'); S.rows=Array.isArray(data.data)?data.data:[]; S.last=data; populateSymbols(S.rows); populateViewOptions(S.rows); S.page=1; if($('signalsAccount'))$('signalsAccount').textContent=data.account?.id||'—'; if($('signalsAccountType'))$('signalsAccountType').textContent=`${data.account?.type||'account'} · ${data.account?.currency||''}`; renderHealth(data); setStatus(Number(data.live_data_available_count||0)>0?'LIVE':'NO LIVE QUOTES',Number(data.live_data_available_count||0)>0); renderView(); }
-    catch(error){const message=error?.message||'Market data unavailable.';S.rows=[];setStatus(message);if($('signalsReady'))$('signalsReady').textContent='0';if($('signalsBaseline'))$('signalsBaseline').textContent='Unavailable';if($('scanTimestamp'))$('scanTimestamp').textContent=`Scan failed · ${new Date().toLocaleTimeString()}`;if($('signalsTable'))$('signalsTable').innerHTML=`<tr><td colspan="10">${esc(message)}</td></tr>`;if($('liveTape'))$('liveTape').innerHTML=`<div class="empty">${esc(message)}</div>`;focus(null)}
-    finally{S.scanning=false;controls.forEach(b=>{b.disabled=false;b.removeAttribute('aria-busy')})}
+    if (S.scanning) return;
+    S.scanning = true;
+    const buttons = [$('signalsScan'), $('signalsRefresh')].filter(Boolean);
+    buttons.forEach(button => { button.disabled = true; button.setAttribute('aria-busy', 'true'); });
+    const symbol = $('signalsSymbol')?.value || '';
+    const timeframe = $('signalsTimeframe')?.value || 'M1';
+    const limit = $('signalsLimit')?.value || '40';
+    try {
+      const data = await request(`/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol ? `&symbol=${encodeURIComponent(symbol)}` : ''}`);
+      if (data.status !== 'ok') throw new Error(data.message || 'Live signal service returned an invalid response.');
+      S.rows = Array.isArray(data.data) ? data.data : [];
+      S.page = 1;
+      populateFilters(S.rows);
+      renderHealth(data);
+      renderView();
+    } catch (error) {
+      const message = error?.message || 'Market data unavailable.';
+      S.rows = [];
+      if ($('signalsFeed')) $('signalsFeed').textContent = 'UNAVAILABLE';
+      if ($('signalsFeedAge')) $('signalsFeedAge').textContent = message;
+      if ($('signalsReady')) $('signalsReady').textContent = '0';
+      if ($('signalsBaseline')) $('signalsBaseline').textContent = 'Unavailable';
+      if ($('scanTimestamp')) $('scanTimestamp').textContent = `Scan failed · ${new Date().toLocaleTimeString()}`;
+      renderTable([]);
+      renderTape([]);
+      focus(null);
+    } finally {
+      S.scanning = false;
+      buttons.forEach(button => { button.disabled = false; button.removeAttribute('aria-busy'); });
+    }
   }
-  function boot(){
-    $('signalsScan')?.addEventListener('click',scan); $('signalsRefresh')?.addEventListener('click',scan);
-    $('signalsSymbol')?.addEventListener('change',()=>{S.page=1;renderView()}); $('signalsTimeframe')?.addEventListener('change',scan);
-    $('signalsLimit')?.addEventListener('change',scan);
-    ['signalsSearch','signalsStrategy','signalsDirection','signalsStatus','signalsConfidence','signalsSort','signalsPageSize'].forEach(id=>$(id)?.addEventListener('input',()=>{S.page=1;renderView()}));
-    ['signalsStrategy','signalsDirection','signalsStatus','signalsConfidence','signalsSort','signalsPageSize'].forEach(id=>$(id)?.addEventListener('change',()=>{S.page=1;renderView()}));
-    $('signalsPrev')?.addEventListener('click',()=>{S.page--;renderView()}); $('signalsNext')?.addEventListener('click',()=>{S.page++;renderView()});
-    const resetForAccountChange=()=>{S.rows=[];S.last=null;S.page=1;focus(null);renderTape([]);renderTable([]);setStatus('Account changed — refreshing the Deriv public market-data feed…');scan()};
-    window.addEventListener('algobot:account-synced',resetForAccountChange); window.addEventListener('algobot:account-changed',resetForAccountChange); scan();
+
+  function renderView() {
+    const rows = filteredRows();
+    renderTape(rows);
+    renderTable(rows);
+    focus(rows.find(r => r.execution_ready) || rows.find(r => r.direction === 'BUY' || r.direction === 'SELL') || rows.find(r => r.live) || rows[0] || null);
   }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+
+  function boot() {
+    $('signalsScan')?.addEventListener('click', scan);
+    $('signalsRefresh')?.addEventListener('click', scan);
+    $('signalsSymbol')?.addEventListener('change', () => { S.page = 1; renderView(); });
+    $('signalsTimeframe')?.addEventListener('change', scan);
+    $('signalsLimit')?.addEventListener('change', scan);
+    ['signalsSearch','signalsStrategy','signalsDirection','signalsStatus','signalsConfidence','signalsSort','signalsPageSize']
+      .forEach(id => $(id)?.addEventListener('input', () => { S.page = 1; renderView(); }));
+    $('signalsPrev')?.addEventListener('click', () => { if (S.page > 1) { S.page -= 1; renderView(); } });
+    $('signalsNext')?.addEventListener('click', () => { S.page += 1; renderView(); });
+    scan();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once: true});
+  else boot();
 })();
