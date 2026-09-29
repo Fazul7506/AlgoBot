@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -51,7 +51,7 @@ class AnalysisSmokeTests(TestCase):
                 volume=1,
                 epoch=epoch,
             )
-        get_active.return_value = type("Account", (), {\n            "account_id": "CR123", "account_type": "demo", "currency": "USD",\n            "credential_status": "ready", "token_status": "active",\n            "broker": type("Broker", (), {"broker_type": "deriv"})(),\n        })()\n        fetch_contracts.return_value = {
+        get_active.return_value = type("Account", (), {\n            "account_id": "CR123", "account_type": "demo", "currency": "USD",\n            "credential_status": "ready", "token_status": "active",\n            "broker": type("Broker", (), {"broker_type": "deriv"})(),\n        })()\n        sync_account.return_value = (get_active.return_value, {})\n        fetch_contracts.return_value = {
             "available_contract_types": ["MULTUP", "MULTDOWN"],
             "available_contract_families": ["multiplier"],
             "expiry_types": ["intraday"],
@@ -95,8 +95,9 @@ class AnalysisSmokeTests(TestCase):
 
 
     @patch.object(views, "_authenticated_contract_capabilities")
+    @patch.object(views.SynchronizationService, "sync_account", new_callable=AsyncMock)
     @patch.object(views, "get_active_account")
-    def test_analysis_contracts_returns_authenticated_deriv_capabilities(self, get_active, fetch_contracts):
+    def test_analysis_contracts_returns_authenticated_deriv_capabilities(self, get_active, sync_account, fetch_contracts):
         market = MarketSymbol.objects.create(
             symbol="R_100",
             display_name="Volatility 100",
