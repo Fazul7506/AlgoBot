@@ -80,6 +80,39 @@
     $('focusDirection').textContent=row.direction || '—'; $('focusDirection').className=tone(row.direction); $('focusThreshold').textContent=pct(row.live_confidence_threshold); $('focusAge').textContent=row.live?.age_seconds==null?'—':`${row.live.age_seconds}s`;
     $('focusEntry').textContent=num(row.entry_price); $('focusStop').textContent=num(row.stop_loss); $('focusTake').textContent=num(row.take_profit); $('focusTf').textContent=row.timeframe||'—'; $('focusEvidence').innerHTML=(row.evidence||[]).map(item=>`<span class="evidence-chip">${esc(stateText(item))}</span>`).join('')||'<span class="muted">No confirmation evidence.</span>'; renderSpec(row);
   }
+  function renderWhyHow(row) {
+    const why = $('signalWhy'), source = $('whySource'), lifecycle = $('signalLifecycleDetail'), lifecycleState = $('lifecycleState');
+    if (!row) {
+      if (why) why.innerHTML='<p class="muted">Select a market to inspect actual persisted strategy evidence.</p>';
+      if (source) source.textContent='Select a signal';
+      if (lifecycleState) lifecycleState.textContent='Awaiting signal';
+      return;
+    }
+    if (source) source.textContent = row.strategy ? `Strategy · ${row.strategy_version || 'persisted version'}` : 'Broker / market state';
+    if (why) {
+      const items = Array.isArray(row.why) ? row.why : [];
+      const base = [
+        ['Signal source', row.strategy ? `Strategy · ${row.strategy}` : null, row.analysis_timestamp],
+        ['Market data', row.live?.source || null, row.live?.epoch ? new Date(Number(row.live.epoch)*1000).toLocaleString() : null],
+        ['Confirmation', row.evidence?.join(', ') || null, row.status]
+      ];
+      const all = [...base, ...items.map(item => [item.condition, item.observed, item.result])].filter(x => x[1] != null && x[1] !== '');
+      why.innerHTML = all.length ? all.map(x => `<div class="evidence-row"><span>${esc(label(x[0]))}</span><strong>${esc(typeof x[1] === 'object' ? JSON.stringify(x[1]) : x[1])}</strong><small>${esc(x[2] || 'OBSERVED')}</small></div>`).join('') : '<p class="muted">No persisted evidence is available for this signal.</p>';
+    }
+    const stages = [
+      ['Market data', row.live ? 'PASS' : 'UNAVAILABLE'],
+      ['Analysis baseline', row.analysis_signal_id ? (row.status === 'ANALYSIS_STALE' ? 'STALE' : 'PASS') : 'UNAVAILABLE'],
+      ['Strategy evaluation', row.analysis_signal_id ? 'PASS' : 'UNAVAILABLE'],
+      ['Confirmation', row.execution_ready ? 'PASS' : row.status === 'LIVE_CONFIRMATION_FAILED' ? 'FAILED' : 'WAIT'],
+      ['Broker contract', row.trade_context?.contract_type ? 'PASS' : 'REQUIRED'],
+      ['Manual execution', 'USER DECISION'],
+      ['Broker settlement', 'PENDING'],
+      ['Positions / Trade History', 'BROKER RECORD']
+    ];
+    if (lifecycle) lifecycle.innerHTML=stages.map(x=>`<div class="lifecycle-step"><span>${esc(x[1])}</span><strong>${esc(x[0])}</strong></div>`).join('');
+    if (lifecycleState) lifecycleState.textContent = row.status ? stateText(row.status) : 'Awaiting signal';
+  }
+
   function renderTape(rows) {
     const el=$('liveTape'); if(!el)return; $('marketCount').textContent=`${rows.length} markets`;
     el.innerHTML=rows.slice(0,20).map(row=>`<button type="button" class="tape-row" data-symbol="${esc(row.symbol)}"><span><strong>${esc(row.symbol)}</strong><small>${esc(row.market||'Deriv')}</small></span><strong>${esc(num(row.live?.price))}</strong><span class="tape-signal ${tone(row.direction)}">${esc(row.direction || '—')}</span><span>${esc(pct(row.confidence))}</span></button>`).join('')||'<div class="empty">No broker quotes returned for this scan.</div>';
@@ -91,7 +124,7 @@
     tbody.querySelectorAll('tr[data-symbol]').forEach(r=>r.addEventListener('click',()=>focus(S.rows.find(item=>item.symbol===r.dataset.symbol))));
   }
   function renderHealth(data) {
-    const live=Number(data.live_data_available_count||0), total=Number(data.count||0), stale=Number(data.stale_count||0); if($('signalsBalance'))$('signalsBalance').textContent=data.account?.balance!=null?money(data.account.balance,data.account.currency||'USD'):'—'; if($('signalsRiskBudget'))$('signalsRiskBudget').textContent=data.account?.risk_budget!=null?'Risk budget '+money(data.account.risk_budget,data.account.currency||'USD'):'Risk budget —'; if($('signalsFeed'))$('signalsFeed').textContent=live===total&&total>0?'LIVE':live>0?'PARTIAL':'UNAVAILABLE'; if($('signalsFeedAge'))$('signalsFeedAge').textContent=live>0?`${live}/${total} live Deriv quotes · ${num(data.feed_latency_ms,0)} ms`:'No current Deriv quotes received'; if($('signalsReady'))$('signalsReady').textContent=String(data.actionable_count??0); if($('signalsBaseline'))$('signalsBaseline').textContent=`${S.rows.filter(r=>r.analysis_signal_id).length}/${S.rows.length} matched`; if($('scanTimestamp'))$('scanTimestamp').textContent=`Scanned ${new Date().toLocaleTimeString()}${stale?` · ${stale} stale`:''}`;
+    const live=Number(data.live_data_available_count||0), total=Number(data.count||0), stale=Number(data.stale_count||0); if($('signalsBalance'))$('signalsBalance').textContent=data.account?.balance!=null?money(data.account.balance,data.account.currency||'USD'):'—'; if($('signalsRiskBudget'))$('signalsRiskBudget').textContent=data.account?.risk_budget!=null?'Risk budget '+money(data.account.risk_budget,data.account.currency||'USD'):'Risk budget —'; if($('signalsFeed'))$('signalsFeed').textContent=data.broker_feed_state|| (live===total&&total>0?'LIVE':live>0?'PARTIAL':'UNAVAILABLE'); if($('signalsFeedAge'))$('signalsFeedAge').textContent=live>0?`${live}/${total} live Deriv quotes · ${num(data.feed_latency_ms,0)} ms`:'No current Deriv quotes received'; if($('signalsReady'))$('signalsReady').textContent=String(data.actionable_count??0); if($('signalsBaseline'))$('signalsBaseline').textContent=`${S.rows.filter(r=>r.analysis_signal_id).length}/${S.rows.length} matched`; if($('scanTimestamp'))$('scanTimestamp').textContent=`Scanned ${new Date().toLocaleTimeString()}${stale?` · ${stale} stale`:''}`;
   }
   async function scan() {
     if(S.scanning)return; S.scanning=true; const controls=[$('signalsScan'),$('signalsRefresh')].filter(Boolean); controls.forEach(b=>{b.disabled=true;b.setAttribute('aria-busy','true')}); const symbol=$('signalsSymbol')?.value||'', timeframe=$('signalsTimeframe')?.value||'M1', limit=$('signalsLimit')?.value||'40';
