@@ -86,10 +86,6 @@
     const requestInit={credentials:sessionAccountSelect?'include':'omit',...options,headers,cache:'no-store',signal:controller.signal};
     const response=await nativeFetch(target,requestInit);
     return{response,text:await response.text()};
-    if(accessToken&&!headers.has('Authorization'))headers.set('Authorization','Bearer '+accessToken);
-    const requestInit={credentials:'omit',...options,headers,cache:'no-store',signal:controller.signal};
-    const response=await nativeFetch(target,requestInit);
-    return{response,text:await response.text()};
   }
 
   const protectedPublicPaths = /^\/api\/(?:brokers\/|orders(?:\/|$)|positions(?:\/|$)|dashboard(?:\/|$)|ai(?:\/|$)|predictions(?:\/|$)|automation(?:\/|$)|portfolio(?:\/|$)|backtesting(?:\/|$)|settings(?:\/|$)|tenants(?:\/|$))/;
