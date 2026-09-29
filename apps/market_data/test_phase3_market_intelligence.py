@@ -87,7 +87,7 @@ class Phase3MarketIntelligenceTests(TestCase):
         self.assertEqual(row["dominant_direction"], "BUY")
         self.assertEqual(row["buy_signals"], 2)
         self.assertEqual(row["sell_signals"], 1)
-        self.assertEqual(row["timeframes"], [])
+        self.assertEqual(row["timeframes"], ["M1"])
         self.assertGreater(row["signal_strength"], 0)
         self.assertIn("signal_confluence_buy", row["evidence"])
 
