@@ -2,6 +2,7 @@ from collections import Counter
 from decimal import Decimal
 
 from django.utils import timezone
+from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -141,10 +142,10 @@ def signal_lifecycle(request):
         age_seconds = max(0, int((now - signal.timestamp).total_seconds()))
         lifecycle = "active" if age_seconds <= SIGNAL_ACTIVE_SECONDS else "expired"
         order = Order.objects.filter(
+            Q(routing_context__signal_id=str(signal.id)) | Q(routing_context__signal_id=signal.id),
             user=request.user,
             account=account,
             symbol=signal.symbol,
-            routing_context__signal_id=str(signal.id),
         ).order_by("-created_at").first()
         position = None
         if order is not None and order.broker_order_id:
