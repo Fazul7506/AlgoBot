@@ -14,7 +14,7 @@
     if(busy&&!force)return busy;const request=canonical();if(!request)return selected;
     busy=(async()=>{
       const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},10000)).filter(a=>a?.id);accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
-      let serverSelected=null,activeRequestFailed=false;
+      let serverSelected=null;
       const listedActive=rows.find(a=>a.is_active===true||a.is_preferred===true||a.is_default===true);
       if(listedActive) serverSelected=listedActive;
       try{
@@ -33,7 +33,7 @@
       if(!target){selected=null;storageSet(null);window.AlgoBotBrokerState?.reset('no-connected-broker-account');window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));return null}
       const hydrated=serverSelected&&accountId(serverSelected)===accountId(target)?serverSelected:target;
       accounts=accounts.map(a=>accountId(a)===accountId(hydrated)?{...a,...hydrated,is_active:true}:{...a,is_active:false,is_preferred:false});
-      if(!accounts.some(a=>accountId(a)===accountId(hydrated)))accounts=[hydrated,...accounts];window.AlgoBotBrokerAccounts=accounts.slice();return setSelected(hydrated,activeRequestFailed?'account-context-recovered':'account-context-hydrated',true);
+      if(!accounts.some(a=>accountId(a)===accountId(hydrated)))accounts=[hydrated,...accounts];window.AlgoBotBrokerAccounts=accounts.slice();return setSelected(hydrated,'account-context-hydrated',true);
     })().finally(()=>{busy=null});return busy;
   }
   function clearTransientState(reason='account-switching'){
