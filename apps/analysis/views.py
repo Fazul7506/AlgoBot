@@ -178,8 +178,8 @@ def analysis_data(request):
     ai_result = {
         "status": "not_ready",
         "decision": "AVOID",
-        "signal": "NO_TRADE",
-        "confidence": 0.0,
+        "signal": None,
+        "confidence": None,
         "models_used": 0,
         "model_types": [],
         "reason": "A validated trained ensemble is required before an analysis can become an executable signal.",
@@ -340,7 +340,7 @@ def analysis_data(request):
         )
     )
     if not result["execution_gate"]["ready"]:
-        result["trade_spec"]["direction"] = "HOLD"
+        result["trade_spec"]["direction"] = None
         result["trade_spec"]["entry_condition"] = "NO TRADE until every execution gate is confirmed"
     cache.set(cache_key, result, ANALYSIS_CACHE_SECONDS)
     return JsonResponse(result)
