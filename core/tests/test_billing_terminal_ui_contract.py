@@ -59,6 +59,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("window.AlgoBotAPI", client)
         self.assertNotIn("bootstrappedCsrfToken", client)
         self.assertNotIn("X-CSRFToken", client)
+        self.assertNotIn("X-Algobot-Account-ID", client)
 
     def test_terminal_account_switch_uses_canonical_api_client(self):
         from pathlib import Path
