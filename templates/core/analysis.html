@@ -68,14 +68,14 @@ function chart(d){const c=$('aChart'),b=c.getBoundingClientRect(),q=devicePixelR
 async function jsonResponse(r){const text=await r.text();let j;try{j=JSON.parse(text)}catch(e){throw Error(text.trim().startsWith('<')?'The Analysis API returned an HTML error page instead of JSON. Check authentication and the deployed API route.':'The Analysis API returned invalid JSON.')}if(!r.ok)throw Error(j.message||j.detail||`Analysis API error (${r.status})`);return j}
 async function markets(){try{const request=window.AlgoBotFrontendData?.request;if(!request)throw Error('AlgoBot market service is not ready.');const j=await request('/api/market/broker-catalogue/',{},10000);S.markets=j.symbols||[];$('aSymbol').innerHTML=S.markets.map(m=>'<option value="'+esc(m.symbol)+'">'+esc(m.symbol)+' · '+esc(m.display_name||m.market||'Market')+'</option>').join('')||'<option>No active broker markets</option>';if(S.markets.length)load()}catch(e){status(false,e.message)}}
 function tradeSpecFromAnalysis(d){
-  const ids=['aMarketType','aSubMarket','aInstrument','aTradeType','aTradeDirection','aPickerContractType','aPickerContractFamily','aDuration','aDurationUnit','aExpiryType','aBarrier','aStake','aRiskBudget','aAccountBalance','aAvailableFunds','aFreeMargin','aPayout','aStrategy','aCategory','aRisk','aExecution','aEntryCondition','aConfirmation','aSpecRegime','aQuoteSource'];
+  const ids=['aMarketType','aSubMarket','aInstrument','aTradeType','aTradeDirection','aContractType','aContractFamily','aDuration','aDurationUnit','aExpiryType','aBarrier','aStake','aRiskBudget','aAccountBalance','aAvailableFunds','aFreeMargin','aPayout','aStrategy','aCategory','aRisk','aExecution','aEntryCondition','aConfirmation','aSpecRegime','aQuoteSource'];
   const spec=d.trade_spec||{},acct=d.account_context||{};
   const money=v=>v==null||v===''?'—':(typeof window.AlgoBotMoney?.format==='function'?window.AlgoBotMoney.format(v,acct.currency||'USD'):(String(acct.currency||'USD').toUpperCase()==='USD'?'$':'')+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}));
   const put=(id,v)=>{const el=$(id);if(el)el.textContent=v==null||v===''?'—':label(v)};
   const values={
     aMarketType:spec.market_type,aSubMarket:spec.sub_market,aInstrument:spec.instrument||d.symbol,
-    aTradeType:spec.trade_type,aTradeDirection:spec.direction,aPickerContractType:spec.contract_type,
-    aPickerContractFamily:spec.contract_family,aDuration:spec.duration,aDurationUnit:spec.duration_unit,
+    aTradeType:spec.trade_type,aTradeDirection:spec.direction,aContractType:spec.contract_type,
+    aContractFamily:spec.contract_family,aDuration:spec.duration,aDurationUnit:spec.duration_unit,
     aExpiryType:spec.broker_expiry_types,aBarrier:spec.barrier,aStake:money(spec.stake),
     aRiskBudget:money(spec.risk_budget),aAccountBalance:money(spec.account_balance),
     aAvailableFunds:money(acct.available_funds),aFreeMargin:money(spec.free_margin),
