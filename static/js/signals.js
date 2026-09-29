@@ -17,6 +17,12 @@
   const stateText = value => String(value || 'WAITING').replaceAll('_', ' ');
   const S = {rows: [], scanning: false, page: 1, contractRequest: 0};
 
+let ContractPicker={capabilities:null,selected:null,requestId:0};
+async function loadSignalContract(){const row= S.rows.find(r=>r.symbol===($('signalsSymbol')?.value||'')) || S.rows.find(r=>r.execution_ready) || S.rows[0];const symbol=row?.symbol;if(!symbol){$('signalsContractStatus').textContent='Select or scan a market first.';return}const id=++ContractPicker.requestId;$('signalsContractStatus').textContent='Loading current Deriv contracts_for…';try{const data=await request('/analysis/contracts/?symbol='+encodeURIComponent(symbol)+'&timeframe='+encodeURIComponent(row?.timeframe||$('signalsTimeframe')?.value||'M1'));if(id!==ContractPicker.requestId)return;ContractPicker.capabilities=data.capabilities||{};const rows=ContractPicker.capabilities.available||[];const fill=(el,vals,placeholder)=>{const current=el.value;el.innerHTML='<option value="">'+esc(placeholder)+'</option>'+[...new Set(vals.filter(Boolean))].sort().map(v=>'<option value="'+esc(v)+'">'+esc(label(v))+'</option>').join('');if(vals.includes(current))el.value=current};fill($('signalsContractFamily'),rows.map(x=>x.contract_category),'All broker families');fill($('signalsContractExpiry'),rows.map(x=>x.expiry_type),'Any broker expiry');fill($('signalsContractSentiment'),rows.map(x=>x.sentiment),'Any broker sentiment');$('signalsContractMarketType').innerHTML='<option>'+esc(row?.market||'—')+'</option>';$('signalsContractSubMarket').innerHTML='<option>'+esc(row?.sub_market||'—')+'</option>';renderSignalContractTypes();$('signalsContractStatus').textContent='Broker capabilities loaded';$('signalsContractNote').textContent='Broker-published: family, type, expiry and sentiment. Duration, barrier, multiplier and growth-rate inputs are not asserted as supported until Deriv validates a concrete proposal.'}catch(e){$('signalsContractStatus').textContent=e.message||'Broker capabilities unavailable';$('signalsContractNote').textContent='No contract choice has been fabricated.'}}
+function renderSignalContractTypes(){const rows=ContractPicker.capabilities?.available||[];const f=$('signalsContractFamily').value,e=$('signalsContractExpiry').value,s=$('signalsContractSentiment').value;const types=rows.filter(x=>(!f||x.contract_category===f)&&(!e||x.expiry_type===e)&&(!s||x.sentiment===s)).map(x=>x.contract_type);const el=$('signalsContractType');el.innerHTML='<option value="">Select contract type</option>'+[...new Set(types.filter(Boolean))].sort().map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('')}
+function applySignalContract(){const type=$('signalsContractType').value;if(!type){$('signalsContractSummary').textContent='No broker contract selected.';return}const rows=ContractPicker.capabilities?.available||[];const chosen=rows.find(x=>x.contract_type===type&&(!$('signalsContractFamily').value||x.contract_category===$('signalsContractFamily').value)&&(!$('signalsContractExpiry').value||x.expiry_type===$('signalsContractExpiry').value)&&(!$('signalsContractSentiment').value||x.sentiment===$('signalsContractSentiment').value));if(!chosen)return;ContractPicker.selected={...chosen,duration:$('signalsContractDuration').value||null,duration_unit:$('signalsContractDurationUnit').value||null,barrier:$('signalsContractBarrier').value||null,multiplier:$('signalsContractMultiplier').value||null,growth_rate:$('signalsContractGrowthRate').value||null};$('signalsContractSummary').textContent=chosen.contract_category+' · '+chosen.contract_type+' · '+(chosen.expiry_type||'expiry not published')+' · '+(chosen.sentiment||'sentiment not published');$('signalsContractModal').hidden=true;$('signalsContractModal').setAttribute('aria-hidden','true')}
+
+
   async function getApiClient() {
     if (window.AlgoBotAPI?.apiClient) return window.AlgoBotAPI.apiClient;
     await new Promise(resolve => {
@@ -282,6 +288,12 @@
   }
 
   function boot() {
+    $('signalsContractOpen')?.addEventListener('click',()=>{const m=$('signalsContractModal');m.hidden=false;m.setAttribute('aria-hidden','false');loadSignalContract()});
+    $('signalsContractClose')?.addEventListener('click',()=>{const m=$('signalsContractModal');m.hidden=true;m.setAttribute('aria-hidden','true')});
+    document.querySelectorAll('[data-signal-contract-close]').forEach(e=>e.addEventListener('click',()=>{const m=$('signalsContractModal');m.hidden=true;m.setAttribute('aria-hidden','true')}));
+    $('signalsContractApply')?.addEventListener('click',applySignalContract);
+    $('signalsContractClear')?.addEventListener('click',()=>{ContractPicker.selected=null;$('signalsContractSummary').textContent='No contract selected.'});
+    ['signalsContractFamily','signalsContractExpiry','signalsContractSentiment'].forEach(id=>$(id)?.addEventListener('change',renderSignalContractTypes));
     $('signalsScan')?.addEventListener('click', scan);
     $('signalsRefresh')?.addEventListener('click', scan);
     $('signalsSymbol')?.addEventListener('change', () => { S.page = 1; renderView(); });
