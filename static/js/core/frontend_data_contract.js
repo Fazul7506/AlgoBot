@@ -74,15 +74,18 @@
     const targetOrigin=new URL(target,window.location.origin).origin;
     const sameOrigin=targetOrigin===window.location.origin;
     const sessionAccountSelect=/^\/api\/brokers\/accounts\/[^/]+\/select\/$/.test(new URL(target,window.location.origin).pathname);
-    if(sessionAccountSelect){
-      const match=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-      const csrfToken=match?decodeURIComponent(match[1]):'';
-      if(csrfToken&&!headers.has('X-CSRFToken'))headers.set('X-CSRFToken',csrfToken);
-      const requestInit={credentials:'include',...options,headers,cache:'no-store',signal:controller.signal};
-      const response=await nativeFetch(target,requestInit);
-      return{response,text:await response.text()};
-    }
+    // Account selection mutates the authenticated Django session, but the browser
+    // already has a short-lived JWT issued by /api/auth/browser-token/. Use that
+    // bearer credential for API authentication while retaining the session cookie
+    // so the server can persist the selected account in the Django session.
+    // Do not copy a csrftoken from the UI origin: with the split UI/API deployment
+    // duplicate or rotated CSRF cookies can make that header disagree with the
+    // cookie received by the API origin.
     const accessToken=await ensureApiAccessToken(controller);
+    if(accessToken&&!headers.has('Authorization'))headers.set('Authorization','Bearer '+accessToken);
+    const requestInit={credentials:sessionAccountSelect?'include':'omit',...options,headers,cache:'no-store',signal:controller.signal};
+    const response=await nativeFetch(target,requestInit);
+    return{response,text:await response.text()};
     if(accessToken&&!headers.has('Authorization'))headers.set('Authorization','Bearer '+accessToken);
     const requestInit={credentials:'omit',...options,headers,cache:'no-store',signal:controller.signal};
     const response=await nativeFetch(target,requestInit);
