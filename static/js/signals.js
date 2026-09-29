@@ -33,9 +33,8 @@
     // Read-only fallback: keep Signals usable even when the shared client did not
     // initialise. This never changes mutation/authentication behaviour.
     const rawPath = String(path || '/');
-    const selectedId = window.AlgoBotAccountContext?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id;
     const headers = new Headers({'Accept':'application/json'});
-    if (selectedId != null) headers.set('X-Algobot-Account-ID', String(selectedId));
+    // Active-account authority stays server-side in the authenticated Django session.
     const response = await fetch(new URL(rawPath, `${apiBase()}/`).toString(), {method:'GET', credentials:'include', headers});
     let payload = {};
     try { payload = await response.json(); } catch (_) { payload = {detail: await response.text()}; }
