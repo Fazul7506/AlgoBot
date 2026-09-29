@@ -10,3 +10,18 @@
 @media(max-width:650px){.live-signals{gap:14px}.live-signals-head{gap:12px}.live-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.live-actions .btn{width:100%;min-width:0}.live-status-grid,.focus-grid{grid-template-columns:1fr 1fr}.signal-command{padding:13px}.signal-filters{display:grid;grid-template-columns:1fr 1fr 1fr}.signal-filters select{min-width:0;width:100%}.signal-focus{padding:15px}.panel-title{gap:8px}.focus-price strong{font-size:1.75rem}.focus-grid{gap:7px}.focus-grid div{padding:9px}.live-side>.panel,.signal-table-panel{padding:13px}.live-signal-table{min-width:860px}}
 @media(max-width:420px){.live-actions{grid-template-columns:1fr 1fr}.signal-filters{grid-template-columns:1fr}.live-status-grid,.focus-grid{grid-template-columns:1fr}.panel-title{flex-direction:column}.signal-state{align-self:flex-start}}
 html[data-theme="light"] .live-status-card,html[data-theme="light"] .panel{box-shadow:0 8px 24px rgba(15,23,42,.08)}
+
+
+/* Signal interpretation / lifecycle additions */
+.signals-explanation-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.signal-evidence-detail{display:grid;gap:8px}
+.evidence-row{display:grid;grid-template-columns:minmax(100px,.7fr) minmax(120px,1.5fr) auto;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:8px}
+.evidence-row span,.evidence-row small{color:var(--muted)}
+.signal-how{margin:0;padding-left:22px;display:grid;gap:10px;color:var(--text)}
+.signal-lifecycle-panel{margin-top:12px}
+.signal-lifecycle-detail{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
+.lifecycle-step{border:1px solid var(--line);border-radius:8px;padding:10px;min-width:0}
+.lifecycle-step span{display:block;font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.lifecycle-step strong{font-size:12px}
+@media(max-width:900px){.signals-explanation-grid{grid-template-columns:1fr}.signal-lifecycle-detail{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:560px){.signal-lifecycle-detail{grid-template-columns:repeat(2,minmax(0,1fr))}.evidence-row{grid-template-columns:1fr}.signal-how{padding-left:20px}}
