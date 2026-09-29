@@ -41,7 +41,9 @@ def _select_validated_contract(capabilities, direction=None, timeframe=None):
     if not isinstance(available, list):
         return None
     direction = str(direction or "").upper()
-    preferred_sentiment = "up" if direction == "BUY" else "down" if direction == "SELL" else None
+    if direction not in {"BUY", "SELL"}:
+        return None
+    preferred_sentiment = "up" if direction == "BUY" else "down"
     timeframe = str(timeframe or "").upper()
 
     directional_types = {
