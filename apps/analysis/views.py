@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.analysis.advanced import analyze_candles
 from apps.analysis.broker_intelligence import build_account_risk_context
-from apps.brokers.services import SynchronizationService
+from apps.brokers.services import BrokerRegistry, SynchronizationService
 from core.account_context import get_active_account
 from apps.market_data.models import MarketSnapshot, MarketSymbol
 from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick
@@ -26,6 +26,32 @@ from apps.ai_engine.services import PredictionService, RecommendationService
 ANALYSIS_MARKETS_CACHE_SECONDS = 15
 ANALYSIS_CACHE_SECONDS = 3
 
+
+
+def _authenticated_contract_capabilities(account, symbol):
+    """Fetch broker contract capabilities through the selected account session.
+
+    Contract availability is account/broker scoped. Never expose or persist the
+    OAuth token; only broker-published capability metadata is returned.
+    """
+    adapter = BrokerRegistry().adapter(account.broker, account)
+    available = asyncio.run(adapter.get_trade_capabilities(symbol))
+    if not isinstance(available, list):
+        raise RuntimeError("Deriv returned an invalid contract capability payload")
+    contracts = [item for item in available if isinstance(item, dict) and item.get("contract_type")]
+    return {
+        "symbol": symbol,
+        "source": "deriv_authenticated_contracts_for",
+        "available": contracts,
+        "available_contract_types": sorted({str(item.get("contract_type")) for item in contracts if item.get("contract_type")}),
+        "available_contract_families": sorted({str(item.get("contract_category")) for item in contracts if item.get("contract_category")}),
+        "market_types": sorted({str(item.get("market")) for item in contracts if item.get("market")}),
+        "submarkets": sorted({str(item.get("submarket")) for item in contracts if item.get("submarket")}),
+        "expiry_types": sorted({str(item.get("expiry_type")) for item in contracts if item.get("expiry_type")}),
+        "sentiments": sorted({str(item.get("sentiment")) for item in contracts if item.get("sentiment")}),
+        "barriers": sorted({str(value) for item in contracts for value in (item.get("barriers") or []) if value not in (None, "")}),
+        "fetched_at": int(time.time()),
+    }
 
 
 def _select_validated_contract(capabilities, direction=None, timeframe=None):
@@ -441,14 +467,20 @@ def analysis_contracts(request):
         market = MarketSymbol.objects.get(symbol=symbol, is_active=True, is_tradable=True)
     except MarketSymbol.DoesNotExist:
         return JsonResponse({"status": "error", "code": "MARKET_UNAVAILABLE", "message": "The selected market is not currently available from the broker catalogue."}, status=404)
+    account = get_active_account(request.user, request=request)
+    if account is None:
+        return JsonResponse({"status": "error", "code": "NO_ACTIVE_BROKER_ACCOUNT", "message": "Select a connected Deriv broker account before loading contract capabilities."}, status=409)
+    if account.broker.broker_type != "deriv":
+        return JsonResponse({"status": "error", "code": "BROKER_NOT_SUPPORTED", "message": "Contract capability synchronization currently requires the selected Deriv account."}, status=422)
     try:
-        capabilities = fetch_contracts_for(market.symbol)
+        account, _broker_data = asyncio.run(asyncio.wait_for(SynchronizationService().sync_account(account), timeout=8.0))
+        capabilities = _authenticated_contract_capabilities(account, market.symbol)
     except Exception as exc:
         return JsonResponse(
             {
                 "status": "error",
                 "code": "BROKER_CONTRACT_DATA_FAILED",
-                "message": "Deriv contract capabilities could not be confirmed.",
+                "message": "Deriv contract capabilities could not be confirmed from the selected broker account.",
                 "detail": str(exc),
                 "symbol": market.symbol,
             },
