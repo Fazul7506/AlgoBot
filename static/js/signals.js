@@ -78,7 +78,7 @@
     $('focusPrice').textContent=num(row.live?.price); $('focusSource').textContent=row.live?.source==='deriv_public_websocket'?`Deriv live · ${row.live?.epoch?new Date(Number(row.live.epoch)*1000).toLocaleTimeString():'now'}`:'No live tick';
     $('focusConfidence').textContent=pct(row.confidence); const confidenceNumber=Number(row.confidence); $('focusConfidenceBar').style.width=Number.isFinite(confidenceNumber)?`${Math.max(0,Math.min(100,confidenceNumber))}%`:'0%'; $('focusBaseline').textContent=row.baseline_direction?`${row.baseline_direction} · ${pct(row.baseline_confidence)}`:'No baseline';
     $('focusDirection').textContent=row.direction || '—'; $('focusDirection').className=tone(row.direction); $('focusThreshold').textContent=pct(row.live_confidence_threshold); $('focusAge').textContent=row.live?.age_seconds==null?'—':`${row.live.age_seconds}s`;
-    $('focusEntry').textContent=num(row.entry_price); $('focusStop').textContent=num(row.stop_loss); $('focusTake').textContent=num(row.take_profit); $('focusTf').textContent=row.timeframe||'—'; $('focusEvidence').innerHTML=(row.evidence||[]).map(item=>`<span class="evidence-chip">${esc(stateText(item))}</span>`).join('')||'<span class="muted">No confirmation evidence.</span>'; renderSpec(row);
+    $('focusEntry').textContent=num(row.entry_price); $('focusStop').textContent=num(row.stop_loss); $('focusTake').textContent=num(row.take_profit); $('focusTf').textContent=row.timeframe||'—'; $('focusEvidence').innerHTML=(row.evidence||[]).map(item=>`<span class="evidence-chip">${esc(stateText(item))}</span>`).join('')||'<span class="muted">No confirmation evidence.</span>'; renderSpec(row); renderWhyHow(row);
   }
   function renderWhyHow(row) {
     const why = $('signalWhy'), source = $('whySource'), lifecycle = $('signalLifecycleDetail'), lifecycleState = $('lifecycleState');
@@ -92,6 +92,7 @@
     if (why) {
       const items = Array.isArray(row.why) ? row.why : [];
       const base = [
+        ['Broker account', row.account_id ? `${row.account_type || 'account'} · ${row.account_id}` : null, row.broker || null],
         ['Signal source', row.strategy ? `Strategy · ${row.strategy}` : null, row.analysis_timestamp],
         ['Market data', row.live?.source || null, row.live?.epoch ? new Date(Number(row.live.epoch)*1000).toLocaleString() : null],
         ['Confirmation', row.evidence?.join(', ') || null, row.status]
@@ -106,8 +107,8 @@
       ['Confirmation', row.execution_ready ? 'PASS' : row.status === 'LIVE_CONFIRMATION_FAILED' ? 'FAILED' : 'WAIT'],
       ['Broker contract', row.trade_context?.contract_type ? 'PASS' : 'REQUIRED'],
       ['Manual execution', 'USER DECISION'],
-      ['Broker settlement', 'PENDING'],
-      ['Positions / Trade History', 'BROKER RECORD']
+      ['Broker settlement', 'NOT LINKED'],
+      ['Positions / Trade History', 'NOT LINKED']
     ];
     if (lifecycle) lifecycle.innerHTML=stages.map(x=>`<div class="lifecycle-step"><span>${esc(x[1])}</span><strong>${esc(x[0])}</strong></div>`).join('');
     if (lifecycleState) lifecycleState.textContent = row.status ? stateText(row.status) : 'Awaiting signal';
