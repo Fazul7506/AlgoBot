@@ -136,3 +136,45 @@ class LiveSignalsContractTests(TestCase):
         self.assertEqual(row["baseline_direction"], "BUY")
         self.assertEqual(row["analysis_signal_id"], StrategySignal.objects.get(configuration=self.config).id)
 
+
+    @patch("apps.market_data.signal_views._live_deriv_ticks")
+    def test_signal_exposes_canonical_lifecycle_and_provenance(self, live_ticks):
+        StrategySignal.objects.create(
+            strategy=self.strategy,
+            configuration=self.config,
+            symbol="R_100",
+            signal="BUY",
+            confidence=80,
+            entry_price="100.00000",
+            timestamp=timezone.now(),
+        )
+        live_ticks.return_value = ({"R_100": {"symbol": "R_100", "quote": 101.0, "epoch": int(timezone.now().timestamp())}}, 10.0)
+        response = self.client.get("/api/strategy-signals/?symbol=R_100&timeframe=M1")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        row = payload["data"][0]
+        self.assertEqual(payload["research_state"], "READY")
+        self.assertEqual(payload["broker_state"], "BROKER_CONNECTED")
+        self.assertEqual(row["lifecycle"], "ACTIONABLE")
+        self.assertTrue(row["signal_valid"])
+        self.assertEqual(row["confidence_source"], "strategy_signal")
+        self.assertEqual(row["provenance"]["execution"], "Not executed")
+
+    @patch("apps.market_data.signal_views._live_deriv_ticks")
+    def test_live_confirmation_conflict_invalidates_signal_without_rewriting_confidence(self, live_ticks):
+        StrategySignal.objects.create(
+            strategy=self.strategy,
+            configuration=self.config,
+            symbol="R_100",
+            signal="BUY",
+            confidence=91,
+            entry_price="110.00000",
+            timestamp=timezone.now(),
+        )
+        live_ticks.return_value = ({"R_100": {"symbol": "R_100", "quote": 101.0, "epoch": int(timezone.now().timestamp())}}, 10.0)
+        response = self.client.get("/api/strategy-signals/?symbol=R_100&timeframe=M1")
+        row = response.json()["data"][0]
+        self.assertEqual(row["lifecycle"], "INVALIDATED")
+        self.assertEqual(row["status"], "LIVE_CONFIRMATION_FAILED")
+        self.assertEqual(row["confidence"], 91.0)
+        self.assertFalse(row["execution_ready"])
