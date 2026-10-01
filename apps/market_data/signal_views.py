@@ -58,8 +58,15 @@ def _analysis_baselines(request, symbols, timeframe, account=None):
     if account is None:
         return {}
     qs = (StrategySignal.objects.select_related("strategy", "configuration")
-          .filter(configuration__user=request.user, configuration__broker_account=account,
-                  symbol__in=symbols, timestamp__lte=timezone.now())
+          .filter(
+              configuration__user=request.user,
+              configuration__broker_account=account,
+              configuration__is_active=True,
+              configuration__enabled=True,
+              strategy__enabled=True,
+              symbol__in=symbols,
+              timestamp__lte=timezone.now(),
+          )
           .order_by("-timestamp"))
     baselines = {}
     for signal in qs:
