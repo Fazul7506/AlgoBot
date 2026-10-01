@@ -81,3 +81,58 @@ class LiveSignalsContractTests(TestCase):
         row = response.json()["data"][0]
         self.assertEqual(row["status"], "ANALYSIS_STALE")
         self.assertFalse(row["execution_ready"])
+
+    @patch("apps.market_data.signal_views._live_deriv_ticks")
+    def test_inactive_strategy_signal_is_not_used_as_live_baseline(self, live_ticks):
+        self.config.is_active = True
+        self.config.enabled = True
+        self.config.save(update_fields=["is_active", "enabled"])
+
+        inactive_strategy = Strategy.objects.create(
+            name="Inactive Test",
+            slug="inactive-test",
+            category="Trend Following",
+            version="1",
+            enabled=True,
+        )
+        inactive_config = StrategyConfiguration.objects.create(
+            strategy=inactive_strategy,
+            user=self.user,
+            broker_account=self.account,
+            symbol="R_100",
+            timeframe="M1",
+            enabled=True,
+            is_active=False,
+        )
+        StrategySignal.objects.create(
+            strategy=inactive_strategy,
+            configuration=inactive_config,
+            symbol="R_100",
+            signal="SELL",
+            confidence=99,
+            entry_price="102.00000",
+            timestamp=timezone.now(),
+        )
+        StrategySignal.objects.create(
+            strategy=self.strategy,
+            configuration=self.config,
+            symbol="R_100",
+            signal="BUY",
+            confidence=80,
+            entry_price="100.00000",
+            timestamp=timezone.now(),
+        )
+        live_ticks.return_value = ({
+            "R_100": {
+                "symbol": "R_100",
+                "quote": 101.0,
+                "epoch": int(timezone.now().timestamp()),
+            }
+        }, 12.0)
+
+        response = self.client.get("/api/strategy-signals/?symbol=R_100&timeframe=M1")
+        self.assertEqual(response.status_code, 200)
+        row = response.json()["data"][0]
+        self.assertEqual(row["baseline_direction"], "BUY")
+        self.assertEqual(row["analysis_signal_id"], StrategySignal.objects.get(configuration=self.config).id)
+
