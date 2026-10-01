@@ -420,10 +420,12 @@ def _strategy_signals_impl(request):
         rows.append(row)
     if not account_credentials_valid:
         for row in rows:
-            if row.get("execution_ready"):
+            if row.get("execution_ready") or row.get("direction") in {"BUY", "SELL"}:
                 row["execution_ready"] = False
+                row["signal_valid"] = False
                 row["evidence"] = [*row.get("evidence", []), "selected_account_credentials_not_ready_for_execution"]
                 row["status"] = "ACCOUNT_AUTH_REQUIRED"
+                row["lifecycle"] = "BLOCKED"
 
     actionable = [r for r in rows if r.get("execution_ready")]
     live_data_available_count = sum(1 for r in rows if r.get("live"))
