@@ -7,6 +7,8 @@ from django.urls import reverse
 
 from apps.analysis import views
 from apps.market_data.models import Candle, MarketSymbol
+from apps.brokers.models import Broker, BrokerAccount
+from apps.strategies.models import Strategy, StrategyConfiguration, StrategySignal
 
 
 class AnalysisSmokeTests(TestCase):
@@ -162,3 +164,94 @@ class AnalysisSmokeTests(TestCase):
         response = self.client.get(reverse("analysis-markets"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["markets"], [])
+
+
+class AnalysisArchitectureReconciliationTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="analysis-architecture", password="test-pass-123"
+        )
+        self.client.force_login(self.user)
+        self.broker = Broker.objects.create(
+            name="Deriv", broker_type="deriv", status="active"
+        )
+        self.account = BrokerAccount.objects.create(
+            user=self.user,
+            broker=self.broker,
+            account_id="CR-ANALYSIS",
+            status="active",
+            credentials={"account_type": "demo"},
+        )
+        cache.clear()
+
+    def test_latest_strategy_baseline_is_account_scoped_and_past_only(self):
+        strategy = Strategy.objects.create(
+            name="Canonical Strategy",
+            slug="canonical-strategy",
+            category="Trend Following",
+        )
+        config = StrategyConfiguration.objects.create(
+            strategy=strategy,
+            user=self.user,
+            broker_account=self.account,
+            symbol="R_100",
+            timeframe="M1",
+            enabled=True,
+            is_active=True,
+        )
+        StrategySignal.objects.create(
+            strategy=strategy,
+            configuration=config,
+            symbol="R_100",
+            signal="BUY",
+            confidence=81,
+        )
+        from apps.analysis.views import _latest_strategy_baseline
+        baseline = _latest_strategy_baseline(
+            type("Request", (), {"user": self.user})(),
+            self.account,
+            "R_100",
+            "M1",
+        )
+        self.assertIsNotNone(baseline)
+        self.assertEqual(baseline.signal, "BUY")
+        self.assertEqual(baseline.configuration.broker_account_id, self.account.id)
+
+    @patch.object(views, "_authenticated_contract_capabilities")
+    def test_analysis_prefers_authenticated_contract_capabilities_for_active_account(self, authenticated_caps):
+        market = MarketSymbol.objects.create(
+            symbol="R_100",
+            display_name="Volatility 100",
+            market="Volatility Indices",
+            broker="deriv",
+        )
+        for epoch, close in ((100, 100), (160, 101), (220, 102)):
+            Candle.objects.create(
+                symbol=market,
+                timeframe="1m",
+                open=close,
+                high=close + 1,
+                low=close - 1,
+                close=close,
+                volume=1,
+                epoch=epoch,
+            )
+        authenticated_caps.return_value = {
+            "symbol": "R_100",
+            "source": "deriv_authenticated_contracts_for",
+            "available": [{"contract_type": "CALL", "contract_category": "rise_fall"}],
+            "available_contract_types": ["CALL"],
+            "available_contract_families": ["rise_fall"],
+            "expiry_types": ["intraday"],
+            "sentiments": ["up"],
+        }
+        response = self.client.get(
+            reverse("analysis-data"),
+            {"symbol": "R_100", "timeframe": "M1", "limit": 300, "refresh": "0"},
+        )
+        self.assertEqual(response.status_code, 200)
+        authenticated_caps.assert_called_once_with(self.account, "R_100")
+        self.assertEqual(
+            response.json()["contract_capabilities"]["source"],
+            "deriv_authenticated_contracts_for",
+        )

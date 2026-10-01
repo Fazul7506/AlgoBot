@@ -16,7 +16,7 @@
     if (client) return client.get(path, {credentials:"include", __algoTimeoutMs:15000});
     const r = await fetch(path,{credentials:"same-origin",headers:{"Accept":"application/json","Content-Type":"application/json",...(options.headers||{})},...options});
     let p={}; try{p=await r.json()}catch(_){}
-    if(!r.ok) throw new Error(p?.message || p?.error?.detail || "Request failed ("+r.status+")");
+    if(!r.ok) throw new Error(p?.message || p?.error?.detail || `HTTP ${r.status} request failure`);
     return p;
   }
   function set(id,v){const e=$(id);if(e)e.textContent=v==null||v===""?"—":v}

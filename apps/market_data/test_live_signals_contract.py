@@ -35,7 +35,7 @@ class LiveSignalsContractTests(TestCase):
         self.assertTrue(self.client.login(username="signals-contract", password="test-pass"))
         self.market = MarketSymbol.objects.create(symbol="R_100", display_name="Volatility 100", market="Derived Indices", broker="deriv", is_active=True, is_tradable=True)
         self.strategy = Strategy.objects.create(name="Live Test", slug="live-test", category="Trend Following", version="1", enabled=True)
-        self.config = StrategyConfiguration.objects.create(strategy=self.strategy, user=self.user, broker_account=self.account, symbol="R_100", timeframe="M1", enabled=True)
+        self.config = StrategyConfiguration.objects.create(strategy=self.strategy, user=self.user, broker_account=self.account, symbol="R_100", timeframe="M1", enabled=True, is_active=True)
 
     @patch("apps.market_data.signal_views._live_deriv_ticks")
     def test_live_signal_uses_public_broker_quote_and_matching_baseline(self, live_ticks):

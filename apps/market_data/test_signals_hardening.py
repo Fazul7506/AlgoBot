@@ -68,6 +68,31 @@ class SignalRevisionIntegrityTests(SimpleTestCase):
         self.assertEqual(result["status"], "ANALYSIS_STALE")
         self.assertFalse(result["execution_ready"])
 
+    def test_explicit_signal_expiry_is_distinguished_from_staleness(self):
+        now = timezone.now()
+        result = _revise_signal(
+            self._signal(metadata={"expires_at": (now - timedelta(seconds=1)).isoformat()}),
+            {"quote": 101, "epoch": int(now.timestamp()), "_source": "deriv_public_websocket"},
+            now,
+            self._market(),
+            self._account(),
+        )
+        self.assertEqual(result["status"], "SIGNAL_EXPIRED")
+        self.assertEqual(result["lifecycle"], "EXPIRED")
+        self.assertFalse(result["execution_ready"])
+
+    def test_missing_confidence_remains_unavailable(self):
+        now = timezone.now()
+        result = _revise_signal(
+            self._signal(confidence=None),
+            {"quote": 101, "epoch": int(now.timestamp()), "_source": "deriv_public_websocket"},
+            now,
+            self._market(),
+            self._account(),
+        )
+        self.assertIsNone(result["confidence"])
+        self.assertFalse(result["execution_ready"])
+
 
 class SignalBaselineIsolationTests(TestCase):
     def test_baselines_are_scoped_to_the_authenticated_user_and_account(self):
@@ -78,7 +103,7 @@ class SignalBaselineIsolationTests(TestCase):
         owner_account = BrokerAccount.objects.create(user=owner, broker=broker, account_id="owner-account", credentials={"account_type": "demo"})
         other_account = BrokerAccount.objects.create(user=other, broker=broker, account_id="other-account", credentials={"account_type": "demo"})
         strategy = Strategy.objects.create(name="Isolation Strategy", slug="isolation-strategy", category="Trend Following")
-        owner_config = StrategyConfiguration.objects.create(strategy=strategy, user=owner, broker_account=owner_account, symbol="R_100", timeframe="M1")
+        owner_config = StrategyConfiguration.objects.create(strategy=strategy, user=owner, broker_account=owner_account, symbol="R_100", timeframe="M1", is_active=True)
         other_config = StrategyConfiguration.objects.create(strategy=strategy, user=other, broker_account=other_account, symbol="R_100", timeframe="M1")
         StrategySignal.objects.create(strategy=strategy, configuration=owner_config, symbol="R_100", signal="BUY", confidence=80)
         StrategySignal.objects.create(strategy=strategy, configuration=other_config, symbol="R_100", signal="SELL", confidence=95)

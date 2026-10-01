@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import time
+from datetime import datetime
 from decimal import InvalidOperation
 
 import websockets
@@ -246,8 +247,12 @@ def _signal_lifecycle(*, baseline, live_tick, status, direction, execution_ready
     if baseline is None:
         return "ANALYSING"
     if status == "ANALYSIS_STALE":
+        return "STALE"
+    if status == "SIGNAL_EXPIRED":
         return "EXPIRED"
-    if status in {"LIVE_DATA_STALE", "LIVE_CONFIRMATION_UNAVAILABLE"}:
+    if status in {"LIVE_DATA_STALE"}:
+        return "STALE"
+    if status in {"LIVE_CONFIRMATION_UNAVAILABLE", "LIVE_DATA_UNAVAILABLE"}:
         return "WAITING_FOR_CONFIRMATION"
     if status == "LIVE_CONFIRMATION_FAILED":
         return "INVALIDATED"
@@ -277,7 +282,24 @@ def _revise_signal(signal, live_tick, now, market, account):
     evidence = ["analysis_baseline_loaded", "deriv_public_live_tick"]
     status = "LIVE_REVIEW"
     direction = baseline_direction
-    if analysis_age > ANALYSIS_BASELINE_MAX_AGE_SECONDS:
+    expiry_value = _meta_first(metadata, "expires_at", "expiry_at", "valid_until", "expires")
+    expired = False
+    if expiry_value not in (None, ""):
+        try:
+            if isinstance(expiry_value, (int, float)):
+                expired = float(expiry_value) <= time.time()
+            else:
+                expiry = datetime.fromisoformat(str(expiry_value).replace("Z", "+00:00"))
+                if timezone.is_naive(expiry):
+                    expiry = timezone.make_aware(expiry, timezone.get_current_timezone())
+                expired = expiry <= now
+        except (TypeError, ValueError, OverflowError):
+            expired = False
+    if expired:
+        status = "SIGNAL_EXPIRED"
+        direction = None
+        evidence.append("signal_expiry_reached")
+    elif analysis_age > ANALYSIS_BASELINE_MAX_AGE_SECONDS:
         status = "ANALYSIS_STALE"
         direction = None
         evidence.append("analysis_baseline_stale")
@@ -430,8 +452,27 @@ def _strategy_signals_impl(request):
     actionable = [r for r in rows if r.get("execution_ready")]
     live_data_available_count = sum(1 for r in rows if r.get("live"))
     stale_count = sum(1 for r in rows if r.get("status") in {"LIVE_DATA_STALE", "ANALYSIS_STALE"})
-    broker_feed_state = ("BROKER_CONNECTED" if live_data_available_count == len(rows) and rows else "BROKER_UNAVAILABLE" if not live_data_available_count else "BROKER_CONNECTED")
+    broker_feed_state = (
+        "BROKER_CONNECTED"
+        if live_data_available_count == len(rows) and rows
+        else "BROKER_PARTIAL"
+        if live_data_available_count
+        else "BROKER_UNAVAILABLE"
+    )
     state = "ACTIONABLE" if actionable else "STALE" if stale_count else "READY" if live_data_available_count else "UNAVAILABLE"
+    if not live_data_available_count:
+        return JsonResponse({
+            "status": "error",
+            "state": "UNAVAILABLE",
+            "code": "MARKET_DATA_UNAVAILABLE",
+            "message": "Current Deriv market data is unavailable; no current signal state is asserted.",
+            "generated_at": now.isoformat(),
+            "broker_feed_state": broker_feed_state,
+            "count": len(rows),
+            "live_data_available_count": 0,
+            "actionable_count": 0,
+            "data": rows,
+        }, status=503)
     return JsonResponse({
         "status": "ok", "state": state, "source": "deriv_public_live", "generated_at": now.isoformat(),
         "feed_latency_ms": feed_latency_ms,
