@@ -398,10 +398,23 @@ def _strategy_signals_impl(request):
         row = {"symbol": market.symbol, "instrument": market.display_name, "display_name": market.display_name, "market": market.market, "sub_market": market.sub_market, "broker": "deriv", "account_id": account.account_id, "account_type": account.account_type, "timeframe": timeframe, "source": "deriv_public_stream"}
         base_context = {"market_type": market.market, "sub_market": market.sub_market, "symbol": market.symbol, "instrument": market.display_name, "trade_type": None, "direction": None, "contract_type": None, "contract_family": None, "duration": None, "duration_unit": None, "barrier": None, "stake": account_risk_context.get("recommended_stake"), "risk_budget": account_risk_context.get("risk_budget"), "payout": None, "currency": account.currency, "account_type": account.account_type, "broker": account.broker.name, "timeframe": timeframe}
         if not live_tick:
-            row.update({"direction": None, "confidence": None, "status": "LIVE_DATA_UNAVAILABLE", "execution_ready": False, "evidence": ["broker_tick_not_received"], "why": [], "trade_context": base_context})
+            row.update({
+                "direction": None, "confidence": None, "status": "LIVE_DATA_UNAVAILABLE",
+                "lifecycle": "WAITING_FOR_CONFIRMATION", "execution_ready": False,
+                "signal_valid": False, "evidence": ["broker_tick_not_received"], "why": [],
+                "provenance": {"market_data": "Deriv public market-data WebSocket", "analysis": "Unavailable", "execution": "Not executed"},
+                "trade_context": base_context,
+            })
         elif not baseline:
             live_age = max(0, int(time.time()) - int(live_tick.get("epoch")))
-            row.update({"direction": None, "confidence": None, "status": "WAITING_FOR_ANALYSIS", "execution_ready": False, "evidence": ["live_tick_received", "no_matching_analysis_baseline"], "why": [], "live": {"price": _as_float(live_tick.get("quote")), "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": int(live_tick.get("epoch")), "age_seconds": live_age, "source": live_tick.get("_source", "deriv_public_websocket")}, "trade_context": base_context})
+            row.update({
+                "direction": None, "confidence": None, "status": "WAITING_FOR_ANALYSIS",
+                "lifecycle": "ANALYSING", "execution_ready": False, "signal_valid": False,
+                "evidence": ["live_tick_received", "no_matching_analysis_baseline"], "why": [],
+                "live": {"price": _as_float(live_tick.get("quote")), "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": int(live_tick.get("epoch")), "age_seconds": live_age, "source": live_tick.get("_source", "deriv_public_websocket")},
+                "provenance": {"market_data": "Deriv public market-data WebSocket", "analysis": "No matching StrategySignal", "execution": "Not executed"},
+                "trade_context": base_context,
+            })
         else:
             row.update(_revise_signal(baseline, live_tick, now, market, account))
         rows.append(row)
@@ -415,8 +428,24 @@ def _strategy_signals_impl(request):
     actionable = [r for r in rows if r.get("execution_ready")]
     live_data_available_count = sum(1 for r in rows if r.get("live"))
     stale_count = sum(1 for r in rows if r.get("status") in {"LIVE_DATA_STALE", "ANALYSIS_STALE"})
-    state = "ready" if actionable else "stale" if stale_count else "ready" if live_data_available_count else "unavailable"
-    return JsonResponse({"status": "ok", "state": state, "source": "deriv_public_live", "generated_at": now.isoformat(), "feed_latency_ms": feed_latency_ms, "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency, "balance": account_risk_context.get("balance"), "available_funds": account_risk_context.get("available_funds"), "recommended_stake": account_risk_context.get("recommended_stake"), "risk_budget": account_risk_context.get("risk_budget")}, "account_risk_context": account_risk_context, "analysis_role": "upstream_baseline_only", "historical_candles_primary": False, "account_trading_enabled": account_credentials_valid, "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS, "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS, "broker_feed_state": ("LIVE" if live_data_available_count == len(rows) and rows else "PARTIAL" if live_data_available_count else "UNAVAILABLE"), "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count, "actionable_count": len(actionable), "data": rows})
+    broker_feed_state = ("BROKER_CONNECTED" if live_data_available_count == len(rows) and rows else "BROKER_UNAVAILABLE" if not live_data_available_count else "BROKER_CONNECTED")
+    state = "ACTIONABLE" if actionable else "STALE" if stale_count else "READY" if live_data_available_count else "UNAVAILABLE"
+    return JsonResponse({
+        "status": "ok", "state": state, "source": "deriv_public_live", "generated_at": now.isoformat(),
+        "feed_latency_ms": feed_latency_ms,
+        "research_state": "READY" if live_data_available_count else "UNAVAILABLE",
+        "broker_state": broker_feed_state,
+        "account": {"id": account.account_id, "type": account.account_type, "currency": account.currency, "balance": account_risk_context.get("balance"), "available_funds": account_risk_context.get("available_funds"), "recommended_stake": account_risk_context.get("recommended_stake"), "risk_budget": account_risk_context.get("risk_budget")},
+        "account_risk_context": account_risk_context,
+        "analysis_role": "upstream_baseline_only", "historical_candles_primary": False,
+        "account_trading_enabled": account_credentials_valid,
+        "live_tick_max_age_seconds": LIVE_TICK_MAX_AGE_SECONDS,
+        "analysis_baseline_max_age_seconds": ANALYSIS_BASELINE_MAX_AGE_SECONDS,
+        "signal_lifecycle": ["ANALYSING", "CANDIDATE", "WAITING_FOR_CONFIRMATION", "ACTIONABLE", "STALE", "EXPIRED", "INVALIDATED", "BLOCKED", "EXECUTED"],
+        "broker_feed_state": broker_feed_state,
+        "count": len(rows), "live_data_available_count": live_data_available_count, "stale_count": stale_count,
+        "actionable_count": len(actionable), "data": rows,
+    })
 
 
 def strategy_signals(request):
