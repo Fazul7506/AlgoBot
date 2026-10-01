@@ -340,9 +340,13 @@ def analysis_data(request):
         "sufficient_history": len(candles) >= 251,
         "ai_ready": ai_result["models_used"] > 0 and ai_result["decision"] in {"BUY", "SELL"} and ai_result.get("recommendation") == ai_result["decision"],
         "broker_contracts_confirmed": bool(broker_capabilities.get("available_contract_types")),
+        "account_scope_confirmed": bool(active_account is not None and getattr(active_account, "user_id", request.user.pk) == request.user.pk),
+        "account_ready": False,
+        "risk_ready": False,
         "live_quote_confirmed": False,
+        "live_quote_fresh": False,
         "ready": False,
-        "reason": "Final execution readiness is set only after the fresh broker tick is confirmed below.",
+        "reason": "Final execution readiness requires fresh market data, a ready selected account, risk capacity, broker capabilities and a fresh live quote.",
     }
     account_context = None
     if active_account is not None:
@@ -419,16 +423,41 @@ def analysis_data(request):
     result["execution_gate"]["data_fresh"] = bool(
         result["data_provenance"]["age_seconds"] <= max(120, TIMEFRAMES[canonical_timeframe] * 2)
     )
+    live_quote_age = None
+    if refresh_requested and live_tick and live_tick.get("quote") is not None and live_tick.get("epoch") is not None:
+        live_quote_age = max(0, int(time.time()) - int(live_tick["epoch"]))
+    result["live_quote"] = {
+        "price": float(live_tick["quote"]) if refresh_requested and live_tick and live_tick.get("quote") is not None else None,
+        "epoch": int(live_tick["epoch"]) if refresh_requested and live_tick and live_tick.get("epoch") is not None else None,
+        "age_seconds": live_quote_age,
+        "fresh": live_quote_age is not None and live_quote_age <= 5,
+        "source": "deriv_public_websocket" if live_tick else None,
+    }
     result["execution_gate"]["live_quote_confirmed"] = bool(
         refresh_requested and live_tick and live_tick.get("quote") is not None
     )
+    result["execution_gate"]["live_quote_fresh"] = bool(result["live_quote"]["fresh"])
+    result["execution_gate"]["account_ready"] = bool(
+        active_account is not None
+        and getattr(active_account, "token_status", "") == "active"
+        and not getattr(active_account, "is_token_expired", False)
+    )
+    recommended_stake = account_context.get("recommended_stake") if account_context else None
+    try:
+        result["execution_gate"]["risk_ready"] = recommended_stake is not None and float(recommended_stake) > 0
+    except (TypeError, ValueError):
+        result["execution_gate"]["risk_ready"] = False
     result["execution_gate"]["ready"] = all(
         (
             result["execution_gate"]["data_fresh"],
             result["execution_gate"]["sufficient_history"],
             result["execution_gate"]["ai_ready"],
             result["execution_gate"]["broker_contracts_confirmed"],
+            result["execution_gate"]["account_scope_confirmed"],
+            result["execution_gate"]["account_ready"],
+            result["execution_gate"]["risk_ready"],
             result["execution_gate"]["live_quote_confirmed"],
+            result["execution_gate"]["live_quote_fresh"],
         )
     )
     if not result["execution_gate"]["ready"]:
