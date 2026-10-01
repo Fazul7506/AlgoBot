@@ -80,6 +80,16 @@ class AnalysisSmokeTests(TestCase):
         self.assertTrue(spec["entry_condition"])
         self.assertEqual(response.json()["contract_capabilities"]["available_contract_families"], ["multiplier"])
 
+        payload = response.json()
+        self.assertIn(payload["research_state"], {"READY", "STALE"})
+        self.assertIn("market_data", payload["analysis_layers"])
+        self.assertIn("technical", payload["analysis_layers"])
+        self.assertIn("strategy", payload["analysis_layers"])
+        self.assertIn("ai", payload["analysis_layers"])
+        self.assertIn(payload["confluence"]["state"], {"CONFIRMED", "CONDITIONAL"})
+        self.assertTrue(payload["signal_validation"]["no_look_ahead"])
+        self.assertTrue(payload["signal_validation"]["execution_separate"])
+
     def test_analysis_data_reports_missing_persisted_candles(self):
         market = MarketSymbol.objects.create(
             symbol="R_100",
