@@ -74,7 +74,8 @@ jobs:
           }
           trap cleanup EXIT INT TERM
 
-          python manage.py migrate --fake-initial --noinput
+          # Database migrations remain owned by the Render web deployment.
+          # This runner only starts the canonical background processes.
 
           celery -A deriv_platform.celery beat \
             --loglevel=INFO \
