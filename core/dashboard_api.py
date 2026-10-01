@@ -239,12 +239,46 @@ class DashboardViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["get"])
     def signals(self, request):
+        """Return only the authenticated user's active-account strategy signals."""
+        account = get_active_account(request.user, request=request)
+        if account is None:
+            return Response({
+                "status": "unavailable",
+                "count": 0,
+                "data": [],
+                "error": {
+                    "code": "NO_ACTIVE_BROKER_ACCOUNT",
+                    "detail": "Select a connected broker account before reading strategy signals.",
+                },
+            }, status=status.HTTP_409_CONFLICT)
+
         symbol = str(request.GET.get("symbol") or "").strip()
-        qs = StrategySignal.objects.select_related("strategy", "configuration").order_by("-timestamp")
+        qs = (
+            StrategySignal.objects
+            .select_related("strategy", "configuration")
+            .filter(
+                configuration__user=request.user,
+                configuration__broker_account=account,
+                configuration__is_active=True,
+                configuration__enabled=True,
+                strategy__enabled=True,
+                timestamp__lte=timezone.now(),
+            )
+            .order_by("-timestamp")
+        )
         if symbol:
             qs = qs.filter(symbol=symbol)
         rows = qs[: self._limit(request)]
-        return Response({"status": "success", "count": len(rows), "data": [self._signal_payload(row) for row in rows]})
+        return Response({
+            "status": "success",
+            "count": len(rows),
+            "data": [self._signal_payload(row) for row in rows],
+            "account": {
+                "id": account.account_id,
+                "type": account.account_type,
+                "currency": account.currency,
+            },
+        })
 
     @action(detail=False, methods=["get"])
     def notifications(self, request):
