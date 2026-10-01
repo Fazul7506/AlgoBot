@@ -16,6 +16,7 @@ from apps.analysis.broker_intelligence import build_account_risk_context
 from apps.brokers.services import BrokerRegistry, SynchronizationService
 from core.account_context import get_active_account
 from apps.market_data.models import MarketSnapshot, MarketSymbol
+from apps.strategies.models import StrategySignal
 from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick
 from apps.market_data.historical import fetch_and_store, fetch_and_store_ticks
 from apps.market_data.constants import TIMEFRAMES
@@ -25,6 +26,31 @@ from apps.ai_engine.services import PredictionService, RecommendationService
 
 ANALYSIS_MARKETS_CACHE_SECONDS = 15
 ANALYSIS_CACHE_SECONDS = 3
+STRATEGY_BASELINE_MAX_AGE_SECONDS = 300
+
+
+def _latest_strategy_baseline(request, account, symbol, timeframe):
+    """Read the latest persisted strategy result for the active broker account.
+
+    This is observation-only: it never runs a strategy or triggers execution.
+    """
+    if account is None:
+        return None
+    return (
+        StrategySignal.objects.select_related("strategy", "configuration")
+        .filter(
+            configuration__user=request.user,
+            configuration__broker_account=account,
+            configuration__symbol=symbol,
+            configuration__timeframe=timeframe,
+            configuration__is_active=True,
+            configuration__enabled=True,
+            strategy__enabled=True,
+            timestamp__lte=timezone.now(),
+        )
+        .order_by("-timestamp")
+        .first()
+    )
 
 
 
@@ -253,8 +279,14 @@ def analysis_data(request):
         )
 
     result = analyze_candles(candles, symbol=market.symbol, timeframe=canonical_timeframe)
+    strategy_baseline = _latest_strategy_baseline(
+        request, active_account, market.symbol, canonical_timeframe.upper()
+    )
     try:
-        broker_capabilities = fetch_contracts_for(market.symbol)
+        if active_account is not None and getattr(active_account.broker, "broker_type", "") == "deriv":
+            broker_capabilities = _authenticated_contract_capabilities(active_account, market.symbol)
+        else:
+            broker_capabilities = fetch_contracts_for(market.symbol)
     except Exception as exc:
         return JsonResponse({
             "status": "error",
@@ -296,49 +328,76 @@ def analysis_data(request):
             )
             consensus = prediction.payload.get("consensus") or {}
             recommendation = RecommendationService().recommend(market.symbol, prediction)
-            decision = str(consensus.get("decision") or "AVOID").upper()
-            confidence = float(consensus.get("confidence", 0.0) or 0.0) * 100.0
+            models_used = int(consensus.get("models_used", 0) or 0)
+            raw_confidence = consensus.get("confidence")
+            confidence = float(raw_confidence) * 100.0 if raw_confidence is not None else None
+            raw_probability = consensus.get("probability")
+            probability = float(raw_probability) if raw_probability is not None else None
+            raw_agreement = consensus.get("agreement")
+            agreement = float(raw_agreement) if raw_agreement is not None else None
+            raw_decision = str(consensus.get("decision") or "").upper()
+            decision = raw_decision if raw_decision in {"BUY", "SELL", "AVOID"} else None
+            valid_ai_output = models_used > 0 and decision in {"BUY", "SELL"} and confidence is not None
             ai_result = {
-                "status": "ok" if recommendation.recommendation == decision and decision in {"BUY", "SELL"} and int(consensus.get("models_used", 0) or 0) > 0 else "no_trade",
+                "status": "ok" if valid_ai_output and recommendation.recommendation == decision else "no_trade" if models_used > 0 else "unavailable",
                 "decision": decision,
                 "signal": (
-                    "Strong Bullish" if recommendation.recommendation == "BUY" and decision == "BUY" and confidence >= 80
-                    else "Bullish" if recommendation.recommendation == "BUY" and decision == "BUY"
-                    else "Strong Bearish" if recommendation.recommendation == "SELL" and decision == "SELL" and confidence >= 80
-                    else "Bearish" if recommendation.recommendation == "SELL" and decision == "SELL"
-                    else "NO_TRADE"
+                    "Strong Bullish" if valid_ai_output and recommendation.recommendation == "BUY" and decision == "BUY" and confidence >= 80
+                    else "Bullish" if valid_ai_output and recommendation.recommendation == "BUY" and decision == "BUY"
+                    else "Strong Bearish" if valid_ai_output and recommendation.recommendation == "SELL" and decision == "SELL" and confidence >= 80
+                    else "Bearish" if valid_ai_output and recommendation.recommendation == "SELL" and decision == "SELL"
+                    else None
                 ),
-                "confidence": round(confidence, 2),
-                "models_used": int(consensus.get("models_used", 0) or 0),
+                "confidence": round(confidence, 2) if confidence is not None else None,
+                "models_used": models_used,
                 "model_types": consensus.get("model_types", []),
-                "probability": float(consensus.get("probability", 0.0) or 0.0),
-                "agreement": float(consensus.get("agreement", 0.0) or 0.0),
-                "recommendation": recommendation.recommendation,
-                "recommendation_confidence": float(recommendation.confidence),
+                "probability": probability,
+                "agreement": agreement,
+                "recommendation": recommendation.recommendation if models_used > 0 else None,
+                "recommendation_confidence": float(recommendation.confidence) if models_used > 0 else None,
                 "prediction_id": prediction.id,
-                "reason": recommendation.reason,
+                "reason": recommendation.reason if models_used > 0 else "No validated trained model is currently available.",
                 "source": prediction.payload.get("source"),
             }
         except Exception as exc:
-            return JsonResponse(
-                {
-                    "status": "error",
-                    "code": "AI_ANALYSIS_FAILED",
-                    "message": "The trained AI inference pipeline could not be completed; no executable signal was substituted.",
-                    "detail": str(exc),
-                    "symbol": market.symbol,
-                    "timeframe": canonical_timeframe,
-                },
-                status=503,
+            log.warning(
+                "Analysis AI inference unavailable",
+                extra={"symbol": market.symbol, "timeframe": canonical_timeframe, "error": str(exc)[:200]},
             )
+            ai_result = {
+                "status": "unavailable",
+                "decision": None,
+                "signal": None,
+                "confidence": None,
+                "models_used": 0,
+                "model_types": [],
+                "probability": None,
+                "agreement": None,
+                "recommendation": None,
+                "recommendation_confidence": None,
+                "prediction_id": None,
+                "reason": "AI analysis is currently unavailable; no AI signal or confidence was substituted.",
+                "source": None,
+            }
     result["ai"] = ai_result
     result["signal"] = ai_result["signal"]
     result["confidence"] = ai_result["confidence"]
     result["score"] = result.get("technical_score")
+    strategy_direction = str(strategy_baseline.signal or "").upper() if strategy_baseline else None
+    strategy_age = (
+        max(0, int((timezone.now() - strategy_baseline.timestamp).total_seconds()))
+        if strategy_baseline else None
+    )
+    strategy_fresh = strategy_age is not None and strategy_age <= STRATEGY_BASELINE_MAX_AGE_SECONDS
+    strategy_ready = strategy_fresh and strategy_direction in {"BUY", "SELL"}
+    ai_direction = ai_result.get("decision")
+    strategy_confluence = strategy_ready and ai_direction in {"BUY", "SELL"} and strategy_direction == ai_direction
     result["execution_gate"] = {
         "data_fresh": False,
         "sufficient_history": len(candles) >= 251,
-        "ai_ready": ai_result["models_used"] > 0 and ai_result["decision"] in {"BUY", "SELL"} and ai_result.get("recommendation") == ai_result["decision"],
+        "strategy_ready": strategy_ready,
+        "strategy_confluence": strategy_confluence,
+        "ai_ready": ai_result["models_used"] > 0 and ai_result["decision"] in {"BUY", "SELL"} and ai_result.get("confidence") is not None and ai_result.get("recommendation") == ai_result["decision"],
         "broker_contracts_confirmed": bool(broker_capabilities.get("available_contract_types")),
         "account_scope_confirmed": bool(active_account is not None and getattr(active_account, "user_id", request.user.pk) == request.user.pk),
         "account_ready": False,
@@ -458,6 +517,8 @@ def analysis_data(request):
             result["execution_gate"]["risk_ready"],
             result["execution_gate"]["live_quote_confirmed"],
             result["execution_gate"]["live_quote_fresh"],
+            result["execution_gate"]["strategy_ready"],
+            result["execution_gate"]["strategy_confluence"],
         )
     )
     if not result["execution_gate"]["ready"]:
@@ -489,9 +550,14 @@ def analysis_data(request):
             "factors": result.get("factors") or [],
         },
         "strategy": {
-            "state": "READY" if result.get("signal") in {"Strong Bullish", "Bullish", "Strong Bearish", "Bearish"} else "WAIT",
-            "direction": "BUY" if "Bullish" in str(result.get("signal")) else "SELL" if "Bearish" in str(result.get("signal")) else None,
-            "evidence": result.get("factors") or [],
+            "state": "READY" if strategy_ready else "STALE" if strategy_baseline else "UNAVAILABLE",
+            "direction": strategy_direction if strategy_ready else None,
+            "confidence": float(strategy_baseline.confidence) if strategy_baseline and strategy_baseline.confidence is not None else None,
+            "timestamp": strategy_baseline.timestamp.isoformat() if strategy_baseline else None,
+            "age_seconds": strategy_age,
+            "strategy": strategy_baseline.strategy.name if strategy_baseline else None,
+            "version": strategy_baseline.strategy.version if strategy_baseline else None,
+            "evidence": (strategy_baseline.metadata or {}).get("criteria", {}) if strategy_baseline else [],
         },
         "ai": {
             "state": "READY" if ai_ready else result["ai"].get("status", "not_ready"),
@@ -506,7 +572,8 @@ def analysis_data(request):
     for key, passed, label in (
         ("market_data", gate["data_fresh"], "fresh market data"),
         ("technical", technical_score is not None, "technical evidence"),
-        ("strategy", result.get("signal") is not None, "strategy direction"),
+        ("strategy", strategy_ready, "fresh strategy result"),
+        ("strategy_confluence", strategy_confluence, "strategy and AI direction agree"),
         ("ai", ai_ready, "validated AI decision"),
         ("broker", broker_ready, "broker contract capability"),
         ("account", account_ready, "selected account"),
@@ -518,7 +585,11 @@ def analysis_data(request):
         "state": "CONFIRMED" if all(item["passed"] for item in evidence) else "CONDITIONAL",
         "direction": result.get("trade_spec", {}).get("direction") if gate["ready"] else None,
         "evidence": evidence,
-        "score": technical_score if technical_score is not None else None,
+        "score": (
+            round(float(result.get("indicators", {}).get("confluence_score")) * 100, 2)
+            if result.get("indicators", {}).get("confluence_score") is not None
+            else technical_score if technical_score is not None else None
+        ),
         "note": "Confluence is evidence alignment; it is not an execution fact.",
     }
     result["signal_validation"] = {
