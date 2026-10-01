@@ -70,7 +70,17 @@
     const timer=setTimeout(()=>controller.abort(new Error('API request timeout')),timeoutMs), signal=callerSignal && typeof AbortSignal.any === 'function' ? AbortSignal.any([callerSignal,controller.signal]) : controller.signal;
     if (callerSignal?.aborted) controller.abort(callerSignal.reason);
     try {
-      try { return await nativeFetch(url.toString(),{...options,method,body,headers,credentials: options.credentials || 'include',signal}); }
+      try {
+        const response=await nativeFetch(url.toString(),{...options,method,body,headers,credentials: options.credentials || 'include',signal});
+        const fallbackPath=sameOriginFallbackPath(raw,method);
+        if (fallbackPath && fallbackPath!==url.toString() && [401,403,404,502,503,504].includes(response.status)) {
+          try {
+            const fallback=await nativeFetch(fallbackPath,{...options,method,body,headers,credentials: options.credentials || 'include'});
+            if (fallback.ok || ![401,403,404,502,503,504].includes(fallback.status)) return fallback;
+          } catch (_) {}
+        }
+        return response;
+      }
       catch (error) {
         if (controller.signal.aborted && !callerSignal?.aborted) {
           const timeout=new APIError('API request timed out after '+timeoutMs+'ms',{code:'API_TIMEOUT',url:url.toString(),method});
