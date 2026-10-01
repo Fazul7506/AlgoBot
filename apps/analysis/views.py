@@ -300,8 +300,8 @@ def analysis_data(request):
     # same broker-ingested candles shown above. No heuristic confidence is
     # promoted to an executable signal.
     ai_result = {
-        "status": "not_ready",
-        "decision": "AVOID",
+        "status": "unavailable",
+        "decision": None,
         "signal": None,
         "confidence": None,
         "models_used": 0,
@@ -585,11 +585,7 @@ def analysis_data(request):
         "state": "CONFIRMED" if all(item["passed"] for item in evidence) else "CONDITIONAL",
         "direction": result.get("trade_spec", {}).get("direction") if gate["ready"] else None,
         "evidence": evidence,
-        "score": (
-            round(float(result.get("indicators", {}).get("confluence_score")) * 100, 2)
-            if result.get("indicators", {}).get("confluence_score") is not None
-            else technical_score if technical_score is not None else None
-        ),
+        "score": None,
         "note": "Confluence is evidence alignment; it is not an execution fact.",
     }
     result["signal_validation"] = {
