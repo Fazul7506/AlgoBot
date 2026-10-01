@@ -15,7 +15,7 @@
     return v === 'BUY' ? 'buy' : v === 'SELL' ? 'sell' : 'hold';
   };
   const stateText = value => String(value || 'WAITING').replaceAll('_', ' ');
-  const S = {rows: [], scanning: false, page: 1, contractRequest: 0};
+  const S = {rows: [], scanning: false, page: 1, contractRequest: 0, state: 'LOADING', error: null};
 
 let ContractPicker={capabilities:null,selected:null,requestId:0};
 async function loadSignalContract(){const row= S.rows.find(r=>r.symbol===($('signalsSymbol')?.value||'')) || S.rows.find(r=>r.execution_ready) || S.rows[0];const symbol=row?.symbol;if(!symbol){$('signalsContractStatus').textContent='Select or scan a market first.';return}const id=++ContractPicker.requestId;$('signalsContractStatus').textContent='Loading current Deriv contracts_for…';try{const data=await request('/analysis/contracts/?symbol='+encodeURIComponent(symbol)+'&timeframe='+encodeURIComponent(row?.timeframe||$('signalsTimeframe')?.value||'M1'));if(id!==ContractPicker.requestId)return;ContractPicker.capabilities=data.capabilities||{};const rows=ContractPicker.capabilities.available||[];const account=data.account||{};const fill=(el,vals,placeholder)=>{const current=el.value;el.innerHTML='<option value="">'+esc(placeholder)+'</option>'+[...new Set(vals.filter(Boolean))].sort().map(v=>'<option value="'+esc(v)+'">'+esc(label(v))+'</option>').join('');if(vals.includes(current))el.value=current};fill($('signalsContractFamily'),rows.map(x=>x.contract_category),'All broker families');fill($('signalsContractExpiry'),rows.map(x=>x.expiry_type),'Any broker expiry');fill($('signalsContractSentiment'),rows.map(x=>x.sentiment),'Any broker sentiment');const marketTypes=ContractPicker.capabilities.market_types||[];const submarkets=ContractPicker.capabilities.submarkets||[];$('signalsContractMarketType').innerHTML='<option>'+esc(marketTypes[0]||row?.market||'—')+'</option>';$('signalsContractSubMarket').innerHTML='<option>'+esc(submarkets[0]||row?.sub_market||'—')+'</option>';renderSignalContractTypes();$('signalsContractStatus').textContent='Broker account '+(account.account_type||'—')+' · '+(account.currency||'—')+' · credentials '+(account.credential_status||'unavailable')+' · contract capabilities loaded';$('signalsContractNote').textContent='Broker-published: family, type, expiry and sentiment. Duration, barrier, multiplier and growth-rate inputs are not asserted as supported until Deriv validates a concrete proposal.'}catch(e){$('signalsContractStatus').textContent=e.message||'Broker capabilities unavailable';$('signalsContractNote').textContent='No contract choice has been fabricated.'}}
@@ -109,6 +109,10 @@ function applySignalContract(){const type=$('signalsContractType').value;if(!typ
   function renderTable(rows) {
     const tbody = $('signalsTable');
     if (!tbody) return;
+    if (['UNAVAILABLE','API_ERROR','AUTHENTICATION_FAILURE','PERMISSION_DENIED'].includes(S.state)) {
+      tbody.innerHTML = '<tr><td colspan="8">Signal data is unavailable. Existing rows are not treated as current.</td></tr>';
+      return;
+    }
     tbody.innerHTML = rows.map(row => `<tr data-symbol="${esc(row.symbol)}">
       <td><strong>${esc(row.display_name || row.symbol)}</strong><small>${esc(row.symbol)}</small></td>
       <td>${esc(row.market || '—')}<small>${esc(row.sub_market || '')}</small></td>
@@ -128,6 +132,11 @@ function applySignalContract(){const type=$('signalsContractType').value;if(!typ
   function renderTape(rows) {
     const tape = $('liveTape');
     if (!tape) return;
+    if (['UNAVAILABLE','API_ERROR','AUTHENTICATION_FAILURE','PERMISSION_DENIED'].includes(S.state)) {
+      $('marketCount').textContent = 'Unavailable';
+      tape.innerHTML = '<div class="empty">Live signal data is unavailable.</div>';
+      return;
+    }
     $('marketCount').textContent = `${rows.length} markets`;
     tape.innerHTML = rows.slice(0, 20).map(row => `<button type="button" class="tape-row" data-symbol="${esc(row.symbol)}">
       <span><strong>${esc(row.symbol)}</strong><small>${esc(row.market || 'Deriv')}</small></span>
@@ -259,21 +268,22 @@ function applySignalContract(){const type=$('signalsContractType').value;if(!typ
       const data = await request(`/api/strategy-signals/?limit=${encodeURIComponent(limit)}&timeframe=${encodeURIComponent(timeframe)}${symbol ? `&symbol=${encodeURIComponent(symbol)}` : ''}`);
       if (data.status !== 'ok') throw new Error(data.message || 'Live signal service returned an invalid response.');
       S.rows = Array.isArray(data.data) ? data.data : [];
+      S.state = String(data.state || 'READY').toUpperCase();
+      S.error = null;
       S.page = 1;
       populateFilters(S.rows);
       renderHealth(data);
       renderView();
     } catch (error) {
       const message = error?.message || 'Market data unavailable.';
-      S.rows = [];
+      S.state = 'UNAVAILABLE';
+      S.error = message;
       if ($('signalsFeed')) $('signalsFeed').textContent = 'UNAVAILABLE';
       if ($('signalsFeedAge')) $('signalsFeedAge').textContent = message;
-      if ($('signalsReady')) $('signalsReady').textContent = '0';
+      if ($('signalsReady')) $('signalsReady').textContent = '—';
       if ($('signalsBaseline')) $('signalsBaseline').textContent = 'Unavailable';
       if ($('scanTimestamp')) $('scanTimestamp').textContent = `Scan failed · ${new Date().toLocaleTimeString()}`;
-      renderTable([]);
-      renderTape([]);
-      focus(null);
+      renderView();
     } finally {
       S.scanning = false;
       buttons.forEach(button => { button.disabled = false; button.removeAttribute('aria-busy'); });
