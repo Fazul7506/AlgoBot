@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import time
+from datetime import datetime
 from decimal import InvalidOperation
 
 import websockets
@@ -288,7 +289,7 @@ def _revise_signal(signal, live_tick, now, market, account):
             if isinstance(expiry_value, (int, float)):
                 expired = float(expiry_value) <= time.time()
             else:
-                expiry = timezone.datetime.fromisoformat(str(expiry_value).replace("Z", "+00:00"))
+                expiry = datetime.fromisoformat(str(expiry_value).replace("Z", "+00:00"))
                 if timezone.is_naive(expiry):
                     expiry = timezone.make_aware(expiry, timezone.get_current_timezone())
                 expired = expiry <= now
