@@ -70,11 +70,44 @@
     const timer=setTimeout(()=>controller.abort(new Error('API request timeout')),timeoutMs), signal=callerSignal && typeof AbortSignal.any === 'function' ? AbortSignal.any([callerSignal,controller.signal]) : controller.signal;
     if (callerSignal?.aborted) controller.abort(callerSignal.reason);
     try {
-      try { return await nativeFetch(url.toString(),{...options,method,body,headers,credentials: options.credentials || 'include',signal}); }
+      try {
+        const response=await nativeFetch(url.toString(),{...options,method,body,headers,credentials: options.credentials || 'include',signal});
+        const fallbackPath=sameOriginFallbackPath(raw,method);
+        if (fallbackPath && fallbackPath!==url.toString() && [401,403,404,502,503,504].includes(response.status)) {
+          try {
+            const fallback=await nativeFetch(fallbackPath,{...options,method,body,headers,credentials: options.credentials || 'include'});
+            if (fallback.ok || ![401,403,404,502,503,504].includes(fallback.status)) return fallback;
+          } catch (_) {}
+        }
+        return response;
+      }
       catch (error) {
-        if (controller.signal.aborted && !callerSignal?.aborted) { const timeout=new APIError('API request timed out after '+timeoutMs+'ms',{code:'API_TIMEOUT',url:url.toString(),method}); emitError(timeout,options); throw timeout; }
-        if (callerSignal?.aborted) { const cancelled=new APIError(callerSignal.reason?.message || 'Request was cancelled.',{code:'REQUEST_ABORTED',url:url.toString(),method}); cancelled.retryable=false; throw cancelled; }
-        const network=new APIError(error?.message || 'Network request failed',{code:'NETWORK_ERROR',url:url.toString(),method}); emitError(network,options); throw network;
+        if (controller.signal.aborted && !callerSignal?.aborted) {
+          const timeout=new APIError('API request timed out after '+timeoutMs+'ms',{code:'API_TIMEOUT',url:url.toString(),method});
+          // Production may temporarily expose the API hostname on a different
+          // routing layer. Safe read-only requests can fall back to the
+          // authenticated same-origin endpoint instead of leaving workspace
+          // pages stuck in loading state.
+          const fallbackPath=sameOriginFallbackPath(raw,method);
+          if (fallbackPath && fallbackPath!==url.toString()) {
+            try {
+              return await nativeFetch(fallbackPath,{...options,method,body,headers,credentials: options.credentials || 'include'});
+            } catch (_) {}
+          }
+          emitError(timeout,options); throw timeout;
+        }
+        if (callerSignal?.aborted) {
+          const cancelled=new APIError(callerSignal.reason?.message || 'Request was cancelled.',{code:'REQUEST_ABORTED',url:url.toString(),method});
+          cancelled.retryable=false; throw cancelled;
+        }
+        const fallbackPath=sameOriginFallbackPath(raw,method);
+        if (fallbackPath && fallbackPath!==url.toString()) {
+          try {
+            return await nativeFetch(fallbackPath,{...options,method,body,headers,credentials: options.credentials || 'include'});
+          } catch (_) {}
+        }
+        const network=new APIError(error?.message || 'Network request failed',{code:'NETWORK_ERROR',url:url.toString(),method});
+        emitError(network,options); throw network;
       }
     } finally { clearTimeout(timer); }
   }
