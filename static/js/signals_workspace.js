@@ -9,10 +9,26 @@
   const tone=v=>String(v||"").toUpperCase()==="BUY"?"positive":String(v||"").toUpperCase()==="SELL"?"negative":"neutral";
   const S={rows:[],page:1,pageSize:20};
   async function request(path){
-    const client=window.AlgoBotAPI?.apiClient;
-    if(client)return client.request?client.request(path,{method:"GET"}):client.get(path,{credentials:"include"});
-    const r=await fetch(path,{credentials:"same-origin",headers:{Accept:"application/json"}});let p={};try{p=await r.json()}catch(_){}
-    if(!r.ok)throw new Error(p?.message||p?.error?.detail||"Signals unavailable ("+r.status+")");return p;
+    const timeoutMs=12000;
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),timeoutMs);
+    try{
+      // Signals is rendered by the canonical Django application. Use the
+      // same-origin API route so a cross-origin API/CORS failure cannot leave
+      // the workspace stuck in a perpetual loading state.
+      const r=await fetch(new URL(path,window.location.origin),{
+        method:"GET",
+        credentials:"same-origin",
+        headers:{Accept:"application/json"},
+        signal:controller.signal
+      });
+      let p={};try{p=await r.json()}catch(_){}
+      if(!r.ok)throw new Error(p?.message||p?.detail||p?.error?.detail||"Signals unavailable ("+r.status+")");
+      return p;
+    }catch(error){
+      if(error?.name==="AbortError")throw new Error("Signals request timed out after 12s.");
+      throw error;
+    }finally{clearTimeout(timer)}
   }
   function set(id,v){const e=$(id);if(e)e.textContent=v==null||v===""?"—":v}
   function filterRows(){
