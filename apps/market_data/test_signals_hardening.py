@@ -103,7 +103,7 @@ class SignalBaselineIsolationTests(TestCase):
         owner_account = BrokerAccount.objects.create(user=owner, broker=broker, account_id="owner-account", credentials={"account_type": "demo"})
         other_account = BrokerAccount.objects.create(user=other, broker=broker, account_id="other-account", credentials={"account_type": "demo"})
         strategy = Strategy.objects.create(name="Isolation Strategy", slug="isolation-strategy", category="Trend Following")
-        owner_config = StrategyConfiguration.objects.create(strategy=strategy, user=owner, broker_account=owner_account, symbol="R_100", timeframe="M1")
+        owner_config = StrategyConfiguration.objects.create(strategy=strategy, user=owner, broker_account=owner_account, symbol="R_100", timeframe="M1", is_active=True)
         other_config = StrategyConfiguration.objects.create(strategy=strategy, user=other, broker_account=other_account, symbol="R_100", timeframe="M1")
         StrategySignal.objects.create(strategy=strategy, configuration=owner_config, symbol="R_100", signal="BUY", confidence=80)
         StrategySignal.objects.create(strategy=strategy, configuration=other_config, symbol="R_100", signal="SELL", confidence=95)
