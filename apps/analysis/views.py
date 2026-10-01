@@ -463,6 +463,72 @@ def analysis_data(request):
     if not result["execution_gate"]["ready"]:
         result["trade_spec"]["direction"] = None
         result["trade_spec"]["entry_condition"] = "NO TRADE until every execution gate is confirmed"
+
+    gate = result["execution_gate"]
+    technical_score = result.get("technical_score")
+    ai_ready = bool(gate["ai_ready"])
+    broker_ready = bool(gate["broker_contracts_confirmed"])
+    account_ready = bool(gate["account_scope_confirmed"] and gate["account_ready"])
+    live_ready = bool(gate["live_quote_confirmed"] and gate["live_quote_fresh"])
+    risk_ready = bool(gate["risk_ready"])
+    result["research_state"] = "READY" if gate["data_fresh"] else "STALE"
+    result["broker_state"] = "BROKER_CONNECTED" if live_ready and broker_ready else "BROKER_UNAVAILABLE" if not gate["live_quote_confirmed"] else "BROKER_CONNECTED"
+    result["analysis_layers"] = {
+        "market_data": {
+            "state": "READY" if gate["data_fresh"] else "STALE",
+            "source": "Deriv market data",
+            "candle_count": len(candles),
+            "fresh": bool(gate["data_fresh"]),
+        },
+        "technical": {
+            "state": "READY" if technical_score is not None else "UNAVAILABLE",
+            "score": technical_score,
+            "indicators": result.get("indicators", {}),
+            "structure": result.get("structure"),
+            "volatility_regime": result.get("volatility_regime"),
+            "factors": result.get("factors") or [],
+        },
+        "strategy": {
+            "state": "READY" if result.get("signal") in {"Strong Bullish", "Bullish", "Strong Bearish", "Bearish"} else "WAIT",
+            "direction": "BUY" if "Bullish" in str(result.get("signal")) else "SELL" if "Bearish" in str(result.get("signal")) else None,
+            "evidence": result.get("factors") or [],
+        },
+        "ai": {
+            "state": "READY" if ai_ready else result["ai"].get("status", "not_ready"),
+            "decision": result["ai"].get("decision"),
+            "confidence": result["ai"].get("confidence"),
+            "models_used": result["ai"].get("models_used", 0),
+            "agreement": result["ai"].get("agreement"),
+            "source": result["ai"].get("source"),
+        },
+    }
+    evidence = []
+    for key, passed, label in (
+        ("market_data", gate["data_fresh"], "fresh market data"),
+        ("technical", technical_score is not None, "technical evidence"),
+        ("strategy", result.get("signal") is not None, "strategy direction"),
+        ("ai", ai_ready, "validated AI decision"),
+        ("broker", broker_ready, "broker contract capability"),
+        ("account", account_ready, "selected account"),
+        ("risk", risk_ready, "risk capacity"),
+        ("live_quote", live_ready, "fresh live quote"),
+    ):
+        evidence.append({"layer": key, "condition": label, "passed": bool(passed)})
+    result["confluence"] = {
+        "state": "CONFIRMED" if all(item["passed"] for item in evidence) else "CONDITIONAL",
+        "direction": result.get("trade_spec", {}).get("direction") if gate["ready"] else None,
+        "evidence": evidence,
+        "score": technical_score if technical_score is not None else None,
+        "note": "Confluence is evidence alignment; it is not an execution fact.",
+    }
+    result["signal_validation"] = {
+        "state": "ACTIONABLE" if gate["ready"] else "WAITING_FOR_CONFIRMATION",
+        "signal": result.get("signal") if gate["ready"] else None,
+        "generated_at": result.get("data_provenance", {}).get("last_epoch"),
+        "expires_after_seconds": max(120, TIMEFRAMES[canonical_timeframe] * 2),
+        "no_look_ahead": True,
+        "execution_separate": True,
+    }
     cache.set(cache_key, result, ANALYSIS_CACHE_SECONDS)
     return JsonResponse(result)
 
