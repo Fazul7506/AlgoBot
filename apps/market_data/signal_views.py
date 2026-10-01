@@ -241,6 +241,27 @@ def _signal_evidence(signal):
             evidence.append({"condition": key, "observed": value, "result": "OBSERVED"})
     return evidence[:30]
 
+def _signal_lifecycle(*, baseline, live_tick, status, direction, execution_ready):
+    """Map observed validation state to the canonical Signals lifecycle."""
+    if baseline is None:
+        return "ANALYSING"
+    if status == "ANALYSIS_STALE":
+        return "EXPIRED"
+    if status in {"LIVE_DATA_STALE", "LIVE_CONFIRMATION_UNAVAILABLE"}:
+        return "WAITING_FOR_CONFIRMATION"
+    if status == "LIVE_CONFIRMATION_FAILED":
+        return "INVALIDATED"
+    if status == "LIVE_CONFIDENCE_BELOW_GATE":
+        return "BLOCKED"
+    if status == "ACCOUNT_AUTH_REQUIRED":
+        return "BLOCKED"
+    if execution_ready:
+        return "ACTIONABLE"
+    if direction in {"BUY", "SELL"}:
+        return "CANDIDATE"
+    return "WAITING_FOR_CONFIRMATION"
+
+
 def _revise_signal(signal, live_tick, now, market, account):
     metadata = signal.metadata if isinstance(signal.metadata, dict) else {}
     baseline_direction = str(signal.signal or "").upper()
@@ -251,24 +272,27 @@ def _revise_signal(signal, live_tick, now, market, account):
     live_age = max(0, int(time.time()) - live_epoch)
     live_price = _as_float(live_tick.get("quote"))
     entry = _as_float(signal.entry_price)
-    # Confidence is owned by the persisted StrategySignal. The live quote is
-    # a confirmation/freshness gate and must not manufacture a second confidence
-    # score by blending the quote into the strategy confidence.
     revised = base_confidence
     confidence_source = "strategy_signal" if base_confidence is not None else None
     evidence = ["analysis_baseline_loaded", "deriv_public_live_tick"]
     status = "LIVE_REVIEW"
     direction = baseline_direction
     if analysis_age > ANALYSIS_BASELINE_MAX_AGE_SECONDS:
-        status = "ANALYSIS_STALE"; direction = None; evidence.append("analysis_baseline_stale")
+        status = "ANALYSIS_STALE"
+        direction = None
+        evidence.append("analysis_baseline_stale")
     elif live_age > LIVE_TICK_MAX_AGE_SECONDS:
-        status = "LIVE_DATA_STALE"; direction = None; evidence.append("live_tick_stale")
+        status = "LIVE_DATA_STALE"
+        direction = None
+        evidence.append("live_tick_stale")
     elif baseline_direction in {"BUY", "SELL"} and live_price is not None and entry is not None:
         favorable = (baseline_direction == "BUY" and live_price >= entry) or (baseline_direction == "SELL" and live_price <= entry)
         if favorable:
             evidence.append("live_price_confirms_analysis_entry_side")
         else:
-            direction = None; status = "LIVE_CONFIRMATION_FAILED"; evidence.append("live_price_conflicts_with_analysis_entry_side")
+            direction = None
+            status = "LIVE_CONFIRMATION_FAILED"
+            evidence.append("live_price_conflicts_with_analysis_entry_side")
     elif baseline_direction in {"BUY", "SELL"}:
         status = "LIVE_CONFIRMATION_UNAVAILABLE"
         direction = None
@@ -276,18 +300,57 @@ def _revise_signal(signal, live_tick, now, market, account):
     threshold = _as_float(metadata.get("live_confidence_threshold"))
     if threshold is None:
         threshold = DEFAULT_CONFIDENCE_THRESHOLD
-    execution_ready = direction in {"BUY", "SELL"} and revised is not None and revised >= threshold and status == "LIVE_REVIEW"
-    if not execution_ready and direction in {"BUY", "SELL"}:
+    confidence_gate = revised is not None and revised >= threshold
+    signal_valid = direction in {"BUY", "SELL"} and status == "LIVE_REVIEW"
+    execution_ready = signal_valid and confidence_gate
+    if signal_valid and not confidence_gate:
         status = "LIVE_CONFIDENCE_BELOW_GATE"
+    lifecycle = _signal_lifecycle(
+        baseline=signal,
+        live_tick=live_tick,
+        status=status,
+        direction=direction,
+        execution_ready=execution_ready,
+    )
     return {
-        "analysis_signal_id": signal.id, "analysis_timestamp": signal.timestamp.isoformat(), "analysis_age_seconds": analysis_age,
-        "baseline_direction": baseline_direction or None, "baseline_confidence": round(base_confidence, 2) if base_confidence is not None else None, "direction": direction,
-        "confidence": round(revised, 2) if revised is not None else None, "confidence_source": confidence_source, "live_confidence_threshold": round(threshold, 2), "execution_ready": execution_ready,
-        "status": status, "evidence": evidence, "why": _signal_evidence(signal), "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
-        "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None, "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
-        "strategy": signal.strategy.name, "strategy_version": signal.strategy.version, "timeframe": _analysis_timeframe(signal),
-        "analysis_metadata": metadata, "trade_context": _trade_context(signal, market, account),
-        "live": {"price": live_price, "bid": _as_float(live_tick.get("bid")), "ask": _as_float(live_tick.get("ask")), "epoch": live_epoch, "age_seconds": live_age, "source": live_tick.get("_source", "deriv_public_websocket")},
+        "analysis_signal_id": signal.id,
+        "analysis_timestamp": signal.timestamp.isoformat(),
+        "analysis_age_seconds": analysis_age,
+        "baseline_direction": baseline_direction or None,
+        "baseline_confidence": round(base_confidence, 2) if base_confidence is not None else None,
+        "direction": direction,
+        "confidence": round(revised, 2) if revised is not None else None,
+        "confidence_source": confidence_source,
+        "live_confidence_threshold": round(threshold, 2),
+        "execution_ready": execution_ready,
+        "signal_valid": signal_valid,
+        "status": status,
+        "lifecycle": lifecycle,
+        "evidence": evidence,
+        "why": _signal_evidence(signal),
+        "entry_price": str(signal.entry_price) if signal.entry_price is not None else None,
+        "stop_loss": str(signal.stop_loss) if signal.stop_loss is not None else None,
+        "take_profit": str(signal.take_profit) if signal.take_profit is not None else None,
+        "strategy": signal.strategy.name,
+        "strategy_version": signal.strategy.version,
+        "strategy_category": signal.strategy.category,
+        "timeframe": _analysis_timeframe(signal),
+        "analysis_metadata": metadata,
+        "trade_context": _trade_context(signal, market, account),
+        "provenance": {
+            "market_data": "Deriv public market-data WebSocket",
+            "analysis": "AlgoBot persisted StrategySignal",
+            "strategy": f"{signal.strategy.name} v{signal.strategy.version}",
+            "execution": "Not executed",
+        },
+        "live": {
+            "price": live_price,
+            "bid": _as_float(live_tick.get("bid")),
+            "ask": _as_float(live_tick.get("ask")),
+            "epoch": live_epoch,
+            "age_seconds": live_age,
+            "source": live_tick.get("_source", "deriv_public_websocket"),
+        },
     }
 
 
