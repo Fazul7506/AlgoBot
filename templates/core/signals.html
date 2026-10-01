@@ -1,104 +1,16 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Live Signals | AlgoBot{% endblock %}
-{% block mobile_title %}Live Signals{% endblock %}
+{% block title %}Signals | AlgoBot{% endblock %}
+{% block mobile_title %}Signals{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals_workspace.css' %}?v=20261001-s1">{% endblock %}
 {% block content %}
-<main id="main-content" class="live-signals" data-live-signals>
-  <header class="live-signals-head">
-    <div>
-      <p class="eyebrow">DERIV · LIVE MARKET RESEARCH</p>
-      <h1>Live Signals</h1>
-      <p>Research view: current Deriv quotes, validated analysis baselines, strategy evidence and confirmation state. No execution controls or fabricated values are shown here.</p>
-    </div>
-    <div class="live-actions">
-      <button class="btn primary" id="signalsScan" type="button">Scan live now</button>
-      <button class="btn" id="signalsRefresh" type="button">Refresh</button>
-      <a class="btn" href="/analysis/">Analysis</a>
-    </div>
-  </header>
-
-  <section class="live-status-grid" aria-label="Live research health">
-    <article class="live-status-card"><span>Active account</span><strong id="signalsAccount">—</strong><small id="signalsAccountType">—</small></article>
-    <article class="live-status-card"><span>Broker feed</span><strong id="signalsFeed">CONNECTING</strong><small id="signalsFeedAge">Waiting for broker snapshot</small></article>
-    <article class="live-status-card"><span>Analysis coverage</span><strong id="signalsBaseline">—</strong><small>Matching persisted baselines</small></article>
-    <article class="live-status-card"><span>Research signals</span><strong id="signalsReady">0</strong><small>Confirmed research candidates</small></article>
-  </section>
-
-  <section class="signal-command panel">
-    <div><strong>Signal scanner</strong><span>Prices come directly from Deriv. Missing market data stays unavailable.</span></div>
-    <div class="signal-filters">
-      <input id="signalsSearch" type="search" placeholder="Search symbol / strategy" aria-label="Search signals">
-      <select id="signalsSymbol" aria-label="Instrument"><option value="">All instruments</option></select>
-      <select id="signalsStrategy" aria-label="Strategy"><option value="">All strategies</option></select>
-      <select id="signalsDirection" aria-label="Direction"><option value="">All directions</option><option value="BUY">BUY</option><option value="SELL">SELL</option></select>
-      <select id="signalsStatus" aria-label="Signal status"><option value="">All statuses</option></select>
-      <select id="signalsConfidence" aria-label="Confidence"><option value="">Any confidence</option><option value="70">70%+</option><option value="80">80%+</option><option value="90">90%+</option></select>
-      <select id="signalsSort" aria-label="Sort signals"><option value="symbol">Symbol</option><option value="confidence">Confidence</option><option value="live_age">Live age</option><option value="timestamp">Signal time</option></select>
-      <select id="signalsTimeframe" aria-label="Analysis timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select>
-      <select id="signalsLimit" aria-label="Market limit"><option>20</option><option selected>40</option><option>60</option><option>80</option></select>
-      <select id="signalsPageSize" aria-label="Rows per page"><option>10</option><option selected>20</option><option>40</option></select>
-      <button class="btn" id="signalsPrev" type="button">Previous</button>
-      <button class="btn" id="signalsNext" type="button">Next</button>
-      <span id="signalsPager" class="signals-pager" aria-live="polite">Page 1</span>
-    </div>
-  </section>
-
-  <section class="signal-overview">
-    <article class="signal-focus panel">
-      <div class="panel-title">
-        <div><span class="eyebrow">SELECTED RESEARCH SIGNAL</span><h2 id="focusInstrument">Live market</h2></div>
-        <span id="focusState" class="signal-state waiting">WAITING</span>
-      </div>
-      <div class="focus-price"><strong id="focusPrice">—</strong><span id="focusSource">Waiting for broker quote</span></div>
-      <div class="confidence-wrap">
-        <div class="confidence-label"><span>Strategy confidence</span><strong id="focusConfidence">—</strong></div>
-        <div class="confidence-track"><i id="focusConfidenceBar"></i></div>
-      </div>
-      <div class="focus-grid">
-        <div><span>Baseline</span><strong id="focusBaseline">—</strong></div>
-        <div><span>Direction</span><strong id="focusDirection">—</strong></div>
-        <div><span>Gate threshold</span><strong id="focusThreshold">—</strong></div>
-        <div><span>Live age</span><strong id="focusAge">—</strong></div>
-        <div><span>Entry reference</span><strong id="focusEntry">—</strong></div>
-        <div><span>Stop reference</span><strong id="focusStop">—</strong></div>
-        <div><span>Target reference</span><strong id="focusTake">—</strong></div>
-        <div><span>Timeframe</span><strong id="focusTf">—</strong></div>
-      </div>
-      <div class="signal-evidence"><h3>Confirmation evidence</h3><div id="focusEvidence"><span class="muted">No signal selected.</span></div></div>
-      <div class="signal-research-contract">
-        <div><span>Broker-validated contract</span><strong id="focusContract">—</strong></div>
-        <div><span>Contract family</span><strong id="focusContractFamily">—</strong></div>
-        <small id="focusContractReason">Only a contract returned by the current Deriv contracts_for response is displayed. No seasonal claim is inferred without broker evidence.</small>
-      </div>
-    </article>
-
-    <aside class="live-side">
-      <article class="panel">
-        <div class="panel-title"><h2>Live market tape</h2><span id="marketCount">0 markets</span></div>
-        <div id="liveTape" class="live-tape"><div class="empty">Start a scan to load broker quotes.</div></div>
-      </article>
-      <article class="panel">
-        <div class="panel-title"><h2>Research evidence</h2><span id="whySource">Select a signal</span></div>
-        <div id="signalWhy" class="signal-evidence-detail" aria-live="polite"><p class="muted">Select a market to inspect persisted strategy evidence.</p></div>
-      </article>
-    </aside>
-  </section>
-
-  <section class="panel signal-contract-panel"><div class="panel-title"><div><h2>Broker contract selection</h2><p>Research-only selector backed by the current Deriv contracts_for catalogue.</p></div><button id="signalsContractOpen" type="button" class="btn">Choose contract</button></div><div id="signalsContractSummary">No contract selected.</div></section>
-  <div id="signalsContractModal" class="contract-modal" hidden aria-hidden="true"><div class="contract-modal-backdrop" data-signal-contract-close></div><section class="contract-modal-card" role="dialog" aria-modal="true" aria-labelledby="signalsContractModalTitle"><div class="panel-title"><div><h2 id="signalsContractModalTitle">Deriv research contract selector</h2><p id="signalsContractStatus">Select a signal first, or choose the current instrument.</p></div><button id="signalsContractClose" type="button" class="btn" data-signal-contract-close>Close</button></div><div class="contract-selector-grid"><label>Market type<select id="signalsContractMarketType" disabled><option>—</option></select></label><label>Sub-market<select id="signalsContractSubMarket" disabled><option>—</option></select></label><label>Contract family<select id="signalsContractFamily"><option value="">All broker families</option></select></label><label>Contract type<select id="signalsContractType"><option value="">Select contract type</option></select></label><label>Broker expiry type<select id="signalsContractExpiry"><option value="">Any broker expiry</option></select></label><label>Sentiment<select id="signalsContractSentiment"><option value="">Any broker sentiment</option></select></label><label>Duration<input id="signalsContractDuration" type="number" min="0" step="any" placeholder="Only when required"></label><label>Duration unit<input id="signalsContractDurationUnit" maxlength="12" placeholder="Broker proposal validates"></label><label>Barrier / strike<input id="signalsContractBarrier" maxlength="64" placeholder="Only when required"></label><label>Multiplier<input id="signalsContractMultiplier" type="number" min="0" step="any" placeholder="Only for multiplier contracts"></label><label>Growth rate<input id="signalsContractGrowthRate" type="number" min="0" step="any" placeholder="Only when required"></label></div><div id="signalsContractNote" class="contract-capability-note">No broker capability loaded.</div><div class="contract-modal-actions"><button id="signalsContractClear" type="button" class="btn">Clear</button><button id="signalsContractApply" type="button" class="btn primary">Use for research context</button></div></section></div>
-  <section class="panel signal-table-panel">
-    <div class="panel-title">
-      <div><h2>Live signal matrix</h2><p>Current Deriv quotes paired with matching persisted Analysis baselines.</p></div>
-      <span id="scanTimestamp">Not scanned</span>
-    </div>
-    <div class="table-scroll">
-      <table class="live-signal-table">
-        <thead><tr><th>Instrument</th><th>Market</th><th>TF</th><th>Live price</th><th>Baseline</th><th>Signal</th><th>Confidence</th><th>Status</th></tr></thead>
-        <tbody id="signalsTable"><tr><td colspan="8">Start a scan to load current Deriv research data.</td></tr></tbody>
-      </table>
-    </div>
-  </section>
+<main id="main-content" class="workspace">
+<header class="hero"><div><p class="eyebrow">VALIDATED OPPORTUNITY QUEUE</p><h1>Signals</h1><p>Signals are time-sensitive analytical opportunities. They are not proof of execution; broker state remains authoritative for what actually happened.</p></div><div class="actions"><a class="btn" href="/analysis/">Analysis</a><a class="btn" href="/trading/">Terminal</a></div></header>
+<section class="toolbar"><select id="timeframe"><option>M1</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option><option>D1</option></select><select id="limit"><option>20</option><option selected>40</option><option>60</option><option>80</option></select><button id="scan" class="btn primary">Scan live now</button><button id="refresh" class="btn">Refresh</button><span class="grow"></span><span id="health">—</span><span id="broker">—</span><span id="scanTime" class="muted">—</span></section>
+<section class="grid-4"><article class="panel card"><span class="label">Active account</span><strong id="account" class="value">—</strong><small id="accountType" class="muted">—</small></article><article class="panel card"><span class="label">Research state</span><strong id="matched" class="value">—</strong></article><article class="panel card"><span class="label">Actionable</span><strong id="actionable" class="value">0</strong></article><article class="panel card"><span class="label">Rows</span><strong id="count" class="value">0</strong></article></section>
+<section class="panel"><div class="filter"><input id="search" class="grow" type="search" placeholder="Search symbol, strategy or lifecycle"><select id="symbolFilter"><option value="">All instruments</option></select><select id="direction"><option value="">All directions</option><option value="BUY">BUY</option><option value="SELL">SELL</option></select><select id="status"><option value="">All lifecycle states</option></select><select id="pageSize"><option>10</option><option selected>20</option><option>40</option></select><button id="prev" class="btn">Previous</button><button id="next" class="btn">Next</button><span id="pager" class="muted">Page 1</span></div></section>
+<section class="two-col"><article class="panel focus"><div class="section-head"><h2 id="focusTitle">Select a signal</h2><span id="focusState" class="state neutral">WAITING</span></div><div class="body"><div class="metric-grid"><div class="metric"><span class="label">Direction</span><strong id="focusDirection">—</strong></div><div class="metric"><span class="label">Live price</span><strong id="focusPrice">—</strong></div><div class="metric"><span class="label">Confidence</span><strong id="focusConfidence">—</strong></div><div class="metric"><span class="label">Live age</span><strong id="focusAge">—</strong></div><div class="metric"><span class="label">Entry reference</span><strong id="focusEntry">—</strong></div><div class="metric"><span class="label">Stop reference</span><strong id="focusStop">—</strong></div><div class="metric"><span class="label">Target reference</span><strong id="focusTake">—</strong></div><div class="metric"><span class="label">Strategy</span><strong id="focusStrategy">—</strong></div><div class="metric"><span class="label">Account</span><strong id="focusAccount">—</strong></div><div class="metric"><span class="label">Execution</span><strong id="focusExecution">—</strong></div></div><h3>Validation evidence</h3><div id="evidence"></div><h3>Provenance</h3><div id="provenance"></div></div></article><aside class="panel"><div class="section-head"><h2>Lifecycle</h2><p>Signals move through validation states; broker failure is not treated as “no signal”.</p></div><div class="body"><div class="evidence-row"><span>ANALYSING</span><strong>Research being assembled</strong></div><div class="evidence-row"><span>CANDIDATE</span><strong>Conditions observed</strong></div><div class="evidence-row"><span>WAITING_FOR_CONFIRMATION</span><strong>Fresh confirmation required</strong></div><div class="evidence-row"><span>ACTIONABLE</span><strong>Signal gates currently pass</strong></div><div class="evidence-row"><span>STALE / EXPIRED</span><strong>Freshness failed</strong></div><div class="evidence-row"><span>INVALIDATED</span><strong>Live state conflicts</strong></div><div class="evidence-row"><span>BLOCKED</span><strong>Execution gate not passed</strong></div><div class="evidence-row"><span>EXECUTED</span><strong>Only broker state can establish this</strong></div></div></aside></section>
+<section class="panel"><div class="section-head"><h2>Live signal matrix</h2><p>Current Deriv quotes paired with active, account-scoped StrategySignal baselines.</p></div><div class="table-scroll"><table class="table"><thead><tr><th>Instrument</th><th>Timeframe</th><th>Baseline</th><th>Confidence</th><th>Lifecycle</th><th>Live price</th><th>Live age</th><th>Gate</th></tr></thead><tbody id="table"><tr><td colspan="8">Scan to load live broker data.</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/signals.css' %}?v=20260929-signals9">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/signals.js' %}?v=20260929-signals9" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/signals_workspace.js' %}?v=20261001-s1" defer></script>{% endblock %}
