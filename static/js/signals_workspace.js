@@ -10,7 +10,7 @@
   const S={rows:[],page:1,pageSize:20};
   async function request(path){
     const client=window.AlgoBotAPI?.apiClient;
-    if(client)return client.request?client.request(path,{method:"GET"}):client.get(path,{credentials:"include"});
+    if(client){const getter=client.get||client.request;if(!getter)throw new Error("Signals API client is unavailable.");return getter.call(client,path,{credentials:"include",__algoTimeoutMs:12000});}
     const r=await fetch(path,{credentials:"same-origin",headers:{Accept:"application/json"}});let p={};try{p=await r.json()}catch(_){}
     if(!r.ok)throw new Error(p?.message||p?.error?.detail||"Signals unavailable ("+r.status+")");return p;
   }
@@ -38,11 +38,11 @@
     $("status").innerHTML='<option value="">All lifecycle states</option>'+statuses.map(x=>'<option value="'+esc(x)+'">'+esc(state(x))+"</option>").join("");
   }
   async function scan(){
-    $("scan").disabled=true;set("health","SCANNING");try{
+    $("scan").disabled=true;set("health","SCANNING");set("scanTime","Loading live Deriv signal data…");try{
       const tf=$("timeframe").value, data=await request("/api/strategy-signals/?limit="+encodeURIComponent($("limit").value)+"&timeframe="+encodeURIComponent(tf));
       if(data.status!=="ok")throw new Error(data.message||"Signal service unavailable");
       S.rows=Array.isArray(data.data)?data.data:[];S.page=1;populate();set("health",state(data.research_state||data.state));set("broker",state(data.broker_state||data.broker_feed_state));set("account",data.account?.id||"—");set("accountType",(data.account?.type||"—")+" · "+(data.account?.currency||""));set("scanTime",new Date().toLocaleTimeString());render();
-    }catch(e){S.rows=[];set("health","UNAVAILABLE");set("broker","BROKER UNAVAILABLE");set("scanTime",e.message||"Scan failed");render()}finally{$("scan").disabled=false}
+    }catch(e){S.rows=[];set("health","UNAVAILABLE");set("broker","BROKER UNAVAILABLE");set("scanTime",e?.message||"Signal data could not be loaded");render()}finally{$("scan").disabled=false}
   }
   function boot(){
     $("scan").addEventListener("click",scan);$("refresh").addEventListener("click",scan);$("timeframe").addEventListener("change",scan);$("limit").addEventListener("change",scan);
