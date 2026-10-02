@@ -1,0 +1,8 @@
+services:
+  algobot-worker:
+    build:
+      context: ../..
+      dockerfile: deploy/external-worker/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - /etc/algobot/worker.env
