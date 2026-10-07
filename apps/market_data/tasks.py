@@ -312,6 +312,7 @@ def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
     if scope:
         _mark_backfill_run(
             scope,
+            run_id=run_id,
             result={
                 "symbols_total": total,
                 "symbols_completed": 0,
@@ -330,6 +331,7 @@ def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
             task_id = CandleBackfillRun.objects.filter(scope=scope).values_list("task_id", flat=True).first() or ""
             _emit_backfill_event(
                 scope,
+                run_id=run_id,
                 event_type="symbol_started",
                 message=f"Fetching broker history for {value}",
                 symbol=value,
@@ -371,6 +373,7 @@ def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
         if scope:
             _mark_backfill_run(
                 scope,
+                run_id=run_id,
                 result=progress,
                 error=(
                     f"Historical backfill failed for: {', '.join(failed)}"
@@ -390,6 +393,7 @@ def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
                     if run_id else CandleBackfillRun.objects.filter(scope=scope, status="running").order_by("-requested_at", "-id").values_list("task_id", flat=True).first()) or "",
                 worker_hostname=_worker_identity(),
                 payload={"index": index, "total": total, "percent": progress["percent"]},
+                run_id=run_id,
             )
 
     failed = [name for name, payload in results.items() if _symbol_backfill_failed(payload)]
