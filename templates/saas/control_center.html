@@ -55,8 +55,8 @@
 </style>
 <script>
 (()=>{const $=id=>document.getElementById(id);let data=null;
-const get=async u=>{const r=await fetch(u,{credentials:'same-origin',headers:{Accept:'application/json'}});if(!r.ok)throw Error(`HTTP ${r.status}`);return r.json()};
-const post=async(u,b)=>{const r=await fetch(u,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(b)});if(!r.ok){let d={};try{d=await r.json()}catch{}throw Error(d.error||`HTTP ${r.status}`)}return r.json()};
+const get=async u=>window.AlgoBotFrontendData.request(u,{},10000);
+const post=async(u,b)=>window.AlgoBotFrontendData.request(u,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(b)},10000);
 function csrf(){return document.cookie.split('; ').find(x=>x.startsWith('csrftoken='))?.split('=')[1]||''}
 function render(d){data=d;$('state').textContent='Connected';$('dot').parentElement.classList.add('live');const t=d.tenant;
 if(!t){$('tenant-empty').hidden=false;$('tenant-content').hidden=true;return}
