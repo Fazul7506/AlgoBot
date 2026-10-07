@@ -1,29 +1,17 @@
-.app-sidebar { z-index: 1000; overscroll-behavior: contain; overflow-anchor: none; }
-.sidebar-header, .topbar-actions, .sidebar-user { min-width: 0; }
-.sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.sidebar-header .brand { min-width: 0; display: inline-flex; align-items: center; gap: 10px; }
+.app-sidebar { overflow-anchor: none; }
+.sidebar-header { align-items: center; justify-content: space-between; gap: 12px; }
+.sidebar-header .brand { align-items: center; gap: 10px; }
 .sidebar-toggle, .mobile-menu-button { border: 1px solid var(--line); background: var(--panel2); color: var(--text); border-radius: var(--ds-radius-md); cursor: pointer; }
-.sidebar-toggle { width: 38px; height: 38px; display: grid; place-items: center; }
+.sidebar-toggle { place-items: center; }
 .sidebar-toggle .material-symbols-rounded { font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
-.mobile-menu-button { position: fixed; top: 12px; left: 12px; z-index: 1100; width: 44px; height: 44px; display: none; }
-.sidebar-backdrop { position: fixed; inset: 0; z-index: 999; background: rgba(2, 8, 18, .68); backdrop-filter: blur(3px); }
-.sidebar-backdrop[hidden] { display: none; }
-.app-sidebar.is-collapsed { width: 78px; padding-left: 14px; padding-right: 14px; }
-.app-sidebar.is-collapsed .brand-name,
-.app-sidebar.is-collapsed nav span:not(.material-symbols-rounded),
-.app-sidebar.is-collapsed .sidebar-new-trade span:not(.material-symbols-rounded),
-.app-sidebar.is-collapsed .sidebar-section h2 { display: none; }
-.app-sidebar.is-collapsed .sidebar-user { display: grid !important; grid-template-columns: 1fr !important; gap: 7px !important; width: 100% !important; padding: 10px 0 0 !important; margin-top: 10px !important; }
-.app-sidebar.is-collapsed .algobot-sidebar-account { width: 48px !important; min-width: 48px !important; height: 48px !important; padding: 7px !important; margin: 0 auto !important; border-radius: 14px !important; box-sizing: border-box !important; display: flex !important; align-items: center !important; justify-content: center !important; overflow: hidden !important; }
-.app-sidebar.is-collapsed .algobot-account-summary { width: 100% !important; justify-content: center !important; gap: 0 !important; }
-.app-sidebar.is-collapsed .algobot-account-avatar,.app-sidebar.is-collapsed .algobot-account-avatar.small { width: 32px !important; height: 32px !important; flex-basis: 32px !important; }
-.app-sidebar.is-collapsed .algobot-account-copy,.app-sidebar.is-collapsed .algobot-account-fresh,.app-sidebar.is-collapsed .algobot-account-error { display: none !important; }
-.app-sidebar.is-collapsed .algobot-account-switch { position: absolute !important; inset: auto 3px 3px auto !important; width: 18px !important; height: 18px !important; min-width: 18px !important; margin: 0 !important; padding: 0 !important; border-radius: 999px !important; display: grid !important; place-items: center !important; overflow: hidden !important; font-size: 0 !important; z-index: 2 !important; }
-.app-sidebar.is-collapsed .algobot-account-switch .algobot-switch-avatar { display: none !important; }
+.sidebar-backdrop { background: rgba(2, 8, 18, .68); backdrop-filter: blur(3px); }
+.app-sidebar.is-collapsed { padding-left: 14px; padding-right: 14px; }
+.app-sidebar.is-collapsed .sidebar-user { grid-template-columns: 1fr !important; gap: 7px !important; padding: 10px 0 0 !important; }
+.app-sidebar.is-collapsed .algobot-sidebar-account { padding: 7px !important; border-radius: 14px !important; align-items: center !important; justify-content: center !important; }
+.app-sidebar.is-collapsed .algobot-account-summary { justify-content: center !important; gap: 0 !important; }
+.app-sidebar.is-collapsed .algobot-account-switch { padding: 0 !important; border-radius: 999px !important; place-items: center !important; font-size: 0 !important; }
 .app-sidebar.is-collapsed .algobot-account-switch span:last-child::before { content: '↔'; font-size: 11px; line-height: 1; }
-.app-sidebar.is-collapsed .sidebar-user-actions { width: 40px !important; height: 40px !important; margin: 0 auto !important; }
-.app-sidebar.is-collapsed .sidebar-user-actions button { width: 40px !important; height: 40px !important; border-radius: 12px !important; }
-.app-sidebar.is-collapsed + .app-shell,.app-shell.sidebar-collapsed { margin-left: 78px; }
+.app-sidebar.is-collapsed .sidebar-user-actions button { border-radius: 12px !important; }
 .connection-indicator { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; }
 .connection-indicator i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .connection-indicator.connected { color: var(--green); }
@@ -35,8 +23,6 @@
 /* Canonical active-page state. Navigation JS owns the .active class; CSS owns its presentation. */
 #app-sidebar nav a,
 #app-sidebar .sidebar-new-trade {
-  position: relative;
-  box-sizing: border-box;
   transition: background-color .14s ease, color .14s ease, border-color .14s ease;
 }
 #app-sidebar nav a.active,
@@ -121,8 +107,7 @@
 @keyframes algobot-toast-out { from { opacity: 1; transform: translate3d(0,0,0); } to { opacity: 0; transform: translate3d(0,-4px,0); } }
 
 @media (min-width: 901px) {
-  .app-sidebar { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.38) transparent; }
-  .app-sidebar::-webkit-scrollbar { width: 7px; }
+  .app-sidebar { scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.38) transparent; }
   .app-sidebar::-webkit-scrollbar-track { background: transparent; }
   .app-sidebar::-webkit-scrollbar-thumb { background: rgba(148,163,184,.38); border-radius: 999px; }
   .app-sidebar::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.58); }
@@ -130,13 +115,9 @@
 @media (max-width: 800px) {
   #django-message-stack.toast-stack { top: max(60px, env(safe-area-inset-top) + 48px); right: max(10px, env(safe-area-inset-right) + 8px); width: min(380px, calc(100vw - 20px)); max-width: calc(100vw - 20px); }
   #django-message-stack.toast-stack .toast { max-height: 120px; }
-  .mobile-menu-button { display: grid; place-items: center; }
-  .app-sidebar { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); transform: translate3d(-105%,0,0); transition: transform .22s ease; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
-  .app-sidebar.is-open { transform: translate3d(0,0,0); }
-  .app-sidebar.is-collapsed + .app-shell, .app-shell.sidebar-collapsed { margin-left: 0; }
-  .app-shell { margin-left: 0 !important; }
+  .mobile-menu-button { place-items: center; }
+  .app-sidebar { transition: transform .22s ease; -webkit-overflow-scrolling: touch; }
   .topbar { padding-left: 68px; }
-  .sidebar-toggle { display: none; }
   body.mobile-nav-open { overflow: auto !important; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -150,110 +131,40 @@
    invariant survives stylesheet ordering/asset collection. */
 @media (min-width: 981px) {
   #app-sidebar.app-sidebar {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: auto !important;
-    bottom: 0 !important;
-    width: 260px !important;
-    min-width: 260px !important;
-    height: 100dvh !important;
-    max-height: 100dvh !important;
-    margin: 0 !important;
-    overflow: hidden !important;
-    transform: none !important;
-    z-index: 40 !important;
-    display: flex !important;
     flex-direction: column !important;
-    box-sizing: border-box !important;
-    overscroll-behavior: none !important;
-  }
-
-  #app-sidebar.app-sidebar nav {
-    min-height: 0 !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain !important;
-    flex: 1 1 auto !important;
   }
 
   #app-sidebar.app-sidebar .sidebar-header {
-    position: relative !important;
-    flex: 0 0 54px !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
-    display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
   }
 
   #app-sidebar.app-sidebar .sidebar-header .brand {
-    display: inline-flex !important;
     align-items: center !important;
     gap: 6px !important;
-    min-width: 0 !important;
-  }
-
-  #app-sidebar.app-sidebar .sidebar-header .brand-favicon {
-    width: 28px !important;
-    height: 28px !important;
-    flex: 0 0 28px !important;
-  }
-
-  #app-sidebar.app-sidebar .sidebar-header .brand-name {
-    margin-left: 0 !important;
   }
 
   #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle {
-    position: relative !important;
-    top: auto !important;
-    right: auto !important;
-    left: auto !important;
-    bottom: auto !important;
-    inset: auto !important;
-    display: grid !important;
     place-items: center !important;
-    flex: 0 0 36px !important;
-    width: 36px !important;
-    min-width: 36px !important;
-    height: 36px !important;
-    margin: 0 !important;
-    z-index: 5 !important;
   }
 }
 
 @media (min-width: 981px) {
-  .app-shell > .app-main,
-  .app-shell > #app-main {
-    min-width: 0;
-  }
 }
 
 
 @media (min-width: 981px) {
   #app-sidebar.app-sidebar.is-collapsed {
-    width: 78px !important;
-    min-width: 78px !important;
     padding-left: 14px !important;
     padding-right: 14px !important;
   }
 
-  #app-sidebar.app-sidebar.is-collapsed .sidebar-header {
-    flex-basis: 54px !important;
-  }
-
   #app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand {
-    width: 48px !important;
     justify-content: center !important;
     gap: 0 !important;
   }
 
   #app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle {
-    position: absolute !important;
-    inset: 0 !important;
-    width: 48px !important;
-    min-width: 48px !important;
-    height: 48px !important;
     opacity: 0 !important;
   }
 
