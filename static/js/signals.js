@@ -35,17 +35,7 @@ function applySignalContract(){const type=$('signalsContractType').value;if(!typ
   }
 
   async function request(path) {
-    const client = await getApiClient();
-    if (client) return client.get(path, {credentials: 'include', __algoTimeoutMs: 15000});
-    const response = await fetch(new URL(path, window.location.origin), {
-      method: 'GET',
-      credentials: 'include',
-      headers: {'Accept': 'application/json'}
-    });
-    let payload = {};
-    try { payload = await response.json(); } catch (_) {}
-    if (!response.ok) throw new Error(payload?.message || `Signals API request failed (${response.status})`);
-    return payload;
+    return window.AlgoBotFrontendData.request(path, {}, 15000);
   }
 
   function populateSelect(id, values, emptyLabel) {
