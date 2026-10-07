@@ -64,6 +64,8 @@ def main() -> int:
         source = text(path)
         if "document.createElement('style')" in source or 'document.createElement("style")' in source:
             findings.append(f"WARN runtime CSS injection in {path.relative_to(ROOT)}")
+        if "fetch('/api/" in source or 'fetch("/api/' in source:
+            findings.append(f"WARN direct API fetch bypasses canonical transport in {path.relative_to(ROOT)}")
         stripped = re.sub(r"/\*.*?\*/", "", text(path), flags=re.S)
         stripped = re.sub(r"//.*", "", stripped).strip()
         if not stripped:
