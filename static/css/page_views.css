@@ -28,3 +28,7 @@
 
 /* Payment provider trust badge */
 .intasend-trust-badge{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;color:var(--muted-text,#8e96a3);text-decoration:none;font-size:.8rem;margin:14px auto 4px;max-width:100%}.intasend-trust-badge img{display:block;width:min(375px,100%);height:auto}.intasend-trust-badge strong{font-weight:700}.intasend-trust-badge:focus-visible{outline:2px solid var(--accent,#7c3aed);outline-offset:4px;border-radius:6px}
+
+/* Backtesting workspace */
+.backtest-page .panel-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.backtest-page .research-notice{margin-bottom:24px}.backtest-page .research-notice p{max-width:760px}.backtest-page .backtest-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.backtest-page .backtest-form label{display:grid;gap:7px;min-width:0}.backtest-page .backtest-form button{grid-column:1/-1}.backtest-page .backtest-form select,.backtest-page .backtest-form input{width:100%;min-width:0}.backtest-page .backtest-feedback{margin-top:12px;padding:11px 13px;border-radius:10px;background:rgba(127,127,127,.08)}.backtest-page .backtest-feedback[data-state="error"]{border:1px solid rgba(255,80,100,.45)}.backtest-page .backtest-feedback[data-state="success"]{border:1px solid rgba(80,200,140,.45)}.backtest-page .backtest-range-note{margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(127,127,127,.08)}
+@media(max-width:700px){.backtest-page .backtest-form{grid-template-columns:1fr}}
