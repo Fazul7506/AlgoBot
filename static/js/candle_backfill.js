@@ -5,6 +5,7 @@
   const $ = (selector) => page.querySelector(selector);
   const body = $("[data-log-body]");
   let lastEventId = 0;
+  let selectedRunId = new URLSearchParams(window.location.search).get("run_id") || "";
   let polling = false;
   let tail = true;
   let query = "";
@@ -127,6 +128,63 @@
     if (logEmpty && Number(run.event_count || 0) > 0) logEmpty.remove();
   };
 
+
+  const renderHistory = (history) => {
+    const table = $("[data-history-body]");
+    if (!table) return;
+    table.replaceChildren();
+    const rows = Array.isArray(history) ? history : [];
+    text("[data-history-count]", rows.length + (rows.length === 1 ? " run" : " runs"));
+    if (!rows.length) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 8;
+      cell.className = "rb-history-empty";
+      cell.textContent = "No candle backfill executions have been recorded yet.";
+      row.appendChild(cell);
+      table.appendChild(row);
+      return;
+    }
+    rows.forEach((run) => {
+      const row = document.createElement("tr");
+      row.dataset.runId = String(run.id);
+      row.tabIndex = 0;
+      if (String(run.id) === String(selectedRunId)) row.classList.add("is-selected");
+      const progress = run.progress || {};
+      const cells = [
+        "<strong>#" + run.id + "</strong><small>" + (run.task_id || "No task ID") + "</small>",
+        run.scope || "—",
+        (run.trigger || "manual").replace(/^./, (m) => m.toUpperCase()),
+        "<span class=\"rb-history-status\" data-state=\"" + (run.status || "") + "\">" + (run.status_label || run.status || "—") + "</span>",
+        formatDate(run.requested_at),
+        run.started_at ? formatDuration(run.duration_seconds) : "—",
+        (Number(progress.percent) || 0) + "%",
+        run.worker_hostname || "—",
+      ];
+      cells.forEach((value) => {
+        const cell = document.createElement("td");
+        cell.innerHTML = value;
+        row.appendChild(cell);
+      });
+      const select = () => {
+        selectedRunId = String(run.id);
+        lastEventId = 0;
+        const url = new URL(window.location.href);
+        url.searchParams.set("run_id", selectedRunId);
+        window.history.replaceState({}, "", url);
+        refresh();
+      };
+      row.addEventListener("click", select);
+      row.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          select();
+        }
+      });
+      table.appendChild(row);
+    });
+  };
+
   const appendEvent = (event) => {
     const row = document.createElement("div");
     row.className = "rb-log-line";
@@ -175,7 +233,7 @@
     try {
       const params = new URLSearchParams({
         format: "json",
-        scope: "initial",
+        run_id: selectedRunId,
         after: String(lastEventId),
         limit: "200",
       });
@@ -202,7 +260,14 @@
       telemetryFailures = 0;
       const telemetryNotice = $("[data-telemetry-error]");
       if (telemetryNotice) telemetryNotice.remove();
-      renderRun(data.initial);
+      if (!selectedRunId && data.selected) {
+        selectedRunId = String(data.selected.id);
+        const url = new URL(window.location.href);
+        url.searchParams.set("run_id", selectedRunId);
+        window.history.replaceState({}, "", url);
+      }
+      renderRun(data.selected);
+      renderHistory(data.history || []);
       if (query && lastEventId === 0) {
         renderEvents(data.events || [], true);
       } else {
@@ -254,6 +319,12 @@
       resetSearch();
     });
   }
+
+  const historyRefresh = $("[data-history-refresh]");
+  if (historyRefresh) historyRefresh.addEventListener("click", () => {
+    lastEventId = 0;
+    refresh();
+  });
 
   const refreshButton = $("[data-refresh]");
   if (refreshButton) {
