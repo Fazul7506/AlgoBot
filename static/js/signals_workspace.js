@@ -9,26 +9,10 @@
   const tone=v=>String(v||"").toUpperCase()==="BUY"?"positive":String(v||"").toUpperCase()==="SELL"?"negative":"neutral";
   const S={rows:[],page:1,pageSize:20};
   async function request(path){
-    const timeoutMs=12000;
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),timeoutMs);
-    try{
-      // Signals is rendered by the canonical Django application. Use the
-      // same-origin API route so a cross-origin API/CORS failure cannot leave
-      // the workspace stuck in a perpetual loading state.
-      const r=await fetch(new URL(path,window.location.origin),{
-        method:"GET",
-        credentials:"same-origin",
-        headers:{Accept:"application/json"},
-        signal:controller.signal
-      });
-      let p={};try{p=await r.json()}catch(_){}
-      if(!r.ok)throw new Error(p?.message||p?.detail||p?.error?.detail||"Signals unavailable ("+r.status+")");
-      return p;
-    }catch(error){
-      if(error?.name==="AbortError")throw new Error("Signals request timed out after 12s.");
-      throw error;
-    }finally{clearTimeout(timer)}
+    const client=window.AlgoBotAPI?.apiClient;
+    if(client){const getter=client.get||client.request;if(!getter)throw new Error("Signals API client is unavailable.");return getter.call(client,path,{credentials:"include",__algoTimeoutMs:12000});}
+    const r=await fetch(path,{credentials:"same-origin",headers:{Accept:"application/json"}});let p={};try{p=await r.json()}catch(_){}
+    if(!r.ok)throw new Error(p?.message||p?.error?.detail||"Signals unavailable ("+r.status+")");return p;
   }
   function set(id,v){const e=$(id);if(e)e.textContent=v==null||v===""?"—":v}
   function filterRows(){
@@ -54,11 +38,11 @@
     $("status").innerHTML='<option value="">All lifecycle states</option>'+statuses.map(x=>'<option value="'+esc(x)+'">'+esc(state(x))+"</option>").join("");
   }
   async function scan(){
-    $("scan").disabled=true;set("health","SCANNING");try{
+    $("scan").disabled=true;set("health","SCANNING");set("scanTime","Loading live Deriv signal data…");try{
       const tf=$("timeframe").value, data=await request("/api/strategy-signals/?limit="+encodeURIComponent($("limit").value)+"&timeframe="+encodeURIComponent(tf));
       if(data.status!=="ok")throw new Error(data.message||"Signal service unavailable");
       S.rows=Array.isArray(data.data)?data.data:[];S.page=1;populate();set("health",state(data.research_state||data.state));set("broker",state(data.broker_state||data.broker_feed_state));set("account",data.account?.id||"—");set("accountType",(data.account?.type||"—")+" · "+(data.account?.currency||""));set("scanTime",new Date().toLocaleTimeString());render();
-    }catch(e){S.rows=[];set("health","UNAVAILABLE");set("broker","BROKER UNAVAILABLE");set("scanTime",e.message||"Scan failed");render()}finally{$("scan").disabled=false}
+    }catch(e){S.rows=[];set("health","UNAVAILABLE");set("broker","BROKER UNAVAILABLE");set("scanTime",e?.message||"Signal data could not be loaded");render()}finally{$("scan").disabled=false}
   }
   function boot(){
     $("scan").addEventListener("click",scan);$("refresh").addEventListener("click",scan);$("timeframe").addEventListener("change",scan);$("limit").addEventListener("change",scan);
