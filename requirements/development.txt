@@ -1,3 +1,4 @@
+# Development-only tooling layered on the shared base requirements.
 -r base.txt
 black
 ruff
