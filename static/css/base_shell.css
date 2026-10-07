@@ -113,7 +113,7 @@
   .topbar { padding-left: 68px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  #django-message-stack.toast-stack .toast { animation: none !important; }
-  #app-sidebar nav a, #app-sidebar .sidebar-new-trade { transition: none !important; }
+  #django-message-stack.toast-stack .toast { animation: none; }
+  #app-sidebar nav a, #app-sidebar .sidebar-new-trade { transition: none; }
 }
 
