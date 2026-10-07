@@ -38,12 +38,16 @@ def main() -> int:
 
     for path in templates:
         content = text(path)
-        style_blocks = len(re.findall(r"<style\\b", content, flags=re.I))
-        inline_styles = len(re.findall(r"\\sstyle\\s*=", content, flags=re.I))
+        style_blocks = len(re.findall(r"<style\b", content, flags=re.I))
+        inline_styles = len(re.findall(r"\sstyle\s*=", content, flags=re.I))
         if style_blocks:
             findings.append(f"WARN embedded <style> block(s) in {path.relative_to(ROOT)}: {style_blocks}")
         if inline_styles:
             findings.append(f"WARN inline style attribute(s) in {path.relative_to(ROOT)}: {inline_styles}")
+        if "fetch('/api/" in content or 'fetch("/api/' in content:
+            findings.append(f"WARN direct API fetch bypasses canonical transport in template {path.relative_to(ROOT)}")
+        if "document.createElement('style')" in content or 'document.createElement("style")' in content:
+            findings.append(f"WARN runtime CSS injection in template {path.relative_to(ROOT)}")
         for element_id in ID_RE.findall(content):
             duplicate_ids[element_id].append(str(path.relative_to(ROOT)))
 
