@@ -328,7 +328,7 @@ def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
     for index, value in enumerate(symbols, start=1):
         if scope:
             from .models import CandleBackfillRun
-            task_id = CandleBackfillRun.objects.filter(scope=scope).values_list("task_id", flat=True).first() or ""
+            task_id = (CandleBackfillRun.objects.filter(pk=run_id).values_list("task_id", flat=True).first() if run_id else CandleBackfillRun.objects.filter(scope=scope, status="running").order_by("-requested_at", "-id").values_list("task_id", flat=True).first()) or ""
             _emit_backfill_event(
                 scope,
                 run_id=run_id,
