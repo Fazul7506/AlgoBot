@@ -143,6 +143,15 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("ACCOUNT_CONTEXT_NOT_ACTIVE", realtime)
         self.assertIn("session_account = await self.selected_account()", realtime)
 
+    def test_ai_predictions_workspace_uses_authenticated_bearer_transport_for_post(self):
+        from pathlib import Path
+        client = Path("static/js/predictions_workspace_fix.js").read_text(encoding="utf-8")
+        self.assertIn("window.AlgoBotFrontendData?.request", client)
+        self.assertIn("request('/api/ai/predict/'", client)
+        self.assertNotIn("credentials:'same-origin'", client)
+        self.assertNotIn("X-CSRFToken", client)
+        self.assertNotIn("document.cookie.match", client)
+
     def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
         from pathlib import Path
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
