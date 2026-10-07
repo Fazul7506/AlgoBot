@@ -21,19 +21,10 @@
 
   function request(url, options = {}, timeout = 8000) {
     const shared = window.AlgoBotFrontendData?.request;
-    if (typeof shared === 'function') return shared(url, options, timeout);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-    return fetch(url, {credentials: 'same-origin', cache: 'no-store', ...options, headers: {Accept: 'application/json', ...(options.headers || {})}, signal: controller.signal})
-      .then(async (response) => {
-        const body = await response.text();
-        let data = {};
-        try { data = body ? JSON.parse(body) : {}; } catch (_) { data = {detail: body}; }
-        if (!response.ok) throw Object.assign(new Error(data.detail || data.message || `Request failed (${response.status})`), {status: response.status});
-        return data;
-      })
-      .catch((error) => { if (error?.name === 'AbortError') throw Object.assign(new Error('Request timed out'), {code: 'API_TIMEOUT'}); throw error; })
-      .finally(() => clearTimeout(timeoutId));
+    if (typeof shared !== 'function') {
+      return Promise.reject(new Error('Canonical frontend transport is not ready.'));
+    }
+    return shared(url, options, timeout);
   }
 
   function status(key, state, label) {
