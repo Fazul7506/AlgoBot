@@ -133,6 +133,7 @@ def _run_payload(run):
         or ""
     )
     return {
+        "id": run.pk, "run_key": str(run.run_key),
         "scope": run.scope, "status": run.status, "status_label": status_label,
         "render_status": render_status, "render_status_label": render_status_label,
         "count": run.count, "symbol": run.symbol, "task_id": run.task_id,
