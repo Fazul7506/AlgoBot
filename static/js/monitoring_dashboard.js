@@ -7,9 +7,8 @@
   const load = async () => {
     if (refresh) { refresh.disabled = true; refresh.textContent = 'Refreshing…'; }
     try {
-      const response = await fetch('/api/monitoring/dashboard/', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
+      const response = await window.AlgoBotFrontendData.request('/api/monitoring/dashboard/', {}, 10000);
+      const data = response;
       setText('[data-system-status]', data.overall_system_health ?? 'Unknown');
       setText('[data-broker-status]', data.broker_status ?? 'Unknown');
       setText('[data-current-trades]', data.current_trades ?? 0);
