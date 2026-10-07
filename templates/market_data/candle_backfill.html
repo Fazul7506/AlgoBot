@@ -16,7 +16,7 @@
         <span class="rb-live" data-live {% if not run_payload or not run_payload.live %}hidden{% endif %}><i></i>Live</span>
       </div>
     </div>
-    {% if not run or run.status == "failed" %}
+    {% if not run or run.status != "running" %}
     <form class="rb-start-form" method="post" action="{% url 'initial_candle_backfill' %}">
       {% csrf_token %}
       <div class="rb-start-copy">
@@ -59,7 +59,7 @@
   </header>
 
   <section class="rb-run-summary">
-    <div class="rb-summary-item rb-summary-status"><span>STATUS</span><strong data-status-large>{% if run_payload %}{{ run_payload.status_label }}{% else %}Not started{% endif %}</strong><em data-status-sub>{% if run %}{% if run.status == "completed" %}Backfill is persisted{% elif run.status == "failed" %}Worker stopped with an error{% elif run.started_at %}Worker is processing broker history{% elif run_payload.accepted_at %}Worker received the task; execution has not started yet{% else %}Waiting for worker receipt{% endif %}{% else %}No initial backfill run exists{% endif %}</em></div>
+    <div class="rb-summary-item rb-summary-status"><span>STATUS</span><strong data-status-large>{% if run_payload %}{{ run_payload.status_label }}{% else %}Not started{% endif %}</strong><em data-status-sub>{% if run %}{% if run.status == "completed" %}Backfill is persisted{% elif run.status == "failed" %}Worker stopped with an error{% elif run.started_at %}Worker is processing broker history{% elif run_payload.accepted_at %}Worker received the task; execution has not started yet{% else %}Waiting for worker receipt{% endif %}{% else %}No backfill execution exists{% endif %}</em></div>
     <div class="rb-summary-item"><span>DURATION</span><strong data-duration>{% if run_payload and run_payload.started_at %}{{ run_payload.duration_seconds }}s{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>REQUESTED</span><strong data-requested>{% if run %}{{ run.requested_at|date:"d/m/Y, H:i:s" }}{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>STARTED</span><strong data-started>{% if run and run.started_at %}{{ run.started_at|date:"d/m/Y, H:i:s" }}{% else %}—{% endif %}</strong></div>
@@ -146,7 +146,7 @@
     <div class="rb-log-head"><span>Operation logs</span><span data-log-count>{% if run_payload %}{{ run_payload.event_count }} lines{% else %}0 lines{% endif %}</span></div>
     <div class="rb-log-body" data-log-body aria-live="polite">
       {% if not run %}
-      <div class="rb-log-empty">No initial run exists. Start the backfill above to create durable dispatch and worker log events.</div>
+      <div class="rb-log-empty">No backfill execution exists. Start one above to create durable dispatch and worker log events.</div>
       {% elif not run_payload.event_count %}
       <div class="rb-log-empty">No durable operator events have been recorded for this run.</div>
       {% endif %}
