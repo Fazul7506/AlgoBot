@@ -22,6 +22,7 @@
 {% endblock %}
 {% block extra_js %}<script>
 (()=> {
+  const boot = () => {
   const $=s=>document.querySelector(s);
   const apiBase=(document.querySelector('meta[name="algobot-api-base"]')?.content||window.location.origin).replace(/\/$/,'');
   const csrf=()=>{const c=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);return c?decodeURIComponent(c[1]):document.querySelector('meta[name="csrf-token"]')?.content||''};
@@ -80,6 +81,9 @@
     try{await api('/billing/cancel-subscription/',{method:'POST',body:'{}'});await load();}catch(e){showError(e.message);}
   };
   load();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true});
+  else boot();
 })();
 </script>
 {% endblock %}
