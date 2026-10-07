@@ -25,9 +25,7 @@
     status.textContent = 'Loading…'; status.className = 'ds-status ds-status--pending'; refresh.disabled = true;
     grid.innerHTML = '<div class="hm-empty">Refreshing market intelligence…</div>';
     try {
-      const response = await fetch(`/api/market/indicator-dashboard/heatmap/?timeframe=${encodeURIComponent(timeframe.value)}`, {credentials:'same-origin', headers:{Accept:'application/json'}});
-      if (!response.ok) throw new Error(`Heatmap request failed (${response.status})`);
-      const rows = await response.json();
+      const rows = await window.AlgoBotFrontendData.request(`/api/market/indicator-dashboard/heatmap/?timeframe=${encodeURIComponent(timeframe.value)}`, {}, 10000);
       if (!Array.isArray(rows) || !rows.length) { grid.innerHTML = '<div class="hm-empty">No active market data is available for this timeframe.</div>'; status.textContent = 'No data'; status.className='ds-status ds-status--degraded'; return; }
       grid.innerHTML = rows.map(row => {
         const value = score(row); const pct = Math.round(Math.abs(value) * 100); const rsi = Number(row.rsi); const confidence = Number(row.confidence);
