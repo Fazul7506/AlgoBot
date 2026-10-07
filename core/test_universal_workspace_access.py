@@ -149,6 +149,37 @@ class UniversalWorkspaceAccessTests(TestCase):
                 name,
             )
 
+
+    def test_shared_component_styles_and_transport_contracts_are_canonical(self):
+        response = self.client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode("utf-8")
+        self.assertIn("css/shared_components.css?v=20261008-components1", html)
+        self.assertIn('href="#app-content"', html)
+        self.assertNotIn('href="#main-content"', html)
+
+        from pathlib import Path
+        live_ui = (Path(settings.BASE_DIR) / "static" / "js" / "live_broker_ui.js").read_text(encoding="utf-8")
+        self.assertIn("return request(url, options, timeout);", live_ui)
+        self.assertNotIn("return canonicalRequest(url, options, timeout);", live_ui)
+        self.assertNotIn("document.createElement('style')", live_ui)
+
+        recovery = (Path(settings.BASE_DIR) / "static" / "js" / "core" / "workspace_recovery.js").read_text(encoding="utf-8")
+        switcher = (Path(settings.BASE_DIR) / "static" / "js" / "terminal_strategy_switcher.js").read_text(encoding="utf-8")
+        self.assertNotIn("document.createElement('style')", recovery)
+        self.assertNotIn("document.createElement('style')", switcher)
+
+    def test_shared_page_components_no_longer_embed_layout_style_blocks(self):
+        from pathlib import Path
+        for relative in (
+            "templates/components/enterprise_page.html",
+            "templates/core/audit_log.html",
+            "templates/core/bot_runtime.html",
+        ):
+            content = (Path(settings.BASE_DIR) / relative).read_text(encoding="utf-8")
+            self.assertNotIn("<style", content.lower(), relative)
+            self.assertNotIn(" style=", content.lower(), relative)
+
     def test_frontend_static_asset_contract_remains_present(self):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
