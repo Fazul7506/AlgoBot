@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from uuid import uuid4
 
 from .constants import SUPPORTED_MARKETS, TIMEFRAMES
 
@@ -108,7 +109,12 @@ class MarketStatistics(models.Model):
 
 
 class CandleBackfillRun(models.Model):
-    """Durable control record for the one-time historical warm-up job."""
+    """Durable record for one historical candle-backfill execution.
+
+    ``scope`` identifies the execution family (for example ``initial`` or
+    ``research``); it is intentionally non-unique so every execution keeps
+    its own immutable history and event stream.
+    """
 
     STATUS_CHOICES = [
         ("running", "Running"),
@@ -116,7 +122,8 @@ class CandleBackfillRun(models.Model):
         ("failed", "Failed"),
     ]
 
-    scope = models.CharField(max_length=32, unique=True, default="initial")
+    scope = models.CharField(max_length=32, default="initial", db_index=True)
+    run_key = models.UUIDField(default=uuid4, unique=True, editable=False, db_index=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="running", db_index=True)
     count = models.PositiveIntegerField(default=5000)
     symbol = models.CharField(max_length=40, blank=True)
@@ -142,6 +149,10 @@ class CandleBackfillRun(models.Model):
 
     class Meta:
         ordering = ["-requested_at"]
+        indexes = [
+            models.Index(fields=["scope", "status", "-requested_at"]),
+            models.Index(fields=["scope", "-requested_at"]),
+        ]
 
     def __str__(self):
         return f"{self.scope}:{self.status}"
