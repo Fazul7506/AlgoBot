@@ -201,3 +201,5 @@
 .rb-history-status[data-state="completed"]{background:rgba(34,197,94,.12)}.rb-history-status[data-state="failed"]{background:rgba(239,68,68,.12)}.rb-history-status[data-state="running"]{background:rgba(59,130,246,.12)}
 .rb-history-empty{text-align:center!important;padding:28px!important;opacity:.65}
 @media (max-width:760px){.rb-history-head{padding:16px;flex-direction:column}.rb-history-table{min-width:780px}.rb-history-table-wrap{max-height:360px}}
+
+[data-progress-bar]{width:0;}
