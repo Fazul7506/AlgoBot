@@ -132,7 +132,7 @@ def _mark_unknown_candle_backfill_delivery(task_id, message):
 
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().filter(
-                scope="initial", status="running", task_id=str(task_id)
+                status="running", task_id=str(task_id)
             ).first()
             if not run:
                 return
@@ -158,7 +158,10 @@ def _mark_unknown_candle_backfill_delivery(task_id, message):
 
 @task_unknown.connect
 def _record_candle_backfill_unknown_task(sender=None, name=None, id=None, **kwargs):
-    if name != "apps.market_data.tasks.run_initial_candle_backfill":
+    if name not in {
+        "apps.market_data.tasks.run_initial_candle_backfill",
+        "apps.market_data.tasks.backfill_research_candles",
+    }:
         return
     _mark_unknown_candle_backfill_delivery(
         id,
@@ -171,7 +174,10 @@ def _record_candle_backfill_rejected_task(sender=None, message=None, **kwargs):
     headers = getattr(message, "headers", {}) or {}
     properties = getattr(message, "properties", {}) or {}
     task_name = headers.get("task") or properties.get("type")
-    if task_name != "apps.market_data.tasks.run_initial_candle_backfill":
+    if task_name not in {
+        "apps.market_data.tasks.run_initial_candle_backfill",
+        "apps.market_data.tasks.backfill_research_candles",
+    }:
         return
     task_id = headers.get("id") or properties.get("correlation_id")
     _mark_unknown_candle_backfill_delivery(
