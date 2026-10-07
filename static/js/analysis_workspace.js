@@ -12,28 +12,12 @@
   const A = {markets:[],data:null,contract:null,timer:null};
 
   async function request(path, options={}) {
-    const timeoutMs = 12000;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      // Analysis is served by the same canonical Django application as the
-      // page. Prefer same-origin GETs so a separate API hostname/CORS failure
-      // cannot leave the research workspace waiting forever.
-      const r = await fetch(new URL(path, window.location.origin), {
-        method: "GET",
-        credentials: "same-origin",
-        headers: {"Accept":"application/json",...(options.headers||{})},
-        signal: controller.signal
-      });
-      let p={}; try{p=await r.json()}catch(_){}
-      if(!r.ok) throw new Error(p?.message || p?.detail || p?.error?.detail || `HTTP ${r.status} request failure`);
-      return p;
-    } catch (error) {
-      if (error?.name === "AbortError") throw new Error("Analysis request timed out after 12s.");
-      throw error;
-    } finally {
-      clearTimeout(timer);
-    }
+    const client = window.AlgoBotAPI?.apiClient;
+    if (client) return client.get(path, {credentials:"include", __algoTimeoutMs:12000});
+    const r = await fetch(path,{credentials:"same-origin",headers:{"Accept":"application/json","Content-Type":"application/json",...(options.headers||{})},...options});
+    let p={}; try{p=await r.json()}catch(_){}
+    if(!r.ok) throw new Error(p?.message || p?.error?.detail || `HTTP ${r.status} request failure`);
+    return p;
   }
   function set(id,v){const e=$(id);if(e)e.textContent=v==null||v===""?"—":v}
   function list(id,items,fn,empty="No observed evidence."){const e=$(id);if(e)e.innerHTML=items?.length?items.map(fn).join(""):'<span class="muted">'+esc(empty)+"</span>"}
@@ -91,7 +75,7 @@
       if(d.status==="error")throw new Error(d.message||"Analysis unavailable");
       render(d);$("loadState").textContent="Updated "+new Date().toLocaleTimeString();
     }catch(e){
-      $("loadState").textContent=e.message||"Analysis unavailable";setHealth(false,"UNAVAILABLE");
+      $("loadState").textContent=e?.message||"Analysis unavailable";setHealth(false,"UNAVAILABLE");
       $("researchState").textContent="UNAVAILABLE";$("brokerState").textContent="BROKER UNAVAILABLE";
     }
   }
