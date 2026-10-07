@@ -192,115 +192,166 @@ def symbol_detail(request, symbol):
     return render(request, "market_data/symbol_detail.html", {"symbol": symbol})
 
 
+def _history_payload(limit=50):
+    runs = CandleBackfillRun.objects.order_by("-requested_at", "-id")[:limit]
+    return [_run_payload(run) for run in runs]
+
+
+def _run_from_request(request):
+    run_id = (request.GET.get("run_id") or "").strip()
+    if run_id:
+        try:
+            return CandleBackfillRun.objects.filter(pk=int(run_id)).first()
+        except ValueError:
+            return None
+    return CandleBackfillRun.objects.order_by("-requested_at", "-id").first()
+
+
+def _reset_run_for_dispatch(run, *, count, symbol, requested_by, trigger):
+    now = timezone.now()
+    run.status = "running"
+    run.count = count
+    run.symbol = symbol
+    run.task_id = ""
+    run.requested_by = requested_by
+    run.requested_at = now
+    run.started_at = None
+    run.dispatch_at = None
+    run.accepted_at = None
+    run.last_heartbeat_at = None
+    run.current_symbol = ""
+    run.current_timeframe = ""
+    run.worker_hostname = ""
+    run.completed_at = None
+    run.result = {
+        "symbols_total": 0,
+        "symbols_completed": 0,
+        "symbols_succeeded": 0,
+        "symbols_failed": 0,
+        "percent": 0,
+        "work_total": 0,
+        "work_completed": 0,
+        "work_percent": 0,
+        "results": {},
+        "trigger": trigger,
+    }
+    run.error = ""
+    run.save()
+    CandleBackfillRun.objects.filter(pk=run.pk).update(requested_at=now)
+    run.refresh_from_db()
+    return run
+
+
+def _dispatch_backfill(run, *, task, count, symbol, queue_name, task_id, trigger):
+    run.task_id = task_id
+    run.dispatch_at = timezone.now()
+    run.save(update_fields=["task_id", "dispatch_at"])
+    CandleBackfillEvent.objects.create(
+        run=run,
+        level="notice",
+        event_type="dispatch",
+        message=f"{trigger.title()} backfill requested; publishing to the Celery market-data worker.",
+        symbol=symbol,
+        task_id=task_id,
+        payload={"count": count, "queue": queue_name, "trigger": trigger},
+    )
+    try:
+        published = task.apply_async(
+            args=(run.pk,),
+            kwargs={"count": count, "symbol": symbol or None},
+            queue=queue_name,
+            task_id=task_id,
+        )
+        CandleBackfillEvent.objects.create(
+            run=run,
+            level="info",
+            event_type="dispatch",
+            message=f"Celery accepted the publish request: {published.id}",
+            symbol=symbol,
+            task_id=task_id,
+            payload={"queue": queue_name, "trigger": trigger},
+        )
+        return True
+    except Exception as exc:
+        run.status = "failed"
+        run.error = f"Unable to dispatch Celery task: {exc}"
+        run.completed_at = timezone.now()
+        run.save(update_fields=["status", "error", "completed_at"])
+        CandleBackfillEvent.objects.create(
+            run=run,
+            level="error",
+            event_type="error",
+            message=run.error,
+            task_id=task_id,
+            payload={"queue": queue_name, "terminal": True, "trigger": trigger},
+        )
+        return False
+
+
 def initial_candle_backfill(request):
-    """Staff-only control page for broker-authoritative historical candle backfill."""
+    """Staff-only control plane for every broker-authoritative candle-backfill execution."""
     if not request.user.is_authenticated:
         return redirect_to_login(request.get_full_path())
     if not _staff_required(request.user):
         raise PermissionDenied
 
     if request.method == "POST":
+        scope = (request.POST.get("scope") or "initial").strip().lower()
+        if scope not in {"initial", "research"}:
+            scope = "initial"
+        count = BACKFILL_COUNT if scope == "initial" else 250
+        symbol = (request.POST.get("symbol") or "").strip()
+        eligible = MarketSymbol.objects.filter(
+            broker__iexact="deriv",
+            is_active=True,
+            is_tradable=True,
+        )
+        if symbol and not eligible.filter(symbol=symbol).exists():
+            if request.GET.get("format") == "json":
+                return JsonResponse({"error": "Selected symbol is not an active, tradable Deriv market symbol."}, status=400)
+            return redirect(f"{reverse('initial_candle_backfill')}?error=invalid-symbol")
+
         with transaction.atomic():
-            run = CandleBackfillRun.objects.select_for_update().filter(scope="initial").first()
-            if run and run.status in {"running", "completed"}:
-                return redirect(reverse("initial_candle_backfill"))
-            count = BACKFILL_COUNT
-            symbol = (request.POST.get("symbol") or "").strip()
-            eligible = MarketSymbol.objects.filter(
-                broker__iexact="deriv",
-                is_active=True,
-                is_tradable=True,
+            active = CandleBackfillRun.objects.select_for_update().filter(
+                scope=scope, status="running"
+            ).order_by("-requested_at", "-id").first()
+            if active:
+                return redirect(f"{reverse('initial_candle_backfill')}?run_id={active.pk}")
+            run = CandleBackfillRun.objects.create(scope=scope)
+            _reset_run_for_dispatch(
+                run,
+                count=count,
+                symbol=symbol,
+                requested_by=request.user,
+                trigger="manual",
             )
-            if symbol and not eligible.filter(symbol=symbol).exists():
-                return JsonResponse(
-                    {"error": "Selected symbol is not an active, tradable Deriv market symbol."},
-                    status=400,
-                ) if request.GET.get("format") == "json" else redirect(
-                    f"{reverse('initial_candle_backfill')}?error=invalid-symbol"
-                )
-            if run is None:
-                run = CandleBackfillRun(scope="initial")
-            now = timezone.now()
-            run.status = "running"
-            run.count = count
-            run.symbol = symbol
-            run.task_id = ""
-            run.requested_by = request.user
-            run.requested_at = now
-            run.started_at = None
-            run.dispatch_at = None
-            run.accepted_at = None
-            run.last_heartbeat_at = None
-            run.current_symbol = ""
-            run.current_timeframe = ""
-            run.worker_hostname = ""
-            run.completed_at = None
-            run.result = {
-                "symbols_total": 0,
-                "symbols_completed": 0,
-                "symbols_succeeded": 0,
-                "symbols_failed": 0,
-                "percent": 0,
-                "results": {},
-                "trigger": "manual",
-            }
-            run.error = ""
-            run.save()
-            # requested_at uses auto_now_add, so an existing failed run cannot
-            # be restarted with a new request timestamp through Model.save().
-            CandleBackfillRun.objects.filter(pk=run.pk).update(
-                requested_at=now,
-            )
-            run.refresh_from_db()
 
         queue_name = "market_data"
-        dispatch_message = "Manual backfill requested; publishing to the Celery market-data worker."
-        CandleBackfillEvent.objects.create(
-            run=run,
-            level="notice",
-            event_type="dispatch",
-            message=dispatch_message,
-            symbol=symbol,
-            payload={"count": count, "queue": queue_name},
-        )
-
-        from .tasks import run_initial_candle_backfill
         task_id = uuid4().hex
-        run.task_id = task_id
-        run.dispatch_at = timezone.now()
-        run.save(update_fields=["task_id", "dispatch_at"])
-        try:
-            task = run_initial_candle_backfill.apply_async(
-                args=(run.pk,),
-                kwargs={"count": count, "symbol": symbol or None},
-                queue=queue_name,
-                task_id=task_id,
-            )
-            CandleBackfillEvent.objects.create(
-                run=run,
-                level="info",
-                event_type="dispatch",
-                message=f"Celery accepted the publish request: {task_id}",
+        if scope == "initial":
+            from .tasks import run_initial_candle_backfill
+            dispatched = _dispatch_backfill(
+                run,
+                task=run_initial_candle_backfill,
+                count=count,
                 symbol=symbol,
+                queue_name=queue_name,
                 task_id=task_id,
-                payload={"queue": queue_name},
+                trigger="manual",
             )
-        except Exception as exc:
-            run.status = "failed"
-            run.error = f"Unable to dispatch Celery task: {exc}"
-            run.completed_at = timezone.now()
-            run.save(update_fields=["status", "error", "completed_at"])
-            CandleBackfillEvent.objects.create(
-                run=run,
-                level="error",
-                event_type="error",
-                message=run.error,
-                payload={"queue": "market_data"},
+        else:
+            from .tasks import run_research_candle_backfill
+            dispatched = _dispatch_backfill(
+                run,
+                task=run_research_candle_backfill,
+                count=count,
+                symbol=symbol,
+                queue_name=queue_name,
+                task_id=task_id,
+                trigger="manual",
             )
-        return redirect(reverse("initial_candle_backfill"))
+        return redirect(f"{reverse('initial_candle_backfill')}?run_id={run.pk}")
 
-    initial = CandleBackfillRun.objects.filter(scope="initial").first()
-    research_run = CandleBackfillRun.objects.filter(scope="research").first()
     eligible_symbols = list(
         MarketSymbol.objects.filter(
             broker__iexact="deriv",
@@ -320,6 +371,7 @@ def initial_candle_backfill(request):
     ]
     backfill_config = {
         "count": BACKFILL_COUNT,
+        "research_count": 250,
         "eligible_symbol_count": len(eligible_symbols),
         "native_timeframes": native_timeframes,
         "tick_derived_timeframes": tick_derived_timeframes,
@@ -345,42 +397,65 @@ def initial_candle_backfill(request):
             "Durable lifecycle telemetry",
             "Controlled automatic recovery",
         ],
-
     }
+
+    history = list(CandleBackfillRun.objects.order_by("-requested_at", "-id")[:50])
+    selected = _run_from_request(request)
+    if selected is None and history:
+        selected = history[0]
+
     if request.GET.get("format") == "json":
-        scope = request.GET.get("scope", "initial")
-        run = initial if scope == "initial" else research_run
+        try:
+            limit = min(max(int(request.GET.get("history_limit", "50") or 50), 1), 100)
+        except ValueError:
+            limit = 50
+        selected = _run_from_request(request)
+        if selected is None:
+            selected = CandleBackfillRun.objects.order_by("-requested_at", "-id").first()
         payload = {
-            "initial": _run_payload(initial),
-            "research": _run_payload(research_run),
+            "selected": _run_payload(selected),
+            "history": [_run_payload(run) for run in CandleBackfillRun.objects.order_by("-requested_at", "-id")[:limit]],
+            "initial": _run_payload(CandleBackfillRun.objects.filter(scope="initial").order_by("-requested_at", "-id").first()),
+            "research": _run_payload(CandleBackfillRun.objects.filter(scope="research").order_by("-requested_at", "-id").first()),
             "events": [],
             "events_last_id": 0,
             "config": backfill_config,
         }
-        if run:
+        if selected:
             try:
                 after = max(0, int(request.GET.get("after", "0") or 0))
             except ValueError:
                 after = 0
             try:
-                limit = min(max(int(request.GET.get("limit", "200") or 200), 1), 500)
+                limit_events = min(max(int(request.GET.get("limit", "200") or 200), 1), 500)
             except ValueError:
-                limit = 200
-            events = CandleBackfillEvent.objects.filter(run=run)
+                limit_events = 200
+            events = CandleBackfillEvent.objects.filter(run=selected)
             query = (request.GET.get("q") or "").strip()
             level = (request.GET.get("level") or "").strip().lower()
             if query:
                 from django.db.models import Q
-                events = events.filter(Q(message__icontains=query) | Q(symbol__icontains=query) | Q(timeframe__icontains=query) | Q(level__icontains=query))
+                events = events.filter(
+                    Q(message__icontains=query)
+                    | Q(symbol__icontains=query)
+                    | Q(timeframe__icontains=query)
+                    | Q(level__icontains=query)
+                )
             if level in {"info", "notice", "warning", "error", "success"}:
                 events = events.filter(level=level)
             if after:
                 events = events.filter(id__gt=after)
-            events = list(events.order_by("id")[:limit])
+            events = list(events.order_by("id")[:limit_events])
             payload["events"] = [{
-                "id": event.id, "timestamp": event.created_at.isoformat(), "level": event.level,
-                "type": event.event_type, "message": event.message, "symbol": event.symbol,
-                "timeframe": event.timeframe, "task_id": event.task_id, "worker": event.worker_hostname,
+                "id": event.id,
+                "timestamp": event.created_at.isoformat(),
+                "level": event.level,
+                "type": event.event_type,
+                "message": event.message,
+                "symbol": event.symbol,
+                "timeframe": event.timeframe,
+                "task_id": event.task_id,
+                "worker": event.worker_hostname,
                 "payload": event.payload,
             } for event in events]
             payload["events_last_id"] = events[-1].id if events else after
@@ -389,6 +464,7 @@ def initial_candle_backfill(request):
         response["Pragma"] = "no-cache"
         response["Expires"] = "0"
         return response
+
     page_error = (
         "Selected symbol is not an active, tradable Deriv market symbol."
         if request.GET.get("error") == "invalid-symbol"
@@ -398,9 +474,11 @@ def initial_candle_backfill(request):
         request,
         "market_data/candle_backfill.html",
         {
-            "run": initial,
-            "run_payload": _run_payload(initial),
-            "research_run": research_run,
+            "run": selected,
+            "run_payload": _run_payload(selected),
+            "history": history,
+            "history_payload": [_run_payload(run) for run in history],
+            "research_run": CandleBackfillRun.objects.filter(scope="research").order_by("-requested_at", "-id").first(),
             "eligible_symbols": eligible_symbols,
             "backfill_config": backfill_config,
             "page_error": page_error,
