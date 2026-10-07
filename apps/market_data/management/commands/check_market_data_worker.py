@@ -49,6 +49,11 @@ class Command(BaseCommand):
 
         from deriv_platform.celery import app
 
+        # Celery loads CELERY_IMPORTS during worker boot. This management
+        # command runs before that boot phase, so explicitly import the
+        # production market-data task module before inspecting the registry.
+        app.loader.import_task_module("apps.market_data.tasks")
+
         registered = set(app.tasks)
         if REQUIRED_TASK not in registered:
             raise CommandError(
