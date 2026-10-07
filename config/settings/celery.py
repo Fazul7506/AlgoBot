@@ -5,6 +5,8 @@ request timeout. Publishing is deliberately bounded and non-retrying for web
 requests, while dedicated workers may reconnect normally.
 """
 
+import os
+
 from kombu import Queue
 
 from .cache import CELERY_BROKER_URL, CELERY_RESULT_BACKEND
@@ -13,7 +15,7 @@ from .utils import env_bool
 USE_CELERY = env_bool("USE_CELERY", True)
 
 CELERY_BROKER_CONNECTION_TIMEOUT = 3
-CELERY_BROKER_POOL_LIMIT = max(1, int(__import__("os").environ.get("CELERY_BROKER_POOL_LIMIT", "2")))
+CELERY_BROKER_POOL_LIMIT = max(1, int(os.environ.get("CELERY_BROKER_POOL_LIMIT", "2")))
 CELERY_BROKER_CONNECTION_RETRY = env_bool("CELERY_WORKER_BROKER_RETRY", False)
 CELERY_BROKER_CONNECTION_MAX_RETRIES = None if CELERY_BROKER_CONNECTION_RETRY else 0
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = env_bool(
@@ -35,7 +37,7 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
     # a still-running late-ack task before its durable heartbeat/recovery logic
     # can make a decision.
     "visibility_timeout": 4 * 60 * 60,
-    "max_connections": max(1, int(__import__("os").environ.get("CELERY_REDIS_MAX_CONNECTIONS", "4"))),
+    "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "4"))),
 }
 CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
     "visibility_timeout": 4 * 60 * 60,
