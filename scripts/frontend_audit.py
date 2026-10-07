@@ -38,6 +38,12 @@ def main() -> int:
 
     for path in templates:
         content = text(path)
+        style_blocks = len(re.findall(r"<style\\b", content, flags=re.I))
+        inline_styles = len(re.findall(r"\\sstyle\\s*=", content, flags=re.I))
+        if style_blocks:
+            findings.append(f"WARN embedded <style> block(s) in {path.relative_to(ROOT)}: {style_blocks}")
+        if inline_styles:
+            findings.append(f"WARN inline style attribute(s) in {path.relative_to(ROOT)}: {inline_styles}")
         for element_id in ID_RE.findall(content):
             duplicate_ids[element_id].append(str(path.relative_to(ROOT)))
 
@@ -55,6 +61,9 @@ def main() -> int:
             findings.append("WARN exact duplicate CSS files: " + ", ".join(paths))
 
     for path in js_files:
+        source = text(path)
+        if "document.createElement('style')" in source or 'document.createElement("style")' in source:
+            findings.append(f"WARN runtime CSS injection in {path.relative_to(ROOT)}")
         stripped = re.sub(r"/\*.*?\*/", "", text(path), flags=re.S)
         stripped = re.sub(r"//.*", "", stripped).strip()
         if not stripped:
