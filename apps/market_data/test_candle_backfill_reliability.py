@@ -168,6 +168,52 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertEqual(run.result["percent"], 100.0)
         self.assertIn("R_100", run.error)
 
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+    @patch("apps.market_data.historical.fetch_and_store_all_timeframes")
+    def test_timeframe_started_heartbeat_does_not_fake_completion(self, fetch):
+        from .tasks import _backfill_timeframe_progress
+
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="running",
+            count=5000,
+            result={"work_total": 12, "work_completed": 0},
+        )
+        _backfill_timeframe_progress("initial", "R_100", "2h", {"status": "started"})
+        run.refresh_from_db()
+        self.assertEqual(run.result["work_completed"], 0)
+        self.assertEqual(run.result["current_timeframe_status"], "started")
+        self.assertEqual(run.current_timeframe, "2h")
+        self.assertIsNotNone(run.last_heartbeat_at)
+
+        _backfill_timeframe_progress("initial", "R_100", "2h", {"source": "deriv_candles"})
+        run.refresh_from_db()
+        self.assertEqual(run.result["work_completed"], 1)
+        self.assertEqual(run.result["current_timeframe_status"], "completed")
+
+    def test_running_backfill_recovers_after_ten_minutes_without_heartbeat(self):
+        run = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="running",
+            count=5000,
+            started_at=timezone.now() - timedelta(minutes=11),
+            task_id="stalled-worker-task",
+        )
+        CandleBackfillRun.objects.filter(pk=run.pk).update(
+            last_heartbeat_at=timezone.now() - timedelta(minutes=11),
+        )
+
+        with patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async") as publish:
+            publish.return_value.id = "ignored-celery-generated-id"
+            result = reconcile_candle_backfill_runs(max_age_seconds=300)
+
+        run.refresh_from_db()
+        self.assertEqual(result["recovered"][0]["scope"], "initial")
+        self.assertEqual(run.status, "running")
+        self.assertTrue(run.task_id)
+        self.assertIsNone(run.started_at)
+        publish.assert_called_once()
+
     def test_worker_received_signal_persists_acceptance_before_task_start(self):
         from .tasks import _record_candle_backfill_worker_received
 
