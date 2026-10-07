@@ -407,7 +407,7 @@ def initial_candle_backfill(request):
 
     if request.GET.get("format") == "json":
         try:
-            limit = min(max(int(request.GET.get("history_limit", "50") or 50), 1), 100)
+            limit = min(max(int(request.GET.get("history_limit", "50") or 50), 1), 500)
         except ValueError:
             limit = 50
         selected = _run_from_request(request)
