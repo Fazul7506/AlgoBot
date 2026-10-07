@@ -21,7 +21,7 @@
 </style>
 <script>
 (()=>{const $=id=>document.getElementById(id);
-const get=async u=>{const r=await fetch(u,{credentials:'same-origin',headers:{Accept:'application/json'}});if(!r.ok)throw Error(`HTTP ${r.status}`);return r.json()};
+const get=async u=>window.AlgoBotFrontendData.request(u,{},10000);
 function render(d){const s=d.summary;$('healthy').textContent=s.healthy;$('degraded').textContent=s.degraded;$('down').textContent=s.down;$('critical').textContent=s.critical_events;$('errors').textContent=s.errors;$('updated').textContent=new Date(d.timestamp).toLocaleTimeString();
 const good=s.down===0;$('overall').textContent=good?(s.degraded?'Operational · degraded':'All systems operational'):'Incident detected';$('overall').className='overall '+(good?'ok':'bad');
 $('health-count').textContent=`${d.health.length} components`;const critical=['Trading Engine','Broker Connectivity','Database','Task Worker','WebSocket','Risk Engine'];
