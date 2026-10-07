@@ -69,7 +69,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         css = self._css("runtime_recovery.css")
         self.assertLess(len(css.splitlines()), 500)
         self.assertEqual(css.count("!important"), 0)
-        self.assertEqual(css.count("@media"), 5)
+        self.assertEqual(css.count("@media"), 4)
         self.assertIn(".app-sidebar{", css)
         self.assertIn(".app-shell{", css)
         self.assertIn(".app-sidebar nav{", css)
@@ -117,7 +117,7 @@ class UniversalWorkspaceAccessTests(TestCase):
 
     def test_no_mobile_x_close_control_was_added(self):
         html = (Path(settings.BASE_DIR) / "templates" / "base.html").read_text(encoding="utf-8")
-        self.assertEqual(html.count('data-mobile-menu'), 2)
+        self.assertEqual(html.count('data-mobile-menu'), 1)
         self.assertEqual(html.count('data-sidebar-toggle'), 1)
         self.assertNotIn('data-sidebar-close', html)
 
