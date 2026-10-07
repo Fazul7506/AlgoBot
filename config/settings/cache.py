@@ -46,6 +46,16 @@ USE_REDIS = _dotenv_value("USE_REDIS", "false").strip().lower() in {
 CELERY_BROKER_URL = _dotenv_value("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = _dotenv_value("CELERY_RESULT_BACKEND", REDIS_URL)
 
+# Render Redis plans have finite client limits. Never let redis-py use its
+# effectively-unbounded default pool, because each web/worker process can then
+# consume the entire Redis client budget and take the API down before a view is
+# reached (DRF throttling uses this cache during request initialization).
+try:
+    REDIS_CACHE_MAX_CONNECTIONS = max(1, int(_dotenv_value("REDIS_CACHE_MAX_CONNECTIONS", "4")))
+except (TypeError, ValueError):
+    REDIS_CACHE_MAX_CONNECTIONS = 4
+REDIS_CACHE_HEALTH_CHECK_INTERVAL = max(0, int(_dotenv_value("REDIS_CACHE_HEALTH_CHECK_INTERVAL", "30")))
+
 CACHES = {
     "default": {
         "BACKEND": (
@@ -60,6 +70,8 @@ CACHES = {
                 "CONNECTION_POOL_KWARGS": {
                     "socket_connect_timeout": 5,
                     "socket_timeout": 5,
+                    "max_connections": REDIS_CACHE_MAX_CONNECTIONS,
+                    "health_check_interval": REDIS_CACHE_HEALTH_CHECK_INTERVAL,
                 },
             }
             if USE_REDIS
