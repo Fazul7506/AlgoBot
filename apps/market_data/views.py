@@ -340,10 +340,10 @@ def initial_candle_backfill(request):
                 trigger="manual",
             )
         else:
-            from .tasks import run_research_candle_backfill
+            from .tasks import backfill_research_candles
             dispatched = _dispatch_backfill(
                 run,
-                task=run_research_candle_backfill,
+                task=backfill_research_candles,
                 count=count,
                 symbol=symbol,
                 queue_name=queue_name,
