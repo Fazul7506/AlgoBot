@@ -19,7 +19,7 @@
         retryable: true
       }));
     }
-    return canonicalRequest(url, options, timeout);
+    return request(url, options, timeout);
   };
 
   const typeOf = a => String(a?.account_type || a?.credentials?.account_type || 'demo').toLowerCase();
@@ -32,23 +32,6 @@
       ? `<img class="${cls}" src="${safe(url)}" alt="${safe(name)} avatar" loading="lazy" referrerpolicy="no-referrer">`
       : `<span class="${cls}">${safe(name[0]?.toUpperCase() || 'B')}</span>`;
   };
-
-  function styles() {
-    if ($('#algobot-account-style')) return;
-    const s = document.createElement('style');
-    s.id = 'algobot-account-style';
-    s.textContent = `
-      .sidebar-user{position:relative!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:10px!important;align-items:center!important;width:100%!important;box-sizing:border-box;padding:14px 0 0!important;margin-top:14px!important;border-top:1px solid var(--line)}
-      .algobot-sidebar-account{display:grid;width:100%;min-width:0;box-sizing:border-box;background:linear-gradient(180deg,#10233dcc,#0b1728ee);border:1px solid var(--line);border-radius:16px;padding:14px;position:relative;overflow:visible}
-      .algobot-account-summary{display:flex;align-items:center;gap:9px;min-width:0;font-size:12px}.algobot-account-avatar{width:34px;height:34px;flex:0 0 34px;border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;justify-content:center;background:#132a49;border:1px solid var(--line);font-weight:800}.algobot-account-avatar.small{width:32px;height:32px;flex-basis:32px}.algobot-account-copy{display:grid;min-width:0;line-height:1.25}.algobot-account-copy strong,.algobot-account-copy span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.algobot-account-copy span{color:var(--muted);font-size:11px}.algobot-account-fresh{color:var(--muted);font-size:10px;margin-top:6px}.algobot-account-error{color:var(--muted);font-size:11px}
-      .algobot-account-switch{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%;border:1px solid var(--line);background:#132a49;color:var(--text);border-radius:9px;padding:8px 10px;margin-top:9px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;text-decoration:none}.algobot-account-switch:disabled{opacity:.5;cursor:not-allowed}.algobot-switch-avatar{width:18px;height:18px;border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;justify-content:center;background:#07111f;border:1px solid var(--line);font-size:9px;font-weight:800}
-      .sidebar-user-actions{position:static!important;display:flex!important;align-items:center!important;justify-content:center!important;width:40px!important;height:40px!important;padding:0!important;margin:0!important}.sidebar-user-actions form{margin:0!important;width:100%;height:100%}.sidebar-user-actions button{width:40px!important;height:40px!important;box-sizing:border-box;border:1px solid var(--line);background:#132a49;color:var(--text);border-radius:10px;cursor:pointer;display:grid;place-items:center;padding:0!important;text-decoration:none}.sidebar-user-actions button:hover{border-color:var(--accent);filter:brightness(1.12)}.sidebar-user-actions .material-symbols-rounded{font-size:19px;line-height:1}
-      .algobot-logout-backdrop{position:fixed;inset:0;z-index:9998;background:rgba(2,8,18,.68);backdrop-filter:blur(5px);display:grid;place-items:center;padding:20px}.algobot-logout-dialog{width:min(420px,calc(100vw - 40px));box-sizing:border-box;background:#0d1a2b;border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.45);padding:24px;color:var(--text)}.algobot-logout-dialog h2{margin:0 0 8px;font-size:18px}.algobot-logout-dialog p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}.algobot-logout-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}.algobot-logout-actions button{min-width:90px;padding:9px 14px;border-radius:10px;border:1px solid var(--line);background:#132a49;color:var(--text);cursor:pointer;text-decoration:none}.algobot-logout-actions .confirm{background:var(--accent);color:#07111f;border-color:var(--accent);font-weight:700}
-      .algobot-sidebar-account a,.algobot-sidebar-account button,.sidebar-user-actions button{text-decoration:none!important}
-      @media(max-width:800px){.sidebar-user{grid-template-columns:minmax(0,1fr) auto!important}.sidebar-user-actions{width:38px!important;height:38px!important}.sidebar-user-actions button{width:38px!important;height:38px!important}.algobot-logout-backdrop{padding:16px}}
-    `;
-    document.head.appendChild(s);
-  }
 
   function placeLogout() {
     const side = $('.sidebar-user');
@@ -66,7 +49,6 @@
 
   function mount() {
     ensureMaterialSymbols();
-    styles();
     const side = $('.sidebar-user');
     if (!side) return;
     side.querySelectorAll('[data-top-account],.algobot-top-account,.sidebar-account-duplicate,[data-duplicate-account],.broker-account-duplicate').forEach(n => n.remove());
