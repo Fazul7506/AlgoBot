@@ -457,7 +457,7 @@ def _mark_backfill_run(
     soft_time_limit=2 * 60 * 60,
     time_limit=2 * 60 * 60 + 5 * 60,
 )
-def backfill_research_candles(count=250, symbol=None, run_id=None):
+def backfill_research_candles(run_id=None, count=250, symbol=None):
     """Run one research backfill execution and retain its complete lifecycle history."""
     from django.db import close_old_connections
     from .models import CandleBackfillRun
