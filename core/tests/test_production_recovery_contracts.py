@@ -3,7 +3,7 @@ from pathlib import Path
 from django.test import SimpleTestCase
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class ProductionRecoveryContractTests(SimpleTestCase):
