@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # Keep the long-running broker-history queue deliberately below Deriv's shared
 # market-data request budget. The Render market-data worker is single-consumer.
 BACKFILL_REQUEST_INTERVAL_SECONDS = 0.75
-BACKFILL_RUNNING_STALE_AFTER = timedelta(minutes=60)
+BACKFILL_RUNNING_STALE_AFTER = timedelta(minutes=10)
 BACKFILL_DISPATCH_STALE_AFTER = timedelta(minutes=2)
 BACKFILL_RECEIVED_STALE_AFTER = timedelta(minutes=5)
 BACKFILL_MAX_RECOVERY_ATTEMPTS = 3
@@ -235,18 +235,24 @@ def _backfill_timeframe_progress(scope, symbol, timeframe, payload):
     from .models import CandleBackfillRun
 
     task_id = CandleBackfillRun.objects.filter(scope=scope).values_list("task_id", flat=True).first() or ""
-    failed = isinstance(payload, dict) and payload.get("status") == "failed"
+    payload = payload if isinstance(payload, dict) else {"value": str(payload)}
+    phase = payload.get("status")
+    failed = phase == "failed"
+    completed = phase != "started"
     with transaction.atomic():
         run = CandleBackfillRun.objects.select_for_update().filter(scope=scope).first()
         if run:
             result = dict(run.result or {})
-            completed = int(result.get("work_completed", 0) or 0) + 1
-            total = int(result.get("work_total", 0) or 0)
-            result["work_completed"] = completed
-            result["work_percent"] = round((completed / total) * 100, 1) if total else 0
+            if completed:
+                work_completed = int(result.get("work_completed", 0) or 0) + 1
+                total = int(result.get("work_total", 0) or 0)
+                result["work_completed"] = work_completed
+                result["work_percent"] = round((work_completed / total) * 100, 1) if total else 0
             result["current_symbol"] = symbol
             result["current_timeframe"] = timeframe
-            result["current_timeframe_status"] = "failed" if failed else "completed"
+            result["current_timeframe_status"] = (
+                "started" if phase == "started" else ("failed" if failed else "completed")
+            )
             run.result = result
             run.current_symbol = symbol
             run.current_timeframe = timeframe
