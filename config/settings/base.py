@@ -9,27 +9,27 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
-from config.settings.utils import get_bool_env, get_list_env
+from config.settings.utils import env_bool, env_list
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = os.getenv("SECRET_KEY", os.getenv("DJANGO_SECRET_KEY", "django-insecure-local-development-only"))
-DEBUG = get_bool_env("DEBUG", get_bool_env("DJANGO_DEBUG", True))
-ALLOW_LIVE_TRADING = get_bool_env("ALLOW_LIVE_TRADING", False)
-ENABLE_BROKER_ACCOUNT_SWITCH = get_bool_env("ENABLE_BROKER_ACCOUNT_SWITCH", True)
+DEBUG = env_bool("DEBUG", env_bool("DJANGO_DEBUG", True))
+ALLOW_LIVE_TRADING = env_bool("ALLOW_LIVE_TRADING", False)
+ENABLE_BROKER_ACCOUNT_SWITCH = env_bool("ENABLE_BROKER_ACCOUNT_SWITCH", True)
 
-ALLOWED_HOSTS = get_list_env("ALLOWED_HOSTS", ["127.0.0.1", "localhost", "testserver", "algobot.dpdns.org", "www.algobot.dpdns.org", "api.algobot.dpdns.org"])
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["127.0.0.1", "localhost", "testserver", "algobot.dpdns.org", "www.algobot.dpdns.org", "api.algobot.dpdns.org"])
 TIME_ZONE = os.getenv("TIME_ZONE", "UTC")
 LANGUAGE_CODE = "en-us"
 USE_I18N = True
 USE_TZ = True
-SECURE_SSL_REDIRECT = get_bool_env("SECURE_SSL_REDIRECT", False)
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", False)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SESSION_COOKIE_SECURE = get_bool_env("SESSION_COOKIE_SECURE", False)
-CSRF_COOKIE_SECURE = get_bool_env("CSRF_COOKIE_SECURE", False)
+SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", False)
+CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", False)
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_HTTPONLY = False
-CSRF_TRUSTED_ORIGINS = get_list_env("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"] if os.getenv("ALGO_API_BASE_URL") else [])
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"] if os.getenv("ALGO_API_BASE_URL") else [])
 CSRF_FAILURE_VIEW = "django.views.csrf.csrf_failure"
 
 INSTALLED_APPS = [
@@ -71,7 +71,7 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=1), "REFRESH_TOKEN_LIFETIME": timedelta(days=7), "ROTATE_REFRESH_TOKENS": True, "BLACKLIST_AFTER_ROTATION": True, "ALGORITHM": "HS256", "SIGNING_KEY": SECRET_KEY,
 }
 
-CORS_ALLOWED_ORIGINS = get_list_env(
+CORS_ALLOWED_ORIGINS = env_list(
     "CORS_ALLOWED_ORIGINS",
     ["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:8000", "http://localhost:8000", "https://algobot.dpdns.org", "https://www.algobot.dpdns.org"]
     if os.getenv("ALGO_API_BASE_URL")
