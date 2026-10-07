@@ -160,7 +160,7 @@ def _run_payload(run):
         "trigger": result.get("trigger", "manual"),
         "queue": result.get("queue", ""),
         "delivery_queue": delivery_queue,
-        "task_name": "apps.market_data.tasks.run_initial_candle_backfill",
+        "task_name": ("apps.market_data.tasks.run_initial_candle_backfill" if run.scope == "initial" else "apps.market_data.tasks.backfill_research_candles"),
         "recovery_attempts": int(result.get("dispatch_recovery_attempts", 0) or 0),
         "automatic_attempts": int(result.get("automatic_attempts", 0) or 0),
         "celery_state": _celery_state(run),
