@@ -184,3 +184,20 @@
 .rb-pipeline-arrow{align-self:center;color:#4f5b67;font-size:16px}
 @media(max-width:1050px){.rb-contract-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.rb-contract-card:nth-child(2){border-right:0}.rb-contract-card:nth-child(-n+2){border-bottom:1px solid #252b33}}
 @media(max-width:700px){.rb-contract-head{flex-direction:column}.rb-contract-grid{grid-template-columns:1fr}.rb-contract-card{border-right:0;border-bottom:1px solid #252b33}.rb-contract-card:last-child{border-bottom:0}.rb-gates{grid-template-columns:1fr}.rb-gates-column{border-right:0;border-bottom:1px solid #252b33}.rb-gates-column:last-child{border-bottom:0}.rb-pipeline{padding:12px}.rb-pipeline-step{min-width:145px}}
+
+/* Execution history: every manual and automatic backfill gets its own durable row. */
+.rb-history-panel{margin-top:18px;border:1px solid var(--border-color,rgba(255,255,255,.08));border-radius:16px;background:var(--surface-color,rgba(255,255,255,.02));overflow:hidden}
+.rb-history-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:20px 22px;border-bottom:1px solid var(--border-color,rgba(255,255,255,.08))}
+.rb-history-head h2{margin:4px 0 5px}.rb-history-head p{margin:0;opacity:.72}
+.rb-history-meta{display:flex;align-items:center;gap:10px;white-space:nowrap}.rb-history-meta [data-history-count]{font-size:.82rem;opacity:.7}
+.rb-history-table-wrap{overflow:auto;max-height:430px}
+.rb-history-table{width:100%;min-width:920px;border-collapse:collapse}
+.rb-history-table th,.rb-history-table td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--border-color,rgba(255,255,255,.06));font-size:.82rem}
+.rb-history-table th{position:sticky;top:0;z-index:1;background:var(--surface-color,#101114);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;opacity:.68}
+.rb-history-table tbody tr{cursor:pointer;transition:background .15s ease}
+.rb-history-table tbody tr:hover,.rb-history-table tbody tr:focus,.rb-history-table tbody tr.is-selected{background:rgba(127,127,127,.08);outline:none}
+.rb-history-table td strong,.rb-history-table td small{display:block}.rb-history-table td small{margin-top:3px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.55}
+.rb-history-status{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:.72rem;font-weight:700;text-transform:uppercase}
+.rb-history-status[data-state="completed"]{background:rgba(34,197,94,.12)}.rb-history-status[data-state="failed"]{background:rgba(239,68,68,.12)}.rb-history-status[data-state="running"]{background:rgba(59,130,246,.12)}
+.rb-history-empty{text-align:center!important;padding:28px!important;opacity:.65}
+@media (max-width:760px){.rb-history-head{padding:16px;flex-direction:column}.rb-history-table{min-width:780px}.rb-history-table-wrap{max-height:360px}}
