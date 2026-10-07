@@ -6,6 +6,7 @@
   const body = $("[data-log-body]");
   let lastEventId = 0;
   let selectedRunId = new URLSearchParams(window.location.search).get("run_id") || "";
+  let historyLimit = 50;
   let polling = false;
   let tail = true;
   let query = "";
@@ -129,12 +130,14 @@
   };
 
 
-  const renderHistory = (history) => {
+  const renderHistory = (history, hasMore) => {
     const table = $("[data-history-body]");
     if (!table) return;
     table.replaceChildren();
     const rows = Array.isArray(history) ? history : [];
     text("[data-history-count]", rows.length + (rows.length === 1 ? " run" : " runs"));
+    const more = $("[data-history-more]");
+    if (more) more.hidden = !hasMore;
     if (!rows.length) {
       const row = document.createElement("tr");
       const cell = document.createElement("td");
@@ -236,6 +239,7 @@
         run_id: selectedRunId,
         after: String(lastEventId),
         limit: "200",
+        history_limit: String(historyLimit),
       });
       if (query) params.set("q", query);
       if (level) params.set("level", level);
@@ -267,7 +271,7 @@
         window.history.replaceState({}, "", url);
       }
       renderRun(data.selected);
-      renderHistory(data.history || []);
+      renderHistory(data.history || [], Boolean(data.history_has_more));
       if (query && lastEventId === 0) {
         renderEvents(data.events || [], true);
       } else {
@@ -322,7 +326,14 @@
 
   const historyRefresh = $("[data-history-refresh]");
   if (historyRefresh) historyRefresh.addEventListener("click", () => {
+    historyLimit = 50;
     lastEventId = 0;
+    refresh();
+  });
+
+  const historyMore = $("[data-history-more]");
+  if (historyMore) historyMore.addEventListener("click", () => {
+    historyLimit += 50;
     refresh();
   });
 
