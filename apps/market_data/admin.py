@@ -31,6 +31,12 @@ class CandleBackfillRunAdmin(admin.ModelAdmin):
     ordering = ("-requested_at",)
     inlines = (CandleBackfillEventInline,)
 
+    def has_delete_permission(self, request, obj=None):
+        # Superusers must always be able to clear a stale singleton run.
+        if request.user.is_superuser:
+            return True
+        return super().has_delete_permission(request, obj)
+
     @admin.display(description="Progress", ordering="status")
     def progress_display(self, obj):
         result = obj.result or {}
