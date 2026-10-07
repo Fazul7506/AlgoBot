@@ -87,7 +87,7 @@
       <span><b data-progress-count>{% if run_payload and run_payload.progress.total %}{{ run_payload.progress.completed }} / {{ run_payload.progress.total }}{% else %}— / —{% endif %}</b> symbols complete</span>
       <strong data-progress-percent>{% if run_payload and run_payload.progress.work_total %}{{ run_payload.progress.percent }}%{% else %}—{% endif %}</strong>
     </div>
-    <div class="rb-progress-track"><span data-progress-bar style="width:{% if run_payload and run_payload.progress.work_total %}{{ run_payload.progress.percent }}%{% else %}0%{% endif %}"></span></div>
+    <div class="rb-progress-track"><span data-progress-bar></span></div>
     <div class="rb-work-progress"><span data-work-progress>{% if run_payload and run_payload.progress.work_total %}{{ run_payload.progress.work_completed }} / {{ run_payload.progress.work_total }} broker series{% else %}No worker work has been confirmed{% endif %}</span></div>
     <div class="rb-current"><span class="material-symbols-rounded">sync</span><span>Current broker operation</span><strong data-current-operation>{% if run_payload and run_payload.current_symbol %}{{ run_payload.current_symbol }}{% if run_payload.current_timeframe %} · {{ run_payload.current_timeframe }}{% endif %}{% elif run_payload and run_payload.accepted_at %}Worker received the task{% elif run %}Waiting for worker receipt{% else %}Start the backfill to begin broker ingestion{% endif %}</strong></div>
   </section>
