@@ -50,7 +50,7 @@
     if (!run) {
       text("[data-status]", "Not started");
       text("[data-status-large]", "Not started");
-      text("[data-status-sub]", "No initial backfill run exists");
+      text("[data-status-sub]", "No backfill execution exists");
       text("[data-duration]", "—");
       text("[data-requested]", "—");
       text("[data-started]", "—");
@@ -72,7 +72,7 @@
         body.replaceChildren();
         const empty = document.createElement("div");
         empty.className = "rb-log-empty";
-        empty.textContent = "No initial run exists. Start the backfill above to create durable dispatch and worker log events.";
+        empty.textContent = "No backfill execution exists. Start one above to create durable dispatch and worker log events.";
         body.appendChild(empty);
       }
       lastEventId = 0;
@@ -89,8 +89,8 @@
     }
     text("[data-status-large]", run.status_label || state);
     text("[data-start-state]",
-      state === "completed" ? "Initial backfill completed."
-      : state === "failed" ? "Initial backfill failed."
+      state === "completed" ? ((run.scope || "Backfill") + " execution completed.")
+      : state === "failed" ? ((run.scope || "Backfill") + " execution failed.")
       : run.accepted_at ? "Worker received the backfill task."
       : "Backfill is being dispatched to the market-data worker."
     );
