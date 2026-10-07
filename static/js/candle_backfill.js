@@ -164,9 +164,24 @@
         (Number(progress.percent) || 0) + "%",
         run.worker_hostname || "—",
       ];
-      cells.forEach((value) => {
+      const identity = document.createElement("td");
+      const idStrong = document.createElement("strong");
+      idStrong.textContent = "#" + run.id;
+      const taskSmall = document.createElement("small");
+      taskSmall.textContent = run.task_id || "No task ID";
+      identity.append(idStrong, taskSmall);
+      row.appendChild(identity);
+      cells.slice(1).forEach((value, index) => {
         const cell = document.createElement("td");
-        cell.innerHTML = value;
+        if (index === 2) {
+          const status = document.createElement("span");
+          status.className = "rb-history-status";
+          status.dataset.state = run.status || "";
+          status.textContent = run.status_label || run.status || "—";
+          cell.appendChild(status);
+        } else {
+          cell.textContent = value.replace(/<[^>]+>/g, "");
+        }
         row.appendChild(cell);
       });
       const select = () => {
