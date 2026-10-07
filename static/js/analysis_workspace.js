@@ -12,12 +12,7 @@
   const A = {markets:[],data:null,contract:null,timer:null};
 
   async function request(path, options={}) {
-    const client = window.AlgoBotAPI?.apiClient;
-    if (client) return client.get(path, {credentials:"include", __algoTimeoutMs:12000});
-    const r = await fetch(path,{credentials:"same-origin",headers:{"Accept":"application/json","Content-Type":"application/json",...(options.headers||{})},...options});
-    let p={}; try{p=await r.json()}catch(_){}
-    if(!r.ok) throw new Error(p?.message || p?.error?.detail || `HTTP ${r.status} request failure`);
-    return p;
+    return window.AlgoBotFrontendData.request(path, options, 12000);
   }
   function set(id,v){const e=$(id);if(e)e.textContent=v==null||v===""?"—":v}
   function list(id,items,fn,empty="No observed evidence."){const e=$(id);if(e)e.innerHTML=items?.length?items.map(fn).join(""):'<span class="muted">'+esc(empty)+"</span>"}
