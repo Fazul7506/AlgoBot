@@ -416,6 +416,7 @@ def initial_candle_backfill(request):
         payload = {
             "selected": _run_payload(selected),
             "history": [_run_payload(run) for run in CandleBackfillRun.objects.order_by("-requested_at", "-id")[:limit]],
+            "history_has_more": CandleBackfillRun.objects.order_by("-requested_at", "-id")[limit:limit + 1].exists(),
             "initial": _run_payload(CandleBackfillRun.objects.filter(scope="initial").order_by("-requested_at", "-id").first()),
             "research": _run_payload(CandleBackfillRun.objects.filter(scope="research").order_by("-requested_at", "-id").first()),
             "events": [],
