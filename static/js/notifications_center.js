@@ -9,9 +9,7 @@
   }
 
   async function request(url, options = {}) {
-    const response = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}) }, ...options });
-    if (!response.ok) throw new Error(`Request failed (${response.status})`);
-    return response.status === 204 ? null : response.json();
+    return window.AlgoBotFrontendData.request(url, options, 10000);
   }
 
   function render() {
