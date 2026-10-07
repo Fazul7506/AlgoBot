@@ -228,7 +228,7 @@
 
   <section class="rb-details-grid rb-details-secondary">
     <article class="rb-detail-card"><span class="rb-eyebrow">WORKER TELEMETRY</span><h3>Database-backed lifecycle</h3><p>Worker acceptance, start time, heartbeat, symbol progress, timeframe results and terminal state are persisted in Django. Celery <code>PENDING</code> cannot overwrite confirmed application lifecycle evidence.</p></article>
-    <article class="rb-detail-card"><span class="rb-eyebrow">ADMIN CONSISTENCY</span><h3>Same run, same evidence</h3><p>Django admin reads the same run and durable event records shown here. Deleting the singleton run intentionally returns this page to <strong>Not started</strong> and exposes the Start backfill control.</p><a href="{% url 'admin:market_data_candlebackfillrun_changelist' %}">Open Django admin →</a></article>
+    <article class="rb-detail-card"><span class="rb-eyebrow">ADMIN CONSISTENCY</span><h3>Same run, same evidence</h3><p>Django admin reads the same execution and durable event records shown here. Deleting one run removes only that execution; the remaining history stays intact.</p><a href="{% url 'admin:market_data_candlebackfillrun_changelist' %}">Open Django admin →</a></article>
   </section>
 </section>
 {% endblock %}
