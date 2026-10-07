@@ -65,9 +65,7 @@
 
   async function load() {
     status.textContent = 'Loading…';
-    const response = await fetch('/api/settings/', {credentials: 'same-origin', headers: {'Accept': 'application/json'}});
-    if (!response.ok) throw new Error(`Settings request failed (${response.status})`);
-    const data = await response.json();
+    const data = await window.AlgoBotFrontendData.request('/api/settings/', {}, 10000);
     set('first_name', data.user.first_name); set('last_name', data.user.last_name); set('email', data.user.email);
     Object.entries(data.profile).forEach(([key, value]) => key.includes('notifications') ? check(key, value) : set(key, value));
     Object.entries(data.trading).forEach(([key, value]) => set(key, value));
@@ -86,9 +84,7 @@
       const value = field(k).value;
       trading[k] = ['max_daily_loss_pct','risk_per_trade_pct','min_win_rate'].includes(k) ? Number(value) : (k === 'max_concurrent_trades' ? Number(value) : value);
     });
-    const response = await fetch('/api/settings/', {method:'PATCH', credentials:'same-origin', headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'}, body:JSON.stringify({profile,trading})});
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) { message.textContent = data.detail || 'Unable to save settings.'; return; }
+    const data = await window.AlgoBotFrontendData.request('/api/settings/', {method:'PATCH', headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'}, body:JSON.stringify({profile,trading})}, 10000);
     message.textContent = data.message || 'Settings saved.';
   });
 
