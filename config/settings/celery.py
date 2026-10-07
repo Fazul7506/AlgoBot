@@ -39,9 +39,6 @@ CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
     "visibility_timeout": 4 * 60 * 60,
 }
 
-CELERY_BROKER_URL = CELERY_BROKER_URL
-CELERY_RESULT_BACKEND = CELERY_RESULT_BACKEND
-
 # Long-running broker-data tasks expose STARTED state and are acknowledged only
 # after execution. Worker loss therefore allows Celery to redeliver them.
 CELERY_TASK_TRACK_STARTED = True
