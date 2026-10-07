@@ -68,7 +68,10 @@ def _worker_identity():
 def _record_candle_backfill_worker_received(sender=None, request=None, **kwargs):
     """Persist queue delivery before the task body starts executing."""
     task_name = getattr(request, "task", "") if request is not None else ""
-    if task_name != "apps.market_data.tasks.run_initial_candle_backfill":
+    if task_name not in {
+        "apps.market_data.tasks.run_initial_candle_backfill",
+        "apps.market_data.tasks.backfill_research_candles",
+    }:
         return
     args = list(getattr(request, "args", None) or [])
     if not args:
@@ -85,9 +88,7 @@ def _record_candle_backfill_worker_received(sender=None, request=None, **kwargs)
 
         now = timezone.now()
         with transaction.atomic():
-            run = CandleBackfillRun.objects.select_for_update().filter(
-                pk=run_id, scope="initial"
-            ).first()
+            run = CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
             if not run or (run.task_id and task_id and run.task_id != task_id):
                 return
             delivery_info = getattr(request, "delivery_info", None) or {}
@@ -190,6 +191,7 @@ def _emit_backfill_event(
     task_id="",
     worker_hostname="",
     payload=None,
+    run_id=None,
 ):
     """Persist an operator log line and the worker heartbeat atomically."""
     from django.db import transaction
@@ -197,7 +199,10 @@ def _emit_backfill_event(
 
     now = timezone.now()
     with transaction.atomic():
-        run = CandleBackfillRun.objects.select_for_update().filter(scope=scope).first()
+        queryset = CandleBackfillRun.objects.select_for_update()
+        run = queryset.filter(pk=run_id).first() if run_id else queryset.filter(
+            scope=scope, status="running"
+        ).order_by("-requested_at", "-id").first()
         if not run:
             return None
         if task_id and run.task_id and run.task_id != str(task_id):
@@ -229,18 +234,24 @@ def _emit_backfill_event(
         return event
 
 
-def _backfill_timeframe_progress(scope, symbol, timeframe, payload):
+def _backfill_timeframe_progress(scope, symbol, timeframe, payload, run_id=None):
     """Persist every broker timeframe boundary for live operator visibility."""
     from django.db import transaction
     from .models import CandleBackfillRun
 
-    task_id = CandleBackfillRun.objects.filter(scope=scope).values_list("task_id", flat=True).first() or ""
+    task_id = (CandleBackfillRun.objects.filter(pk=run_id).values_list("task_id", flat=True).first()
+        if run_id else CandleBackfillRun.objects.filter(scope=scope, status="running").order_by("-requested_at", "-id").values_list("task_id", flat=True).first()) or ""
     payload = payload if isinstance(payload, dict) else {"value": str(payload)}
     phase = payload.get("status")
     failed = phase == "failed"
     completed = phase != "started"
     with transaction.atomic():
-        run = CandleBackfillRun.objects.select_for_update().filter(scope=scope).first()
+        run = (
+            CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
+            if run_id else CandleBackfillRun.objects.select_for_update().filter(
+                scope=scope, status="running"
+            ).order_by("-requested_at", "-id").first()
+        )
         if run:
             result = dict(run.result or {})
             if completed:
@@ -268,6 +279,7 @@ def _backfill_timeframe_progress(scope, symbol, timeframe, payload):
         task_id=task_id,
         worker_hostname=_worker_identity(),
         payload=payload if isinstance(payload, dict) else {"value": str(payload)},
+        run_id=run_id,
     )
 
 
@@ -284,7 +296,7 @@ def _symbol_backfill_failed(payload):
     )
 
 
-def _backfill_symbols(symbols, count, *, scope=None):
+def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
     from .historical import TIMEFRAME_GRANULARITY, fetch_and_store_all_timeframes
 
     results = {}
@@ -325,7 +337,7 @@ def _backfill_symbols(symbols, count, *, scope=None):
                 request_interval=BACKFILL_REQUEST_INTERVAL_SECONDS,
                 progress_callback=(
                     lambda timeframe, payload, symbol=value: _backfill_timeframe_progress(
-                        scope, symbol, timeframe, payload
+                        scope, symbol, timeframe, payload, run_id=run_id
                     )
                 ) if scope else None,
             )
@@ -368,7 +380,8 @@ def _backfill_symbols(symbols, count, *, scope=None):
                     else f"Completed {value}"
                 ),
                 symbol=value,
-                task_id=CandleBackfillRun.objects.filter(scope=scope).values_list("task_id", flat=True).first() or "",
+                task_id=(CandleBackfillRun.objects.filter(pk=run_id).values_list("task_id", flat=True).first()
+                    if run_id else CandleBackfillRun.objects.filter(scope=scope, status="running").order_by("-requested_at", "-id").values_list("task_id", flat=True).first()) or "",
                 worker_hostname=_worker_identity(),
                 payload={"index": index, "total": total, "percent": progress["percent"]},
             )
@@ -400,16 +413,25 @@ def _mark_backfill_run(
     completed_at=None,
     result=None,
     error=None,
+    run_id=None,
 ):
     """Persist worker state so browser and Django admin see real progress."""
     from django.db import transaction
     from .models import CandleBackfillRun
 
     with transaction.atomic():
-        run, _ = CandleBackfillRun.objects.select_for_update().get_or_create(
-            scope=scope,
-            defaults={"count": int(count or 5000), "symbol": symbol or ""},
+        run = (
+            CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
+            if run_id else CandleBackfillRun.objects.select_for_update().filter(
+                scope=scope, status="running"
+            ).order_by("-requested_at", "-id").first()
         )
+        if run is None:
+            run = CandleBackfillRun.objects.create(
+                scope=scope,
+                count=int(count or 5000),
+                symbol=symbol or "",
+            )
         updates = []
         for field, value in (
             ("status", status),
