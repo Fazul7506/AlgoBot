@@ -29,15 +29,7 @@
   const apiBase=(document.querySelector('meta[name="algobot-api-base"]')?.content||window.location.origin).replace(/\/$/,'');
   const csrf=()=>{const c=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);return c?decodeURIComponent(c[1]):document.querySelector('meta[name="csrf-token"]')?.content||''};
   const api=async(url,opts={})=>{
-    const method=(opts.method||'GET').toUpperCase();
-    const headers={Accept:'application/json',...(opts.headers||{})};
-    if(!['GET','HEAD','OPTIONS'].includes(method))headers['X-CSRFToken']=headers['X-CSRFToken']||csrf();
-    if(opts.body!==undefined)headers['Content-Type']=headers['Content-Type']||'application/json';
-    const target=/^https?:\/\//i.test(url)?url:`${apiBase}${url.startsWith('/')?url:`/${url}`}`;
-    const response=await fetch(target,{credentials:'include',cache:'no-store',...opts,headers});
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw Error(data.detail||data.error||`Request failed (${response.status})`);
-    return data;
+    return window.AlgoBotFrontendData.request(url,opts,10000);
   };
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const money=(cents,currency)=>{
