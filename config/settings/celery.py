@@ -41,7 +41,7 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
 }
 CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
     "visibility_timeout": 4 * 60 * 60,
-    "max_connections": max(1, int(__import__("os").environ.get("CELERY_REDIS_MAX_CONNECTIONS", "4"))),
+    "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "4"))),
 }
 
 # Long-running broker-data tasks expose STARTED state and are acknowledged only
