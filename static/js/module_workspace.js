@@ -26,20 +26,7 @@
 
   async function request(url, options = {}) {
     if (!url) throw new Error("No API endpoint configured for this resource.");
-    const response = await fetch(url, {
-      credentials: "same-origin",
-      ...options,
-      headers: { ...csrfHeaders(), ...(options.headers || {}) },
-    });
-    const text = await response.text();
-    let data = {};
-    try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
-    if (response.status === 401 || response.status === 403) {
-      window.location.assign(`/login/?next=${encodeURIComponent(window.location.pathname)}`);
-      throw new Error("Authentication required");
-    }
-    if (!response.ok) throw new Error(data.detail || data.message || `Service unavailable (${response.status})`);
-    return data;
+    return window.AlgoBotFrontendData.request(url, options, 10000);
   }
 
   const recordCount = value => {
