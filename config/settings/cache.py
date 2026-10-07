@@ -54,7 +54,10 @@ try:
     REDIS_CACHE_MAX_CONNECTIONS = max(1, int(_dotenv_value("REDIS_CACHE_MAX_CONNECTIONS", "4")))
 except (TypeError, ValueError):
     REDIS_CACHE_MAX_CONNECTIONS = 4
-REDIS_CACHE_HEALTH_CHECK_INTERVAL = max(0, int(_dotenv_value("REDIS_CACHE_HEALTH_CHECK_INTERVAL", "30")))
+try:
+    REDIS_CACHE_HEALTH_CHECK_INTERVAL = max(0, int(_dotenv_value("REDIS_CACHE_HEALTH_CHECK_INTERVAL", "30")))
+except (TypeError, ValueError):
+    REDIS_CACHE_HEALTH_CHECK_INTERVAL = 30
 
 CACHES = {
     "default": {
