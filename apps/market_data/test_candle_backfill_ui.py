@@ -42,7 +42,7 @@ class CandleBackfillUiTests(TestCase):
         self.assertContains(response, "BACKFILL CRITERIA")
         self.assertContains(response, "broker=deriv")
         self.assertContains(response, "Not started")
-        self.assertContains(response, "No initial run exists")
+        self.assertContains(response, "No backfill execution exists yet")
         self.assertNotContains(response, "Loading live state")
 
     def test_json_empty_state_is_explicit_and_contains_config(self):
@@ -166,10 +166,14 @@ class CandleBackfillUiTests(TestCase):
             )
         self.assertEqual(response.status_code, 302)
         run.refresh_from_db()
-        self.assertEqual(run.status, "running")
-        self.assertEqual(run.symbol, "R_100")
-        self.assertTrue(run.task_id)
-        self.assertGreater(run.requested_at, old_requested)
+        self.assertEqual(run.status, "failed")
+        latest = CandleBackfillRun.objects.filter(scope="initial").order_by("-requested_at", "-id").first()
+        self.assertIsNotNone(latest)
+        self.assertNotEqual(latest.pk, run.pk)
+        self.assertEqual(latest.status, "running")
+        self.assertEqual(latest.symbol, "R_100")
+        self.assertTrue(latest.task_id)
+        self.assertGreater(latest.requested_at, old_requested)
 
     def test_json_payload_exposes_render_aligned_state_and_actual_delivery_queue(self):
         run = CandleBackfillRun.objects.create(
@@ -279,3 +283,78 @@ class CandleBackfillUiTests(TestCase):
         self.assertEqual(run.task_id, "stale-task")
         self.assertIsNone(run.started_at)
         publish.assert_not_called()
+
+
+    def test_history_retains_multiple_executions_in_request_order(self):
+        first = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="completed",
+            count=5000,
+            result={"trigger": "automatic", "percent": 100},
+        )
+        second = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="failed",
+            count=5000,
+            result={"trigger": "manual", "percent": 42},
+            error="Deriv timeout",
+        )
+        response = self.client.get(
+            reverse("initial_candle_backfill"),
+            {"format": "json", "history_limit": 10},
+        )
+        self.assertEqual(response.status_code, 200)
+        history = response.json()["history"]
+        ids = [item["id"] for item in history]
+        self.assertEqual(set(ids), {first.pk, second.pk})
+        self.assertEqual(ids[0], second.pk)
+
+    def test_json_can_select_any_historical_run_for_telemetry(self):
+        old = CandleBackfillRun.objects.create(
+            scope="research",
+            status="completed",
+            count=250,
+            result={"trigger": "automatic", "percent": 100},
+        )
+        CandleBackfillEvent.objects.create(
+            run=old,
+            level="success",
+            event_type="completed",
+            message="research run completed",
+        )
+        current = CandleBackfillRun.objects.create(
+            scope="initial",
+            status="failed",
+            count=5000,
+            result={"trigger": "manual", "percent": 10},
+        )
+        response = self.client.get(
+            reverse("initial_candle_backfill"),
+            {"format": "json", "run_id": old.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["selected"]["id"], old.pk)
+        self.assertEqual(payload["selected"]["scope"], "research")
+        self.assertEqual(len(payload["events"]), 1)
+        self.assertEqual(payload["events"][0]["message"], "research run completed")
+        self.assertNotEqual(payload["selected"]["id"], current.pk)
+
+    def test_manual_research_backfill_creates_a_separate_execution(self):
+        published = SimpleNamespace(id="research-task")
+        with patch(
+            "apps.market_data.tasks.backfill_research_candles.apply_async",
+            return_value=published,
+        ) as publish:
+            response = self.client.post(
+                reverse("initial_candle_backfill"),
+                {"scope": "research", "symbol": "R_100"},
+            )
+        self.assertEqual(response.status_code, 302)
+        run = CandleBackfillRun.objects.get(scope="research")
+        self.assertEqual(run.result.get("trigger"), "manual")
+        self.assertEqual(run.symbol, "R_100")
+        publish.assert_called_once()
+        self.assertEqual(publish.call_args.kwargs["args"], (run.pk,))
+        self.assertEqual(publish.call_args.kwargs["kwargs"], {"count": 250, "symbol": "R_100"})
+        self.assertEqual(publish.call_args.kwargs["queue"], "market_data")
