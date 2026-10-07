@@ -5,7 +5,7 @@
 {% block content %}
 <section class="rb-page" data-backfill-page>
   <header class="rb-top">
-    <div class="rb-breadcrumb"><span class="material-symbols-rounded">database</span><span>Candle Backfill</span><span>›</span><strong>Initial warm-up</strong></div>
+    <div class="rb-breadcrumb"><span class="material-symbols-rounded">database</span><span>Candle Backfill</span><span>›</span><strong>All executions</strong></div>
     <div class="rb-title-row">
       <div>
         <h1>Historical Candle Backfill</h1>
@@ -21,11 +21,18 @@
       {% csrf_token %}
       <div class="rb-start-copy">
         <span class="rb-eyebrow">OPERATOR CONTROL</span>
-        <strong>{% if run %}Retry failed backfill{% else %}Start initial backfill{% endif %}</strong>
-        <small>Celery also schedules this warm-up automatically. Manual retry is available only as an operator override. No market data is generated locally.</small>
+        <strong>Start a broker backfill</strong>
+        <small>Every manual and automatic execution is persisted as its own run. No market data is generated locally.</small>
       </div>
       <label class="rb-symbol-field">
         <span>Scope</span>
+        <select name="scope" aria-label="Backfill type">
+          <option value="initial">Initial / full warm-up · {{ backfill_config.count }} records</option>
+          <option value="research">Research refresh · {{ backfill_config.research_count }} records</option>
+        </select>
+      </label>
+      <label class="rb-symbol-field">
+        <span>Symbol</span>
         <select name="symbol">
           <option value="">All eligible Deriv symbols ({{ backfill_config.eligible_symbol_count }})</option>
           {% for value in eligible_symbols %}
@@ -35,18 +42,18 @@
       </label>
       <button type="submit" class="rb-start-btn">
         <span class="material-symbols-rounded">{% if run %}restart_alt{% else %}play_arrow{% endif %}</span>
-        {% if run %}Retry backfill{% else %}Start backfill{% endif %}
+        Start backfill
       </button>
     </form>
     {% elif run.status == "running" %}
     <div class="rb-start-state">
       <span class="material-symbols-rounded">sync</span>
-      <div><strong data-start-state>Backfill is running under the durable worker lifecycle.</strong><small>Do not start another initial run while this run is active.</small></div>
+      <div><strong data-start-state>Selected backfill is running under the durable worker lifecycle.</strong><small>Only one execution of the selected backfill family may run at a time.</small></div>
     </div>
     {% else %}
     <div class="rb-start-state rb-start-complete">
       <span class="material-symbols-rounded">task_alt</span>
-      <div><strong data-start-state>Initial backfill completed.</strong><small>This singleton initial warm-up is retained as the source-of-truth run.</small></div>
+      <div><strong data-start-state>Selected backfill completed.</strong><small>This execution is retained as immutable operational history.</small></div>
     </div>
     {% endif %}
   </header>
@@ -73,7 +80,7 @@
 
   <section class="rb-progress-card">
     <div class="rb-card-head">
-      <div><span class="rb-eyebrow">INITIAL WARM-UP</span><h2>Up to {{ backfill_config.count|default:"5000" }} broker records per series</h2></div>
+      <div><span class="rb-eyebrow">SELECTED EXECUTION</span><h2>Up to {{ run_payload.count|default:backfill_config.count }} broker records per series</h2></div>
       <div class="rb-worker"><span data-worker-state>{% if run_payload %}{{ run_payload.worker_state }}{% else %}NOT STARTED{% endif %}</span><small data-heartbeat>{% if run_payload and run_payload.last_heartbeat_at %}Heartbeat {{ run_payload.last_heartbeat_at|date:"d/m/Y, H:i:s" }}{% else %}Heartbeat —{% endif %}</small></div>
     </div>
     <div class="rb-progress-label">
@@ -83,6 +90,38 @@
     <div class="rb-progress-track"><span data-progress-bar style="width:{% if run_payload and run_payload.progress.work_total %}{{ run_payload.progress.percent }}%{% else %}0%{% endif %}"></span></div>
     <div class="rb-work-progress"><span data-work-progress>{% if run_payload and run_payload.progress.work_total %}{{ run_payload.progress.work_completed }} / {{ run_payload.progress.work_total }} broker series{% else %}No worker work has been confirmed{% endif %}</span></div>
     <div class="rb-current"><span class="material-symbols-rounded">sync</span><span>Current broker operation</span><strong data-current-operation>{% if run_payload and run_payload.current_symbol %}{{ run_payload.current_symbol }}{% if run_payload.current_timeframe %} · {{ run_payload.current_timeframe }}{% endif %}{% elif run_payload and run_payload.accepted_at %}Worker received the task{% elif run %}Waiting for worker receipt{% else %}Start the backfill to begin broker ingestion{% endif %}</strong></div>
+  </section>
+
+  <section class="rb-history-panel" aria-labelledby="backfill-history-title">
+    <div class="rb-history-head">
+      <div>
+        <span class="rb-eyebrow">EXECUTION HISTORY</span>
+        <h2 id="backfill-history-title">Every candle backfill execution</h2>
+        <p>Manual starts, scheduled refreshes, automatic warm-ups and recovered deliveries remain visible as separate durable runs.</p>
+      </div>
+      <div class="rb-history-meta"><span data-history-count>0 runs</span><button type="button" class="rb-icon-btn" data-history-refresh aria-label="Refresh execution history"><span class="material-symbols-rounded">refresh</span></button></div>
+    </div>
+    <div class="rb-history-table-wrap">
+      <table class="rb-history-table">
+        <thead><tr><th>Run</th><th>Type</th><th>Trigger</th><th>Status</th><th>Requested</th><th>Duration</th><th>Progress</th><th>Worker</th></tr></thead>
+        <tbody data-history-body>
+          {% for item in history_payload %}
+          <tr data-run-id="{{ item.id|default:forloop.counter }}" tabindex="0">
+            <td><strong>#{{ item.id|default:"—" }}</strong><small>{{ item.task_id|default:"No task ID" }}</small></td>
+            <td>{{ item.scope|default:"—" }}</td>
+            <td>{{ item.trigger|default:"manual"|title }}</td>
+            <td><span class="rb-history-status" data-state="{{ item.status }}">{{ item.status_label }}</span></td>
+            <td>{{ item.requested_at|default:"—" }}</td>
+            <td>{{ item.duration_seconds|default:0 }}s</td>
+            <td>{{ item.progress.percent|default:0 }}%</td>
+            <td>{{ item.worker_hostname|default:"—" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="rb-history-empty">No candle backfill executions have been recorded yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <section class="rb-log-panel" data-log-panel>
@@ -193,4 +232,4 @@
 </section>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20260922-live-telemetry2">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20260921-renderclone8" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20261008-execution-history1" defer></script>{% endblock %}
