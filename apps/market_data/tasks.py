@@ -1,42 +1,28 @@
-import importlib
 import logging
 from datetime import timedelta, timezone as dt_timezone
 import socket
 from uuid import uuid4
 
+from celery import shared_task
 from celery.signals import task_received, task_unknown, task_rejected
 
 from django.utils import timezone
 
 
-def _celery_app():
-    module = importlib.import_module("deriv_platform.celery")
-    return getattr(module, "app", None)
-
-
-def _task(fn=None, **options):
-    app = _celery_app()
-
-    def decorate(target):
-        return app.task(target, **options) if app else target
-
-    return decorate(fn) if fn is not None else decorate
-
-
-@_task
+@shared_task
 def store_tick(data):
     from .services import TickService
     return TickService().ingest(data).id
 
 
-@_task
+@shared_task
 def generate_candles(tick_id):
     from .models import Tick
     from .services import CandleService
     return len(CandleService().update_from_tick(Tick.objects.get(id=tick_id)))
 
 
-@_task
+@shared_task
 def calculate_statistics(symbol):
     from .services import MarketStatisticsService
     return MarketStatisticsService().calculate(symbol).id
@@ -437,7 +423,7 @@ def _mark_backfill_run(
         return run
 
 
-@_task(
+@shared_task(
     acks_late=True,
     reject_on_worker_lost=True,
     soft_time_limit=2 * 60 * 60,
@@ -508,7 +494,7 @@ def backfill_research_candles(count=250, symbol=None):
         close_old_connections()
 
 
-@_task
+@shared_task
 def ensure_initial_candle_backfill(count=5000):
     """Let Celery Beat create/retry the singleton initial warm-up without a browser click."""
     from django.db import close_old_connections, transaction
@@ -612,7 +598,7 @@ def ensure_initial_candle_backfill(count=5000):
         close_old_connections()
 
 
-@_task(
+@shared_task(
     acks_late=True,
     reject_on_worker_lost=True,
     soft_time_limit=4 * 60 * 60,
@@ -721,7 +707,7 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
         close_old_connections()
 
 
-@_task
+@shared_task
 def reconcile_candle_backfill_runs(max_age_seconds=300):
     """Recover stalled broker-data jobs without exposing a queue lifecycle state."""
     from django.db import close_old_connections, transaction
