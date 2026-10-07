@@ -5,13 +5,6 @@
 .sidebar-toggle { place-items: center; }
 .sidebar-toggle .material-symbols-rounded { font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
 .sidebar-backdrop { background: rgba(2, 8, 18, .68); backdrop-filter: blur(3px); }
-.app-sidebar.is-collapsed { padding-left: 14px; padding-right: 14px; }
-.app-sidebar.is-collapsed .sidebar-user { grid-template-columns: 1fr !important; gap: 7px !important; padding: 10px 0 0 !important; }
-.app-sidebar.is-collapsed .algobot-sidebar-account { padding: 7px !important; border-radius: 14px !important; align-items: center !important; justify-content: center !important; }
-.app-sidebar.is-collapsed .algobot-account-summary { justify-content: center !important; gap: 0 !important; }
-.app-sidebar.is-collapsed .algobot-account-switch { padding: 0 !important; border-radius: 999px !important; place-items: center !important; font-size: 0 !important; }
-.app-sidebar.is-collapsed .algobot-account-switch span:last-child::before { content: '↔'; font-size: 11px; line-height: 1; }
-.app-sidebar.is-collapsed .sidebar-user-actions button { border-radius: 12px !important; }
 .connection-indicator { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; }
 .connection-indicator i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .connection-indicator.connected { color: var(--green); }
@@ -29,17 +22,17 @@
 #app-sidebar nav a[aria-current='page'],
 #app-sidebar .sidebar-new-trade.active,
 #app-sidebar .sidebar-new-trade[aria-current='page'] {
-  color: var(--text) !important;
-  background: color-mix(in srgb, var(--red) 14%, transparent) !important;
-  border-left: 2px solid var(--accent) !important;
-  box-shadow: inset 2px 0 0 var(--red), 0 0 0 1px color-mix(in srgb, var(--red) 10%, transparent);
+  color: var(--text);
+  background: rgba(53,217,255,.10);
+  border-color: rgba(53,217,255,.18);
+  box-shadow: inset 3px 0 0 var(--accent);
   font-weight: 700;
 }
 #app-sidebar nav a.active .material-symbols-rounded,
 #app-sidebar nav a[aria-current='page'] .material-symbols-rounded,
 #app-sidebar .sidebar-new-trade.active .material-symbols-rounded,
 #app-sidebar .sidebar-new-trade[aria-current='page'] .material-symbols-rounded {
-  color: var(--accent) !important;
+  color: var(--accent);
 }
 #app-sidebar nav a:hover,
 #app-sidebar .sidebar-new-trade:hover { color: var(--text); }
@@ -118,60 +111,9 @@
   .mobile-menu-button { place-items: center; }
   .app-sidebar { transition: transform .22s ease; -webkit-overflow-scrolling: touch; }
   .topbar { padding-left: 68px; }
-  body.mobile-nav-open { overflow: auto !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   #django-message-stack.toast-stack .toast { animation: none !important; }
   #app-sidebar nav a, #app-sidebar .sidebar-new-trade { transition: none !important; }
 }
 
-
-/* Desktop shell invariant: the navigation rail belongs to the viewport, not
-   the scrolling document. Keep this in the canonical shell stylesheet so the
-   invariant survives stylesheet ordering/asset collection. */
-@media (min-width: 981px) {
-  #app-sidebar.app-sidebar {
-    flex-direction: column !important;
-  }
-
-  #app-sidebar.app-sidebar .sidebar-header {
-    align-items: center !important;
-    justify-content: space-between !important;
-  }
-
-  #app-sidebar.app-sidebar .sidebar-header .brand {
-    align-items: center !important;
-    gap: 6px !important;
-  }
-
-  #app-sidebar.app-sidebar .sidebar-header > .sidebar-toggle {
-    place-items: center !important;
-  }
-}
-
-@media (min-width: 981px) {
-}
-
-
-@media (min-width: 981px) {
-  #app-sidebar.app-sidebar.is-collapsed {
-    padding-left: 14px !important;
-    padding-right: 14px !important;
-  }
-
-  #app-sidebar.app-sidebar.is-collapsed .sidebar-header .brand {
-    justify-content: center !important;
-    gap: 0 !important;
-  }
-
-  #app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle {
-    opacity: 0 !important;
-  }
-
-  #app-sidebar.app-sidebar.is-collapsed .sidebar-header:hover > .sidebar-toggle,
-  #app-sidebar.app-sidebar.is-collapsed .sidebar-header:focus-within > .sidebar-toggle,
-  #app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:hover,
-  #app-sidebar.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:focus-visible {
-    opacity: 1 !important;
-  }
-}
