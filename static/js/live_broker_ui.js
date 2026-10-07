@@ -23,7 +23,11 @@
   };
 
   const typeOf = a => String(a?.account_type || a?.credentials?.account_type || 'demo').toLowerCase();
-  const current = () => accounts.find(a => a.is_default || a.is_preferred) || accounts[0] || null;
+  const current = () => {
+    const selected = window.AlgoBotAccountContext?.getSelected?.();
+    if (selected?.id) return selected;
+    return accounts.find(a => a.is_active || a.is_default || a.is_preferred) || accounts[0] || null;
+  };
   const avatar = (a, small = false) => {
     const url = String(a?.avatar_url || a?.broker?.avatar_url || a?.credentials?.avatar_url || '').trim();
     const name = a?.broker?.name || a?.broker_name || 'Broker';
