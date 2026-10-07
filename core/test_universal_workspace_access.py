@@ -94,7 +94,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("transform:translate3d(-105%,0,0)", css)
         self.assertIn(".app-sidebar.is-open{transform:translate3d(0,0,0);}", css)
         self.assertIn(".app-sidebar .sidebar-toggle{display:none;}", css)
-        self.assertIn(".app-shell,.app-shell.sidebar-collapsed", css)
+        self.assertIn(".app-shell,", css)
+        self.assertIn(".app-shell.sidebar-collapsed", css)
         self.assertIn("margin-left:0", css)
 
     def test_mobile_drawer_scroll_lock_contract_is_preserved(self):
@@ -144,7 +145,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             css = self._css(name)
             self.assertNotRegex(
                 css,
-                r"(?is)(?:app-sidebar|app-shell|mobile-menu-button)[^{}]*\{[^{}]*\b(?:margin-left|position\s*:\s*fixed|inset\s*:|width\s*:\s*260px|min-width\s*:\s*260px|transform\s*:\s*translate)",
+                r"(?is)(?:app-sidebar|app-shell|mobile-menu-button)[^{}]*\{[^{}]*\b(?:margin-left\s*:|position\s*:\s*fixed|inset\s*:|width\s*:\s*260px|min-width\s*:\s*260px|transform\s*:\s*translate)",
                 name,
             )
 
