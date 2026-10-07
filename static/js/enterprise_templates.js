@@ -2,16 +2,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
-  const json = async (url, opts = {}) => {
-    const headers = { Accept: 'application/json', ...(opts.headers || {}) };
-    const res = await fetch(url, { credentials: 'same-origin', ...opts, headers });
-    const text = await res.text();
-    let data = {};
-    try { data = text ? JSON.parse(text) : {}; } catch { data = { detail: text }; }
-    if (res.status === 401 || res.status === 403) { document.body.classList.add('auth-expired'); window.location.assign('/login/?next=' + encodeURIComponent(window.location.pathname)); throw new Error('Authentication required'); }
-    if (!res.ok) throw new Error(data.detail || data.message || `Request failed (${res.status})`);
-    return data;
-  };
+  const json = async (url, opts = {}) => window.AlgoBotFrontendData.request(url, opts, 10000);
 
   const csrf = () => {
     const cookie = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
