@@ -435,74 +435,81 @@ def _mark_backfill_run(
     soft_time_limit=2 * 60 * 60,
     time_limit=2 * 60 * 60 + 5 * 60,
 )
-def backfill_research_candles(count=250, symbol=None):
-    """Keep research history warm without competing with the initial warm-up."""
+def backfill_research_candles(count=250, symbol=None, run_id=None):
+    """Run one research backfill execution and retain its complete lifecycle history."""
     from django.db import close_old_connections
     from .models import CandleBackfillRun
 
     close_old_connections()
     task_id = getattr(backfill_research_candles.request, "id", "")
+    run = None
     try:
-        initial = CandleBackfillRun.objects.filter(scope="initial", status="running").first()
+        initial = CandleBackfillRun.objects.filter(scope="initial", status="running").order_by("-requested_at", "-id").first()
         if initial:
-            logger.info(
-                "Skipping scheduled research backfill while initial warm-up is active",
-                extra={"initial_run_id": initial.pk},
-            )
+            logger.info("Skipping scheduled research backfill while initial warm-up is active", extra={"initial_run_id": initial.pk})
             return {"status": "skipped", "reason": "initial_backfill_active", "initial_run_id": initial.pk}
 
         started = timezone.now()
+        if run_id:
+            run = CandleBackfillRun.objects.get(pk=run_id)
+        else:
+            run = CandleBackfillRun.objects.create(
+                scope="research",
+                status="running",
+                count=int(count),
+                symbol=symbol or "",
+                task_id=task_id or "",
+                requested_at=started,
+                started_at=started,
+                accepted_at=started,
+                last_heartbeat_at=started,
+                result={"symbols_total": 0, "symbols_completed": 0, "percent": 0, "trigger": "automatic"},
+            )
         _mark_backfill_run(
-            "research",
-            status="running",
-            count=count,
-            symbol=symbol,
-            task_id=task_id,
-            started_at=started,
-            completed_at=None,
-            result={"symbols_total": 0, "symbols_completed": 0, "percent": 0},
-            error="",
+            "research", run_id=run.pk, status="running", count=count, symbol=symbol,
+            task_id=task_id, started_at=run.started_at or started, completed_at=None,
+            result=dict(run.result or {}), error="",
         )
         _emit_backfill_event(
-            "research",
-            event_type="worker_started",
-            message=f"Worker accepted scheduled research backfill task {task_id}",
-            task_id=task_id,
-            worker_hostname=_worker_identity(),
+            "research", run_id=run.pk, event_type="worker_started",
+            message=f"Worker accepted research candle backfill task {task_id}",
+            task_id=task_id, worker_hostname=_worker_identity(),
         )
         symbols = _active_symbols(symbol)
         if not symbols:
             raise RuntimeError("No active tradable market symbols are available")
-
-        result = _backfill_symbols(symbols, int(count), scope="research")
+        result = _backfill_symbols(symbols, int(count), scope="research", run_id=run.pk)
         failed = [value for value, payload in result["results"].items() if _symbol_backfill_failed(payload)]
         error = f"Historical backfill failed for: {', '.join(failed)}" if failed else ""
+        result["trigger"] = (run.result or {}).get("trigger", "automatic")
         _mark_backfill_run(
-            "research",
-            status="failed" if failed else "completed",
-            result=result,
-            error=error,
-            completed_at=timezone.now(),
+            "research", run_id=run.pk, status="failed" if failed else "completed",
+            result=result, error=error, completed_at=timezone.now(),
+        )
+        _emit_backfill_event(
+            "research", run_id=run.pk, level="error" if failed else "success",
+            event_type="failed" if failed else "completed",
+            message=error if failed else f"Research candle backfill completed: {result['symbols_succeeded']}/{result['symbols_total']} symbols succeeded",
+            task_id=task_id, worker_hostname=_worker_identity(), payload={"result": result},
         )
         if failed:
             raise RuntimeError(error)
         return result
     except Exception as exc:
-        _mark_backfill_run(
-            "research",
-            status="failed",
-            error=str(exc),
-            completed_at=timezone.now(),
-        )
-        logger.exception("Research candle backfill failed", extra={"task_id": task_id})
+        if run is not None:
+            _mark_backfill_run("research", run_id=run.pk, status="failed", error=str(exc), completed_at=timezone.now())
+            _emit_backfill_event(
+                "research", run_id=run.pk, level="error", event_type="failed",
+                message=f"Research candle backfill failed: {exc}",
+                task_id=task_id, worker_hostname=_worker_identity(),
+            )
+        logger.exception("Research candle backfill failed", extra={"task_id": task_id, "run_id": run_id or getattr(run, "pk", None)})
         raise
-    finally:
-        close_old_connections()
 
 
 @shared_task
 def ensure_initial_candle_backfill(count=5000):
-    """Let Celery Beat create/retry the singleton initial warm-up without a browser click."""
+    """Create a new durable execution only when the initial warm-up needs work."""
     from django.db import close_old_connections, transaction
     from .models import CandleBackfillEvent, CandleBackfillRun
 
@@ -510,62 +517,42 @@ def ensure_initial_candle_backfill(count=5000):
     now = timezone.now()
     try:
         with transaction.atomic():
-            run = CandleBackfillRun.objects.select_for_update().filter(scope="initial").first()
-            if run and run.status == "completed":
-                return {"status": "completed", "run_id": run.pk}
-            if run and run.status == "running":
-                # Recovery has one owner: the dedicated reconciler. Do not
-                # invoke it from inside this task while the run row is locked;
-                # that creates control-plane/recovery contention and can make
-                # a healthy dispatch appear stuck.
-                return {"status": "running", "run_id": run.pk}
+            active = CandleBackfillRun.objects.select_for_update().filter(
+                scope="initial", status="running"
+            ).order_by("-requested_at", "-id").first()
+            if active:
+                return {"status": "running", "run_id": active.pk}
 
-            trigger = "automatic"
-            symbol = (run.symbol if run else "") or ""
-            automatic_attempts = int((run.result or {}).get("automatic_attempts", 0) or 0) if run else 0
-            if run and run.status == "failed":
-                last_auto = (run.result or {}).get("last_automatic_dispatch_at")
+            latest = CandleBackfillRun.objects.filter(scope="initial").order_by("-requested_at", "-id").first()
+            if latest and latest.status == "completed":
+                return {"status": "completed", "run_id": latest.pk}
+
+            automatic_attempts = int((latest.result or {}).get("automatic_attempts", 0) or 0) if latest else 0
+            if latest and latest.status == "failed":
+                last_auto = (latest.result or {}).get("last_automatic_dispatch_at")
                 if last_auto:
                     try:
                         last_auto_at = timezone.datetime.fromisoformat(last_auto)
                         if timezone.is_naive(last_auto_at):
                             last_auto_at = last_auto_at.replace(tzinfo=dt_timezone.utc)
                         if now - last_auto_at < BACKFILL_AUTOMATIC_RETRY_AFTER:
-                            return {"status": "cooldown", "run_id": run.pk}
+                            return {"status": "cooldown", "run_id": latest.pk}
                     except (TypeError, ValueError):
                         pass
-
-            if run is None:
-                run = CandleBackfillRun(scope="initial")
             automatic_attempts += 1
-            run.status = "running"
-            run.count = int(count)
-            run.task_id = ""
-            run.requested_by = None
-            run.requested_at = now
-            run.started_at = None
-            run.dispatch_at = None
-            run.accepted_at = None
-            run.last_heartbeat_at = None
-            run.current_symbol = ""
-            run.current_timeframe = ""
-            run.worker_hostname = ""
-            run.completed_at = None
-            run.error = ""
-            run.result = {
-                "symbols_total": 0,
-                "symbols_completed": 0,
-                "symbols_succeeded": 0,
-                "symbols_failed": 0,
-                "percent": 0,
-                "results": {},
-                "trigger": trigger,
-                "automatic_attempts": automatic_attempts,
-                "last_automatic_dispatch_at": now.isoformat(),
-            }
-            run.save()
-            CandleBackfillRun.objects.filter(pk=run.pk).update(requested_at=now)
-            run.refresh_from_db()
+            run = CandleBackfillRun.objects.create(
+                scope="initial",
+                status="running",
+                count=int(count),
+                requested_at=now,
+                result={
+                    "symbols_total": 0, "symbols_completed": 0, "symbols_succeeded": 0,
+                    "symbols_failed": 0, "percent": 0, "results": {},
+                    "trigger": "automatic",
+                    "automatic_attempts": automatic_attempts,
+                    "last_automatic_dispatch_at": now.isoformat(),
+                },
+            )
 
         queue_name = BACKFILL_QUEUE
         task_id = uuid4().hex
@@ -573,32 +560,17 @@ def ensure_initial_candle_backfill(count=5000):
         run.dispatch_at = timezone.now()
         run.save(update_fields=["task_id", "dispatch_at"])
         task = run_initial_candle_backfill.apply_async(
-            args=(run.pk,),
-            kwargs={"count": int(count), "symbol": symbol or None},
-            queue=queue_name,
-            task_id=task_id,
+            args=(run.pk,), kwargs={"count": int(count), "symbol": None},
+            queue=queue_name, task_id=task_id,
         )
         CandleBackfillEvent.objects.create(
-            run=run,
-            level="notice",
-            event_type="dispatch",
-            message="Celery Beat automatically dispatched the initial broker candle backfill to the market-data worker.",
-            task_id=task.id,
-            payload={"queue": queue_name, "trigger": trigger, "automatic_attempts": automatic_attempts},
+            run=run, level="notice", event_type="dispatch",
+            message="Celery Beat automatically dispatched an initial broker candle backfill to the market-data worker.",
+            task_id=task.id, payload={"queue": queue_name, "trigger": "automatic", "automatic_attempts": automatic_attempts},
         )
         return {"status": "dispatched", "run_id": run.pk, "task_id": task.id, "queue": queue_name}
     except Exception as exc:
         logger.exception("Automatic initial candle backfill dispatch failed")
-        try:
-            with transaction.atomic():
-                run = CandleBackfillRun.objects.select_for_update().filter(scope="initial").first()
-                if run and run.status == "running" and not run.started_at:
-                    run.status = "failed"
-                    run.error = f"Automatic Celery dispatch failed: {exc}"
-                    run.completed_at = timezone.now()
-                    run.save(update_fields=["status", "error", "completed_at"])
-        except Exception:
-            logger.exception("Unable to persist automatic candle backfill dispatch failure")
         return {"status": "failed", "error": str(exc)}
     finally:
         close_old_connections()
@@ -611,7 +583,7 @@ def ensure_initial_candle_backfill(count=5000):
     time_limit=4 * 60 * 60 + 5 * 60,
 )
 def run_initial_candle_backfill(run_id, count=5000, symbol=None):
-    """Run the one-time historical warm-up from an available market-data Celery consumer."""
+    """Execute one immutable initial-backfill run from the market-data worker."""
     from django.db import close_old_connections, transaction
     from .models import CandleBackfillRun
 
@@ -626,8 +598,8 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
                 logger.warning("Ignoring superseded candle backfill delivery", extra={"run_id": run_id, "task_id": task_id})
                 return {"status": "superseded", "run_id": run_id}
             now = timezone.now()
-            run_metadata = dict(run.result or {})
-            trigger = run_metadata.get("trigger", "manual")
+            metadata = dict(run.result or {})
+            trigger = metadata.get("trigger", "manual")
             run.status = "running"
             run.started_at = run.started_at or now
             run.accepted_at = run.accepted_at or now
@@ -636,58 +608,43 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
             run.task_id = task_id or run.task_id
             run.worker_hostname = _worker_identity()
             run.result = {
-                "symbols_total": 0,
-                "symbols_completed": 0,
-                "symbols_succeeded": 0,
-                "symbols_failed": 0,
-                "percent": 0,
-                "results": {},
+                "symbols_total": 0, "symbols_completed": 0, "symbols_succeeded": 0,
+                "symbols_failed": 0, "percent": 0, "results": {},
                 "trigger": trigger,
-                "automatic_attempts": run_metadata.get("automatic_attempts", 0),
-                "last_automatic_dispatch_at": run_metadata.get("last_automatic_dispatch_at", ""),
+                "automatic_attempts": metadata.get("automatic_attempts", 0),
+                "last_automatic_dispatch_at": metadata.get("last_automatic_dispatch_at", ""),
             }
             run.save(update_fields=["status", "started_at", "accepted_at", "last_heartbeat_at", "error", "task_id", "worker_hostname", "result"])
 
         _emit_backfill_event(
-            "initial",
-            event_type="worker_started",
+            "initial", run_id=run_id, event_type="worker_started",
             message=f"Worker accepted candle backfill task {task_id}",
-            task_id=task_id,
-            worker_hostname=_worker_identity(),
+            task_id=task_id, worker_hostname=_worker_identity(),
         )
-        logger.info("Candle backfill worker started", extra={"run_id": run_id, "task_id": task_id})
         symbols = _active_symbols(symbol)
         if not symbols:
             raise RuntimeError("No active tradable market symbols are available")
-
-        result = _backfill_symbols(symbols, int(count), scope="initial")
+        result = _backfill_symbols(symbols, int(count), scope="initial", run_id=run_id)
         failed = [value for value, payload in result["results"].items() if _symbol_backfill_failed(payload)]
         error = f"Historical backfill failed for: {', '.join(failed)}" if failed else ""
-
+        result["trigger"] = trigger
+        result["automatic_attempts"] = metadata.get("automatic_attempts", 0)
+        result["last_automatic_dispatch_at"] = metadata.get("last_automatic_dispatch_at", "")
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
             if run.status == "completed" and run.completed_at:
                 return run.result or {"status": "completed"}
-            result = dict(result)
-            result["trigger"] = trigger
-            result["automatic_attempts"] = run_metadata.get("automatic_attempts", 0)
-            result["last_automatic_dispatch_at"] = run_metadata.get("last_automatic_dispatch_at", "")
             run.result = result
             run.status = "failed" if failed else "completed"
             run.error = error
             run.completed_at = timezone.now()
             run.save(update_fields=["result", "status", "error", "completed_at"])
-
         _emit_backfill_event(
-            "initial",
-            level="error" if failed else "success",
+            "initial", run_id=run_id, level="error" if failed else "success",
             event_type="failed" if failed else "completed",
             message=error if failed else f"Candle backfill completed: {result['symbols_succeeded']}/{result['symbols_total']} symbols succeeded",
-            task_id=task_id,
-            worker_hostname=_worker_identity(),
-            payload={"result": result},
+            task_id=task_id, worker_hostname=_worker_identity(), payload={"result": result},
         )
-
         if failed:
             raise RuntimeError(error)
         return result
@@ -700,17 +657,12 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
                 run.completed_at = timezone.now()
                 run.save(update_fields=["status", "error", "completed_at"])
         _emit_backfill_event(
-            "initial",
-            level="error",
-            event_type="failed",
+            "initial", run_id=run_id, level="error", event_type="failed",
             message=f"Candle backfill failed: {exc}",
-            task_id=task_id,
-            worker_hostname=_worker_identity(),
+            task_id=task_id, worker_hostname=_worker_identity(),
         )
         logger.exception("Initial candle backfill failed", extra={"run_id": run_id})
         raise
-    finally:
-        close_old_connections()
 
 
 @shared_task
