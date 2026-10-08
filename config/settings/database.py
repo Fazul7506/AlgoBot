@@ -97,6 +97,7 @@ if DATABASE_URL:
             **database_config.get("OPTIONS", {}),
             **pool_options,
         }
+        database_config["DISABLE_SERVER_SIDE_CURSORS"] = True
     DATABASES = {"default": database_config}
 elif USE_POSTGRES:
     DATABASES = {
