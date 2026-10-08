@@ -181,21 +181,17 @@ class ExecutionQueueTaskTests(TestCase):
         self.assertEqual(wrapped(), {'processed': 1})
         lock.release.assert_called_once_with()
 
-    @patch('apps.execution.tasks.get_redis_connection')
-    def test_queued_order_is_claimed_and_completed(self, get_redis_connection):
-        # The production task is protected by a distributed singleton. This
-        # regression test must explicitly model successful lock acquisition so
-        # it exercises queue claiming/execution rather than depending on CI's
-        # Redis availability or an unrelated existing lock.
-        lock = get_redis_connection.return_value.lock.return_value
-        lock.acquire.return_value = True
+    def test_queued_order_is_claimed_and_completed(self):
+        # Lock acquisition is covered by dedicated singleton tests above. Use
+        # the wrapped queue function here so this regression test remains
+        # deterministic and does not depend on Redis availability in CI.
         user = get_user_model().objects.create_user(username='queue-regression', password='test-password')
         broker = Broker.objects.create(name='Queue Broker', broker_type='deriv', status='active', supports_live=False)
         account = BrokerAccount.objects.create(user=user, broker=broker, account_id='QUEUE', status='active', credentials={'account_type': 'demo'})
         order = Order.objects.create(user=user, broker_account=account, symbol='R_10', direction='buy', order_type='market', stake='1', status='queued')
         queue = ExecutionQueue.objects.create(order=order, status='pending')
         with patch('apps.execution.tasks.ExecutionEngine.execute', new=AsyncMock(return_value=order)) as execute:
-            result = process_execution_queue.run(batch_size=1)
+            result = process_execution_queue.run.__wrapped__(batch_size=1)
         execute.assert_awaited_once()
         queue.refresh_from_db()
         self.assertEqual(queue.status, 'done')
