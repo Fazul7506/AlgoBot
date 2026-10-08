@@ -547,7 +547,12 @@ def ensure_initial_candle_backfill(count=5000):
 
     close_old_connections()
     now = timezone.now()
+    dispatch_lock = None
     try:
+        from .backfill_lock import acquire_backfill_dispatch_lock
+        dispatch_lock = acquire_backfill_dispatch_lock("initial")
+        if dispatch_lock is None:
+            return {"status": "busy", "reason": "backfill_dispatch_lock_held"}
         with transaction.atomic():
             active = CandleBackfillRun.objects.select_for_update().filter(
                 scope="initial", status="running"
@@ -605,6 +610,8 @@ def ensure_initial_candle_backfill(count=5000):
         logger.exception("Automatic initial candle backfill dispatch failed")
         return {"status": "failed", "error": str(exc)}
     finally:
+        if dispatch_lock is not None:
+            dispatch_lock.release()
         close_old_connections()
 
 
@@ -706,6 +713,15 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
 
     close_old_connections()
     now = timezone.now()
+    dispatch_lock = None
+    try:
+        from .backfill_lock import acquire_backfill_dispatch_lock
+        dispatch_lock = acquire_backfill_dispatch_lock("initial-recovery")
+        if dispatch_lock is None:
+            return {"recovered": [], "status": "busy"}
+    except Exception:
+        logger.exception("Unable to acquire candle backfill recovery lock")
+        return {"recovered": [], "status": "lock_unavailable"}
     running_cutoff = now - BACKFILL_RUNNING_STALE_AFTER
     dispatch_cutoff = now - BACKFILL_DISPATCH_STALE_AFTER
     # The first delivery attempt may recover after the short dispatch window.
@@ -809,4 +825,6 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
         return {"recovered": recovered}
     finally:
+        if dispatch_lock is not None:
+            dispatch_lock.release()
         close_old_connections()

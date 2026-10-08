@@ -14,6 +14,10 @@
   let apiAccessToken=null;
   let apiTokenPromise=null;
   const browserApiTokenUrl=()=>apiBase+'/api/auth/browser-token/';
+  const readCsrfToken=()=>{
+    const match=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  };
   async function ensureApiAccessToken(controller,force=false){
     if(apiAccessToken&&!force)return apiAccessToken;
     if(apiTokenPromise&&!force)return apiTokenPromise;
@@ -61,7 +65,7 @@
     return `${apiBase}${raw.startsWith('/')?raw:`/${raw}`}`;
   };
   const normalizeEndpoint=url=>url==='/api/market/snapshots/all_snapshots/'?'/api/market/snapshots/?page_size=8':url;
-  const isCloudflareChallenge=(response,text)=>{if(!response||!text)return false;const body=String(text).toLowerCase();return[400,403,429,503,520,521,522,524].includes(response.status)&&(body.includes('just a moment')||body.includes('challenge-platform')||body.includes('cf_chl_opt')||body.includes('cf_chl-')||body.includes('challenges.cloudflare.com')||body.includes('enable javascript and cookies to continue')||(body.includes('cloudflare')&&String(response.headers?.get('content-type')||'').toLowerCase().includes('text/html')))};
+  const isCloudflareChallenge=(response,text)=>{if(!response)return false;const mitigated=String(response.headers?.get('cf-mitigated')||'').toLowerCase();if(mitigated==='challenge')return true;if(!text)return false;const body=String(text).toLowerCase();return[400,403,429,503,520,521,522,524].includes(response.status)&&(body.includes('just a moment')||body.includes('challenge-platform')||body.includes('cf_chl_opt')||body.includes('cf_chl-')||body.includes('challenges.cloudflare.com')||body.includes('enable javascript and cookies to continue')||(body.includes('cloudflare')&&String(response.headers?.get('content-type')||'').toLowerCase().includes('text/html')))};
   const parseDjangoResponse=(response,text)=>{const ct=String(response?.headers?.get('content-type')||'').toLowerCase();if(!ct.includes('text/html')||!text)return null;try{const doc=new DOMParser().parseFromString(text,'text/html'),env=doc.querySelector('[data-django-response]');if(!env)return null;const payloadNode=doc.querySelector('#django-response-payload'),messageNode=doc.querySelector('[data-response-message], [data-django-message]');let payload={};if(payloadNode?.textContent)payload=JSON.parse(payloadNode.textContent);return{django:true,status:Number(env.dataset.status||response.status||200),kind:env.dataset.kind||'info',message:messageNode?.textContent?.trim()||'',payload}}catch(_){return null}};
   const parsePayload=(response,text)=>{const django=parseDjangoResponse(response,text);if(django)return django;try{return text?JSON.parse(text):{}}catch(_){if(isCloudflareChallenge(response,text))return{detail:'Dedicated API edge challenge encountered.',code:'EDGE_CHALLENGE'};const ct=String(response?.headers?.get('content-type')||'').toLowerCase();return{detail:ct.includes('text/html')?`API returned an unexpected HTML response (${response.status}).`:String(text||`HTTP ${response?.status||'unknown'} request failure`)}}};
   const statusMessage=(status,payload)=>payload?.detail||payload?.message||({401:'Your session has expired. Sign in again.',403:'You are not authorized to perform this action.',404:'The requested API endpoint was not found.',405:'The API endpoint does not accept this HTTP method.',409:'The requested operation conflicts with the current account state.',429:'The request limit or plan quota has been reached.',500:'The server encountered an internal error.',502:'The broker/API gateway returned an invalid response.',503:'The backend service is temporarily unavailable.',504:'The backend service timed out.'}[status]||`HTTP ${status} request failure`);
@@ -83,6 +87,17 @@
     // cookie received by the API origin.
     const accessToken=await ensureApiAccessToken(controller);
     if(accessToken&&!headers.has('Authorization'))headers.set('Authorization','Bearer '+accessToken);
+    if(sessionAccountSelect && !headers.has('X-CSRFToken')){
+      const csrfToken=readCsrfToken();
+      if(!csrfToken){
+        const error=new Error('The browser security token is unavailable. Refresh the workspace before switching accounts.');
+        error.code='CSRF_TOKEN_UNAVAILABLE';
+        error.status=403;
+        error.retryable=false;
+        throw error;
+      }
+      headers.set('X-CSRFToken',csrfToken);
+    }
     const requestInit={credentials:sessionAccountSelect?'include':'omit',...options,headers,cache:'no-store',signal:controller.signal};
     const response=await nativeFetch(target,requestInit);
     return{response,text:await response.text()};

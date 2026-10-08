@@ -1,5 +1,5 @@
 # Production-only dependencies layered on the shared base requirements.
 -r base.txt
-psycopg2-binary
+psycopg[binary,pool]
 sentry-sdk
 gunicorn

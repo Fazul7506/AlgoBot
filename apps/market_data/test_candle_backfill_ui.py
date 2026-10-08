@@ -1,6 +1,6 @@
 from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -12,6 +12,12 @@ from .models import CandleBackfillEvent, CandleBackfillRun, MarketSymbol
 
 class CandleBackfillUiTests(TestCase):
     def setUp(self):
+        self.lock_patcher = patch(
+            "apps.market_data.views.acquire_backfill_dispatch_lock",
+            return_value=MagicMock(),
+        )
+        self.lock_patcher.start()
+        self.addCleanup(self.lock_patcher.stop)
         self.user = get_user_model().objects.create_user(
             username="backfill-admin",
             password="test-password",

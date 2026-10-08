@@ -25,6 +25,6 @@ joblib>=1.4,<2
 xgboost>=3,<4
 lightgbm>=4,<5
 statsmodels>=0.14,<1
-psycopg2-binary
+psycopg[binary,pool]
 sentry-sdk
 gunicorn

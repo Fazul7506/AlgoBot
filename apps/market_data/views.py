@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+import logging
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.views import redirect_to_login
 from django.db import transaction
@@ -8,7 +9,10 @@ from django.urls import reverse
 from django.utils import timezone
 from uuid import uuid4
 
+logger = logging.getLogger(__name__)
+
 from .constants import TIMEFRAMES
+from .backfill_lock import acquire_backfill_dispatch_lock
 from .models import CandleBackfillEvent, CandleBackfillRun, MarketSymbol
 
 BACKFILL_COUNT = 5000
@@ -312,46 +316,65 @@ def initial_candle_backfill(request):
                 return JsonResponse({"error": "Selected symbol is not an active, tradable Deriv market symbol."}, status=400)
             return redirect(f"{reverse('initial_candle_backfill')}?error=invalid-symbol")
 
-        with transaction.atomic():
-            active = CandleBackfillRun.objects.select_for_update().filter(
-                scope=scope, status="running"
-            ).order_by("-requested_at", "-id").first()
+        dispatch_lock = None
+        try:
+            dispatch_lock = acquire_backfill_dispatch_lock(scope)
+        except Exception:
+            logger.exception("backfill_dispatch_lock_unavailable", extra={"scope": scope})
+            if request.GET.get("format") == "json":
+                return JsonResponse({"error": "Backfill dispatch coordination is temporarily unavailable; no execution was started."}, status=503)
+            return redirect(f"{reverse('initial_candle_backfill')}?error=dispatch-unavailable")
+        if dispatch_lock is None:
+            active = CandleBackfillRun.objects.filter(scope=scope, status="running").order_by("-requested_at", "-id").first()
             if active:
                 return redirect(f"{reverse('initial_candle_backfill')}?run_id={active.pk}")
-            run = CandleBackfillRun.objects.create(scope=scope)
-            _reset_run_for_dispatch(
-                run,
-                count=count,
-                symbol=symbol,
-                requested_by=request.user,
-                trigger="manual",
-            )
+            if request.GET.get("format") == "json":
+                return JsonResponse({"error": "Another backfill dispatch is already being processed. Retry after it completes."}, status=409)
+            return redirect(f"{reverse('initial_candle_backfill')}?error=dispatch-busy")
 
-        queue_name = "market_data"
-        task_id = uuid4().hex
-        if scope == "initial":
-            from .tasks import run_initial_candle_backfill
-            dispatched = _dispatch_backfill(
-                run,
-                task=run_initial_candle_backfill,
-                count=count,
-                symbol=symbol,
-                queue_name=queue_name,
-                task_id=task_id,
-                trigger="manual",
-            )
-        else:
-            from .tasks import backfill_research_candles
-            dispatched = _dispatch_backfill(
-                run,
-                task=backfill_research_candles,
-                count=count,
-                symbol=symbol,
-                queue_name=queue_name,
-                task_id=task_id,
-                trigger="manual",
-            )
-        return redirect(f"{reverse('initial_candle_backfill')}?run_id={run.pk}")
+        try:
+            with transaction.atomic():
+                active = CandleBackfillRun.objects.select_for_update().filter(
+                    scope=scope, status="running"
+                ).order_by("-requested_at", "-id").first()
+                if active:
+                    return redirect(f"{reverse('initial_candle_backfill')}?run_id={active.pk}")
+                run = CandleBackfillRun.objects.create(scope=scope)
+                _reset_run_for_dispatch(
+                    run,
+                    count=count,
+                    symbol=symbol,
+                    requested_by=request.user,
+                    trigger="manual",
+                )
+
+            queue_name = "market_data"
+            task_id = uuid4().hex
+            if scope == "initial":
+                from .tasks import run_initial_candle_backfill
+                dispatched = _dispatch_backfill(
+                    run,
+                    task=run_initial_candle_backfill,
+                    count=count,
+                    symbol=symbol,
+                    queue_name=queue_name,
+                    task_id=task_id,
+                    trigger="manual",
+                )
+            else:
+                from .tasks import backfill_research_candles
+                dispatched = _dispatch_backfill(
+                    run,
+                    task=backfill_research_candles,
+                    count=count,
+                    symbol=symbol,
+                    queue_name=queue_name,
+                    task_id=task_id,
+                    trigger="manual",
+                )
+            return redirect(f"{reverse('initial_candle_backfill')}?run_id={run.pk}")
+        finally:
+            dispatch_lock.release()
 
     eligible_symbols = list(
         MarketSymbol.objects.filter(
@@ -467,11 +490,13 @@ def initial_candle_backfill(request):
         response["Expires"] = "0"
         return response
 
-    page_error = (
-        "Selected symbol is not an active, tradable Deriv market symbol."
-        if request.GET.get("error") == "invalid-symbol"
-        else ""
-    )
+    error_code = request.GET.get("error")
+    page_errors = {
+        "invalid-symbol": "Selected symbol is not an active, tradable Deriv market symbol.",
+        "dispatch-busy": "Another backfill dispatch is already being coordinated; no duplicate execution was started.",
+        "dispatch-unavailable": "Backfill dispatch coordination is temporarily unavailable; no execution was started.",
+    }
+    page_error = page_errors.get(error_code, "")
     return render(
         request,
         "market_data/candle_backfill.html",
