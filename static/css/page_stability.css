@@ -1,0 +1,357 @@
+/* AlgoBot repository-wide page stability layer — 2026-10-08.
+ * This layer normalizes page geometry without changing business behavior.
+ * Shell geometry stays in runtime_recovery.css; page/component contracts live here.
+ */
+
+.app-content,
+.app-content > main,
+.app-content > section,
+.app-content > .workspace,
+.app-content > .page-shell,
+.app-content > .data-page,
+.app-content > .enterprise-page,
+.app-content > .algobot-shared-page,
+.app-content > .command-center,
+.app-content > .monitoring-workspace{
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+}
+
+.app-content > main,
+.app-content > section,
+.app-content > .workspace,
+.app-content > .page-shell,
+.app-content > .data-page,
+.app-content > .enterprise-page,
+.app-content > .algobot-shared-page,
+.app-content > .command-center,
+.app-content > .monitoring-workspace{
+  margin-inline:auto;
+  padding-inline:clamp(12px,2.2vw,28px);
+  padding-bottom:32px;
+}
+
+.page-heading,
+.page-header,
+.enterprise-page-header,
+.command-hero,
+.compact-hero,
+.enterprise-hero,
+.hero,
+.workspace > header{
+  min-width:0;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  flex-wrap:wrap;
+}
+
+.page-heading > *,
+.page-header > *,
+.enterprise-page-header > *,
+.command-hero > *,
+.compact-hero > *,
+.enterprise-hero > *,
+.hero > *,
+.workspace > header > *{
+  min-width:0;
+  max-width:100%;
+}
+
+.page-heading h1,
+.page-header h1,
+.enterprise-page-header h1,
+.command-hero h1,
+.compact-hero h1,
+.enterprise-hero h1,
+.hero h1,
+.workspace h1{
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+.page-heading p,
+.page-header p,
+.enterprise-page-header p,
+.command-hero p,
+.compact-hero p,
+.enterprise-hero p,
+.hero p,
+.workspace > p{
+  max-width:78ch;
+  overflow-wrap:anywhere;
+}
+
+.page-actions,
+.enterprise-page-actions,
+.hero-actions,
+.actions,
+.topbar-actions{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  max-width:100%;
+}
+
+.page-actions .btn,
+.enterprise-page-actions .btn,
+.hero-actions .btn,
+.actions .btn{
+  min-width:0;
+  max-width:100%;
+}
+
+.kpi-grid,
+.grid-4,
+.card-grid,
+.workspace-grid,
+.monitoring-kpis,
+.monitoring-grid,
+.status-grid,
+.model-lab-grid,
+.usage-grid,
+.billing-plan-grid,
+.card-grid,
+.cards{
+  min-width:0;
+  align-items:stretch;
+}
+
+.kpi-grid,
+.grid-4{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:14px;
+}
+
+.kpi-card,
+.card,
+.cards > article,
+.kpi-grid > article,
+.grid-4 > article,
+.monitoring-card,
+.status-grid > article,
+.model-card,
+.usage-card,
+.billing-plan-card,
+.workspace-grid > *,
+.panel,
+.enterprise-page__workspace{
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+}
+
+.kpi-card *,
+.card *,
+.cards > article *,
+.kpi-grid > article *,
+.grid-4 > article *,
+.monitoring-card *,
+.status-grid > article *,
+.model-card *,
+.usage-card *,
+.billing-plan-card *,
+.workspace-grid > *,
+.panel *,
+.enterprise-page__workspace *{
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+.table-wrap,
+.table-responsive,
+.data-table-wrap,
+.enterprise-table-wrap,
+.scroll-x{
+  display:block;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  overflow-x:auto;
+  overflow-y:visible;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-gutter:stable;
+}
+
+.table-wrap > table,
+.table-responsive > table,
+.data-table-wrap > table,
+.enterprise-table-wrap > table{
+  width:100%;
+  min-width:680px;
+  max-width:none;
+  border-collapse:collapse;
+}
+
+.panel-head,
+.section-head,
+.subhead,
+.head{
+  min-width:0;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.panel-head > *,
+.section-head > *,
+.subhead > *,
+.head > *{
+  min-width:0;
+  max-width:100%;
+}
+
+input,
+select,
+textarea,
+button{
+  max-width:100%;
+  box-sizing:border-box;
+}
+
+input,
+select,
+textarea{
+  min-width:0;
+}
+
+.form-grid,
+.filters,
+.toolbar,
+.orders-toolbar{
+  min-width:0;
+  max-width:100%;
+  display:flex;
+  align-items:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.toolbar > *,
+.filters > *,
+.orders-toolbar > *{
+  min-width:0;
+  max-width:100%;
+}
+
+.empty,
+.empty-state,
+.ds-state{
+  min-width:0;
+  max-width:100%;
+  overflow-wrap:anywhere;
+}
+
+.command-center,
+.monitoring-workspace,
+.enterprise-page,
+.algobot-shared-page,
+.page-shell,
+.data-page{
+  overflow:visible;
+}
+
+@media (max-width:1100px){
+  .kpi-grid,
+  .grid-4{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+
+@media (max-width:760px){
+  .app-content > main,
+  .app-content > section,
+  .app-content > .workspace,
+  .app-content > .page-shell,
+  .app-content > .data-page,
+  .app-content > .enterprise-page,
+  .app-content > .algobot-shared-page,
+  .app-content > .command-center,
+  .app-content > .monitoring-workspace{
+    padding-inline:10px;
+    padding-bottom:24px;
+  }
+
+  .page-heading,
+  .page-header,
+  .enterprise-page-header,
+  .command-hero,
+  .compact-hero,
+  .enterprise-hero,
+  .hero,
+  .workspace > header{
+    gap:12px;
+  }
+
+  .page-actions,
+  .enterprise-page-actions,
+  .hero-actions,
+  .actions{
+    width:100%;
+  }
+
+  .page-actions .btn,
+  .enterprise-page-actions .btn,
+  .hero-actions .btn,
+  .actions .btn{
+    flex:1 1 auto;
+  }
+
+  .kpi-grid,
+  .grid-4{
+    grid-template-columns:1fr;
+    gap:10px;
+  }
+
+  .cards{
+    grid-template-columns:1fr!important;
+  }
+
+  .workspace-grid.two,
+  .workspace-grid.three,
+  .workspace-grid.four{
+    grid-template-columns:1fr!important;
+  }
+
+  .monitoring-kpis,
+  .monitoring-grid,
+  .status-grid,
+  .model-lab-grid,
+  .usage-grid{
+    grid-template-columns:1fr!important;
+  }
+
+  .table-wrap > table,
+  .table-responsive > table,
+  .data-table-wrap > table,
+  .enterprise-table-wrap > table{
+    min-width:620px;
+  }
+}
+
+@media (max-width:430px){
+  .page-actions .btn,
+  .enterprise-page-actions .btn,
+  .hero-actions .btn,
+  .actions .btn{
+    width:100%;
+    flex-basis:100%;
+  }
+
+  .table-wrap > table,
+  .table-responsive > table,
+  .data-table-wrap > table,
+  .enterprise-table-wrap > table{
+    min-width:560px;
+  }
+}
