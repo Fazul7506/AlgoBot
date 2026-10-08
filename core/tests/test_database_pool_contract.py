@@ -17,7 +17,7 @@ class DatabasePoolContractTests(SimpleTestCase):
         self.assertEqual(options["pool"]["max_size"], 3)
         self.assertEqual(options["pool"]["max_lifetime"], 1800)
         self.assertEqual(options["pool"]["timeout"], 10)
-        self.assertNotIn("DISABLE_SERVER_SIDE_CURSORS", options)
+        self.assertTrue(options["DISABLE_SERVER_SIDE_CURSORS"])
         self.assertFalse(options["server_side_binding"])
 
     def test_pool_can_be_disabled_for_local_or_legacy_runtime(self):
