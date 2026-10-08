@@ -292,6 +292,7 @@
       }
       if (data.events_last_id) lastEventId = Number(data.events_last_id) || lastEventId;
     } catch (error) {
+      if (error?.name === "AbortError") return;
       telemetryFailures += 1;
       // A single mobile-network hiccup must not look like a broker failure.
       // Show the reconnect warning only after several consecutive failures.
@@ -308,8 +309,10 @@
         row.textContent = "Live telemetry is temporarily unavailable; the durable server state remains authoritative and the page will keep retrying.";
       }
     } finally {
-      if (activeController === controller) activeController = null;
-      polling = false;
+      if (activeController === controller) {
+        activeController = null;
+        polling = false;
+      }
     }
   };
 
