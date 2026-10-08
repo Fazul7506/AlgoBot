@@ -87,7 +87,10 @@ class WebhookService:
     @staticmethod
     def validate_url(url):
         parsed = urllib.parse.urlparse(str(url).strip())
-        if parsed.scheme not in {"https", "http"} or not parsed.hostname: raise ValueError("Webhook URL must be a valid HTTP or HTTPS URL")
+        if parsed.scheme not in {"https", "http"} or not parsed.hostname:
+            raise ValueError("Webhook URL must be a valid HTTP or HTTPS URL")
+        if parsed.scheme != "https" and not getattr(settings, "DEBUG", False) and getattr(settings, "DEVELOPER_WEBHOOK_REQUIRE_HTTPS", True):
+            raise ValueError("Production webhooks must use HTTPS")
         if parsed.username or parsed.password: raise ValueError("Webhook URLs cannot contain embedded credentials")
         host = parsed.hostname.lower().rstrip(".")
         if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"): raise ValueError("Local webhook destinations are not allowed")
@@ -124,7 +127,13 @@ class WebhookService:
         request = urllib.request.Request(webhook.url, data=body, method="POST", headers={"Content-Type": "application/json", "X-AlgoBot-Signature": self.sign(webhook.secret, body.decode())})
         try:
             delivery.attempts += 1
-            with urllib.request.build_opener(_NoRedirectHandler()).open(request, timeout=timeout) as response:
+            # Disable ambient HTTP(S)_PROXY variables: webhook destinations are
+            # user-controlled and must not be routed through an untrusted proxy.
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirectHandler())
+            # Re-resolve immediately before connecting to reduce DNS-rebinding
+            # exposure between validation and delivery.
+            self.validate_url(webhook.url)
+            with opener.open(request, timeout=timeout) as response:
                 delivery.response_status = response.status; delivery.response_body = response.read(4096).decode(errors="replace")
                 delivery.status = "delivered" if 200 <= response.status < 300 else "failed"; delivery.delivered_at = django_timezone.now() if delivery.status == "delivered" else None
                 delivery.save(); return ServiceResult(delivery.status, {"delivery_id": delivery.id, "status_code": response.status})
