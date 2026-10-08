@@ -347,29 +347,29 @@ def initial_candle_backfill(request):
                 )
 
             queue_name = "market_data"
-        task_id = uuid4().hex
-        if scope == "initial":
-            from .tasks import run_initial_candle_backfill
-            dispatched = _dispatch_backfill(
-                run,
-                task=run_initial_candle_backfill,
-                count=count,
-                symbol=symbol,
-                queue_name=queue_name,
-                task_id=task_id,
-                trigger="manual",
-            )
-        else:
-            from .tasks import backfill_research_candles
-            dispatched = _dispatch_backfill(
-                run,
-                task=backfill_research_candles,
-                count=count,
-                symbol=symbol,
-                queue_name=queue_name,
-                task_id=task_id,
-                trigger="manual",
-            )
+            task_id = uuid4().hex
+            if scope == "initial":
+                from .tasks import run_initial_candle_backfill
+                dispatched = _dispatch_backfill(
+                    run,
+                    task=run_initial_candle_backfill,
+                    count=count,
+                    symbol=symbol,
+                    queue_name=queue_name,
+                    task_id=task_id,
+                    trigger="manual",
+                )
+            else:
+                from .tasks import backfill_research_candles
+                dispatched = _dispatch_backfill(
+                    run,
+                    task=backfill_research_candles,
+                    count=count,
+                    symbol=symbol,
+                    queue_name=queue_name,
+                    task_id=task_id,
+                    trigger="manual",
+                )
             return redirect(f"{reverse('initial_candle_backfill')}?run_id={run.pk}")
         finally:
             dispatch_lock.release()
