@@ -14,6 +14,9 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("Contact sales", template)
         self.assertIn('data-provider="intasend"', template)
         self.assertIn('data-provider="pesapal"', template)
+        self.assertIn('Included with every account', template)
+        self.assertIn('Checkout unavailable', template)
+        self.assertNotIn("name==='FREE'?'Use Free':'Choose plan'", template)
 
     def test_intasend_badge_is_limited_to_intasend_billing_surfaces(self):
         from pathlib import Path
