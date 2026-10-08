@@ -134,12 +134,12 @@
   };
 
 
-  const renderHistory = (history, hasMore) => {
+  const renderHistory = (history, hasMore, totalCount = null) => {
     const table = $("[data-history-body]");
     if (!table) return;
     table.replaceChildren();
     const rows = Array.isArray(history) ? history : [];
-    const total = Number.isFinite(Number(window.__backfillHistoryTotal)) ? Number(window.__backfillHistoryTotal) : rows.length;
+    const total = Number.isFinite(Number(totalCount)) ? Number(totalCount) : rows.length;
     text("[data-history-count]", total + (total === 1 ? " run" : " runs"));
     const more = $("[data-history-more]");
     if (more) more.hidden = !hasMore;
@@ -190,13 +190,6 @@
         row.appendChild(cell);
       });
       const select = () => selectRun(run.id);
-      row.addEventListener("click", select);
-      row.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          select();
-        }
-      });
       table.appendChild(row);
     });
   };
@@ -248,6 +241,7 @@
     const generation = ++refreshGeneration;
     if (force && activeController) activeController.abort();
     polling = true;
+    let controller = null;
     try {
       const params = new URLSearchParams({
         format: "json",
@@ -261,7 +255,7 @@
       // Never allow one stalled HTTP request to freeze the telemetry loop.
       // The durable Django run/event records remain authoritative; the browser
       // is only a live observer.
-      const controller = new AbortController();
+      controller = new AbortController();
       activeController = controller;
       const requestedRunId = selectedRunId;
       const timeout = window.setTimeout(() => controller.abort(), 4500);
@@ -289,14 +283,14 @@
         window.history.replaceState({}, "", url);
       }
       renderRun(data.selected);
-      renderHistory(data.history || [], Boolean(data.history_has_more));
+      window.__backfillHistoryTotal = Number(data.history_total) || (data.history || []).length;
+      renderHistory(data.history || [], Boolean(data.history_has_more), window.__backfillHistoryTotal);
       if (query && lastEventId === 0) {
         renderEvents(data.events || [], true);
       } else {
         renderEvents(data.events || [], false);
       }
       if (data.events_last_id) lastEventId = Number(data.events_last_id) || lastEventId;
-      window.__backfillHistoryTotal = Number(data.history_total) || (data.history || []).length;
     } catch (error) {
       telemetryFailures += 1;
       // A single mobile-network hiccup must not look like a broker failure.
@@ -366,7 +360,7 @@
   const resetSearch = () => {
     lastEventId = 0;
     body.replaceChildren();
-    refresh();
+    refresh({force: true});
   };
 
   const search = $("[data-log-search]");
