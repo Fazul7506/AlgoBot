@@ -1,0 +1,85 @@
+/* Developer/API production hardening: isolated page-level geometry and responsive controls. */
+.dev-page,.api-explorer,.api-status-page{box-sizing:border-box;min-width:0;width:100%;max-width:100%;overflow-x:clip}
+.dev-page *, .api-explorer *, .api-status-page *{box-sizing:border-box;min-width:0}
+.dev-page .panel,.api-explorer .panel,.api-status-page .panel{max-width:100%}
+.dev-page .dev-hero-actions,.api-explorer .api-hero-actions{flex-wrap:wrap;justify-content:flex-end}
+.dev-page .dev-hero-actions .btn,.api-explorer .api-hero-actions .btn{white-space:nowrap;text-decoration:none}
+.dev-page .dev-row{align-items:flex-start}
+.dev-page .dev-row>div:first-child{min-width:0;flex:1}
+.dev-page .dev-actions{max-width:100%;justify-content:flex-end}
+.dev-page .dev-actions button{min-height:34px;cursor:pointer}
+.dev-page .dev-actions form{max-width:100%}
+.dev-page .dev-actions button:hover,.dev-page .secret-panel button:hover{border-color:#64748b;background:#2a3039}
+.dev-page .dev-form input,.dev-page .dev-form select,.dev-page .dev-form textarea{width:100%;max-width:100%;box-sizing:border-box}
+.dev-page .dev-form fieldset{min-width:0;margin:0;padding:12px}
+.dev-page .dev-form fieldset label{min-width:0}
+.dev-page .dev-meta{display:block;overflow-wrap:anywhere;word-break:break-word}
+.dev-page .dev-list{min-width:0}
+.dev-page .secret-panel{min-width:0}
+.dev-page .secret-panel code{display:block;min-width:0;max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.dev-page .dev-code{max-width:100%;overflow:auto}
+.dev-page .dev-help{overflow-wrap:anywhere}
+.api-explorer{max-width:1400px;margin:auto;padding:18px}
+.api-explorer .api-hero{min-width:0}
+.api-explorer .api-hero>div:first-child{min-width:0}
+.api-explorer .api-hero p{max-width:850px;line-height:1.55}
+.api-explorer .api-control-strip{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;padding:14px 16px}
+.api-explorer .api-control-strip>div{display:grid;gap:4px;min-width:0}
+.api-explorer .api-control-strip span{color:#94a3b8;font-size:12px;line-height:1.5}
+.api-explorer .api-control-strip .btn{flex:0 0 auto;text-decoration:none;white-space:nowrap}
+.api-explorer .api-sidebar,.api-explorer .api-main{min-width:0}
+.api-explorer .api-sidebar{overscroll-behavior:contain}
+.api-explorer .api-main{overflow-x:hidden}
+.api-explorer .api-main-head>div{min-width:0}
+.api-explorer .api-main-head h2,.api-explorer .api-main-head p{overflow-wrap:anywhere}
+.api-explorer .api-tabs{overflow-x:auto;scrollbar-width:thin}
+.api-explorer .api-tabs button{flex:0 0 auto;white-space:nowrap}
+.api-explorer .api-panel pre{max-width:100%;overflow:auto}
+.api-explorer .api-meta-grid article{min-width:0}
+.api-explorer .api-meta-grid strong,.api-explorer .api-meta-grid code{overflow-wrap:anywhere;word-break:break-word}
+.api-explorer .api-endpoint{min-width:0}
+.api-explorer .api-endpoint code{min-width:0}
+.api-status-page .hero-panel{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.api-status-page .hero-panel p{max-width:900px;line-height:1.55}
+.api-status-page .hero-panel .btn{flex:0 0 auto;white-space:nowrap}
+.api-status-page .status-grid article{min-width:0}
+.api-status-page .status-grid strong,.api-status-page .status-grid small{overflow-wrap:anywhere}
+.api-status-page .status-row>*{min-width:0;overflow-wrap:anywhere}
+
+@media (max-width:1100px){
+  .dev-page .dev-hero-actions,.api-explorer .api-hero-actions{justify-content:flex-start}
+  .api-explorer .api-layout{grid-template-columns:280px minmax(0,1fr)}
+  .api-explorer .api-meta-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:900px){
+  .dev-page .dev-hero-actions,.api-explorer .api-hero-actions{width:100%}
+  .dev-page .dev-actions{justify-content:flex-start}
+  .api-explorer .api-control-strip{align-items:flex-start;flex-direction:column}
+  .api-explorer .api-control-strip .btn{width:100%;text-align:center}
+  .api-status-page .hero-panel{flex-direction:column}
+  .api-status-page .hero-panel .btn{width:100%}
+}
+@media (max-width:600px){
+  .dev-page,.api-explorer,.api-status-page{padding:10px}
+  .dev-page .dev-hero-actions,.api-explorer .api-hero-actions{display:grid;grid-template-columns:1fr 1fr;width:100%;gap:8px}
+  .dev-page .dev-hero-actions .dev-health,.api-explorer .api-hero-actions .api-status{grid-column:1/-1;justify-self:start}
+  .dev-page .dev-hero-actions .btn,.api-explorer .api-hero-actions .btn{width:100%;text-align:center}
+  .dev-page .dev-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+  .dev-page .dev-actions form,.dev-page .dev-actions button{width:100%}
+  .dev-page .dev-row{padding:14px 0}
+  .dev-page .dev-form fieldset{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .dev-page .secret-panel>div{grid-template-columns:1fr}
+  .api-explorer .api-hero{padding:16px}
+  .api-explorer .api-layout{min-height:0}
+  .api-explorer .api-sidebar{max-height:46vh}
+  .api-explorer .api-main{padding:14px}
+  .api-explorer .api-meta-grid{grid-template-columns:1fr}
+  .api-explorer .api-main-head{align-items:flex-start;flex-direction:column}
+  .api-explorer .api-main-head .badge{align-self:flex-start}
+}
+@media (max-width:380px){
+  .dev-page .dev-hero-actions,.api-explorer .api-hero-actions{grid-template-columns:1fr}
+  .dev-page .dev-hero-actions .dev-health,.api-explorer .api-hero-actions .api-status{grid-column:auto}
+  .dev-page .dev-actions{grid-template-columns:1fr}
+  .dev-page .dev-form fieldset{grid-template-columns:1fr}
+}
