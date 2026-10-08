@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
+from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.developer.models import APIKey, Webhook
 from apps.developer.services import APIKeyService, APIGatewayService, WebhookService
@@ -18,14 +19,13 @@ class DeveloperPlatformTests(TestCase):
         self.client.defaults["HTTP_X_API_SECRET"] = self.admin_secret
 
     def payload(self, response):
-        return response.context["response_payload"]
+        return response.json()
 
-    def test_developer_endpoints_use_django_html_response_envelope(self):
+    def test_developer_endpoints_are_json_api_responses(self):
         response = self.client.get("/api/developer/keys/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("text/html", response["Content-Type"])
-        self.assertContains(response, "data-django-response")
-        self.assertNotIn("application/json", response["Content-Type"].lower())
+        self.assertIn("application/json", response["Content-Type"])
+        self.assertIsInstance(self.payload(response), list)
 
     def test_key_list_masks_secret_material(self):
         response = self.client.get("/api/developer/keys/")
@@ -175,6 +175,19 @@ class DeveloperPlatformTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Webhook.objects.count(), 0)
 
+    def test_split_origin_jwt_authentication_reaches_developer_api(self):
+        token = str(AccessToken.for_user(self.user))
+        client = Client()
+        response = client.get("/api/developer/keys/", HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]["id"], self.key.id)
+
+    def test_docs_contract_uses_correct_server_and_two_part_api_key_auth(self):
+        docs = self.client.get("/api/developer/docs/").json()
+        self.assertEqual(docs["servers"], [{"url": ""}])
+        self.assertIn("ApiSecretAuth", docs["components"]["securitySchemes"])
+        self.assertEqual(docs["security"][0], {"ApiKeyAuth": [], "ApiSecretAuth": []})
+
     def test_docs_sdk_analytics_and_sandbox(self):
         for url in ["/api/developer/docs/", "/api/developer/sdk/", "/api/developer/sandbox/"]:
             self.assertEqual(self.client.get(url).status_code, 200)
@@ -198,5 +211,5 @@ class DeveloperPlatformTests(TestCase):
         with patch("apps.developer.views.DocumentationService.publish", side_effect=RuntimeError("documentation backend unavailable")):
             response = self.client.get("/api/developer/docs/")
         self.assertEqual(response.status_code, 500)
-        self.assertContains(response, "Developer service error", status_code=500)
-        self.assertContains(response, "documentation backend unavailable", status_code=500)
+        self.assertEqual(response.json()["detail"], "The developer service could not complete the request: documentation backend unavailable")
+        self.assertEqual(response.json()["code"], "DEVELOPER_API_ERROR")
