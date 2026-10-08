@@ -150,7 +150,7 @@ class CandleBackfillReliabilityTests(TestCase):
             result = reconcile_candle_backfill_runs(max_age_seconds=300)
 
         run.refresh_from_db()
-        self.assertEqual(result, {"recovered": []})
+        self.assertEqual(result, {"recovered": [], "stale_research_failed": []})
         self.assertEqual(run.status, "running")
         delay.assert_not_called()
 
@@ -360,7 +360,7 @@ class CandleBackfillReliabilityTests(TestCase):
 
         run.refresh_from_db()
         self.assertEqual(run.task_id, first["recovered"][0]["task_id"])
-        self.assertEqual(second, {"recovered": []})
+        self.assertEqual(second, {"recovered": [], "stale_research_failed": []})
         publish.assert_called_once()
 
     @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
