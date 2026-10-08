@@ -14,13 +14,18 @@
     if(busy&&!force)return busy;const request=canonical();if(!request)return selected;
     busy=(async()=>{
       const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},10000)).filter(a=>a?.id);accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
-      let serverSelected=null;
-      const listedActive=rows.find(a=>a.is_active===true||a.is_preferred===true||a.is_default===true);
-      if(listedActive) serverSelected=listedActive;
-      try{
-        const active=await request('/api/brokers/accounts/active/',{notifyOnError:false},5000);
-        serverSelected=active?.active_account||active?.account||null;
-      }catch(_){ }
+      // /api/brokers/accounts/ serializes is_active from the same server-side
+      // session authority used by /active/. Prefer that single response so the
+      // dashboard does not block on a second sequential account request.
+      let serverSelected=rows.find(a=>a.is_active===true||a.is_preferred===true||a.is_default===true)||null;
+      // Keep the dedicated active endpoint only as a compatibility fallback for
+      // older API deployments that do not expose is_active on the list payload.
+      if(!serverSelected&&rows.length){
+        try{
+          const active=await request('/api/brokers/accounts/active/',{notifyOnError:false},2500);
+          serverSelected=active?.active_account||active?.account||null;
+        }catch(_){ }
+      }
       const serverId=accountId(serverSelected);
       // The original connected-account fallback remains intact for compatibility.
       let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
