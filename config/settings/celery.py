@@ -80,6 +80,7 @@ CELERY_TASK_ROUTES = {
 
 CELERY_TASK_ANNOTATIONS = {
     "apps.market_data.tasks.run_initial_candle_backfill": {
+        "ignore_result": True,
         "acks_late": True,
         "reject_on_worker_lost": True,
         "track_started": True,
@@ -87,6 +88,7 @@ CELERY_TASK_ANNOTATIONS = {
         "time_limit": 4 * 60 * 60 + 5 * 60,
     },
     "apps.market_data.tasks.backfill_research_candles": {
+        "ignore_result": True,
         "acks_late": True,
         "reject_on_worker_lost": True,
         "track_started": True,

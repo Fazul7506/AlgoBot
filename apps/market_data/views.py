@@ -27,13 +27,12 @@ def _celery_state(run):
         return "FAILURE"
     if run.started_at:
         return "STARTED"
+    # PostgreSQL is the authoritative lifecycle store for Candle Backfill.
+    # Never query Celery's Redis result backend from the operator request path.
+    # A Redis result-store outage must not break the page or consume broker
+    # client capacity.
     if run.task_id:
-        try:
-            from deriv_platform.celery import app
-            state = app.AsyncResult(run.task_id).state
-            return state if state not in {"PENDING", None} else "DISPATCHING"
-        except Exception:
-            return "DISPATCHING"
+        return "RECEIVED" if run.accepted_at else "DISPATCHING"
     return "DISPATCHING"
 
 
