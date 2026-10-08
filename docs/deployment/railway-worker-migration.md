@@ -2,13 +2,12 @@
 
 ## Purpose
 
-AlgoBot keeps its existing Render web/API service while the five long-running background roles are moved to Railway during the temporary Railway trial:
+AlgoBot keeps its existing Render web/API service while the four long-running background roles are moved to Railway during the temporary Railway trial:
 
 1. **AlgoBot-Worker** — general Celery queue `celery`
 2. **AlgoBot-Beat** — Celery Beat scheduler; exactly one instance
 3. **AlgoBot-MarketData** — isolated `market_data` Celery queue
 4. **AlgoBot-LiveMarketStream** — long-running live market stream
-5. **AlgoBot-Execution** — dedicated execution queue consumer; exactly one replica and Celery concurrency=1
 
 The worker commands are implemented in:
 
@@ -16,7 +15,6 @@ The worker commands are implemented in:
 - `deploy/railway/beat.sh`
 - `deploy/railway/market-data-worker.sh`
 - `deploy/railway/live-market-stream.sh`
-- `deploy/railway/execution-worker.sh`
 
 These scripts intentionally preserve the worker commands already used by `render.yaml`. No application/business logic is moved into Railway-specific code.
 
@@ -271,10 +269,6 @@ python manage.py check_market_data_worker
 
 and then start the `market_data` queue worker.
 
-### Execution worker
-
-The execution worker must consume only the `execution` queue with one Celery concurrency slot. This is intentional: broker/database latency must not cause overlapping execution-queue consumers.
-
 ### LiveMarketStream
 
 Logs should show the management command starting and maintaining its live market connection.
@@ -331,7 +325,7 @@ The target long-term architecture is:
                     └──────────────────────────┘
 ```
 
-The five Railway start scripts are deliberately portable. The same commands can be run on Oracle using systemd, Docker, or another process supervisor without changing AlgoBot application code.
+The four Railway start scripts are deliberately portable. The same commands can be run on Oracle using systemd, Docker, or another process supervisor without changing AlgoBot application code.
 
 ## Oracle migration principle
 
