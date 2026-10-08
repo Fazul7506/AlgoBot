@@ -141,6 +141,14 @@ class DeveloperPlatformTests(TestCase):
         session = Client()
         self.assertTrue(session.login(username="dev", password="pass12345"))
         response = session.get("/developer/")
+        Webhook.objects.create(
+            user=self.user,
+            url="https://example.com/hook",
+            secret="test-secret",
+            events=["test"],
+            status="active",
+        )
+        response = session.get("/developer/")
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
         for value in [
@@ -150,6 +158,7 @@ class DeveloperPlatformTests(TestCase):
             "Deactivate",
             "Delete",
             "Send test",
+            "Rotate secret",
         ]:
             self.assertIn(value, html)
         self.assertIn("developer_api_hardening.css", html)
