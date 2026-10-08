@@ -148,8 +148,16 @@
     <div class="rb-log-body" data-log-body aria-live="polite">
       {% if not run %}
       <div class="rb-log-empty">No backfill execution exists yet. Start one above to create durable dispatch and worker log events.</div>
-      {% elif not run_payload.event_count %}
+      {% elif not initial_events %}
       <div class="rb-log-empty">No durable operator events have been recorded for this run.</div>
+      {% else %}
+      {% for event in initial_events %}
+      <div class="rb-log-line" data-event-id="{{ event.id }}">
+        <span class="rb-log-time">{{ event.created_at|date:"H:i:s" }}</span>
+        <span class="rb-log-level {{ event.level }}">{{ event.level }}</span>
+        <span class="rb-log-message">{{ event.message }}{% if event.symbol or event.timeframe %}<span class="rb-log-meta">{{ event.symbol }}{% if event.symbol and event.timeframe %} · {% endif %}{{ event.timeframe }}</span>{% endif %}</span>
+      </div>
+      {% endfor %}
       {% endif %}
     </div>
   </section>
