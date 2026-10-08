@@ -42,7 +42,7 @@ def _browser_secret(request, *, kind, key="", secret="", warning=""):
 
 @login_required
 def dashboard(request):
-    platform = _safe_call(request, "Developer platform", lambda: DeveloperPlatformService().dashboard(), {})
+    platform = _safe_call(request, "Developer platform", lambda: DeveloperPlatformService().dashboard(user=request.user), {})
     documentation = _safe_call(request, "API documentation", lambda: DocumentationService().publish().payload, {})
     analytics = _safe_call(request, "Developer analytics", lambda: AnalyticsService().aggregate(user=request.user), {})
     api_keys = _safe_call(request, "API keys", lambda: APIKeySerializer(APIKey.objects.filter(user=request.user).order_by("-created_at"), many=True).data, [])
