@@ -16,11 +16,11 @@
       const paths = document?.paths || {};
       const operations = Object.values(paths).reduce((total, path) => total + Object.keys(path || {}).filter(method => ['get','post','put','patch','delete','options','head'].includes(method)).length, 0);
       const auth = document?.authentication?.type || (document?.security?.length ? 'Protected' : 'Not declared');
-      const realtime = Object.keys(paths).some(path => /websocket|realtime|stream|subscribe/i.test(path));
+      const realtime = Object.keys(paths).some(path => /websocket|realtime|stream|subscribe/i.test(path)) || Object.keys(document?.['x-algobot']?.websocket || {}).length > 0;
       const trading = Object.keys(paths).some(path => /trade|order|execution/i.test(path));
       const contract = document?.info?.version || 'unknown';
 
-      set('gateway', operations ? 'Operational' : 'No operations', operations ? 'status-ok' : 'status-warn');
+      set('gateway', operations ? 'Contract reachable' : 'No operations', operations ? 'status-ok' : 'status-warn');
       set('contract', operations ? `Published · ${operations} operations` : 'Empty', operations ? 'status-ok' : 'status-bad');
       set('realtime', realtime ? 'Documented' : 'Not exposed', realtime ? 'status-ok' : 'status-warn');
 
@@ -32,7 +32,7 @@
         const rows = [
           ['API contract', operations ? 'Published' : 'Empty', operations ? 'status-ok' : 'status-bad'],
           ['Authentication', auth, auth === 'Not declared' ? 'status-warn' : 'status-ok'],
-          ['Realtime API', realtime ? 'Documented' : 'Not exposed', realtime ? 'status-ok' : 'status-warn'],
+          ['Realtime API', realtime ? 'Documented' : 'Not documented', realtime ? 'status-ok' : 'status-warn'],
           ['Trading surface', trading ? 'Present · execution remains gated' : 'Not exposed', trading ? 'status-warn' : 'status-ok'],
           ['Live execution', 'Safety-gated', 'status-warn']
         ];
