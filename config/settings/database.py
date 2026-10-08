@@ -82,6 +82,8 @@ def _database_pool_options(database_url):
             "timeout": timeout,
         },
         "server_side_binding": False,
+        # Django setting; removed from OPTIONS before psycopg receives it.
+        "DISABLE_SERVER_SIDE_CURSORS": True,
     }
 
 
@@ -93,11 +95,13 @@ if DATABASE_URL:
     )
     pool_options = _database_pool_options(DATABASE_URL)
     if pool_options:
+        disable_server_side_cursors = pool_options.pop("DISABLE_SERVER_SIDE_CURSORS", False)
         database_config["OPTIONS"] = {
             **database_config.get("OPTIONS", {}),
             **pool_options,
         }
-        database_config["DISABLE_SERVER_SIDE_CURSORS"] = True
+        if disable_server_side_cursors:
+            database_config["DISABLE_SERVER_SIDE_CURSORS"] = True
     DATABASES = {"default": database_config}
 elif USE_POSTGRES:
     DATABASES = {
