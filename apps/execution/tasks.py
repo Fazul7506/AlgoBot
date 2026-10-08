@@ -6,6 +6,7 @@ from functools import wraps
 
 from celery import shared_task
 from django.db import transaction
+from django.db.models import Q
 from django_redis import get_redis_connection
 from django.utils import timezone
 
@@ -63,19 +64,19 @@ def process_execution_queue(batch_size=10):
             entry = (
                 ExecutionQueue.objects.select_for_update(skip_locked=True)
                 .select_related("order", "order__user", "order__broker_account", "order__broker_account__broker")
-                .filter(status__in=[c.QUEUE_STATUS_PENDING, c.QUEUE_STATUS_RETRY])
-                .filter(next_retry__isnull=True)
+                .filter(
+                    Q(
+                        status=c.QUEUE_STATUS_PENDING,
+                        next_retry__isnull=True,
+                    )
+                    | Q(
+                        status=c.QUEUE_STATUS_RETRY,
+                        next_retry__lte=now,
+                    )
+                )
                 .order_by("priority", "created_at")
                 .first()
             )
-            if entry is None:
-                entry = (
-                    ExecutionQueue.objects.select_for_update(skip_locked=True)
-                    .select_related("order", "order__user", "order__broker_account", "order__broker_account__broker")
-                    .filter(status=c.QUEUE_STATUS_RETRY, next_retry__lte=now)
-                    .order_by("priority", "created_at")
-                    .first()
-                )
             if entry is None:
                 break
             entry.status = c.QUEUE_STATUS_PROCESSING
