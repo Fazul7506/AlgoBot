@@ -497,12 +497,21 @@ def initial_candle_backfill(request):
         "dispatch-unavailable": "Backfill dispatch coordination is temporarily unavailable; no execution was started.",
     }
     page_error = page_errors.get(error_code, "")
+    selected_payload = _run_payload(selected)
+    initial_events = []
+    if selected:
+        initial_events = list(
+            CandleBackfillEvent.objects.filter(run=selected)
+            .order_by("-id")[:200]
+        )
+        initial_events.reverse()
     return render(
         request,
         "market_data/candle_backfill.html",
         {
             "run": selected,
-            "run_payload": _run_payload(selected),
+            "run_payload": selected_payload,
+            "initial_events": initial_events,
             "history": history,
             "history_payload": [_run_payload(run) for run in history],
             "research_run": CandleBackfillRun.objects.filter(scope="research").order_by("-requested_at", "-id").first(),
