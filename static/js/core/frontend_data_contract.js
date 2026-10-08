@@ -14,6 +14,10 @@
   let apiAccessToken=null;
   let apiTokenPromise=null;
   const browserApiTokenUrl=()=>apiBase+'/api/auth/browser-token/';
+  const readCsrfToken=()=>{
+    const match=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  };
   async function ensureApiAccessToken(controller,force=false){
     if(apiAccessToken&&!force)return apiAccessToken;
     if(apiTokenPromise&&!force)return apiTokenPromise;
@@ -83,6 +87,17 @@
     // cookie received by the API origin.
     const accessToken=await ensureApiAccessToken(controller);
     if(accessToken&&!headers.has('Authorization'))headers.set('Authorization','Bearer '+accessToken);
+    if(sessionAccountSelect && !headers.has('X-CSRFToken')){
+      const csrfToken=readCsrfToken();
+      if(!csrfToken){
+        const error=new Error('The browser security token is unavailable. Refresh the workspace before switching accounts.');
+        error.code='CSRF_TOKEN_UNAVAILABLE';
+        error.status=403;
+        error.retryable=false;
+        throw error;
+      }
+      headers.set('X-CSRFToken',csrfToken);
+    }
     const requestInit={credentials:sessionAccountSelect?'include':'omit',...options,headers,cache:'no-store',signal:controller.signal};
     const response=await nativeFetch(target,requestInit);
     return{response,text:await response.text()};
