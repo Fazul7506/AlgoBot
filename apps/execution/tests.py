@@ -193,7 +193,20 @@ class ExecutionQueueTaskTests(TestCase):
         broker = Broker.objects.create(name='Queue Broker', broker_type='deriv', status='active', supports_live=False)
         account = BrokerAccount.objects.create(user=user, broker=broker, account_id='QUEUE', status='active', credentials={'account_type': 'demo'})
         order = Order.objects.create(user=user, broker_account=account, symbol='R_10', direction='buy', order_type='market', stake='1', status='queued')
-        queue = ExecutionQueue.objects.create(order=order, status='pending')
+        queue = ExecutionQueue.objects.create(
+            order=order,
+            status='pending',
+            next_retry=None,
+            queue_type='priority',
+        )
+        self.assertEqual(
+            ExecutionQueue.objects.filter(
+                pk=queue.pk,
+                status='pending',
+                next_retry__isnull=True,
+            ).count(),
+            1,
+        )
         with patch('apps.execution.tasks.ExecutionEngine.execute', new=AsyncMock(return_value=order)) as execute:
             result = process_execution_queue.run(batch_size=1)
         execute.assert_awaited_once()
