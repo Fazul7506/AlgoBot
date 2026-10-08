@@ -51,9 +51,9 @@ CELERY_RESULT_BACKEND = _dotenv_value("CELERY_RESULT_BACKEND", REDIS_URL)
 # consume the entire Redis client budget and take the API down before a view is
 # reached (DRF throttling uses this cache during request initialization).
 try:
-    REDIS_CACHE_MAX_CONNECTIONS = max(1, int(_dotenv_value("REDIS_CACHE_MAX_CONNECTIONS", "4")))
+    REDIS_CACHE_MAX_CONNECTIONS = max(1, int(_dotenv_value("REDIS_CACHE_MAX_CONNECTIONS", "2")))
 except (TypeError, ValueError):
-    REDIS_CACHE_MAX_CONNECTIONS = 4
+    REDIS_CACHE_MAX_CONNECTIONS = 2
 try:
     REDIS_CACHE_HEALTH_CHECK_INTERVAL = max(0, int(_dotenv_value("REDIS_CACHE_HEALTH_CHECK_INTERVAL", "30")))
 except (TypeError, ValueError):
@@ -71,9 +71,10 @@ CACHES = {
             {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 "CONNECTION_POOL_KWARGS": {
-                    "socket_connect_timeout": 5,
-                    "socket_timeout": 5,
+                    "socket_connect_timeout": 1,
+                    "socket_timeout": 1,
                     "max_connections": REDIS_CACHE_MAX_CONNECTIONS,
+                    "retry_on_timeout": False,
                     "health_check_interval": REDIS_CACHE_HEALTH_CHECK_INTERVAL,
                 },
             }
