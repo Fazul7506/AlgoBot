@@ -40,7 +40,7 @@ BACKFILL_LIVE_HEARTBEAT_SECONDS = 180
 BACKFILL_STALE_HEARTBEAT_SECONDS = 300
 
 
-def _run_payload(run):
+def _run_payload(run, *, include_delivery=True):
     if not run:
         return None
     now = timezone.now()
@@ -120,21 +120,20 @@ def _run_payload(run):
         })
     if run.error:
         notices.append({"level": "error", "message": run.error})
-    event_count = CandleBackfillEvent.objects.filter(run=run).count()
-    latest_delivery = (
-        CandleBackfillEvent.objects.filter(
-            run=run,
-            event_type__in=["dispatch", "recovered", "worker_received"],
+    event_count = 0
+    delivery_queue = result.get("queue") or ""
+    if include_delivery:
+        event_count = CandleBackfillEvent.objects.filter(run=run).count()
+        latest_delivery = (
+            CandleBackfillEvent.objects.filter(
+                run=run,
+                event_type__in=["dispatch", "recovered", "worker_received"],
+            )
+            .order_by("-created_at", "-id")
+            .first()
         )
-        .order_by("-created_at", "-id")
-        .first()
-    )
-    latest_payload = latest_delivery.payload if latest_delivery else {}
-    delivery_queue = (
-        latest_payload.get("queue")
-        or result.get("queue")
-        or ""
-    )
+        latest_payload = latest_delivery.payload if latest_delivery else {}
+        delivery_queue = latest_payload.get("queue") or delivery_queue
     return {
         "id": run.pk, "run_key": str(run.run_key),
         "scope": run.scope, "status": run.status, "status_label": status_label,
@@ -438,7 +437,7 @@ def initial_candle_backfill(request):
             selected = CandleBackfillRun.objects.order_by("-requested_at", "-id").first()
         payload = {
             "selected": _run_payload(selected),
-            "history": [_run_payload(run) for run in CandleBackfillRun.objects.order_by("-requested_at", "-id")[:limit]],
+            "history": [_run_payload(run, include_delivery=False) for run in CandleBackfillRun.objects.order_by("-requested_at", "-id")[:limit]],
             "history_total": CandleBackfillRun.objects.count(),
             "history_has_more": CandleBackfillRun.objects.order_by("-requested_at", "-id")[limit:limit + 1].exists(),
             "initial": _run_payload(CandleBackfillRun.objects.filter(scope="initial").order_by("-requested_at", "-id").first()),
@@ -515,7 +514,7 @@ def initial_candle_backfill(request):
             "initial_events": initial_events,
             "history": history,
             "history_total": history_total,
-            "history_payload": [_run_payload(run) for run in history],
+            "history_payload": [_run_payload(run, include_delivery=False) for run in history],
             "research_run": CandleBackfillRun.objects.filter(scope="research").order_by("-requested_at", "-id").first(),
             "eligible_symbols": eligible_symbols,
             "backfill_config": backfill_config,
