@@ -82,8 +82,6 @@ def _database_pool_options(database_url):
             "timeout": timeout,
         },
         "server_side_binding": False,
-        # Django setting; removed from OPTIONS before psycopg receives it.
-        "DISABLE_SERVER_SIDE_CURSORS": True,
     }
 
 
