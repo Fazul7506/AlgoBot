@@ -4,7 +4,7 @@
 {% block content %}
 <section class="billing-page">
   <header class="page-heading"><div><p class="eyebrow">ACCOUNT</p><h1>Billing</h1><p class="billing-subtitle">Manage your plan and pay securely with IntaSend or Pesapal.</p></div><button class="btn ghost" type="button" data-billing-refresh>Refresh</button></header>
-  <section class="panel billing-alert" data-billing-alert hidden role="alert"></section>
+  <section class="panel billing-alert" data-billing-alert hidden role="alert" aria-live="polite"></section>
   <form id="billing-checkout-form" action="{% url 'billing_checkout_start' %}" method="post" hidden>
     {% csrf_token %}
     <input type="hidden" name="plan" data-checkout-form-plan>
@@ -24,10 +24,8 @@
 (()=> {
   const boot = () => {
   const $=s=>document.querySelector(s);
-  const apiBase=(document.querySelector('meta[name="algobot-api-base"]')?.content||window.location.origin).replace(/\/$/,'');
-  const csrf=()=>{const c=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);return c?decodeURIComponent(c[1]):document.querySelector('meta[name="csrf-token"]')?.content||''};
   const api=async(url,opts={})=>{
-    return window.AlgoBotFrontendData.request(url,opts,10000);
+    return window.AlgoBotFrontendData.request(url,opts,7000);
   };
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const money=(cents,currency)=>{
@@ -39,17 +37,27 @@
   const alertBox=$('[data-billing-alert]');
   const showError=m=>{if(alertBox){alertBox.hidden=!m;alertBox.textContent=m||'';}};
   function renderPlans(plans,current){
-    const catalog=plans||[];
+    const catalog=Array.isArray(plans)?plans:[];
     $('[data-plan-grid]').innerHTML=catalog.map(p=>{
-      const name=String(p.plan||'').toUpperCase(),active=name===current;
-      if(active||name==='FREE')return `<article class="panel billing-plan-card"><p class="eyebrow">${esc(name)}</p><h2 class="billing-plan-price money-value">${money(p.price_cents,p.currency)}</h2><p>${p.recurring?'30-day subscription cycle':'No recurring charge'}</p><div class="billing-plan-actions">${active?'<button class="btn ghost" type="button" disabled>Current plan</button>':`<button class="btn primary" type="button" data-checkout-plan="${esc(name)}" data-provider="intasend">${name==='FREE'?'Use Free':'Choose plan'}</button>`}</div></article>`;
-      return `<article class="panel billing-plan-card"><p class="eyebrow">${esc(name)}</p><h2 class="billing-plan-price money-value">${money(p.price_cents,p.currency)}</h2><p>30-day subscription cycle</p><span class="provider-label">Checkout provider</span><div class="billing-plan-actions"><button class="btn primary provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="intasend"><img class="provider-logo" src="/static/images/intasend-logo.svg" alt="IntaSend">Pay with IntaSend</button><button class="btn ghost provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="pesapal"><img class="provider-logo" src="/static/images/pesapal-logo.svg" alt="Pesapal">Pay with Pesapal</button></div></article>`;
+      const name=String(p.plan||'').toUpperCase(),active=name===current,configured=p.configured!==false;
+      const price=money(p.price_cents,p.currency);
+      let action='';
+      if(active) {
+        action='<button class="btn ghost" type="button" disabled aria-current="true">Current plan</button>';
+      } else if(name==='FREE') {
+        action='<button class="btn ghost" type="button" disabled>Included with every account</button>';
+      } else if(!configured) {
+        action='<button class="btn ghost" type="button" disabled>Checkout unavailable</button>';
+      } else {
+        action=`<button class="btn primary provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="intasend"><img class="provider-logo" src="/static/images/intasend-logo.svg" alt="" aria-hidden="true">Pay with IntaSend</button><button class="btn ghost provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="pesapal"><img class="provider-logo" src="/static/images/pesapal-logo.svg" alt="" aria-hidden="true">Pay with Pesapal</button>`;
+      }
+      return `<article class="panel billing-plan-card" data-plan="${esc(name)}"><p class="eyebrow">${esc(name)}</p><h2 class="billing-plan-price money-value">${price}</h2><p>${p.recurring?'30-day subscription cycle':'No recurring charge'}</p>${!configured&&name!=='FREE'?'<span class="provider-label">This plan is not configured for checkout.</span>':''}<div class="billing-plan-actions">${action}</div></article>`;
     }).join('')||'<div class="panel">No billing plans are configured.</div>';
     const checkoutForm=$('#billing-checkout-form');
     const checkoutPlan=checkoutForm?.querySelector('[data-checkout-form-plan]');
     const checkoutProvider=checkoutForm?.querySelector('[data-checkout-form-provider]');
     $('[data-plan-grid]').querySelectorAll('[data-checkout-plan]').forEach(b=>b.addEventListener('click',()=>{
-      if(!checkoutForm||!checkoutPlan||!checkoutProvider)return;
+      if(!checkoutForm||!checkoutPlan||!checkoutProvider||b.disabled)return;
       b.disabled=true;
       checkoutPlan.value=b.dataset.checkoutPlan||'';
       checkoutProvider.value=b.dataset.provider||'';
@@ -73,12 +81,12 @@
       }).join('');
       const payments=status.payments||[];
       $('[data-payment-list]').innerHTML=payments.length?payments.map(x=>{const raw=String(x.status||'PENDING').toUpperCase(),cls=raw==='COMPLETED'?'billing-status-completed':raw==='FAILED'?'billing-status-failed':'billing-status-pending';return `<div class="billing-row"><span>${esc(x.metadata?.plan||'Subscription')}</span><span class="money-value">${money(x.amount_cents,x.currency)}</span><span class="${cls}">${raw}</span><span>${x.created_at?new Date(x.created_at).toLocaleString():''}</span></div>`;}).join(''):'No payment history yet. Complete a provider checkout and return here to record the result.';
-    }catch(e){console.error(e);showError(`Billing data could not be loaded: ${e.message}`);}
+    }catch(e){console.error(e);showError(`Billing data could not be loaded: ${e?.message||'Please refresh and try again.'}`);}
   }
   $('[data-billing-refresh]').onclick=load;
   $('[data-cancel-subscription]').onclick=async()=>{
     if(!confirm('Stop renewal at the end of your current paid cycle?'))return;
-    try{await api('/billing/cancel-subscription/',{method:'POST',body:'{}'});await load();}catch(e){showError(e.message);}
+    try{await api('/billing/cancel-subscription/',{method:'POST',body:'{}'});await load();}catch(e){showError(e?.message||'Unable to cancel renewal. Please try again.');}
   };
   load();
   };
