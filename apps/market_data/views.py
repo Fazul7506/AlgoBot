@@ -9,6 +9,8 @@ from django.urls import reverse
 from django.utils import timezone
 from uuid import uuid4
 
+logger = logging.getLogger(__name__)
+
 from .constants import TIMEFRAMES
 from .backfill_lock import acquire_backfill_dispatch_lock
 from .models import CandleBackfillEvent, CandleBackfillRun, MarketSymbol
