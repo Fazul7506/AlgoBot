@@ -4,7 +4,9 @@
 
   const $ = (selector) => page.querySelector(selector);
   const body = $("[data-log-body]");
-  let lastEventId = 0;
+  // Server-rendered durable events are the first paint. Continue polling strictly
+  // after the newest rendered event so live polling never duplicates those rows.
+  let lastEventId = Number(body?.querySelector("[data-event-id]:last-child")?.dataset.eventId || 0);
   let selectedRunId = new URLSearchParams(window.location.search).get("run_id") || "";
   let historyLimit = 50;
   let polling = false;
