@@ -88,14 +88,18 @@
 
   function examples(operation) {
     const url = endpointUrl(operation);
-    const authHeader = spec?.authentication?.headers?.[0] || 'X-API-Key';
     const body = requestContract(operation).exampleBody;
-    const curlParts = [`curl -X ${operation.method.toUpperCase()} '${url}'`, `-H 'Accept: application/json'`, `-H '${authHeader}: $ALGOBOT_API_KEY'`];
+    const curlParts = [
+      `curl -X ${operation.method.toUpperCase()} '${url}'`,
+      `-H 'Accept: application/json'`,
+      `-H 'X-API-Key: $ALGOBOT_API_KEY'`,
+      `-H 'X-API-Secret: $ALGOBOT_API_SECRET'`
+    ];
     if (body && ['post', 'put', 'patch'].includes(operation.method)) {
       curlParts.push(`-H 'Content-Type: application/json'`, `-d '${JSON.stringify(body)}'`);
     }
-    const python = `import requests\n\nurl = ${JSON.stringify(url)}\nheaders = {${JSON.stringify(authHeader)}: "${'$'}ALGOBOT_API_KEY"}\nresponse = requests.${operation.method}(url, headers=headers${body ? `, json=${JSON.stringify(body)}` : ''})\nprint(response.json())`;
-    const javascript = `const response = await fetch(${JSON.stringify(url)}, {\n  method: ${JSON.stringify(operation.method.toUpperCase())},\n  headers: { "${authHeader}": process.env.ALGOBOT_API_KEY, "Accept": "application/json" }${body ? `,\n  body: JSON.stringify(${JSON.stringify(body)})` : ''}\n});\nconsole.log(await response.json());`;
+    const python = `import requests\\n\\nurl = ${JSON.stringify(url)}\\nheaders = {"X-API-Key": "${'$'}ALGOBOT_API_KEY", "X-API-Secret": "${'$'}ALGOBOT_API_SECRET"}\\nresponse = requests.${operation.method}(url, headers=headers${body ? `, json=${JSON.stringify(body)}` : ''})\\nprint(response.json())`;
+    const javascript = `const response = await fetch(${JSON.stringify(url)}, {\\n  method: ${JSON.stringify(operation.method.toUpperCase())},\\n  headers: { "X-API-Key": process.env.ALGOBOT_API_KEY, "X-API-Secret": process.env.ALGOBOT_API_SECRET, "Accept": "application/json" }${body ? `,\\n  body: JSON.stringify(${JSON.stringify(body)})` : ''}\\n});\\nconsole.log(await response.json());`;
     return { curl: curlParts.join(' '), python, javascript };
   }
 
