@@ -174,6 +174,13 @@ class DocumentationService:
 
 
 class DeveloperPlatformService:
-    def dashboard(self):
+    def dashboard(self, user=None):
         from .models import Plugin
-        return {"api_health": "operational", "active_keys": APIKey.objects.filter(status="active").count(), "installed_plugins": Plugin.objects.filter(status="active").count()}
+        keys = APIKey.objects.filter(status="active")
+        if user is not None:
+            keys = keys.filter(user=user)
+        return {
+            "api_health": "operational",
+            "active_keys": keys.count(),
+            "installed_plugins": Plugin.objects.filter(status="active").count(),
+        }
