@@ -422,6 +422,7 @@ def initial_candle_backfill(request):
         ],
     }
 
+    history_total = CandleBackfillRun.objects.count()
     history = list(CandleBackfillRun.objects.order_by("-requested_at", "-id")[:50])
     selected = _run_from_request(request)
     if selected is None and history:
@@ -438,6 +439,7 @@ def initial_candle_backfill(request):
         payload = {
             "selected": _run_payload(selected),
             "history": [_run_payload(run) for run in CandleBackfillRun.objects.order_by("-requested_at", "-id")[:limit]],
+            "history_total": CandleBackfillRun.objects.count(),
             "history_has_more": CandleBackfillRun.objects.order_by("-requested_at", "-id")[limit:limit + 1].exists(),
             "initial": _run_payload(CandleBackfillRun.objects.filter(scope="initial").order_by("-requested_at", "-id").first()),
             "research": _run_payload(CandleBackfillRun.objects.filter(scope="research").order_by("-requested_at", "-id").first()),
@@ -512,6 +514,7 @@ def initial_candle_backfill(request):
             "run_payload": selected_payload,
             "initial_events": initial_events,
             "history": history,
+            "history_total": history_total,
             "history_payload": [_run_payload(run) for run in history],
             "research_run": CandleBackfillRun.objects.filter(scope="research").order_by("-requested_at", "-id").first(),
             "eligible_symbols": eligible_symbols,
