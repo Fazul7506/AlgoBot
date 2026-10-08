@@ -8,7 +8,7 @@ from config.settings.database import _database_pool_options
 
 class DatabasePoolContractTests(SimpleTestCase):
     def test_production_pool_is_bounded_for_supabase_pooler(self):
-        with patch.dict(os.environ, {"DJANGO_ENV": "production"}, clear=False):
+        with patch.dict(os.environ, {"DJANGO_ENV": "production", "DB_CONNECTION_POOL_ENABLED": "true"}, clear=False):
             options = _database_pool_options(
                 "postgresql://postgres.example:secret@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
             )
