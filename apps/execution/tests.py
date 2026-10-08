@@ -162,7 +162,7 @@ class ExecutionQueueTaskTests(TestCase):
         entry = app.conf.beat_schedule["execution-queue-every-2-seconds"]
         self.assertEqual(entry["task"], "apps.execution.process_execution_queue")
         self.assertEqual(entry["schedule"], 2.0)
-        self.assertEqual(entry["options"]["queue"], "execution")
+        self.assertEqual(entry["options"]["queue"], "celery")
         self.assertEqual(entry["options"]["expires"], 3)
 
     def test_queued_order_is_claimed_and_completed(self):
