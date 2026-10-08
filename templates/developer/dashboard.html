@@ -5,7 +5,7 @@
 <section class="dev-page" data-developer-page>
   <header class="dev-hero panel">
     <div><p class="eyebrow">DEVELOPER</p><h1>Developer API</h1></div>
-    <div class="dev-hero-actions"><span class="dev-health"><i></i>{{ api_health|default:"operational"|title }}</span><button class="btn ghost" type="button" data-refresh-developer>Refresh</button></div>
+    <div class="dev-hero-actions"><span class="dev-health"><i></i>{{ api_health|default:"operational"|title }}</span><a class="btn ghost" href="/developer/api/explorer/">API Explorer</a><a class="btn ghost" href="/developer/api/status/">API Status</a><button class="btn ghost" type="button" data-refresh-developer>Refresh</button></div>
   </header>
   <section class="dev-metrics">
     <article class="panel"><span>Calls today</span><strong>{{ analytics.api_calls_today|default:0 }}</strong></article>
@@ -39,7 +39,8 @@
         <div class="dev-row"><div><strong>{{ key.name }}</strong><small>{{ key.key }}</small><span class="dev-meta">{{ key.permissions|join:", " }} · {{ key.status }}{% if key.last_used %} · used {{ key.last_used|date:"Y-m-d H:i" }}{% endif %}</span></div>
           <div class="dev-actions">
             {% if key.status == "active" %}<form action="/api/developer/browser/keys/{{ key.id }}/rotate/" method="post" data-confirm="Rotate this key? The previous secret remains valid for the configured grace period.">{% csrf_token %}<button type="submit">Rotate</button></form>{% endif %}
-            {% if key.status == "active" %}<form action="/api/developer/browser/keys/{{ key.id }}/revoke/" method="post" data-confirm="Revoke this API key? Existing clients using it will stop authenticating.">{% csrf_token %}<button type="submit">Revoke</button></form>{% endif %}
+            {% if key.status == "active" %}<form action="/api/developer/browser/keys/{{ key.id }}/deactivate/" method="post" data-confirm="Deactivate this API key? Existing clients using it will stop authenticating until you activate it again.">{% csrf_token %}<button type="submit">Deactivate</button></form>{% elif key.status == "inactive" %}<form action="/api/developer/browser/keys/{{ key.id }}/activate/" method="post" data-confirm="Activate this API key and allow clients to authenticate again?">{% csrf_token %}<button type="submit">Activate</button></form>{% endif %}
+            {% if key.status == "active" or key.status == "inactive" %}<form action="/api/developer/browser/keys/{{ key.id }}/revoke/" method="post" data-confirm="Revoke this API key permanently? Existing clients using it will stop authenticating and it cannot be reactivated.">{% csrf_token %}<button type="submit">Revoke</button></form>{% endif %}
             <form action="/api/developer/browser/keys/{{ key.id }}/delete/" method="post" data-confirm="Delete this API key? This permanently removes the credential and cannot be undone.">{% csrf_token %}<button type="submit">Delete</button></form>
           </div>
         </div>
@@ -68,7 +69,10 @@
       <div class="dev-list">
         {% for webhook in webhooks %}
         <div class="dev-row"><div><strong>{{ webhook.url }}</strong><small>{{ webhook.events|join:", " }}</small><span class="dev-meta">{{ webhook.status }} · created {{ webhook.created_at|date:"Y-m-d H:i" }}</span></div>
-          <div class="dev-actions"><form action="/api/developer/browser/webhooks/{{ webhook.id }}/test/" method="post">{% csrf_token %}<button type="submit">Send test</button></form></div>
+          <div class="dev-actions">
+            {% if webhook.status == "active" %}<form action="/api/developer/browser/webhooks/{{ webhook.id }}/test/" method="post">{% csrf_token %}<button type="submit">Send test</button></form><form action="/api/developer/browser/webhooks/{{ webhook.id }}/rotate/" method="post" data-confirm="Rotate this webhook secret? The old signing secret will stop being valid immediately.">{% csrf_token %}<button type="submit">Rotate secret</button></form><form action="/api/developer/browser/webhooks/{{ webhook.id }}/deactivate/" method="post" data-confirm="Deactivate this webhook? No new deliveries will be sent until it is activated again.">{% csrf_token %}<button type="submit">Deactivate</button></form>{% elif webhook.status == "inactive" %}<form action="/api/developer/browser/webhooks/{{ webhook.id }}/activate/" method="post" data-confirm="Activate this webhook and allow deliveries again?">{% csrf_token %}<button type="submit">Activate</button></form>{% endif %}
+            <form action="/api/developer/browser/webhooks/{{ webhook.id }}/delete/" method="post" data-confirm="Delete this webhook and its delivery history? This cannot be undone.">{% csrf_token %}<button type="submit">Delete</button></form>
+          </div>
         </div>
         {% empty %}<div class="dev-empty">No webhooks configured.</div>{% endfor %}
       </div>
@@ -77,4 +81,5 @@
   </section>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/developer_portal.js' %}?v=20260901-django-messages" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/developer_api_hardening.css' %}?v=20261008-devapi1">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/developer_portal.js' %}?v=20261008-devapi1" defer></script>{% endblock %}
