@@ -235,7 +235,11 @@ class PaymentReconciler:
             subscription.plan = plan
         subscription.price_cents = invoice.amount_cents
         subscription.currency = str(invoice.currency or "KES").lower()
-        subscription.recurring = plan != "FREE"
+        provider = str((invoice.metadata or {}).get("provider") or "").lower()
+        provider_subscription_id = str((invoice.metadata or {}).get("subscription_id") or "").strip()
+        subscription.provider = provider
+        subscription.provider_subscription_id = provider_subscription_id
+        subscription.recurring = plan != "FREE" and provider == "intasend" and bool(provider_subscription_id)
         subscription.is_active = True
         subscription.renewed_at = timezone.now()
         subscription.expires_at = timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30))) if subscription.recurring else None
