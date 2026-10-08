@@ -469,13 +469,37 @@ def _mark_backfill_run(
 )
 def backfill_research_candles(run_id=None, count=250, symbol=None):
     """Run one research backfill execution and retain its complete lifecycle history."""
-    from django.db import close_old_connections
+    from django.db import close_old_connections, transaction
     from .models import CandleBackfillRun
 
     close_old_connections()
     task_id = getattr(backfill_research_candles.request, "id", "")
     run = None
+    dispatch_lock = None
     try:
+        if run_id is None:
+            from .backfill_lock import acquire_backfill_dispatch_lock
+            dispatch_lock = acquire_backfill_dispatch_lock("research")
+            if dispatch_lock is None:
+                return {"status": "skipped", "reason": "research_backfill_dispatch_lock_held"}
+            with transaction.atomic():
+                active_research = (
+                    CandleBackfillRun.objects.select_for_update()
+                    .filter(scope="research", status="running")
+                    .order_by("-requested_at", "-id")
+                    .first()
+                )
+                if active_research:
+                    logger.info(
+                        "Skipping overlapping research candle backfill",
+                        extra={"active_run_id": active_research.pk},
+                    )
+                    return {
+                        "status": "skipped",
+                        "reason": "research_backfill_active",
+                        "active_run_id": active_research.pk,
+                    }
+
         initial = CandleBackfillRun.objects.filter(scope="initial", status="running").order_by("-requested_at", "-id").first()
         if initial:
             logger.info("Skipping scheduled research backfill while initial warm-up is active", extra={"initial_run_id": initial.pk})
@@ -537,6 +561,10 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
             )
         logger.exception("Research candle backfill failed", extra={"task_id": task_id, "run_id": run_id or getattr(run, "pk", None)})
         raise
+    finally:
+        if dispatch_lock is not None:
+            dispatch_lock.release()
+        close_old_connections()
 
 
 @shared_task
@@ -729,8 +757,48 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
     # so the operator page cannot re-publish the same job on every poll.
     recovery_cutoff = now - timedelta(seconds=max(1, int(max_age_seconds or 300)))
     recovered = []
+    stale_research_failed = []
+
+    def _recovery_result(**extra):
+        result = {"recovered": recovered}
+        if stale_research_failed:
+            result["stale_research_failed"] = stale_research_failed
+        result.update(extra)
+        return result
+
     try:
         with transaction.atomic():
+            stale_research_runs = (
+                CandleBackfillRun.objects.select_for_update()
+                .filter(scope="research", status="running")
+                .filter(
+                    Q(last_heartbeat_at__lt=running_cutoff)
+                    | Q(
+                        last_heartbeat_at__isnull=True,
+                        started_at__lt=running_cutoff,
+                    )
+                )
+                .order_by("requested_at", "id")
+            )
+            for stale_research in stale_research_runs:
+                stale_research.status = "failed"
+                stale_research.error = (
+                    "Research candle backfill heartbeat became stale; "
+                    "the worker execution was treated as abandoned."
+                )
+                stale_research.completed_at = now
+                stale_research.save(update_fields=["status", "error", "completed_at"])
+                CandleBackfillEvent.objects.create(
+                    run=stale_research,
+                    level="error",
+                    event_type="failed",
+                    message=stale_research.error,
+                    task_id=stale_research.task_id,
+                    worker_hostname=stale_research.worker_hostname,
+                    payload={"scope": "research", "recovered": True, "terminal": True},
+                )
+                stale_research_failed.append(stale_research.pk)
+
             run = (
                 CandleBackfillRun.objects.select_for_update()
                 .filter(scope="initial", status="running")
@@ -759,7 +827,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 .first()
             )
             if not run:
-                return {"recovered": []}
+                return _recovery_result()
             run_id = run.pk
             count = int(run.count or 5000)
             symbol = run.symbol or None
@@ -772,7 +840,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 run.completed_at = now
                 run.save(update_fields=["status", "error", "completed_at"])
                 CandleBackfillEvent.objects.create(run=run, level="error", event_type="failed", message=run.error, task_id=old_task_id, payload={"recovery_attempts": recovery_attempts})
-                return {"recovered": [], "failed": run_id}
+                return _recovery_result(failed=run_id)
             run.task_id = ""
             run.dispatch_at = None
             prior_result["dispatch_recovery_attempts"] = recovery_attempts + 1
@@ -798,7 +866,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
                 if current.status != "running":
-                    return {"recovered": []}
+                    return _recovery_result()
                 current.task_id = task_id
                 current.dispatch_at = timezone.now()
                 current.error = ""
@@ -823,7 +891,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     current.save(update_fields=["status", "error", "completed_at"])
                     CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts), "recovery_attempts": recovery_attempts},)
             logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
-        return {"recovered": recovered}
+        return _recovery_result()
     finally:
         if dispatch_lock is not None:
             dispatch_lock.release()

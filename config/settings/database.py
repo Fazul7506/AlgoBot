@@ -82,7 +82,6 @@ def _database_pool_options(database_url):
             "timeout": timeout,
         },
         "server_side_binding": False,
-        "DISABLE_SERVER_SIDE_CURSORS": True,
     }
 
 
@@ -98,6 +97,9 @@ if DATABASE_URL:
             **database_config.get("OPTIONS", {}),
             **pool_options,
         }
+        # Django setting: keep it outside OPTIONS so psycopg3 never receives
+        # the Django-only flag as a connection parameter.
+        database_config["DISABLE_SERVER_SIDE_CURSORS"] = True
     DATABASES = {"default": database_config}
 elif USE_POSTGRES:
     DATABASES = {

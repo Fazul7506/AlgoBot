@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from .models import CandleBackfillEvent, CandleBackfillRun, MarketSymbol
-from .tasks import ensure_initial_candle_backfill, reconcile_candle_backfill_runs, run_initial_candle_backfill
+from .tasks import backfill_research_candles, ensure_initial_candle_backfill, reconcile_candle_backfill_runs, run_initial_candle_backfill
 
 
 class CandleBackfillReliabilityTests(TestCase):
@@ -37,6 +37,49 @@ class CandleBackfillReliabilityTests(TestCase):
         )
         from .tasks import _active_symbols
         self.assertEqual(_active_symbols(), ["R_100"])
+
+    def test_research_backfill_skips_when_another_research_run_is_active(self):
+        active = CandleBackfillRun.objects.create(
+            scope="research",
+            status="running",
+            count=250,
+            started_at=timezone.now(),
+        )
+        result = backfill_research_candles.apply(
+            kwargs={"count": 250},
+        )
+        self.assertEqual(result.state, "SUCCESS")
+        self.assertEqual(
+            result.result,
+            {
+                "status": "skipped",
+                "reason": "research_backfill_active",
+                "active_run_id": active.pk,
+            },
+        )
+        self.assertEqual(CandleBackfillRun.objects.filter(scope="research").count(), 1)
+
+    def test_stale_research_runs_are_marked_terminal_by_recovery(self):
+        run = CandleBackfillRun.objects.create(
+            scope="research",
+            status="running",
+            count=250,
+            started_at=timezone.now() - timedelta(minutes=11),
+            last_heartbeat_at=timezone.now() - timedelta(minutes=11),
+            task_id="stale-research-task",
+        )
+        result = reconcile_candle_backfill_runs()
+        run.refresh_from_db()
+        self.assertEqual(result["recovered"], [])
+        self.assertEqual(result["stale_research_failed"], [run.pk])
+        self.assertEqual(run.status, "failed")
+        self.assertIsNotNone(run.completed_at)
+        self.assertIn("heartbeat became stale", run.error)
+        self.assertTrue(
+            CandleBackfillEvent.objects.filter(
+                run=run, event_type="failed", task_id="stale-research-task"
+            ).exists()
+        )
 
     def test_recovery_runs_on_general_worker_queue(self):
         self.assertEqual(
