@@ -90,7 +90,11 @@ services:
       - key: CSRF_COOKIE_SAMESITE
         value: Lax
     buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt && DJANGO_ENV=production python manage.py collectstatic --noinput
-    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && python manage.py set_telegram_webhook && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
+    # Run database migrations before the new web instance receives traffic.
+    # Keep network-dependent Telegram registration out of the web start path so
+    # a provider timeout cannot leave the HTTP service unavailable during deploys.
+    preDeployCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput
+    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
     healthCheckPath: /health/
     maxShutdownDelaySeconds: 60
     autoDeployTrigger: commit
@@ -101,7 +105,7 @@ services:
     plan: starter
     buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt
     autoDeployTrigger: commit
-    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && CELERY_BROKER_URL="$REDIS_URL" CELERY_RESULT_BACKEND="$REDIS_URL" exec celery -A deriv_platform.celery worker --loglevel=INFO -Q celery --concurrency=2 --prefetch-multiplier=1 --max-tasks-per-child=100 --hostname=general@%h
+    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && DJANGO_ENV=production python manage.py set_telegram_webhook && CELERY_BROKER_URL="$REDIS_URL" CELERY_RESULT_BACKEND="$REDIS_URL" exec celery -A deriv_platform.celery worker --loglevel=INFO -Q celery --concurrency=2 --prefetch-multiplier=1 --max-tasks-per-child=100 --hostname=general@%h
     maxShutdownDelaySeconds: 60
     envVars:
       - key: DJANGO_ENV

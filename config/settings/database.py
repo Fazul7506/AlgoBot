@@ -1,5 +1,7 @@
 """Database settings for AlgoBot."""
 
+from urllib.parse import urlparse
+
 import dj_database_url
 
 from .base import BASE_DIR
@@ -15,11 +17,35 @@ POSTGRES_HOST = env("POSTGRES_HOST", "localhost")
 POSTGRES_PORT = env("POSTGRES_PORT", "5432")
 
 
+def _database_conn_max_age(database_url):
+    """Choose a safe Django connection lifetime for the configured database."""
+    configured = env("DB_CONN_MAX_AGE", "").strip()
+    if configured:
+        try:
+            value = int(configured)
+        except ValueError as exc:
+            raise ValueError("DB_CONN_MAX_AGE must be an integer number of seconds.") from exc
+        if value < 0:
+            raise ValueError("DB_CONN_MAX_AGE must be >= 0.")
+        return value
+
+    # Supavisor session-mode connections (port 5432) are persistent client
+    # sessions. With several Render web/worker processes, Django's default
+    # 600-second persistence can hold idle pooler sessions long enough to
+    # exhaust the shared pool. Releasing the client connection at request/task
+    # boundaries lets Supavisor recycle the underlying database connection.
+    hostname = (urlparse(database_url).hostname or "").lower()
+    if hostname.endswith(".pooler.supabase.com"):
+        return 0
+
+    return 600
+
+
 if DATABASE_URL:
     DATABASES = {
         "default": dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=600,
+            conn_max_age=_database_conn_max_age(DATABASE_URL),
             ssl_require=True,
         )
     }
