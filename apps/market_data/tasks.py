@@ -469,29 +469,36 @@ def _mark_backfill_run(
 )
 def backfill_research_candles(run_id=None, count=250, symbol=None):
     """Run one research backfill execution and retain its complete lifecycle history."""
-    from django.db import close_old_connections
+    from django.db import close_old_connections, transaction
     from .models import CandleBackfillRun
 
     close_old_connections()
     task_id = getattr(backfill_research_candles.request, "id", "")
     run = None
+    dispatch_lock = None
     try:
         if run_id is None:
-            active_research = (
-                CandleBackfillRun.objects.filter(scope="research", status="running")
-                .order_by("-requested_at", "-id")
-                .first()
-            )
-            if active_research:
-                logger.info(
-                    "Skipping overlapping research candle backfill",
-                    extra={"active_run_id": active_research.pk},
+            from .backfill_lock import acquire_backfill_dispatch_lock
+            dispatch_lock = acquire_backfill_dispatch_lock("research")
+            if dispatch_lock is None:
+                return {"status": "skipped", "reason": "research_backfill_dispatch_lock_held"}
+            with transaction.atomic():
+                active_research = (
+                    CandleBackfillRun.objects.select_for_update()
+                    .filter(scope="research", status="running")
+                    .order_by("-requested_at", "-id")
+                    .first()
                 )
-                return {
-                    "status": "skipped",
-                    "reason": "research_backfill_active",
-                    "active_run_id": active_research.pk,
-                }
+                if active_research:
+                    logger.info(
+                        "Skipping overlapping research candle backfill",
+                        extra={"active_run_id": active_research.pk},
+                    )
+                    return {
+                        "status": "skipped",
+                        "reason": "research_backfill_active",
+                        "active_run_id": active_research.pk,
+                    }
 
         initial = CandleBackfillRun.objects.filter(scope="initial", status="running").order_by("-requested_at", "-id").first()
         if initial:
@@ -554,6 +561,10 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
             )
         logger.exception("Research candle backfill failed", extra={"task_id": task_id, "run_id": run_id or getattr(run, "pk", None)})
         raise
+    finally:
+        if dispatch_lock is not None:
+            dispatch_lock.release()
+        close_old_connections()
 
 
 @shared_task
