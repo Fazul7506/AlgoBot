@@ -125,24 +125,49 @@ class BillingHardeningTests(TestCase):
         self.assertFalse(Invoice.objects.filter(external_id="WEBHOOK-NOLOCAL").exists())
         self.assertEqual(Subscription.objects.get(user=self.user).plan, "FREE")
 
-    def test_cancel_subscription_stops_renewal_without_removing_paid_access(self):
+    @patch("core.views_billing.PaymentService.cancel_intasend_subscription")
+    def test_cancel_subscription_stops_provider_renewal_without_removing_paid_access(self, cancel_provider):
         expiry = timezone.now() + timedelta(days=12)
         subscription = Subscription.objects.get(user=self.user)
         subscription.plan = "PRO"
         subscription.price_cents = 499900
         subscription.currency = "kes"
         subscription.recurring = True
+        subscription.provider = "intasend"
+        subscription.provider_subscription_id = "SUB-123"
         subscription.is_active = True
         subscription.expires_at = expiry
-        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at"])
+        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "provider", "provider_subscription_id", "is_active", "expires_at"])
 
+        cancel_provider.return_value = {"ok": True, "status": "cancelled"}
         response = self.client.post(reverse("billing_cancel_subscription"), data={}, content_type="application/json", **self.api_headers)
         self.assertEqual(response.status_code, 200)
+        cancel_provider.assert_called_once_with("SUB-123")
         subscription.refresh_from_db()
         self.assertFalse(subscription.recurring)
         self.assertTrue(subscription.is_active)
         self.assertAlmostEqual(subscription.expires_at.timestamp(), expiry.timestamp(), delta=2)
         self.assertEqual(response.json()["status"], "cancelled_at_period_end")
+
+    @patch("core.views_billing.PaymentService.cancel_intasend_subscription")
+    def test_cancel_subscription_does_not_change_local_state_when_provider_rejects(self, cancel_provider):
+        subscription = Subscription.objects.get(user=self.user)
+        subscription.plan = "PRO"
+        subscription.recurring = True
+        subscription.provider = "intasend"
+        subscription.provider_subscription_id = "SUB-FAIL"
+        subscription.is_active = True
+        subscription.expires_at = timezone.now() + timedelta(days=12)
+        subscription.save(update_fields=["plan", "recurring", "provider", "provider_subscription_id", "is_active", "expires_at"])
+
+        cancel_provider.return_value = {"ok": False, "status": "provider_error"}
+        response = self.client.post(reverse("billing_cancel_subscription"), data={}, content_type="application/json", **self.api_headers)
+        self.assertEqual(response.status_code, 502)
+        subscription.refresh_from_db()
+        self.assertTrue(subscription.recurring)
+        self.assertTrue(subscription.is_active)
+
+
 
     def test_expired_subscription_is_reported_inactive(self):
         subscription = Subscription.objects.get(user=self.user)
