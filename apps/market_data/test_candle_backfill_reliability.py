@@ -1,5 +1,5 @@
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.conf import settings
 from django.test import TestCase, override_settings
@@ -11,6 +11,12 @@ from .tasks import ensure_initial_candle_backfill, reconcile_candle_backfill_run
 
 class CandleBackfillReliabilityTests(TestCase):
     def setUp(self):
+        self.lock_patcher = patch(
+            "apps.market_data.backfill_lock.acquire_backfill_dispatch_lock",
+            return_value=MagicMock(),
+        )
+        self.lock_patcher.start()
+        self.addCleanup(self.lock_patcher.stop)
         self.symbol = MarketSymbol.objects.create(
             symbol="R_100",
             display_name="Volatility 100",
