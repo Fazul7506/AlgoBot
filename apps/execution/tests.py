@@ -208,7 +208,7 @@ class ExecutionQueueTaskTests(TestCase):
             1,
         )
         with patch('apps.execution.tasks.ExecutionEngine.execute', new=AsyncMock(return_value=order)) as execute:
-            result = process_execution_queue.run(batch_size=1)
+            result = process_execution_queue.run.__wrapped__(batch_size=1)
         execute.assert_awaited_once()
         queue.refresh_from_db()
         self.assertEqual(queue.status, 'done')
