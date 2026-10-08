@@ -99,7 +99,7 @@
         <h2 id="backfill-history-title">Every candle backfill execution</h2>
         <p>Manual starts, scheduled refreshes, automatic warm-ups and recovered deliveries remain visible as separate durable runs.</p>
       </div>
-      <div class="rb-history-meta"><span data-history-count>{{ history_total|default:history_payload|length }} {% if history_total == 1 %}run{% else %}runs{% endif %}</span><button type="button" class="rb-icon-btn" data-history-refresh aria-label="Refresh execution history"><span class="material-symbols-rounded">refresh</span></button></div>
+      <div class="rb-history-meta"><span data-history-count>{{ history_total|default:"0" }} {% if history_total == 1 %}run{% else %}runs{% endif %}</span><button type="button" class="rb-icon-btn" data-history-refresh aria-label="Refresh execution history"><span class="material-symbols-rounded">refresh</span></button></div>
     </div>
     <div class="rb-history-table-wrap">
       <table class="rb-history-table">
