@@ -15,6 +15,8 @@
   let level = "";
   let searchTimer = null;
   let telemetryFailures = 0;
+  let refreshGeneration = 0;
+  let activeController = null;
 
   const text = (selector, value) => {
     const node = $(selector);
@@ -137,7 +139,8 @@
     if (!table) return;
     table.replaceChildren();
     const rows = Array.isArray(history) ? history : [];
-    text("[data-history-count]", rows.length + (rows.length === 1 ? " run" : " runs"));
+    const total = Number.isFinite(Number(window.__backfillHistoryTotal)) ? Number(window.__backfillHistoryTotal) : rows.length;
+    text("[data-history-count]", total + (total === 1 ? " run" : " runs"));
     const more = $("[data-history-more]");
     if (more) more.hidden = !hasMore;
     if (!rows.length) {
@@ -186,14 +189,7 @@
         }
         row.appendChild(cell);
       });
-      const select = () => {
-        selectedRunId = String(run.id);
-        lastEventId = 0;
-        const url = new URL(window.location.href);
-        url.searchParams.set("run_id", selectedRunId);
-        window.history.replaceState({}, "", url);
-        refresh();
-      };
+      const select = () => selectRun(run.id);
       row.addEventListener("click", select);
       row.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -247,8 +243,10 @@
     if (tail) body.scrollTop = body.scrollHeight;
   };
 
-  const refresh = async () => {
-    if (polling) return;
+  const refresh = async ({force = false} = {}) => {
+    if (polling && !force) return;
+    const generation = ++refreshGeneration;
+    if (force && activeController) activeController.abort();
     polling = true;
     try {
       const params = new URLSearchParams({
@@ -264,6 +262,8 @@
       // The durable Django run/event records remain authoritative; the browser
       // is only a live observer.
       const controller = new AbortController();
+      activeController = controller;
+      const requestedRunId = selectedRunId;
       const timeout = window.setTimeout(() => controller.abort(), 4500);
       let response;
       try {
@@ -278,6 +278,7 @@
       }
       if (!response.ok) throw new Error("status " + response.status);
       const data = await response.json();
+      if (generation !== refreshGeneration || requestedRunId !== selectedRunId) return;
       telemetryFailures = 0;
       const telemetryNotice = $("[data-telemetry-error]");
       if (telemetryNotice) telemetryNotice.remove();
@@ -295,6 +296,7 @@
         renderEvents(data.events || [], false);
       }
       if (data.events_last_id) lastEventId = Number(data.events_last_id) || lastEventId;
+      window.__backfillHistoryTotal = Number(data.history_total) || (data.history || []).length;
     } catch (error) {
       telemetryFailures += 1;
       // A single mobile-network hiccup must not look like a broker failure.
@@ -312,9 +314,54 @@
         row.textContent = "Live telemetry is temporarily unavailable; the durable server state remains authoritative and the page will keep retrying.";
       }
     } finally {
+      if (activeController === controller) activeController = null;
       polling = false;
     }
   };
+
+  const selectRun = (runId) => {
+    const nextId = String(runId);
+    if (!nextId) return;
+    selectedRunId = nextId;
+    lastEventId = 0;
+    refreshGeneration += 1;
+    if (activeController) activeController.abort();
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("run_id", selectedRunId);
+    window.history.replaceState({}, "", url);
+
+    page.querySelectorAll("[data-history-body] [data-run-id]").forEach((row) => {
+      row.classList.toggle("is-selected", String(row.dataset.runId) === selectedRunId);
+    });
+
+    if (body) {
+      body.replaceChildren();
+      const loading = document.createElement("div");
+      loading.className = "rb-log-empty";
+      loading.textContent = "Loading durable logs for execution #" + selectedRunId + "…";
+      body.appendChild(loading);
+    }
+    text("[data-log-count]", "Loading…");
+    refresh({force: true});
+  };
+
+  // Server-rendered rows must remain interactive even when the first telemetry
+  // request fails. Delegate selection from the stable table body.
+  const initialHistoryBody = $("[data-history-body]");
+  if (initialHistoryBody) {
+    initialHistoryBody.addEventListener("click", (event) => {
+      const row = event.target.closest("[data-run-id]");
+      if (row && initialHistoryBody.contains(row)) selectRun(row.dataset.runId);
+    });
+    initialHistoryBody.addEventListener("keydown", (event) => {
+      const row = event.target.closest("[data-run-id]");
+      if (row && initialHistoryBody.contains(row) && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        selectRun(row.dataset.runId);
+      }
+    });
+  }
 
   const resetSearch = () => {
     lastEventId = 0;
@@ -345,7 +392,7 @@
   if (historyRefresh) historyRefresh.addEventListener("click", () => {
     historyLimit = 50;
     lastEventId = 0;
-    refresh();
+    refresh({force: true});
   });
 
   const historyMore = $("[data-history-more]");
