@@ -79,6 +79,30 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(Subscription.objects.get(user=self.user).plan, "BASIC")
         self.assertTrue(Subscription.objects.get(user=self.user).expires_at > timezone.now())
 
+    def test_pesapal_payment_grants_time_limited_access_without_fake_recurring_state(self):
+        reference = f"PP-{self.user.id}-BASIC-ONETIME"
+        invoice = Invoice.objects.create(
+            user=self.user,
+            amount_cents=99900,
+            currency="KES",
+            metadata={"plan": "BASIC", "provider": "pesapal", "reference": reference},
+            external_id="PP-ONE-TIME-1",
+        )
+        result = PaymentReconciler.reconcile(
+            provider="pesapal",
+            external_id="PP-ONE-TIME-1",
+            status="COMPLETED",
+            amount="999.00",
+            currency="KES",
+            metadata={"merchant_reference": reference, "user_id": self.user.id, "plan": "BASIC", "provider": "pesapal"},
+        )
+        self.assertEqual(result["status"], "COMPLETED")
+        subscription = Subscription.objects.get(user=self.user)
+        self.assertEqual(subscription.plan, "BASIC")
+        self.assertEqual(subscription.provider, "pesapal")
+        self.assertFalse(subscription.recurring)
+        self.assertIsNone(subscription.provider_subscription_id)
+
     def test_webhook_reconciliation_never_creates_an_invoice_from_forged_identity(self):
         result = PaymentReconciler.reconcile(
             provider="pesapal",
