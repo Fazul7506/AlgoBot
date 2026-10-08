@@ -181,7 +181,14 @@ class ExecutionQueueTaskTests(TestCase):
         self.assertEqual(wrapped(), {'processed': 1})
         lock.release.assert_called_once_with()
 
-    def test_queued_order_is_claimed_and_completed(self):
+    @patch('apps.execution.tasks.get_redis_connection')
+    def test_queued_order_is_claimed_and_completed(self, get_redis_connection):
+        # The production task is protected by a distributed singleton. This
+        # regression test must explicitly model successful lock acquisition so
+        # it exercises queue claiming/execution rather than depending on CI's
+        # Redis availability or an unrelated existing lock.
+        lock = get_redis_connection.return_value.lock.return_value
+        lock.acquire.return_value = True
         user = get_user_model().objects.create_user(username='queue-regression', password='test-password')
         broker = Broker.objects.create(name='Queue Broker', broker_type='deriv', status='active', supports_live=False)
         account = BrokerAccount.objects.create(user=user, broker=broker, account_id='QUEUE', status='active', credentials={'account_type': 'demo'})
