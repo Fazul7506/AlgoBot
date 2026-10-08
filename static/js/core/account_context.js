@@ -13,7 +13,7 @@
   async function load(force=false){
     if(busy&&!force)return busy;const request=canonical();if(!request)return selected;
     busy=(async()=>{
-      const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},10000)).filter(a=>a?.id);accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
+      const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},7000)).filter(a=>a?.id);accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
       // /api/brokers/accounts/ serializes is_active from the same server-side
       // session authority used by /active/. Prefer that single response so the
       // dashboard does not block on a second sequential account request.
