@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.developer.models import APIKey, Webhook
@@ -19,7 +19,8 @@ class DeveloperPlatformTests(TestCase):
         self.client.defaults["HTTP_X_API_SECRET"] = self.admin_secret
 
     def payload(self, response):
-        return response.json()
+        body = response.json()
+        return body.get("data", body)
 
     def test_developer_endpoints_are_json_api_responses(self):
         response = self.client.get("/api/developer/keys/")
@@ -172,6 +173,12 @@ class DeveloperPlatformTests(TestCase):
 
     def test_webhook_rejects_private_destinations(self):
         response = self.client.post("/api/developer/webhooks/create/", {"url": "http://127.0.0.1/hook", "events": ["test"]})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Webhook.objects.count(), 0)
+
+    @override_settings(DEBUG=False, DEVELOPER_WEBHOOK_REQUIRE_HTTPS=True)
+    def test_production_webhooks_require_https(self):
+        response = self.client.post("/api/developer/webhooks/create/", {"url": "http://example.com/hook", "events": ["test"]})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Webhook.objects.count(), 0)
 
