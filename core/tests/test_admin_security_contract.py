@@ -20,8 +20,14 @@ class AdminSecurityContractTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_sensitive_credential_fields_are_not_admin_editable(self):
-        from core.models import EncryptedCredential, PasswordResetToken
+        from core.models import BotSettings, EncryptedCredential, PasswordResetToken, UserProfile
         from apps.brokers.models import BrokerAccount
+
+        profile_admin = admin.site._registry[UserProfile]
+        self.assertTrue({"email_verification_token", "telegram_chat_id", "telegram_username", "brevo_api_key"}.issubset(set(profile_admin.exclude)))
+
+        bot_admin = admin.site._registry[BotSettings]
+        self.assertTrue({"telegram_chat_id", "telegram_username", "brevo_api_key"}.issubset(set(bot_admin.exclude)))
 
         credential_admin = admin.site._registry[EncryptedCredential]
         self.assertIn("encrypted_value", credential_admin.exclude)
