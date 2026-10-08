@@ -1,6 +1,8 @@
 import os
 
 from celery import Celery
+from celery.signals import task_postrun, task_prerun
+from django.db import close_old_connections
 from celery.schedules import crontab
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deriv_platform.settings")
@@ -8,6 +10,21 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deriv_platform.settings")
 app = Celery("deriv_platform")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
+
+
+@task_prerun.connect
+
+def _close_stale_task_connections(*args, **kwargs):
+    """Release stale Django DB connections before a long-running task."""
+    close_old_connections()
+
+
+@task_postrun.connect
+
+def _close_task_connections(*args, **kwargs):
+    """Release obsolete/failed DB connections after every Celery task."""
+    close_old_connections()
+
 
 app.conf.beat_schedule = {
     "initial-candle-backfill-automatic-every-5-minutes": {
@@ -20,6 +37,11 @@ app.conf.beat_schedule = {
         "task": "apps.execution.process_execution_queue",
         "schedule": 2.0,
         "kwargs": {"batch_size": 10},
+        # Do not let a slow execution cycle create an unbounded backlog of
+        # database-heavy polling tasks. A fresh tick replaces an expired one.
+        # The task also takes a distributed Redis lock, so execution remains
+        # logically singleton even though the general worker handles other jobs.
+        "options": {"queue": "celery", "expires": 3},
     },
     "ai-data-health-every-15-minutes": {
         "task": "apps.ai_engine.tasks.check_ai_data_health",

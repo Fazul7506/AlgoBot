@@ -15,7 +15,7 @@ from apps.brokers.position_sync import PositionSyncError
 from apps.execution.deriv_views import DerivTradingActionView
 from apps.execution.models import ExecutionQueue, Order
 from apps.execution.signal_validation import SignalValidationService
-from apps.execution.tasks import process_execution_queue
+from apps.execution.tasks import _execution_queue_singleton, process_execution_queue
 from .serializers import OrderSerializer
 from .views import OrderViewSet, PositionViewSet
 from .engine import ExecutionEngine
@@ -156,7 +156,39 @@ class ExecutionQueueTaskTests(TestCase):
     def test_celery_task_name_matches_beat_schedule(self):
         self.assertEqual(process_execution_queue.name, 'apps.execution.process_execution_queue')
 
-    def test_queued_order_is_claimed_and_completed(self):
+    def test_execution_queue_beat_tick_expires_stale_polling_tasks(self):
+        from deriv_platform.celery import app
+
+        entry = app.conf.beat_schedule["execution-queue-every-2-seconds"]
+        self.assertEqual(entry["task"], "apps.execution.process_execution_queue")
+        self.assertEqual(entry["schedule"], 2.0)
+        self.assertEqual(entry["options"]["queue"], "celery")
+        self.assertEqual(entry["options"]["expires"], 3)
+
+    @patch('apps.execution.tasks.get_redis_connection')
+    def test_execution_queue_skips_when_singleton_lock_is_held(self, get_redis_connection):
+        lock = get_redis_connection.return_value.lock.return_value
+        lock.acquire.return_value = False
+        wrapped = _execution_queue_singleton(lambda: {'processed': 1})
+        self.assertEqual(wrapped(), {'processed': 0, 'succeeded': 0, 'failed': 0, 'uncertain': 0})
+        lock.release.assert_not_called()
+
+    @patch('apps.execution.tasks.get_redis_connection')
+    def test_execution_queue_releases_singleton_lock_after_processing(self, get_redis_connection):
+        lock = get_redis_connection.return_value.lock.return_value
+        lock.acquire.return_value = True
+        wrapped = _execution_queue_singleton(lambda: {'processed': 1})
+        self.assertEqual(wrapped(), {'processed': 1})
+        lock.release.assert_called_once_with()
+
+    @patch('apps.execution.tasks.get_redis_connection')
+    def test_queued_order_is_claimed_and_completed(self, get_redis_connection):
+        # The production task is protected by a distributed singleton. This
+        # regression test must explicitly model successful lock acquisition so
+        # it exercises queue claiming/execution rather than depending on CI's
+        # Redis availability or an unrelated existing lock.
+        lock = get_redis_connection.return_value.lock.return_value
+        lock.acquire.return_value = True
         user = get_user_model().objects.create_user(username='queue-regression', password='test-password')
         broker = Broker.objects.create(name='Queue Broker', broker_type='deriv', status='active', supports_live=False)
         account = BrokerAccount.objects.create(user=user, broker=broker, account_id='QUEUE', status='active', credentials={'account_type': 'demo'})

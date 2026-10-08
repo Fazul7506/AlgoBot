@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from functools import wraps
 
 from celery import shared_task
 from django.db import transaction
+from django_redis import get_redis_connection
 from django.utils import timezone
 
 from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
@@ -15,7 +17,41 @@ from .models import ExecutionQueue, Order
 logger = logging.getLogger(__name__)
 
 
+def _execution_queue_singleton(func):
+    """Prevent overlapping execution-queue consumers across worker processes."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            redis = get_redis_connection("default")
+            lock = redis.lock(
+                "algobot:execution-queue:singleton",
+                timeout=600,
+                blocking=False,
+            )
+            acquired = lock.acquire(blocking=False)
+        except Exception:
+            # If Redis cannot provide the lock, fail closed rather than risking
+            # concurrent execution consumers during a database incident.
+            logger.exception("execution.queue.lock_unavailable")
+            return {"processed": 0, "succeeded": 0, "failed": 0, "uncertain": 0}
+
+        if not acquired:
+            logger.info("execution.queue.overlap_skipped")
+            return {"processed": 0, "succeeded": 0, "failed": 0, "uncertain": 0}
+
+        try:
+            return func(*args, **kwargs)
+        finally:
+            try:
+                lock.release()
+            except Exception:
+                logger.exception("execution.queue.lock_release_failed")
+
+    return wrapper
+
+
 @shared_task(name="apps.execution.process_execution_queue")
+@_execution_queue_singleton
 def process_execution_queue(batch_size=10):
     """Claim queued orders and execute them once at the broker boundary."""
     now = timezone.now()

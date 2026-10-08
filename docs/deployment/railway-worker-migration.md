@@ -18,6 +18,8 @@ The worker commands are implemented in:
 
 These scripts intentionally preserve the worker commands already used by `render.yaml`. No application/business logic is moved into Railway-specific code.
 
+The general worker is the sole Railway worker entrypoint responsible for applying Django migrations. The other long-running processes intentionally do not run migrations at startup, preventing several workers from competing for Supabase connections during a rollout.
+
 ## Important migration rule
 
 Do **not** remove the existing Render worker services until all four Railway services are deployed and their logs have been validated.
