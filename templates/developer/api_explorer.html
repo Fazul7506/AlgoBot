@@ -5,9 +5,13 @@
 <section class="api-explorer" data-api-explorer>
   <header class="api-hero panel">
     <div><p class="eyebrow">DEVELOPER PLATFORM</p><h1>API Explorer</h1><p>Explore AlgoBot's versioned API contract, authentication requirements, request schemas and response examples from one authoritative reference.</p></div>
-    <div class="api-hero-actions"><span class="api-status"><i></i><span data-api-health>Checking API…</span></span><button class="btn ghost" type="button" data-refresh-api>Refresh</button></div>
+    <div class="api-hero-actions"><span class="api-status"><i></i><span data-api-health>Checking API…</span></span><a class="btn ghost" href="/developer/">Developer dashboard</a><a class="btn ghost" href="/developer/api/status/">API Status</a><button class="btn ghost" type="button" data-refresh-api>Refresh</button></div>
   </header>
   <div class="api-notice" data-api-notice hidden aria-live="polite"></div>
+  <section class="panel api-control-strip" aria-label="Developer API management">
+    <div><strong>Credentials & webhooks</strong><span>Manage API keys, rotate secrets, deactivate credentials and control webhook delivery from the Developer dashboard.</span></div>
+    <a class="btn primary" href="/developer/">Manage developer access</a>
+  </section>
   <div class="api-layout">
     <aside class="panel api-sidebar">
       <div class="api-sidebar-head"><strong>API Reference</strong><span data-endpoint-count>—</span></div>
@@ -25,4 +29,5 @@
   </div>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/api_explorer.js' %}?v=20260831-api1" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/developer_api_hardening.css' %}?v=20261008-devapi1">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/api_explorer.js' %}?v=20261008-api2" defer></script>{% endblock %}

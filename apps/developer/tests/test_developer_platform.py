@@ -57,7 +57,7 @@ class DeveloperPlatformTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertIn("secret", self.payload(response))
 
-    def test_key_rotation_and_revoke_require_admin_scope(self):
+    def test_key_lifecycle_rotate_deactivate_activate_and_revoke_require_admin_scope(self):
         response = self.client.post(f"/api/developer/keys/{self.key.id}/rotate/")
         self.assertEqual(response.status_code, 403)
 
@@ -67,6 +67,17 @@ class DeveloperPlatformTests(TestCase):
         self.key.refresh_from_db()
         self.assertNotEqual(self.key.secret, self.secret)
         self.assertIn("secret", self.payload(response))
+
+        response = self.client.post(f"/api/developer/keys/{self.key.id}/deactivate/")
+        self.assertEqual(response.status_code, 200)
+        self.key.refresh_from_db()
+        self.assertEqual(self.key.status, "inactive")
+
+        response = self.client.post(f"/api/developer/keys/{self.key.id}/activate/")
+        self.assertEqual(response.status_code, 200)
+        self.key.refresh_from_db()
+        self.assertEqual(self.key.status, "active")
+
         response = self.client.post(f"/api/developer/keys/{self.key.id}/revoke/")
         self.assertEqual(response.status_code, 200)
         self.key.refresh_from_db()
@@ -102,6 +113,56 @@ class DeveloperPlatformTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Webhook.objects.count(), 1)
 
+    def test_webhook_lifecycle_rotate_deactivate_activate_and_delete(self):
+        response = self.client.post("/api/developer/webhooks/create/", {"url": "https://example.com/hook", "events": ["trade.closed"]})
+        self.assertEqual(response.status_code, 201)
+        webhook = Webhook.objects.get()
+
+        response = self.client.post(f"/api/developer/webhooks/{webhook.id}/rotate/")
+        self.assertEqual(response.status_code, 200)
+        webhook.refresh_from_db()
+        self.assertIn("secret", self.payload(response))
+
+        response = self.client.post(f"/api/developer/webhooks/{webhook.id}/deactivate/")
+        self.assertEqual(response.status_code, 200)
+        webhook.refresh_from_db()
+        self.assertEqual(webhook.status, "inactive")
+
+        response = self.client.post(f"/api/developer/webhooks/{webhook.id}/activate/")
+        self.assertEqual(response.status_code, 200)
+        webhook.refresh_from_db()
+        self.assertEqual(webhook.status, "active")
+
+        response = self.client.delete(f"/api/developer/webhooks/{webhook.id}/delete/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Webhook.objects.filter(pk=webhook.id).exists())
+
+    def test_browser_developer_page_exposes_complete_lifecycle_controls(self):
+        session = Client()
+        self.assertTrue(session.login(username="dev", password="pass12345"))
+        response = session.get("/developer/")
+        Webhook.objects.create(
+            user=self.user,
+            url="https://example.com/hook",
+            secret="test-secret",
+            events=["test"],
+            status="active",
+        )
+        response = session.get("/developer/")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        for value in [
+            "/api/developer/browser/keys/",
+            "/api/developer/browser/webhooks/",
+            "Rotate",
+            "Deactivate",
+            "Delete",
+            "Send test",
+            "Rotate secret",
+        ]:
+            self.assertIn(value, html)
+        self.assertIn("developer_api_hardening.css", html)
+
     def test_webhook_creation_requires_webhook_scope(self):
         limited_key, limited_secret = APIKeyService().create(self.user, "read-only", ["read"])
         self.client.defaults["HTTP_X_API_KEY"] = limited_key.key
@@ -120,6 +181,12 @@ class DeveloperPlatformTests(TestCase):
         docs = self.client.get("/api/developer/docs/")
         self.assertEqual(docs.status_code, 200)
         self.assertIn("/api/developer/keys/{id}/delete/", self.payload(docs)["paths"])
+        self.assertIn("/api/developer/keys/{id}/deactivate/", self.payload(docs)["paths"])
+        self.assertIn("/api/developer/keys/{id}/activate/", self.payload(docs)["paths"])
+        self.assertIn("/api/developer/webhooks/{id}/rotate/", self.payload(docs)["paths"])
+        self.assertIn("/api/developer/webhooks/{id}/deactivate/", self.payload(docs)["paths"])
+        self.assertIn("/api/developer/webhooks/{id}/activate/", self.payload(docs)["paths"])
+        self.assertIn("/api/developer/webhooks/{id}/delete/", self.payload(docs)["paths"])
         self.assertEqual(self.client.get("/api/developer/analytics/").status_code, 403)
 
         self.use_admin_key()

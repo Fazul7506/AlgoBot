@@ -120,6 +120,43 @@ def browser_key_rotate(request, pk):
 
 @login_required
 @require_http_methods(["POST"])
+def browser_key_deactivate(request, pk):
+    try:
+        api_key = APIKey.objects.get(pk=pk, user=request.user)
+    except APIKey.DoesNotExist:
+        messages.error(request, "The requested API key does not exist.")
+        return redirect("developer_page")
+    if api_key.status == "revoked":
+        messages.error(request, "Revoked API keys cannot be deactivated.")
+        return redirect("developer_page")
+    try:
+        APIKeyService().deactivate(api_key)
+    except Exception as exc:
+        messages.error(request, f"API key could not be deactivated: {exc}")
+        return redirect("developer_page")
+    messages.success(request, "API key deactivated. Existing clients can no longer authenticate.")
+    return redirect("developer_page")
+
+
+@login_required
+@require_http_methods(["POST"])
+def browser_key_activate(request, pk):
+    try:
+        api_key = APIKey.objects.get(pk=pk, user=request.user)
+    except APIKey.DoesNotExist:
+        messages.error(request, "The requested API key does not exist.")
+        return redirect("developer_page")
+    try:
+        APIKeyService().activate(api_key)
+    except Exception as exc:
+        messages.error(request, f"API key could not be activated: {exc}")
+        return redirect("developer_page")
+    messages.success(request, "API key activated successfully.")
+    return redirect("developer_page")
+
+
+@login_required
+@require_http_methods(["POST"])
 def browser_key_revoke(request, pk):
     try:
         api_key = APIKey.objects.get(pk=pk, user=request.user)
@@ -175,6 +212,68 @@ def browser_webhook_create(request):
         warning=f"Signing secret for {webhook.url}. Save it securely; it will not be shown again.",
     )
     messages.success(request, "Webhook created successfully. Save its signing secret now.")
+    return redirect("developer_page")
+
+
+@login_required
+@require_http_methods(["POST"])
+def browser_webhook_rotate(request, pk):
+    try:
+        webhook = Webhook.objects.get(pk=pk, user=request.user)
+    except Webhook.DoesNotExist:
+        messages.error(request, "The requested webhook does not exist.")
+        return redirect("developer_page")
+    try:
+        _, secret = WebhookService().rotate_secret(webhook)
+    except Exception as exc:
+        messages.error(request, f"Webhook secret rotation failed: {exc}")
+        return redirect("developer_page")
+    _browser_secret(
+        request,
+        kind="webhook",
+        secret=secret,
+        warning=f"New signing secret for {webhook.url}. The previous secret is no longer valid.",
+    )
+    messages.success(request, "Webhook signing secret rotated successfully. Save the new secret now.")
+    return redirect("developer_page")
+
+
+@login_required
+@require_http_methods(["POST"])
+def browser_webhook_deactivate(request, pk):
+    try:
+        webhook = Webhook.objects.get(pk=pk, user=request.user)
+    except Webhook.DoesNotExist:
+        messages.error(request, "The requested webhook does not exist.")
+        return redirect("developer_page")
+    WebhookService().deactivate(webhook)
+    messages.success(request, "Webhook deactivated. No new deliveries will be sent.")
+    return redirect("developer_page")
+
+
+@login_required
+@require_http_methods(["POST"])
+def browser_webhook_activate(request, pk):
+    try:
+        webhook = Webhook.objects.get(pk=pk, user=request.user)
+    except Webhook.DoesNotExist:
+        messages.error(request, "The requested webhook does not exist.")
+        return redirect("developer_page")
+    WebhookService().activate(webhook)
+    messages.success(request, "Webhook activated successfully.")
+    return redirect("developer_page")
+
+
+@login_required
+@require_http_methods(["POST"])
+def browser_webhook_delete(request, pk):
+    try:
+        webhook = Webhook.objects.get(pk=pk, user=request.user)
+    except Webhook.DoesNotExist:
+        messages.error(request, "The requested webhook does not exist.")
+        return redirect("developer_page")
+    webhook.delete()
+    messages.success(request, "Webhook deleted successfully.")
     return redirect("developer_page")
 
 
@@ -317,6 +416,35 @@ def key_rotate(request, pk):
 
 
 @_developer_endpoint(HasDeveloperAdminScope)
+def key_deactivate(request, pk):
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Deactivate API keys with POST.", status=405, kind="error")
+    try:
+        api_key = APIKey.objects.get(pk=pk, user=request.user)
+    except APIKey.DoesNotExist:
+        return _django_response(request, title="API key not found", message="The requested API key does not exist.", status=404, kind="error")
+    if api_key.status == "revoked":
+        return _django_response(request, title="API key cannot be deactivated", message="Revoked API keys cannot be deactivated.", status=400, kind="error")
+    APIKeyService().deactivate(api_key)
+    return _django_response(request, title="API key deactivated", payload=APIKeySerializer(api_key).data, message="API key deactivated.", kind="success")
+
+
+@_developer_endpoint(HasDeveloperAdminScope)
+def key_activate(request, pk):
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Activate API keys with POST.", status=405, kind="error")
+    try:
+        api_key = APIKey.objects.get(pk=pk, user=request.user)
+    except APIKey.DoesNotExist:
+        return _django_response(request, title="API key not found", message="The requested API key does not exist.", status=404, kind="error")
+    try:
+        APIKeyService().activate(api_key)
+    except ValueError as exc:
+        return _django_response(request, title="API key cannot be activated", message=str(exc), status=400, kind="error")
+    return _django_response(request, title="API key activated", payload=APIKeySerializer(api_key).data, message="API key activated.", kind="success")
+
+
+@_developer_endpoint(HasDeveloperAdminScope)
 def key_revoke(request, pk):
     if request.method != "POST":
         return _django_response(request, title="Method not allowed", message="Revoke API keys with POST.", status=405, kind="error")
@@ -388,6 +516,54 @@ def webhook_create(request):
     result["secret"] = secret
     result["warning"] = "Store this signing secret securely. It will not be shown again."
     return _django_response(request, title="Webhook created", payload=result, message="Webhook created. Save its signing secret now.", kind="success", status=201)
+
+
+@_developer_endpoint(HasWebhookScope)
+def webhook_rotate(request, pk):
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Rotate webhook secrets with POST.", status=405, kind="error")
+    try:
+        webhook = Webhook.objects.get(pk=pk, user=request.user)
+    except Webhook.DoesNotExist:
+        return _django_response(request, title="Webhook not found", message="The requested webhook does not exist.", status=404, kind="error")
+    _, secret = WebhookService().rotate_secret(webhook)
+    return _django_response(request, title="Webhook secret rotated", payload={"id": webhook.id, "secret": secret, "warning": "Store this signing secret securely. It will not be shown again."}, message="Webhook signing secret rotated successfully.", kind="success")
+
+
+@_developer_endpoint(HasWebhookScope)
+def webhook_deactivate(request, pk):
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Deactivate webhooks with POST.", status=405, kind="error")
+    try:
+        webhook = Webhook.objects.get(pk=pk, user=request.user)
+    except Webhook.DoesNotExist:
+        return _django_response(request, title="Webhook not found", message="The requested webhook does not exist.", status=404, kind="error")
+    WebhookService().deactivate(webhook)
+    return _django_response(request, title="Webhook deactivated", payload=WebhookSerializer(webhook).data, message="Webhook deactivated.", kind="success")
+
+
+@_developer_endpoint(HasWebhookScope)
+def webhook_activate(request, pk):
+    if request.method != "POST":
+        return _django_response(request, title="Method not allowed", message="Activate webhooks with POST.", status=405, kind="error")
+    try:
+        webhook = Webhook.objects.get(pk=pk, user=request.user)
+    except Webhook.DoesNotExist:
+        return _django_response(request, title="Webhook not found", message="The requested webhook does not exist.", status=404, kind="error")
+    WebhookService().activate(webhook)
+    return _django_response(request, title="Webhook activated", payload=WebhookSerializer(webhook).data, message="Webhook activated.", kind="success")
+
+
+@_developer_endpoint(HasWebhookScope)
+def webhook_delete(request, pk):
+    if request.method not in {"POST", "DELETE"}:
+        return _django_response(request, title="Method not allowed", message="Delete webhooks with POST or DELETE.", status=405, kind="error")
+    try:
+        webhook = Webhook.objects.get(pk=pk, user=request.user)
+    except Webhook.DoesNotExist:
+        return _django_response(request, title="Webhook not found", message="The requested webhook does not exist.", status=404, kind="error")
+    webhook.delete()
+    return _django_response(request, title="Webhook deleted", payload={}, message="Webhook deleted.", kind="success")
 
 
 @_developer_endpoint(HasWebhookScope)
