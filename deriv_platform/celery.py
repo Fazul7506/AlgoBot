@@ -1,6 +1,8 @@
 import os
 
 from celery import Celery
+from celery.signals import task_postrun, task_prerun
+from django.db import close_old_connections
 from celery.schedules import crontab
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deriv_platform.settings")
@@ -8,6 +10,21 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deriv_platform.settings")
 app = Celery("deriv_platform")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
+
+
+@task_prerun.connect
+
+def _close_stale_task_connections(*args, **kwargs):
+    """Release stale Django DB connections before a long-running task."""
+    close_old_connections()
+
+
+@task_postrun.connect
+
+def _close_task_connections(*args, **kwargs):
+    """Release obsolete/failed DB connections after every Celery task."""
+    close_old_connections()
+
 
 app.conf.beat_schedule = {
     "initial-candle-backfill-automatic-every-5-minutes": {
