@@ -851,7 +851,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
                 if current.status != "running":
-                    return {"recovered": []}
+                    return {"recovered": [], "stale_research_failed": stale_research_failed}
                 current.task_id = task_id
                 current.dispatch_at = timezone.now()
                 current.error = ""
