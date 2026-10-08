@@ -90,7 +90,11 @@ services:
       - key: CSRF_COOKIE_SAMESITE
         value: Lax
     buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt && DJANGO_ENV=production python manage.py collectstatic --noinput
-    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && python manage.py set_telegram_webhook && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
+    # Run database migrations before the new web instance receives traffic.
+    # Keep network-dependent Telegram registration out of the web start path so
+    # a provider timeout cannot leave the HTTP service unavailable during deploys.
+    preDeployCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput
+    startCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && exec daphne --bind 0.0.0.0 --port $PORT deriv_platform.asgi:application
     healthCheckPath: /health/
     maxShutdownDelaySeconds: 60
     autoDeployTrigger: commit
