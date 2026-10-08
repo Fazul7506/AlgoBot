@@ -22,7 +22,14 @@ class DeveloperAPIMiddleware:
         request.META["HTTP_X_REQUEST_ID"] = request_id
         key_value = request.headers.get("X-API-Key") or request.headers.get("Api-Key")
         api_key = APIKey.objects.filter(key=key_value).first() if key_value else None
-        raw_identity = f"key:{api_key.pk}" if api_key else f"ip:{request.META.get('REMOTE_ADDR', 'anon')}"
+        authorization = request.headers.get("Authorization", "").strip()
+        if api_key:
+            raw_identity = f"key:{api_key.pk}"
+        elif authorization.lower().startswith("bearer "):
+            # Hash the short-lived JWT instead of storing or exposing the token.
+            raw_identity = f"jwt:{hashlib.sha256(authorization.encode('utf-8')).hexdigest()}"
+        else:
+            raw_identity = f"ip:{request.META.get('REMOTE_ADDR', 'anon')}"
         identity = hashlib.sha256(raw_identity.encode("utf-8")).hexdigest()[:32]
         from django.conf import settings
         limit = int(getattr(settings, "DEVELOPER_API_RATE_LIMIT", 60))
