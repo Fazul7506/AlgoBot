@@ -11,6 +11,7 @@ django-filter>=25,<26
 python-dotenv>=1,<2
 django-redis>=5,<6
 dj-database-url>=2.3,<3
+psycopg2-binary>=2.9,<3
 requests>=2.32,<3
 websockets>=15,<16
 whitenoise>=6.8,<7
