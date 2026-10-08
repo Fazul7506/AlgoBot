@@ -1,3 +1,4 @@
+import hashlib
 import time
 import uuid
 from django.core.cache import cache
