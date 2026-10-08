@@ -451,12 +451,25 @@ def billing_reconcile(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def billing_cancel(request):
-    """Stop future renewal while preserving access through the paid cycle."""
+    """Cancel provider renewal first, then preserve paid access locally."""
+    subscription = Subscription.objects.filter(user=request.user).first()
+    if not subscription or subscription.plan == "FREE":
+        return Response({"status": "already_free", "plan": "FREE", "expires_at": None})
+    if not subscription.is_active:
+        return Response({"status": "already_cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None})
+
+    provider = str(subscription.provider or "").lower().strip()
+    provider_subscription_id = str(subscription.provider_subscription_id or "").strip()
+    if provider == PaymentService.INTASEND:
+        if not provider_subscription_id:
+            return Response({"detail": "The recurring provider subscription is not linked locally; renewal was not cancelled."}, status=status.HTTP_409_CONFLICT)
+        result = PaymentService().cancel_intasend_subscription(provider_subscription_id)
+        if not result.get("ok"):
+            return Response({"detail": "The payment provider did not confirm cancellation. Your renewal remains active."}, status=status.HTTP_502_BAD_GATEWAY)
+
     with transaction.atomic():
-        subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
-        if subscription.plan == "FREE":
-            return Response({"status": "already_free", "plan": "FREE", "expires_at": None})
-        if not subscription.is_active:
+        subscription = Subscription.objects.select_for_update().get(pk=subscription.pk)
+        if subscription.plan == "FREE" or not subscription.is_active:
             return Response({"status": "already_cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None})
         subscription.recurring = False
         if not subscription.expires_at:
