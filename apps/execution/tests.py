@@ -15,7 +15,7 @@ from apps.brokers.position_sync import PositionSyncError
 from apps.execution.deriv_views import DerivTradingActionView
 from apps.execution.models import ExecutionQueue, Order
 from apps.execution.signal_validation import SignalValidationService
-from apps.execution.tasks import process_execution_queue
+from apps.execution.tasks import _execution_queue_singleton, process_execution_queue
 from .serializers import OrderSerializer
 from .views import OrderViewSet, PositionViewSet
 from .engine import ExecutionEngine
@@ -164,6 +164,22 @@ class ExecutionQueueTaskTests(TestCase):
         self.assertEqual(entry["schedule"], 2.0)
         self.assertEqual(entry["options"]["queue"], "celery")
         self.assertEqual(entry["options"]["expires"], 3)
+
+    @patch('apps.execution.tasks.get_redis_connection')
+    def test_execution_queue_skips_when_singleton_lock_is_held(self, get_redis_connection):
+        lock = get_redis_connection.return_value.lock.return_value
+        lock.acquire.return_value = False
+        wrapped = _execution_queue_singleton(lambda: {'processed': 1})
+        self.assertEqual(wrapped(), {'processed': 0, 'succeeded': 0, 'failed': 0, 'uncertain': 0})
+        lock.release.assert_not_called()
+
+    @patch('apps.execution.tasks.get_redis_connection')
+    def test_execution_queue_releases_singleton_lock_after_processing(self, get_redis_connection):
+        lock = get_redis_connection.return_value.lock.return_value
+        lock.acquire.return_value = True
+        wrapped = _execution_queue_singleton(lambda: {'processed': 1})
+        self.assertEqual(wrapped(), {'processed': 1})
+        lock.release.assert_called_once_with()
 
     def test_queued_order_is_claimed_and_completed(self):
         user = get_user_model().objects.create_user(username='queue-regression', password='test-password')
