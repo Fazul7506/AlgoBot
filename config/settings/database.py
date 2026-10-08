@@ -29,11 +29,9 @@ def _database_conn_max_age(database_url):
             raise ValueError("DB_CONN_MAX_AGE must be >= 0.")
         return value
 
-    # Supavisor session-mode connections (port 5432) are persistent client
-    # sessions. With several Render web/worker processes, Django's default
-    # 600-second persistence can hold idle pooler sessions long enough to
-    # exhaust the shared pool. Releasing the client connection at request/task
-    # boundaries lets Supavisor recycle the underlying database connection.
+    # AlgoBot runs ASGI on Render. Keep Django's per-request connection lifetime
+    # at zero so database connections are returned promptly; production uses the
+    # explicit psycopg connection pool below to cap concurrent client sessions.
     hostname = (urlparse(database_url).hostname or "").lower()
     if hostname.endswith(".pooler.supabase.com"):
         return 0
@@ -41,14 +39,61 @@ def _database_conn_max_age(database_url):
     return 600
 
 
-if DATABASE_URL:
-    DATABASES = {
-        "default": dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=_database_conn_max_age(DATABASE_URL),
-            ssl_require=True,
-        )
+def _database_pool_options(database_url):
+    """Return bounded psycopg pool settings for production ASGI workloads."""
+    enabled = env_bool("DB_CONNECTION_POOL_ENABLED", os.getenv("DJANGO_ENV", "").lower() == "production")
+    if not enabled:
+        return {}
+
+    hostname = (urlparse(database_url).hostname or "").lower()
+    if not hostname:
+        return {}
+
+    try:
+        min_size = int(env("DB_POOL_MIN_SIZE", "1"))
+        max_size = int(env("DB_POOL_MAX_SIZE", "3"))
+        max_lifetime = int(env("DB_POOL_MAX_LIFETIME", "1800"))
+    except ValueError as exc:
+        raise ValueError(
+            "DB_POOL_MIN_SIZE, DB_POOL_MAX_SIZE, and DB_POOL_MAX_LIFETIME must be integers."
+        ) from exc
+
+    if min_size < 0:
+        raise ValueError("DB_POOL_MIN_SIZE must be >= 0.")
+    if max_size < 1 or max_size < min_size:
+        raise ValueError("DB_POOL_MAX_SIZE must be >= DB_POOL_MIN_SIZE and >= 1.")
+    if max_lifetime <= 0:
+        raise ValueError("DB_POOL_MAX_LIFETIME must be > 0.")
+
+    # Django 5.2+ supports psycopg's built-in pool. A small explicit maximum is
+    # important for Supabase session-mode pooling, where the client pool size
+    # is the effective per-role connection ceiling. Keep server-side cursors
+    # disabled so the same configuration remains safe if the URL is later
+    # moved to Supabase transaction pooling.
+    return {
+        "pool": {
+            "min_size": min_size,
+            "max_size": max_size,
+            "max_lifetime": max_lifetime,
+        },
+        "server_side_binding": False,
+        "DISABLE_SERVER_SIDE_CURSORS": True,
     }
+
+
+if DATABASE_URL:
+    database_config = dj_database_url.parse(
+        DATABASE_URL,
+        conn_max_age=_database_conn_max_age(DATABASE_URL),
+        ssl_require=True,
+    )
+    pool_options = _database_pool_options(DATABASE_URL)
+    if pool_options:
+        database_config["OPTIONS"] = {
+            **database_config.get("OPTIONS", {}),
+            **pool_options,
+        }
+    DATABASES = {"default": database_config}
 elif USE_POSTGRES:
     DATABASES = {
         "default": {
