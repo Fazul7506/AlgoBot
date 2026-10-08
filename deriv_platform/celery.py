@@ -20,6 +20,9 @@ app.conf.beat_schedule = {
         "task": "apps.execution.process_execution_queue",
         "schedule": 2.0,
         "kwargs": {"batch_size": 10},
+        # Do not let a slow execution cycle create an unbounded backlog of
+        # database-heavy polling tasks. A fresh tick replaces an expired one.
+        "options": {"queue": "celery", "expires": 3},
     },
     "ai-data-health-every-15-minutes": {
         "task": "apps.ai_engine.tasks.check_ai_data_health",
