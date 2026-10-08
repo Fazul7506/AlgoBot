@@ -37,10 +37,11 @@ app.conf.beat_schedule = {
         "task": "apps.execution.process_execution_queue",
         "schedule": 2.0,
         "kwargs": {"batch_size": 10},
-        # Keep execution polling isolated from unrelated Celery work. The
-        # dedicated execution worker runs one replica/concurrency slot so a
-        # slow broker cycle cannot overlap another execution-queue cycle.
-        "options": {"queue": "execution", "expires": 3},
+        # Do not let a slow execution cycle create an unbounded backlog of
+        # database-heavy polling tasks. A fresh tick replaces an expired one.
+        # The task also takes a distributed Redis lock, so execution remains
+        # logically singleton even though the general worker handles other jobs.
+        "options": {"queue": "celery", "expires": 3},
     },
     "ai-data-health-every-15-minutes": {
         "task": "apps.ai_engine.tasks.check_ai_data_health",
