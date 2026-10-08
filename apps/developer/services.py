@@ -46,6 +46,12 @@ class APIKeyService:
         api_key.secret = make_password(raw_secret); api_key.last_used = now
         api_key.save(update_fields=["secret", "previous_secret", "previous_secret_expires_at", "last_used", "updated_at"])
         return api_key, raw_secret
+    def deactivate(self, api_key):
+        api_key.status = "inactive"; api_key.save(update_fields=["status", "updated_at"]); return api_key
+    def activate(self, api_key):
+        if api_key.expires_at and api_key.expires_at <= django_timezone.now():
+            raise ValueError("Expired API keys cannot be reactivated.")
+        api_key.status = "active"; api_key.save(update_fields=["status", "updated_at"]); return api_key
     def revoke(self, api_key):
         api_key.status = "revoked"; api_key.save(update_fields=["status", "updated_at"]); return api_key
 
@@ -93,6 +99,19 @@ class WebhookService:
     def sign(self, secret, payload):
         if not isinstance(payload, str): payload = json.dumps(payload, separators=(",", ":"), sort_keys=True)
         return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    def rotate_secret(self, webhook):
+        raw_secret = secrets.token_urlsafe(32)
+        webhook.secret = raw_secret
+        webhook.save(update_fields=["secret", "updated_at"])
+        return webhook, raw_secret
+    def deactivate(self, webhook):
+        webhook.status = "inactive"
+        webhook.save(update_fields=["status", "updated_at"])
+        return webhook
+    def activate(self, webhook):
+        webhook.status = "active"
+        webhook.save(update_fields=["status", "updated_at"])
+        return webhook
     def create_delivery(self, webhook, event, payload=None): return WebhookDelivery.objects.create(webhook=webhook, event=event, payload=payload or {}, status="pending")
     def deliver(self, webhook, event, payload=None, timeout=5):
         if webhook.status != "active": return ServiceResult("skipped", {"reason": "webhook_inactive"})
