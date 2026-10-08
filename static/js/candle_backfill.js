@@ -390,10 +390,45 @@
     });
   }
 
-  // Refresh immediately when the operator returns to the tab.
+  let refreshTimer = null;
+  let destroyed = false;
+
+  const scheduleRefresh = (delay = 1500) => {
+    if (destroyed || document.visibilityState !== "visible") return;
+    if (refreshTimer) window.clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(async () => {
+      refreshTimer = null;
+      await refresh();
+      const backoff = telemetryFailures
+        ? Math.min(30000, 1500 * Math.pow(2, Math.min(telemetryFailures - 1, 4)))
+        : 1500;
+      scheduleRefresh(backoff);
+    }, Math.max(250, delay));
+  };
+
+  const refreshNow = () => {
+    if (refreshTimer) {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+    void refresh().finally(() => scheduleRefresh(1500));
+  };
+
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") refresh();
+    if (document.visibilityState === "visible") {
+      telemetryFailures = 0;
+      refreshNow();
+    } else if (refreshTimer) {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
   });
-  refresh();
-  window.setInterval(refresh, 1500);
+
+  window.addEventListener("pagehide", () => {
+    destroyed = true;
+    if (refreshTimer) window.clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }, {once: true});
+
+  refreshNow();
 })();
