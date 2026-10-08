@@ -177,6 +177,14 @@ def _checkout(request, plan_name, provider=None):
     if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL}:
         return None, "Unsupported payment provider."
 
+    active_subscription = Subscription.objects.filter(user=request.user).first()
+    if active_subscription and active_subscription.plan != "FREE" and active_subscription.is_active and (
+        not active_subscription.expires_at or active_subscription.expires_at > timezone.now()
+    ):
+        if active_subscription.plan == plan["plan"]:
+            return None, "This plan is already active."
+        return None, "Your current paid access is still active. Cancel its renewal first, then start the new plan."
+
     # Serialize checkout initiation per user, but never hold a DB lock across the provider HTTP call.
     # A short-lived lease prevents concurrent browser retries from opening two provider checkouts.
     lease_seconds = 120
@@ -422,6 +430,13 @@ def billing_change_plan(request):
         if subscription.plan == plan["plan"] and current_active:
             return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
         if plan["plan"] == "FREE":
+            if subscription.recurring and str(subscription.provider or "").lower() == PaymentService.INTASEND:
+                provider_subscription_id = str(subscription.provider_subscription_id or "").strip()
+                if not provider_subscription_id:
+                    return Response({"detail": "The recurring provider subscription is not linked locally; downgrade was not applied."}, status=status.HTTP_409_CONFLICT)
+                provider_result = PaymentService().cancel_intasend_subscription(provider_subscription_id)
+                if not provider_result.get("ok"):
+                    return Response({"detail": "The payment provider did not confirm cancellation. Your paid plan remains active."}, status=status.HTTP_502_BAD_GATEWAY)
             subscription.plan = "FREE"
             subscription.price_cents = 0
             subscription.currency = plan["currency"].lower()
@@ -429,7 +444,11 @@ def billing_change_plan(request):
             subscription.is_active = True
             subscription.expires_at = None
             subscription.renewed_at = timezone.now()
-            subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at"])
+            subscription.provider = ""
+            subscription.provider_subscription_id = ""
+            subscription.cancelled_at = timezone.now()
+            subscription.cancellation_reason = "user_downgrade_to_free"
+            subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at", "provider", "provider_subscription_id", "cancelled_at", "cancellation_reason"])
             return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
     url, error = _checkout(request, requested, request.data.get("provider"))
     if error: return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
