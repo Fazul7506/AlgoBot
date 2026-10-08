@@ -156,6 +156,15 @@ class ExecutionQueueTaskTests(TestCase):
     def test_celery_task_name_matches_beat_schedule(self):
         self.assertEqual(process_execution_queue.name, 'apps.execution.process_execution_queue')
 
+    def test_execution_queue_beat_tick_expires_stale_polling_tasks(self):
+        from deriv_platform.celery import app
+
+        entry = app.conf.beat_schedule["execution-queue-every-2-seconds"]
+        self.assertEqual(entry["task"], "apps.execution.process_execution_queue")
+        self.assertEqual(entry["schedule"], 2.0)
+        self.assertEqual(entry["options"]["queue"], "celery")
+        self.assertEqual(entry["options"]["expires"], 3)
+
     def test_queued_order_is_claimed_and_completed(self):
         user = get_user_model().objects.create_user(username='queue-regression', password='test-password')
         broker = Broker.objects.create(name='Queue Broker', broker_type='deriv', status='active', supports_live=False)
