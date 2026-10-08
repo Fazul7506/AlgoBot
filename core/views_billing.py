@@ -423,20 +423,29 @@ def billing_checkout(request):
 def billing_change_plan(request):
     requested = str(request.data.get("plan") or "").upper().strip()
     plan = _plan(requested)
-    if not plan: return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
-    with transaction.atomic():
-        subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
-        current_active = subscription.is_active and (not subscription.expires_at or subscription.expires_at > timezone.now())
-        if subscription.plan == plan["plan"] and current_active:
-            return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
-        if plan["plan"] == "FREE":
-            if subscription.recurring and str(subscription.provider or "").lower() == PaymentService.INTASEND:
-                provider_subscription_id = str(subscription.provider_subscription_id or "").strip()
-                if not provider_subscription_id:
-                    return Response({"detail": "The recurring provider subscription is not linked locally; downgrade was not applied."}, status=status.HTTP_409_CONFLICT)
-                provider_result = PaymentService().cancel_intasend_subscription(provider_subscription_id)
-                if not provider_result.get("ok"):
-                    return Response({"detail": "The payment provider did not confirm cancellation. Your paid plan remains active."}, status=status.HTTP_502_BAD_GATEWAY)
+    if not plan:
+        return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
+
+    subscription = Subscription.objects.filter(user=request.user).first()
+    current_active = bool(
+        subscription
+        and subscription.is_active
+        and (not subscription.expires_at or subscription.expires_at > timezone.now())
+    )
+    if subscription and subscription.plan == plan["plan"] and current_active:
+        return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
+
+    if plan["plan"] == "FREE":
+        if subscription and current_active and subscription.recurring and str(subscription.provider or "").lower() == PaymentService.INTASEND:
+            provider_subscription_id = str(subscription.provider_subscription_id or "").strip()
+            if not provider_subscription_id:
+                return Response({"detail": "The recurring provider subscription is not linked locally; downgrade was not applied."}, status=status.HTTP_409_CONFLICT)
+            provider_result = PaymentService().cancel_intasend_subscription(provider_subscription_id)
+            if not provider_result.get("ok"):
+                return Response({"detail": "The payment provider did not confirm cancellation. Your paid plan remains active."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        with transaction.atomic():
+            subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
             subscription.plan = "FREE"
             subscription.price_cents = 0
             subscription.currency = plan["currency"].lower()
@@ -449,11 +458,12 @@ def billing_change_plan(request):
             subscription.cancelled_at = timezone.now()
             subscription.cancellation_reason = "user_downgrade_to_free"
             subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at", "provider", "provider_subscription_id", "cancelled_at", "cancellation_reason"])
-            return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
-    url, error = _checkout(request, requested, request.data.get("provider"))
-    if error: return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    return Response({"url": url, "plan": requested, "payment_required": True})
+        return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
 
+    url, error = _checkout(request, requested, request.data.get("provider"))
+    if error:
+        return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return Response({"url": url, "plan": requested, "payment_required": True})
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
