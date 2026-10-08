@@ -9,7 +9,9 @@ export DJANGO_ENV=production
 export CELERY_WORKER_BROKER_RETRY=true
 export CELERY_WORKER_RETRY_ON_STARTUP=true
 
-python manage.py migrate --fake-initial --noinput
+# Schema migrations are owned by the general worker deployment. Keeping
+# the dedicated market-data worker migration-free avoids concurrent migration
+# connections against the shared Supabase pool during a rollout.
 python manage.py check_market_data_worker
 
 exec celery -A deriv_platform.celery worker \
