@@ -2,6 +2,7 @@ import asyncio
 import logging
 from django.conf import settings
 from django.shortcuts import get_object_or_404
+from django.db.models import Prefetch
 from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.exceptions import APIException
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -63,7 +64,12 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
     # while the authenticated Django session is still used by select_account()
     # to persist the active account context.
     authentication_classes=[JWTAuthentication,BrowserSessionAuthentication]
-    def get_queryset(self):return BrokerAccount.objects.filter(user=self.request.user).select_related('broker').order_by('broker__name','account_id')
+    def get_queryset(self):
+        connected = BrokerConnection.objects.filter(status='connected').only('id','broker_account_id','status')
+        return (BrokerAccount.objects.filter(user=self.request.user)
+                .select_related('broker')
+                .prefetch_related(Prefetch('connections', queryset=connected, to_attr='_connected_connections'))
+                .order_by('broker__name','account_id'))
     def finalize_response(self,request, response_obj,*args,**kwargs):
         response_obj=super().finalize_response(request,response_obj,*args,**kwargs)
         response_obj['Cache-Control']='private, no-store, max-age=0'
@@ -137,7 +143,8 @@ class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet):
 class BrokerHealthViewSet(viewsets.ViewSet):
     permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def list(self,request):
-        accounts=list(BrokerAccount.objects.filter(user=request.user).select_related('broker').order_by('broker__name','account_id'));active=get_active_account(request.user,request=request)
+        connected = BrokerConnection.objects.filter(status='connected').only('id','broker_account_id','status')
+        accounts=list(BrokerAccount.objects.filter(user=request.user).select_related('broker').prefetch_related(Prefetch('connections', queryset=connected, to_attr='_connected_connections')).order_by('broker__name','account_id'));active=get_active_account(request.user,request=request)
         return response.Response({'accounts':BrokerAccountSerializer(accounts,many=True,context={'request':request}).data,'connected':bool(active),'active_account_id':active.id if active else None,'switch_enabled':settings.ENABLE_BROKER_ACCOUNT_SWITCH,'source':'broker_connections'})
 @decorators.api_view(['POST'])
 @decorators.permission_classes([JWTAuthenticatedPermission])
