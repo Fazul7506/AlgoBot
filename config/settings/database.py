@@ -93,13 +93,13 @@ if DATABASE_URL:
     )
     pool_options = _database_pool_options(DATABASE_URL)
     if pool_options:
-        disable_server_side_cursors = pool_options.pop("DISABLE_SERVER_SIDE_CURSORS", False)
         database_config["OPTIONS"] = {
             **database_config.get("OPTIONS", {}),
             **pool_options,
         }
-        if disable_server_side_cursors:
-            database_config["DISABLE_SERVER_SIDE_CURSORS"] = True
+        # Django setting: keep it outside OPTIONS so psycopg3 never receives
+        # the Django-only flag as a connection parameter.
+        database_config["DISABLE_SERVER_SIDE_CURSORS"] = True
     DATABASES = {"default": database_config}
 elif USE_POSTGRES:
     DATABASES = {
