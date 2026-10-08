@@ -1,4 +1,5 @@
 from rest_framework.authentication import BaseAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth.hashers import check_password
 from django.utils import timezone
@@ -20,6 +21,8 @@ class APIKeyAuthentication(BaseAuthentication):
     """
 
     keywords = ("ApiKey", "Bearer")
+
+    jwt_authentication = JWTAuthentication()
 
     def authenticate(self, request):
         key = request.headers.get("X-API-Key") or request.headers.get("Api-Key")
