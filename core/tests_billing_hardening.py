@@ -79,6 +79,52 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(Subscription.objects.get(user=self.user).plan, "BASIC")
         self.assertTrue(Subscription.objects.get(user=self.user).expires_at > timezone.now())
 
+    def test_webhook_reconciliation_never_creates_an_invoice_from_forged_identity(self):
+        result = PaymentReconciler.reconcile(
+            provider="pesapal",
+            external_id="ATTACKER-TRACKING-ID",
+            status="COMPLETE",
+            amount="999.00",
+            currency="KES",
+            metadata={
+                "merchant_reference": f"PP-{self.user.id}-BASIC-FORGED",
+                "plan": "BASIC",
+                "user_id": self.user.id,
+            },
+            require_existing_invoice=True,
+        )
+        self.assertTrue(result["unresolved_invoice"])
+        self.assertTrue(result["retryable"])
+        self.assertFalse(Invoice.objects.filter(external_id="ATTACKER-TRACKING-ID").exists())
+        self.assertFalse(Payment.objects.filter(external_id="ATTACKER-TRACKING-ID").exists())
+        self.assertFalse(Subscription.objects.get(user=self.user).plan == "BASIC")
+
+    @override_settings(INTASEND_WEBHOOK_CHALLENGE="expected")
+    @patch("core.services.payment_reconciler.PaymentService.get_intasend_payment_status")
+    def test_intasend_webhook_requires_a_matching_local_invoice(self, get_status):
+        reference = f"IS-{self.user.id}-BASIC-NOLOCAL"
+        get_status.return_value = {
+            "invoice": {
+                "invoice_id": "WEBHOOK-NOLOCAL",
+                "state": "COMPLETE",
+                "value": "999.00",
+                "currency": "KES",
+            }
+        }
+        result = PaymentReconciler.handle_intasend_webhook({
+            "invoice_id": "WEBHOOK-NOLOCAL",
+            "state": "COMPLETE",
+            "value": "999.00",
+            "currency": "KES",
+            "api_ref": reference,
+            "challenge": "expected",
+        })
+        self.assertTrue(result["unresolved_invoice"])
+        self.assertTrue(result["retryable"])
+        get_status.assert_called_once()
+        self.assertFalse(Invoice.objects.filter(external_id="WEBHOOK-NOLOCAL").exists())
+        self.assertEqual(Subscription.objects.get(user=self.user).plan, "FREE")
+
     def test_cancel_subscription_stops_renewal_without_removing_paid_access(self):
         expiry = timezone.now() + timedelta(days=12)
         subscription = Subscription.objects.get(user=self.user)
