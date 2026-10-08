@@ -82,7 +82,6 @@ def _database_pool_options(database_url):
             "timeout": timeout,
         },
         "server_side_binding": False,
-        "DISABLE_SERVER_SIDE_CURSORS": True,
     }
 
 
