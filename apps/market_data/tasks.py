@@ -758,6 +758,14 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
     recovery_cutoff = now - timedelta(seconds=max(1, int(max_age_seconds or 300)))
     recovered = []
     stale_research_failed = []
+
+    def _recovery_result(**extra):
+        result = {"recovered": recovered}
+        if stale_research_failed:
+            result["stale_research_failed"] = stale_research_failed
+        result.update(extra)
+        return result
+
     try:
         with transaction.atomic():
             stale_research_runs = (
@@ -819,10 +827,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 .first()
             )
             if not run:
-                result = {"recovered": []}
-                if stale_research_failed:
-                    result["stale_research_failed"] = stale_research_failed
-                return result
+                return _recovery_result()
             run_id = run.pk
             count = int(run.count or 5000)
             symbol = run.symbol or None
@@ -835,11 +840,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 run.completed_at = now
                 run.save(update_fields=["status", "error", "completed_at"])
                 CandleBackfillEvent.objects.create(run=run, level="error", event_type="failed", message=run.error, task_id=old_task_id, payload={"recovery_attempts": recovery_attempts})
-                return {
-                    "recovered": [],
-                    "failed": run_id,
-                    "stale_research_failed": stale_research_failed,
-                }
+                return _recovery_result(failed=run_id)
             run.task_id = ""
             run.dispatch_at = None
             prior_result["dispatch_recovery_attempts"] = recovery_attempts + 1
@@ -865,7 +866,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             with transaction.atomic():
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
                 if current.status != "running":
-                    return {"recovered": [], "stale_research_failed": stale_research_failed}
+                    return _recovery_result()
                 current.task_id = task_id
                 current.dispatch_at = timezone.now()
                 current.error = ""
@@ -890,7 +891,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     current.save(update_fields=["status", "error", "completed_at"])
                     CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts), "recovery_attempts": recovery_attempts},)
             logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
-        return {"recovered": recovered, "stale_research_failed": stale_research_failed}
+        return _recovery_result()
     finally:
         if dispatch_lock is not None:
             dispatch_lock.release()
