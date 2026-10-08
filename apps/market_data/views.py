@@ -488,11 +488,13 @@ def initial_candle_backfill(request):
         response["Expires"] = "0"
         return response
 
-    page_error = (
-        "Selected symbol is not an active, tradable Deriv market symbol."
-        if request.GET.get("error") == "invalid-symbol"
-        else ""
-    )
+    error_code = request.GET.get("error")
+    page_errors = {
+        "invalid-symbol": "Selected symbol is not an active, tradable Deriv market symbol.",
+        "dispatch-busy": "Another backfill dispatch is already being coordinated; no duplicate execution was started.",
+        "dispatch-unavailable": "Backfill dispatch coordination is temporarily unavailable; no execution was started.",
+    }
+    page_error = page_errors.get(error_code, "")
     return render(
         request,
         "market_data/candle_backfill.html",
