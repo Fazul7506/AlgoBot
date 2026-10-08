@@ -208,6 +208,26 @@ class BillingHardeningTests(TestCase):
         self.assertFalse(response.json()["subscription"]["is_active"])
         self.assertFalse(Subscription.objects.get(user=self.user).is_active)
 
+    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_PRO_PRICE_CENTS="70000", ALGOBOT_BILLING_CURRENCY="KES")
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
+    def test_active_paid_plan_cannot_open_a_second_paid_checkout(self, create_checkout):
+        subscription = Subscription.objects.get(user=self.user)
+        subscription.plan = "BASIC"
+        subscription.price_cents = 50000
+        subscription.currency = "kes"
+        subscription.recurring = False
+        subscription.is_active = True
+        subscription.expires_at = timezone.now() + timedelta(days=10)
+        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at"])
+
+        response = self.client.post(
+            reverse("billing_checkout_start"),
+            {"plan": "PRO", "provider": "pesapal"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("billing_page"))
+        create_checkout.assert_not_called()
+
     @override_settings(ALGOBOT_PRO_PRICE_CENTS="0")
     def test_zero_price_paid_plan_is_not_sent_to_a_provider(self):
         response = self.client.post(reverse("billing_checkout"), {"plan": "PRO"}, format="json", **self.api_headers)
