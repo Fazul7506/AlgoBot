@@ -819,7 +819,10 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 .first()
             )
             if not run:
-                return {"recovered": [], "stale_research_failed": stale_research_failed}
+                result = {"recovered": []}
+                if stale_research_failed:
+                    result["stale_research_failed"] = stale_research_failed
+                return result
             run_id = run.pk
             count = int(run.count or 5000)
             symbol = run.symbol or None
