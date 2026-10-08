@@ -150,7 +150,7 @@ class CandleBackfillReliabilityTests(TestCase):
             result = reconcile_candle_backfill_runs(max_age_seconds=300)
 
         run.refresh_from_db()
-        self.assertEqual(result, {"recovered": [], "stale_research_failed": []})
+        self.assertEqual(result, {"recovered": []})
         self.assertEqual(run.status, "running")
         delay.assert_not_called()
 
