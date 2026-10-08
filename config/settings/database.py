@@ -54,6 +54,7 @@ def _database_pool_options(database_url):
         min_size = int(env("DB_POOL_MIN_SIZE", "1"))
         max_size = int(env("DB_POOL_MAX_SIZE", "3"))
         max_lifetime = int(env("DB_POOL_MAX_LIFETIME", "1800"))
+        timeout = int(env("DB_POOL_TIMEOUT", "10"))
     except ValueError as exc:
         raise ValueError(
             "DB_POOL_MIN_SIZE, DB_POOL_MAX_SIZE, and DB_POOL_MAX_LIFETIME must be integers."
@@ -65,6 +66,8 @@ def _database_pool_options(database_url):
         raise ValueError("DB_POOL_MAX_SIZE must be >= DB_POOL_MIN_SIZE and >= 1.")
     if max_lifetime <= 0:
         raise ValueError("DB_POOL_MAX_LIFETIME must be > 0.")
+    if timeout <= 0:
+        raise ValueError("DB_POOL_TIMEOUT must be > 0.")
 
     # Django 5.2+ supports psycopg's built-in pool. A small explicit maximum is
     # important for Supabase session-mode pooling, where the client pool size
@@ -76,6 +79,7 @@ def _database_pool_options(database_url):
             "min_size": min_size,
             "max_size": max_size,
             "max_lifetime": max_lifetime,
+            "timeout": timeout,
         },
         "server_side_binding": False,
         "DISABLE_SERVER_SIDE_CURSORS": True,
