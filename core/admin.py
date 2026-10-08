@@ -12,10 +12,8 @@ class UserProfileAdmin(admin.ModelAdmin):
     list_display = ["user", "email_verified", "timezone", "created_at"]
     list_filter = ["email_verified", "two_factor_enabled", "created_at"]
     search_fields = ["user__username", "user__email"]
-    readonly_fields = [
-        "created_at", "updated_at", "email_verification_token",
-        "telegram_chat_id", "telegram_username", "brevo_api_key",
-    ]
+    readonly_fields = ["created_at", "updated_at"]
+    exclude = ["email_verification_token", "telegram_chat_id", "telegram_username", "brevo_api_key"]
 
 
 @admin.register(Subscription)
@@ -54,10 +52,8 @@ class BotSettingsAdmin(admin.ModelAdmin):
     list_display = ["user", "is_enabled", "status", "default_strategy"]
     list_filter = ["is_enabled", "status"]
     search_fields = ["user__username"]
-    readonly_fields = [
-        "created_at", "updated_at", "telegram_chat_id",
-        "telegram_username", "brevo_api_key",
-    ]
+    readonly_fields = ["created_at", "updated_at"]
+    exclude = ["telegram_chat_id", "telegram_username", "brevo_api_key"]
 
 
 @admin.register(Invoice)
