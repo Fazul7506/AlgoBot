@@ -275,6 +275,7 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
         reconcile = Path("static/js/terminal_phase2.js").read_text(encoding="utf-8")
         self.assertIn("account_scope=active", terminal)
+        self.assertIn("credentials:'include'", terminal)
         self.assertIn("account_scope=active", reconcile)
         self.assertIn("executionUncertain", terminal)
         self.assertIn("remains locked until broker state is reconciled", terminal)
