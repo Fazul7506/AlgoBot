@@ -741,8 +741,11 @@ def broker_proposal(request):
     duration = payload.get("duration")
     if duration is not None:
         try:
-            duration = int(duration)
-        except (TypeError, ValueError, OverflowError):
+            duration_decimal = Decimal(str(duration))
+            if not duration_decimal.is_finite() or duration_decimal != duration_decimal.to_integral_value():
+                raise ValueError("duration must be a whole number")
+            duration = int(duration_decimal)
+        except (InvalidOperation, TypeError, ValueError, OverflowError):
             return JsonResponse({"status": "error", "code": "INVALID_DURATION", "message": "Duration must be a positive whole number."}, status=400)
         if duration < 1 or duration > 100000:
             return JsonResponse({"status": "error", "code": "INVALID_DURATION", "message": "Duration must be between 1 and 100000."}, status=400)
