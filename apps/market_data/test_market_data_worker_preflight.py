@@ -7,6 +7,7 @@ from django.test import SimpleTestCase
 
 
 class MarketDataWorkerPreflightTests(SimpleTestCase):
+    @patch("django.db.connection.introspection.table_names", return_value=["market_data_candlebackfillrun"])
     @patch("deriv_platform.celery.app")
     @patch.dict(os.environ, {
         "DJANGO_ENV": "production",
@@ -38,4 +39,30 @@ class MarketDataWorkerPreflightTests(SimpleTestCase):
         app.tasks = {}
         app.conf.task_routes = {}
         with self.assertRaises(CommandError):
+            call_command("check_market_data_worker")
+
+    @patch("django.db.connection.introspection.table_names", return_value=[])
+    @patch("deriv_platform.celery.app")
+    @patch.dict(os.environ, {
+        "DJANGO_ENV": "production",
+        "DATABASE_URL": "postgres://ci",
+        "REDIS_URL": "redis://ci",
+        "SECRET_KEY": "ci-secret",
+        "USE_REDIS": "true",
+        "USE_CELERY": "true",
+        "CELERY_BROKER_URL": "redis://ci",
+        "CELERY_RESULT_BACKEND": "redis://ci",
+    }, clear=False)
+    def test_preflight_rejects_missing_market_data_schema(self, app):
+        app.tasks = {
+            "apps.market_data.tasks.run_initial_candle_backfill": object(),
+        }
+        app.conf.task_routes = {
+            "apps.market_data.tasks.run_initial_candle_backfill": {
+                "queue": "market_data",
+            }
+        }
+        app.conf.task_queues = [type("Queue", (), {"name": "celery"})(), type("Queue", (), {"name": "market_data"})()]
+        app.conf.task_default_queue = "celery"
+        with self.assertRaisesRegex(CommandError, "Required database table.*missing"):
             call_command("check_market_data_worker")
