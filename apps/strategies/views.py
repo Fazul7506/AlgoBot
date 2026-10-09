@@ -72,6 +72,8 @@ class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
             return response.Response({'detail': 'No saved configuration exists for this strategy. Configure it before switching.'}, status=status.HTTP_409_CONFLICT)
         if not config.broker_account_id:
             return response.Response({'detail': 'The strategy configuration has no broker account. Select an active broker account first.'}, status=status.HTTP_409_CONFLICT)
+        if config.broker_account.status != 'active':
+            return response.Response({'detail': 'The linked broker account is not active. Reconnect and verify the account before switching strategies.'}, status=status.HTTP_409_CONFLICT)
         with transaction.atomic():
             request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
             StrategyConfiguration.objects.select_for_update().filter(user=request.user, is_active=True).update(is_active=False)
@@ -135,6 +137,8 @@ class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
             account = get_active_account(request.user, request=request)
         if make_active and account is None:
             return response.Response({'detail': 'An active strategy requires an active broker account.'}, status=409)
+        if make_active and account.status != 'active':
+            return response.Response({'detail': 'The selected broker account is not active. Reconnect and verify it before activating a strategy.'}, status=409)
 
         existing = StrategyConfiguration.objects.filter(
             strategy=strategy, user=request.user, symbol=symbol, timeframe=timeframe
