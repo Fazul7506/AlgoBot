@@ -63,6 +63,9 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn(".status-dot.ok{background:#22c55e", css)
         self.assertIn(".status-dot.warn{background:#f59e0b", css)
         self.assertIn(".status-dot.error{background:#ef4444", css)
+        self.assertIn('grid-template-areas:"title value" "meta meta"', css)
+        self.assertNotIn(".mini-row span{display:none}", css)
+        self.assertNotIn(".signal-row span{display:none}", css)
         self.assertIn("css/dashboard.css' %}?v=20261009-dashboard-audit3", template)
         self.assertIn("dashboard_command_center.js' %}?v=20261009-dashboard-audit3", template)
 
