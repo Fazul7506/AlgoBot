@@ -299,7 +299,8 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertIn('data-order-preview-result', template)
         self.assertIn("PRE-TRADE ESTIMATE — NOT AN EXECUTED ORDER", terminal)
         self.assertIn("duration_unit:durationUnit", terminal)
-        self.assertIn("payout_verified", terminal) if "payout_verified" in terminal else self.assertIn("preview.estimate", terminal)
+        self.assertIn("preview.estimate", terminal)
+        self.assertIn("estimate.payout", terminal)
 
     def test_terminal_timeframe_control_does_not_reference_out_of_scope_variable(self):
         from pathlib import Path
