@@ -86,6 +86,20 @@ def _gmail_access_token(conn):
     return refreshed_token
 
 
+def gmail_revoke(conn):
+    token = _dec(conn.refresh_token) or _dec(conn.access_token)
+    if not token:
+        return True
+    response = requests.post(
+        "https://oauth2.googleapis.com/revoke",
+        params={"token": token},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=5,
+    )
+    response.raise_for_status()
+    return True
+
+
 def send_gmail_notification(conn, notification):
     from .services import SenderIdentity, render_email_html
 
