@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -47,7 +48,7 @@ class DashboardAccountSnapshotTests(TestCase):
         self.assertEqual(account["data_freshness"], "fresh")
 
     def test_future_sync_timestamp_is_not_marked_fresh(self):
-        self.account.last_synced_at = timezone.now() + timezone.timedelta(seconds=120)
+        self.account.last_synced_at = timezone.now() + timedelta(seconds=120)
         self.account.save(update_fields=["last_synced_at"])
         response = self._overview()
         self.assertEqual(response.data["data"]["account"]["data_freshness"], "stale")
