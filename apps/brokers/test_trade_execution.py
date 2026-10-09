@@ -44,6 +44,25 @@ class CanonicalTradeExecutionTests(TransactionTestCase):
         self.assertEqual(report.status, "filled")
         self.assertEqual(Order.objects.filter(client_order_id="web-regression-1").count(), 1)
 
+    def test_execution_accepts_broker_verified_nested_realtime_account_type(self):
+        self.account.credentials = {"realtime": {"account_type": "demo"}}
+        self.account.save(update_fields=["credentials"])
+        fake_report = {"status": "filled", "broker_order_id": "C-NESTED", "execution_price": "1.25", "fees": 0}
+        adapter = SimpleNamespace(place_order=AsyncMock(return_value=fake_report))
+        with patch("apps.brokers.services.BrokerRegistry.adapter", return_value=adapter):
+            report = ExecutionEngine().submit(
+                self.user,
+                account=self.account,
+                symbol="R_100",
+                direction="buy",
+                order_type="market",
+                stake=Decimal("1"),
+                client_order_id="nested-realtime-account-type",
+            )
+        self.assertEqual(report.order.broker_order_id, "C-NESTED")
+        self.assertEqual(report.order.routing_context["account_type"], "demo")
+        adapter.place_order.assert_awaited_once()
+
     def test_same_client_order_id_does_not_place_a_second_order(self):
         fake_report = {"status": "filled", "broker_order_id": "C124", "execution_price": "1.25", "fees": 0}
         adapter = SimpleNamespace(place_order=AsyncMock(return_value=fake_report))
