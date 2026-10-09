@@ -373,6 +373,38 @@ def _django_response(request, *, title, payload=None, message="", status=200, ki
         data.setdefault("code", "DEVELOPER_API_ERROR")
     return JsonResponse(data, status=status)
 
+
+def _developer_endpoint(scope):
+    """Authenticate developer API callers, enforce endpoint scope and normalize errors."""
+    def decorator(view):
+        @wraps(view)
+        def wrapped(request, *args, **kwargs):
+            if not _authenticate(request):
+                return _django_response(
+                    request, title="Authentication required",
+                    message="Sign in with an authenticated AlgoBot session or valid API key.",
+                    status=401, kind="error",
+                )
+            permission = scope()
+            if not permission.has_permission(request, view):
+                return _django_response(
+                    request, title="Access denied",
+                    message=getattr(permission, "message", "You do not have permission for this endpoint."),
+                    status=403, kind="error",
+                )
+            try:
+                return view(request, *args, **kwargs)
+            except Exception:
+                # Do not disclose exception text, provider responses, or secrets to API callers.
+                return _django_response(
+                    request, title="Developer service error",
+                    message="The developer service could not complete the request.",
+                    status=500, kind="error",
+                )
+        return wrapped
+    return decorator
+
+
 @_developer_endpoint(HasDeveloperScope)
 def keys(request):
     rows = APIKey.objects.filter(user=request.user).order_by("-created_at")
