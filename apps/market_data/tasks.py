@@ -631,7 +631,31 @@ def ensure_research_candle_backfill(count=250):
                 return {"status": "running", "run_id": active.pk}
 
             if latest:
-                last_completed = latest.completed_at or latest.requested_at
+                # A terminal run without completed_at is legacy/inconsistent
+                # state. Never substitute requested_at: doing so can bypass the
+                # completion-relative cooldown when a run lasted a long time.
+                # Repair the missing terminal timestamp conservatively from now,
+                # then require a complete 30-minute interval before dispatch.
+                last_completed = latest.completed_at
+                if last_completed is None:
+                    if latest.status not in {"completed", "failed"}:
+                        return {
+                            "status": "cooldown",
+                            "run_id": latest.pk,
+                            "reason": "previous_run_completion_time_missing",
+                            "seconds_remaining": 1800,
+                        }
+                    latest.completed_at = now
+                    latest.save(update_fields=["completed_at"])
+                    last_completed = now
+                    CandleBackfillEvent.objects.create(
+                        run=latest,
+                        level="warning",
+                        event_type="completion_timestamp_repaired",
+                        message="Terminal research backfill had no completion timestamp; cooldown restarted conservatively from detection time.",
+                        task_id=latest.task_id or "",
+                        payload={"cooldown_seconds": 1800, "repaired_at": now.isoformat()},
+                    )
                 due_at = last_completed + timedelta(minutes=30)
                 if now < due_at:
                     return {
