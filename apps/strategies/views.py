@@ -1,8 +1,8 @@
 from django.db import transaction
 from rest_framework import viewsets, decorators, response, status, permissions
 from rest_framework.exceptions import ValidationError
-from .models import Strategy, StrategyConfiguration, StrategyExecution, StrategyPerformance, StrategySignal
-from .serializers import StrategySerializer, StrategyExecutionSerializer, StrategyPerformanceSerializer, StrategySignalSerializer, StrategyConfigurationSerializer
+from .models import Strategy, StrategyConfiguration, StrategyExecution, StrategySignal
+from .serializers import StrategySerializer, StrategyExecutionSerializer, StrategySignalSerializer, StrategyConfigurationSerializer
 from .engine import StrategyEngine
 from .services import StrategyService
 from core.account_context import get_active_account
