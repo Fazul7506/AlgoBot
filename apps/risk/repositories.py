@@ -4,7 +4,11 @@ from . import constants as c
 
 class RiskRepository:
     def profile_for_user(self, user):
-        profile, _ = RiskProfile.objects.get_or_create(user=user, defaults={'profile_name': 'Default Risk Profile'})
+        # Older accounts may have multiple profiles because the historical API
+        # allowed them. Use the same stable profile as the single-profile UI.
+        profile = RiskProfile.objects.filter(user=user).order_by("created_at", "id").first()
+        if profile is None:
+            profile = RiskProfile.objects.create(user=user, profile_name="Default Risk Profile")
         return profile
 
     def apply_level_defaults(self, profile):
