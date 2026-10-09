@@ -25,7 +25,9 @@
     if (typeof shared !== 'function') {
       return Promise.reject(new Error('Canonical frontend transport is not ready.'));
     }
-    return shared(url, options, timeout);
+    // The API's active-account authority is the server-side Django session.
+    // Preserve that cookie on Dashboard reads while keeping the canonical transport.
+    return shared(url, {credentials: 'include', ...options}, timeout);
   }
 
   function status(key, state, label) {
