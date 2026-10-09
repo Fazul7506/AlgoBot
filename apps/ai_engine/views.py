@@ -43,7 +43,7 @@ class AIModelViewSet(viewsets.ReadOnlyModelViewSet):
 class ModelVersionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ModelVersion.objects.select_related("model").all()
     serializer_class = ModelVersionSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [StaffOnlyPermission]
 
 
 class PredictionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -73,7 +73,7 @@ class MarketRegimeViewSet(viewsets.ReadOnlyModelViewSet):
 class FeatureVectorViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = FeatureVector.objects.all()
     serializer_class = FeatureVectorSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [StaffOnlyPermission]
 
 
 class AnomalyViewSet(viewsets.ReadOnlyModelViewSet):
@@ -213,6 +213,8 @@ def _broker_market_context(account, symbol):
 @decorators.permission_classes([JWTAuthenticatedPermission])
 @decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
 def predict(request):
+    if not isinstance(request.data, dict):
+        return response.Response({"detail": "A JSON object is required.", "code": "AI_CONTEXT_INVALID"}, status=status.HTTP_400_BAD_REQUEST)
     try:
         symbol = _discover_symbol(request)
         if not symbol:
@@ -226,7 +228,7 @@ def predict(request):
         if raw_context is None:
             raw_context = _broker_market_context(account, symbol)
         ctx = validate_feature_context(raw_context)
-        result = AIEngine().analyze(symbol, timeframe, ctx)
+        result = AIEngine().analyze(symbol, timeframe, ctx, user=request.user)
         prediction = result["prediction"]
         recommendation = result["recommendation"]
         regime = result["regime"]
@@ -255,7 +257,13 @@ def explain(request):
     timeframe = str(request.query_params.get("timeframe") or "M1").upper()
     if not symbol:
         return response.Response({"detail": "symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
-    features = FeatureStoreService().latest(symbol, timeframe)
-    if not features:
-        return response.Response({"detail": "No AI feature vector is available for this market yet."}, status=status.HTTP_404_NOT_FOUND)
-    return response.Response(ExplainabilityService().explain(features))
+    prediction = Prediction.objects.filter(
+        user=request.user, symbol=symbol, timeframe=timeframe
+    ).order_by("-created_at").first()
+    features = (prediction.payload or {}).get("feature_values") if prediction else None
+    if not isinstance(features, dict) or not features:
+        return response.Response(
+            {"detail": "No user-scoped AI feature context is available for this market yet."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return response.Response(ExplainabilityService().explain(features, prediction))
