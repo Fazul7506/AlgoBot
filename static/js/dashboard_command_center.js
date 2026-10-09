@@ -56,7 +56,7 @@
     try { sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({at: Date.now(), account})); } catch (_) {}
   }
 
-  function renderAccount(account, message = '') {
+  function renderAccount(account, message = '', persistSnapshot = true) {
     if (!account) {
       ['balance','equity','available','pnl'].forEach(key => setText(`[data-kpi="${key}"]`, 'Unavailable'));
       setText('[data-kpi-state="balance"]', message || 'No authoritative broker account');
@@ -80,7 +80,7 @@
     const sync = account.last_synced_at ? new Date(account.last_synced_at).toLocaleTimeString() : 'snapshot';
     setHtml('[data-dashboard-brokers]', `<span><b></b><strong>${esc(broker)}</strong> · ${esc(id)} · CONNECTED</span><small>Broker snapshot · ${esc(sync)}</small>`);
     status('account', 'ok', 'Broker account available');
-    writeLastAccountSnapshot(account);
+    if (persistSnapshot) writeLastAccountSnapshot(account);
   }
 
   function renderRows(selector, values, renderer, fallback) {
@@ -129,11 +129,22 @@
       const currentId = window.AlgoBotBrokerState?.get?.()?.account?.id;
       if (seq !== loadSeq || (requestedAccountId != null && currentId != null && String(currentId) !== requestedAccountId)) return;
       const [account, positions, orders, markets, signals] = responses;
-      if (account.status === 'fulfilled') renderAccount(account.value?.data?.account || account.value?.account || null);
+      const accountPayload = account.status === 'fulfilled'
+        ? (account.value?.data?.account || account.value?.account || null)
+        : null;
+      // Never paint an account response that belongs to a different selection.
+      // Internal account IDs are compared only when both sides expose one.
+      if (requestedAccountId != null && accountPayload?.id != null && String(accountPayload.id) !== requestedAccountId) {
+        renderAccount(null, 'Account changed during refresh · retrying');
+        setText('[data-dashboard-sync]', 'Account selection changed · refreshing');
+        timer = setTimeout(load, 250);
+        return;
+      }
+      if (account.status === 'fulfilled') renderAccount(accountPayload);
       else if (account.reason?.code === 'API_TIMEOUT') {
         const stale = readLastAccountSnapshot();
         if (stale?.account) {
-          renderAccount(stale.account);
+          renderAccount(stale.account, '', false);
           setText('[data-kpi-state="balance"]', `Last verified broker snapshot · refresh timed out${stale.at ? ` · ${new Date(stale.at).toLocaleTimeString()}` : ''}`);
           status('account', 'warn', 'Broker refresh timed out · last verified snapshot shown');
         } else renderAccount(null, 'Broker snapshot timed out · refresh again');
