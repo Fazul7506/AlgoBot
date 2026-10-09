@@ -330,7 +330,7 @@ def analysis_data(request):
                 },
             )
             consensus = prediction.payload.get("consensus") or {}
-            recommendation = RecommendationService().recommend(market.symbol, prediction)
+            recommendation = RecommendationService().recommend(market.symbol, prediction, user=request.user)
             models_used = int(consensus.get("models_used", 0) or 0)
             raw_confidence = consensus.get("confidence")
             confidence = float(raw_confidence) * 100.0 if raw_confidence is not None else None
