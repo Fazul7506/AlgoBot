@@ -149,7 +149,7 @@
       const responses = await Promise.allSettled([
         request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS),
         request('/api/positions/open/', {}, 8000),
-        request('/api/orders/', {}, 8000),
+        request('/api/dashboard/trade_history/?days=30&limit=8', {}, 8000),
         request('/api/market/snapshots/all_snapshots/', {}, 8000),
         request('/api/dashboard/signals/?limit=8', {}, 8000)
       ]);
