@@ -239,3 +239,22 @@ class TerminalAiTimeframeContractTests(SimpleTestCase):
         self.assertIn("raw_timeframe.upper()", views)
         self.assertIn("amount}{unit.lower()}", views)
         self.assertIn("timeframe=candle_timeframe", views)
+
+
+class TerminalBrokerReadinessContractTests(SimpleTestCase):
+    def test_terminal_requires_authoritative_connection_and_credentials_before_execution(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        self.assertIn("a.is_connected===true", terminal)
+        self.assertIn("a.credential_status||''", terminal)
+        self.assertIn("a.broker?.status||''", terminal)
+        self.assertIn("if(!brokerReady())throw new Error(brokerReadinessReason())", terminal)
+        self.assertIn("if(!brokerReady()){result(", terminal)
+        self.assertIn("syncExecutionControls", terminal)
+
+    def test_public_market_quote_loading_does_not_require_a_connected_trading_account(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        quote_loader = terminal.split("async function loadQuote()", 1)[1].split("async function loadRecords()", 1)[0]
+        self.assertIn("if(!symbol)return", quote_loader)
+        self.assertNotIn("brokerReady()", quote_loader)
