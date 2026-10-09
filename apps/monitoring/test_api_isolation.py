@@ -54,7 +54,7 @@ class MonitoringApiIsolationTests(TestCase):
         self.assertFalse(self.foreign_alert.acknowledged)
 
     def test_incidents_are_scoped_to_assignee_or_owned_alert(self):
-        foreign_incident = Incident.objects.create(
+        Incident.objects.create(
             title="Foreign incident", severity="CRITICAL", alert=self.foreign_alert, assigned_to=self.other
         )
         own_incident = Incident.objects.create(
