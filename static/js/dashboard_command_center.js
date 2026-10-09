@@ -110,14 +110,20 @@
     const markets = result.markets.ok ? list(result.markets.value).slice(0, 8) : [];
     const signals = result.signals.ok ? list(result.signals.value).slice(0, 8) : [];
     const marketsTimestamped = markets.some(item => Number.isFinite(Date.parse(item.timestamp)));
+    const positionsStale = result.positions.ok && (result.positions.value?.status === 'stale' || result.positions.value?.source === 'broker_cache');
+    const ordersStale = result.orders.ok && (result.orders.value?.status === 'stale' || result.orders.value?.source === 'broker_cache');
 
     renderRows('[data-dashboard-positions]', positions, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.profit ?? item.pnl ?? item.profit_loss ?? '—')}</b></div>`, result.positions.ok ? 'No open positions reported by the backend.' : 'Position service unavailable.');
     renderRows('[data-dashboard-orders]', orders, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.status || 'Unknown')}</b></div>`, result.orders.ok ? 'No orders reported by the backend.' : 'Order service unavailable.');
     renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol?.display_name || item.display_name || item.symbol || 'Market')}</strong><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid ?? 'Unavailable')} · Ask ${esc(item.ask_price ?? item.ask ?? 'Unavailable')}` : 'Broker market catalogue'} · ${esc(snapshotAge(item.timestamp))}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.ok ? 'No market snapshot is currently available.' : 'Market data service unavailable.');
     renderRows('[data-dashboard-signals]', signals, item => `<div class="signal-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')} · ${esc(item.direction || item.signal || 'HOLD')}</strong><span>${esc(item.strategy?.name || item.strategy || item.market_regime || '')}</span><b>${item.confidence != null && Number.isFinite(Number(item.confidence)) ? `${Number(item.confidence).toFixed(0)}%` : '—'}</b></div>`, result.signals.ok ? 'No recent backend signals.' : 'Signal service unavailable.');
 
-    status('positions', result.positions.ok ? (positions.length ? 'ok' : 'warn') : 'error', result.positions.ok ? (positions.length ? 'Exposure available' : 'No open positions') : 'Position service unavailable');
-    status('execution', result.orders.ok ? (orders.length ? 'ok' : 'warn') : 'error', result.orders.ok ? (orders.length ? 'Execution feed available' : 'No recent orders') : 'Order service unavailable');
+    const positionSync = result.positions.value?.meta?.last_synced_at || result.positions.value?.meta?.last_synced || null;
+    const orderSync = result.orders.value?.meta?.last_synced_at || result.orders.value?.meta?.last_synced || null;
+    status('positions', !result.positions.ok ? 'error' : (positions.length && !positionsStale ? 'ok' : 'warn'),
+      !result.positions.ok ? 'Position service unavailable' : positionsStale ? `Cached exposure · ${snapshotAge(positionSync)}` : positions.length ? 'Exposure available' : 'No open positions');
+    status('execution', !result.orders.ok ? 'error' : (orders.length && !ordersStale ? 'ok' : 'warn'),
+      !result.orders.ok ? 'Order service unavailable' : ordersStale ? `Cached orders · ${snapshotAge(orderSync)}` : orders.length ? 'Execution feed available' : 'No recent orders');
     status('markets', result.markets.ok ? (markets.length && marketsTimestamped ? 'ok' : 'warn') : 'error', result.markets.ok ? (markets.length && marketsTimestamped ? 'Market snapshot timestamps available' : markets.length ? 'Market data returned · freshness unknown' : 'No market snapshot') : 'Market data unavailable');
     status('signals', result.signals.ok ? (signals.length ? 'ok' : 'warn') : 'error', result.signals.ok ? (signals.length ? 'AI signal feed available' : 'No recent signals') : 'Signal service unavailable');
 
