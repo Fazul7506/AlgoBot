@@ -19,6 +19,10 @@
     : 'Unavailable';
 
   function setState(state, detail) {
+    if (state !== 'live') {
+      $('[data-q="bid"]')?.replaceChildren(document.createTextNode('Unavailable'));
+      $('[data-q="ask"]')?.replaceChildren(document.createTextNode('Unavailable'));
+    }
     const root = $('.terminal-page');
     if (root) {
       root.dataset.marketDataState = state;
