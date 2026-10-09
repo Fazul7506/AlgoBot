@@ -104,10 +104,26 @@ def process_execution_queue(batch_size=10):
             uncertain += 1
             logger.error("execution.queue.uncertain order_id=%s attempt=%s error=%s", order_id, entry.attempts, exc)
         except (BrokerAuthenticationError, BrokerOrderError, PermissionError, ValueError) as exc:
-            Order.objects.filter(pk=order_id).update(status=c.ORDER_STATUS_FAILED, updated_at=timezone.now())
-            ExecutionQueue.objects.filter(pk=entry.pk).update(status=c.QUEUE_STATUS_FAILED, updated_at=timezone.now())
-            failed += 1
-            logger.warning("execution.queue.rejected order_id=%s attempt=%s error=%s", order_id, entry.attempts, exc)
+            # A typed exception is only a definitive rejection before the
+            # submission boundary. If the adapter already marked the order as
+            # sent/accepted/executed, preserve uncertainty and reconcile it.
+            current = Order.objects.filter(pk=order_id).only("status", "validation_context").first()
+            if current and current.status in {c.ORDER_STATUS_SENT, c.ORDER_STATUS_ACCEPTED, c.ORDER_STATUS_EXECUTED}:
+                context = dict(current.validation_context or {})
+                context.update({"reconciliation_required": True, "execution_error": str(exc)[:500]})
+                Order.objects.filter(pk=order_id).update(
+                    status=c.ORDER_STATUS_SENT,
+                    validation_context=context,
+                    updated_at=timezone.now(),
+                )
+                ExecutionQueue.objects.filter(pk=entry.pk).update(status=c.QUEUE_STATUS_FAILED, updated_at=timezone.now())
+                uncertain += 1
+                logger.warning("execution.queue.uncertain order_id=%s attempt=%s error=%s", order_id, entry.attempts, exc)
+            else:
+                Order.objects.filter(pk=order_id).update(status=c.ORDER_STATUS_FAILED, updated_at=timezone.now())
+                ExecutionQueue.objects.filter(pk=entry.pk).update(status=c.QUEUE_STATUS_FAILED, updated_at=timezone.now())
+                failed += 1
+                logger.warning("execution.queue.rejected order_id=%s attempt=%s error=%s", order_id, entry.attempts, exc)
         except Exception as exc:
             # ExecutionEngine marks an order sent before calling the adapter.
             # Any unclassified failure after that boundary may have happened
