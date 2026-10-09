@@ -22,7 +22,7 @@
     set('[data-ai-count]', predictionOk ? String(ps.length) : 'Unavailable');
     set('[data-ai-model-count]', modelOk ? String(ms.length) : 'Unavailable');
     set('[data-ai-job-count]', jobsOk ? String(js.length) : 'Unavailable');
-    const calibrated = ps.filter(p => Number(p.payload?.models_used || 0) > 0 && Number.isFinite(Number(p.confidence)));
+    const calibrated = ps.filter(p => Number(p.payload?.models_used || 0) > 0 && p.confidence != null && p.confidence !== '' && Number.isFinite(Number(p.confidence)));
     set('[data-ai-confidence]', !predictionOk || !calibrated.length
       ? 'Unavailable'
       : (calibrated.reduce((sum, p) => sum + Number(p.confidence), 0) / calibrated.length).toFixed(1) + '%');
@@ -32,7 +32,7 @@
     } else {
       mg.innerHTML = ms.length ? ms.slice(0, 12).map(m => {
         const validated = ['active', 'champion'].includes(String(m.status || '').toLowerCase());
-        const metric = value => validated && Number.isFinite(Number(value)) ? esc(Number(value).toFixed(3)) : 'Not validated';
+        const metric = value => validated && value != null && value !== '' && Number.isFinite(Number(value)) ? esc(Number(value).toFixed(3)) : 'Not validated';
         return `<article class="ai-model"><strong>${esc(m.name)}</strong><div>v${esc(m.version)} · ${esc(m.algorithm)}</div><div>Status: <span class="ai-badge">${esc(m.status)}</span></div><div>Accuracy: ${metric(m.accuracy)}</div><div>Precision: ${metric(m.precision)}</div><div>Recall: ${metric(m.recall)}</div><div>F1: ${metric(m.f1_score)}</div><div>AUC: ${metric(m.auc)}</div></article>`;
       }).join('') : '<p class="ai-note">No registered models yet. Train and validate a model before treating predictions as actionable.</p>';
     }
@@ -42,9 +42,9 @@
     } else {
       hb.innerHTML = ps.length ? ps.slice(0, 50).map(p => {
         const hasModel = Number(p.payload?.models_used || 0) > 0;
-        const probability = hasModel && Number.isFinite(Number(p.probability)) ? (Number(p.probability) * 100).toFixed(1) + '%' : '—';
-        const confidence = hasModel && Number.isFinite(Number(p.confidence)) ? Number(p.confidence).toFixed(1) + '%' : '—';
-        return `<tr><td>${esc(p.symbol)}</td><td>${esc(p.timeframe)}</td><td>${esc(p.prediction)}</td><td>${probability}</td><td>${confidence}</td><td>${Number.isFinite(Number(p.risk_score)) ? Number(p.risk_score).toFixed(2) : '—'}</td><td>${esc(p.created_at)}</td></tr>`;
+        const probability = hasModel && p.probability != null && p.probability !== '' && Number.isFinite(Number(p.probability)) ? (Number(p.probability) * 100).toFixed(1) + '%' : '—';
+        const confidence = hasModel && p.confidence != null && p.confidence !== '' && Number.isFinite(Number(p.confidence)) ? Number(p.confidence).toFixed(1) + '%' : '—';
+        return `<tr><td>${esc(p.symbol)}</td><td>${esc(p.timeframe)}</td><td>${esc(p.prediction)}</td><td>${probability}</td><td>${confidence}</td><td>${p.risk_score != null && p.risk_score !== '' && Number.isFinite(Number(p.risk_score)) ? Number(p.risk_score).toFixed(2) : '—'}</td><td>${esc(p.created_at)}</td></tr>`;
       }).join('') : '<tr><td colspan="7">No predictions recorded.</td></tr>';
     }
   };
@@ -63,7 +63,7 @@
         const d = await request('/api/ai/predict/', {method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({symbol,timeframe})});
         const p = d.prediction || {}, rec = d.recommendation || {}, reg = d.regime || {}, cons = p.payload?.consensus || {};
         const hasModel = Number(cons.models_used || p.payload?.models_used || 0) > 0;
-        out.innerHTML = `<div class="ai-result"><h3>${esc(d.symbol)} · ${esc(d.timeframe)}</h3><div class="ai-lab-grid"><div>Prediction<br><strong>${esc(p.prediction)}</strong></div><div>Confidence<br><strong>${hasModel && Number.isFinite(Number(p.confidence)) ? Number(p.confidence).toFixed(1)+'%' : 'Unavailable'}</strong></div><div>Recommendation<br><strong>${esc(rec.recommendation)}</strong></div><div>Regime<br><strong>${esc(reg.regime)}</strong></div></div><p class="ai-note">Models used: ${esc(cons.models_used ?? p.payload?.models_used ?? 0)} · Source: ${esc(p.payload?.source || 'configured AI engine')} · Broker: ${esc(d.broker)}.</p><p class="ai-note">AI output is advisory and remains subject to configured consensus, risk and execution gates.</p></div>`;
+        out.innerHTML = `<div class="ai-result"><h3>${esc(d.symbol)} · ${esc(d.timeframe)}</h3><div class="ai-lab-grid"><div>Prediction<br><strong>${esc(p.prediction)}</strong></div><div>Confidence<br><strong>${hasModel && p.confidence != null && p.confidence !== '' && Number.isFinite(Number(p.confidence)) ? Number(p.confidence).toFixed(1)+'%' : 'Unavailable'}</strong></div><div>Recommendation<br><strong>${esc(rec.recommendation)}</strong></div><div>Regime<br><strong>${esc(reg.regime)}</strong></div></div><p class="ai-note">Models used: ${esc(cons.models_used ?? p.payload?.models_used ?? 0)} · Source: ${esc(p.payload?.source || 'configured AI engine')} · Broker: ${esc(d.broker)}.</p><p class="ai-note">AI output is advisory and remains subject to configured consensus, risk and execution gates.</p></div>`;
         await load(root);
       } catch (e) {
         out.innerHTML = `<div class="ai-error">${esc(e.message)}</div>`;
