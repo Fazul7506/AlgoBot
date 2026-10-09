@@ -164,3 +164,41 @@ class DashboardAccountOverviewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"]["account"]["id"], selected.pk)
         self.assertEqual(response.data["data"]["account"]["account_id"], selected.account_id)
+
+    def test_dashboard_trade_history_is_scoped_to_the_server_selected_account(self):
+        selected = BrokerAccount.objects.create(
+            user=self.user,
+            broker=self.broker,
+            account_id="DASHBOARD-ORDER-SELECTED",
+            status="active",
+            currency="USD",
+        )
+        BrokerConnection.objects.create(
+            broker=self.broker,
+            broker_account=selected,
+            status="connected",
+        )
+        Order.objects.create(
+            user=self.user,
+            broker_account=self.account,
+            symbol="OWN-ACCOUNT",
+            direction="buy",
+            stake="10",
+            status="executed",
+        )
+        Order.objects.create(
+            user=self.user,
+            broker_account=selected,
+            symbol="SELECTED-ACCOUNT",
+            direction="sell",
+            stake="5",
+            status="executed",
+        )
+        request = APIRequestFactory().get("/api/dashboard/trade_history/?days=30&limit=8")
+        SessionMiddleware(lambda current_request: None).process_request(request)
+        request.session[SESSION_KEY] = selected.pk
+        request.session.save()
+        force_authenticate(request, user=self.user)
+        response = DashboardViewSet.as_view({"get": "trade_history"})(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["symbol"] for row in response.data["data"]], ["SELECTED-ACCOUNT"])
