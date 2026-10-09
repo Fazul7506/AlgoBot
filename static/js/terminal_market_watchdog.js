@@ -11,6 +11,7 @@
   let reconnectTimer = null;
   let healthTimer = null;
   let stopped = false;
+  let lastTickAt = 0;
 
   const fmt = value => Number.isFinite(Number(value))
     ? Number(value).toLocaleString(undefined, {maximumFractionDigits: 8})
@@ -54,8 +55,9 @@
 
   function closeSocket() {
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-    try { ws?.close(); } catch (_) {}
+    const previous = ws;
     ws = null;
+    try { previous?.close(); } catch (_) {}
   }
 
   function scheduleReconnect() {
@@ -69,31 +71,42 @@
     if (!normalized || stopped || document.visibilityState !== 'visible') return;
     activeSymbol = normalized;
     closeSocket();
+    lastTickAt = 0;
     setState('waiting', `Connecting to Deriv ticks for ${normalized}…`);
-    try { ws = new WebSocket(WS); }
+    let connection;
+    try { connection = new WebSocket(WS); ws = connection; }
     catch (_) { scheduleReconnect(); return; }
-    ws.onopen = () => {
-      if (!ws) return;
+    connection.onopen = () => {
+      if (ws !== connection) return;
       try {
-        ws.send(JSON.stringify({ticks: normalized, subscribe: 1, req_id: Date.now()}));
+        connection.send(JSON.stringify({ticks: normalized, subscribe: 1, req_id: Date.now()}));
         setState('waiting', `Waiting for Deriv tick for ${normalized}…`);
       } catch (_) { scheduleReconnect(); }
     };
-    ws.onmessage = event => {
+    connection.onmessage = event => {
+      if (ws !== connection) return;
       try {
         const data = JSON.parse(event.data);
         if (data?.error) { setState('stale', data.error.message || 'Deriv rejected the tick subscription'); return; }
         if (data?.msg_type === 'tick' && data.tick?.quote != null) paintQuote(data.tick.quote, data.tick.epoch);
       } catch (_) {}
     };
-    ws.onerror = () => setState('stale', 'Deriv market stream error; reconnecting…');
-    ws.onclose = () => { ws = null; scheduleReconnect(); };
+    connection.onerror = () => {
+      if (ws !== connection) return;
+      setState('stale', 'Deriv market stream error; reconnecting…');
+      try { connection.close(); } catch (_) {}
+    };
+    connection.onclose = () => {
+      if (ws !== connection) return;
+      ws = null;
+      scheduleReconnect();
+    };
   }
 
   function refreshConnection() {
     const symbol = String($('#symbol')?.value || '').trim();
     if (!symbol) { closeSocket(); activeSymbol = ''; setState('waiting', 'Select a broker instrument'); return; }
-    if (symbol !== activeSymbol || !ws || ws.readyState !== WebSocket.OPEN) connect(symbol);
+    if (symbol !== activeSymbol || !ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) connect(symbol);
   }
 
   function boot() {
@@ -109,7 +122,14 @@
       else refreshConnection();
     });
     healthTimer = setInterval(() => {
-      if (!document.hidden) refreshConnection();
+      if (document.hidden) return;
+      if (ws && ws.readyState === WebSocket.OPEN && lastTickAt && Date.now() - lastTickAt > 15000) {
+        setState('stale', 'No Deriv ticks received for 15 seconds; reconnecting…');
+        closeSocket();
+        scheduleReconnect();
+        return;
+      }
+      refreshConnection();
     }, 5000);
     refreshConnection();
     window.addEventListener('pagehide', () => {
