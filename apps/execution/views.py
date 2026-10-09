@@ -9,6 +9,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
 from .models import Order, ExecutionLog, ReconciliationEvent, BrokerTradeHistory
+from . import constants as c
+from .exceptions import OrderValidationError
 from apps.brokers.models import Position
 from .serializers import OrderSerializer, PositionSerializer, ExecutionLogSerializer, ReconciliationEventSerializer, BrokerTradeHistorySerializer
 from .engine import ExecutionEngine
@@ -116,12 +118,27 @@ class OrderViewSet(viewsets.ModelViewSet):
             log.exception('Pre-trade preview failed', extra={'user_id':request.user.id,'symbol':request.data.get('symbol')})
             return response.Response({'status':'rejected','code':'PREVIEW_INTERNAL_ERROR','detail':'Pre-trade preview could not be completed safely. Check market/broker status and retry.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     @decorators.action(detail=True, methods=['post'])
-    def cancel(self, request, pk=None): return response.Response(OrderSerializer(ExecutionEngine().cancel_order(self.get_object())).data)
+    def cancel(self, request, pk=None):
+        try:
+            order = ExecutionEngine().cancel_order(self.get_object())
+        except OrderValidationError as exc:
+            return response.Response({
+                'status': 'rejected', 'code': 'ORDER_CANCEL_NOT_SAFE',
+                'detail': str(exc), 'retryable': False, 'reconcile_required': True,
+            }, status=status.HTTP_409_CONFLICT)
+        return response.Response(OrderSerializer(order, context=self.get_serializer_context()).data)
+
     @decorators.action(detail=True, methods=['post'])
     def retry(self, request, pk=None):
         order = self.get_object()
-        if order.status in {'sent', 'unknown'}: return response.Response({'status':'rejected','code':'EXECUTION_RETRY_FORBIDDEN','detail':'Broker execution state is uncertain. Reconcile the order with the broker before any retry.','retryable':False}, status=status.HTTP_409_CONFLICT)
-        ExecutionEngine().retry(order); return response.Response({'status':'queued'})
+        if order.status != c.ORDER_STATUS_FAILED:
+            return response.Response({
+                'status': 'rejected', 'code': 'EXECUTION_RETRY_FORBIDDEN',
+                'detail': 'Only orders in a confirmed failed state can be retried. Submitted, accepted, executed, cancelled or uncertain orders must not be replayed.',
+                'retryable': False, 'reconcile_required': order.status in {c.ORDER_STATUS_SENT, c.ORDER_STATUS_ACCEPTED, c.ORDER_STATUS_EXECUTED},
+            }, status=status.HTTP_409_CONFLICT)
+        ExecutionEngine().retry(order)
+        return response.Response({'status': 'queued'})
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PositionSerializer
