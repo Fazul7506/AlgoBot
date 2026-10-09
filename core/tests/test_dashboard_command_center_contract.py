@@ -1,4 +1,6 @@
 from pathlib import Path
+import shutil
+import subprocess
 
 from django.test import SimpleTestCase
 
@@ -90,3 +92,11 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("request('/api/dashboard/trade_history/?days=30&limit=8'", source)
         self.assertNotIn("request('/api/orders/'", source)
+
+    def test_dashboard_javascript_syntax_with_node_when_available(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is not installed in this test environment")
+        script = ROOT / "static" / "js" / "dashboard_command_center.js"
+        result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
