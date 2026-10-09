@@ -13,7 +13,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.template import Context, Template
 from django.utils import timezone
 
-from .channel_service import send_telegram
+from .channel_service import send_telegram, send_gmail_notification
 from .models import Broadcast, DeliveryLog, Notification, NotificationChannelConnection, NotificationPreference, NotificationTemplate
 
 
@@ -101,7 +101,8 @@ class DeliveryService:
     def _email(self, notification, conn):
         if not conn.address:
             raise RuntimeError("Gmail notification address is missing; reconnect the account.")
-        return send_transactional_email(recipient=conn.address, subject=notification.title, message=notification.message, category=notification.category, metadata=notification.metadata)
+        send_gmail_notification(conn, notification)
+        return "gmail"
 
     def deliver(self, notification: Notification, provider="internal") -> DeliveryResult:
         log = DeliveryLog.objects.create(notification=notification, channel=notification.channel, status="sending", attempts=notification.attempts + 1, provider=provider, sent_at=timezone.now())
