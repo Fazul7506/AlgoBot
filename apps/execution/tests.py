@@ -22,6 +22,31 @@ from .engine import ExecutionEngine
 
 
 class OrderSerializerRegressionTests(APITestCase):
+    def test_environment_uses_the_model_canonical_account_type(self):
+        account = SimpleNamespace(
+            account_type='real',
+            credentials={'realtime': {'account_type': 'demo'}},
+        )
+        self.assertEqual(OrderViewSet._environment(account), 'real')
+
+    def test_idempotent_replay_requires_matching_broker_account(self):
+        user = get_user_model().objects.create_user(username='idempotency-account', password='test-password')
+        broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active')
+        account = BrokerAccount.objects.create(
+            user=user, broker=broker, account_id='IDEMPOTENCY-ACCOUNT', status='active'
+        )
+        Order.objects.create(
+            user=user, broker_account=account, symbol='R_100', direction='buy',
+            order_type='market', stake='1', client_request_id='same-client-id',
+        )
+        request = APIRequestFactory().post(
+            '/api/orders/', {'client_request_id': 'same-client-id'}, format='json'
+        )
+        force_authenticate(request, user=user)
+        result = OrderViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data['code'], 'CLIENT_REQUEST_ACCOUNT_REQUIRED')
+
     def test_terminal_order_values_are_normalized(self):
         serializer = OrderSerializer()
         self.assertEqual(serializer.validate_direction('BUY'), 'buy')
