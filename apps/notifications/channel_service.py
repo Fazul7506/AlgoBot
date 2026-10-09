@@ -94,15 +94,15 @@ def gmail_callback(request, code, state):
 def telegram_start(user, request):
     if not _telegram_configured():
         raise RuntimeError("Telegram connection is not configured yet.")
+    username = str(getattr(settings, "TELEGRAM_BOT_USERNAME", "")).strip().lstrip("@")
+    if not username:
+        raise RuntimeError("TELEGRAM_BOT_USERNAME is not configured.")
     raw = secrets.token_urlsafe(24)
     conn, _ = NotificationChannelConnection.objects.get_or_create(user=user, provider="telegram")
     conn.status = "pending"
     conn.verification_code_hash = hashlib.sha256(raw.encode()).hexdigest()
     conn.verification_expires_at = timezone.now() + timedelta(minutes=15)
     conn.save(update_fields=["status", "verification_code_hash", "verification_expires_at", "updated_at"])
-    username = str(getattr(settings, "TELEGRAM_BOT_USERNAME", "")).strip().lstrip("@")
-    if not username:
-        raise RuntimeError("TELEGRAM_BOT_USERNAME is not configured.")
     return f"https://t.me/{username}?start={raw}"
 
 
@@ -273,16 +273,22 @@ def telegram_webhook(payload):
             with transaction.atomic():
                 conn = NotificationChannelConnection.objects.select_for_update().filter(provider="telegram", status="pending", verification_code_hash=digest, verification_expires_at__gt=timezone.now()).select_related("user").first()
                 if conn:
-                    conn.status = "verified"
-                    conn.external_id = str(chat_id)
-                    conn.address = f'@{chat["username"]}' if chat.get("username") else (chat.get("first_name") or "Telegram")
-                    conn.verified_at = timezone.now()
-                    conn.verification_code_hash = ""
-                    conn.verification_expires_at = None
-                    conn.metadata = {"first_name": chat.get("first_name", ""), "last_name": chat.get("last_name", ""), "username": chat.get("username", "")}
-                    conn.save()
-                    NotificationPreference.objects.update_or_create(user=conn.user, channel="telegram", defaults={"enabled": True})
-                    reply = "AlgoBot Telegram is now VERIFIED. You can use /account, /positions, /trades, /alerts and /help from this chat."
+                    existing_binding = NotificationChannelConnection.objects.select_for_update().filter(
+                        provider="telegram", external_id=str(chat_id)
+                    ).exclude(pk=conn.pk).first()
+                    if existing_binding:
+                        reply = "This Telegram chat is already linked to another AlgoBot account. Disconnect it there before linking it here."
+                    else:
+                        conn.status = "verified"
+                        conn.external_id = str(chat_id)
+                        conn.address = f'@{chat["username"]}' if chat.get("username") else (chat.get("first_name") or "Telegram")
+                        conn.verified_at = timezone.now()
+                        conn.verification_code_hash = ""
+                        conn.verification_expires_at = None
+                        conn.metadata = {"first_name": chat.get("first_name", ""), "last_name": chat.get("last_name", ""), "username": chat.get("username", "")}
+                        conn.save()
+                        NotificationPreference.objects.update_or_create(user=conn.user, channel="telegram", defaults={"enabled": True})
+                        reply = "AlgoBot Telegram is now VERIFIED. You can use /account, /positions, /trades, /alerts and /help from this chat."
                 else:
                     reply = "That AlgoBot verification link is invalid or expired. Start a new Telegram connection from AlgoBot."
         elif command == "disconnect":
