@@ -153,13 +153,13 @@ class ExecutionManagementSystem:
             result = await asyncio.wait_for(adapter.place_order(order), timeout=timeout)
         except asyncio.TimeoutError as exc:
             await self._mark_connection_issue(order, 'unknown_timeout')
-            await sync_to_async(TradeReconciliation.objects.create)(broker=order.broker, trade={'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unknown_timeout'}, matched=False, difference={'order': 'broker_response_unknown'}, repaired=False)
+            await sync_to_async(TradeReconciliation.objects.create)(broker=order.broker, trade={'algobot_order_id': order.pk, 'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unknown_timeout'}, matched=False, difference={'order': 'broker_response_unknown'}, repaired=False)
             raise BrokerConnectionError('Broker order placement timed out; execution state is unknown and must be reconciled before retrying.') from exc
         except BrokerAuthenticationError:
             order.status = 'rejected'; await sync_to_async(order.save)(update_fields=['status', 'updated_at']); raise
         except BrokerConnectionError:
             await self._mark_connection_issue(order, 'unknown_connection_error')
-            await sync_to_async(TradeReconciliation.objects.create)(broker=order.broker, trade={'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unknown_connection_error'}, matched=False, difference={'order': 'broker_response_unknown'}, repaired=False)
+            await sync_to_async(TradeReconciliation.objects.create)(broker=order.broker, trade={'algobot_order_id': order.pk, 'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unknown_connection_error'}, matched=False, difference={'order': 'broker_response_unknown'}, repaired=False)
             raise
         except BrokerOrderError:
             order.status = 'rejected'; await sync_to_async(order.save)(update_fields=['status', 'updated_at']); raise
@@ -270,7 +270,9 @@ class ReconciliationService:
         observed_reference = str((broker_trade or {}).get('broker_order_id') or (broker_trade or {}).get('order_id') or '')
         matched = bool(expected_reference and observed_reference and expected_reference == observed_reference)
         diff = {} if matched else {'order': 'missing_or_mismatched', 'expected_reference': expected_reference, 'observed_reference': observed_reference}
-        rec = TradeReconciliation.objects.create(broker=order.broker, trade=broker_trade or {}, matched=matched, difference=diff, repaired=False)
+        trade_payload = dict(broker_trade or {})
+        trade_payload['algobot_order_id'] = order.pk
+        rec = TradeReconciliation.objects.create(broker=order.broker, trade=trade_payload, matched=matched, difference=diff, repaired=False)
         if matched:
             if order.status == 'pending':
                 order.status = 'reconciled'; order.save(update_fields=['status', 'updated_at'])
