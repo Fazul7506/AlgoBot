@@ -24,8 +24,8 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
 
     def test_stale_snapshot_render_does_not_refresh_its_cache_timestamp(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("function renderAccount(account, message = '', persistSnapshot = true)", source)
-        self.assertIn("renderAccount(stale.account, '', false)", source)
+        self.assertIn("function renderAccount(account, message = '', persistSnapshot = true, staleDisplay = false)", source)
+        self.assertIn("renderAccount(stale.account, '', false, true)", source)
         self.assertIn("if (persistSnapshot) writeLastAccountSnapshot(account)", source)
 
     def test_account_overview_response_is_checked_against_requested_account(self):
@@ -105,3 +105,10 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("return shared(url, {credentials: 'include', ...options}, timeout)", source)
         self.assertIn("server-side Django session", source)
+
+    def test_stale_cache_requires_a_fresh_connected_snapshot_and_is_labelled_stale_on_timeout(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("value.account.is_connected !== true", source)
+        self.assertIn("String(value.account.data_freshness || '').toLowerCase() !== 'fresh'", source)
+        self.assertIn("CONNECTION LAST VERIFIED", source)
+        self.assertIn("setText('[data-kpi-state=\"equity\"]', timeoutLabel)", source)
