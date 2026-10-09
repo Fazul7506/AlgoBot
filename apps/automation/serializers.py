@@ -24,7 +24,9 @@ class WorkflowExecutionSerializer(serializers.ModelSerializer):
 class AutomationRuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutomationRule
-        fields = "__all__"
+        # System-owned rule internals may include routing configuration and must
+        # not be exposed to every authenticated account.
+        fields = ["id", "name", "priority", "enabled"]
 
 
 class ScheduledTaskSerializer(serializers.ModelSerializer):
