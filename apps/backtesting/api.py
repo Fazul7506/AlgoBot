@@ -9,7 +9,6 @@ from rest_framework.decorators import permission_classes
 from rest_framework.exceptions import ValidationError
 from .models import Backtest, BacktestClusterJob, BacktestStatistics
 from .serializers import BacktestSerializer, BacktestStatisticsSerializer, BacktestTradeSerializer, canonical_timeframe
-from .services import ParameterOptimizationService, ReplayService
 from apps.strategies.models import Strategy as StrategyModel
 from apps.market_data.models import MarketSymbol, Tick
 from apps.market_data.constants import TIMEFRAMES
