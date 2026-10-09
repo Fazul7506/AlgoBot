@@ -117,8 +117,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("ensureApiAccessToken", client)
         self.assertIn("headers.set('Authorization'", client)
         self.assertIn("credentials:sessionAccountSelect?'include':'omit'", client)
-        self.assertIn("readCsrfToken", client)
-        self.assertIn("headers.set('X-CSRFToken',csrfToken)", client)
+        self.assertNotIn("readCsrfToken", client)
+        self.assertNotIn("headers.set('X-CSRFToken',csrfToken)", client)
         self.assertNotIn("X-Algobot-Account-ID", client)
         self.assertNotIn("/api/csrf/", client)
 
