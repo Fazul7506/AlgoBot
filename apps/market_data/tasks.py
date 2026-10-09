@@ -653,13 +653,6 @@ def ensure_research_candle_backfill(count=250):
                 # then require a complete 30-minute interval before dispatch.
                 last_completed = latest.completed_at
                 if last_completed is None:
-                    if latest.status not in {"completed", "failed"}:
-                        return {
-                            "status": "cooldown",
-                            "run_id": latest.pk,
-                            "reason": "previous_run_completion_time_missing",
-                            "seconds_remaining": 1800,
-                        }
                     latest.completed_at = now
                     latest.save(update_fields=["completed_at"])
                     last_completed = now
