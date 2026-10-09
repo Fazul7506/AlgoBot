@@ -4,7 +4,9 @@
 
   const $ = (selector) => page.querySelector(selector);
   const body = $("[data-log-body]");
-  let lastEventId = 0;
+  // Server-rendered durable events are the first paint. Continue polling strictly
+  // after the newest rendered event so live polling never duplicates those rows.
+  let lastEventId = Number(body?.querySelector("[data-event-id]:last-child")?.dataset.eventId || 0);
   let selectedRunId = new URLSearchParams(window.location.search).get("run_id") || "";
   let historyLimit = 50;
   let polling = false;
@@ -13,6 +15,8 @@
   let level = "";
   let searchTimer = null;
   let telemetryFailures = 0;
+  let refreshGeneration = 0;
+  let activeController = null;
 
   const text = (selector, value) => {
     const node = $(selector);
@@ -130,12 +134,13 @@
   };
 
 
-  const renderHistory = (history, hasMore) => {
+  const renderHistory = (history, hasMore, totalCount = null) => {
     const table = $("[data-history-body]");
     if (!table) return;
     table.replaceChildren();
     const rows = Array.isArray(history) ? history : [];
-    text("[data-history-count]", rows.length + (rows.length === 1 ? " run" : " runs"));
+    const total = Number.isFinite(Number(totalCount)) ? Number(totalCount) : rows.length;
+    text("[data-history-count]", total + (total === 1 ? " run" : " runs"));
     const more = $("[data-history-more]");
     if (more) more.hidden = !hasMore;
     if (!rows.length) {
@@ -184,21 +189,7 @@
         }
         row.appendChild(cell);
       });
-      const select = () => {
-        selectedRunId = String(run.id);
-        lastEventId = 0;
-        const url = new URL(window.location.href);
-        url.searchParams.set("run_id", selectedRunId);
-        window.history.replaceState({}, "", url);
-        refresh();
-      };
-      row.addEventListener("click", select);
-      row.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          select();
-        }
-      });
+      const select = () => selectRun(run.id);
       table.appendChild(row);
     });
   };
@@ -245,9 +236,12 @@
     if (tail) body.scrollTop = body.scrollHeight;
   };
 
-  const refresh = async () => {
-    if (polling) return;
+  const refresh = async ({force = false} = {}) => {
+    if (polling && !force) return;
+    const generation = ++refreshGeneration;
+    if (force && activeController) activeController.abort();
     polling = true;
+    let controller = null;
     try {
       const params = new URLSearchParams({
         format: "json",
@@ -261,7 +255,9 @@
       // Never allow one stalled HTTP request to freeze the telemetry loop.
       // The durable Django run/event records remain authoritative; the browser
       // is only a live observer.
-      const controller = new AbortController();
+      controller = new AbortController();
+      activeController = controller;
+      const requestedRunId = selectedRunId;
       const timeout = window.setTimeout(() => controller.abort(), 4500);
       let response;
       try {
@@ -276,6 +272,7 @@
       }
       if (!response.ok) throw new Error("status " + response.status);
       const data = await response.json();
+      if (generation !== refreshGeneration || requestedRunId !== selectedRunId) return;
       telemetryFailures = 0;
       const telemetryNotice = $("[data-telemetry-error]");
       if (telemetryNotice) telemetryNotice.remove();
@@ -286,7 +283,8 @@
         window.history.replaceState({}, "", url);
       }
       renderRun(data.selected);
-      renderHistory(data.history || [], Boolean(data.history_has_more));
+      window.__backfillHistoryTotal = Number(data.history_total) || (data.history || []).length;
+      renderHistory(data.history || [], Boolean(data.history_has_more), window.__backfillHistoryTotal);
       if (query && lastEventId === 0) {
         renderEvents(data.events || [], true);
       } else {
@@ -294,6 +292,7 @@
       }
       if (data.events_last_id) lastEventId = Number(data.events_last_id) || lastEventId;
     } catch (error) {
+      if (error?.name === "AbortError") return;
       telemetryFailures += 1;
       // A single mobile-network hiccup must not look like a broker failure.
       // Show the reconnect warning only after several consecutive failures.
@@ -310,14 +309,61 @@
         row.textContent = "Live telemetry is temporarily unavailable; the durable server state remains authoritative and the page will keep retrying.";
       }
     } finally {
-      polling = false;
+      if (activeController === controller) {
+        activeController = null;
+        polling = false;
+      }
     }
   };
+
+  const selectRun = (runId) => {
+    const nextId = String(runId);
+    if (!nextId) return;
+    selectedRunId = nextId;
+    lastEventId = 0;
+    refreshGeneration += 1;
+    if (activeController) activeController.abort();
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("run_id", selectedRunId);
+    window.history.replaceState({}, "", url);
+
+    page.querySelectorAll("[data-history-body] [data-run-id]").forEach((row) => {
+      row.classList.toggle("is-selected", String(row.dataset.runId) === selectedRunId);
+    });
+
+    if (body) {
+      body.replaceChildren();
+      const loading = document.createElement("div");
+      loading.className = "rb-log-empty";
+      loading.textContent = "Loading durable logs for execution #" + selectedRunId + "…";
+      body.appendChild(loading);
+    }
+    text("[data-log-count]", "Loading…");
+    refresh({force: true});
+  };
+
+  // Server-rendered rows must remain interactive even when the first telemetry
+  // request fails. Delegate selection from the stable table body.
+  const initialHistoryBody = $("[data-history-body]");
+  if (initialHistoryBody) {
+    initialHistoryBody.addEventListener("click", (event) => {
+      const row = event.target.closest("[data-run-id]");
+      if (row && initialHistoryBody.contains(row)) selectRun(row.dataset.runId);
+    });
+    initialHistoryBody.addEventListener("keydown", (event) => {
+      const row = event.target.closest("[data-run-id]");
+      if (row && initialHistoryBody.contains(row) && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        selectRun(row.dataset.runId);
+      }
+    });
+  }
 
   const resetSearch = () => {
     lastEventId = 0;
     body.replaceChildren();
-    refresh();
+    refresh({force: true});
   };
 
   const search = $("[data-log-search]");
@@ -343,7 +389,7 @@
   if (historyRefresh) historyRefresh.addEventListener("click", () => {
     historyLimit = 50;
     lastEventId = 0;
-    refresh();
+    refresh({force: true});
   });
 
   const historyMore = $("[data-history-more]");
