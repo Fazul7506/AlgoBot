@@ -238,6 +238,7 @@ class TerminalAiTimeframeContractTests(SimpleTestCase):
         self.assertIn("candle_timeframe", views)
         self.assertIn("raw_timeframe.upper()", views)
         self.assertIn("amount}{unit.lower()}", views)
+        self.assertIn('r"([SMHD])(\\d+)"', views)
         self.assertIn("timeframe=candle_timeframe", views)
 
 
