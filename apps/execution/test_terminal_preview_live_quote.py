@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from apps.brokers.exceptions import BrokerOrderError
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from apps.execution.models import Order
 from apps.execution.views import OrderViewSet
@@ -197,3 +198,30 @@ class TerminalLivePreviewTests(TestCase):
         items = result.data.get("results", result.data if isinstance(result.data, list) else [])
         self.assertEqual([row["id"] for row in items], [first.id])
 
+
+    def test_preview_passes_selected_duration_to_broker_proposal(self):
+        adapter = self.adapter()
+        adapter.get_order_preview.return_value.update({"duration": 5, "duration_unit": "t"})
+        with patch("apps.execution.views.BrokerRegistry.adapter", return_value=adapter):
+            result = self.preview(duration=5, duration_unit="t")
+
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data["estimate"]["duration"], 5)
+        self.assertEqual(result.data["estimate"]["duration_unit"], "t")
+        adapter.get_order_preview.assert_awaited_once_with(
+            symbol="R_100",
+            contract_type="CALL",
+            amount=Decimal("1.00"),
+            duration=5,
+            duration_unit="t",
+        )
+
+    def test_preview_rejects_broker_proposal_failure_without_claiming_ready(self):
+        adapter = self.adapter()
+        adapter.get_order_preview.side_effect = BrokerOrderError("Required contract parameter is missing")
+        with patch("apps.execution.views.BrokerRegistry.adapter", return_value=adapter):
+            result = self.preview()
+
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data["code"], "BROKER_PROPOSAL_REJECTED")
+        self.assertTrue(result.data["no_order_submitted"])
