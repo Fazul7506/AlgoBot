@@ -290,6 +290,17 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertNotIn("executed by Deriv", terminal)
         self.assertNotIn("is_preferred", terminal)
 
+    def test_terminal_preview_displays_broker_estimate_and_submits_duration(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        template = Path("templates/core/trading.html").read_text(encoding="utf-8")
+        self.assertIn('name="duration"', template)
+        self.assertIn('name="duration_unit"', template)
+        self.assertIn('data-order-preview-result', template)
+        self.assertIn("PRE-TRADE ESTIMATE — NOT AN EXECUTED ORDER", terminal)
+        self.assertIn("duration_unit:durationUnit", terminal)
+        self.assertIn("payout_verified", terminal) if "payout_verified" in terminal else self.assertIn("preview.estimate", terminal)
+
     def test_terminal_timeframe_control_does_not_reference_out_of_scope_variable(self):
         from pathlib import Path
         chart = Path("static/js/deriv_pro_chart.js").read_text(encoding="utf-8")
