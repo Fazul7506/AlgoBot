@@ -290,7 +290,7 @@ class TerminalExecutionContractTests(SimpleTestCase):
 
     def test_watchdog_does_not_fabricate_bid_ask_from_public_last_tick(self):
         watchdog = (ROOT / 'static' / 'js' / 'terminal_market_watchdog.js').read_text()
-        self.assertIn("textContent('Unavailable')", watchdog)
+        self.assertIn("createTextNode('Unavailable')", watchdog)
         self.assertIn("parsedEpoch > now / 1000 + 5", watchdog)
         self.assertIn("Date.now() - silenceSince > 15000", watchdog)
 
