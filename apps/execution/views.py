@@ -25,7 +25,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     def get_queryset(self): return Order.objects.filter(user=self.request.user)
     @staticmethod
-    def _environment(account): return str((account.credentials or {}).get('account_type') or '').lower().strip() if account else ''
+    def _environment(account): return str(getattr(account, 'account_type', '') or '').lower().strip() if account else ''
     @staticmethod
     def _safe_client_context(data, account):
         context = data.get('routing_context') or data.get('validation_context') or {}
@@ -45,12 +45,16 @@ class OrderViewSet(viewsets.ModelViewSet):
             'duration_unit': data.get('duration_unit') or '',
         }
     def create(self, request, *args, **kwargs):
+        if not isinstance(request.data, dict):
+            return response.Response({'status':'rejected','code':'ORDER_PAYLOAD_INVALID','detail':'A JSON object is required.'}, status=status.HTTP_400_BAD_REQUEST)
         client_request_id = str(request.data.get('client_request_id') or request.data.get('client_order_id') or '').strip()
         if client_request_id:
             existing = Order.objects.filter(user=request.user, client_request_id=client_request_id).first()
             if existing:
                 requested_account = str(request.data.get('broker_account') or '').strip()
-                if requested_account and str(existing.broker_account_id) != requested_account:
+                if not requested_account:
+                    return response.Response({'status':'rejected','code':'CLIENT_REQUEST_ACCOUNT_REQUIRED','detail':'A broker account must be specified to safely replay this client request ID.','retryable':False}, status=status.HTTP_409_CONFLICT)
+                if str(existing.broker_account_id) != requested_account:
                     return response.Response({'status':'rejected','code':'CLIENT_REQUEST_ACCOUNT_MISMATCH','detail':'This client request ID belongs to a different broker account and cannot be replayed in the current account context.','retryable':False}, status=status.HTTP_409_CONFLICT)
                 return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
         allowed_orders, used_orders, order_limit = check(request.user, 'orders')
