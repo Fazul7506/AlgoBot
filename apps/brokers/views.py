@@ -153,8 +153,8 @@ def connect_broker(request):
     broker_id=request.data.get('broker_id') or request.data.get('broker');account_id=request.data.get('account_id')
     if not broker_id or not account_id:return response.Response({'detail':'broker_id and account_id are required.'},status=status.HTTP_400_BAD_REQUEST)
     broker=get_object_or_404(Broker,pk=broker_id);account=get_object_or_404(BrokerAccount,pk=account_id,user=request.user,broker=broker)
-    allowed,used,limit=check(request.user,'broker_accounts',amount=0)
-    if limit>=0 and used>limit:return response.Response({'detail':f'Your {effective_plan(request.user).name} broker-account capacity is exceeded. Upgrade the plan to authorize all connected accounts.','code':'BROKER_ACCOUNT_LIMIT_REACHED','used':used,'limit':limit},status=status.HTTP_429_TOO_MANY_REQUESTS)
+    allowed,used,limit=check(request.user,'broker_accounts',amount=1)
+    if not allowed:return response.Response({'detail':f'Your {effective_plan(request.user).name} broker-account capacity would be exceeded by this connection. Upgrade your plan or disconnect another account first.','code':'BROKER_ACCOUNT_LIMIT_REACHED','used':used,'requested':1,'limit':limit},status=status.HTTP_429_TOO_MANY_REQUESTS)
     try:
         connection=_run_bounded(BrokerConnectionService().connect(broker,account),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
         account.refresh_from_db()
