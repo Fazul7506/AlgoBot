@@ -42,6 +42,17 @@ def _as_float(value):
         return None
 
 
+def _normalize_live_tick(tick):
+    """Reject malformed or future quotes before they count as live market data."""
+    if not isinstance(tick, dict):
+        return None
+    quote = _as_float(tick.get("quote"))
+    epoch = _as_float(tick.get("epoch"))
+    if quote is None or epoch is None or epoch <= 0 or epoch > time.time() + 5:
+        return None
+    return {**tick, "quote": quote, "epoch": int(epoch)}
+
+
 def _meta_first(metadata, *keys):
     for key in keys:
         value = metadata.get(key)
@@ -209,9 +220,12 @@ def _persisted_live_ticks(markets):
         age = (now - snapshot.timestamp).total_seconds()
         if age < -5 or age > LIVE_SNAPSHOT_MAX_AGE_SECONDS:
             continue
+        quote = _as_float(snapshot.last_price)
+        if quote is None:
+            continue
         results[snapshot.symbol.symbol] = {
             "symbol": snapshot.symbol.symbol,
-            "quote": _as_float(snapshot.last_price),
+            "quote": quote,
             "bid": _as_float(snapshot.bid),
             "ask": _as_float(snapshot.ask),
             "epoch": int(snapshot.timestamp.timestamp()),
@@ -406,8 +420,11 @@ def _strategy_signals_impl(request):
         try:
             fallback_ticks, _fallback_latency = asyncio.run(_live_deriv_ticks(missing_symbols))
             for symbol, tick in fallback_ticks.items():
-                tick["_source"] = "deriv_public_websocket"
-            live_ticks.update(fallback_ticks)
+                normalized_tick = _normalize_live_tick(tick)
+                if normalized_tick is None:
+                    continue
+                normalized_tick["_source"] = "deriv_public_websocket"
+                live_ticks[symbol] = normalized_tick
         except BrokerConnectionError as exc:
             # A missing live quote remains missing. No stale or fabricated value
             # is substituted into a trading signal. Preserve the failure reason
