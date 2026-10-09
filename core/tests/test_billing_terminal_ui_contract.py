@@ -277,6 +277,7 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertIn("account_scope=active", terminal)
         self.assertIn("credentials:'include'", terminal)
         self.assertIn("account_scope=active", reconcile)
+        self.assertIn("credentials:'include'", reconcile)
         self.assertIn("executionUncertain", terminal)
         self.assertIn("remains locked until broker state is reconciled", terminal)
         self.assertNotIn("executed by Deriv", terminal)
