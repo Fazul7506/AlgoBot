@@ -94,6 +94,7 @@ urlpatterns = [
     path("portfolio/", login_required(portfolio_center), name="portfolio_page"),
     path("notifications/", notification_channels_page, name="notifications_page"),
     path("monitoring/", include("apps.monitoring.urls")),
+    path("api/monitoring/", include("apps.monitoring.urls")),
     path("risk/", login_required(risk_page), name="risk_page"),
     path("trade-history/", login_required(trade_history_page), name="trade_history_page"),
     path("trade-history/postmortems/", login_required(trade_postmortems), name="trade_postmortems"),
@@ -152,6 +153,7 @@ urlpatterns = [
     path("api/", include("apps.notifications.urls")),
     # Analysis is the canonical research API namespace; no Analytics namespace remains.
     path("analysis/", include("apps.analysis.urls")),
+    path("api/deployment/", include("apps.deployment.urls")),
     path("api/", include("apps.deployment.urls")),
     path("api/strategy-signals/", strategy_signals, name="strategy_signals"),
     path("api/", include(router.urls)),
