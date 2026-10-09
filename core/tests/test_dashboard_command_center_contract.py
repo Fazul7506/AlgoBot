@@ -75,3 +75,8 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("const ordersStale = result.orders.ok", source)
         self.assertIn("Cached exposure ·", source)
         self.assertIn("Cached orders ·", source)
+
+    def test_dashboard_activity_ignores_invalid_timestamps(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("item.time && Number.isFinite(Date.parse(item.time))", source)
+        self.assertIn("Date.parse(b.time) - Date.parse(a.time)", source)
