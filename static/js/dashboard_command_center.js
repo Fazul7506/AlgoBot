@@ -50,6 +50,7 @@
       if (!value || !value.account) return null;
       const requestedId = currentAccountId();
       if (!requestedId || value.account.id == null || String(value.account.id) !== requestedId) return null;
+      if (value.account.is_connected !== true || String(value.account.data_freshness || '').toLowerCase() !== 'fresh') return null;
       return value;
     } catch (_) { return null; }
   }
@@ -58,7 +59,7 @@
     try { sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({at: Date.now(), account})); } catch (_) {}
   }
 
-  function renderAccount(account, message = '', persistSnapshot = true) {
+  function renderAccount(account, message = '', persistSnapshot = true, staleDisplay = false) {
     if (!account) {
       ['balance','equity','available','pnl'].forEach(key => setText(`[data-kpi="${key}"]`, 'Unavailable'));
       setText('[data-kpi-state="balance"]', message || 'No authoritative broker account');
@@ -77,16 +78,16 @@
     setText('[data-kpi="pnl"]', pnl == null ? 'Unavailable' : money(pnl, currency));
     const freshness = String(account.data_freshness || 'unknown').toLowerCase();
     const connected = account.is_connected === true;
-    const snapshotLabel = freshness === 'fresh' ? 'Fresh broker snapshot' : freshness === 'stale' ? 'Stale broker snapshot' : 'Broker snapshot freshness unknown';
+    const snapshotLabel = staleDisplay ? 'Last verified broker snapshot' : freshness === 'fresh' ? 'Fresh broker snapshot' : freshness === 'stale' ? 'Stale broker snapshot' : 'Broker snapshot freshness unknown';
     setText('[data-kpi-state="balance"]', freshness === 'fresh' ? 'Authoritative broker snapshot' : snapshotLabel);
     setText('[data-kpi-state="equity"]', account.equity == null ? 'Not reported by broker' : (freshness === 'fresh' ? 'Authoritative broker equity' : snapshotLabel));
     const broker = typeof account.broker === 'string' ? account.broker : (account.broker?.name || account.broker_name || 'Broker');
     const id = account.account_id || account.broker_account_id || account.loginid || 'Account';
     const sync = account.last_synced_at ? new Date(account.last_synced_at).toLocaleTimeString() : 'not verified';
-    const connectionLabel = connected ? 'CONNECTED' : 'CONNECTION UNCONFIRMED';
+    const connectionLabel = staleDisplay ? 'CONNECTION LAST VERIFIED' : connected ? 'CONNECTED' : 'CONNECTION UNCONFIRMED';
     setHtml('[data-dashboard-brokers]', `<span><b></b><strong>${esc(broker)}</strong> · ${esc(id)} · ${esc(connectionLabel)}</span><small>${esc(snapshotLabel)} · ${esc(sync)}</small>`);
-    const accountState = connected && freshness === 'fresh' ? 'ok' : (freshness === 'stale' || freshness === 'unknown' || !connected ? 'warn' : 'error');
-    const accountStatus = !connected ? 'Broker connection unconfirmed' : freshness === 'fresh' ? 'Broker account synchronized' : freshness === 'stale' ? 'Broker snapshot is stale' : 'Broker snapshot freshness unknown';
+    const accountState = staleDisplay ? 'warn' : connected && freshness === 'fresh' ? 'ok' : (freshness === 'stale' || freshness === 'unknown' || !connected ? 'warn' : 'error');
+    const accountStatus = staleDisplay ? 'Broker refresh timed out · last verified snapshot shown' : !connected ? 'Broker connection unconfirmed' : freshness === 'fresh' ? 'Broker account synchronized' : freshness === 'stale' ? 'Broker snapshot is stale' : 'Broker snapshot freshness unknown';
     status('account', accountState, accountStatus);
     // Only cache a snapshot confirmed fresh by the broker and connection layer.
     if (persistSnapshot && connected && freshness === 'fresh') writeLastAccountSnapshot(account);
@@ -174,10 +175,11 @@
       else if (account.reason?.code === 'API_TIMEOUT') {
         const stale = readLastAccountSnapshot();
         if (stale?.account) {
-          renderAccount(stale.account, '', false);
+          renderAccount(stale.account, '', false, true);
           const verifiedAt = stale.account.last_synced_at || stale.at;
-          setText('[data-kpi-state="balance"]', `Last verified broker snapshot · refresh timed out${verifiedAt ? ` · ${new Date(verifiedAt).toLocaleTimeString()}` : ''}`);
-          status('account', 'warn', 'Broker refresh timed out · last verified snapshot shown');
+          const timeoutLabel = `Last verified broker snapshot · refresh timed out${verifiedAt ? ` · ${new Date(verifiedAt).toLocaleTimeString()}` : ''}`;
+          setText('[data-kpi-state="balance"]', timeoutLabel);
+          setText('[data-kpi-state="equity"]', timeoutLabel);
         } else renderAccount(null, 'Broker snapshot timed out · refresh again');
       } else renderAccount(null, 'Broker snapshot unavailable');
       renderCollections({
