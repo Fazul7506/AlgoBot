@@ -4,12 +4,12 @@
   window.__algoBotAnalysisWorkspace = true;
   const $ = id => document.getElementById(id);
   const esc = v => String(v ?? "—").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const num = (v,d=5) => v==null || Number.isNaN(Number(v)) ? "—" : Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
-  const pct = v => v==null || Number.isNaN(Number(v)) ? "—" : Number(v).toFixed(1)+"%";
-  const money = (v,c) => v==null || v==="" ? "—" : (c ? c+" " : "")+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const num = (v,d=5) => v==null || v==="" || !Number.isFinite(Number(v)) ? "—" : Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
+  const pct = v => v==null || v==="" || !Number.isFinite(Number(v)) ? "—" : Number(v).toFixed(1)+"%";
+  const money = (v,c) => v==null || v==="" || !Number.isFinite(Number(v)) ? "—" : (c ? c+" " : "")+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const state = v => String(v ?? "UNAVAILABLE").replaceAll("_"," ");
   const tone = v => ["BUY","BULLISH","STRONG BULLISH"].includes(String(v||"").toUpperCase()) ? "positive" : ["SELL","BEARISH","STRONG BEARISH"].includes(String(v||"").toUpperCase()) ? "negative" : "neutral";
-  const A = {markets:[],data:null,contract:null,timer:null};
+  const A = {markets:[],data:null,contract:null,timer:null,loadGeneration:0};
 
   async function request(path, options={}) {
     return window.AlgoBotFrontendData.request(path, options, 12000);
@@ -34,7 +34,7 @@
   function render(d){
     A.data=d;
     const gate=d.execution_gate||{}, ai=d.ai||{}, layers=d.analysis_layers||{}, conf=d.confluence||{}, acct=d.account_context||{};
-    set("aResearchState",state(d.research_state)); set("aBrokerState",state(d.broker_state)); set("aSymbol",d.symbol); set("aTf",d.timeframe); set("aPrice",num(d.price)); set("aSignal",d.signal||"NO TRADE"); $("aSignal").className="value "+tone(d.signal);
+    set("aResearchState",state(d.research_state)); set("aBrokerState",state(d.broker_state)); set("aSymbol",d.symbol); set("aTf",d.timeframe); set("aPrice",num(d.price)); set("aSignal",d.signal==null?"UNAVAILABLE":d.signal); $("aSignal").className="value "+tone(d.signal);
     set("aTechnical",d.score!=null?num(d.score,1)+"/100":"—"); set("aConfidence",pct(d.confidence)); set("aRegime",d.volatility_regime); set("aFresh",d.data_provenance?.fresh?"FRESH":"STALE");
     setHealth(Boolean(d.data_provenance?.fresh && d.live_quote?.fresh),d.live_quote?.fresh?"DERIV LIVE":"DATA NOT FRESH");
     set("marketState",state(layers.market_data?.state)); set("marketSource",layers.market_data?.source); set("marketAge",d.data_provenance?.age_seconds!=null?d.data_provenance.age_seconds+"s":"—"); set("candleCount",d.candles);
@@ -43,10 +43,8 @@
     set("aiState",state(layers.ai?.state)); set("aiDecision",layers.ai?.decision||"UNAVAILABLE"); set("aiConfidence",pct(layers.ai?.confidence)); set("aiModels",layers.ai?.models_used?String(layers.ai.models_used):"0"); set("aiAgreement",layers.ai?.agreement!=null?pct(Number(layers.ai.agreement)*100):"—");
     set("confluenceState",state(conf.state)); set("confluenceDirection",conf.direction||"WAIT"); set("confluenceScore",conf.score!=null?num(conf.score,1)+"/100":"—");
     list("confluenceEvidence", conf.evidence, e => { const cls = e.passed ? "pass" : "fail"; const label = e.passed ? "PASS" : "WAIT"; return '<div class="evidence-row"><span>' + esc(e.layer) + '</span><strong>' + esc(e.condition) + '</strong><b class="' + cls + '">' + label + '</b></div>'; });
-    list("confluenceEvidence", conf.evidence, e => { const cls = e.passed ? "pass" : "fail"; const label = e.passed ? "PASS" : "WAIT"; return '<div class="evidence-row"><span>' + esc(e.layer) + '</span><strong>' + esc(e.condition) + '</strong><b class="' + cls + '">' + label + '</b></div>'; });
     set("gateState",gate.ready?"EXECUTION ELIGIBLE":"BLOCKED"); set("gateReason",gate.ready?"All configured gates passed.":"One or more execution gates are not confirmed.");
     const gateRows=[["Market data",gate.data_fresh],["History",gate.sufficient_history],["AI",gate.ai_ready],["Broker contracts",gate.broker_contracts_confirmed],["Account scope",gate.account_scope_confirmed],["Account ready",gate.account_ready],["Risk",gate.risk_ready],["Live quote",gate.live_quote_confirmed&&gate.live_quote_fresh]];
-    list("gateList", gateRows, e => { const cls = e[1] ? "pass" : "fail"; const label = e[1] ? "PASS" : "BLOCKED"; return '<div class="gate-row"><span>' + esc(e[0]) + '</span><b class="' + cls + '">' + label + '</b></div>'; });
     list("gateList", gateRows, e => { const cls = e[1] ? "pass" : "fail"; const label = e[1] ? "PASS" : "BLOCKED"; return '<div class="gate-row"><span>' + esc(e[0]) + '</span><b class="' + cls + '">' + label + '</b></div>'; });
     set("support",num(d.levels?.support));set("resistance",num(d.levels?.resistance));set("range",num(d.levels?.range));set("change",d.change_pct!=null?num(d.change_pct,2)+"%":"—");
     set("sma20",num(d.indicators?.sma20));set("sma50",num(d.indicators?.sma50));set("sma200",num(d.indicators?.sma200));set("ema",num(d.indicators?.ema9)+" / "+num(d.indicators?.ema21));set("rsi",num(d.indicators?.rsi14,2));set("atr",num(d.indicators?.atr14));set("macd",num(d.indicators?.macd?.histogram));set("bb",d.indicators?.bollinger?.width!=null?num(d.indicators.bollinger.width,2)+"%":"—");
@@ -61,21 +59,40 @@
     drawChart(d.last_candles||[]);
   }
 
-  async function load(){
+  async function load(options={}){
+    const generation=++A.loadGeneration;
     const symbol=$("symbol").value, tf=$("timeframe").value, limit=$("limit").value;
-    if(!symbol)return;
+    if(!symbol){$("loadState").textContent="No active market is available.";return}
     $("loadState").textContent="Loading fresh broker data…";
     try{
-      const d=await request("/analysis/data/?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf)+"&limit="+limit+"&refresh=1");
+      const refreshAccount=options.refreshAccount===true;
+      const d=await request("/analysis/data/?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf)+"&limit="+limit+"&refresh=1&refresh_account="+(refreshAccount?"1":"0"));
+      if(generation!==A.loadGeneration||symbol!==$("symbol").value||tf!==$("timeframe").value||limit!==$("limit").value)return;
       if(d.status==="error")throw new Error(d.message||"Analysis unavailable");
       render(d);$("loadState").textContent="Updated "+new Date().toLocaleTimeString();
     }catch(e){
+      if(generation!==A.loadGeneration)return;
+      A.data=null;
       $("loadState").textContent=e?.message||"Analysis unavailable";setHealth(false,"UNAVAILABLE");
-      $("researchState").textContent="UNAVAILABLE";$("brokerState").textContent="BROKER UNAVAILABLE";
+      set("aResearchState","UNAVAILABLE");set("aBrokerState","UNAVAILABLE");set("aPrice","—");set("aSignal","UNAVAILABLE");
+      set("marketState","UNAVAILABLE");set("marketSource","—");set("marketAge","—");set("candleCount","—");
+      set("liveQuote","UNAVAILABLE");set("liveQuoteAge","—");set("liveQuoteSource","—");
+      set("gateState","BLOCKED");set("gateReason","Fresh analysis evidence could not be confirmed.");
+      set("account","NO VERIFIED ACCOUNT CONTEXT");set("accountType","—");set("currency","—");set("balance","—");set("riskBudget","—");set("stake","—");
+      drawChart([]);
     }
   }
   async function markets(){
-    try{const d=await request("/analysis/markets/");A.markets=d.markets||[];const s=$("symbol");s.innerHTML=A.markets.map(m=>'<option value="'+esc(m.symbol)+'">'+esc(m.symbol)+" · "+esc(m.display_name||m.symbol)+"</option>").join(""); if(!s.value&&A.markets[0])s.value=A.markets[0].symbol;await load()}catch(e){$("loadState").textContent=e.message||"Markets unavailable"}}
+    try{
+      const d=await request("/analysis/markets/");
+      A.markets=d.markets||[];
+      const s=$("symbol");
+      s.innerHTML=A.markets.map(m=>'<option value="'+esc(m.symbol)+'">'+esc(m.symbol)+" · "+esc(m.display_name||m.symbol)+"</option>").join("");
+      if(!A.markets.length){$("loadState").textContent="No active markets are available.";setHealth(false,"UNAVAILABLE");return}
+      if(!s.value&&A.markets[0])s.value=A.markets[0].symbol;
+      await load({refreshAccount:true});
+    }catch(e){$("loadState").textContent=e.message||"Markets unavailable"}
+  }
   async function prepare(){
     if(!A.data)return;
     $("prepareState").textContent="Revalidation is performed on the selected Analysis data. Open Terminal only after review.";
@@ -83,9 +100,9 @@
     $("prepareState").textContent="BLOCKED: "+(A.data.execution_gate?.reason||"Execution gates are not confirmed.");
   }
   function boot(){
-    ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",load));
-    $("refresh")?.addEventListener("click",load);$("prepare")?.addEventListener("click",prepare);
-    $("auto")?.addEventListener("change",()=>{clearInterval(A.timer);if($("auto").checked)A.timer=setInterval(load,5000)});
+    ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>load()));
+    $("refresh")?.addEventListener("click",()=>load({refreshAccount:true}));$("prepare")?.addEventListener("click",prepare);
+    $("auto")?.addEventListener("change",()=>{clearInterval(A.timer);if($("auto").checked)A.timer=setInterval(()=>load({refreshAccount:false}),15000)});
     window.addEventListener("resize",()=>A.data&&drawChart(A.data.last_candles||[]));markets();
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
