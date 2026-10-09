@@ -124,9 +124,21 @@ def schedule(request):
 @decorators.api_view(["POST"])
 @decorators.permission_classes([permissions.IsAuthenticated])
 def approve(request):
-    approval = ApprovalRequest.objects.get(
-        id=request.data["approval"], workflow__user=request.user
+    if not isinstance(request.data, dict) or not request.data.get("approval"):
+        return response.Response(
+            {"detail": "An approval identifier is required.", "code": "APPROVAL_ID_REQUIRED"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    approval = get_object_or_404(
+        ApprovalRequest.objects.select_related("workflow"),
+        id=request.data["approval"],
+        workflow__user=request.user,
     )
+    if approval.status != "pending":
+        return response.Response(
+            {"detail": "Only pending approval requests can be approved.", "code": "APPROVAL_NOT_PENDING"},
+            status=status.HTTP_409_CONFLICT,
+        )
     return response.Response(
         ApprovalRequestSerializer(
             ApprovalService().approve(approval, request.user)
