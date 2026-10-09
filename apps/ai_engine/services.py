@@ -183,7 +183,7 @@ class AIEngine:
             features = FeatureEngineeringService().build_features(symbol, timeframe, context)
         return {
             "prediction": p,
-            "recommendation": RecommendationService().recommend(symbol, p),
-            "regime": MarketRegimeService().detect(symbol, features),
+            "recommendation": RecommendationService().recommend(symbol, p, user=user),
+            "regime": MarketRegimeService().detect(symbol, features, user=user),
             "explainability": ExplainabilityService().explain(features, p),
         }
