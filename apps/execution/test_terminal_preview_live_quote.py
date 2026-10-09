@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from apps.execution.models import Order
 from apps.execution.views import OrderViewSet
 
 
@@ -140,3 +141,42 @@ class TerminalLivePreviewTests(TestCase):
         self.assertEqual(result.status_code, 409)
         self.assertEqual(result.data["code"], "PREVIEW_RISK_REJECTED")
         adapter.get_trade_capabilities.assert_not_awaited()
+
+    def test_terminal_order_history_is_scoped_to_the_selected_account(self):
+        other_account = BrokerAccount.objects.create(
+            user=self.user,
+            broker=self.broker,
+            account_id="VRTC-OTHER",
+            status="active",
+            balance="100.00",
+            credentials={"account_type": "demo"},
+        )
+        first = Order.objects.create(
+            user=self.user,
+            broker_account=self.account,
+            symbol="R_100",
+            direction="buy",
+            order_type="market",
+            contract_type="CALL",
+            stake="1.00",
+            status="executed",
+        )
+        Order.objects.create(
+            user=self.user,
+            broker_account=other_account,
+            symbol="R_100",
+            direction="buy",
+            order_type="market",
+            contract_type="CALL",
+            stake="1.00",
+            status="executed",
+        )
+        request = self.factory.get("/api/orders/?account_scope=active&limit=8")
+        force_authenticate(request, user=self.user)
+        with patch("apps.execution.views.get_active_account", return_value=self.account):
+            result = OrderViewSet.as_view({"get": "list"})(request)
+
+        self.assertEqual(result.status_code, 200)
+        items = result.data.get("results", result.data if isinstance(result.data, list) else [])
+        self.assertEqual([row["id"] for row in items], [first.id])
+
