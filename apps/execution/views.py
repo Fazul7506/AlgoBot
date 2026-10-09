@@ -27,7 +27,12 @@ log = logging.getLogger(__name__)
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
-    def get_queryset(self): return Order.objects.filter(user=self.request.user)
+    def get_queryset(self):
+        queryset = Order.objects.filter(user=self.request.user)
+        if str(self.request.query_params.get('account_scope') or '').lower() == 'active':
+            account = get_active_account(self.request.user, request=self.request)
+            return queryset.filter(broker_account=account) if account else queryset.none()
+        return queryset
     @staticmethod
     def _environment(account): return str(getattr(account, 'account_type', '') or '').lower().strip() if account else ''
     @staticmethod
