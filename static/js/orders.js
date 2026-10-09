@@ -6,7 +6,7 @@
   const list = value => window.AlgoBotFrontendData?.list(value) || [];
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' })[c]);
   let rows = [];
-  const pending = new Set(['draft','validated','queued','sent','accepted']);
+  const pending = new Set(['draft','validated','queued']);
   const statusClass = s => String(s || 'unknown').toLowerCase().replace(/[^a-z0-9_-]/g,'');
   function render(message = null, state = 'Ready') {
     const table = $('[data-page-table]'); if (!table) return;
@@ -27,6 +27,6 @@
   async function request(url, options={}) { const r=await window.AlgoBotFrontendData.request(url, options, 15000); return r; }
   async function load() { render('Loading authenticated broker orders…','Loading'); try { rows=list(await request('/api/orders/')); render(); } catch (error) { rows=[]; render(`Orders unavailable: ${error?.message || 'The backend did not return an order response.'}`,'Error'); } }
   async function action(url, message) { if(!window.confirm(message)) return; try { await request(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}); await load(); } catch(e) { window.alert(e?.message || 'Order action failed.'); } }
-  function boot() { $('[data-page-search]')?.addEventListener('input',render); $('[data-orders-status]')?.addEventListener('change',render); $('[data-orders-refresh]')?.addEventListener('click',load); $('[data-page-table]')?.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.cancel)action(`/api/orders/${encodeURIComponent(b.dataset.cancel)}/cancel/`,'Cancel this order? The existing execution service will process the cancellation.');if(b.dataset.retry)action(`/api/orders/${encodeURIComponent(b.dataset.retry)}/retry/`,'Queue this failed order for retry?');}); load(); }
+  function boot() { $('[data-page-search]')?.addEventListener('input',render); $('[data-orders-status]')?.addEventListener('change',render); $('[data-orders-refresh]')?.addEventListener('click',load); $('[data-page-table]')?.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.cancel)action(`/api/orders/${encodeURIComponent(b.dataset.cancel)}/cancel/`,'Cancel this order before broker submission? Submitted or accepted contracts cannot be cancelled locally.');if(b.dataset.retry)action(`/api/orders/${encodeURIComponent(b.dataset.retry)}/retry/`,'Queue this failed order for retry?');}); load(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true }); else boot();
 })();
