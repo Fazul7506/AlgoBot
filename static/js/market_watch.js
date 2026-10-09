@@ -8,9 +8,9 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   }[c]));
   const list = value => Array.isArray(value) ? value : [];
-  const money = value => Number.isFinite(Number(value))
-    ? Number(value).toLocaleString(undefined, { maximumFractionDigits: 8 })
-    : 'Unavailable';
+  const money = value => value == null || value === '' || !Number.isFinite(Number(value))
+    ? 'Unavailable'
+    : Number(value).toLocaleString(undefined, { maximumFractionDigits: 8 });
 
   const storedFavourites = () => {
     try {
@@ -29,6 +29,8 @@
   let socket = null;
   let reconnectTimer = null;
   let staleTimer = null;
+  let loadSeq = 0;
+  let activeAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
 
   const persist = () => {
     try {
@@ -174,9 +176,10 @@
   const close = () => {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
-    if (socket) {
-      try { socket.close(); } catch (_) {}
-      socket = null;
+    const previous = socket;
+    socket = null;
+    if (previous) {
+      try { previous.close(); } catch (_) {}
     }
   };
 
@@ -193,22 +196,27 @@
     }
     close();
     try {
-      socket = new WebSocket(wsUrl());
-      socket.addEventListener('open', () => {
-        socket?.send(JSON.stringify({ action: 'subscribe', symbols }));
+      const ws = new WebSocket(wsUrl());
+      socket = ws;
+      ws.addEventListener('open', () => {
+        if (socket !== ws) return;
+        ws.send(JSON.stringify({ action: 'subscribe', symbols }));
       });
-      socket.addEventListener('message', event => {
+      ws.addEventListener('message', event => {
+        if (socket !== ws) return;
         try {
           const payload = JSON.parse(event.data);
           if (payload.type !== 'market.tick') return;
           const tick = payload.payload || {};
           const symbol = String(tick.symbol || '');
-          const price = Number(tick.quote);
+          const price = tick.quote == null || tick.quote === '' ? NaN : Number(tick.quote);
           if (!symbol || !Number.isFinite(price)) return;
+          const bid = tick.bid == null || tick.bid === '' ? price : Number(tick.bid);
+          const ask = tick.ask == null || tick.ask === '' ? price : Number(tick.ask);
           quotes.set(symbol, {
             price,
-            bid: Number.isFinite(Number(tick.bid)) ? Number(tick.bid) : price,
-            ask: Number.isFinite(Number(tick.ask)) ? Number(tick.ask) : price,
+            bid: Number.isFinite(bid) ? bid : price,
+            ask: Number.isFinite(ask) ? ask : price,
             state: 'live',
             receivedAt: Date.now()
           });
@@ -227,14 +235,16 @@
           summary();
         } catch (_) {}
       });
-      socket.addEventListener('close', () => {
+      ws.addEventListener('close', () => {
+        if (socket !== ws) return;
         socket = null;
         if (document.visibilityState === 'visible') {
           reconnectTimer = setTimeout(connect, 2500);
         }
       });
-      socket.addEventListener('error', () => {
-        try { socket?.close(); } catch (_) {}
+      ws.addEventListener('error', () => {
+        if (socket !== ws) return;
+        try { ws.close(); } catch (_) {}
       });
     } catch (_) {
       reconnectTimer = setTimeout(connect, 2500);
@@ -244,10 +254,16 @@
   const loadSymbols = async () => {
     const request = window.AlgoBotFrontendData?.request;
     if (!request) throw new Error('AlgoBot market service is not ready.');
+    const seq = ++loadSeq;
+    const requestedAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
     const data = await request('/api/market/broker-catalogue/', {}, 10000);
+    const currentAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
+    if (seq !== loadSeq || requestedAccountId !== currentAccountId) return;
     rows = list(data?.symbols).filter(
       row => row?.is_active !== false && row?.is_tradable !== false
     );
+    const catalogueStatus = $('[data-market-catalogue-status]');
+    if (catalogueStatus) catalogueStatus.textContent = data?.stale ? 'Cached catalogue · refresh unavailable' : 'Broker catalogue';
     if (!rows.length) throw new Error('Connected broker returned no active tradable instruments.');
     categories();
     render();
@@ -283,6 +299,21 @@
       } finally {
         event.currentTarget.disabled = false;
       }
+    });
+    window.AlgoBotBrokerState?.subscribe?.(() => {
+      const account = window.AlgoBotBrokerState?.get?.()?.account;
+      const nextId = account?.id == null ? null : String(account.id);
+      if (nextId === activeAccountId) return;
+      activeAccountId = nextId;
+      loadSeq += 1;
+      close();
+      rows = [];
+      quotes.clear();
+      selectedMarket = 'All';
+      categories();
+      render('Account changed. Loading the selected broker market catalogue…');
+      if (nextId) load();
+      else if ($('[data-market-catalogue-status]')) $('[data-market-catalogue-status]').textContent = 'No selected broker';
     });
     document.addEventListener('visibilitychange', () =>
       document.visibilityState === 'visible' ? connect() : close()
