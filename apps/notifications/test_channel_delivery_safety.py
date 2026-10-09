@@ -9,7 +9,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
 from .channel_service import _enc, send_gmail_notification, telegram_start, telegram_webhook
-from .models import Notification, NotificationChannelConnection
+from .models import Notification, NotificationChannelConnection, NotificationPreference
 
 
 class GmailDeliveryTests(TestCase):
@@ -157,3 +157,13 @@ class NotificationApiInputTests(TestCase):
         )
         self.assertEqual(response.status_code, 501)
         self.assertEqual(response.json()["status"], "not_configured")
+
+
+    def test_disconnected_preferred_channel_falls_back_to_in_app(self):
+        user = get_user_model().objects.create_user(username="notification-fallback-user", password="test-password")
+        NotificationPreference.objects.create(user=user, channel="gmail", enabled=True)
+        from .services import NotificationEngine
+        notices = NotificationEngine().publish(user, "Fallback", "Persist this alert.")
+        self.assertEqual(len(notices), 1)
+        self.assertEqual(notices[0].channel, "in_app")
+        self.assertEqual(notices[0].status, "delivered")
