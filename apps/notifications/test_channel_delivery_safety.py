@@ -8,7 +8,7 @@ from django.db import IntegrityError, transaction
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
-from .channel_service import _enc, send_gmail_notification, telegram_start, telegram_webhook
+from .channel_service import _dec, _enc, send_gmail_notification, telegram_start, telegram_webhook
 from .models import Notification, NotificationChannelConnection, NotificationPreference
 
 
@@ -79,7 +79,7 @@ class GmailDeliveryTests(TestCase):
         self.assertIn("oauth2.googleapis.com/token", post.call_args_list[0].args[0])
         self.assertEqual(post.call_args_list[1].kwargs["headers"]["Authorization"], "Bearer new-access")
         conn.refresh_from_db()
-        self.assertEqual(conn.access_token, _enc("new-access"))
+        self.assertEqual(_dec(conn.access_token), "new-access")
         self.assertGreater(conn.token_expires_at, timezone.now())
 
 
