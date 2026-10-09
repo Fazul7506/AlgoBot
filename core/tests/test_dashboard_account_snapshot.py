@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from apps.brokers.models import Broker, BrokerAccount
+from apps.brokers.models import Broker, BrokerAccount, Position
 from core.dashboard_api import DashboardViewSet
 
 
@@ -52,3 +52,20 @@ class DashboardAccountSnapshotTests(TestCase):
         self.account.save(update_fields=["last_synced_at"])
         response = self._overview()
         self.assertEqual(response.data["data"]["account"]["data_freshness"], "stale")
+
+    def test_performance_summary_uses_canonical_position_profit_field(self):
+        Position.objects.create(
+            broker=self.broker, account=self.account, symbol="R_100",
+            status="closed", profit=Decimal("12.50"),
+        )
+        Position.objects.create(
+            broker=self.broker, account=self.account, symbol="R_75",
+            status="closed", profit=Decimal("-3.25"),
+        )
+        request = APIRequestFactory().get("/api/dashboard/performance_summary/")
+        force_authenticate(request, user=self.user)
+        with patch("core.dashboard_api.get_active_account", return_value=self.account):
+            response = DashboardViewSet.as_view({"get": "performance_summary"})(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["best_trade"], Decimal("12.50"))
+        self.assertEqual(response.data["data"]["worst_trade"], Decimal("-3.25"))
