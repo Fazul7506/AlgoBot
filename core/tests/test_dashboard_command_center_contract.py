@@ -65,3 +65,10 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn(".status-dot.error{background:#ef4444", css)
         self.assertIn("css/dashboard.css' %}?v=20261009-dashboard-audit2", template)
         self.assertIn("dashboard_command_center.js' %}?v=20261009-dashboard-audit2", template)
+
+    def test_cached_positions_and_orders_are_not_reported_as_live(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("const positionsStale = result.positions.ok", source)
+        self.assertIn("const ordersStale = result.orders.ok", source)
+        self.assertIn("Cached exposure ·", source)
+        self.assertIn("Cached orders ·", source)
