@@ -14,6 +14,8 @@ from .services import MonitoringEngine
 @permission_classes([IsAuthenticated])
 def dashboard(request):
     data = MonitoringEngine().dashboard()
+    if not request.user.is_staff:
+        data["overall_system_health"] = "available"
     account_ids = BrokerAccount.objects.filter(user=request.user, status="active").values_list("id", flat=True)
     data["broker_status"] = (
         "connected"
