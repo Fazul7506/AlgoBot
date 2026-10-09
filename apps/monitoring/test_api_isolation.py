@@ -10,11 +10,11 @@ class MonitoringApiIsolationTests(TestCase):
         self.user = User.objects.create_user(username="monitoring-owner", password="test-password")
         self.other = User.objects.create_user(username="monitoring-other", password="test-password")
         self.own_alert = Alert.objects.create(
-            user=self.user, title="Own alert", category="trading", severity="warning",
+            user=self.user, title="Own alert", category="Trading", severity="MEDIUM",
             message="Own alert message", source="test",
         )
         self.foreign_alert = Alert.objects.create(
-            user=self.other, title="Foreign alert", category="security", severity="critical",
+            user=self.other, title="Foreign alert", category="Security", severity="CRITICAL",
             message="Foreign account data", source="test",
         )
         AuditLog.objects.create(user=self.other, action="secret_action", module="security", resource="sensitive-resource")
@@ -55,10 +55,10 @@ class MonitoringApiIsolationTests(TestCase):
 
     def test_incidents_are_scoped_to_assignee_or_owned_alert(self):
         foreign_incident = Incident.objects.create(
-            title="Foreign incident", severity="critical", alert=self.foreign_alert, assigned_to=self.other
+            title="Foreign incident", severity="CRITICAL", alert=self.foreign_alert, assigned_to=self.other
         )
         own_incident = Incident.objects.create(
-            title="Own incident", severity="warning", alert=self.own_alert, assigned_to=self.user
+            title="Own incident", severity="MEDIUM", alert=self.own_alert, assigned_to=self.user
         )
         self.client.force_login(self.user)
         response = self.client.get("/api/monitoring/incidents/")
