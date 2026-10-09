@@ -1,5 +1,5 @@
 from django.db import transaction
-from rest_framework import viewsets, decorators, response, status
+from rest_framework import viewsets, decorators, response, status, permissions
 from .models import Strategy, StrategyConfiguration, StrategyExecution, StrategyPerformance, StrategySignal
 from .serializers import StrategySerializer, StrategyExecutionSerializer, StrategyPerformanceSerializer, StrategySignalSerializer, StrategyConfigurationSerializer
 from .engine import StrategyEngine
@@ -9,6 +9,7 @@ from core.billing_entitlements import effective_plan
 
 
 class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
     queryset = Strategy.objects.all()
     serializer_class = StrategySerializer
 
@@ -72,6 +73,7 @@ class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
         if not config.broker_account_id:
             return response.Response({'detail': 'The strategy configuration has no broker account. Select an active broker account first.'}, status=status.HTTP_409_CONFLICT)
         with transaction.atomic():
+            request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
             StrategyConfiguration.objects.select_for_update().filter(user=request.user, is_active=True).update(is_active=False)
             config.is_active = True
             config.enabled = True
@@ -151,7 +153,18 @@ class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
                 }, status=status.HTTP_409_CONFLICT)
 
         with transaction.atomic():
+            # Lock the owning user as the serialization point even when there is
+            # currently no active configuration row to lock.
+            request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
             if make_active:
+                active_count = StrategyConfiguration.objects.filter(user=request.user, is_active=True).count()
+                plan = effective_plan(request.user)
+                if not (existing and existing.is_active) and plan.strategies >= 0 and active_count >= plan.strategies:
+                    return response.Response({
+                        'detail': f'Your {plan.name} plan allows {plan.strategies} active strategy connection(s). Disconnect another strategy before connecting this one.',
+                        'code': 'STRATEGY_CAPACITY_REACHED', 'metric': 'strategies',
+                        'used': active_count, 'limit': plan.strategies, 'plan': plan.key,
+                    }, status=status.HTTP_409_CONFLICT)
                 StrategyConfiguration.objects.select_for_update().filter(user=request.user, is_active=True).update(is_active=False)
             configuration, _ = StrategyConfiguration.objects.update_or_create(
                 strategy=strategy, user=request.user, symbol=symbol, timeframe=timeframe,
@@ -210,8 +223,13 @@ class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
 
     @decorators.action(detail=False, methods=['get'])
     def performance(self, request):
-        strategy_ids = self._user_configs().values_list('strategy_id', flat=True).distinct()
-        return response.Response(StrategyPerformanceSerializer(StrategyPerformance.objects.filter(strategy_id__in=strategy_ids), many=True).data)
+        # StrategyPerformance is one global row per catalog strategy and is
+        # currently aggregated across users. It is not valid account-level P&L.
+        return response.Response({
+            'status': 'unavailable',
+            'code': 'ACCOUNT_PERFORMANCE_UNAVAILABLE',
+            'detail': 'Account-level strategy performance requires strategy executions to be reconciled with this user’s settled broker trades.',
+        }, status=status.HTTP_501_NOT_IMPLEMENTED)
 
     @decorators.action(detail=False, methods=['get'])
     def signals(self, request):
