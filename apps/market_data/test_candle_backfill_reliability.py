@@ -556,6 +556,26 @@ class CandleBackfillReliabilityTests(TestCase):
         )
         publish.assert_not_called()
 
+    def test_research_scheduler_fails_closed_when_dispatch_lock_is_held(self):
+        with patch(
+            "apps.market_data.backfill_lock.acquire_backfill_dispatch_lock",
+            return_value=None,
+        ), patch("apps.market_data.tasks.backfill_research_candles.apply_async") as publish:
+            result = ensure_research_candle_backfill(count=250)
+        self.assertEqual(result, {"status": "busy", "reason": "research_backfill_dispatch_lock_held"})
+        self.assertFalse(CandleBackfillRun.objects.filter(scope="research").exists())
+        publish.assert_not_called()
+
+    def test_expired_dispatch_lock_release_does_not_mask_task_result(self):
+        from redis.exceptions import LockNotOwnedError
+        from .backfill_lock import BackfillDispatchLock
+
+        lock = BackfillDispatchLock("research")
+        lock._lock = MagicMock()
+        lock._lock.release.side_effect = LockNotOwnedError("lock expired")
+        lock.release()
+        self.assertIsNone(lock._lock)
+
     def test_research_backfill_scheduler_dispatches_after_30_minute_cooldown(self):
         completed_at = timezone.now() - timedelta(minutes=31)
         previous = CandleBackfillRun.objects.create(
