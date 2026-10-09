@@ -11,7 +11,6 @@ from apps.deployment.models import BackupRecord, ClusterStatus, DeploymentRecord
 from apps.developer.models import APIKey
 from apps.monitoring.models import AuditLog
 from core.account_context import get_active_account
-from core.models import Subscription
 
 
 def _account(request):
