@@ -117,12 +117,12 @@ class ExplainabilityService:
 
 class RecommendationService:
     MIN_CONFIDENCE=65.; MIN_MODELS=1; MIN_CONFLUENCE=.50; MAX_CHOP=.80
-    def recommend(self,symbol,prediction):
+    def recommend(self,symbol,prediction,user=None):
         payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; price_action=payload.get('price_action') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); models=int(consensus.get('models_used',payload.get('models_used',0)) or 0); confluence=_num(price_action.get('confluence_score')); chop=_num(price_action.get('chop_score')); alignment=_num(price_action.get('mtf_alignment'))
         blocked=chop>self.MAX_CHOP or confluence<self.MIN_CONFLUENCE or (alignment==0 and abs(_num(price_action.get('trend_score')))>0.15)
         actionable=decision in {'BUY','SELL'} and confidence>=self.MIN_CONFIDENCE and models>=self.MIN_MODELS and not blocked
         rec=decision if actionable else 'WAIT'; risk='high' if prediction.risk_score>.6 else 'medium' if prediction.risk_score>.3 else 'low'; evidence={**payload,'consensus':{**consensus,'decision':decision,'confidence':confidence,'actionable':actionable},'price_action_gate':{'confluence':confluence,'chop':chop,'mtf_alignment':alignment,'blocked':blocked}}
-        return AIRecommendation.objects.create(symbol=symbol,recommendation=rec,confidence=confidence,risk_level=risk,reason=f'{rec} based on ensemble consensus {decision}, {confidence:.1f}% confidence, price-action confluence {confluence:.2f} and chop {chop:.2f}.',evidence=evidence)
+        return AIRecommendation.objects.create(user=user,symbol=symbol,recommendation=rec,confidence=confidence,risk_level=risk,reason=f'{rec} based on ensemble consensus {decision}, {confidence:.1f}% confidence, price-action confluence {confluence:.2f} and chop {chop:.2f}.',evidence=evidence)
 
 class ConsensusDecisionGate:
     MIN_CONFIDENCE=65.
@@ -137,8 +137,8 @@ class ConsensusDecisionGate:
         return True,'Ensemble consensus approved'
 
 class MarketRegimeService:
-    def detect(self,symbol,features):
-        vol=_num(features.get('volatility')); trend=abs(_num(features.get('trend_score',features.get('price_velocity')))); chop=_num(features.get('chop_score')); regime='volatile' if vol>2 else 'choppy' if chop>.7 else 'strong_trend' if trend>.2 else 'sideways'; return MarketRegime.objects.create(symbol=symbol,regime=regime,confidence=min(100,50+vol*10+trend*10))
+    def detect(self,symbol,features,user=None):
+        vol=_num(features.get('volatility')); trend=abs(_num(features.get('trend_score',features.get('price_velocity')))); chop=_num(features.get('chop_score')); regime='volatile' if vol>2 else 'choppy' if chop>.7 else 'strong_trend' if trend>.2 else 'sideways'; return MarketRegime.objects.create(user=user,symbol=symbol,regime=regime,confidence=min(100,50+vol*10+trend*10))
 class AnomalyDetectionService:
     def scan(self,symbol,features):
         score=max(_num(features.get('volatility')),abs(_num(features.get('price_acceleration')))); return AnomalyEvent.objects.create(symbol=symbol,anomaly_type='volatility_spike' if score>3 else 'none',score=score,details=features) if score>3 else None
