@@ -289,6 +289,7 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertIn("remains locked until broker state is reconciled", terminal)
         self.assertNotIn("executed by Deriv", terminal)
         self.assertNotIn("is_preferred", terminal)
+        self.assertNotIn("accounts[0]?.id", terminal)
 
     def test_terminal_ai_discards_results_for_changed_account_market_or_timeframe(self):
         from pathlib import Path
