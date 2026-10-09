@@ -80,3 +80,8 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("item.time && Number.isFinite(Date.parse(item.time))", source)
         self.assertIn("Date.parse(b.time) - Date.parse(a.time)", source)
+
+    def test_only_fresh_connected_account_snapshots_are_cached(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("persistSnapshot && connected && freshness === 'fresh'", source)
+        self.assertIn("const verifiedAt = stale.account.last_synced_at || stale.at", source)
