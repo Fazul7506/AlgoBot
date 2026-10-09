@@ -15,7 +15,12 @@ from .models import (
 class AIModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = AIModel
-        fields = "__all__"
+        # Expose only registry summaries. Internal metadata may contain training
+        # paths, feature configuration, or other governance details.
+        fields = (
+            "id", "name", "version", "algorithm", "framework", "status",
+            "accuracy", "precision", "recall", "f1_score", "auc", "created_at",
+        )
 
 
 class ModelVersionSerializer(serializers.ModelSerializer):
