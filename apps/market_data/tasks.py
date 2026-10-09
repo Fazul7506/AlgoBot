@@ -609,8 +609,16 @@ def ensure_research_candle_backfill(count=250):
     close_old_connections()
     now = timezone.now()
     run = None
+    dispatch_lock = None
     task_id = uuid4().hex
     try:
+        # Row locks cannot serialize the first-ever dispatch when the table is
+        # empty. Use the shared distributed lock so countdown, Beat, retries,
+        # and concurrent workers all arbitrate through the same gate.
+        from .backfill_lock import acquire_backfill_dispatch_lock
+        dispatch_lock = acquire_backfill_dispatch_lock("research")
+        if dispatch_lock is None:
+            return {"status": "busy", "reason": "research_backfill_dispatch_lock_held"}
         with transaction.atomic():
             # Lock the latest record first so the countdown and Beat recovery
             # tick serialize before checking whether a run is already active.
@@ -720,6 +728,8 @@ def ensure_research_candle_backfill(count=250):
         logger.exception("Automatic research candle backfill dispatch failed")
         return {"status": "failed", "error": str(exc)}
     finally:
+        if dispatch_lock is not None:
+            dispatch_lock.release()
         close_old_connections()
 
 
