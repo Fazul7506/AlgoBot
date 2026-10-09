@@ -12,8 +12,8 @@
   const list=v=>window.AlgoBotFrontendData?.list?.(v)||[];
   const api=(url,options={},timeout=12000)=>window.AlgoBotServices?.request?.('market-data',url,options,timeout)||window.AlgoBotFrontendData?.request?.(url,options,timeout);
   let contracts=[],capabilitiesRequest=0,capabilitiesInFlight=null,capabilitiesSymbol='';
-  const capabilitiesCacheKey=symbol=>'algobot:broker-capabilities:v2:'+String(window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'none')+':'+symbol;
-  const readCapabilitiesCache=symbol=>{try{const item=JSON.parse(sessionStorage.getItem(capabilitiesCacheKey(symbol))||'null');return item?.payload||null}catch(_){return null}};
+  const capabilitiesCacheKey=symbol=>'algobot:broker-capabilities:v3:'+String(window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'none')+':'+symbol;
+  const readCapabilitiesCache=symbol=>{try{const item=JSON.parse(sessionStorage.getItem(capabilitiesCacheKey(symbol))||'null');if(!item?.payload||Date.now()-Number(item.at||0)>300000)return null;return item.payload}catch(_){return null}};
   const writeCapabilitiesCache=(symbol,payload)=>{try{sessionStorage.setItem(capabilitiesCacheKey(symbol),JSON.stringify({at:Date.now(),payload}))}catch(_){} };
 
   const directionFor=type=>/PUT|FALL|LOWER|MULTDOWN|DIGITUNDER|DIGITDIFF|DIGITODD|NOTOUCH|TURBOSSHORT|RUNLOW|EXPIRYMISS/i.test(String(type||''))?'SELL':'BUY';
