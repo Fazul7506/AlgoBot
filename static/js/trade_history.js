@@ -170,9 +170,11 @@
     const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `algobot-deriv-trade-history-${new Date().toISOString().slice(0,10)}.csv`;
+    link.download = `algobot-deriv-trade-history-page-${page}-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   [refresh, apply].forEach(control => control.addEventListener('click', () => load(1, true)));
