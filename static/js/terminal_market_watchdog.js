@@ -44,14 +44,19 @@
   }
 
   function paintQuote(quote, epoch) {
+    if (quote == null || quote === '') return;
     const value = Number(quote);
     if (!Number.isFinite(value)) return;
-    const text = fmt(value);
-    $('[data-q="bid"]')?.replaceChildren(document.createTextNode(text));
-    $('[data-q="ask"]')?.replaceChildren(document.createTextNode(text));
     const now = Date.now();
-    setState('live', `live Deriv quote · ${epoch ? new Date(Number(epoch) * 1000).toLocaleTimeString() : 'updated just now'}`);
-    window.dispatchEvent(new CustomEvent('algobot:market-watchdog-tick', {detail: {symbol: activeSymbol, quote: value, epoch: Number(epoch) || Math.floor(now / 1000)}}));
+    const parsedEpoch = epoch == null || epoch === '' ? null : Number(epoch);
+    if (parsedEpoch !== null && (!Number.isFinite(parsedEpoch) || parsedEpoch <= 0 || parsedEpoch > now / 1000 + 5)) return;
+    lastTickAt = now;
+    const text = fmt(value);
+    // A public tick is a last-traded quote, not a broker bid/ask order book.
+    $('[data-q="bid"]')?.replaceChildren(document.createTextNode('Unavailable'));
+    $('[data-q="ask"]')?.replaceChildren(document.createTextNode(text));
+    setState('live', `live Deriv quote · ${parsedEpoch ? new Date(parsedEpoch * 1000).toLocaleTimeString() : 'updated just now'}`);
+    window.dispatchEvent(new CustomEvent('algobot:market-watchdog-tick', {detail: {symbol: activeSymbol, quote: value, epoch: parsedEpoch || Math.floor(now / 1000)}}));
   }
 
   function closeSocket() {
