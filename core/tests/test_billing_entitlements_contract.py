@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from core.billing_entitlements import PLAN_ENTITLEMENTS, entitlement_payload, effective_plan
+from core.billing_entitlements import PLAN_ENTITLEMENTS, entitlement_payload, effective_plan, usage
 
 
 class BillingEntitlementsContractTests(TestCase):
@@ -29,3 +29,19 @@ class BillingEntitlementsContractTests(TestCase):
         self.assertEqual(payload["usage"]["orders"]["source"], "audit_log")
         self.assertEqual(payload["usage"]["broker_accounts"]["source"], "database")
         self.assertIn("no synthetic usage is generated", payload["reset_policy"]["measurement"].lower())
+
+
+    def test_broker_account_usage_counts_connected_accounts_not_broker_types(self):
+        from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+
+        user = get_user_model().objects.create_user(username="broker-capacity-user", password="test-password")
+        broker = Broker.objects.create(name="Capacity Broker", broker_type="deriv", status="active")
+        first = BrokerAccount.objects.create(user=user, broker=broker, account_id="CAPACITY-1", status="active")
+        second = BrokerAccount.objects.create(user=user, broker=broker, account_id="CAPACITY-2", status="active")
+        BrokerConnection.objects.create(broker=broker, broker_account=first, status="connected")
+        self.assertEqual(usage(user, "broker_accounts"), 1)
+        BrokerConnection.objects.create(broker=broker, broker_account=second, status="connected")
+        self.assertEqual(usage(user, "broker_accounts"), 2)
+        second.status = "disabled"
+        second.save(update_fields=["status"])
+        self.assertEqual(usage(user, "broker_accounts"), 1)
