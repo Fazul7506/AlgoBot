@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -42,7 +43,7 @@ class TerminalLivePreviewTests(TestCase):
         )
         self.factory = APIRequestFactory()
 
-    def preview(self, contract_type="CALL", direction="buy", stake="1.00"):
+    def preview(self, contract_type="CALL", direction="buy", stake="1.00", duration=60, duration_unit="s"):
         request = self.factory.post(
             "/api/orders/preview/",
             {
@@ -52,6 +53,8 @@ class TerminalLivePreviewTests(TestCase):
                 "direction": direction,
                 "order_type": "market",
                 "stake": stake,
+                "duration": duration,
+                "duration_unit": duration_unit,
             },
             format="json",
         )
@@ -74,6 +77,16 @@ class TerminalLivePreviewTests(TestCase):
                     "epoch": int(timezone.now().timestamp()),
                 }
             ),
+            get_order_preview=AsyncMock(return_value={
+                "proposal_id": "isolated-proposal",
+                "ask_price": "1.00",
+                "payout": "1.90",
+                "symbol": "R_100",
+                "contract_type": "CALL",
+                "currency": "USD",
+                "duration": 60,
+                "duration_unit": "s",
+            }),
         )
 
     def test_preview_uses_fresh_quote_and_verifies_selected_contract(self):
@@ -88,6 +101,10 @@ class TerminalLivePreviewTests(TestCase):
         self.assertTrue(result.data["gates"]["contract_verified"])
         self.assertTrue(result.data["gates"]["fresh_market_data"])
         self.assertEqual(result.data["market"]["source"], "selected_broker_live_quote")
+        self.assertEqual(result.data["estimate"]["payout"], 1.9)
+        self.assertEqual(result.data["estimate"]["potential_profit"], 0.9)
+        self.assertTrue(result.data["gates"]["payout_verified"])
+        adapter.get_order_preview.assert_awaited_once_with(symbol="R_100", contract_type="CALL", amount=Decimal("1.00"), duration=60, duration_unit="s")
         adapter.get_trade_capabilities.assert_awaited_once_with("R_100")
         adapter.get_market_data.assert_awaited_once_with("R_100")
 
