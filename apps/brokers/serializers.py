@@ -33,9 +33,8 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
         return value if isinstance(value, dict) else {}
 
     def get_account_type(self,obj):
-        value=(obj.credentials or {}).get('account_type')
-        if not value:value=self._realtime(obj).get('account_type')
-        value=str(value or '').lower().strip(); return value if value in {'real','demo'} else 'unknown'
+        value = obj.account_type
+        return value if value in {'real', 'demo'} else 'unknown'
     def get_avatar_url(self,obj):
         r,m=self._realtime(obj),self._broker_metadata(obj); return str(r.get('avatar_url') or m.get('avatar_url') or '')
     def get_display_name(self,obj): return f'{obj.broker.name} · {obj.account_id}'

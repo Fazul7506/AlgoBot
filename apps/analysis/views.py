@@ -3,8 +3,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 import time
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.core.cache import cache
 from django.http import JsonResponse
@@ -220,6 +221,7 @@ def analysis_data(request):
         limit = 300
 
     refresh_requested = str(request.GET.get("refresh", "1")).lower() in {"1", "true", "yes"}
+    account_refresh_requested = str(request.GET.get("refresh_account", "0")).lower() in {"1", "true", "yes"}
     active_account = get_active_account(request.user, request=request)
     cache_key = "algobot:analysis:v5:" + hashlib.sha256(
         json.dumps([
@@ -229,6 +231,7 @@ def analysis_data(request):
             timeframe.lower(),
             limit,
             bool(refresh_requested),
+            bool(account_refresh_requested),
         ]).encode("utf-8")
     ).hexdigest()
     cached = cache.get(cache_key)
@@ -328,7 +331,7 @@ def analysis_data(request):
                 },
             )
             consensus = prediction.payload.get("consensus") or {}
-            recommendation = RecommendationService().recommend(market.symbol, prediction)
+            recommendation = RecommendationService().recommend(market.symbol, prediction, user=request.user)
             models_used = int(consensus.get("models_used", 0) or 0)
             raw_confidence = consensus.get("confidence")
             confidence = float(raw_confidence) * 100.0 if raw_confidence is not None else None
@@ -336,9 +339,15 @@ def analysis_data(request):
             probability = float(raw_probability) if raw_probability is not None else None
             raw_agreement = consensus.get("agreement")
             agreement = float(raw_agreement) if raw_agreement is not None else None
+            if confidence is not None and (not math.isfinite(confidence) or not 0 <= confidence <= 100):
+                confidence = None
+            if probability is not None and (not math.isfinite(probability) or not 0 <= probability <= 1):
+                probability = None
+            if agreement is not None and (not math.isfinite(agreement) or not 0 <= agreement <= 1):
+                agreement = None
             raw_decision = str(consensus.get("decision") or "").upper()
             decision = raw_decision if raw_decision in {"BUY", "SELL", "AVOID"} else None
-            valid_ai_output = models_used > 0 and decision in {"BUY", "SELL"} and confidence is not None
+            valid_ai_output = models_used > 0 and decision in {"BUY", "SELL"} and confidence is not None and probability is not None and agreement is not None
             ai_result = {
                 "status": "ok" if valid_ai_output and recommendation.recommendation == decision else "no_trade" if models_used > 0 else "unavailable",
                 "decision": decision,
@@ -399,7 +408,12 @@ def analysis_data(request):
         "strategy_ready": strategy_ready,
         "strategy_confluence": strategy_confluence,
         "ai_ready": ai_result["models_used"] > 0 and ai_result["decision"] in {"BUY", "SELL"} and ai_result.get("confidence") is not None and ai_result.get("recommendation") == ai_result["decision"],
-        "broker_contracts_confirmed": bool(broker_capabilities.get("available_contract_types")),
+        "broker_contracts_confirmed": bool(
+            active_account is not None
+            and getattr(active_account.broker, "broker_type", "") == "deriv"
+            and broker_capabilities.get("source") == "deriv_authenticated_contracts_for"
+            and broker_capabilities.get("available_contract_types")
+        ),
         "account_scope_confirmed": bool(active_account is not None and getattr(active_account, "user_id", request.user.pk) == request.user.pk),
         "account_ready": False,
         "risk_ready": False,
@@ -409,10 +423,11 @@ def analysis_data(request):
         "reason": "Final execution readiness requires fresh market data, a ready selected account, risk capacity, broker capabilities and a fresh live quote.",
     }
     account_context = None
+    broker_data = None
     if active_account is not None:
         try:
-            if refresh_requested:
-                synced_account, _broker_data = asyncio.run(
+            if account_refresh_requested:
+                synced_account, broker_data = asyncio.run(
                     asyncio.wait_for(
                         SynchronizationService().sync_account(active_account),
                         timeout=8.0,
@@ -425,9 +440,10 @@ def analysis_data(request):
                 signal=result.get("signal"),
                 confidence=result.get("confidence"),
                 volatility=result.get("volatility_regime"),
+                broker_data=broker_data,
             )
         except Exception as exc:
-            if refresh_requested:
+            if account_refresh_requested:
                 return JsonResponse(
                     {
                         "status": "error",
@@ -499,8 +515,7 @@ def analysis_data(request):
     result["execution_gate"]["live_quote_fresh"] = bool(result["live_quote"]["fresh"])
     result["execution_gate"]["account_ready"] = bool(
         active_account is not None
-        and getattr(active_account, "token_status", "") == "active"
-        and not getattr(active_account, "is_token_expired", False)
+        and getattr(active_account, "is_connection_eligible", False)
     )
     recommended_stake = account_context.get("recommended_stake") if account_context else None
     try:
@@ -534,7 +549,7 @@ def analysis_data(request):
     live_ready = bool(gate["live_quote_confirmed"] and gate["live_quote_fresh"])
     risk_ready = bool(gate["risk_ready"])
     result["research_state"] = "READY" if gate["data_fresh"] else "STALE"
-    result["broker_state"] = "BROKER_CONNECTED" if live_ready and broker_ready else "BROKER_UNAVAILABLE" if not gate["live_quote_confirmed"] else "BROKER_CONNECTED"
+    result["broker_state"] = "BROKER_CONNECTED" if live_ready and broker_ready and account_ready else "BROKER_UNAVAILABLE"
     result["analysis_layers"] = {
         "market_data": {
             "state": "READY" if gate["data_fresh"] else "STALE",
@@ -683,7 +698,7 @@ def broker_account_context(request):
                 timeout=8.0,
             )
         )
-        context = build_account_risk_context(request.user, account)
+        context = build_account_risk_context(request.user, account, broker_data=broker_data)
     except Exception as exc:
         return JsonResponse(
             {
@@ -712,11 +727,41 @@ def broker_proposal(request):
         payload = json.loads(request.body or "{}")
     except (TypeError, ValueError):
         return JsonResponse({"status": "error", "code": "INVALID_JSON", "message": "A valid JSON proposal request is required."}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"status": "error", "code": "INVALID_PROPOSAL_OBJECT", "message": "A JSON object is required."}, status=400)
 
     symbol = str(payload.get("symbol") or "").strip().upper()
     contract_type = str(payload.get("contract_type") or "").strip().upper()
     if not symbol or not contract_type:
         return JsonResponse({"status": "error", "code": "CONTRACT_PARAMETERS_REQUIRED", "message": "Symbol and broker contract type are required."}, status=400)
+
+    confidence = payload.get("confidence")
+    if confidence is not None:
+        try:
+            confidence_decimal = Decimal(str(confidence))
+        except (InvalidOperation, TypeError, ValueError):
+            return JsonResponse({"status": "error", "code": "INVALID_CONFIDENCE", "message": "Confidence must be a finite number from 0 to 100."}, status=400)
+        if not confidence_decimal.is_finite() or confidence_decimal < 0 or confidence_decimal > 100:
+            return JsonResponse({"status": "error", "code": "INVALID_CONFIDENCE", "message": "Confidence must be a finite number from 0 to 100."}, status=400)
+        confidence = float(confidence_decimal)
+
+    duration = payload.get("duration")
+    if duration is not None:
+        try:
+            duration_decimal = Decimal(str(duration))
+            if not duration_decimal.is_finite() or duration_decimal != duration_decimal.to_integral_value():
+                raise ValueError("duration must be a whole number")
+            duration = int(duration_decimal)
+        except (InvalidOperation, TypeError, ValueError, OverflowError):
+            return JsonResponse({"status": "error", "code": "INVALID_DURATION", "message": "Duration must be a positive whole number."}, status=400)
+        if duration < 1 or duration > 100000:
+            return JsonResponse({"status": "error", "code": "INVALID_DURATION", "message": "Duration must be between 1 and 100000."}, status=400)
+    duration_unit = str(payload.get("duration_unit") or "s").lower()
+    if duration_unit not in {"s", "m", "h", "d", "t"}:
+        return JsonResponse({"status": "error", "code": "INVALID_DURATION_UNIT", "message": "Unsupported contract duration unit."}, status=400)
+    basis = str(payload.get("basis") or "stake").lower()
+    if basis != "stake":
+        return JsonResponse({"status": "error", "code": "UNSUPPORTED_PROPOSAL_BASIS", "message": "Risk-capped proposals currently support stake basis only."}, status=422)
 
     try:
         market = MarketSymbol.objects.get(symbol=symbol, is_active=True, is_tradable=True)
@@ -740,18 +785,23 @@ def broker_proposal(request):
         if contract_type not in allowed:
             return JsonResponse({"status": "error", "code": "CONTRACT_NOT_AVAILABLE", "message": f"{contract_type} is not currently offered by Deriv for {symbol}.", "available_contract_types": sorted(allowed)}, status=422)
 
-        confidence = payload.get("confidence")
         risk_context = build_account_risk_context(
             request.user,
             account,
             signal=payload.get("signal"),
             confidence=confidence,
             volatility=payload.get("volatility"),
+            broker_data=_broker_data,
         )
         amount = payload.get("amount")
         if amount in (None, ""):
             amount = risk_context["recommended_stake"]
-        amount_decimal = Decimal(str(amount))
+        try:
+            amount_decimal = Decimal(str(amount))
+        except (InvalidOperation, TypeError, ValueError):
+            return JsonResponse({"status": "error", "code": "INVALID_AMOUNT", "message": "Amount must be a finite positive number."}, status=400)
+        if not amount_decimal.is_finite():
+            return JsonResponse({"status": "error", "code": "INVALID_AMOUNT", "message": "Amount must be a finite positive number."}, status=400)
         recommended_decimal = Decimal(str(risk_context["recommended_stake"]))
         if amount_decimal <= 0:
             return JsonResponse({"status": "error", "code": "NO_RISK_BUDGET", "message": "The selected account has no broker-available risk budget for this proposal.", "account_context": risk_context}, status=422)
@@ -766,9 +816,9 @@ def broker_proposal(request):
                     contract_type=contract_type,
                     amount=amount_decimal,
                     currency=account.currency,
-                    duration=payload.get("duration"),
-                    duration_unit=payload.get("duration_unit") or "s",
-                    basis=payload.get("basis") or "stake",
+                    duration=duration,
+                    duration_unit=duration_unit,
+                    basis=basis,
                     barrier=payload.get("barrier"),
                     multiplier=payload.get("multiplier"),
                     growth_rate=payload.get("growth_rate"),

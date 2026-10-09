@@ -56,11 +56,13 @@
       const payload = sr.value || {};
       strategies = list(payload.strategies || payload);
       const signals = sig.status === 'fulfilled' ? list(sig.value) : [];
-      const performance = perf.status === 'fulfilled' ? list(perf.value) : [];
+      const performance = perf.status === 'fulfilled' ? list(perf.value) : null;
       counts(payload, signals);
       renderList();
       $('[data-s-strategy-signals]').innerHTML = signals.length ? signals.slice(0,8).map(s => `<div class="signal-row"><strong>${esc(s.symbol || '—')}</strong><span>${esc(s.signal || 'HOLD')}</span><b>${s.confidence != null ? Number(s.confidence).toFixed(0) + '%' : '—'}</b></div>`).join('') : '<div class="empty-state">No strategy signals have been generated yet.</div>';
-      $('[data-s-performance]').innerHTML = performance.length ? performance.slice(0,8).map(p => `<div class="mini-row"><strong>${esc(p.strategy_name || p.strategy || 'Strategy')}</strong><span>${p.win_rate != null ? Number(p.win_rate).toFixed(1) + '%' : '—'}</span><b>${esc(p.net_profit ?? '0')}</b></div>`).join('') : '<div class="empty-state">No strategy performance records yet.</div>';
+      $('[data-s-performance]').innerHTML = performance === null
+        ? '<div class="empty-state">Account-level performance is unavailable until strategy executions are reconciled with settled broker trades. No personal P&amp;L is inferred from global strategy totals.</div>'
+        : (performance.length ? performance.slice(0,8).map(p => `<div class="mini-row"><strong>${esc(p.strategy_name || p.strategy || 'Strategy')}</strong><span>${p.win_rate != null ? Number(p.win_rate).toFixed(1) + '%' : '—'}</span><b>${esc(p.net_profit ?? 'Unavailable')}</b></div>`).join('') : '<div class="empty-state">No settled account-level strategy performance records yet.</div>');
     } catch (e) {
       const msg = esc(e?.message || 'Unable to load strategy data.');
       $('[data-s-list]').innerHTML = `<div class="empty-state">Strategy control plane unavailable: ${msg} <button class="btn small ghost" type="button" data-s-retry>Retry</button></div>`;

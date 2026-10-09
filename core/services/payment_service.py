@@ -495,6 +495,29 @@ class PaymentService:
             logger.exception("IntaSend subscription status request failed")
             return None
 
+    def cancel_intasend_subscription(self, subscription_id: str) -> dict:
+        """Cancel an IntaSend recurring subscription at the provider."""
+        if not self.intasend_secret_key or not subscription_id:
+            return {"ok": False, "status": "configuration_error"}
+        try:
+            response = requests.post(
+                f"{self.intasend_base_url}/api/v1/subscriptions/{subscription_id}/unsubscribe/",
+                headers={
+                    "Authorization": f"Bearer {self.intasend_secret_key}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                timeout=self.timeout,
+            )
+            data = self._json_or_error(response)
+            if response.ok:
+                return {"ok": True, "status": "cancelled", "provider_status": data}
+            logger.error("IntaSend subscription cancellation failed status=%s body=%s", response.status_code, data)
+            return {"ok": False, "status": "provider_error", "http_status": response.status_code}
+        except requests.RequestException as exc:
+            logger.error("IntaSend subscription cancellation failed: %s", exc)
+            return {"ok": False, "status": "network_error"}
+
     def create_invoice_record(self, user, amount_cents: int, currency: str = "KES"):
         from core.models import Invoice
         return Invoice.objects.create(user=user, amount_cents=amount_cents, currency=currency)

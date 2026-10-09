@@ -22,7 +22,10 @@
     return request(url, options, timeout);
   };
 
-  const typeOf = a => String(a?.account_type || a?.credentials?.account_type || 'demo').toLowerCase();
+  const typeOf = a => {
+    const value = String(a?.account_type || a?.credentials?.account_type || '').trim().toLowerCase();
+    return ['demo', 'real'].includes(value) ? value : 'unknown';
+  };
   const current = () => {
     const selected = window.AlgoBotAccountContext?.getSelected?.();
     if (selected?.id) return selected;

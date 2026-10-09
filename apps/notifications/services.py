@@ -13,7 +13,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.template import Context, Template
 from django.utils import timezone
 
-from .channel_service import send_telegram
+from .channel_service import connection_status, send_telegram, send_gmail_notification
 from .models import Broadcast, DeliveryLog, Notification, NotificationChannelConnection, NotificationPreference, NotificationTemplate
 
 
@@ -85,7 +85,15 @@ class PreferenceService:
 
 class RoutingService:
     def routes(self, user, category="general", priority="info"):
-        return PreferenceService().enabled_channels(user)
+        enabled = PreferenceService().enabled_channels(user)
+        channels = connection_status(user)
+        available = [
+            channel for channel in enabled
+            if channel == "in_app" or (channel in {"gmail", "telegram"} and channels.get(channel, {}).get("connected"))
+        ]
+        # Always retain a durable in-app notification if every selected external
+        # channel is currently disconnected or missing usable credentials.
+        return available or ["in_app"]
 
 
 def _enqueue_telegram(notification: Notification) -> None:
@@ -101,7 +109,8 @@ class DeliveryService:
     def _email(self, notification, conn):
         if not conn.address:
             raise RuntimeError("Gmail notification address is missing; reconnect the account.")
-        return send_transactional_email(recipient=conn.address, subject=notification.title, message=notification.message, category=notification.category, metadata=notification.metadata)
+        send_gmail_notification(conn, notification)
+        return "gmail"
 
     def deliver(self, notification: Notification, provider="internal") -> DeliveryResult:
         log = DeliveryLog.objects.create(notification=notification, channel=notification.channel, status="sending", attempts=notification.attempts + 1, provider=provider, sent_at=timezone.now())

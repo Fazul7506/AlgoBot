@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
@@ -16,7 +17,7 @@ class DerivLiveWebSocketContractTests(SimpleTestCase):
                     json.dumps({
                         "msg_type": "tick",
                         "req_id": 1,
-                        "tick": {"symbol": "R_100", "quote": 123.45, "epoch": 1900000000},
+                        "tick": {"symbol": "R_100", "quote": 123.45, "epoch": int(time.time()) - 1},
                     })
                 ]
 

@@ -19,8 +19,8 @@
   <div class="kpi-grid" aria-label="Portfolio summary">
     <article class="kpi-card"><span>Portfolios</span><strong>{{ portfolios|length }}</strong></article>
     <article class="kpi-card"><span>Trades</span><strong>{{ trade_count }}</strong></article>
-    <article class="kpi-card"><span>Win rate</span><strong>{{ win_rate|floatformat:1 }}%</strong></article>
-    <article class="kpi-card"><span>Net P&amp;L</span><strong>{{ net_pnl|floatformat:2 }}</strong></article>
+    <article class="kpi-card"><span>Win rate</span><strong>{% if win_rate is not None %}{{ win_rate|floatformat:1 }}%{% else %}Unavailable{% endif %}</strong></article>
+    <article class="kpi-card"><span>Net P&amp;L</span><strong>{% if has_trade_pnl %}{{ net_pnl|floatformat:2 }}{% else %}Unavailable{% endif %}</strong></article>
   </div>
   <section class="workspace-grid two" aria-label="Portfolio records">
     <article class="panel">
@@ -33,8 +33,8 @@
     </article>
   </section>
   <section class="workspace-grid two" aria-label="Portfolio analysis">
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">ALLOCATION</p><h2>Capital map</h2></div></div>{% for allocation in allocations %}<div class="mini-row"><strong>{{ allocation.symbol|default:allocation.asset }}</strong><span>{{ allocation.weight|floatformat:2 }}%</span><b>{{ allocation.allocated_capital|floatformat:2 }}</b></div>{% empty %}<div class="empty-state">No allocation records are available.</div>{% endfor %}</article>
-    <article class="panel"><div class="panel-head"><div><p class="eyebrow">PERFORMANCE</p><h2>Latest observations</h2></div></div>{% for item in latest_performance %}<div class="mini-row"><strong>{{ item.timestamp|date:"M j, Y H:i" }}</strong><span>Portfolio</span><b>{{ item.value|default:item.return_pct|floatformat:2 }}</b></div>{% empty %}<div class="empty-state">No portfolio performance observations are available.</div>{% endfor %}</article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">ALLOCATION</p><h2>Capital map</h2></div></div>{% for allocation in allocations %}<div class="mini-row"><strong>{{ allocation.symbol|default:allocation.asset }}</strong><span>{{ allocation.allocation_percent|floatformat:2 }}%</span><b>{{ allocation.allocated_capital|floatformat:2 }}</b></div>{% empty %}<div class="empty-state">No allocation records are available.</div>{% endfor %}</article>
+    <article class="panel"><div class="panel-head"><div><p class="eyebrow">PERFORMANCE</p><h2>Latest observations</h2></div></div>{% for item in latest_performance %}<div class="mini-row"><strong>{{ item.timestamp|date:"M j, Y H:i" }}</strong><span>Portfolio</span><b>{{ item.cumulative_return|default:item.daily_return|floatformat:2 }}</b></div>{% empty %}<div class="empty-state">No portfolio performance observations are available.</div>{% endfor %}</article>
   </section>
   <section class="panel"><div class="panel-head"><div><p class="eyebrow">ACCOUNT BOUNDARY</p><h2>Broker-confirmed state</h2></div></div><p class="hero-copy">Portfolio values are loaded from connected broker accounts and persisted records. Synthetic values are never displayed.</p><a class="btn primary" href="/brokers/connect/">Connect a broker</a></section>
 </main>

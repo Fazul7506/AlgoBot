@@ -9,7 +9,12 @@ class HasDeveloperScope(BasePermission):
         auth = getattr(request, "auth", None)
         if not auth:
             return bool(getattr(request.user, "is_authenticated", False))
-        permissions = getattr(auth, "permissions", [])
+        # API-key credentials carry explicit scopes. Session/JWT credentials
+        # authenticate the user and follow the same user-access policy as the
+        # browser session instead of being mistaken for an empty-scoped API key.
+        permissions = getattr(auth, "permissions", None)
+        if permissions is None:
+            return bool(getattr(request.user, "is_authenticated", False))
         return self.required_scope in permissions or "admin" in permissions
 
 

@@ -14,7 +14,6 @@ router.register("notifications", NotificationViewSet, basename="enterprise-notif
 
 urlpatterns = [
     path("notifications/channels/", RedirectView.as_view(url="/notifications/", permanent=False), name="notification_channels"),
-    path("", include(router.urls)),
     path("notifications/send/", send),
     path("notifications/broadcast/", broadcast),
     path("notifications/webhook/", webhook),
@@ -27,4 +26,5 @@ urlpatterns = [
     path("notifications/channels/telegram/disconnect/", telegram_disconnect, name="telegram_disconnect"),
     path("notifications/telegram/webhook/", telegram_webhook_view, name="telegram_webhook"),
     path("notifications/telegram/health/", telegram_health_view, name="telegram_health"),
+    path("", include(router.urls)),
 ]

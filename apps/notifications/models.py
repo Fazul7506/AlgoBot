@@ -2,6 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 
 class Notification(models.Model):
@@ -71,7 +72,14 @@ class NotificationChannelConnection(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["user", "provider"], name="uniq_notification_channel_provider")]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "provider"], name="uniq_notification_channel_provider"),
+            models.UniqueConstraint(
+                fields=["external_id"],
+                condition=Q(provider="telegram") & ~Q(external_id=""),
+                name="uniq_telegram_chat_binding",
+            ),
+        ]
         indexes = [models.Index(fields=["user", "provider", "status"])]
 
 

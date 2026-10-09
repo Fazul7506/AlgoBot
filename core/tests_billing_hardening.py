@@ -79,24 +79,119 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(Subscription.objects.get(user=self.user).plan, "BASIC")
         self.assertTrue(Subscription.objects.get(user=self.user).expires_at > timezone.now())
 
-    def test_cancel_subscription_stops_renewal_without_removing_paid_access(self):
+    def test_pesapal_payment_grants_time_limited_access_without_fake_recurring_state(self):
+        reference = f"PP-{self.user.id}-BASIC-ONETIME"
+        invoice = Invoice.objects.create(
+            user=self.user,
+            amount_cents=99900,
+            currency="KES",
+            metadata={"plan": "BASIC", "provider": "pesapal", "reference": reference},
+            external_id="PP-ONE-TIME-1",
+        )
+        result = PaymentReconciler.reconcile(
+            provider="pesapal",
+            external_id="PP-ONE-TIME-1",
+            status="COMPLETED",
+            amount="999.00",
+            currency="KES",
+            metadata={"merchant_reference": reference, "user_id": self.user.id, "plan": "BASIC", "provider": "pesapal"},
+        )
+        self.assertEqual(result["status"], "COMPLETED")
+        subscription = Subscription.objects.get(user=self.user)
+        self.assertEqual(subscription.plan, "BASIC")
+        self.assertEqual(subscription.provider, "pesapal")
+        self.assertFalse(subscription.recurring)
+        self.assertFalse(subscription.provider_subscription_id)
+
+    def test_webhook_reconciliation_never_creates_an_invoice_from_forged_identity(self):
+        result = PaymentReconciler.reconcile(
+            provider="pesapal",
+            external_id="ATTACKER-TRACKING-ID",
+            status="COMPLETE",
+            amount="999.00",
+            currency="KES",
+            metadata={
+                "merchant_reference": f"PP-{self.user.id}-BASIC-FORGED",
+                "plan": "BASIC",
+                "user_id": self.user.id,
+            },
+            require_existing_invoice=True,
+        )
+        self.assertTrue(result["unresolved_invoice"])
+        self.assertTrue(result["retryable"])
+        self.assertFalse(Invoice.objects.filter(external_id="ATTACKER-TRACKING-ID").exists())
+        self.assertFalse(Payment.objects.filter(external_id="ATTACKER-TRACKING-ID").exists())
+        self.assertFalse(Subscription.objects.get(user=self.user).plan == "BASIC")
+
+    @override_settings(INTASEND_WEBHOOK_CHALLENGE="expected")
+    @patch("core.services.payment_reconciler.PaymentService.get_intasend_payment_status")
+    def test_intasend_webhook_requires_a_matching_local_invoice(self, get_status):
+        reference = f"IS-{self.user.id}-BASIC-NOLOCAL"
+        get_status.return_value = {
+            "invoice": {
+                "invoice_id": "WEBHOOK-NOLOCAL",
+                "state": "COMPLETE",
+                "value": "999.00",
+                "currency": "KES",
+            }
+        }
+        result = PaymentReconciler.handle_intasend_webhook({
+            "invoice_id": "WEBHOOK-NOLOCAL",
+            "state": "COMPLETE",
+            "value": "999.00",
+            "currency": "KES",
+            "api_ref": reference,
+            "challenge": "expected",
+        })
+        self.assertTrue(result["unresolved_invoice"])
+        self.assertTrue(result["retryable"])
+        get_status.assert_called_once()
+        self.assertFalse(Invoice.objects.filter(external_id="WEBHOOK-NOLOCAL").exists())
+        self.assertEqual(Subscription.objects.get(user=self.user).plan, "FREE")
+
+    @patch("core.views_billing.PaymentService.cancel_intasend_subscription")
+    def test_cancel_subscription_stops_provider_renewal_without_removing_paid_access(self, cancel_provider):
         expiry = timezone.now() + timedelta(days=12)
         subscription = Subscription.objects.get(user=self.user)
         subscription.plan = "PRO"
         subscription.price_cents = 499900
         subscription.currency = "kes"
         subscription.recurring = True
+        subscription.provider = "intasend"
+        subscription.provider_subscription_id = "SUB-123"
         subscription.is_active = True
         subscription.expires_at = expiry
-        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at"])
+        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "provider", "provider_subscription_id", "is_active", "expires_at"])
 
+        cancel_provider.return_value = {"ok": True, "status": "cancelled"}
         response = self.client.post(reverse("billing_cancel_subscription"), data={}, content_type="application/json", **self.api_headers)
         self.assertEqual(response.status_code, 200)
+        cancel_provider.assert_called_once_with("SUB-123")
         subscription.refresh_from_db()
         self.assertFalse(subscription.recurring)
         self.assertTrue(subscription.is_active)
         self.assertAlmostEqual(subscription.expires_at.timestamp(), expiry.timestamp(), delta=2)
         self.assertEqual(response.json()["status"], "cancelled_at_period_end")
+
+    @patch("core.views_billing.PaymentService.cancel_intasend_subscription")
+    def test_cancel_subscription_does_not_change_local_state_when_provider_rejects(self, cancel_provider):
+        subscription = Subscription.objects.get(user=self.user)
+        subscription.plan = "PRO"
+        subscription.recurring = True
+        subscription.provider = "intasend"
+        subscription.provider_subscription_id = "SUB-FAIL"
+        subscription.is_active = True
+        subscription.expires_at = timezone.now() + timedelta(days=12)
+        subscription.save(update_fields=["plan", "recurring", "provider", "provider_subscription_id", "is_active", "expires_at"])
+
+        cancel_provider.return_value = {"ok": False, "status": "provider_error"}
+        response = self.client.post(reverse("billing_cancel_subscription"), data={}, content_type="application/json", **self.api_headers)
+        self.assertEqual(response.status_code, 502)
+        subscription.refresh_from_db()
+        self.assertTrue(subscription.recurring)
+        self.assertTrue(subscription.is_active)
+
+
 
     def test_expired_subscription_is_reported_inactive(self):
         subscription = Subscription.objects.get(user=self.user)
@@ -112,6 +207,26 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["subscription"]["is_active"])
         self.assertFalse(Subscription.objects.get(user=self.user).is_active)
+
+    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_PRO_PRICE_CENTS="70000", ALGOBOT_BILLING_CURRENCY="KES")
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session")
+    def test_active_paid_plan_cannot_open_a_second_paid_checkout(self, create_checkout):
+        subscription = Subscription.objects.get(user=self.user)
+        subscription.plan = "BASIC"
+        subscription.price_cents = 50000
+        subscription.currency = "kes"
+        subscription.recurring = False
+        subscription.is_active = True
+        subscription.expires_at = timezone.now() + timedelta(days=10)
+        subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at"])
+
+        response = self.client.post(
+            reverse("billing_checkout_start"),
+            {"plan": "PRO", "provider": "pesapal"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("billing_page"))
+        create_checkout.assert_not_called()
 
     @override_settings(ALGOBOT_PRO_PRICE_CENTS="0")
     def test_zero_price_paid_plan_is_not_sent_to_a_provider(self):

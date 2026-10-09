@@ -37,11 +37,11 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
     # a still-running late-ack task before its durable heartbeat/recovery logic
     # can make a decision.
     "visibility_timeout": 4 * 60 * 60,
-    "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "1"))),
+    "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "2"))),
 }
 CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
     "visibility_timeout": 4 * 60 * 60,
-    "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "4"))),
+    "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "1"))),
 }
 
 # Long-running broker-data tasks expose STARTED state and are acknowledged only
@@ -76,6 +76,7 @@ CELERY_TASK_ROUTES = {
     # Recovery/observability must not share the single-consumer market-data queue.
     "apps.market_data.tasks.reconcile_candle_backfill_runs": {"queue": "celery"},
     "apps.market_data.tasks.ensure_initial_candle_backfill": {"queue": "celery"},
+    "apps.market_data.tasks.ensure_research_candle_backfill": {"queue": "celery"},
 }
 
 CELERY_TASK_ANNOTATIONS = {

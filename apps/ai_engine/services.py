@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, logging, time
+import hashlib, logging, math, time
 from typing import Any, Iterable
 from django.core.cache import cache
 from django.utils import timezone
@@ -10,8 +10,11 @@ from .training_dataset import current_ai_feedback, current_strategy_signal_featu
 log=logging.getLogger(__name__)
 
 def _num(v,default=0.0):
-    try:return float(v or 0)
-    except (TypeError,ValueError):return default
+    try:
+        result = float(v or 0)
+        return result if math.isfinite(result) else default
+    except (TypeError,ValueError,OverflowError):
+        return default
 
 def _decision(value):
     value=str(value or '').upper(); return {'UP':'BUY','LONG':'BUY','DOWN':'SELL','SHORT':'SELL','WAIT':'AVOID','HOLD':'AVOID','NO_MODELS':'AVOID','AI_ERROR':'AVOID','DO NOT TRADE':'AVOID'}.get(value,value if value in {'BUY','SELL','AVOID'} else 'AVOID')
@@ -59,12 +62,30 @@ class InferenceService:
         if ensemble and ensemble.models:
             try:
                 import numpy as np
-                vector=np.array([[_num(features.get(name,0.0)) for name in MODEL_FEATURE_NAMES]],dtype=float); result=ensemble.predict(vector); direction=_decision(result.get('direction')); prob=float(result.get('probability',0)); consensus={'decision':direction,'probability':round(prob,6),'confidence':round(float(result.get('confidence',prob*100)),2),'agreement':round(float(result.get('agreement',0)),6),'disagreement':round(float(result.get('disagreement',0)),6),'models_used':int(result.get('models_used',0)),'model_types':result.get('model_types',[]),'method':result.get('method','weighted_average'),'model_outputs':result.get('model_outputs',result.get('predictions',[]))}; return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
+                vector=np.array([[_num(features.get(name,0.0)) for name in MODEL_FEATURE_NAMES]],dtype=float)
+                result=ensemble.predict(vector)
+                prob=float(result.get('probability',0))
+                confidence=float(result.get('confidence',prob*100))
+                agreement=float(result.get('agreement',0))
+                disagreement=float(result.get('disagreement',0))
+                models_used=int(result.get('models_used',0))
+                if (
+                    not all(math.isfinite(value) for value in (prob, confidence, agreement, disagreement))
+                    or not 0 <= prob <= 1
+                    or not 0 <= confidence <= 100
+                    or not 0 <= agreement <= 1
+                    or not 0 <= disagreement <= 1
+                    or models_used < 1
+                ):
+                    return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'invalid_ensemble_output','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'invalid_ensemble_output'}}
+                direction=_decision(result.get('direction'))
+                consensus={'decision':direction,'probability':round(prob,6),'confidence':round(confidence,2),'agreement':round(agreement,6),'disagreement':round(disagreement,6),'models_used':models_used,'model_types':result.get('model_types',[]),'method':result.get('method','weighted_average'),'model_outputs':result.get('model_outputs',result.get('predictions',[]))}
+                return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
             except Exception as exc:log.exception('AI ensemble inference failed',extra={'symbol':symbol}); return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'error':str(exc),'source':'trained_ensemble','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'ensemble_inference_error'}}
         return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'no_trained_model','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'no_trained_model'}}
 
 class PredictionService:
-    def predict(self,symbol,timeframe,context=None):
+    def predict(self,symbol,timeframe,context=None,user=None):
         start=time.perf_counter()
         context=context or {}
         feats=FeatureEngineeringService().build_features(symbol,timeframe,context)
@@ -85,6 +106,7 @@ class PredictionService:
         cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score'])
         model_features=list(MODEL_FEATURE_NAMES)
         return Prediction.objects.create(
+            user=user,
             symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],
             confidence=round(consensus_confidence,2),expected_return=raw['expected_return'],risk_score=raw['risk_score'],
             payload={
@@ -92,6 +114,7 @@ class PredictionService:
                 'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),
                 'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,
                 'price_action':{k:feats.get(k) for k in FEATURE_NAMES},
+                'feature_values': feats,
                 'ai_feedback':{'accuracy':feedback_accuracy,'mean_return':feedback_return,'sample_count':feedback_count},
                 'strategy_signal':{'bias':signal_bias,'confidence':signal_confidence,'sample_count':signal_count},
                 'reference_price':float(candles[-1].get('close')) if candles and candles[-1].get('close') is not None else None,
@@ -115,12 +138,12 @@ class ExplainabilityService:
 
 class RecommendationService:
     MIN_CONFIDENCE=65.; MIN_MODELS=1; MIN_CONFLUENCE=.50; MAX_CHOP=.80
-    def recommend(self,symbol,prediction):
+    def recommend(self,symbol,prediction,user=None):
         payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; price_action=payload.get('price_action') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); models=int(consensus.get('models_used',payload.get('models_used',0)) or 0); confluence=_num(price_action.get('confluence_score')); chop=_num(price_action.get('chop_score')); alignment=_num(price_action.get('mtf_alignment'))
         blocked=chop>self.MAX_CHOP or confluence<self.MIN_CONFLUENCE or (alignment==0 and abs(_num(price_action.get('trend_score')))>0.15)
         actionable=decision in {'BUY','SELL'} and confidence>=self.MIN_CONFIDENCE and models>=self.MIN_MODELS and not blocked
         rec=decision if actionable else 'WAIT'; risk='high' if prediction.risk_score>.6 else 'medium' if prediction.risk_score>.3 else 'low'; evidence={**payload,'consensus':{**consensus,'decision':decision,'confidence':confidence,'actionable':actionable},'price_action_gate':{'confluence':confluence,'chop':chop,'mtf_alignment':alignment,'blocked':blocked}}
-        return AIRecommendation.objects.create(symbol=symbol,recommendation=rec,confidence=confidence,risk_level=risk,reason=f'{rec} based on ensemble consensus {decision}, {confidence:.1f}% confidence, price-action confluence {confluence:.2f} and chop {chop:.2f}.',evidence=evidence)
+        return AIRecommendation.objects.create(user=user,symbol=symbol,recommendation=rec,confidence=confidence,risk_level=risk,reason=f'{rec} based on ensemble consensus {decision}, {confidence:.1f}% confidence, price-action confluence {confluence:.2f} and chop {chop:.2f}.',evidence=evidence)
 
 class ConsensusDecisionGate:
     MIN_CONFIDENCE=65.
@@ -135,8 +158,8 @@ class ConsensusDecisionGate:
         return True,'Ensemble consensus approved'
 
 class MarketRegimeService:
-    def detect(self,symbol,features):
-        vol=_num(features.get('volatility')); trend=abs(_num(features.get('trend_score',features.get('price_velocity')))); chop=_num(features.get('chop_score')); regime='volatile' if vol>2 else 'choppy' if chop>.7 else 'strong_trend' if trend>.2 else 'sideways'; return MarketRegime.objects.create(symbol=symbol,regime=regime,confidence=min(100,50+vol*10+trend*10))
+    def detect(self,symbol,features,user=None):
+        vol=_num(features.get('volatility')); trend=abs(_num(features.get('trend_score',features.get('price_velocity')))); chop=_num(features.get('chop_score')); regime='volatile' if vol>2 else 'choppy' if chop>.7 else 'strong_trend' if trend>.2 else 'sideways'; return MarketRegime.objects.create(user=user,symbol=symbol,regime=regime,confidence=min(100,50+vol*10+trend*10))
 class AnomalyDetectionService:
     def scan(self,symbol,features):
         score=max(_num(features.get('volatility')),abs(_num(features.get('price_acceleration')))); return AnomalyEvent.objects.create(symbol=symbol,anomaly_type='volatility_spike' if score>3 else 'none',score=score,details=features) if score>3 else None
@@ -153,5 +176,14 @@ class AIRiskAdvisor:
 class AIStrategyAdvisor:
     def advise(self,prediction):return {'strategy_bias':prediction.prediction,'confidence':prediction.confidence,'note':'AI assists but does not replace the configured strategy and risk engine.'}
 class AIEngine:
-    def analyze(self,symbol,timeframe='M1',context=None):
-        p=PredictionService().predict(symbol,timeframe,context); features=FeatureStoreService().latest(symbol,timeframe); return {'prediction':p,'recommendation':RecommendationService().recommend(symbol,p),'regime':MarketRegimeService().detect(symbol,features),'explainability':ExplainabilityService().explain(features,p)}
+    def analyze(self,symbol,timeframe='M1',context=None,user=None):
+        p = PredictionService().predict(symbol, timeframe, context, user=user)
+        features = (p.payload or {}).get("feature_values")
+        if not isinstance(features, dict) or not features:
+            features = FeatureEngineeringService().build_features(symbol, timeframe, context)
+        return {
+            "prediction": p,
+            "recommendation": RecommendationService().recommend(symbol, p, user=user),
+            "regime": MarketRegimeService().detect(symbol, features, user=user),
+            "explainability": ExplainabilityService().explain(features, p),
+        }

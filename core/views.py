@@ -29,7 +29,6 @@ def strategies_page(request): return render(request,'core/strategies.html')
 @never_cache
 def trading_page(request): return render(request,'core/trading.html')
 @login_required
-@login_required
 def backtesting_page(request): return render(request,'core/backtesting.html')
 @login_required
 def predictions_page(request): return render(request,'core/predictions.html')

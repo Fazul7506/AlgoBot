@@ -66,7 +66,11 @@ def usage(user, metric, window="day"):
     if metric == "broker_accounts":
         try:
             from apps.brokers.models import BrokerAccount
-            return BrokerAccount.objects.filter(user=user).values("broker_id").distinct().count()
+            return BrokerAccount.objects.filter(
+                user=user,
+                status="active",
+                connections__status="connected",
+            ).distinct().count()
         except DatabaseError: return 0
     if metric == "strategies":
         try:

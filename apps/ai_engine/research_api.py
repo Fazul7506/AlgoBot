@@ -67,7 +67,7 @@ def research_predict(request):
     )
 
     try:
-        result = AIEngine().analyze(symbol, timeframe, context)
+        result = AIEngine().analyze(symbol, timeframe, context, user=request.user)
         prediction = result["prediction"]
         recommendation = result["recommendation"]
         regime = result["regime"]

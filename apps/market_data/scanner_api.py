@@ -25,9 +25,25 @@ def _decimal(value):
     if value in (None, ""):
         return None
     try:
-        return Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
+        result = Decimal(str(value))
+        return result if result.is_finite() else None
+    except (InvalidOperation, TypeError, ValueError, OverflowError):
         return None
+
+
+def _decimal_filter(value):
+    if value in (None, ""):
+        return None, False
+    raw = str(value).strip()
+    if len(raw) > 64:
+        return None, True
+    try:
+        result = Decimal(raw)
+    except (InvalidOperation, TypeError, ValueError, OverflowError):
+        return None, True
+    if not result.is_finite() or result.adjusted() > 12:
+        return None, True
+    return result, False
 
 
 def _bounded_limit(request):
@@ -143,11 +159,32 @@ def scanner(request):
     direction = str(request.query_params.get("direction") or "all").lower().strip()
     sort = str(request.query_params.get("sort") or "change_percent").lower().strip()
     trend = str(request.query_params.get("trend") or "all").lower().strip()
-    min_change = _decimal(request.query_params.get("min_change"))
-    max_change = _decimal(request.query_params.get("max_change"))
-    max_spread = _decimal(request.query_params.get("max_spread"))
-    min_rsi = _decimal(request.query_params.get("min_rsi"))
-    max_rsi = _decimal(request.query_params.get("max_rsi"))
+    numeric_filters = {
+        "min_change": _decimal_filter(request.query_params.get("min_change")),
+        "max_change": _decimal_filter(request.query_params.get("max_change")),
+        "max_spread": _decimal_filter(request.query_params.get("max_spread")),
+        "min_rsi": _decimal_filter(request.query_params.get("min_rsi")),
+        "max_rsi": _decimal_filter(request.query_params.get("max_rsi")),
+    }
+    invalid_numeric = [name for name, (_value, invalid) in numeric_filters.items() if invalid]
+    if invalid_numeric:
+        return Response(
+            {"status": "error", "code": "INVALID_NUMERIC_FILTER", "detail": "Numeric filters must be finite, valid decimal numbers.", "fields": invalid_numeric},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    min_change = numeric_filters["min_change"][0]
+    max_change = numeric_filters["max_change"][0]
+    max_spread = numeric_filters["max_spread"][0]
+    min_rsi = numeric_filters["min_rsi"][0]
+    max_rsi = numeric_filters["max_rsi"][0]
+    if max_spread is not None and max_spread < 0:
+        return Response({"status": "error", "code": "INVALID_NUMERIC_FILTER", "detail": "max_spread must be non-negative."}, status=status.HTTP_400_BAD_REQUEST)
+    if any(value is not None and not Decimal("0") <= value <= Decimal("100") for value in (min_rsi, max_rsi)):
+        return Response({"status": "error", "code": "INVALID_NUMERIC_FILTER", "detail": "RSI filters must be between 0 and 100."}, status=status.HTTP_400_BAD_REQUEST)
+    if min_change is not None and max_change is not None and min_change > max_change:
+        return Response({"status": "error", "code": "INVALID_NUMERIC_FILTER", "detail": "min_change must not exceed max_change."}, status=status.HTTP_400_BAD_REQUEST)
+    if min_rsi is not None and max_rsi is not None and min_rsi > max_rsi:
+        return Response({"status": "error", "code": "INVALID_NUMERIC_FILTER", "detail": "min_rsi must not exceed max_rsi."}, status=status.HTTP_400_BAD_REQUEST)
 
     if direction not in {"all", "gainers", "losers"}:
         return Response(
@@ -218,8 +255,9 @@ def scanner(request):
             )
             continue
 
-        age = max(0, int((now - snapshot.timestamp).total_seconds()))
-        fresh = age <= SNAPSHOT_FRESHNESS_SECONDS
+        raw_age = (now - snapshot.timestamp).total_seconds()
+        age = max(0, int(raw_age)) if raw_age >= -5 else None
+        fresh = -5 <= raw_age <= SNAPSHOT_FRESHNESS_SECONDS
         change = Decimal(snapshot.change_percent or 0)
         spread = Decimal(snapshot.spread or 0)
         volume = Decimal(snapshot.volume or 0)

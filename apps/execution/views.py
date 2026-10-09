@@ -5,9 +5,13 @@ import asyncio
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import viewsets, permissions, decorators, response, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
+from django.db import transaction
 from django.db.models import Q
-from .models import Order, ExecutionLog, ReconciliationEvent, BrokerTradeHistory
+from .models import Order, ExecutionLog, ReconciliationEvent, BrokerTradeHistory, ExecutionQueue
+from . import constants as c
+from .exceptions import OrderValidationError
 from apps.brokers.models import Position
 from .serializers import OrderSerializer, PositionSerializer, ExecutionLogSerializer, ReconciliationEventSerializer, BrokerTradeHistorySerializer
 from .engine import ExecutionEngine
@@ -24,7 +28,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     def get_queryset(self): return Order.objects.filter(user=self.request.user)
     @staticmethod
-    def _environment(account): return str((account.credentials or {}).get('account_type') or '').lower().strip() if account else ''
+    def _environment(account): return str(getattr(account, 'account_type', '') or '').lower().strip() if account else ''
     @staticmethod
     def _safe_client_context(data, account):
         context = data.get('routing_context') or data.get('validation_context') or {}
@@ -44,12 +48,16 @@ class OrderViewSet(viewsets.ModelViewSet):
             'duration_unit': data.get('duration_unit') or '',
         }
     def create(self, request, *args, **kwargs):
+        if not isinstance(request.data, dict):
+            return response.Response({'status':'rejected','code':'ORDER_PAYLOAD_INVALID','detail':'A JSON object is required.'}, status=status.HTTP_400_BAD_REQUEST)
         client_request_id = str(request.data.get('client_request_id') or request.data.get('client_order_id') or '').strip()
         if client_request_id:
             existing = Order.objects.filter(user=request.user, client_request_id=client_request_id).first()
             if existing:
                 requested_account = str(request.data.get('broker_account') or '').strip()
-                if requested_account and str(existing.broker_account_id) != requested_account:
+                if not requested_account:
+                    return response.Response({'status':'rejected','code':'CLIENT_REQUEST_ACCOUNT_REQUIRED','detail':'A broker account must be specified to safely replay this client request ID.','retryable':False}, status=status.HTTP_409_CONFLICT)
+                if str(existing.broker_account_id) != requested_account:
                     return response.Response({'status':'rejected','code':'CLIENT_REQUEST_ACCOUNT_MISMATCH','detail':'This client request ID belongs to a different broker account and cannot be replayed in the current account context.','retryable':False}, status=status.HTTP_409_CONFLICT)
                 return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
         allowed_orders, used_orders, order_limit = check(request.user, 'orders')
@@ -111,12 +119,38 @@ class OrderViewSet(viewsets.ModelViewSet):
             log.exception('Pre-trade preview failed', extra={'user_id':request.user.id,'symbol':request.data.get('symbol')})
             return response.Response({'status':'rejected','code':'PREVIEW_INTERNAL_ERROR','detail':'Pre-trade preview could not be completed safely. Check market/broker status and retry.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     @decorators.action(detail=True, methods=['post'])
-    def cancel(self, request, pk=None): return response.Response(OrderSerializer(ExecutionEngine().cancel_order(self.get_object())).data)
+    def cancel(self, request, pk=None):
+        try:
+            order = ExecutionEngine().cancel_order(self.get_object())
+        except OrderValidationError as exc:
+            return response.Response({
+                'status': 'rejected', 'code': 'ORDER_CANCEL_NOT_SAFE',
+                'detail': str(exc), 'retryable': False, 'reconcile_required': True,
+            }, status=status.HTTP_409_CONFLICT)
+        return response.Response(OrderSerializer(order, context=self.get_serializer_context()).data)
+
     @decorators.action(detail=True, methods=['post'])
     def retry(self, request, pk=None):
-        order = self.get_object()
-        if order.status in {'sent', 'unknown'}: return response.Response({'status':'rejected','code':'EXECUTION_RETRY_FORBIDDEN','detail':'Broker execution state is uncertain. Reconcile the order with the broker before any retry.','retryable':False}, status=status.HTTP_409_CONFLICT)
-        ExecutionEngine().retry(order); return response.Response({'status':'queued'})
+        visible_order = self.get_object()
+        with transaction.atomic():
+            # Match the queue worker/cancel path lock order to prevent retrying
+            # an order while a worker still owns its queue entry.
+            queue_entry = ExecutionQueue.objects.select_for_update().filter(order_id=visible_order.pk).first()
+            order = Order.objects.select_for_update().get(pk=visible_order.pk)
+            if order.status != c.ORDER_STATUS_FAILED:
+                return response.Response({
+                    'status': 'rejected', 'code': 'EXECUTION_RETRY_FORBIDDEN',
+                    'detail': 'Only orders in a confirmed failed state can be retried. Submitted, accepted, executed, cancelled or uncertain orders must not be replayed.',
+                    'retryable': False, 'reconcile_required': order.status in {c.ORDER_STATUS_SENT, c.ORDER_STATUS_ACCEPTED, c.ORDER_STATUS_EXECUTED},
+                }, status=status.HTTP_409_CONFLICT)
+            if queue_entry and queue_entry.status == c.QUEUE_STATUS_PROCESSING:
+                return response.Response({
+                    'status': 'rejected', 'code': 'EXECUTION_RETRY_IN_PROGRESS',
+                    'detail': 'An execution worker still owns this queue entry. Reconcile its result before retrying.',
+                    'retryable': False, 'reconcile_required': True,
+                }, status=status.HTTP_409_CONFLICT)
+            ExecutionEngine().retry(order)
+        return response.Response({'status': 'queued'})
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PositionSerializer
@@ -330,6 +364,8 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(direction__iexact=direction)
         start = self._date_filter("date_from", False)
         end = self._date_filter("date_to", True)
+        if start and end and start > end:
+            raise ValidationError({"date_range": "date_from must not be later than date_to."})
         if start:
             qs = qs.filter(broker_timestamp__gte=start)
         if end:
@@ -345,8 +381,8 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=dt_timezone.utc)
             return parsed.replace(hour=23, minute=59, second=59, microsecond=999999) if end_of_day else parsed.replace(hour=0, minute=0, second=0, microsecond=0)
-        except ValueError:
-            return None
+        except ValueError as exc:
+            raise ValidationError({name: f"Invalid {name} value."}) from exc
 
     def get_serializer_context(self):
         context = super().get_serializer_context()

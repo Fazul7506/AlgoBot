@@ -7,9 +7,9 @@ from asgiref.sync import sync_to_async
 from apps.brokers.services import BrokerRegistry
 from apps.brokers.position_sync import BrokerPositionSyncService
 from .exceptions import OrderValidationError, NonRetryableExecutionError
+from . import constants as c
 from .models import Order, ExecutionQueue, ExecutionLog
 from .repositories import OrderRepository, ExecutionLogRepository, ExecutionQueueRepository
-from . import constants as c
 
 
 def _broker_decimal(value):
@@ -60,7 +60,35 @@ class OrderValidationService:
 class OrderService:
     def create_order(self, user, **data):
         order=OrderRepository().create(user=user, **data); ExecutionLogRepository().log(order,'OrderCreated',order.status,'Order created'); return order
-    def cancel(self, order): order.status=c.ORDER_STATUS_CANCELLED; order.save(update_fields=['status','updated_at']); ExecutionLogRepository().log(order,'OrderCancelled','success','Order cancelled'); return order
+    def cancel(self, order):
+        # Lock queue state first, matching the worker's claim order. A broker-
+        # submitted/accepted contract cannot be made cancelled by editing local
+        # state; Deriv requires broker-specific close/sell semantics instead.
+        with transaction.atomic():
+            queue_entry = ExecutionQueue.objects.select_for_update().filter(order_id=order.pk).first()
+            locked_order = Order.objects.select_for_update().get(pk=order.pk)
+            if locked_order.status not in {c.ORDER_STATUS_DRAFT, c.ORDER_STATUS_VALIDATED, c.ORDER_STATUS_QUEUED}:
+                raise OrderValidationError(
+                    "This order has reached broker submission or a terminal state; local cancellation cannot change broker state."
+                )
+            if locked_order.status == c.ORDER_STATUS_QUEUED and (
+                queue_entry is None or queue_entry.status not in {c.QUEUE_STATUS_PENDING, c.QUEUE_STATUS_RETRY}
+            ):
+                raise OrderValidationError(
+                    "The queue is already processing or its state is unknown. Reconcile before attempting cancellation."
+                )
+            if queue_entry and queue_entry.status == c.QUEUE_STATUS_PROCESSING:
+                raise OrderValidationError(
+                    "The execution worker has already claimed this order. Reconcile broker state instead of cancelling locally."
+                )
+            if queue_entry and queue_entry.status in {c.QUEUE_STATUS_PENDING, c.QUEUE_STATUS_RETRY}:
+                queue_entry.status = c.QUEUE_STATUS_CANCELLED
+                queue_entry.next_retry = None
+                queue_entry.save(update_fields=['status', 'next_retry', 'updated_at'])
+            locked_order.status = c.ORDER_STATUS_CANCELLED
+            locked_order.save(update_fields=['status', 'updated_at'])
+            ExecutionLogRepository().log(locked_order, 'OrderCancelled', 'success', 'Order cancelled before broker submission')
+            return locked_order
     def modify(self, order, **changes):
         for k,v in changes.items(): setattr(order,k,v)
         order.save(); ExecutionLogRepository().log(order,'OrderModified','success','Order modified'); return order

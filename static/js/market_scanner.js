@@ -20,6 +20,7 @@
 
   let timer = null;
   let requestId = 0;
+  let activeAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
 
   const setState = (kind, message) => {
     status.textContent = message;
@@ -43,7 +44,7 @@
     count.textContent = results.length + ' shown · ' + (data.total_available ?? 0) + ' available';
     updated.textContent = data.generated_at
       ? 'Updated ' + new Date(data.generated_at).toLocaleTimeString()
-      : 'Updated ' + new Date().toLocaleTimeString();
+      : 'Scanned ' + new Date().toLocaleTimeString();
 
     if (!results.length) {
       rows.innerHTML = '<tr><td colspan="12" class="scanner-empty">No markets match the current filters.</td></tr>';
@@ -51,7 +52,7 @@
     }
 
     rows.innerHTML = results.map(row => {
-      const change = Number(row.change_percent);
+      const change = row.change_percent == null || row.change_percent === '' ? NaN : Number(row.change_percent);
       const state = row.status || 'no_data';
       const trend = row.trend || '—';
       const freshness = row.fresh
@@ -129,6 +130,18 @@
   document.querySelector('[data-scanner-refresh]')?.addEventListener('click', scan);
   document.querySelector('[data-scanner-reset]')?.addEventListener('click', () => {
     form.reset();
+    scan();
+  });
+
+  window.AlgoBotBrokerState?.subscribe?.(() => {
+    const account = window.AlgoBotBrokerState?.get?.()?.account;
+    const nextId = account?.id == null ? null : String(account.id);
+    if (nextId === activeAccountId) return;
+    activeAccountId = nextId;
+    requestId += 1;
+    rows.innerHTML = '<tr><td colspan="12" class="scanner-empty">Account changed. Loading the selected broker universe…</td></tr>';
+    count.textContent = 'Loading…';
+    updated.textContent = '—';
     scan();
   });
 

@@ -39,6 +39,32 @@ class PortfolioEngineTests(TestCase):
         self.assertAlmostEqual(result["excess_return"], 0.02)
         self.assertAlmostEqual(result["tracking_error"], 0.0)
 
+    def test_benchmark_rejects_non_finite_returns_and_risk_free_rate(self):
+        for portfolio_return, benchmark_return, risk_free_rate in (
+            (float("nan"), 0.1, 0.0),
+            (0.1, float("inf"), 0.0),
+            (0.1, 0.05, float("-inf")),
+        ):
+            with self.subTest(portfolio_return=portfolio_return, benchmark_return=benchmark_return):
+                with self.assertRaises(ValueError):
+                    BenchmarkService().compare(
+                        portfolio_return, benchmark_return, risk_free_rate=risk_free_rate
+                    )
+
+    def test_benchmark_rejects_empty_or_mismatched_series(self):
+        with self.assertRaises(ValueError):
+            BenchmarkService().compare([], [])
+        with self.assertRaises(ValueError):
+            BenchmarkService().compare([0.1, 0.2], [0.05])
+
+    def test_benchmark_name_is_bounded(self):
+        result = BenchmarkService().compare(0.1, 0.05, benchmark_name=" X " * 100)
+        self.assertLessEqual(len(result["benchmark_name"]), 80)
+
+    def test_benchmark_name_must_be_text(self):
+        with self.assertRaises(ValueError):
+            BenchmarkService().compare(0.1, 0.05, benchmark_name=None)
+
     def test_reporting_includes_summary_fields(self):
         report = ReportingService().generate(self.portfolio, report_type="executive", export_format="json")
         self.assertEqual(report["portfolio_name"], "Core")

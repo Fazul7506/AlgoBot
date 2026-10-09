@@ -13,7 +13,14 @@ class ProductionRecoveryContractTests(SimpleTestCase):
         self.assertIn('"max_connections": REDIS_CACHE_MAX_CONNECTIONS', cache)
         self.assertIn("REDIS_CACHE_MAX_CONNECTIONS", cache)
         self.assertIn("CELERY_BROKER_POOL_LIMIT", celery)
-        self.assertIn('"max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "4")))', celery)
+        self.assertIn(
+            '"max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "2")))',
+            celery,
+        )
+        self.assertIn(
+            '"max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "1")))',
+            celery,
+        )
 
     def test_drf_uses_resilient_throttles(self):
         base = (ROOT / "config" / "settings" / "base.py").read_text(encoding="utf-8")

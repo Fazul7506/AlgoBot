@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from .models import CandleBackfillEvent, CandleBackfillRun, MarketSymbol
-from .tasks import backfill_research_candles, ensure_initial_candle_backfill, reconcile_candle_backfill_runs, run_initial_candle_backfill
+from .tasks import backfill_research_candles, ensure_initial_candle_backfill, ensure_research_candle_backfill, reconcile_candle_backfill_runs, run_initial_candle_backfill
 
 
 class CandleBackfillReliabilityTests(TestCase):
@@ -80,6 +80,21 @@ class CandleBackfillReliabilityTests(TestCase):
                 run=run, event_type="failed", task_id="stale-research-task"
             ).exists()
         )
+
+    def test_unstarted_research_dispatch_is_recovered_after_two_minutes(self):
+        run = CandleBackfillRun.objects.create(
+            scope="research",
+            status="running",
+            count=250,
+            task_id="never-received-research-task",
+            dispatch_at=timezone.now() - timedelta(minutes=3),
+        )
+        result = reconcile_candle_backfill_runs(max_age_seconds=300)
+        run.refresh_from_db()
+        self.assertEqual(result["stale_research_failed"], [run.pk])
+        self.assertEqual(run.status, "failed")
+        self.assertIsNotNone(run.completed_at)
+        self.assertIn("heartbeat became stale", run.error)
 
     def test_recovery_runs_on_general_worker_queue(self):
         self.assertEqual(
@@ -499,6 +514,115 @@ class CandleBackfillReliabilityTests(TestCase):
         from .tasks import backfill_research_candles, run_initial_candle_backfill
         self.assertEqual(backfill_research_candles.soft_time_limit, 2 * 60 * 60)
         self.assertEqual(run_initial_candle_backfill.soft_time_limit, 4 * 60 * 60)
+
+    def test_research_backfill_scheduler_waits_full_30_minutes_after_completion(self):
+        completed_at = timezone.now() - timedelta(minutes=29)
+        run = CandleBackfillRun.objects.create(
+            scope="research",
+            status="completed",
+            count=250,
+            requested_at=completed_at - timedelta(minutes=5),
+            completed_at=completed_at,
+        )
+        with patch("apps.market_data.tasks.backfill_research_candles.apply_async") as publish:
+            result = ensure_research_candle_backfill(count=250)
+        self.assertEqual(result["status"], "cooldown")
+        self.assertEqual(result["run_id"], run.pk)
+        self.assertGreater(result["seconds_remaining"], 0)
+        publish.assert_not_called()
+        self.assertEqual(CandleBackfillRun.objects.filter(scope="research").count(), 1)
+
+    def test_research_scheduler_repairs_missing_terminal_completion_and_waits_full_cooldown(self):
+        run = CandleBackfillRun.objects.create(
+            scope="research",
+            status="failed",
+            count=250,
+            requested_at=timezone.now() - timedelta(hours=2),
+            completed_at=None,
+        )
+        with patch("apps.market_data.tasks.backfill_research_candles.apply_async") as publish:
+            result = ensure_research_candle_backfill(count=250)
+        run.refresh_from_db()
+        self.assertEqual(result["status"], "cooldown")
+        self.assertEqual(result["run_id"], run.pk)
+        self.assertIsNotNone(run.completed_at)
+        self.assertLess((timezone.now() - run.completed_at).total_seconds(), 5)
+        self.assertGreater(result["seconds_remaining"], 1790)
+        self.assertLessEqual(result["seconds_remaining"], 1800)
+        self.assertTrue(
+            CandleBackfillEvent.objects.filter(
+                run=run, event_type="completion_timestamp_repaired"
+            ).exists()
+        )
+        publish.assert_not_called()
+
+    def test_research_scheduler_fails_closed_when_dispatch_lock_is_held(self):
+        with patch(
+            "apps.market_data.backfill_lock.acquire_backfill_dispatch_lock",
+            return_value=None,
+        ), patch("apps.market_data.tasks.backfill_research_candles.apply_async") as publish:
+            result = ensure_research_candle_backfill(count=250)
+        self.assertEqual(result, {"status": "busy", "reason": "research_backfill_dispatch_lock_held"})
+        self.assertFalse(CandleBackfillRun.objects.filter(scope="research").exists())
+        publish.assert_not_called()
+
+    def test_expired_dispatch_lock_release_does_not_mask_task_result(self):
+        from redis.exceptions import LockNotOwnedError
+        from .backfill_lock import BackfillDispatchLock
+
+        lock = BackfillDispatchLock("research")
+        lock._lock = MagicMock()
+        lock._lock.release.side_effect = LockNotOwnedError("lock expired")
+        lock.release()
+        self.assertIsNone(lock._lock)
+
+    def test_research_backfill_scheduler_dispatches_after_30_minute_cooldown(self):
+        completed_at = timezone.now() - timedelta(minutes=31)
+        previous = CandleBackfillRun.objects.create(
+            scope="research",
+            status="completed",
+            count=250,
+            requested_at=completed_at - timedelta(minutes=5),
+            completed_at=completed_at,
+        )
+        with patch("apps.market_data.tasks.backfill_research_candles.apply_async") as publish:
+            publish.return_value.id = "scheduled-research-task"
+            result = ensure_research_candle_backfill(count=250)
+        self.assertEqual(result["status"], "dispatched")
+        self.assertEqual(result["queue"], "market_data")
+        self.assertEqual(CandleBackfillRun.objects.filter(scope="research").count(), 2)
+        scheduled = CandleBackfillRun.objects.exclude(pk=previous.pk).get(scope="research")
+        self.assertEqual(scheduled.status, "running")
+        self.assertEqual(scheduled.task_id, "scheduled-research-task")
+        self.assertEqual(publish.call_args.kwargs["args"], (scheduled.pk,))
+        self.assertEqual(publish.call_args.kwargs["queue"], "market_data")
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+    @patch("apps.market_data.historical.fetch_and_store_all_timeframes")
+    @patch("apps.market_data.tasks.ensure_research_candle_backfill.apply_async")
+    def test_research_completion_schedules_next_check_after_30_minutes(self, schedule_next, fetch):
+        fetch.return_value = {"symbol": "R_100", "timeframes": {"1m": {"source": "deriv_candles"}}}
+        result = backfill_research_candles.apply(kwargs={"count": 250})
+        self.assertEqual(result.state, "SUCCESS")
+        run = CandleBackfillRun.objects.get(scope="research")
+        run.refresh_from_db()
+        self.assertEqual(run.status, "completed")
+        schedule_next.assert_called_once()
+        self.assertEqual(schedule_next.call_args.kwargs["countdown"], 1800)
+        self.assertEqual(schedule_next.call_args.kwargs["queue"], "celery")
+
+    def test_research_backfill_scheduler_is_on_general_worker_queue(self):
+        self.assertEqual(
+            settings.CELERY_TASK_ROUTES[
+                "apps.market_data.tasks.ensure_research_candle_backfill"
+            ]["queue"],
+            "celery",
+        )
+        from deriv_platform.celery import app
+        entry = app.conf.beat_schedule["research-candle-backfill-completion-relative-scheduler"]
+        self.assertEqual(entry["task"], "apps.market_data.tasks.ensure_research_candle_backfill")
+        self.assertEqual(entry["schedule"], 60.0)
+        self.assertEqual(entry["options"]["queue"], "celery")
 
     def test_recovery_queue_helper_is_defined_and_canonical(self):
         from .tasks import BACKFILL_QUEUE, _recovery_backfill_queue

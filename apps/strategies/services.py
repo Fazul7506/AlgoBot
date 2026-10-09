@@ -138,8 +138,10 @@ class StrategyExecutionService:
         if stake in (None, '', 0, '0', 0.0): return {'status': 'skipped', 'reason': 'strategy_stake_not_configured'}
         allowed, used, limit = check(config.user, 'orders')
         if not allowed: return {'status': 'blocked', 'reason': 'ORDER_LIMIT_REACHED', 'used': used, 'limit': limit}
-        environment = str((account.credentials or {}).get('account_type') or '').lower().strip()
+        environment = str(getattr(account, 'account_type', '') or '').lower().strip()
         if environment == 'real':
+            if not bool(getattr(account.broker, 'supports_live', False)):
+                return {'status': 'blocked', 'reason': 'BROKER_NOT_LIVE_CAPABLE'}
             allowed_live, used_live, limit_live = check_live_order(config.user)
             if not allowed_live: return {'status': 'blocked', 'reason': 'LIVE_ORDER_LIMIT_REACHED', 'used': used_live, 'limit': limit_live}
             if not bool(getattr(__import__('django.conf', fromlist=['settings']).settings, 'ALLOW_LIVE_TRADING', False)): return {'status': 'blocked', 'reason': 'LIVE_TRADING_DISABLED'}
@@ -166,8 +168,8 @@ class StrategyExecutionService:
                     ai_context = {'market_data': market_data, 'indicators': indicator_data, 'strategy': {'confidence': result.get('confidence')}, 'risk': (config.parameters or {}).get('risk', {}), 'candles': handoff.get('candles', [])}
                     strategy_signal = result.get('signal')
                     strategy_confidence = result.get('confidence')
-                    prediction = PredictionService().predict(config.symbol, config.timeframe, ai_context)
-                    recommendation = RecommendationService().recommend(config.symbol, prediction)
+                    prediction = PredictionService().predict(config.symbol, config.timeframe, ai_context, user=config.user)
+                    recommendation = RecommendationService().recommend(config.symbol, prediction, user=config.user)
                     ai_consensus = (prediction.payload or {}).get('consensus') or {}
                     result = {**result, 'strategy_signal': strategy_signal, 'strategy_confidence': strategy_confidence,
                               'ai_recommendation': recommendation.recommendation if recommendation.recommendation in {'BUY', 'SELL'} else None,

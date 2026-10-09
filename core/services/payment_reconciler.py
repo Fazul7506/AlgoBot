@@ -76,7 +76,7 @@ class PaymentReconciler:
         return user_id, plan
 
     @classmethod
-    def reconcile(cls, *, provider, external_id, status, amount=None, currency="KES", metadata=None):
+    def reconcile(cls, *, provider, external_id, status, amount=None, currency="KES", metadata=None, require_existing_invoice=False):
         metadata = metadata if isinstance(metadata, dict) else {}
         provider = str(provider or "").strip().lower()
         external_id = str(external_id or "").strip()
@@ -97,6 +97,15 @@ class PaymentReconciler:
                 if reference:
                     invoice = Invoice.objects.select_for_update().filter(metadata__reference=reference, user=user).first()
             if not invoice:
+                if require_existing_invoice:
+                    return {
+                        "received": True,
+                        "provider": provider,
+                        "status": normalized,
+                        "external_id": external_id,
+                        "unresolved_invoice": True,
+                        "retryable": True,
+                    }
                 invoice = Invoice.objects.create(
                     user=user,
                     external_id=external_id,
@@ -226,10 +235,17 @@ class PaymentReconciler:
             subscription.plan = plan
         subscription.price_cents = invoice.amount_cents
         subscription.currency = str(invoice.currency or "KES").lower()
-        subscription.recurring = plan != "FREE"
+        provider = str((invoice.metadata or {}).get("provider") or "").lower()
+        provider_subscription_id = str((invoice.metadata or {}).get("subscription_id") or "").strip()
+        subscription.provider = provider
+        subscription.provider_subscription_id = provider_subscription_id
+        subscription.recurring = plan != "FREE" and provider == "intasend" and bool(provider_subscription_id)
         subscription.is_active = True
         subscription.renewed_at = timezone.now()
-        subscription.expires_at = timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30))) if subscription.recurring else None
+        subscription.expires_at = (
+            timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30)))
+            if plan and plan != "FREE" else None
+        )
         subscription.save()
 
         profile = getattr(user, "trading_profile", None)
@@ -299,6 +315,7 @@ class PaymentReconciler:
             amount=invoice_data.get("value") or invoice_data.get("amount") or invoice_data.get("net_amount"),
             currency=invoice_data.get("currency", "KES"),
             metadata=cls._sanitize_provider_payload({**data, **invoice_data}),
+            require_existing_invoice=True,
         )
         if result is not None:
             cls._finish_webhook(event, result.get("status", ""))
@@ -319,7 +336,9 @@ class PaymentReconciler:
         ack = {"orderNotificationType": data.get("OrderNotificationType") or data.get("orderNotificationType") or "IPNCHANGE", "orderTrackingId": str(tracking_id), "orderMerchantReference": merchant_reference, "status": 200}
         if not created and event.processed_at:
             return {"received": True, "duplicate": True, "provider": "pesapal", "external_id": str(tracking_id), "ipn_ack": ack}
-        result = cls.reconcile(provider="pesapal", external_id=str(tracking_id), status=verified.get("payment_status_description"), amount=verified.get("amount"), currency=verified.get("currency", "KES"), metadata={"merchant_reference": merchant_reference, "pesapal": verified})
+        result = cls.reconcile(provider="pesapal", external_id=str(tracking_id), status=verified.get("payment_status_description"), amount=verified.get("amount"), currency=verified.get("currency", "KES"), metadata={"merchant_reference": merchant_reference, "pesapal": verified},
+            require_existing_invoice=True,
+        )
         if result is not None:
             cls._finish_webhook(event, result.get("status", ""))
             result["ipn_ack"] = ack

@@ -82,8 +82,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         account=self.get_object()
         if str(account.status).lower()!='active':return response.Response({'detail':'The selected broker account is not active.'},status=status.HTTP_409_CONFLICT)
         if not account.is_connection_eligible:return response.Response({'detail':'The selected broker account is not connected and ready.'},status=status.HTTP_409_CONFLICT)
-        credentials=account.credentials or {};actual=str(credentials.get('account_type') or '').lower().strip()
-        if not actual and isinstance(credentials.get('realtime'),dict):actual=str(credentials['realtime'].get('account_type') or '').lower().strip()
+        actual = account.account_type
         requested=str(request.data.get('account_type') or '').lower().strip()
         if requested not in {'demo','real'}:requested=''
         if actual not in {'demo','real'}:return response.Response({'detail':'The broker has not confirmed this account type yet. Synchronize the account first.'},status=status.HTTP_409_CONFLICT)
@@ -139,7 +138,12 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     def open(self,request):return response.Response(self.get_serializer(self.get_queryset().filter(status='open'),many=True).data)
 class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=TradeReconciliationSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
-    def get_queryset(self):return TradeReconciliation.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
+    def get_queryset(self):
+        # Reconciliation payloads can contain account and execution identifiers. A broker-level
+        # filter leaks other customers' trades when they use the same provider; scope by the
+        # explicit local order association written by ReconciliationService.
+        user_order_ids = Order.objects.filter(user=self.request.user).values_list('pk', flat=True)
+        return TradeReconciliation.objects.filter(trade__algobot_order_id__in=user_order_ids).distinct()
 class BrokerHealthViewSet(viewsets.ViewSet):
     permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def list(self,request):
@@ -153,8 +157,9 @@ def connect_broker(request):
     broker_id=request.data.get('broker_id') or request.data.get('broker');account_id=request.data.get('account_id')
     if not broker_id or not account_id:return response.Response({'detail':'broker_id and account_id are required.'},status=status.HTTP_400_BAD_REQUEST)
     broker=get_object_or_404(Broker,pk=broker_id);account=get_object_or_404(BrokerAccount,pk=account_id,user=request.user,broker=broker)
-    allowed,used,limit=check(request.user,'broker_accounts',amount=0)
-    if limit>=0 and used>limit:return response.Response({'detail':f'Your {effective_plan(request.user).name} broker-account capacity is exceeded. Upgrade the plan to authorize all connected accounts.','code':'BROKER_ACCOUNT_LIMIT_REACHED','used':used,'limit':limit},status=status.HTTP_429_TOO_MANY_REQUESTS)
+    already_counted = account.status == 'active' and BrokerConnection.objects.filter(broker_account=account, status='connected').exists()
+    allowed,used,limit=check(request.user,'broker_accounts',amount=0 if already_counted else 1)
+    if not allowed:return response.Response({'detail':f'Your {effective_plan(request.user).name} broker-account capacity would be exceeded by this connection. Upgrade your plan or disconnect another account first.','code':'BROKER_ACCOUNT_LIMIT_REACHED','used':used,'requested':1,'limit':limit},status=status.HTTP_429_TOO_MANY_REQUESTS)
     try:
         connection=_run_bounded(BrokerConnectionService().connect(broker,account),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
         account.refresh_from_db()

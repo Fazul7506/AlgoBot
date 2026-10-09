@@ -43,6 +43,7 @@
 
   function accountIsConnected(account) {
     if (!account) return false;
+    if (account.is_connected === false) return false;
     if (account.is_connected === true) return true;
     const value = String(account.status || account.connection_status || account.connection_state || '').trim().toLowerCase();
     return ['connected', 'ready', 'active', 'online', 'synchronized', 'syncing', 'degraded'].includes(value);

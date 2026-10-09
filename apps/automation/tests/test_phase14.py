@@ -13,13 +13,16 @@ class AutomationEngineTests(TestCase):
     def test_event_dispatches_rule_action(self):
         AutomationRule.objects.create(name="Risk", trigger={"type": "risk_alert", "event": "RiskAlert"}, action={"type": "send_notification"})
         result = AutomationEngine().handle_event("RiskAlert", {"severity": "critical"})
-        self.assertEqual(result.status, "completed")
+        self.assertEqual(result.status, "not_configured")
         self.assertEqual(len(result.result["results"]), 1)
+        self.assertEqual(result.result["results"][0]["status"], "not_dispatched")
 
     def test_workflow_execution_records_audit(self):
         user = get_user_model().objects.create_user(username="auto", password="x")
         workflow = Workflow.objects.create(user=user, name="Daily Trading", status="pending")
         WorkflowNode.objects.create(workflow=workflow, node_type="action", configuration={"type": "pause_strategy"})
         execution = WorkflowExecutionService().run(workflow, {"event": "manual"})
-        self.assertEqual(execution.status, "completed")
+        self.assertEqual(execution.status, "pending")
         self.assertEqual(execution.result["nodes_executed"], 1)
+        self.assertEqual(execution.result["status"], "dispatch_not_configured")
+        self.assertEqual(execution.result["audit"][0]["status"], "not_dispatched")

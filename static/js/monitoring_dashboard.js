@@ -9,8 +9,8 @@
     try {
       const response = await window.AlgoBotFrontendData.request('/api/monitoring/dashboard/', {}, 10000);
       const data = response;
-      setText('[data-system-status]', data.overall_system_health ?? 'Unknown');
-      setText('[data-broker-status]', data.broker_status ?? 'Unknown');
+      setText('[data-system-status-text]', data.overall_system_health ?? 'Unknown');
+      setText('[data-broker-status-text]', data.broker_status ?? 'Unknown');
       setText('[data-current-trades]', data.current_trades ?? 0);
       setText('[data-active-alerts]', data.active_alerts ?? 0);
       setText('[data-open-incidents]', data.open_incidents ?? 0);
@@ -19,7 +19,7 @@
     } catch (error) {
       if (updated) updated.textContent = `refresh failed (${error.message})`;
     } finally {
-      if (refresh) { refresh.disabled = false; refresh.textContent = 'Refresh telemetry'; }
+      if (refresh) { refresh.disabled = false; refresh.textContent = 'Refresh'; }
     }
   };
   refresh?.addEventListener('click', load);

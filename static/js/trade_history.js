@@ -20,11 +20,18 @@
   const exportButton = $('[data-history-export]');
   let page = 1;
   let lastPayload = null;
+  let requestSeq = 0;
+  let activeAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
 
   const esc = value => String(value ?? '—').replace(/[&<>'"]/g, ch => ({
     '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'
   }[ch]));
-  const money = (value, code) => value == null ? '—' : `${esc(value)} ${esc(code || '')}`.trim();
+  const money = (value, code) => {
+    if (value == null || value === '') return '—';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    return `${n.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 8})} ${esc(code || '')}`.trim();
+  };
   const time = value => {
     if (!value) return '—';
     const d = new Date(value);
@@ -108,6 +115,8 @@
     if (payload.account) {
       currency.textContent = `Currency: ${payload.account.currency || '—'}`;
       syncTime.textContent = `Last synchronization: ${time(payload.account.last_synced_at)}`;
+      const accountName = $('[data-history-account-name]');
+      if (accountName) accountName.textContent = `Deriv · ${payload.account.broker_account_id || payload.account.id || 'selected account'}`;
     }
     message.textContent = payload.error
       ? `${payload.error.detail || 'Broker history synchronization failed.'} Existing rows, if any, are explicitly marked stale.`
@@ -122,16 +131,21 @@
 
   async function load(targetPage = 1, refreshBroker = true) {
     page = targetPage;
+    const seq = ++requestSeq;
+    const requestedAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
     refresh.disabled = true;
     state.textContent = 'Synchronizing…';
     message.textContent = '';
     tbody.innerHTML = '<tr><td colspan="12">Retrieving authoritative Deriv history…</td></tr>';
     try {
       const payload = await window.AlgoBotAPI.apiClient.get(`/api/trade-history/?${params(page, refreshBroker).toString()}`);
+      const currentAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
+      if (seq !== requestSeq || requestedAccountId !== currentAccountId) return;
       lastPayload = payload;
       renderRows(payload.results || []);
       renderMeta(payload);
     } catch (error) {
+      if (seq !== requestSeq) return;
       const payload = error?.payload || {};
       state.textContent = error?.status === 401 ? 'Authentication required' : 'Broker unavailable';
       message.textContent = payload.detail || payload.error?.detail || 'Broker Trade History could not be retrieved. No fabricated records were generated.';
@@ -139,7 +153,7 @@
       prev.disabled = true;
       next.disabled = true;
     } finally {
-      refresh.disabled = false;
+      if (seq === requestSeq) refresh.disabled = false;
     }
   }
 
@@ -156,14 +170,32 @@
     const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `algobot-deriv-trade-history-${new Date().toISOString().slice(0,10)}.csv`;
+    link.download = `algobot-deriv-trade-history-page-${page}-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   [refresh, apply].forEach(control => control.addEventListener('click', () => load(1, true)));
   prev.addEventListener('click', () => load(Math.max(1, page - 1), false));
   next.addEventListener('click', () => load(page + 1, false));
   exportButton.addEventListener('click', exportCsv);
+  window.AlgoBotBrokerState?.subscribe?.(() => {
+    const account = window.AlgoBotBrokerState?.get?.()?.account;
+    const nextId = account?.id == null ? null : String(account.id);
+    if (nextId === activeAccountId) return;
+    activeAccountId = nextId;
+    requestSeq += 1;
+    lastPayload = null;
+    $('[data-history-account-name]').textContent = nextId ? `Deriv · ${account?.account_id || 'selected account'}` : 'No selected Deriv account';
+    state.textContent = nextId ? 'Synchronizing selected account…' : 'No selected account';
+    currency.textContent = 'Currency: —';
+    syncTime.textContent = 'Last synchronization: —';
+    message.textContent = 'Account changed. Previous account history has been cleared.';
+    tbody.innerHTML = '<tr><td colspan="12">Loading selected account history…</td></tr>';
+    prev.disabled = true; next.disabled = true;
+    if (nextId) load(1, true);
+  });
   load();
 })();

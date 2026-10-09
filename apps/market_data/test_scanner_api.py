@@ -116,10 +116,27 @@ class MarketScannerApiTests(TestCase):
         self.assertEqual(
             self.client.get("/api/market/scanner/?trend=sideways").status_code, 400
         )
+        self.assertEqual(
+            self.client.get("/api/market/scanner/?min_rsi=NaN").status_code, 400
+        )
+        self.assertEqual(
+            self.client.get("/api/market/scanner/?max_rsi=101").status_code, 400
+        )
+        self.assertEqual(
+            self.client.get("/api/market/scanner/?min_change=5&max_change=-5").status_code, 400
+        )
 
     def test_stale_snapshot_is_not_classified_as_current_opportunity(self):
         snapshot = self.gainer.snapshot
         snapshot.timestamp = timezone.now() - timedelta(seconds=61)
+        snapshot.save(update_fields=["timestamp"])
+        response = self.client.get("/api/market/scanner/?direction=gainers")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"], [])
+
+    def test_future_dated_snapshot_is_not_fresh(self):
+        snapshot = self.gainer.snapshot
+        snapshot.timestamp = timezone.now() + timedelta(seconds=60)
         snapshot.save(update_fields=["timestamp"])
         response = self.client.get("/api/market/scanner/?direction=gainers")
         self.assertEqual(response.status_code, 200)

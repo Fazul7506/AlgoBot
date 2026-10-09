@@ -120,7 +120,7 @@ class OrderManagementSystem:
         order = Order.objects.create(user=user, broker=account.broker, account=account, status='created', **{k: v for k, v in data.items() if k != 'account'})
         order.status = 'validated'; order.save(update_fields=['status', 'updated_at']); return order
     def _validate_environment(self, account, routing):
-        verified = str((account.credentials or {}).get('account_type') or '').lower().strip()
+        verified = account.account_type
         requested = str(routing.get('account_type') or '').lower().strip()
         if not verified:
             raise BrokerRoutingError('Broker account environment has not been verified; synchronize the account before trading.')
@@ -153,21 +153,57 @@ class ExecutionManagementSystem:
             result = await asyncio.wait_for(adapter.place_order(order), timeout=timeout)
         except asyncio.TimeoutError as exc:
             await self._mark_connection_issue(order, 'unknown_timeout')
-            await sync_to_async(TradeReconciliation.objects.create)(broker=order.broker, trade={'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unknown_timeout'}, matched=False, difference={'order': 'broker_response_unknown'}, repaired=False)
+            await sync_to_async(TradeReconciliation.objects.create)(broker=order.broker, trade={'algobot_order_id': order.pk, 'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unknown_timeout'}, matched=False, difference={'order': 'broker_response_unknown'}, repaired=False)
             raise BrokerConnectionError('Broker order placement timed out; execution state is unknown and must be reconciled before retrying.') from exc
         except BrokerAuthenticationError:
             order.status = 'rejected'; await sync_to_async(order.save)(update_fields=['status', 'updated_at']); raise
         except BrokerConnectionError:
             await self._mark_connection_issue(order, 'unknown_connection_error')
-            await sync_to_async(TradeReconciliation.objects.create)(broker=order.broker, trade={'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unknown_connection_error'}, matched=False, difference={'order': 'broker_response_unknown'}, repaired=False)
+            await sync_to_async(TradeReconciliation.objects.create)(broker=order.broker, trade={'algobot_order_id': order.pk, 'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unknown_connection_error'}, matched=False, difference={'order': 'broker_response_unknown'}, repaired=False)
             raise
         except BrokerOrderError:
             order.status = 'rejected'; await sync_to_async(order.save)(update_fields=['status', 'updated_at']); raise
         except Exception:
             order.status = 'failed'; await sync_to_async(order.save)(update_fields=['status', 'updated_at']); raise
-        latency = (time.perf_counter() - start) * 1000; status_value = 'filled' if result.get('status') in ['filled', 'executed'] else result.get('status', 'executed')
+        if not isinstance(result, dict):
+            await self._mark_connection_issue(order, 'malformed_broker_response')
+            await sync_to_async(TradeReconciliation.objects.create)(
+                broker=order.broker,
+                trade={'algobot_order_id': order.pk, 'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'malformed_broker_response'},
+                matched=False,
+                difference={'order': 'broker_response_invalid'},
+                repaired=False,
+            )
+            raise BrokerConnectionError('Broker returned an invalid order response; execution state is unknown and must be reconciled before retrying.')
+        reported_status = str(result.get('status') or '').strip().lower()
+        if reported_status in {'rejected', 'failed', 'error'}:
+            order.status = 'rejected' if reported_status == 'rejected' else 'failed'
+            await sync_to_async(order.save)(update_fields=['status', 'updated_at'])
+            raise BrokerOrderError(str(result.get('detail') or result.get('message') or 'Broker rejected the order.'))
+        broker_order_id = str(result.get('broker_order_id') or '').strip()
+        if not broker_order_id:
+            await self._mark_connection_issue(order, 'missing_broker_order_id')
+            await sync_to_async(TradeReconciliation.objects.create)(
+                broker=order.broker,
+                trade={'algobot_order_id': order.pk, 'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'missing_broker_order_id', 'broker_response': result},
+                matched=False,
+                difference={'order': 'broker_order_id_missing'},
+                repaired=False,
+            )
+            raise BrokerConnectionError('Broker returned no order identifier; execution state is unknown and must be reconciled before retrying.')
+        if reported_status not in {'filled', 'executed', 'partially_filled', 'pending', 'submitted', 'queued', 'open'}:
+            await self._mark_connection_issue(order, 'unrecognized_broker_status')
+            await sync_to_async(TradeReconciliation.objects.create)(
+                broker=order.broker,
+                trade={'algobot_order_id': order.pk, 'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unrecognized_broker_status', 'broker_response': result},
+                matched=False,
+                difference={'order': 'broker_status_unrecognized'},
+                repaired=False,
+            )
+            raise BrokerConnectionError('Broker returned an unrecognized order status; execution state is unknown and must be reconciled before retrying.')
+        latency = (time.perf_counter() - start) * 1000; status_value = 'filled' if reported_status in ['filled', 'executed'] else reported_status
         requested = order.price or Decimal('0'); executed_value = result.get('execution_price'); executed = Decimal(str(executed_value if executed_value is not None else requested or 0)); slippage = executed - requested
-        order.status = status_value; order.broker_order_id = str(result.get('broker_order_id', '')); update_fields = ['status', 'broker_order_id', 'updated_at']
+        order.status = status_value; order.broker_order_id = broker_order_id; update_fields = ['status', 'broker_order_id', 'updated_at']
         if status_value in {'filled', 'executed', 'partially_filled'}: order.executed_at = timezone.now(); update_fields.append('executed_at')
         await sync_to_async(order.save)(update_fields=update_fields)
         return await sync_to_async(ExecutionReport.objects.create)(order=order, execution_price=executed, requested_price=requested, slippage=slippage, latency=result.get('latency', latency), fees=Decimal(str(result.get('fees', 0))), status=status_value, raw_report=result)
@@ -182,12 +218,15 @@ class ExecutionEngine:
         client_order_id = str(data.get('client_order_id') or '').strip()
         if account.user_id != user.id: raise BrokerRoutingError('The selected broker account does not belong to this user')
         if not account.is_connection_eligible: raise BrokerRoutingError('The selected broker account is not connected or its credentials are not usable')
-        verified_environment = str((account.credentials or {}).get('account_type') or '').lower().strip()
+        verified_environment = account.account_type
         requested_environment = str(routing.get('account_type') or '').lower().strip()
         if requested_environment and requested_environment != verified_environment:
             raise BrokerRoutingError(f'Execution environment mismatch: selected account is {verified_environment}, request asked for {requested_environment}.')
-        if verified_environment == 'real' and not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)):
-            raise BrokerRoutingError('Live-money trading is disabled by platform configuration.')
+        if verified_environment == 'real':
+            if not bool(getattr(account.broker, 'supports_live', False)):
+                raise BrokerRoutingError('The selected broker account is real-money but this broker is not live-trading capable.')
+            if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)):
+                raise BrokerRoutingError('Live-money trading is disabled by platform configuration.')
         if client_order_id:
             existing = Order.objects.filter(user=user, account=account, client_order_id=client_order_id).order_by('-id').first()
             if existing:
@@ -267,7 +306,9 @@ class ReconciliationService:
         observed_reference = str((broker_trade or {}).get('broker_order_id') or (broker_trade or {}).get('order_id') or '')
         matched = bool(expected_reference and observed_reference and expected_reference == observed_reference)
         diff = {} if matched else {'order': 'missing_or_mismatched', 'expected_reference': expected_reference, 'observed_reference': observed_reference}
-        rec = TradeReconciliation.objects.create(broker=order.broker, trade=broker_trade or {}, matched=matched, difference=diff, repaired=False)
+        trade_payload = dict(broker_trade or {})
+        trade_payload['algobot_order_id'] = order.pk
+        rec = TradeReconciliation.objects.create(broker=order.broker, trade=trade_payload, matched=matched, difference=diff, repaired=False)
         if matched:
             if order.status == 'pending':
                 order.status = 'reconciled'; order.save(update_fields=['status', 'updated_at'])

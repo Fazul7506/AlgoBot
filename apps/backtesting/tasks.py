@@ -1,5 +1,6 @@
 import importlib
 import logging
+import math
 import os
 from datetime import datetime, timezone as dt_timezone, timedelta
 from decimal import Decimal, InvalidOperation
@@ -27,7 +28,7 @@ def _strategy_confidence(result):
     sharpe = float(result.get('sharpe_ratio', 0) or 0)
     drawdown = abs(float(result.get('max_drawdown', result.get('maximum_drawdown', 0)) or 0))
     sample_score = min(1.0, trades / 100.0)
-    pf_score = min(1.0, max(0.0, pf / 2.0)) if pf != float('inf') else 1.0
+    pf_score = 1.0 if result.get('profit_factor_unbounded') else min(1.0, max(0.0, pf / 2.0))
     sharpe_score = min(1.0, max(0.0, (sharpe + 1.0) / 3.0))
     dd_score = 1.0 / (1.0 + drawdown / 100.0)
     score = 100.0 * (0.35 * win_rate + 0.25 * pf_score + 0.15 * sharpe_score + 0.15 * dd_score + 0.10 * sample_score)
@@ -36,9 +37,23 @@ def _strategy_confidence(result):
 
 def _decimal(value, default='0'):
     try:
-        return Decimal(str(value if value is not None else default))
+        result = Decimal(str(value if value is not None else default))
+        return result if result.is_finite() else Decimal(default)
     except (InvalidOperation, TypeError, ValueError):
         return Decimal(default)
+
+
+def _json_safe(value):
+    """Replace non-finite numeric values before writing PostgreSQL JSONB."""
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, Decimal) and not value.is_finite():
+        return None
+    return value
 
 
 def _trade_datetime(value):
@@ -83,7 +98,7 @@ def _persist_trades(backtest, result):
             profit=_decimal(raw.get('profit', raw.get('pnl', 0))),
             fees=_decimal(raw.get('fees', 0)),
             duration=duration,
-            metadata=raw,
+            metadata=_json_safe(raw),
         ))
     if rows:
         BacktestTrade.objects.bulk_create(rows, batch_size=500)
@@ -93,22 +108,24 @@ def _persist_trades(backtest, result):
 def _persist_statistics(backtest, result):
     from .models import BacktestStatistics
     pf = result.get('profit_factor', 0)
-    if pf == float('inf'):
+    # The decimal column cannot store infinity/NULL; keep its legacy numeric
+    # fallback while the JSON metrics preserve profit_factor_unbounded.
+    if pf is None or (isinstance(pf, float) and not math.isfinite(pf)):
         pf = 0
     return BacktestStatistics.objects.update_or_create(
         backtest=backtest,
         defaults={
-            'net_profit': result.get('net_profit', result.get('total_profit', 0)),
-            'gross_profit': result.get('gross_profit', 0),
-            'gross_loss': result.get('gross_loss', 0),
+            'net_profit': result.get('net_profit') or 0,
+            'gross_profit': result.get('gross_profit') or 0,
+            'gross_loss': result.get('gross_loss') or 0,
             'profit_factor': pf,
-            'expectancy': result.get('expectancy', 0),
+            'expectancy': result.get('expectancy') or 0,
             'win_rate': result.get('win_rate', 0),
             'loss_rate': result.get('loss_rate', 0),
-            'drawdown': result.get('maximum_drawdown', result.get('max_drawdown', 0)),
-            'sharpe': result.get('sharpe_ratio', 0),
-            'sortino': result.get('sortino_ratio', 0),
-            'calmar': result.get('calmar_ratio', 0),
+            'drawdown': result.get('maximum_drawdown') or result.get('max_drawdown') or 0,
+            'sharpe': result.get('sharpe_ratio') or 0,
+            'sortino': result.get('sortino_ratio') or 0,
+            'calmar': result.get('calmar_ratio') or 0,
             'metrics': result,
             'equity_curve': result.get('equity_curve', []),
             'monthly_returns': result.get('monthly_returns', {}),
@@ -155,20 +172,21 @@ def _window_result(result, start_epoch, end_epoch):
         except (TypeError, ValueError):
             continue
         if entry >= start_epoch and exit_epoch <= end_epoch:
-            trades.append(trade)
+            try:
+                score = float(trade.get('directional_score', trade.get('profit', trade.get('pnl', 0))) or 0)
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if not math.isfinite(score):
+                continue
+            # StrategyService currently scores direction (+1/-1) against the
+            # next close. That is not money P&L and has no stake, spread, fee,
+            # slippage or contract payout model.
+            trades.append({**trade, 'directional_score': score, 'profit': None})
 
-    profits = [float(trade.get('profit', trade.get('pnl', 0)) or 0) for trade in trades]
-    wins = sum(p > 0 for p in profits)
-    losses = sum(p < 0 for p in profits)
-    total_profit = float(sum(profits))
-    gross_profit = float(sum(p for p in profits if p > 0))
-    gross_loss = float(abs(sum(p for p in profits if p < 0)))
-    expectancy = total_profit / len(profits) if profits else 0.0
-    profit_factor = gross_profit / gross_loss if gross_loss else (float('inf') if gross_profit else 0.0)
-    equity = [1000.0]
-    for profit in profits:
-        equity.append(equity[-1] + profit)
-    max_drawdown = max((max(equity[:i + 1]) - equity[i] for i in range(len(equity))), default=0.0)
+    scores = [float(trade.get('directional_score', 0) or 0) for trade in trades]
+    wins = sum(score > 0 for score in scores)
+    losses = sum(score < 0 for score in scores)
+    directional_score = float(sum(scores))
 
     return {
         **result,
@@ -177,17 +195,24 @@ def _window_result(result, start_epoch, end_epoch):
         'wins': wins,
         'losses': losses,
         'win_rate': (wins / len(trades) * 100) if trades else 0.0,
+        'directional_hit_rate': (wins / len(trades) * 100) if trades else 0.0,
         'loss_rate': (losses / len(trades) * 100) if trades else 0.0,
-        'expectancy': expectancy,
-        'gross_profit': gross_profit,
-        'gross_loss': gross_loss,
-        'profit_factor': profit_factor,
-        'total_profit': total_profit,
-        'roi': total_profit / 1000 * 100,
-        'max_drawdown': max_drawdown,
-        'sharpe_ratio': 0,
-        'sortino_ratio': 0,
-        'equity_curve': equity,
+        'directional_score': directional_score,
+        'performance_basis': 'directional_unit_score_no_costs',
+        'financial_metrics_available': False,
+        'expectancy': None,
+        'gross_profit': None,
+        'gross_loss': None,
+        'profit_factor': None,
+        'profit_factor_unbounded': False,
+        'total_profit': None,
+        'net_profit': None,
+        'roi': None,
+        'max_drawdown': None,
+        'maximum_drawdown': None,
+        'sharpe_ratio': None,
+        'sortino_ratio': None,
+        'equity_curve': [],
         'evaluation_start_epoch': start_epoch,
         'evaluation_end_epoch': end_epoch,
         'warmup_trade_count': int(result.get('total_trades', 0) or 0) - len(trades),
@@ -203,24 +228,36 @@ def execute_backtest(backtest_id):
     from apps.strategies.models import Strategy as StrategyModel
     from apps.strategies.services import StrategyService
 
-    backtest = Backtest.objects.get(pk=backtest_id)
-    _cluster_update(
-        backtest_id,
-        status='running',
-        worker_id=os.getenv('HOSTNAME', 'celery-worker')[:120],
-        locked_at=timezone.now(),
-        attempts=F('attempts') + 1,
-    )
-    strategy = StrategyModel.objects.filter(name__iexact=backtest.strategy).first()
-    if not strategy:
-        backtest.status = 'failed'
-        backtest.result_snapshot = {'status': 'failed', 'code': 'STRATEGY_NOT_FOUND', 'error': 'Strategy no longer exists in the strategy catalog.', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat()}
-        backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
-        _cluster_update(backtest_id, status='failed', locked_at=None)
-        return backtest.id
-    try:
+    # A queued Celery message may arrive after cancellation, retry, or edit.
+    # Claim only the current pending version, and use the version as a fencing
+    # token so an older worker cannot overwrite a newer result.
+    with transaction.atomic():
+        backtest = Backtest.objects.select_for_update().filter(pk=backtest_id).first()
+        if backtest is None:
+            return None
+        if backtest.status != 'pending':
+            return backtest.id
+        claimed_version = backtest.result_version
         backtest.status = 'running'
         backtest.save(update_fields=['status', 'updated_at'])
+        _cluster_update(
+            backtest_id,
+            status='running',
+            worker_id=os.getenv('HOSTNAME', 'celery-worker')[:120],
+            locked_at=timezone.now(),
+            attempts=F('attempts') + 1,
+        )
+    strategy = StrategyModel.objects.filter(name__iexact=backtest.strategy).first()
+    if not strategy:
+        with transaction.atomic():
+            current = Backtest.objects.select_for_update().filter(pk=backtest_id).first()
+            if current is not None and current.status == 'running' and current.result_version == claimed_version:
+                current.status = 'failed'
+                current.result_snapshot = {'status': 'failed', 'code': 'STRATEGY_NOT_FOUND', 'error': 'Strategy no longer exists in the strategy catalog.', 'start_date': current.start_date.isoformat(), 'end_date': current.end_date.isoformat()}
+                current.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+                _cluster_update(backtest_id, status='failed', locked_at=None)
+        return backtest.id
+    try:
         evaluation_start_epoch = int(backtest.start_date.timestamp())
         evaluation_end_epoch = int(backtest.end_date.timestamp())
         calculation_start = _warmup_start(backtest)
@@ -233,22 +270,32 @@ def execute_backtest(backtest_id):
             mode=backtest.mode,
         )
         result = _window_result(result if isinstance(result, dict) else {}, evaluation_start_epoch, evaluation_end_epoch)
-        result['strategy_confidence'] = _strategy_confidence(result)
+        result['research_score'] = _strategy_confidence(result)
+        result['research_score_basis'] = 'heuristic_directional_hit_rate_not_calibrated'
+        result['strategy_confidence'] = None
+        result = _json_safe(result)
         result['research_training'] = {'eligible': bool(result.get('total_trades', 0)), 'purpose': 'ai_training_research_only', 'live_authority': False, 'source': 'completed_historical_backtest'}
         with transaction.atomic():
-            trade_count = _persist_trades(backtest, result)
-            _persist_statistics(backtest, result)
+            current = Backtest.objects.select_for_update().filter(pk=backtest_id).first()
+            if current is None or current.status != 'running' or current.result_version != claimed_version:
+                # Cancellation/retry/edit won the race; this worker's result is stale.
+                return backtest_id
+            trade_count = _persist_trades(current, result)
+            _persist_statistics(current, result)
             result['persisted_trade_count'] = trade_count
-            backtest.status = 'completed'
-            backtest.result_snapshot = {'status': 'completed', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat(), 'strategy': strategy.name, 'symbol': backtest.symbol, 'timeframe': backtest.timeframe, 'result': result}
-            backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+            current.status = 'completed'
+            current.result_snapshot = {'status': 'completed', 'start_date': current.start_date.isoformat(), 'end_date': current.end_date.isoformat(), 'strategy': strategy.name, 'symbol': current.symbol, 'timeframe': current.timeframe, 'result': result}
+            current.save(update_fields=['status', 'result_snapshot', 'updated_at'])
             _cluster_update(backtest_id, status='completed', locked_at=None)
         return backtest.id
     except Exception as exc:
-        backtest.status = 'failed'
-        backtest.result_snapshot = {'status': 'failed', 'code': 'BACKTEST_EXECUTION_FAILED', 'error': f'{exc.__class__.__name__}: {exc}', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat()}
-        backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
-        _cluster_update(backtest_id, status='failed', locked_at=None)
+        with transaction.atomic():
+            current = Backtest.objects.select_for_update().filter(pk=backtest_id).first()
+            if current is not None and current.status == 'running' and current.result_version == claimed_version:
+                current.status = 'failed'
+                current.result_snapshot = {'status': 'failed', 'code': 'BACKTEST_EXECUTION_FAILED', 'error': f'{exc.__class__.__name__}: {exc}', 'start_date': current.start_date.isoformat(), 'end_date': current.end_date.isoformat()}
+                current.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+                _cluster_update(backtest_id, status='failed', locked_at=None)
         log.exception('Backtest worker failed', extra={'backtest_id': backtest_id})
         raise
 

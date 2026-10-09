@@ -6,7 +6,7 @@
   const $ = (selector) => document.querySelector(selector);
   const list = (value) => Array.isArray(value) ? value : (Array.isArray(value?.data) ? value.data : (Array.isArray(value?.results) ? value.results : []));
   const esc = (value) => { const node = document.createElement('div'); node.textContent = String(value ?? ''); return node.innerHTML; };
-  const money = (value, currency = 'USD') => { if (value == null || value === '' || Number.isNaN(Number(value))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8})}`; };
+  const money = (value, currency = 'USD') => { if (value == null || value === '' || !Number.isFinite(Number(value))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8})}`; };
   const setText = (selector, value) => { const node = $(selector); if (node) node.textContent = value; };
   const setHtml = (selector, value) => { const node = $(selector); if (node) node.innerHTML = value; };
   const empty = (message) => `<div class="empty-state">${esc(message)}</div>`;
@@ -15,6 +15,7 @@
   let timer = null;
   let lastLoadedAt = null;
   let selectedAccountId = null;
+  let loadSeq = 0;
   const REFRESH_MS = 45000;
   const ACCOUNT_TIMEOUT_MS = 15000;
   const SNAPSHOT_KEY = 'algobot:dashboard:last-verified-account:v2';
@@ -94,8 +95,8 @@
 
     renderRows('[data-dashboard-positions]', positions, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.profit ?? item.pnl ?? item.profit_loss ?? '—')}</b></div>`, result.positions.ok ? 'No open positions reported by the backend.' : 'Position service unavailable.');
     renderRows('[data-dashboard-orders]', orders, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.status || 'Unknown')}</b></div>`, result.orders.ok ? 'No orders reported by the backend.' : 'Order service unavailable.');
-    renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol?.display_name || item.display_name || item.symbol || 'Market')}</strong><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid)} · Ask ${esc(item.ask_price ?? item.ask)}` : 'Broker market catalogue'}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.ok ? 'No market snapshot is currently available.' : 'Market data service unavailable.');
-    renderRows('[data-dashboard-signals]', signals, item => `<div class="signal-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')} · ${esc(item.direction || item.signal || 'HOLD')}</strong><span>${esc(item.strategy?.name || item.strategy || item.market_regime || '')}</span><b>${item.confidence != null ? `${Number(item.confidence).toFixed(0)}%` : '—'}</b></div>`, result.signals.ok ? 'No recent backend signals.' : 'Signal service unavailable.');
+    renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol?.display_name || item.display_name || item.symbol || 'Market')}</strong><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid ?? 'Unavailable')} · Ask ${esc(item.ask_price ?? item.ask ?? 'Unavailable')}` : 'Broker market catalogue'}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.ok ? 'No market snapshot is currently available.' : 'Market data service unavailable.');
+    renderRows('[data-dashboard-signals]', signals, item => `<div class="signal-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')} · ${esc(item.direction || item.signal || 'HOLD')}</strong><span>${esc(item.strategy?.name || item.strategy || item.market_regime || '')}</span><b>${item.confidence != null && Number.isFinite(Number(item.confidence)) ? `${Number(item.confidence).toFixed(0)}%` : '—'}</b></div>`, result.signals.ok ? 'No recent backend signals.' : 'Signal service unavailable.');
 
     status('positions', result.positions.ok ? (positions.length ? 'ok' : 'warn') : 'error', result.positions.ok ? (positions.length ? 'Exposure available' : 'No open positions') : 'Position service unavailable');
     status('execution', result.orders.ok ? (orders.length ? 'ok' : 'warn') : 'error', result.orders.ok ? (orders.length ? 'Execution feed available' : 'No recent orders') : 'Order service unavailable');
@@ -110,13 +111,14 @@
   }
 
   async function load() {
-    if (busy) return;
+    const seq = ++loadSeq;
+    const active = window.AlgoBotBrokerState?.get?.()?.account;
+    const requestedAccountId = active?.id != null ? String(active.id) : null;
+    if (requestedAccountId != null) selectedAccountId = requestedAccountId;
     busy = true;
     setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
     document.documentElement.dataset.dashboardLoading = 'true';
     try {
-      const active = window.AlgoBotBrokerState?.get?.()?.account;
-      if (active?.id != null) selectedAccountId = String(active.id);
       const responses = await Promise.allSettled([
         request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS),
         request('/api/positions/open/', {}, 8000),
@@ -124,6 +126,8 @@
         request('/api/market/snapshots/all_snapshots/', {}, 8000),
         request('/api/dashboard/signals/?limit=8', {}, 8000)
       ]);
+      const currentId = window.AlgoBotBrokerState?.get?.()?.account?.id;
+      if (seq !== loadSeq || (requestedAccountId != null && currentId != null && String(currentId) !== requestedAccountId)) return;
       const [account, positions, orders, markets, signals] = responses;
       if (account.status === 'fulfilled') renderAccount(account.value?.data?.account || account.value?.account || null);
       else if (account.reason?.code === 'API_TIMEOUT') {
@@ -144,20 +148,25 @@
       setText('[data-dashboard-sync]', `Updated ${lastLoadedAt.toLocaleTimeString()} · snapshot only`);
       window.dispatchEvent(new CustomEvent('algobot:dashboard-updated', {detail: {timestamp: lastLoadedAt.toISOString()}}));
     } catch (error) {
+      if (seq !== loadSeq) return;
       setText('[data-dashboard-sync]', 'Dashboard update failed · last known state retained');
       window.dispatchEvent(new CustomEvent('algobot:dashboard-error', {detail: error}));
     } finally {
-      busy = false;
-      document.documentElement.dataset.dashboardLoading = 'false';
-      clearTimeout(timer);
-      timer = setTimeout(load, REFRESH_MS);
+      if (seq === loadSeq) {
+        busy = false;
+        document.documentElement.dataset.dashboardLoading = 'false';
+        clearTimeout(timer);
+        timer = setTimeout(load, REFRESH_MS);
+      }
     }
   }
 
   function boot() {
     $('[data-dashboard-refresh]')?.addEventListener('click', load);
     document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(timer); else { clearTimeout(timer); timer = setTimeout(load, 250); } });
-    window.addEventListener('algobot:account-changed', (event) => { selectedAccountId = event.detail?.id != null ? String(event.detail.id) : null; clearTimeout(timer); timer = setTimeout(load, 250); });
+    const accountChanged = (event) => { selectedAccountId = event.detail?.id != null ? String(event.detail.id) : null; loadSeq += 1; busy = false; clearTimeout(timer); timer = setTimeout(load, 250); };
+    window.addEventListener('algobot:account-changed', accountChanged);
+    window.addEventListener('algobot:account-synced', accountChanged);
     load();
   }
 

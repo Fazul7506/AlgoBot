@@ -2,17 +2,20 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
 from pathlib import Path
+from datetime import timedelta
 
 ROOT = Path(__file__).resolve().parents[2]
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, SimpleTestCase
+from django.utils import timezone
 from rest_framework.test import APITestCase, APIRequestFactory, force_authenticate
 
 from apps.brokers.exceptions import BrokerConnectionError, BrokerOrderError
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection, Position
 from apps.brokers.position_sync import PositionSyncError
 from apps.execution.deriv_views import DerivTradingActionView
+from apps.execution.exceptions import OrderValidationError
 from apps.execution.models import ExecutionQueue, Order
 from apps.execution.signal_validation import SignalValidationService
 from apps.execution.tasks import _execution_queue_singleton, process_execution_queue
@@ -22,6 +25,31 @@ from .engine import ExecutionEngine
 
 
 class OrderSerializerRegressionTests(APITestCase):
+    def test_environment_uses_the_model_canonical_account_type(self):
+        account = SimpleNamespace(
+            account_type='real',
+            credentials={'realtime': {'account_type': 'demo'}},
+        )
+        self.assertEqual(OrderViewSet._environment(account), 'real')
+
+    def test_idempotent_replay_requires_matching_broker_account(self):
+        user = get_user_model().objects.create_user(username='idempotency-account', password='test-password')
+        broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active')
+        account = BrokerAccount.objects.create(
+            user=user, broker=broker, account_id='IDEMPOTENCY-ACCOUNT', status='active'
+        )
+        Order.objects.create(
+            user=user, broker_account=account, symbol='R_100', direction='buy',
+            order_type='market', stake='1', client_request_id='same-client-id',
+        )
+        request = APIRequestFactory().post(
+            '/api/orders/', {'client_request_id': 'same-client-id'}, format='json'
+        )
+        force_authenticate(request, user=user)
+        result = OrderViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data['code'], 'CLIENT_REQUEST_ACCOUNT_REQUIRED')
+
     def test_terminal_order_values_are_normalized(self):
         serializer = OrderSerializer()
         self.assertEqual(serializer.validate_direction('BUY'), 'buy')
@@ -214,6 +242,37 @@ class ExecutionQueueTaskTests(TestCase):
         self.assertEqual(queue.status, 'done')
         self.assertEqual(result['succeeded'], 1)
 
+    @patch('apps.execution.tasks.get_redis_connection')
+    def test_unclassified_failure_after_submission_requires_reconciliation(self, get_redis_connection):
+        lock = get_redis_connection.return_value.lock.return_value
+        lock.acquire.return_value = True
+        user = get_user_model().objects.create_user(username='queue-uncertain', password='test-password')
+        broker = Broker.objects.create(name='Queue Uncertain Broker', broker_type='deriv', status='active', supports_live=False)
+        account = BrokerAccount.objects.create(user=user, broker=broker, account_id='QUEUE-UNCERTAIN', status='active', credentials={'account_type': 'demo'})
+        order = Order.objects.create(user=user, broker_account=account, symbol='R_10', direction='buy', order_type='market', stake='1', status='queued')
+        queue = ExecutionQueue.objects.create(order=order, status='pending', next_retry=None, queue_type='priority')
+
+        async def post_submit_failure(candidate):
+            from asgiref.sync import sync_to_async
+
+            candidate.status = 'sent_to_broker'
+            candidate.validation_context = {'execution_mode': 'manual_command'}
+            await sync_to_async(Order.objects.filter(pk=candidate.pk).update)(
+                status='sent_to_broker',
+                validation_context={'execution_mode': 'manual_command'},
+            )
+            raise RuntimeError('simulated response decode failure')
+
+        with patch('apps.execution.tasks.ExecutionEngine.execute', new=AsyncMock(side_effect=post_submit_failure)):
+            result = process_execution_queue.run.__wrapped__(batch_size=1)
+        order.refresh_from_db()
+        queue.refresh_from_db()
+        self.assertEqual(order.status, 'sent_to_broker')
+        self.assertTrue(order.validation_context['reconciliation_required'])
+        self.assertEqual(queue.status, 'failed')
+        self.assertEqual(result['uncertain'], 1)
+        self.assertEqual(result['failed'], 0)
+
 
 class TerminalExecutionContractTests(SimpleTestCase):
     def test_terminal_contract_metadata_is_persisted_in_serializer_contract(self):
@@ -261,6 +320,19 @@ class TerminalExecutionContractTests(SimpleTestCase):
         chart = (ROOT / 'static' / 'js' / 'deriv_pro_chart.js').read_text()
         self.assertIn("algobot:market-watchdog-tick", chart)
         self.assertNotIn("state.ws=new WebSocket", chart)
+
+    def test_watchdog_does_not_fabricate_bid_ask_from_public_last_tick(self):
+        watchdog = (ROOT / 'static' / 'js' / 'terminal_market_watchdog.js').read_text()
+        self.assertIn("createTextNode('Unavailable')", watchdog)
+        self.assertIn("parsedEpoch > now / 1000 + 5", watchdog)
+        self.assertIn("Date.now() - silenceSince > 15000", watchdog)
+
+    def test_terminal_catalogue_and_account_scoped_records_reject_stale_responses(self):
+        terminal = (ROOT / 'static' / 'js' / 'trading_terminal.js').read_text()
+        self.assertIn("catalogueLoadSeq", terminal)
+        self.assertIn("accountId===String(window.AlgoBotAccountContext", terminal)
+        self.assertIn("recordsLoadSeq", terminal)
+        self.assertIn("signalsLoadSeq", terminal)
 
 
 class SignalValidationServiceTests(SimpleTestCase):
@@ -333,3 +405,75 @@ class DerivTerminalSafetyTests(SimpleTestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.data["status"], "rejected")
         self.assertFalse(response.data["retryable"])
+
+
+class OrderCancellationSafetyTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='order-cancel-safety', password='test-password')
+        self.broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active')
+        self.account = BrokerAccount.objects.create(
+            user=self.user, broker=self.broker, account_id='CANCEL-SAFETY', status='active'
+        )
+
+    def _order(self, status):
+        return Order.objects.create(
+            user=self.user, broker_account=self.account, symbol='R_100',
+            direction='buy', order_type='market', stake='1', status=status,
+        )
+
+    def test_queued_order_cancellation_atomically_cancels_pending_queue(self):
+        order = self._order('queued')
+        queue = ExecutionQueue.objects.create(order=order, status='pending')
+        cancelled = ExecutionEngine().cancel_order(order)
+        queue.refresh_from_db()
+        self.assertEqual(cancelled.status, 'cancelled')
+        self.assertEqual(queue.status, 'cancelled')
+
+    def test_submitted_order_cannot_be_marked_cancelled_locally(self):
+        order = self._order('sent_to_broker')
+        with self.assertRaises(OrderValidationError):
+            ExecutionEngine().cancel_order(order)
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'sent_to_broker')
+
+    def test_processing_queue_cannot_be_cancelled_as_if_not_submitted(self):
+        order = self._order('queued')
+        queue = ExecutionQueue.objects.create(order=order, status='processing')
+        with self.assertRaises(OrderValidationError):
+            ExecutionEngine().cancel_order(order)
+        queue.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(queue.status, 'processing')
+        self.assertEqual(order.status, 'queued')
+
+    def test_submitted_order_retry_endpoint_is_forbidden(self):
+        order = self._order('sent_to_broker')
+        request = APIRequestFactory().post(f'/api/orders/{order.pk}/retry/', {}, format='json')
+        force_authenticate(request, user=self.user)
+        result = OrderViewSet.as_view({'post': 'retry'})(request, pk=order.pk)
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data['code'], 'EXECUTION_RETRY_FORBIDDEN')
+
+    def test_failed_order_retry_is_rejected_while_worker_owns_queue(self):
+        order = self._order('failed')
+        ExecutionQueue.objects.create(order=order, status='processing')
+        request = APIRequestFactory().post(f'/api/orders/{order.pk}/retry/', {}, format='json')
+        force_authenticate(request, user=self.user)
+        result = OrderViewSet.as_view({'post': 'retry'})(request, pk=order.pk)
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data['code'], 'EXECUTION_RETRY_IN_PROGRESS')
+
+    def test_manual_retry_clears_stale_queue_deadline(self):
+        order = self._order('failed')
+        queue = ExecutionQueue.objects.create(
+            order=order, status='failed', next_retry=timezone.now() + timedelta(hours=1)
+        )
+        request = APIRequestFactory().post(f'/api/orders/{order.pk}/retry/', {}, format='json')
+        force_authenticate(request, user=self.user)
+        result = OrderViewSet.as_view({'post': 'retry'})(request, pk=order.pk)
+        self.assertEqual(result.status_code, 200)
+        queue.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(queue.status, 'pending')
+        self.assertIsNone(queue.next_retry)
+        self.assertEqual(order.status, 'queued')

@@ -177,6 +177,14 @@ def _checkout(request, plan_name, provider=None):
     if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL}:
         return None, "Unsupported payment provider."
 
+    active_subscription = Subscription.objects.filter(user=request.user).first()
+    if active_subscription and active_subscription.plan != "FREE" and active_subscription.is_active and (
+        not active_subscription.expires_at or active_subscription.expires_at > timezone.now()
+    ):
+        if active_subscription.plan == plan["plan"]:
+            return None, "This plan is already active."
+        return None, "Your current paid access is still active. Cancel its renewal first, then start the new plan."
+
     # Serialize checkout initiation per user, but never hold a DB lock across the provider HTTP call.
     # A short-lived lease prevents concurrent browser retries from opening two provider checkouts.
     lease_seconds = 120
@@ -415,13 +423,29 @@ def billing_checkout(request):
 def billing_change_plan(request):
     requested = str(request.data.get("plan") or "").upper().strip()
     plan = _plan(requested)
-    if not plan: return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
-    with transaction.atomic():
-        subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
-        current_active = subscription.is_active and (not subscription.expires_at or subscription.expires_at > timezone.now())
-        if subscription.plan == plan["plan"] and current_active:
-            return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
-        if plan["plan"] == "FREE":
+    if not plan:
+        return Response({"detail": "Unknown subscription plan."}, status=status.HTTP_400_BAD_REQUEST)
+
+    subscription = Subscription.objects.filter(user=request.user).first()
+    current_active = bool(
+        subscription
+        and subscription.is_active
+        and (not subscription.expires_at or subscription.expires_at > timezone.now())
+    )
+    if subscription and subscription.plan == plan["plan"] and current_active:
+        return Response({"changed": False, "plan": subscription.plan, "detail": "This is already the active plan."})
+
+    if plan["plan"] == "FREE":
+        if subscription and current_active and subscription.recurring and str(subscription.provider or "").lower() == PaymentService.INTASEND:
+            provider_subscription_id = str(subscription.provider_subscription_id or "").strip()
+            if not provider_subscription_id:
+                return Response({"detail": "The recurring provider subscription is not linked locally; downgrade was not applied."}, status=status.HTTP_409_CONFLICT)
+            provider_result = PaymentService().cancel_intasend_subscription(provider_subscription_id)
+            if not provider_result.get("ok"):
+                return Response({"detail": "The payment provider did not confirm cancellation. Your paid plan remains active."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        with transaction.atomic():
+            subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
             subscription.plan = "FREE"
             subscription.price_cents = 0
             subscription.currency = plan["currency"].lower()
@@ -429,12 +453,17 @@ def billing_change_plan(request):
             subscription.is_active = True
             subscription.expires_at = None
             subscription.renewed_at = timezone.now()
-            subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at"])
-            return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
-    url, error = _checkout(request, requested, request.data.get("provider"))
-    if error: return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    return Response({"url": url, "plan": requested, "payment_required": True})
+            subscription.provider = ""
+            subscription.provider_subscription_id = ""
+            subscription.cancelled_at = timezone.now()
+            subscription.cancellation_reason = "user_downgrade_to_free"
+            subscription.save(update_fields=["plan", "price_cents", "currency", "recurring", "is_active", "expires_at", "renewed_at", "provider", "provider_subscription_id", "cancelled_at", "cancellation_reason"])
+        return Response({"changed": True, "plan": "FREE", "status": "active", "payment_required": False})
 
+    url, error = _checkout(request, requested, request.data.get("provider"))
+    if error:
+        return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return Response({"url": url, "plan": requested, "payment_required": True})
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -451,12 +480,25 @@ def billing_reconcile(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def billing_cancel(request):
-    """Stop future renewal while preserving access through the paid cycle."""
+    """Cancel provider renewal first, then preserve paid access locally."""
+    subscription = Subscription.objects.filter(user=request.user).first()
+    if not subscription or subscription.plan == "FREE":
+        return Response({"status": "already_free", "plan": "FREE", "expires_at": None})
+    if not subscription.is_active:
+        return Response({"status": "already_cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None})
+
+    provider = str(subscription.provider or "").lower().strip()
+    provider_subscription_id = str(subscription.provider_subscription_id or "").strip()
+    if provider == PaymentService.INTASEND:
+        if not provider_subscription_id:
+            return Response({"detail": "The recurring provider subscription is not linked locally; renewal was not cancelled."}, status=status.HTTP_409_CONFLICT)
+        result = PaymentService().cancel_intasend_subscription(provider_subscription_id)
+        if not result.get("ok"):
+            return Response({"detail": "The payment provider did not confirm cancellation. Your renewal remains active."}, status=status.HTTP_502_BAD_GATEWAY)
+
     with transaction.atomic():
-        subscription, _ = Subscription.objects.select_for_update().get_or_create(user=request.user)
-        if subscription.plan == "FREE":
-            return Response({"status": "already_free", "plan": "FREE", "expires_at": None})
-        if not subscription.is_active:
+        subscription = Subscription.objects.select_for_update().get(pk=subscription.pk)
+        if subscription.plan == "FREE" or not subscription.is_active:
             return Response({"status": "already_cancelled", "plan": subscription.plan, "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None})
         subscription.recurring = False
         if not subscription.expires_at:

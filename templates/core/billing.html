@@ -51,7 +51,7 @@
       } else {
         action=`<button class="btn primary provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="intasend"><img class="provider-logo" src="/static/images/intasend-logo.svg" alt="" aria-hidden="true">Pay with IntaSend</button><button class="btn ghost provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="pesapal"><img class="provider-logo" src="/static/images/pesapal-logo.svg" alt="" aria-hidden="true">Pay with Pesapal</button>`;
       }
-      return `<article class="panel billing-plan-card" data-plan="${esc(name)}"><p class="eyebrow">${esc(name)}</p><h2 class="billing-plan-price money-value">${price}</h2><p>${p.recurring?'30-day subscription cycle':'No recurring charge'}</p>${!configured&&name!=='FREE'?'<span class="provider-label">This plan is not configured for checkout.</span>':''}<div class="billing-plan-actions">${action}</div></article>`;
+      return `<article class="panel billing-plan-card" data-plan="${esc(name)}"><p class="eyebrow">${esc(name)}</p><h2 class="billing-plan-price money-value">${price}</h2><p>${p.recurring?'30-day billing period':'No recurring charge'}</p>${!configured&&name!=='FREE'?'<span class="provider-label">This plan is not configured for checkout.</span>':''}<div class="billing-plan-actions">${action}</div></article>`;
     }).join('')||'<div class="panel">No billing plans are configured.</div>';
     const checkoutForm=$('#billing-checkout-form');
     const checkoutPlan=checkoutForm?.querySelector('[data-checkout-form-plan]');

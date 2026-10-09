@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
+from email.message import EmailMessage
+from email.utils import formataddr
 import secrets
 from datetime import timedelta
 from urllib.parse import urlencode
@@ -43,6 +45,97 @@ def _dec(value):
     return _fernet().decrypt(value.encode()).decode() if value else ""
 
 
+def _gmail_access_token(conn):
+    now = timezone.now()
+    access_token = _dec(conn.access_token)
+    if access_token and conn.token_expires_at and conn.token_expires_at > now + timedelta(seconds=60):
+        return access_token
+
+    refresh_token = _dec(conn.refresh_token)
+    if not refresh_token:
+        conn.status = "error"
+        conn.save(update_fields=["status", "updated_at"])
+        raise RuntimeError("Gmail refresh credentials are unavailable. Reconnect the Gmail channel.")
+
+    response = requests.post(
+        GMAIL_TOKEN,
+        data={
+            "client_id": settings.GOOGLE_CLIENT_ID,
+            "client_secret": settings.GOOGLE_CLIENT_SECRET,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+        },
+        timeout=12,
+    )
+    if response.status_code in {400, 401}:
+        conn.status = "error"
+        conn.save(update_fields=["status", "updated_at"])
+        raise RuntimeError("Google rejected the Gmail refresh credential. Reconnect the Gmail channel.")
+    response.raise_for_status()
+    data = response.json()
+    refreshed_token = data.get("access_token")
+    if not refreshed_token:
+        raise RuntimeError("Google did not return a refreshed Gmail access token.")
+    try:
+        expires_in = max(60, int(data.get("expires_in", 3600)))
+    except (TypeError, ValueError):
+        expires_in = 3600
+    conn.access_token = _enc(refreshed_token)
+    conn.token_expires_at = now + timedelta(seconds=expires_in)
+    conn.save(update_fields=["access_token", "token_expires_at", "updated_at"])
+    return refreshed_token
+
+
+def gmail_revoke(conn):
+    token = _dec(conn.refresh_token) or _dec(conn.access_token)
+    if not token:
+        return True
+    response = requests.post(
+        "https://oauth2.googleapis.com/revoke",
+        params={"token": token},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=5,
+    )
+    response.raise_for_status()
+    return True
+
+
+def send_gmail_notification(conn, notification):
+    from .services import SenderIdentity, render_email_html
+
+    sender = SenderIdentity("AlgoBot", conn.address)
+    message = EmailMessage()
+    message["To"] = conn.address
+    message["From"] = formataddr(("AlgoBot", conn.address))
+    message["Subject"] = str(notification.title or "AlgoBot notification")[:220]
+    message.set_content(str(notification.message or ""))
+    message.add_alternative(
+        render_email_html(notification.title, notification.message, notification.category, sender, notification.metadata),
+        subtype="html",
+    )
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii").rstrip("=")
+
+    access_token = _gmail_access_token(conn)
+    for attempt in range(2):
+        response = requests.post(
+            "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            json={"raw": raw},
+            timeout=12,
+        )
+        if response.status_code == 401 and attempt == 0:
+            conn.token_expires_at = timezone.now() - timedelta(seconds=1)
+            conn.save(update_fields=["token_expires_at", "updated_at"])
+            access_token = _gmail_access_token(conn)
+            continue
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("id"):
+            raise RuntimeError("Gmail accepted no message identifier for the send request.")
+        return data
+    raise RuntimeError("Gmail authorization failed after refreshing the access token.")
+
+
 def _google_configured():
     return bool(getattr(settings, "GOOGLE_CLIENT_ID", "") and getattr(settings, "GOOGLE_CLIENT_SECRET", "") and getattr(settings, "GOOGLE_OAUTH_REDIRECT_URI", ""))
 
@@ -76,6 +169,9 @@ def gmail_callback(request, code, state):
     email = (profile.get("email") or "").strip().lower()
     if not email or not profile.get("email_verified"):
         raise ValueError("Google did not verify ownership of this Gmail account.")
+    existing = NotificationChannelConnection.objects.filter(user=request.user, provider="gmail").first()
+    if not refresh and not (existing and existing.refresh_token):
+        raise ValueError("Google did not issue a refresh token. Revoke AlgoBot access in Google and reconnect Gmail.")
     conn, _ = NotificationChannelConnection.objects.get_or_create(user=request.user, provider="gmail")
     conn.status = "verified"
     conn.address = email
@@ -83,6 +179,11 @@ def gmail_callback(request, code, state):
     conn.access_token = _enc(access)
     if refresh:
         conn.refresh_token = _enc(refresh)
+    try:
+        expires_in = max(60, int(data.get("expires_in", 3600)))
+    except (TypeError, ValueError):
+        expires_in = 3600
+    conn.token_expires_at = timezone.now() + timedelta(seconds=expires_in)
     conn.metadata = {"name": profile.get("name", ""), "picture": profile.get("picture", "")}
     conn.verified_at = timezone.now()
     conn.verification_code_hash = ""
@@ -94,15 +195,15 @@ def gmail_callback(request, code, state):
 def telegram_start(user, request):
     if not _telegram_configured():
         raise RuntimeError("Telegram connection is not configured yet.")
+    username = str(getattr(settings, "TELEGRAM_BOT_USERNAME", "")).strip().lstrip("@")
+    if not username:
+        raise RuntimeError("TELEGRAM_BOT_USERNAME is not configured.")
     raw = secrets.token_urlsafe(24)
     conn, _ = NotificationChannelConnection.objects.get_or_create(user=user, provider="telegram")
     conn.status = "pending"
     conn.verification_code_hash = hashlib.sha256(raw.encode()).hexdigest()
     conn.verification_expires_at = timezone.now() + timedelta(minutes=15)
     conn.save(update_fields=["status", "verification_code_hash", "verification_expires_at", "updated_at"])
-    username = str(getattr(settings, "TELEGRAM_BOT_USERNAME", "")).strip().lstrip("@")
-    if not username:
-        raise RuntimeError("TELEGRAM_BOT_USERNAME is not configured.")
     return f"https://t.me/{username}?start={raw}"
 
 
@@ -273,16 +374,22 @@ def telegram_webhook(payload):
             with transaction.atomic():
                 conn = NotificationChannelConnection.objects.select_for_update().filter(provider="telegram", status="pending", verification_code_hash=digest, verification_expires_at__gt=timezone.now()).select_related("user").first()
                 if conn:
-                    conn.status = "verified"
-                    conn.external_id = str(chat_id)
-                    conn.address = f'@{chat["username"]}' if chat.get("username") else (chat.get("first_name") or "Telegram")
-                    conn.verified_at = timezone.now()
-                    conn.verification_code_hash = ""
-                    conn.verification_expires_at = None
-                    conn.metadata = {"first_name": chat.get("first_name", ""), "last_name": chat.get("last_name", ""), "username": chat.get("username", "")}
-                    conn.save()
-                    NotificationPreference.objects.update_or_create(user=conn.user, channel="telegram", defaults={"enabled": True})
-                    reply = "AlgoBot Telegram is now VERIFIED. You can use /account, /positions, /trades, /alerts and /help from this chat."
+                    existing_binding = NotificationChannelConnection.objects.select_for_update().filter(
+                        provider="telegram", external_id=str(chat_id)
+                    ).exclude(pk=conn.pk).first()
+                    if existing_binding:
+                        reply = "This Telegram chat is already linked to another AlgoBot account. Disconnect it there before linking it here."
+                    else:
+                        conn.status = "verified"
+                        conn.external_id = str(chat_id)
+                        conn.address = f'@{chat["username"]}' if chat.get("username") else (chat.get("first_name") or "Telegram")
+                        conn.verified_at = timezone.now()
+                        conn.verification_code_hash = ""
+                        conn.verification_expires_at = None
+                        conn.metadata = {"first_name": chat.get("first_name", ""), "last_name": chat.get("last_name", ""), "username": chat.get("username", "")}
+                        conn.save()
+                        NotificationPreference.objects.update_or_create(user=conn.user, channel="telegram", defaults={"enabled": True})
+                        reply = "AlgoBot Telegram is now VERIFIED. You can use /account, /positions, /trades, /alerts and /help from this chat."
                 else:
                     reply = "That AlgoBot verification link is invalid or expired. Start a new Telegram connection from AlgoBot."
         elif command == "disconnect":
@@ -298,8 +405,24 @@ def telegram_webhook(payload):
 
 
 def connection_status(user):
-    return {
-        provider: {"connected": bool(connection and connection.status == "verified"), "status": connection.status if connection else "not_connected", "address": connection.address if connection else ""}
-        for provider in ("gmail", "telegram")
-        for connection in [NotificationChannelConnection.objects.filter(user=user, provider=provider).first()]
-    }
+    result = {}
+    for provider in ("gmail", "telegram"):
+        connection = NotificationChannelConnection.objects.filter(user=user, provider=provider).first()
+        if not connection:
+            result[provider] = {"connected": False, "status": "not_connected", "address": ""}
+            continue
+        credentials_present = bool(
+            connection.address and (
+                connection.refresh_token if provider == "gmail" else connection.external_id
+            )
+        )
+        connected = connection.status == "verified" and credentials_present
+        state = connection.status
+        if connection.status == "verified" and not credentials_present:
+            state = "error"
+        result[provider] = {
+            "connected": connected,
+            "status": state,
+            "address": connection.address if connected else "",
+        }
+    return result

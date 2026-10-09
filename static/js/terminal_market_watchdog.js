@@ -11,6 +11,8 @@
   let reconnectTimer = null;
   let healthTimer = null;
   let stopped = false;
+  let lastTickAt = 0;
+  let socketStartedAt = 0;
 
   const fmt = value => Number.isFinite(Number(value))
     ? Number(value).toLocaleString(undefined, {maximumFractionDigits: 8})
@@ -42,20 +44,27 @@
   }
 
   function paintQuote(quote, epoch) {
+    if (quote == null || quote === '') return;
     const value = Number(quote);
     if (!Number.isFinite(value)) return;
-    const text = fmt(value);
-    $('[data-q="bid"]')?.replaceChildren(document.createTextNode(text));
-    $('[data-q="ask"]')?.replaceChildren(document.createTextNode(text));
     const now = Date.now();
-    setState('live', `live Deriv quote · ${epoch ? new Date(Number(epoch) * 1000).toLocaleTimeString() : 'updated just now'}`);
-    window.dispatchEvent(new CustomEvent('algobot:market-watchdog-tick', {detail: {symbol: activeSymbol, quote: value, epoch: Number(epoch) || Math.floor(now / 1000)}}));
+    const parsedEpoch = epoch == null || epoch === '' ? null : Number(epoch);
+    if (parsedEpoch !== null && (!Number.isFinite(parsedEpoch) || parsedEpoch <= 0 || parsedEpoch > now / 1000 + 5)) return;
+    lastTickAt = now;
+    const text = fmt(value);
+    // A public tick is a last-traded quote, not a broker bid/ask order book.
+    $('[data-q="bid"]')?.replaceChildren(document.createTextNode('Unavailable'));
+    $('[data-q="ask"]')?.replaceChildren(document.createTextNode(text));
+    setState('live', `live Deriv quote · ${parsedEpoch ? new Date(parsedEpoch * 1000).toLocaleTimeString() : 'updated just now'}`);
+    window.dispatchEvent(new CustomEvent('algobot:market-watchdog-tick', {detail: {symbol: activeSymbol, quote: value, epoch: parsedEpoch || Math.floor(now / 1000)}}));
   }
 
   function closeSocket() {
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-    try { ws?.close(); } catch (_) {}
+    const previous = ws;
     ws = null;
+    socketStartedAt = 0;
+    try { previous?.close(); } catch (_) {}
   }
 
   function scheduleReconnect() {
@@ -69,31 +78,43 @@
     if (!normalized || stopped || document.visibilityState !== 'visible') return;
     activeSymbol = normalized;
     closeSocket();
+    lastTickAt = 0;
+    socketStartedAt = Date.now();
     setState('waiting', `Connecting to Deriv ticks for ${normalized}…`);
-    try { ws = new WebSocket(WS); }
+    let connection;
+    try { connection = new WebSocket(WS); ws = connection; }
     catch (_) { scheduleReconnect(); return; }
-    ws.onopen = () => {
-      if (!ws) return;
+    connection.onopen = () => {
+      if (ws !== connection) return;
       try {
-        ws.send(JSON.stringify({ticks: normalized, subscribe: 1, req_id: Date.now()}));
+        connection.send(JSON.stringify({ticks: normalized, subscribe: 1, req_id: Date.now()}));
         setState('waiting', `Waiting for Deriv tick for ${normalized}…`);
       } catch (_) { scheduleReconnect(); }
     };
-    ws.onmessage = event => {
+    connection.onmessage = event => {
+      if (ws !== connection) return;
       try {
         const data = JSON.parse(event.data);
         if (data?.error) { setState('stale', data.error.message || 'Deriv rejected the tick subscription'); return; }
         if (data?.msg_type === 'tick' && data.tick?.quote != null) paintQuote(data.tick.quote, data.tick.epoch);
       } catch (_) {}
     };
-    ws.onerror = () => setState('stale', 'Deriv market stream error; reconnecting…');
-    ws.onclose = () => { ws = null; scheduleReconnect(); };
+    connection.onerror = () => {
+      if (ws !== connection) return;
+      setState('stale', 'Deriv market stream error; reconnecting…');
+      try { connection.close(); } catch (_) {}
+    };
+    connection.onclose = () => {
+      if (ws !== connection) return;
+      ws = null;
+      scheduleReconnect();
+    };
   }
 
   function refreshConnection() {
     const symbol = String($('#symbol')?.value || '').trim();
     if (!symbol) { closeSocket(); activeSymbol = ''; setState('waiting', 'Select a broker instrument'); return; }
-    if (symbol !== activeSymbol || !ws || ws.readyState !== WebSocket.OPEN) connect(symbol);
+    if (symbol !== activeSymbol || !ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) connect(symbol);
   }
 
   function boot() {
@@ -109,7 +130,16 @@
       else refreshConnection();
     });
     healthTimer = setInterval(() => {
-      if (!document.hidden) refreshConnection();
+      if (document.hidden) return;
+      const silenceSince = lastTickAt || socketStartedAt;
+      if (ws && silenceSince && Date.now() - silenceSince > 15000 &&
+          (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        setState('stale', 'No Deriv ticks received within 15 seconds; reconnecting…');
+        closeSocket();
+        scheduleReconnect();
+        return;
+      }
+      refreshConnection();
     }, 5000);
     refreshConnection();
     window.addEventListener('pagehide', () => {

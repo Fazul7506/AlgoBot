@@ -4,6 +4,7 @@ from functools import wraps
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
+from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from rest_framework.authentication import SessionAuthentication
 
@@ -41,7 +42,7 @@ def _browser_secret(request, *, kind, key="", secret="", warning=""):
 
 @login_required
 def dashboard(request):
-    platform = _safe_call(request, "Developer platform", lambda: DeveloperPlatformService().dashboard(), {})
+    platform = _safe_call(request, "Developer platform", lambda: DeveloperPlatformService().dashboard(user=request.user), {})
     documentation = _safe_call(request, "API documentation", lambda: DocumentationService().publish().payload, {})
     analytics = _safe_call(request, "Developer analytics", lambda: AnalyticsService().aggregate(user=request.user), {})
     api_keys = _safe_call(request, "API keys", lambda: APIKeySerializer(APIKey.objects.filter(user=request.user).order_by("-created_at"), many=True).data, [])
@@ -349,33 +350,57 @@ def _payload(request):
 
 
 def _django_response(request, *, title, payload=None, message="", status=200, kind="info"):
+    """Return a JSON response for machine clients and the split frontend."""
     if message:
         try:
-            messages.add_message(request, messages.SUCCESS if kind == "success" else messages.ERROR if kind == "error" else messages.INFO, message)
+            messages.add_message(
+                request,
+                messages.SUCCESS if kind == "success" else messages.ERROR if kind == "error" else messages.INFO,
+                message,
+            )
         except Exception:
             pass
-    return render(request, RESPONSE_TEMPLATE, {
-        "response_title": title,
-        "response_message": message,
-        "response_payload": payload if payload is not None else {},
-        "response_status": status,
-        "response_kind": kind,
-    }, status=status)
+
+    data = payload if payload is not None else {}
+    if isinstance(data, dict):
+        data = dict(data)
+        data.setdefault("message", message)
+        data.setdefault("title", title)
+    else:
+        data = {"data": data, "message": message, "title": title}
+    if status >= 400:
+        data.setdefault("detail", message or title)
+        data.setdefault("code", "DEVELOPER_API_ERROR")
+    return JsonResponse(data, status=status)
 
 
 def _developer_endpoint(scope):
+    """Authenticate developer API callers, enforce endpoint scope and normalize errors."""
     def decorator(view):
         @wraps(view)
         def wrapped(request, *args, **kwargs):
             if not _authenticate(request):
-                return _django_response(request, title="Authentication required", message="Sign in with an authenticated AlgoBot session or valid API key.", status=401, kind="error")
+                return _django_response(
+                    request, title="Authentication required",
+                    message="Sign in with an authenticated AlgoBot session or valid API key.",
+                    status=401, kind="error",
+                )
             permission = scope()
             if not permission.has_permission(request, view):
-                return _django_response(request, title="Access denied", message=permission.message, status=403, kind="error")
+                return _django_response(
+                    request, title="Access denied",
+                    message=getattr(permission, "message", "You do not have permission for this endpoint."),
+                    status=403, kind="error",
+                )
             try:
                 return view(request, *args, **kwargs)
-            except Exception as exc:
-                return _django_response(request, title="Developer service error", message=f"The developer service could not complete the request: {exc}", status=500, kind="error")
+            except Exception:
+                # Do not disclose exception text, provider responses, or secrets to API callers.
+                return _django_response(
+                    request, title="Developer service error",
+                    message="The developer service could not complete the request.",
+                    status=500, kind="error",
+                )
         return wrapped
     return decorator
 

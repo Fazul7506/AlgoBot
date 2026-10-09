@@ -126,15 +126,23 @@ def build_contract() -> dict:
             "version": "v1",
             "description": "Authoritative contract generated from registered, executable AlgoBot API routes.",
         },
-        "servers": [{"url": "/api/developer"}],
-        "security": [{"ApiKeyAuth": []}, {"BearerAuth": []}],
+        # Paths are emitted as fully-qualified API paths, so the server base
+        # must not repeat /api/developer when clients construct an operation URL.
+        "servers": [{"url": ""}],
+        "security": [{"ApiKeyAuth": [], "ApiSecretAuth": []}, {"BearerAuth": []}],
         "components": {
             "securitySchemes": {
                 "ApiKeyAuth": {
                     "type": "apiKey",
                     "in": "header",
                     "name": "X-API-Key",
-                    "description": "Use X-API-Key together with X-API-Secret.",
+                    "description": "Public API key identifier.",
+                },
+                "ApiSecretAuth": {
+                    "type": "apiKey",
+                    "in": "header",
+                    "name": "X-API-Secret",
+                    "description": "Secret paired with X-API-Key. Never expose it in URLs or source control.",
                 },
                 "BearerAuth": {
                     "type": "http",
