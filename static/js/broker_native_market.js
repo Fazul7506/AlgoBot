@@ -45,7 +45,7 @@
      capabilitiesInFlight=(async()=>{
        try{
          const payload=await api(`/api/market/broker-capabilities/?symbol=${encodeURIComponent(normalized)}`,{notifyOnError:false},12000);
-         if(requestId===capabilitiesRequest){writeCapabilitiesCache(normalized,payload);renderContracts(payload);}
+         if(requestId===capabilitiesRequest){const stale=payload?.stale===true||String(payload?.status||'').toLowerCase()==='stale';if(!stale)writeCapabilitiesCache(normalized,payload);renderContracts(payload);if(stale)setStatus('Using stale broker contract metadata. Live contract availability is rechecked before preview.');}
          return payload;
        }catch(error){
          if(requestId!==capabilitiesRequest)return null;
