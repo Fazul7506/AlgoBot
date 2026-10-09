@@ -262,6 +262,13 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         broker_contracts = Path("static/js/broker_native_market.js").read_text(encoding="utf-8")
         self.assertIn("DIGITDIFF|DIGITODD", broker_contracts)
 
+    def test_terminal_clears_live_quote_values_when_stream_is_not_live(self):
+        from pathlib import Path
+        watchdog = Path("static/js/terminal_market_watchdog.js").read_text(encoding="utf-8")
+        self.assertIn("if (state !== 'live')", watchdog)
+        self.assertIn("data-q=\"ask\"", watchdog)
+        self.assertIn("Unavailable", watchdog)
+
     def test_terminal_does_not_cache_stale_market_or_contract_catalogues_as_fresh(self):
         from pathlib import Path
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
