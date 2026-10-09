@@ -28,8 +28,14 @@ class ActionService:
     def execute(self, action:dict[str,Any], context:dict[str,Any])->dict[str,Any]:
         kind=action.get("type","custom_python")
         if kind not in ACTION_TYPES: raise WorkflowValidationError(f"Unsupported action: {kind}")
-        # Orchestration boundary: trade/risk/broker actions return dispatch intents for core engines.
-        return {"action":kind,"status":"dispatched","target_engine":action.get("engine", kind.split("_")[0]),"parameters":action.get("parameters",{}),"context":context}
+        # No downstream action adapter is configured here. Record the intent without
+        # claiming that a trade, notification, deployment or external call occurred.
+        return {
+            "action": kind,
+            "status": "not_dispatched",
+            "target_engine": action.get("engine", kind.split("_")[0]),
+            "detail": "Action adapter is not configured; no external action was performed.",
+        }
 
 class TriggerService:
     def match(self, trigger:dict[str,Any], event_name:str, payload:dict[str,Any])->bool:
@@ -38,6 +44,8 @@ class TriggerService:
 
 class WorkflowExecutionService:
     def run(self, workflow:Workflow, payload:dict[str,Any]|None=None)->WorkflowExecution:
+        if not workflow.enabled or workflow.status != "pending":
+            raise WorkflowValidationError("Only enabled, pending workflows can be executed.")
         execution=WorkflowExecution.objects.create(workflow=workflow,status="running",trigger_payload=payload or {})
         started=time.perf_counter(); audit=[]
         try:
@@ -47,7 +55,13 @@ class WorkflowExecutionService:
             for node in workflow.nodes.order_by("id"):
                 if node.node_type in {"action","trade","risk","ai","broker","notification"}:
                     audit.append(ActionService().execute(node.configuration, {"workflow_id":workflow.id,"payload":payload or {}}))
-            execution.status="completed"; execution.result={"nodes_executed":len(audit),"audit":audit}
+            dispatch_pending = any(item.get("status") == "not_dispatched" for item in audit)
+            execution.status = "pending" if dispatch_pending else "completed"
+            execution.result = {
+                "nodes_executed": len(audit),
+                "audit": audit,
+                "status": "dispatch_not_configured" if dispatch_pending else "completed",
+            }
         except ApprovalRequired as exc:
             execution.status="paused"; execution.result={"approval":"required","detail":str(exc)}
         except Exception as exc:
@@ -55,21 +69,38 @@ class WorkflowExecutionService:
         execution.completed_at=timezone.now(); execution.duration=execution.completed_at-execution.started_at; execution.audit_log=audit; execution.save(update_fields=["status","result","completed_at","duration","audit_log"]); return execution
 
 class AutomationEventService:
-    def publish(self,event_name:str,source:str,payload:dict[str,Any]|None=None):
-        event=AutomationEvent.objects.create(event_name=event_name,source=source,payload=payload or {})
-        AutomationEngine().handle_event(event_name,payload or {},source)
+    def publish(self,event_name:str,source:str,payload:dict[str,Any]|None=None,user=None):
+        event=AutomationEvent.objects.create(event_name=event_name,source=source,payload=payload or {},user=user)
+        AutomationEngine().handle_event(event_name,payload or {},source,actor=user)
         return event
 
 class AutomationEngine:
-    def handle_event(self,event_name:str,payload:dict[str,Any]|None=None,source:str="system")->AutomationResult:
-        started=time.perf_counter(); payload=payload or {}; results=[]; trigger=TriggerService(); rules=RuleEngine()
-        for rule in AutomationRule.objects.filter(enabled=True).order_by("priority"):
-            if trigger.match(rule.trigger,event_name,payload) and rules.evaluate(rule.condition,payload):
-                results.append(ActionService().execute(rule.action,{"event":event_name,"source":source,"payload":payload}))
-        for wf in Workflow.objects.filter(enabled=True,status__in=["draft","pending","paused"]):
-            if wf.definition.get("trigger",{}).get("event")==event_name:
-                results.append({"workflow_execution": WorkflowExecutionService().run(wf,payload).id})
-        return AutomationResult("completed",{"results":results},(time.perf_counter()-started)*1000)
+    def handle_event(self,event_name:str,payload:dict[str,Any]|None=None,source:str="system",actor=None)->AutomationResult:
+        started=time.perf_counter()
+        payload = payload if isinstance(payload, dict) else {}
+        results = []
+        trigger = TriggerService()
+        rules = RuleEngine()
+        # Rules have no user owner, so user-originated events must not execute
+        # global system rules. Internal/system events retain that behavior.
+        if actor is None:
+            for rule in AutomationRule.objects.filter(enabled=True).order_by("priority"):
+                if trigger.match(rule.trigger,event_name,payload) and rules.evaluate(rule.condition,payload):
+                    results.append(ActionService().execute(rule.action,{"event":event_name,"source":source,"payload":payload}))
+        workflows = Workflow.objects.filter(enabled=True,status="pending")
+        if actor is not None:
+            workflows = workflows.filter(user=actor)
+        for wf in workflows:
+            definition = wf.definition if isinstance(wf.definition, dict) else {}
+            workflow_trigger = definition.get("trigger", {})
+            if isinstance(workflow_trigger, dict) and workflow_trigger.get("event") == event_name:
+                execution = WorkflowExecutionService().run(wf,payload)
+                results.append({"workflow_execution": execution.id, "status": execution.status})
+        not_dispatched = any(
+            item.get("status") == "not_dispatched" or item.get("status") == "pending"
+            for item in results if isinstance(item, dict)
+        )
+        return AutomationResult("not_configured" if not_dispatched else "completed",{"results":results},(time.perf_counter()-started)*1000)
 
 class WorkflowEngine: execute=WorkflowExecutionService().run
 class WorkflowDesignerService:
