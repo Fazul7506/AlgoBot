@@ -130,7 +130,7 @@
     const activity = [
       ...orders.map(item => ({label: item.symbol?.symbol || item.symbol || 'Order', meta: item.status || 'Order', time: item.updated_at || item.created_at})),
       ...signals.map(item => ({label: item.symbol?.symbol || item.symbol || 'Signal', meta: item.direction || item.signal || 'Signal', time: item.created_at || item.timestamp}))
-    ].filter(item => item.time).sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0, 8);
+    ].filter(item => item.time && Number.isFinite(Date.parse(item.time))).sort((a,b) => Date.parse(b.time) - Date.parse(a.time)).slice(0, 8);
     renderRows('[data-dashboard-activity]', activity, item => `<div class="mini-row"><strong>${esc(item.label)}</strong><span>${esc(item.meta)}</span><b>${esc(new Date(item.time).toLocaleString())}</b></div>`, 'No recent backend activity.');
   }
 
