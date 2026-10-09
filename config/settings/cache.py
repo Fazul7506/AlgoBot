@@ -51,7 +51,7 @@ CELERY_RESULT_BACKEND = _dotenv_value("CELERY_RESULT_BACKEND", REDIS_URL)
 # consume the entire Redis client budget and take the API down before a view is
 # reached (DRF throttling uses this cache during request initialization).
 try:
-    REDIS_CACHE_MAX_CONNECTIONS = max(1, int(_dotenv_value("REDIS_CACHE_MAX_CONNECTIONS", "2")))
+    REDIS_CACHE_MAX_CONNECTIONS = max(1, int(_dotenv_value("REDIS_CACHE_MAX_CONNECTIONS", "1")))
 except (TypeError, ValueError):
     REDIS_CACHE_MAX_CONNECTIONS = 2
 try:
