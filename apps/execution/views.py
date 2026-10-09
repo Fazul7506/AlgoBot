@@ -239,6 +239,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             age = timezone.now().timestamp() - epoch
             if age < -5 or age > max_age:
                 return response.Response({'status':'rejected','code':'BROKER_MARKET_DATA_STALE','detail':'The broker quote became stale while the payout estimate was being verified. No order was submitted.'}, status=status.HTTP_409_CONFLICT)
+            potential_profit = float(payout - stake_value)
             stake_value = float(stake_value)
             market = {
                 'price': float(price),
@@ -249,7 +250,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'age_seconds': max(0, int(age)),
                 'source': 'selected_broker_live_quote',
             }
-            return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':symbol,'contract_type':contract_type,'direction':direction.lower(),'order_type':data.get('order_type'),'stake':stake_value,'duration':duration,'duration_unit':duration_unit,'strategy':data.get('strategy','')},'market':market,'estimate':{'proposal_cost':float(proposal_cost),'payout':float(payout),'potential_profit':float(payout-stake_value),'currency':str(account.currency or 'USD').upper(),'duration':duration,'duration_unit':duration_unit,'source':'selected_broker_proposal'},'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'risk_verified':True,'fresh_market_data':True,'contract_verified':True,'payout_verified':True,'ai_verified':False,'ai_required':False}})
+            return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':symbol,'contract_type':contract_type,'direction':direction.lower(),'order_type':data.get('order_type'),'stake':stake_value,'duration':duration,'duration_unit':duration_unit,'strategy':data.get('strategy','')},'market':market,'estimate':{'proposal_cost':float(proposal_cost),'payout':float(payout),'potential_profit':potential_profit,'currency':str(account.currency or 'USD').upper(),'duration':duration,'duration_unit':duration_unit,'source':'selected_broker_proposal'},'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'risk_verified':True,'fresh_market_data':True,'contract_verified':True,'payout_verified':True,'ai_verified':False,'ai_required':False}})
         except Exception:
             log.exception('Pre-trade preview failed', extra={'user_id':request.user.id,'symbol':request.data.get('symbol')})
             return response.Response({'status':'rejected','code':'PREVIEW_INTERNAL_ERROR','detail':'Pre-trade preview could not be completed safely. Check market/broker status and retry.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
