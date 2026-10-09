@@ -2,6 +2,7 @@
 import asyncio
 import inspect
 import json
+import math
 import time
 
 import requests
@@ -213,7 +214,7 @@ class DerivAdapter(BrokerAdapter):
         unit = str(duration_unit or "s").lower().strip()
         if not symbol or not contract_type:
             raise BrokerOrderError("A symbol and contract type are required for a proposal")
-        if amount_value <= 0 or duration_value <= 0 or unit not in {"s", "m", "h", "d", "t"}:
+        if not math.isfinite(amount_value) or amount_value <= 0 or duration_value <= 0 or unit not in {"s", "m", "h", "d", "t"}:
             raise BrokerOrderError("The proposal stake, duration or duration unit is invalid")
         payload = {
             "proposal": 1,
