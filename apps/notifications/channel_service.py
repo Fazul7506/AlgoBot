@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
+from email.message import EmailMessage
+from email.utils import formataddr
 import secrets
 from datetime import timedelta
 from urllib.parse import urlencode
@@ -43,6 +45,83 @@ def _dec(value):
     return _fernet().decrypt(value.encode()).decode() if value else ""
 
 
+def _gmail_access_token(conn):
+    now = timezone.now()
+    access_token = _dec(conn.access_token)
+    if access_token and conn.token_expires_at and conn.token_expires_at > now + timedelta(seconds=60):
+        return access_token
+
+    refresh_token = _dec(conn.refresh_token)
+    if not refresh_token:
+        conn.status = "error"
+        conn.save(update_fields=["status", "updated_at"])
+        raise RuntimeError("Gmail refresh credentials are unavailable. Reconnect the Gmail channel.")
+
+    response = requests.post(
+        GMAIL_TOKEN,
+        data={
+            "client_id": settings.GOOGLE_CLIENT_ID,
+            "client_secret": settings.GOOGLE_CLIENT_SECRET,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+        },
+        timeout=12,
+    )
+    if response.status_code in {400, 401}:
+        conn.status = "error"
+        conn.save(update_fields=["status", "updated_at"])
+        raise RuntimeError("Google rejected the Gmail refresh credential. Reconnect the Gmail channel.")
+    response.raise_for_status()
+    data = response.json()
+    refreshed_token = data.get("access_token")
+    if not refreshed_token:
+        raise RuntimeError("Google did not return a refreshed Gmail access token.")
+    try:
+        expires_in = max(60, int(data.get("expires_in", 3600)))
+    except (TypeError, ValueError):
+        expires_in = 3600
+    conn.access_token = _enc(refreshed_token)
+    conn.token_expires_at = now + timedelta(seconds=expires_in)
+    conn.save(update_fields=["access_token", "token_expires_at", "updated_at"])
+    return refreshed_token
+
+
+def send_gmail_notification(conn, notification):
+    from .services import SenderIdentity, render_email_html
+
+    sender = SenderIdentity("AlgoBot", conn.address)
+    message = EmailMessage()
+    message["To"] = conn.address
+    message["From"] = formataddr(("AlgoBot", conn.address))
+    message["Subject"] = str(notification.title or "AlgoBot notification")[:220]
+    message.set_content(str(notification.message or ""))
+    message.add_alternative(
+        render_email_html(notification.title, notification.message, notification.category, sender, notification.metadata),
+        subtype="html",
+    )
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii").rstrip("=")
+
+    access_token = _gmail_access_token(conn)
+    for attempt in range(2):
+        response = requests.post(
+            "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            json={"raw": raw},
+            timeout=12,
+        )
+        if response.status_code == 401 and attempt == 0:
+            conn.token_expires_at = timezone.now() - timedelta(seconds=1)
+            conn.save(update_fields=["token_expires_at", "updated_at"])
+            access_token = _gmail_access_token(conn)
+            continue
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("id"):
+            raise RuntimeError("Gmail accepted no message identifier for the send request.")
+        return data
+    raise RuntimeError("Gmail authorization failed after refreshing the access token.")
+
+
 def _google_configured():
     return bool(getattr(settings, "GOOGLE_CLIENT_ID", "") and getattr(settings, "GOOGLE_CLIENT_SECRET", "") and getattr(settings, "GOOGLE_OAUTH_REDIRECT_URI", ""))
 
@@ -76,6 +155,9 @@ def gmail_callback(request, code, state):
     email = (profile.get("email") or "").strip().lower()
     if not email or not profile.get("email_verified"):
         raise ValueError("Google did not verify ownership of this Gmail account.")
+    existing = NotificationChannelConnection.objects.filter(user=request.user, provider="gmail").first()
+    if not refresh and not (existing and existing.refresh_token):
+        raise ValueError("Google did not issue a refresh token. Revoke AlgoBot access in Google and reconnect Gmail.")
     conn, _ = NotificationChannelConnection.objects.get_or_create(user=request.user, provider="gmail")
     conn.status = "verified"
     conn.address = email
@@ -83,6 +165,11 @@ def gmail_callback(request, code, state):
     conn.access_token = _enc(access)
     if refresh:
         conn.refresh_token = _enc(refresh)
+    try:
+        expires_in = max(60, int(data.get("expires_in", 3600)))
+    except (TypeError, ValueError):
+        expires_in = 3600
+    conn.token_expires_at = timezone.now() + timedelta(seconds=expires_in)
     conn.metadata = {"name": profile.get("name", ""), "picture": profile.get("picture", "")}
     conn.verified_at = timezone.now()
     conn.verification_code_hash = ""
