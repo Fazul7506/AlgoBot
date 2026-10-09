@@ -2,9 +2,11 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.contrib.sessions.middleware import SessionMiddleware
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection, Position
+from core.account_context import SESSION_KEY
 from apps.execution.models import Order
 from core.dashboard_api import DashboardViewSet
 
@@ -132,3 +134,71 @@ class DashboardAccountOverviewTests(TestCase):
         self.assertEqual(response.data["status"], "unavailable")
         self.assertIsNone(response.data["data"]["account"])
         self.assertIsNone(response.data["data"]["trading_stats"])
+
+    def test_account_overview_requires_authentication(self):
+        request = APIRequestFactory().get("/api/dashboard/account_overview/")
+        response = DashboardViewSet.as_view({"get": "account_overview"})(request)
+        self.assertIn(response.status_code, (401, 403))
+
+    def test_account_overview_uses_the_server_session_selected_account(self):
+        selected = BrokerAccount.objects.create(
+            user=self.user,
+            broker=self.broker,
+            account_id="DASHBOARD-SESSION-SELECTED",
+            status="active",
+            currency="EUR",
+            balance="250.00",
+            equity="250.00",
+        )
+        BrokerConnection.objects.create(
+            broker=self.broker,
+            broker_account=selected,
+            status="connected",
+        )
+        request = APIRequestFactory().get("/api/dashboard/account_overview/")
+        SessionMiddleware(lambda current_request: None).process_request(request)
+        request.session[SESSION_KEY] = selected.pk
+        request.session.save()
+        force_authenticate(request, user=self.user)
+        response = DashboardViewSet.as_view({"get": "account_overview"})(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["account"]["id"], selected.pk)
+        self.assertEqual(response.data["data"]["account"]["account_id"], selected.account_id)
+
+    def test_dashboard_trade_history_is_scoped_to_the_server_selected_account(self):
+        selected = BrokerAccount.objects.create(
+            user=self.user,
+            broker=self.broker,
+            account_id="DASHBOARD-ORDER-SELECTED",
+            status="active",
+            currency="USD",
+        )
+        BrokerConnection.objects.create(
+            broker=self.broker,
+            broker_account=selected,
+            status="connected",
+        )
+        Order.objects.create(
+            user=self.user,
+            broker_account=self.account,
+            symbol="OWN-ACCOUNT",
+            direction="buy",
+            stake="10",
+            status="executed",
+        )
+        Order.objects.create(
+            user=self.user,
+            broker_account=selected,
+            symbol="SELECTED-ACCOUNT",
+            direction="sell",
+            stake="5",
+            status="executed",
+        )
+        request = APIRequestFactory().get("/api/dashboard/trade_history/?days=30&limit=8")
+        SessionMiddleware(lambda current_request: None).process_request(request)
+        request.session[SESSION_KEY] = selected.pk
+        request.session.save()
+        force_authenticate(request, user=self.user)
+        response = DashboardViewSet.as_view({"get": "trade_history"})(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["symbol"] for row in response.data["data"]], ["SELECTED-ACCOUNT"])

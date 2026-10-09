@@ -25,7 +25,9 @@
     if (typeof shared !== 'function') {
       return Promise.reject(new Error('Canonical frontend transport is not ready.'));
     }
-    return shared(url, options, timeout);
+    // The API's active-account authority is the server-side Django session.
+    // Preserve that cookie on Dashboard reads while keeping the canonical transport.
+    return shared(url, {credentials: 'include', ...options}, timeout);
   }
 
   function status(key, state, label) {
@@ -48,6 +50,7 @@
       if (!value || !value.account) return null;
       const requestedId = currentAccountId();
       if (!requestedId || value.account.id == null || String(value.account.id) !== requestedId) return null;
+      if (value.account.is_connected !== true || String(value.account.data_freshness || '').toLowerCase() !== 'fresh') return null;
       return value;
     } catch (_) { return null; }
   }
@@ -56,7 +59,7 @@
     try { sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({at: Date.now(), account})); } catch (_) {}
   }
 
-  function renderAccount(account, message = '') {
+  function renderAccount(account, message = '', persistSnapshot = true, staleDisplay = false) {
     if (!account) {
       ['balance','equity','available','pnl'].forEach(key => setText(`[data-kpi="${key}"]`, 'Unavailable'));
       setText('[data-kpi-state="balance"]', message || 'No authoritative broker account');
@@ -73,18 +76,36 @@
     setText('[data-kpi="equity"]', money(equity, currency));
     setText('[data-kpi="available"]', money(account.free_margin ?? account.available_margin ?? account.available, currency));
     setText('[data-kpi="pnl"]', pnl == null ? 'Unavailable' : money(pnl, currency));
-    setText('[data-kpi-state="balance"]', 'Authoritative broker snapshot');
-    setText('[data-kpi-state="equity"]', account.equity == null ? 'Not reported by broker' : 'Authoritative broker equity');
+    const freshness = String(account.data_freshness || 'unknown').toLowerCase();
+    const connected = account.is_connected === true;
+    const snapshotLabel = staleDisplay ? 'Last verified broker snapshot' : freshness === 'fresh' ? 'Fresh broker snapshot' : freshness === 'stale' ? 'Stale broker snapshot' : 'Broker snapshot freshness unknown';
+    setText('[data-kpi-state="balance"]', freshness === 'fresh' ? 'Authoritative broker snapshot' : snapshotLabel);
+    setText('[data-kpi-state="equity"]', account.equity == null ? 'Not reported by broker' : (freshness === 'fresh' ? 'Authoritative broker equity' : snapshotLabel));
     const broker = typeof account.broker === 'string' ? account.broker : (account.broker?.name || account.broker_name || 'Broker');
     const id = account.account_id || account.broker_account_id || account.loginid || 'Account';
-    const sync = account.last_synced_at ? new Date(account.last_synced_at).toLocaleTimeString() : 'snapshot';
-    setHtml('[data-dashboard-brokers]', `<span><b></b><strong>${esc(broker)}</strong> · ${esc(id)} · CONNECTED</span><small>Broker snapshot · ${esc(sync)}</small>`);
-    status('account', 'ok', 'Broker account available');
-    writeLastAccountSnapshot(account);
+    const sync = account.last_synced_at ? new Date(account.last_synced_at).toLocaleTimeString() : 'not verified';
+    const connectionLabel = staleDisplay ? 'CONNECTION LAST VERIFIED' : connected ? 'CONNECTED' : 'CONNECTION UNCONFIRMED';
+    setHtml('[data-dashboard-brokers]', `<span><b></b><strong>${esc(broker)}</strong> · ${esc(id)} · ${esc(connectionLabel)}</span><small>${esc(snapshotLabel)} · ${esc(sync)}</small>`);
+    const accountState = staleDisplay ? 'warn' : connected && freshness === 'fresh' ? 'ok' : (freshness === 'stale' || freshness === 'unknown' || !connected ? 'warn' : 'error');
+    const accountStatus = staleDisplay ? 'Broker refresh timed out · last verified snapshot shown' : !connected ? 'Broker connection unconfirmed' : freshness === 'fresh' ? 'Broker account synchronized' : freshness === 'stale' ? 'Broker snapshot is stale' : 'Broker snapshot freshness unknown';
+    status('account', accountState, accountStatus);
+    // Only cache a snapshot confirmed fresh by the broker and connection layer.
+    if (persistSnapshot && connected && freshness === 'fresh') writeLastAccountSnapshot(account);
   }
 
   function renderRows(selector, values, renderer, fallback) {
     setHtml(selector, values.length ? values.map(renderer).join('') : empty(fallback));
+  }
+
+  function snapshotAge(value) {
+    const timestamp = value == null ? NaN : Date.parse(value);
+    if (!Number.isFinite(timestamp)) return 'freshness unavailable';
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 0) return 'timestamp ahead of local clock';
+    if (seconds < 60) return `updated ${seconds}s ago`;
+    if (seconds < 3600) return `updated ${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `updated ${Math.floor(seconds / 3600)}h ago`;
+    return `updated ${Math.floor(seconds / 86400)}d ago`;
   }
 
   function renderCollections(result) {
@@ -92,21 +113,28 @@
     const orders = result.orders.ok ? list(result.orders.value).slice(0, 8) : [];
     const markets = result.markets.ok ? list(result.markets.value).slice(0, 8) : [];
     const signals = result.signals.ok ? list(result.signals.value).slice(0, 8) : [];
+    const marketsTimestamped = markets.some(item => Number.isFinite(Date.parse(item.timestamp)));
+    const positionsStale = result.positions.ok && (result.positions.value?.status === 'stale' || result.positions.value?.source === 'broker_cache');
+    const ordersStale = result.orders.ok && (result.orders.value?.status === 'stale' || result.orders.value?.source === 'broker_cache');
 
     renderRows('[data-dashboard-positions]', positions, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.profit ?? item.pnl ?? item.profit_loss ?? '—')}</b></div>`, result.positions.ok ? 'No open positions reported by the backend.' : 'Position service unavailable.');
     renderRows('[data-dashboard-orders]', orders, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.status || 'Unknown')}</b></div>`, result.orders.ok ? 'No orders reported by the backend.' : 'Order service unavailable.');
-    renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol?.display_name || item.display_name || item.symbol || 'Market')}</strong><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid ?? 'Unavailable')} · Ask ${esc(item.ask_price ?? item.ask ?? 'Unavailable')}` : 'Broker market catalogue'}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.ok ? 'No market snapshot is currently available.' : 'Market data service unavailable.');
+    renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol?.display_name || item.display_name || item.symbol || 'Market')}</strong><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid ?? 'Unavailable')} · Ask ${esc(item.ask_price ?? item.ask ?? 'Unavailable')}` : 'Broker market catalogue'} · ${esc(snapshotAge(item.timestamp))}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.ok ? 'No market snapshot is currently available.' : 'Market data service unavailable.');
     renderRows('[data-dashboard-signals]', signals, item => `<div class="signal-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')} · ${esc(item.direction || item.signal || 'HOLD')}</strong><span>${esc(item.strategy?.name || item.strategy || item.market_regime || '')}</span><b>${item.confidence != null && Number.isFinite(Number(item.confidence)) ? `${Number(item.confidence).toFixed(0)}%` : '—'}</b></div>`, result.signals.ok ? 'No recent backend signals.' : 'Signal service unavailable.');
 
-    status('positions', result.positions.ok ? (positions.length ? 'ok' : 'warn') : 'error', result.positions.ok ? (positions.length ? 'Exposure available' : 'No open positions') : 'Position service unavailable');
-    status('execution', result.orders.ok ? (orders.length ? 'ok' : 'warn') : 'error', result.orders.ok ? (orders.length ? 'Execution feed available' : 'No recent orders') : 'Order service unavailable');
-    status('markets', result.markets.ok ? (markets.length ? 'ok' : 'warn') : 'error', result.markets.ok ? (markets.length ? 'Market data available' : 'No market snapshot') : 'Market data unavailable');
+    const positionSync = result.positions.value?.meta?.last_synced_at || result.positions.value?.meta?.last_synced || null;
+    const orderSync = result.orders.value?.meta?.last_synced_at || result.orders.value?.meta?.last_synced || null;
+    status('positions', !result.positions.ok ? 'error' : (positions.length && !positionsStale ? 'ok' : 'warn'),
+      !result.positions.ok ? 'Position service unavailable' : positionsStale ? `Cached exposure · ${snapshotAge(positionSync)}` : positions.length ? 'Exposure available' : 'No open positions');
+    status('execution', !result.orders.ok ? 'error' : (orders.length && !ordersStale ? 'ok' : 'warn'),
+      !result.orders.ok ? 'Order service unavailable' : ordersStale ? `Cached orders · ${snapshotAge(orderSync)}` : orders.length ? 'Execution feed available' : 'No recent orders');
+    status('markets', result.markets.ok ? (markets.length && marketsTimestamped ? 'ok' : 'warn') : 'error', result.markets.ok ? (markets.length && marketsTimestamped ? 'Market snapshot timestamps available' : markets.length ? 'Market data returned · freshness unknown' : 'No market snapshot') : 'Market data unavailable');
     status('signals', result.signals.ok ? (signals.length ? 'ok' : 'warn') : 'error', result.signals.ok ? (signals.length ? 'AI signal feed available' : 'No recent signals') : 'Signal service unavailable');
 
     const activity = [
       ...orders.map(item => ({label: item.symbol?.symbol || item.symbol || 'Order', meta: item.status || 'Order', time: item.updated_at || item.created_at})),
       ...signals.map(item => ({label: item.symbol?.symbol || item.symbol || 'Signal', meta: item.direction || item.signal || 'Signal', time: item.created_at || item.timestamp}))
-    ].filter(item => item.time).sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0, 8);
+    ].filter(item => item.time && Number.isFinite(Date.parse(item.time))).sort((a,b) => Date.parse(b.time) - Date.parse(a.time)).slice(0, 8);
     renderRows('[data-dashboard-activity]', activity, item => `<div class="mini-row"><strong>${esc(item.label)}</strong><span>${esc(item.meta)}</span><b>${esc(new Date(item.time).toLocaleString())}</b></div>`, 'No recent backend activity.');
   }
 
@@ -114,7 +142,9 @@
     const seq = ++loadSeq;
     const active = window.AlgoBotBrokerState?.get?.()?.account;
     const requestedAccountId = active?.id != null ? String(active.id) : null;
-    if (requestedAccountId != null) selectedAccountId = requestedAccountId;
+    // Clear the previous account identity when no account is selected; otherwise
+    // its cached snapshot could survive a disconnect and be shown on a timeout.
+    selectedAccountId = requestedAccountId;
     busy = true;
     setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
     document.documentElement.dataset.dashboardLoading = 'true';
@@ -122,20 +152,34 @@
       const responses = await Promise.allSettled([
         request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS),
         request('/api/positions/open/', {}, 8000),
-        request('/api/orders/', {}, 8000),
+        request('/api/dashboard/trade_history/?days=30&limit=8', {}, 8000),
         request('/api/market/snapshots/all_snapshots/', {}, 8000),
         request('/api/dashboard/signals/?limit=8', {}, 8000)
       ]);
       const currentId = window.AlgoBotBrokerState?.get?.()?.account?.id;
       if (seq !== loadSeq || (requestedAccountId != null && currentId != null && String(currentId) !== requestedAccountId)) return;
       const [account, positions, orders, markets, signals] = responses;
-      if (account.status === 'fulfilled') renderAccount(account.value?.data?.account || account.value?.account || null);
+      const accountPayload = account.status === 'fulfilled'
+        ? (account.value?.data?.account || account.value?.account || null)
+        : null;
+      // Never paint an account response that belongs to a different selection.
+      // Internal account IDs are compared only when both sides expose one.
+      if (requestedAccountId != null && accountPayload && (accountPayload.id == null || String(accountPayload.id) !== requestedAccountId)) {
+        renderAccount(null, 'Account changed during refresh · retrying');
+        setText('[data-dashboard-sync]', 'Account selection changed · refreshing');
+        loadSeq += 1; // Prevent this request's finally block from replacing the fast retry.
+        timer = setTimeout(load, 250);
+        return;
+      }
+      if (account.status === 'fulfilled') renderAccount(accountPayload);
       else if (account.reason?.code === 'API_TIMEOUT') {
         const stale = readLastAccountSnapshot();
         if (stale?.account) {
-          renderAccount(stale.account);
-          setText('[data-kpi-state="balance"]', `Last verified broker snapshot · refresh timed out${stale.at ? ` · ${new Date(stale.at).toLocaleTimeString()}` : ''}`);
-          status('account', 'warn', 'Broker refresh timed out · last verified snapshot shown');
+          renderAccount(stale.account, '', false, true);
+          const verifiedAt = stale.account.last_synced_at || stale.at;
+          const timeoutLabel = `Last verified broker snapshot · refresh timed out${verifiedAt ? ` · ${new Date(verifiedAt).toLocaleTimeString()}` : ''}`;
+          setText('[data-kpi-state="balance"]', timeoutLabel);
+          setText('[data-kpi-state="equity"]', timeoutLabel);
         } else renderAccount(null, 'Broker snapshot timed out · refresh again');
       } else renderAccount(null, 'Broker snapshot unavailable');
       renderCollections({
