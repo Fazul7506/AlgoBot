@@ -209,7 +209,13 @@ class OrderViewSet(viewsets.ModelViewSet):
                 payout = Decimal(str(proposal.get('payout')))
                 proposal_symbol = str(proposal.get('symbol') or '').strip()
                 proposal_contract = str(proposal.get('contract_type') or '').strip().upper()
-                if (proposal_symbol != symbol or proposal_contract != contract_type
+                proposal_currency = str(proposal.get('currency') or '').upper()
+                proposal_duration = int(proposal.get('duration'))
+                proposal_duration_unit = str(proposal.get('duration_unit') or '').lower().strip()
+                if (not proposal.get('proposal_id') or proposal_symbol != symbol
+                        or proposal_contract != contract_type
+                        or proposal_currency != str(account.currency or 'USD').upper()
+                        or proposal_duration != int(duration) or proposal_duration_unit != duration_unit
                         or not proposal_cost.is_finite() or proposal_cost <= 0
                         or not payout.is_finite() or payout <= 0):
                     raise ValueError('Broker proposal identity or price is invalid')
