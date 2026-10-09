@@ -107,6 +107,24 @@ class OrderViewSet(viewsets.ModelViewSet):
                 return response.Response({'status':'rejected','code':'MARKET_SYMBOL_REQUIRED','detail':'Select a broker instrument.'}, status=status.HTTP_400_BAD_REQUEST)
             if not contract_type:
                 return response.Response({'status':'rejected','code':'BROKER_CONTRACT_REQUIRED','detail':'Select a broker-supported contract type before previewing.'}, status=status.HTTP_409_CONFLICT)
+            try:
+                stake_value = Decimal(str(data.get('stake')))
+                if not stake_value.is_finite() or stake_value <= 0:
+                    raise ValueError('Stake must be greater than zero')
+                from types import SimpleNamespace
+                from apps.risk.validator import RiskValidator
+                RiskValidator().validate_order(SimpleNamespace(
+                    user=request.user, broker_account=account, stake=stake_value
+                ))
+            except Exception as exc:
+                log.info('Terminal preview rejected by risk validation', extra={
+                    'user_id': request.user.id, 'account_id': account.id,
+                    'symbol': symbol, 'reason': str(exc),
+                })
+                return response.Response({
+                    'status':'rejected','code':'PREVIEW_RISK_REJECTED',
+                    'detail':str(exc) or 'The stake failed pre-trade risk validation.',
+                }, status=status.HTTP_409_CONFLICT)
 
             # Preview against the selected broker now, rather than treating a
             # persisted snapshot as proof that a live quote is still fresh.
@@ -167,9 +185,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 log.warning('Broker returned an invalid live quote during Terminal preview', extra={'user_id':request.user.id,'symbol':symbol,'account_id':account.id})
                 return response.Response({'status':'rejected','code':'BROKER_MARKET_DATA_INVALID','detail':'The broker returned an invalid or incomplete live quote. No order was submitted.'}, status=status.HTTP_502_BAD_GATEWAY)
 
-            stake = data.get('stake')
-            try: stake_value = float(Decimal(str(stake)))
-            except (InvalidOperation, TypeError, ValueError): stake_value = None
+            stake_value = float(stake_value)
             market = {
                 'price': float(price),
                 'bid': float(bid) if bid is not None else None,
@@ -179,7 +195,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'age_seconds': max(0, int(age)),
                 'source': 'selected_broker_live_quote',
             }
-            return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':symbol,'contract_type':contract_type,'direction':direction.lower(),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':market,'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'fresh_market_data':True,'contract_verified':True,'ai_verified':False,'ai_required':False}})
+            return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':symbol,'contract_type':contract_type,'direction':direction.lower(),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':market,'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'risk_verified':True,'fresh_market_data':True,'contract_verified':True,'ai_verified':False,'ai_required':False}})
         except Exception:
             log.exception('Pre-trade preview failed', extra={'user_id':request.user.id,'symbol':request.data.get('symbol')})
             return response.Response({'status':'rejected','code':'PREVIEW_INTERNAL_ERROR','detail':'Pre-trade preview could not be completed safely. Check market/broker status and retry.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
