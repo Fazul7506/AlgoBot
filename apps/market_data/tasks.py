@@ -464,6 +464,7 @@ def _mark_backfill_run(
 @shared_task(
     acks_late=True,
     reject_on_worker_lost=True,
+    ignore_result=True,
     soft_time_limit=2 * 60 * 60,
     time_limit=2 * 60 * 60 + 5 * 60,
 )
@@ -812,6 +813,7 @@ def ensure_initial_candle_backfill(count=5000):
 @shared_task(
     acks_late=True,
     reject_on_worker_lost=True,
+    ignore_result=True,
     soft_time_limit=4 * 60 * 60,
     time_limit=4 * 60 * 60 + 5 * 60,
 )
