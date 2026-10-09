@@ -83,6 +83,27 @@ class Command(BaseCommand):
                 f"Celery default queue is {default_queue!r}, expected 'celery'"
             )
 
+        # Verify the worker is pointed at a migrated application database, not
+        # merely a reachable PostgreSQL server. Without this check the process
+        # can appear healthy while scheduled backfill tasks fail on missing tables.
+        from django.db import connection as django_connection
+        from apps.market_data.models import CandleBackfillRun
+
+        try:
+            tables = set(django_connection.introspection.table_names())
+        except Exception as exc:
+            raise CommandError(
+                "The configured application database is not reachable from the "
+                f"market-data worker: {exc}"
+            ) from exc
+        required_table = CandleBackfillRun._meta.db_table
+        if required_table not in tables:
+            raise CommandError(
+                f"Required database table {required_table!r} is missing. Apply Django "
+                "migrations to the same DATABASE_URL used by the general worker before "
+                "starting the market-data worker."
+            )
+
         try:
             connection = app.connection_for_read()
             connection.ensure_connection(max_retries=1)
