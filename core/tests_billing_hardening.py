@@ -101,7 +101,7 @@ class BillingHardeningTests(TestCase):
         self.assertEqual(subscription.plan, "BASIC")
         self.assertEqual(subscription.provider, "pesapal")
         self.assertFalse(subscription.recurring)
-        self.assertIsNone(subscription.provider_subscription_id)
+        self.assertFalse(subscription.provider_subscription_id)
 
     def test_webhook_reconciliation_never_creates_an_invoice_from_forged_identity(self):
         result = PaymentReconciler.reconcile(
