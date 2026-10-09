@@ -51,3 +51,8 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("freshness unavailable", source)
         self.assertIn("const marketsTimestamped = markets.some(item => Number.isFinite(Date.parse(item.timestamp)))", source)
         self.assertIn("Market data returned · freshness unknown", source)
+
+    def test_dashboard_clears_previous_account_identity_when_no_account_is_selected(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("selectedAccountId = requestedAccountId;", source)
+        self.assertIn("its cached snapshot could survive a disconnect", source)
