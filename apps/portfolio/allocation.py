@@ -1,4 +1,4 @@
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_DOWN
 
 from django.db import transaction
 
@@ -43,7 +43,9 @@ class AllocationService:
                 raise AllocationError("Duplicate strategy/symbol allocation targets are not allowed.")
             seen.add(identity)
             pct = self._decimal(target.get("allocation_percent", 0), f"targets[{index}].allocation_percent", maximum=Decimal("100"))
+            pct = pct.quantize(Decimal("0.000001"))
             risk_budget = self._decimal(target.get("risk_budget", 0), f"targets[{index}].risk_budget", maximum=Decimal("100"))
+            risk_budget = risk_budget.quantize(Decimal("0.000001"))
             clean_targets.append({
                 "strategy": strategy,
                 "symbol": symbol,
@@ -52,9 +54,11 @@ class AllocationService:
             })
 
         if method == "equal_weight":
-            weight = Decimal("100") / Decimal(len(clean_targets))
-            for target in clean_targets:
+            quantum = Decimal("0.000001")
+            weight = (Decimal("100") / Decimal(len(clean_targets))).quantize(quantum, rounding=ROUND_DOWN)
+            for target in clean_targets[:-1]:
                 target["allocation_percent"] = weight
+            clean_targets[-1]["allocation_percent"] = Decimal("100") - weight * Decimal(len(clean_targets) - 1)
 
         total = sum(target["allocation_percent"] for target in clean_targets)
         if total > Decimal("100.000001"):
