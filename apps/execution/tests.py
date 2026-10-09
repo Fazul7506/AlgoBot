@@ -2,11 +2,13 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
 from pathlib import Path
+from datetime import timedelta
 
 ROOT = Path(__file__).resolve().parents[2]
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, SimpleTestCase
+from django.utils import timezone
 from rest_framework.test import APITestCase, APIRequestFactory, force_authenticate
 
 from apps.brokers.exceptions import BrokerConnectionError, BrokerOrderError
@@ -455,3 +457,18 @@ class OrderCancellationSafetyTests(TestCase):
         result = OrderViewSet.as_view({'post': 'retry'})(request, pk=order.pk)
         self.assertEqual(result.status_code, 409)
         self.assertEqual(result.data['code'], 'EXECUTION_RETRY_IN_PROGRESS')
+
+    def test_manual_retry_clears_stale_queue_deadline(self):
+        order = self._order('failed')
+        queue = ExecutionQueue.objects.create(
+            order=order, status='failed', next_retry=timezone.now() + timedelta(hours=1)
+        )
+        request = APIRequestFactory().post(f'/api/orders/{order.pk}/retry/', {}, format='json')
+        force_authenticate(request, user=self.user)
+        result = OrderViewSet.as_view({'post': 'retry'})(request, pk=order.pk)
+        self.assertEqual(result.status_code, 200)
+        queue.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(queue.status, 'pending')
+        self.assertIsNone(queue.next_retry)
+        self.assertEqual(order.status, 'queued')
