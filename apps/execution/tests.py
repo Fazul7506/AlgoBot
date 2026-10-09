@@ -288,6 +288,19 @@ class TerminalExecutionContractTests(SimpleTestCase):
         self.assertIn("algobot:market-watchdog-tick", chart)
         self.assertNotIn("state.ws=new WebSocket", chart)
 
+    def test_watchdog_does_not_fabricate_bid_ask_from_public_last_tick(self):
+        watchdog = (ROOT / 'static' / 'js' / 'terminal_market_watchdog.js').read_text()
+        self.assertIn("textContent('Unavailable')", watchdog)
+        self.assertIn("parsedEpoch > now / 1000 + 5", watchdog)
+        self.assertIn("Date.now() - silenceSince > 15000", watchdog)
+
+    def test_terminal_catalogue_and_account_scoped_records_reject_stale_responses(self):
+        terminal = (ROOT / 'static' / 'js' / 'trading_terminal.js').read_text()
+        self.assertIn("catalogueLoadSeq", terminal)
+        self.assertIn("accountId===String(window.AlgoBotAccountContext", terminal)
+        self.assertIn("recordsLoadSeq", terminal)
+        self.assertIn("signalsLoadSeq", terminal)
+
 
 class SignalValidationServiceTests(SimpleTestCase):
     def test_returns_structured_validation_errors(self):
