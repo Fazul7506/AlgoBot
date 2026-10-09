@@ -203,14 +203,25 @@ def execute_backtest(backtest_id):
     from apps.strategies.models import Strategy as StrategyModel
     from apps.strategies.services import StrategyService
 
-    backtest = Backtest.objects.get(pk=backtest_id)
-    _cluster_update(
-        backtest_id,
-        status='running',
-        worker_id=os.getenv('HOSTNAME', 'celery-worker')[:120],
-        locked_at=timezone.now(),
-        attempts=F('attempts') + 1,
-    )
+    # A queued Celery message may arrive after cancellation, retry, or edit.
+    # Claim only the current pending version, and use the version as a fencing
+    # token so an older worker cannot overwrite a newer result.
+    with transaction.atomic():
+        backtest = Backtest.objects.select_for_update().filter(pk=backtest_id).first()
+        if backtest is None:
+            return None
+        if backtest.status != 'pending':
+            return backtest.id
+        claimed_version = backtest.result_version
+        backtest.status = 'running'
+        backtest.save(update_fields=['status', 'updated_at'])
+        _cluster_update(
+            backtest_id,
+            status='running',
+            worker_id=os.getenv('HOSTNAME', 'celery-worker')[:120],
+            locked_at=timezone.now(),
+            attempts=F('attempts') + 1,
+        )
     strategy = StrategyModel.objects.filter(name__iexact=backtest.strategy).first()
     if not strategy:
         backtest.status = 'failed'
@@ -219,8 +230,6 @@ def execute_backtest(backtest_id):
         _cluster_update(backtest_id, status='failed', locked_at=None)
         return backtest.id
     try:
-        backtest.status = 'running'
-        backtest.save(update_fields=['status', 'updated_at'])
         evaluation_start_epoch = int(backtest.start_date.timestamp())
         evaluation_end_epoch = int(backtest.end_date.timestamp())
         calculation_start = _warmup_start(backtest)
@@ -236,19 +245,26 @@ def execute_backtest(backtest_id):
         result['strategy_confidence'] = _strategy_confidence(result)
         result['research_training'] = {'eligible': bool(result.get('total_trades', 0)), 'purpose': 'ai_training_research_only', 'live_authority': False, 'source': 'completed_historical_backtest'}
         with transaction.atomic():
-            trade_count = _persist_trades(backtest, result)
-            _persist_statistics(backtest, result)
+            current = Backtest.objects.select_for_update().filter(pk=backtest_id).first()
+            if current is None or current.status != 'running' or current.result_version != claimed_version:
+                # Cancellation/retry/edit won the race; this worker's result is stale.
+                return backtest_id
+            trade_count = _persist_trades(current, result)
+            _persist_statistics(current, result)
             result['persisted_trade_count'] = trade_count
-            backtest.status = 'completed'
-            backtest.result_snapshot = {'status': 'completed', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat(), 'strategy': strategy.name, 'symbol': backtest.symbol, 'timeframe': backtest.timeframe, 'result': result}
-            backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+            current.status = 'completed'
+            current.result_snapshot = {'status': 'completed', 'start_date': current.start_date.isoformat(), 'end_date': current.end_date.isoformat(), 'strategy': strategy.name, 'symbol': current.symbol, 'timeframe': current.timeframe, 'result': result}
+            current.save(update_fields=['status', 'result_snapshot', 'updated_at'])
             _cluster_update(backtest_id, status='completed', locked_at=None)
         return backtest.id
     except Exception as exc:
-        backtest.status = 'failed'
-        backtest.result_snapshot = {'status': 'failed', 'code': 'BACKTEST_EXECUTION_FAILED', 'error': f'{exc.__class__.__name__}: {exc}', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat()}
-        backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
-        _cluster_update(backtest_id, status='failed', locked_at=None)
+        with transaction.atomic():
+            current = Backtest.objects.select_for_update().filter(pk=backtest_id).first()
+            if current is not None and current.status == 'running' and current.result_version == claimed_version:
+                current.status = 'failed'
+                current.result_snapshot = {'status': 'failed', 'code': 'BACKTEST_EXECUTION_FAILED', 'error': f'{exc.__class__.__name__}: {exc}', 'start_date': current.start_date.isoformat(), 'end_date': current.end_date.isoformat()}
+                current.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+                _cluster_update(backtest_id, status='failed', locked_at=None)
         log.exception('Backtest worker failed', extra={'backtest_id': backtest_id})
         raise
 
