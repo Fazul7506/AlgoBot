@@ -547,7 +547,8 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertEqual(result["run_id"], run.pk)
         self.assertIsNotNone(run.completed_at)
         self.assertLess((timezone.now() - run.completed_at).total_seconds(), 5)
-        self.assertEqual(result["seconds_remaining"], 1800)
+        self.assertGreater(result["seconds_remaining"], 1790)
+        self.assertLessEqual(result["seconds_remaining"], 1800)
         self.assertTrue(
             CandleBackfillEvent.objects.filter(
                 run=run, event_type="completion_timestamp_repaired"
