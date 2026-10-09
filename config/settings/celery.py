@@ -37,7 +37,7 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
     # a still-running late-ack task before its durable heartbeat/recovery logic
     # can make a decision.
     "visibility_timeout": 4 * 60 * 60,
-    "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "4"))),
+    "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "2"))),
 }
 CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
     "visibility_timeout": 4 * 60 * 60,
