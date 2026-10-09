@@ -63,3 +63,18 @@ class AutomationSafetyTests(TestCase):
         self.assertEqual(response.status_code, 501)
         self.assertEqual(response.json()["status"], "not_configured")
         self.assertFalse(ScheduledTask.objects.filter(workflow=workflow).exists())
+
+
+    def test_system_rule_api_does_not_expose_action_configuration(self):
+        AutomationRule.objects.create(
+            name="Private routing rule",
+            trigger={"type": "system_event", "event": "internal"},
+            action={"type": "webhook_call", "parameters": {"secret": "never-expose"}},
+        )
+        self.client.force_login(self.user)
+        response = self.client.get("/api/automation/rules/")
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode("utf-8")
+        self.assertIn("Private routing rule", body)
+        self.assertNotIn("webhook_call", body)
+        self.assertNotIn("never-expose", body)
