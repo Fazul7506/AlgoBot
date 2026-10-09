@@ -407,3 +407,12 @@ class OrderCancellationSafetyTests(TestCase):
         result = OrderViewSet.as_view({'post': 'retry'})(request, pk=order.pk)
         self.assertEqual(result.status_code, 409)
         self.assertEqual(result.data['code'], 'EXECUTION_RETRY_FORBIDDEN')
+
+    def test_failed_order_retry_is_rejected_while_worker_owns_queue(self):
+        order = self._order('failed')
+        ExecutionQueue.objects.create(order=order, status='processing')
+        request = APIRequestFactory().post(f'/api/orders/{order.pk}/retry/', {}, format='json')
+        force_authenticate(request, user=self.user)
+        result = OrderViewSet.as_view({'post': 'retry'})(request, pk=order.pk)
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data['code'], 'EXECUTION_RETRY_IN_PROGRESS')
