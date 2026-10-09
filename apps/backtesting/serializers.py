@@ -79,7 +79,7 @@ class BacktestSerializer(serializers.ModelSerializer):
             end = timezone.make_aware(end)
         if end <= start:
             raise serializers.ValidationError('end_date must be later than start_date.')
-        if not self.instance and end > timezone.now():
+        if end > timezone.now():
             raise serializers.ValidationError({'end_date': 'Backtests are historical only; end_date cannot be in the future.'})
         attrs['start_date'] = start
         attrs['end_date'] = end
