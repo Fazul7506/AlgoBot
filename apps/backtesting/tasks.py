@@ -108,7 +108,9 @@ def _persist_trades(backtest, result):
 def _persist_statistics(backtest, result):
     from .models import BacktestStatistics
     pf = result.get('profit_factor', 0)
-    if pf == float('inf'):
+    # The decimal column cannot store infinity/NULL; keep its legacy numeric
+    # fallback while the JSON metrics preserve profit_factor_unbounded.
+    if pf is None or (isinstance(pf, float) and not math.isfinite(pf)):
         pf = 0
     return BacktestStatistics.objects.update_or_create(
         backtest=backtest,
