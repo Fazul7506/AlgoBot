@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, logging, time
+import hashlib, logging, math, time
 from typing import Any, Iterable
 from django.core.cache import cache
 from django.utils import timezone
@@ -10,8 +10,11 @@ from .training_dataset import current_ai_feedback, current_strategy_signal_featu
 log=logging.getLogger(__name__)
 
 def _num(v,default=0.0):
-    try:return float(v or 0)
-    except (TypeError,ValueError):return default
+    try:
+        result = float(v or 0)
+        return result if math.isfinite(result) else default
+    except (TypeError,ValueError,OverflowError):
+        return default
 
 def _decision(value):
     value=str(value or '').upper(); return {'UP':'BUY','LONG':'BUY','DOWN':'SELL','SHORT':'SELL','WAIT':'AVOID','HOLD':'AVOID','NO_MODELS':'AVOID','AI_ERROR':'AVOID','DO NOT TRADE':'AVOID'}.get(value,value if value in {'BUY','SELL','AVOID'} else 'AVOID')
@@ -59,7 +62,25 @@ class InferenceService:
         if ensemble and ensemble.models:
             try:
                 import numpy as np
-                vector=np.array([[_num(features.get(name,0.0)) for name in MODEL_FEATURE_NAMES]],dtype=float); result=ensemble.predict(vector); direction=_decision(result.get('direction')); prob=float(result.get('probability',0)); consensus={'decision':direction,'probability':round(prob,6),'confidence':round(float(result.get('confidence',prob*100)),2),'agreement':round(float(result.get('agreement',0)),6),'disagreement':round(float(result.get('disagreement',0)),6),'models_used':int(result.get('models_used',0)),'model_types':result.get('model_types',[]),'method':result.get('method','weighted_average'),'model_outputs':result.get('model_outputs',result.get('predictions',[]))}; return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
+                vector=np.array([[_num(features.get(name,0.0)) for name in MODEL_FEATURE_NAMES]],dtype=float)
+                result=ensemble.predict(vector)
+                prob=float(result.get('probability',0))
+                confidence=float(result.get('confidence',prob*100))
+                agreement=float(result.get('agreement',0))
+                disagreement=float(result.get('disagreement',0))
+                models_used=int(result.get('models_used',0))
+                if (
+                    not all(math.isfinite(value) for value in (prob, confidence, agreement, disagreement))
+                    or not 0 <= prob <= 1
+                    or not 0 <= confidence <= 100
+                    or not 0 <= agreement <= 1
+                    or not 0 <= disagreement <= 1
+                    or models_used < 1
+                ):
+                    return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'invalid_ensemble_output','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'invalid_ensemble_output'}}
+                direction=_decision(result.get('direction'))
+                consensus={'decision':direction,'probability':round(prob,6),'confidence':round(confidence,2),'agreement':round(agreement,6),'disagreement':round(disagreement,6),'models_used':models_used,'model_types':result.get('model_types',[]),'method':result.get('method','weighted_average'),'model_outputs':result.get('model_outputs',result.get('predictions',[]))}
+                return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
             except Exception as exc:log.exception('AI ensemble inference failed',extra={'symbol':symbol}); return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'error':str(exc),'source':'trained_ensemble','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'ensemble_inference_error'}}
         return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'no_trained_model','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'no_trained_model'}}
 
