@@ -13,6 +13,7 @@ from apps.brokers.exceptions import BrokerConnectionError, BrokerOrderError
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection, Position
 from apps.brokers.position_sync import PositionSyncError
 from apps.execution.deriv_views import DerivTradingActionView
+from apps.execution.exceptions import OrderValidationError
 from apps.execution.models import ExecutionQueue, Order
 from apps.execution.signal_validation import SignalValidationService
 from apps.execution.tasks import _execution_queue_singleton, process_execution_queue
@@ -358,3 +359,43 @@ class DerivTerminalSafetyTests(SimpleTestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.data["status"], "rejected")
         self.assertFalse(response.data["retryable"])
+
+
+class OrderCancellationSafetyTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='order-cancel-safety', password='test-password')
+        self.broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active')
+        self.account = BrokerAccount.objects.create(
+            user=self.user, broker=self.broker, account_id='CANCEL-SAFETY', status='active'
+        )
+
+    def _order(self, status):
+        return Order.objects.create(
+            user=self.user, broker_account=self.account, symbol='R_100',
+            direction='buy', order_type='market', stake='1', status=status,
+        )
+
+    def test_queued_order_cancellation_atomically_cancels_pending_queue(self):
+        order = self._order('queued')
+        queue = ExecutionQueue.objects.create(order=order, status='pending')
+        cancelled = ExecutionEngine().cancel_order(order)
+        queue.refresh_from_db()
+        self.assertEqual(cancelled.status, 'cancelled')
+        self.assertEqual(queue.status, 'cancelled')
+
+    def test_submitted_order_cannot_be_marked_cancelled_locally(self):
+        order = self._order('sent_to_broker')
+        with self.assertRaises(OrderValidationError):
+            ExecutionEngine().cancel_order(order)
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'sent_to_broker')
+
+    def test_processing_queue_cannot_be_cancelled_as_if_not_submitted(self):
+        order = self._order('queued')
+        queue = ExecutionQueue.objects.create(order=order, status='processing')
+        with self.assertRaises(OrderValidationError):
+            ExecutionEngine().cancel_order(order)
+        queue.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(queue.status, 'processing')
+        self.assertEqual(order.status, 'queued')
