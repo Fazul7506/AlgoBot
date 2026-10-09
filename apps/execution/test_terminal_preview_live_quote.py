@@ -29,6 +29,7 @@ class TerminalLivePreviewTests(TestCase):
             broker=self.broker,
             account_id="VRTC-TERMINAL",
             status="active",
+            balance="100.00",
             credentials={"account_type": "demo"},
         )
         self.account.set_access_token("isolated-test-token")
@@ -40,7 +41,7 @@ class TerminalLivePreviewTests(TestCase):
         )
         self.factory = APIRequestFactory()
 
-    def preview(self, contract_type="CALL", direction="buy"):
+    def preview(self, contract_type="CALL", direction="buy", stake="1.00"):
         request = self.factory.post(
             "/api/orders/preview/",
             {
@@ -49,7 +50,7 @@ class TerminalLivePreviewTests(TestCase):
                 "contract_type": contract_type,
                 "direction": direction,
                 "order_type": "market",
-                "stake": "1.00",
+                "stake": stake,
             },
             format="json",
         )
@@ -121,3 +122,21 @@ class TerminalLivePreviewTests(TestCase):
         self.assertEqual(result.status_code, 409)
         self.assertEqual(result.data["code"], "BROKER_CONTRACT_DIRECTION_MISMATCH")
         adapter.get_market_data.assert_not_awaited()
+
+    def test_preview_rejects_stake_above_risk_profile_limit(self):
+        adapter = self.adapter()
+        with patch("apps.execution.views.BrokerRegistry.adapter", return_value=adapter):
+            result = self.preview(stake="3.00")
+
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data["code"], "PREVIEW_RISK_REJECTED")
+        adapter.get_trade_capabilities.assert_not_awaited()
+
+    def test_preview_rejects_zero_stake(self):
+        adapter = self.adapter()
+        with patch("apps.execution.views.BrokerRegistry.adapter", return_value=adapter):
+            result = self.preview(stake="0")
+
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data["code"], "PREVIEW_RISK_REJECTED")
+        adapter.get_trade_capabilities.assert_not_awaited()
