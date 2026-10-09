@@ -1,6 +1,7 @@
 """Distributed dispatch locks for broker candle-backfill lifecycle operations."""
 
 from django_redis import get_redis_connection
+from redis.exceptions import LockNotOwnedError
 
 
 class BackfillDispatchLock:
@@ -27,6 +28,11 @@ class BackfillDispatchLock:
             return
         try:
             self._lock.release()
+        except LockNotOwnedError:
+            # TTL may expire if a caller is interrupted. The durable database
+            # lifecycle row is authoritative; never mask the task's result
+            # with a stale-lock cleanup exception.
+            pass
         finally:
             self._lock = None
 
