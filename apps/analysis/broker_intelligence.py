@@ -122,8 +122,8 @@ def build_account_risk_context(user, account: BrokerAccount, *, signal=None, con
 
     candidates = [risk_budget, daily_remaining, exposure_remaining, available_funds]
     recommended_stake = max(ZERO, min(candidates))
-    confidence_value = _decimal(confidence, HUNDRED)
-    if confidence_value < Decimal("60"):
+    confidence_value = _decimal(confidence, ZERO) if confidence is not None else None
+    if confidence_value is None or confidence_value < Decimal("60"):
         confidence_multiplier = Decimal("0.50")
     elif confidence_value < Decimal("75"):
         confidence_multiplier = Decimal("0.75")
@@ -136,7 +136,7 @@ def build_account_risk_context(user, account: BrokerAccount, *, signal=None, con
 
     inputs_complete = balance_known and funds_known and daily_loss_known and not exposure_unknown
     risk_score = None
-    if inputs_complete:
+    if inputs_complete and margin is not None and confidence_value is not None:
         risk_score = RiskService().score(
             volatility=Decimal("0.8") if regime in {"high", "extreme"} else Decimal("0.25") if regime == "normal" else Decimal("0.1"),
             exposure=(open_stake / balance) if balance else ZERO,
@@ -144,7 +144,7 @@ def build_account_risk_context(user, account: BrokerAccount, *, signal=None, con
             correlation=ZERO,
             margin=(margin / balance) if margin is not None and balance else ZERO,
             market_conditions=ZERO,
-            strategy_confidence=(confidence_value / HUNDRED) if confidence is not None else Decimal("1"),
+            strategy_confidence=confidence_value / HUNDRED,
         )
 
     issues = []
@@ -156,6 +156,10 @@ def build_account_risk_context(user, account: BrokerAccount, *, signal=None, con
         issues.append("settled_trade_pnl_incomplete")
     if exposure_unknown:
         issues.append("open_exposure_incomplete")
+    if margin is None:
+        issues.append("broker_margin_unavailable")
+    if confidence_value is None:
+        issues.append("analysis_confidence_unavailable")
 
     return {
         "broker": account.broker.name,
@@ -178,7 +182,7 @@ def build_account_risk_context(user, account: BrokerAccount, *, signal=None, con
         "max_exposure": _money(exposure_limit) if balance_known else None,
         "open_stake_exposure": _money(open_stake) if not exposure_unknown else None,
         "exposure_remaining": _money(exposure_remaining) if balance_known and not exposure_unknown else None,
-        "confidence": str(confidence_value),
+        "confidence": str(confidence_value) if confidence_value is not None else None,
         "confidence_multiplier": str(confidence_multiplier),
         "recommended_stake": _money(adjusted_stake),
         "risk_score": risk_score,
