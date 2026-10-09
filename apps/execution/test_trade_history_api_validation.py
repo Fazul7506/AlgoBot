@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from unittest.mock import patch
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.brokers.models import Broker, BrokerAccount
@@ -22,7 +23,7 @@ class TradeHistoryFilterValidationTests(TestCase):
         return request
 
     def test_invalid_dates_are_rejected_when_using_cached_pagination(self):
-        with __import__("unittest").mock.patch(
+        with patch(
             "apps.execution.views.get_active_account", return_value=self.account
         ):
             response = self.view(self.request({"refresh": "0", "date_from": "not-a-date"}))
