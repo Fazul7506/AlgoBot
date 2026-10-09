@@ -17,3 +17,5 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
     def test_dashboard_financial_values_reject_infinity_and_nan(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("!Number.isFinite(Number(value))", source)
+        self.assertIn("Number.isFinite(Number(item.confidence))", source)
+        self.assertIn("item.ask_price ?? item.ask ?? 'Unavailable'", source)
