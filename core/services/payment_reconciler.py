@@ -242,7 +242,10 @@ class PaymentReconciler:
         subscription.recurring = plan != "FREE" and provider == "intasend" and bool(provider_subscription_id)
         subscription.is_active = True
         subscription.renewed_at = timezone.now()
-        subscription.expires_at = timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30))) if subscription.recurring else None
+        subscription.expires_at = (
+            timezone.now() + timedelta(days=int(getattr(settings, "ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", 30)))
+            if plan and plan != "FREE" else None
+        )
         subscription.save()
 
         profile = getattr(user, "trading_profile", None)
