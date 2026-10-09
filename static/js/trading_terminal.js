@@ -17,7 +17,7 @@
   // future diagnostics; no second account-selection implementation is created.
   const authoritativeAccountSelectPath=id=>`/api/brokers/accounts/${encodeURIComponent(id)}/select/`;
   const switchAuthoritativeAccount=id=>{void authoritativeAccountSelectPath(id);return window.AlgoBotAccountContext.selectAccount(id)};
-  let accounts=[],symbols=[],direction='BUY',busy=false,activeAccountId=null,directExecutionBusy=false;
+  let accounts=[],symbols=[],direction='BUY',busy=false,activeAccountId=null,directExecutionBusy=false,catalogueLoadSeq=0;
   const requestedParams=new URLSearchParams(location.search),requestedStrategy=requestedParams.get('strategy')||'',requestedDirection=String(requestedParams.get('direction')||'').toUpperCase(),requestedSignalId=requestedParams.get('signal_id')||'';
   const selectedAccount=()=>window.AlgoBotAccountContext?.getSelected?.()||accounts.find(a=>String(a.id)===String(activeAccountId))||window.AlgoBotBrokerState?.get?.()?.account||null;
   const brokerReady=()=>!!selectedAccount();
@@ -60,10 +60,37 @@
   const readCatalogueCache=()=>{try{const v=JSON.parse(sessionStorage.getItem(catalogueCacheKey())||'null');return v&&Array.isArray(v.symbols)&&v.symbols.length?v:null}catch(_){return null}};
   const writeCatalogueCache=rows=>{try{sessionStorage.setItem(catalogueCacheKey(),JSON.stringify({at:Date.now(),symbols:rows}))}catch(_){}};
   const paintSymbols=(s,rows,previous)=>{symbols=rows.filter(r=>r?.symbol&&r.is_active!==false&&r.is_tradable!==false);if(!symbols.length)return'';s.innerHTML=symbols.map(r=>`<option value="${esc(r.symbol)}">${esc(r.display_name||r.symbol)}</option>`).join('');const requested=new URLSearchParams(location.search).get('symbol');s.value=[previous,requested,symbols[0].symbol].find(v=>symbols.some(r=>r.symbol===v))||symbols[0].symbol;renderWatchlist($('[data-watchlist-search]')?.value||'');window.dispatchEvent(new CustomEvent('algobot:broker-symbols-loaded',{detail:{count:symbols.length}}));return s.value};
-  async function loadSymbols(){const s=$('#symbol');if(!s)return'';const previous=s.value;const cached=readCatalogueCache();if(cached?.symbols){const cachedValue=paintSymbols(s,cached.symbols,previous);if(cachedValue&&Date.now()-Number(cached.at||0)<300000){void api('/api/market/catalogue/',{notifyOnError:false},7000).then(p=>{const rows=list(p?.symbols??p).filter(r=>r?.symbol&&r.is_active!==false&&r.is_tradable!==false);if(rows.length){writeCatalogueCache(rows);paintSymbols(s,rows,s.value)}}).catch(()=>{});return cachedValue}}
-    try{const p=await api('/api/market/catalogue/',{notifyOnError:false},7000);const rows=list(p?.symbols??p).filter(r=>r?.symbol&&r.is_active!==false&&r.is_tradable!==false);if(!rows.length)throw new Error('No active tradable broker instruments are available');writeCatalogueCache(rows);return paintSymbols(s,rows,previous)}catch(e){if(cached?.symbols){const value=paintSymbols(s,cached.symbols,previous);if(value)return value}return''}}
-
-  async function loadQuote(){
+  async function loadSymbols(){
+     const s=$('#symbol');if(!s)return'';
+     const seq=++catalogueLoadSeq;
+     const accountId=String(window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'none');
+     const previous=s.value;
+     const cached=readCatalogueCache();
+     const isCurrent=()=>seq===catalogueLoadSeq&&accountId===String(window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'none');
+     if(cached?.symbols){
+       const cachedValue=paintSymbols(s,cached.symbols,previous);
+       if(cachedValue&&Date.now()-Number(cached.at||0)<300000){
+         void api('/api/market/catalogue/',{notifyOnError:false},7000).then(p=>{
+           if(!isCurrent())return;
+           const rows=list(p?.symbols??p).filter(r=>r?.symbol&&r.is_active!==false&&r.is_tradable!==false);
+           if(rows.length){writeCatalogueCache(rows);paintSymbols(s,rows,s.value)}
+         }).catch(()=>{});
+         return cachedValue;
+       }
+     }
+     try{
+       const p=await api('/api/market/catalogue/',{notifyOnError:false},7000);
+       if(!isCurrent())return'';
+       const rows=list(p?.symbols??p).filter(r=>r?.symbol&&r.is_active!==false&&r.is_tradable!==false);
+       if(!rows.length)throw new Error('No active tradable broker instruments are available');
+       writeCatalogueCache(rows);return paintSymbols(s,rows,previous);
+     }catch(e){
+       if(!isCurrent())return'';
+       if(cached?.symbols){const value=paintSymbols(s,cached.symbols,previous);if(value)return value}
+       return''
+     }
+   }
+   async function loadQuote(){
     const symbol=$('#symbol')?.value;
     if(!symbol||!brokerReady())return;
     // The Deriv chart/watchdog owns the realtime quote. Avoid a competing HTTP
