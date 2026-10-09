@@ -137,6 +137,7 @@
       if (requestedAccountId != null && accountPayload?.id != null && String(accountPayload.id) !== requestedAccountId) {
         renderAccount(null, 'Account changed during refresh · retrying');
         setText('[data-dashboard-sync]', 'Account selection changed · refreshing');
+        loadSeq += 1; // Prevent this request's finally block from replacing the fast retry.
         timer = setTimeout(load, 250);
         return;
       }
