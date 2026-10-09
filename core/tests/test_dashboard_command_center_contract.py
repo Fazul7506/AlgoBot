@@ -100,3 +100,8 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         script = ROOT / "static" / "js" / "dashboard_command_center.js"
         result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+
+    def test_dashboard_api_reads_preserve_server_session_account_context(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("return shared(url, {credentials: 'include', ...options}, timeout)", source)
+        self.assertIn("server-side Django session", source)
