@@ -172,6 +172,12 @@ def _window_result(result, start_epoch, end_epoch):
         except (TypeError, ValueError):
             continue
         if entry >= start_epoch and exit_epoch <= end_epoch:
+            try:
+                profit = float(trade.get('profit', trade.get('pnl', 0)) or 0)
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if not math.isfinite(profit):
+                continue
             trades.append(trade)
 
     profits = [float(trade.get('profit', trade.get('pnl', 0)) or 0) for trade in trades]
