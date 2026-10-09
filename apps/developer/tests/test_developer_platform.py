@@ -218,5 +218,5 @@ class DeveloperPlatformTests(TestCase):
         with patch("apps.developer.views.DocumentationService.publish", side_effect=RuntimeError("documentation backend unavailable")):
             response = self.client.get("/api/developer/docs/")
         self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.json()["detail"], "The developer service could not complete the request: documentation backend unavailable")
+        self.assertEqual(response.json()["detail"], "The developer service could not complete the request.")
         self.assertEqual(response.json()["code"], "DEVELOPER_API_ERROR")
