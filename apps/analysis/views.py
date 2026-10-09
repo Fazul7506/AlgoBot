@@ -409,10 +409,11 @@ def analysis_data(request):
         "reason": "Final execution readiness requires fresh market data, a ready selected account, risk capacity, broker capabilities and a fresh live quote.",
     }
     account_context = None
+    broker_data = None
     if active_account is not None:
         try:
             if refresh_requested:
-                synced_account, _broker_data = asyncio.run(
+                synced_account, broker_data = asyncio.run(
                     asyncio.wait_for(
                         SynchronizationService().sync_account(active_account),
                         timeout=8.0,
@@ -425,6 +426,7 @@ def analysis_data(request):
                 signal=result.get("signal"),
                 confidence=result.get("confidence"),
                 volatility=result.get("volatility_regime"),
+                broker_data=broker_data,
             )
         except Exception as exc:
             if refresh_requested:
@@ -683,7 +685,7 @@ def broker_account_context(request):
                 timeout=8.0,
             )
         )
-        context = build_account_risk_context(request.user, account)
+        context = build_account_risk_context(request.user, account, broker_data=broker_data)
     except Exception as exc:
         return JsonResponse(
             {
