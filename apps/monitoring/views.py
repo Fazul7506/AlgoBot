@@ -23,11 +23,12 @@ def dashboard(request):
     # this page. Failures are recorded by the health service rather than being
     # allowed to break the monitoring UI.
     health_results = []
-    for service in ("Application", "Database", "Cache", "Storage"):
-        try:
-            health_results.append(engine.health.check_service(service))
-        except Exception:
-            health_results.append(None)
+    if request.user.is_staff:
+        for service in ("Application", "Database", "Cache", "Storage"):
+            try:
+                health_results.append(engine.health.check_service(service))
+            except Exception:
+                health_results.append(None)
 
     dashboard = engine.dashboard()
     dashboard.update(
@@ -74,10 +75,13 @@ def dashboard(request):
     try:
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
-        checks_healthy = bool(health_results) and all(
-            result is not None and result.status == "healthy" for result in health_results
-        )
-        dashboard["overall_system_health"] = "healthy" if checks_healthy else "degraded"
+        if request.user.is_staff:
+            checks_healthy = bool(health_results) and all(
+                result is not None and result.status == "healthy" for result in health_results
+            )
+            dashboard["overall_system_health"] = "healthy" if checks_healthy else "degraded"
+        else:
+            dashboard["overall_system_health"] = "available"
     except Exception:
         dashboard["overall_system_health"] = "down"
 
