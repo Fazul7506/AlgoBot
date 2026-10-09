@@ -224,10 +224,13 @@ def execute_backtest(backtest_id):
         )
     strategy = StrategyModel.objects.filter(name__iexact=backtest.strategy).first()
     if not strategy:
-        backtest.status = 'failed'
-        backtest.result_snapshot = {'status': 'failed', 'code': 'STRATEGY_NOT_FOUND', 'error': 'Strategy no longer exists in the strategy catalog.', 'start_date': backtest.start_date.isoformat(), 'end_date': backtest.end_date.isoformat()}
-        backtest.save(update_fields=['status', 'result_snapshot', 'updated_at'])
-        _cluster_update(backtest_id, status='failed', locked_at=None)
+        with transaction.atomic():
+            current = Backtest.objects.select_for_update().filter(pk=backtest_id).first()
+            if current is not None and current.status == 'running' and current.result_version == claimed_version:
+                current.status = 'failed'
+                current.result_snapshot = {'status': 'failed', 'code': 'STRATEGY_NOT_FOUND', 'error': 'Strategy no longer exists in the strategy catalog.', 'start_date': current.start_date.isoformat(), 'end_date': current.end_date.isoformat()}
+                current.save(update_fields=['status', 'result_snapshot', 'updated_at'])
+                _cluster_update(backtest_id, status='failed', locked_at=None)
         return backtest.id
     try:
         evaluation_start_epoch = int(backtest.start_date.timestamp())
