@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import json
 import time
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.core.cache import cache
 from django.http import JsonResponse
@@ -720,11 +720,38 @@ def broker_proposal(request):
         payload = json.loads(request.body or "{}")
     except (TypeError, ValueError):
         return JsonResponse({"status": "error", "code": "INVALID_JSON", "message": "A valid JSON proposal request is required."}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"status": "error", "code": "INVALID_PROPOSAL_OBJECT", "message": "A JSON object is required."}, status=400)
 
     symbol = str(payload.get("symbol") or "").strip().upper()
     contract_type = str(payload.get("contract_type") or "").strip().upper()
     if not symbol or not contract_type:
         return JsonResponse({"status": "error", "code": "CONTRACT_PARAMETERS_REQUIRED", "message": "Symbol and broker contract type are required."}, status=400)
+
+    confidence = payload.get("confidence")
+    if confidence is not None:
+        try:
+            confidence_decimal = Decimal(str(confidence))
+        except (InvalidOperation, TypeError, ValueError):
+            return JsonResponse({"status": "error", "code": "INVALID_CONFIDENCE", "message": "Confidence must be a finite number from 0 to 100."}, status=400)
+        if not confidence_decimal.is_finite() or confidence_decimal < 0 or confidence_decimal > 100:
+            return JsonResponse({"status": "error", "code": "INVALID_CONFIDENCE", "message": "Confidence must be a finite number from 0 to 100."}, status=400)
+        confidence = float(confidence_decimal)
+
+    duration = payload.get("duration")
+    if duration is not None:
+        try:
+            duration = int(duration)
+        except (TypeError, ValueError, OverflowError):
+            return JsonResponse({"status": "error", "code": "INVALID_DURATION", "message": "Duration must be a positive whole number."}, status=400)
+        if duration < 1 or duration > 100000:
+            return JsonResponse({"status": "error", "code": "INVALID_DURATION", "message": "Duration must be between 1 and 100000."}, status=400)
+    duration_unit = str(payload.get("duration_unit") or "s").lower()
+    if duration_unit not in {"s", "m", "h", "d", "t"}:
+        return JsonResponse({"status": "error", "code": "INVALID_DURATION_UNIT", "message": "Unsupported contract duration unit."}, status=400)
+    basis = str(payload.get("basis") or "stake").lower()
+    if basis != "stake":
+        return JsonResponse({"status": "error", "code": "UNSUPPORTED_PROPOSAL_BASIS", "message": "Risk-capped proposals currently support stake basis only."}, status=422)
 
     try:
         market = MarketSymbol.objects.get(symbol=symbol, is_active=True, is_tradable=True)
@@ -748,7 +775,6 @@ def broker_proposal(request):
         if contract_type not in allowed:
             return JsonResponse({"status": "error", "code": "CONTRACT_NOT_AVAILABLE", "message": f"{contract_type} is not currently offered by Deriv for {symbol}.", "available_contract_types": sorted(allowed)}, status=422)
 
-        confidence = payload.get("confidence")
         risk_context = build_account_risk_context(
             request.user,
             account,
@@ -760,7 +786,12 @@ def broker_proposal(request):
         amount = payload.get("amount")
         if amount in (None, ""):
             amount = risk_context["recommended_stake"]
-        amount_decimal = Decimal(str(amount))
+        try:
+            amount_decimal = Decimal(str(amount))
+        except (InvalidOperation, TypeError, ValueError):
+            return JsonResponse({"status": "error", "code": "INVALID_AMOUNT", "message": "Amount must be a finite positive number."}, status=400)
+        if not amount_decimal.is_finite():
+            return JsonResponse({"status": "error", "code": "INVALID_AMOUNT", "message": "Amount must be a finite positive number."}, status=400)
         recommended_decimal = Decimal(str(risk_context["recommended_stake"]))
         if amount_decimal <= 0:
             return JsonResponse({"status": "error", "code": "NO_RISK_BUDGET", "message": "The selected account has no broker-available risk budget for this proposal.", "account_context": risk_context}, status=422)
@@ -775,9 +806,9 @@ def broker_proposal(request):
                     contract_type=contract_type,
                     amount=amount_decimal,
                     currency=account.currency,
-                    duration=payload.get("duration"),
-                    duration_unit=payload.get("duration_unit") or "s",
-                    basis=payload.get("basis") or "stake",
+                    duration=duration,
+                    duration_unit=duration_unit,
+                    basis=basis,
                     barrier=payload.get("barrier"),
                     multiplier=payload.get("multiplier"),
                     growth_rate=payload.get("growth_rate"),
