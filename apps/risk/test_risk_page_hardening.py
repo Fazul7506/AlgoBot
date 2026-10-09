@@ -36,9 +36,9 @@ class RiskPageHardeningTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.get("/api/risk/assessment/")
         self.assertEqual(response.status_code, 200)
-        body = response.content.decode("utf-8")
-        self.assertIn(str(own.pk), body)
-        self.assertNotIn(str(foreign.pk), body)
+        payload = response.json()
+        rows = payload.get("results", []) if isinstance(payload, dict) else payload
+        self.assertEqual([item["id"] for item in rows], [own.pk])
 
     def test_risk_profile_rejects_fractional_limits_above_one(self):
         self.client.force_login(self.user)
