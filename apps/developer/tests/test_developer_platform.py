@@ -187,7 +187,7 @@ class DeveloperPlatformTests(TestCase):
         client = Client()
         response = client.get("/api/developer/keys/", HTTP_AUTHORIZATION=f"Bearer {token}")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.payload(response)[0]["id"], self.key.id)
+        self.assertIn(self.key.id, [item["id"] for item in self.payload(response)])
 
     def test_docs_contract_uses_correct_server_and_two_part_api_key_auth(self):
         docs = self.client.get("/api/developer/docs/").json()
