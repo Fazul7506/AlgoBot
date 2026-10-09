@@ -61,6 +61,10 @@ class PortfolioEngineTests(TestCase):
         result = BenchmarkService().compare(0.1, 0.05, benchmark_name=" X " * 100)
         self.assertLessEqual(len(result["benchmark_name"]), 80)
 
+    def test_benchmark_name_must_be_text(self):
+        with self.assertRaises(ValueError):
+            BenchmarkService().compare(0.1, 0.05, benchmark_name=None)
+
     def test_reporting_includes_summary_fields(self):
         report = ReportingService().generate(self.portfolio, report_type="executive", export_format="json")
         self.assertEqual(report["portfolio_name"], "Core")
