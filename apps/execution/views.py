@@ -7,8 +7,9 @@ from django.utils import timezone
 from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
+from django.db import transaction
 from django.db.models import Q
-from .models import Order, ExecutionLog, ReconciliationEvent, BrokerTradeHistory
+from .models import Order, ExecutionLog, ReconciliationEvent, BrokerTradeHistory, ExecutionQueue
 from . import constants as c
 from .exceptions import OrderValidationError
 from apps.brokers.models import Position
@@ -130,14 +131,25 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @decorators.action(detail=True, methods=['post'])
     def retry(self, request, pk=None):
-        order = self.get_object()
-        if order.status != c.ORDER_STATUS_FAILED:
-            return response.Response({
-                'status': 'rejected', 'code': 'EXECUTION_RETRY_FORBIDDEN',
-                'detail': 'Only orders in a confirmed failed state can be retried. Submitted, accepted, executed, cancelled or uncertain orders must not be replayed.',
-                'retryable': False, 'reconcile_required': order.status in {c.ORDER_STATUS_SENT, c.ORDER_STATUS_ACCEPTED, c.ORDER_STATUS_EXECUTED},
-            }, status=status.HTTP_409_CONFLICT)
-        ExecutionEngine().retry(order)
+        visible_order = self.get_object()
+        with transaction.atomic():
+            # Match the queue worker/cancel path lock order to prevent retrying
+            # an order while a worker still owns its queue entry.
+            queue_entry = ExecutionQueue.objects.select_for_update().filter(order_id=visible_order.pk).first()
+            order = Order.objects.select_for_update().get(pk=visible_order.pk)
+            if order.status != c.ORDER_STATUS_FAILED:
+                return response.Response({
+                    'status': 'rejected', 'code': 'EXECUTION_RETRY_FORBIDDEN',
+                    'detail': 'Only orders in a confirmed failed state can be retried. Submitted, accepted, executed, cancelled or uncertain orders must not be replayed.',
+                    'retryable': False, 'reconcile_required': order.status in {c.ORDER_STATUS_SENT, c.ORDER_STATUS_ACCEPTED, c.ORDER_STATUS_EXECUTED},
+                }, status=status.HTTP_409_CONFLICT)
+            if queue_entry and queue_entry.status == c.QUEUE_STATUS_PROCESSING:
+                return response.Response({
+                    'status': 'rejected', 'code': 'EXECUTION_RETRY_IN_PROGRESS',
+                    'detail': 'An execution worker still owns this queue entry. Reconcile its result before retrying.',
+                    'retryable': False, 'reconcile_required': True,
+                }, status=status.HTTP_409_CONFLICT)
+            ExecutionEngine().retry(order)
         return response.Response({'status': 'queued'})
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
