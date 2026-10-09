@@ -240,6 +240,32 @@ class ExecutionQueueTaskTests(TestCase):
         self.assertEqual(queue.status, 'done')
         self.assertEqual(result['succeeded'], 1)
 
+    @patch('apps.execution.tasks.get_redis_connection')
+    def test_unclassified_failure_after_submission_requires_reconciliation(self, get_redis_connection):
+        lock = get_redis_connection.return_value.lock.return_value
+        lock.acquire.return_value = True
+        user = get_user_model().objects.create_user(username='queue-uncertain', password='test-password')
+        broker = Broker.objects.create(name='Queue Uncertain Broker', broker_type='deriv', status='active', supports_live=False)
+        account = BrokerAccount.objects.create(user=user, broker=broker, account_id='QUEUE-UNCERTAIN', status='active', credentials={'account_type': 'demo'})
+        order = Order.objects.create(user=user, broker_account=account, symbol='R_10', direction='buy', order_type='market', stake='1', status='queued')
+        queue = ExecutionQueue.objects.create(order=order, status='pending', next_retry=None, queue_type='priority')
+
+        async def post_submit_failure(candidate):
+            candidate.status = 'sent_to_broker'
+            candidate.validation_context = {'execution_mode': 'manual_command'}
+            candidate.save(update_fields=['status', 'validation_context', 'updated_at'])
+            raise RuntimeError('simulated response decode failure')
+
+        with patch('apps.execution.tasks.ExecutionEngine.execute', new=AsyncMock(side_effect=post_submit_failure)):
+            result = process_execution_queue.run.__wrapped__(batch_size=1)
+        order.refresh_from_db()
+        queue.refresh_from_db()
+        self.assertEqual(order.status, 'sent_to_broker')
+        self.assertTrue(order.validation_context['reconciliation_required'])
+        self.assertEqual(queue.status, 'failed')
+        self.assertEqual(result['uncertain'], 1)
+        self.assertEqual(result['failed'], 0)
+
 
 class TerminalExecutionContractTests(SimpleTestCase):
     def test_terminal_contract_metadata_is_persisted_in_serializer_contract(self):
