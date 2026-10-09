@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 import time
 from decimal import Decimal, InvalidOperation
 
@@ -338,9 +339,15 @@ def analysis_data(request):
             probability = float(raw_probability) if raw_probability is not None else None
             raw_agreement = consensus.get("agreement")
             agreement = float(raw_agreement) if raw_agreement is not None else None
+            if confidence is not None and (not math.isfinite(confidence) or not 0 <= confidence <= 100):
+                confidence = None
+            if probability is not None and (not math.isfinite(probability) or not 0 <= probability <= 1):
+                probability = None
+            if agreement is not None and (not math.isfinite(agreement) or not 0 <= agreement <= 1):
+                agreement = None
             raw_decision = str(consensus.get("decision") or "").upper()
             decision = raw_decision if raw_decision in {"BUY", "SELL", "AVOID"} else None
-            valid_ai_output = models_used > 0 and decision in {"BUY", "SELL"} and confidence is not None
+            valid_ai_output = models_used > 0 and decision in {"BUY", "SELL"} and confidence is not None and probability is not None and agreement is not None
             ai_result = {
                 "status": "ok" if valid_ai_output and recommendation.recommendation == decision else "no_trade" if models_used > 0 else "unavailable",
                 "decision": decision,
