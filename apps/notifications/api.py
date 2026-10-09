@@ -53,13 +53,13 @@ def send(request):
         return response.Response({"detail": "Message must contain 1 to 10000 characters."}, status=400)
     if not isinstance(category, str) or not category.strip() or len(category.strip()) > 40:
         return response.Response({"detail": "Category must contain 1 to 40 characters."}, status=400)
-    if priority not in {"low", "info", "normal", "warning", "error", "critical"}:
+    if not isinstance(priority, str) or priority not in {"low", "info", "normal", "warning", "error", "critical"}:
         return response.Response({"detail": "Unsupported notification priority."}, status=400)
     if channels is not None:
         allowed_channels = {"in_app", "gmail", "telegram"}
         if not isinstance(channels, list) or not channels or len(channels) > len(allowed_channels):
             return response.Response({"detail": "Channels must be a non-empty list of supported channels."}, status=400)
-        if any(channel not in allowed_channels for channel in channels) or len(set(channels)) != len(channels):
+        if any(not isinstance(channel, str) or channel not in allowed_channels for channel in channels) or len(set(channels)) != len(channels):
             return response.Response({"detail": "Channels must be unique supported channel names."}, status=400)
     notifications = NotificationEngine().publish(
         request.user, title.strip(), message, category.strip(), priority, channels
