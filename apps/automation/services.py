@@ -52,7 +52,19 @@ class WorkflowExecutionService:
             if workflow.approval_policy.get("required"):
                 ApprovalService().request(workflow, workflow.user, {"reason":"Workflow execution approval required"})
                 raise ApprovalRequired("approval_required")
-            for node in workflow.nodes.order_by("id"):
+            nodes = list(workflow.nodes.order_by("id"))
+            if not nodes:
+                definition = workflow.definition if isinstance(workflow.definition, dict) else {}
+                definition_nodes = definition.get("nodes", [])
+                if isinstance(definition_nodes, list):
+                    nodes = [
+                        type("WorkflowDefinitionNode", (), {
+                            "node_type": str(node.get("type") or node.get("node_type") or ""),
+                            "configuration": node.get("configuration") if isinstance(node.get("configuration"), dict) else node,
+                        })()
+                        for node in definition_nodes if isinstance(node, dict)
+                    ]
+            for node in nodes:
                 if node.node_type in {"action","trade","risk","ai","broker","notification"}:
                     audit.append(ActionService().execute(node.configuration, {"workflow_id":workflow.id,"payload":payload or {}}))
             dispatch_pending = any(item.get("status") == "not_dispatched" for item in audit)
