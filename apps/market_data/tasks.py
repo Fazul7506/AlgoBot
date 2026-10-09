@@ -541,6 +541,13 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
             message=f"Worker accepted research candle backfill task {task_id}",
             task_id=task_id, worker_hostname=_worker_identity(),
         )
+        # The lock protects dispatch/run creation, not the multi-hour broker
+        # fetch. The durable running row now prevents overlap; release the
+        # short-TTL Redis lock before doing slow work so it cannot expire and
+        # raise LockNotOwnedError from this task's finally block.
+        if dispatch_lock is not None:
+            dispatch_lock.release()
+            dispatch_lock = None
         symbols = _active_symbols(symbol)
         if not symbols:
             raise RuntimeError("No active tradable market symbols are available")
