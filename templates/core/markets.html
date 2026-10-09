@@ -6,7 +6,7 @@
 <section class="markets-center deriv-markets-page algobot-shared-page" data-markets-center>
   <header class="enterprise-hero deriv-market-hero">
     <div><p class="eyebrow">BROKER · MARKET INTELLIGENCE</p><h1>Markets</h1><p class="hero-copy">Broker market-data engine for live instrument discovery, quote health and trade-ready routing.</p></div>
-    <div class="hero-actions"><span class="deriv-live-pill"><i></i> Broker catalogue</span><a class="btn primary" href="/trading/">Open terminal</a></div>
+    <div class="hero-actions"><span class="deriv-live-pill" data-market-catalogue-status><i></i> Broker catalogue</span><a class="btn primary" href="/trading/">Open terminal</a></div>
   </header>
   <section class="market-scanner-summary" aria-label="Market scanner summary">
     <article class="market-scanner-stat"><span>Visible instruments</span><strong data-scanner-total>0</strong></article>
@@ -24,4 +24,4 @@
 </section>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/market_scanner.css' %}">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/market_watch.js' %}" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/market_watch.js' %}?v=20261009-socket-race3" defer></script>{% endblock %}
