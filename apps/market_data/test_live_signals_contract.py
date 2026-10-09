@@ -182,3 +182,31 @@ class LiveSignalsContractTests(TestCase):
         self.assertEqual(row["status"], "LIVE_CONFIRMATION_FAILED")
         self.assertEqual(row["confidence"], 91.0)
         self.assertFalse(row["execution_ready"])
+
+    @patch("apps.market_data.signal_views._live_deriv_ticks")
+    def test_signal_is_blocked_when_account_risk_inputs_are_incomplete(self, live_ticks):
+        self.account.last_synced_at = None
+        self.account.save(update_fields=["last_synced_at"])
+        StrategySignal.objects.create(
+            strategy=self.strategy,
+            configuration=self.config,
+            symbol="R_100",
+            signal="BUY",
+            confidence=95,
+            entry_price="100.00000",
+            timestamp=timezone.now(),
+        )
+        live_ticks.return_value = ({"R_100": {"symbol": "R_100", "quote": 101.0, "epoch": int(timezone.now().timestamp())}}, 10.0)
+        response = self.client.get("/api/strategy-signals/?symbol=R_100&timeframe=M1")
+        self.assertEqual(response.status_code, 200)
+        row = response.json()["data"][0]
+        self.assertEqual(row["status"], "RISK_CONTEXT_INCOMPLETE")
+        self.assertEqual(row["lifecycle"], "BLOCKED")
+        self.assertFalse(row["execution_ready"])
+
+    @patch("apps.market_data.signal_views._live_deriv_ticks")
+    def test_non_finite_live_quote_is_not_returned_as_market_data(self, live_ticks):
+        live_ticks.return_value = ({"R_100": {"symbol": "R_100", "quote": float("nan"), "epoch": int(timezone.now().timestamp())}}, 10.0)
+        response = self.client.get("/api/strategy-signals/?symbol=R_100&timeframe=M1")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["code"], "MARKET_DATA_UNAVAILABLE")
