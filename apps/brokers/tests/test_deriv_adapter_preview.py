@@ -54,14 +54,15 @@ class DerivAdapterPreviewTests(IsolatedAsyncioTestCase):
     async def test_preview_rejects_invalid_stake_before_broker_request(self):
         adapter = self.make_adapter()
 
-        with self.assertRaises(BrokerOrderError):
-            await adapter.get_order_preview(
-                symbol="R_100",
-                contract_type="CALL",
-                amount="0",
-                duration=60,
-                duration_unit="s",
-            )
+        for invalid_amount in ("0", "NaN", "Infinity", "-Infinity"):
+            with self.subTest(amount=invalid_amount), self.assertRaises(BrokerOrderError):
+                await adapter.get_order_preview(
+                    symbol="R_100",
+                    contract_type="CALL",
+                    amount=invalid_amount,
+                    duration=60,
+                    duration_unit="s",
+                )
 
         adapter._request.assert_not_awaited()
 
