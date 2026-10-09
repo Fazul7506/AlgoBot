@@ -15,7 +15,7 @@ from apps.market_data.models import Candle, MarketSnapshot, MarketSymbol, Tick
 from core.account_context import get_active_account
 from .models import AIModel, AIRecommendation, AnomalyEvent, FeatureVector, MarketRegime, ModelVersion, Prediction, PredictionOutcome, TrainingJob
 from .serializers import AIModelSerializer, AIRecommendationSerializer, AnomalyEventSerializer, FeatureVectorSerializer, MarketRegimeSerializer, ModelVersionSerializer, PredictionSerializer, TrainingJobSerializer
-from .services import AIEngine, ExplainabilityService, FeatureStoreService, TrainingService
+from .services import AIEngine, ExplainabilityService, TrainingService
 from .validators import validate_feature_context
 
 logger = logging.getLogger(__name__)
