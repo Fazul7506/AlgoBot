@@ -155,7 +155,7 @@
       window.dispatchEvent(new CustomEvent('algobot:order-created',{detail:o}));
       await loadRecords();
     }catch(e){
-      const uncertain=Number(e?.status)===503||Number(e?.status)===504||e?.code==='BROKER_EXECUTION_STATE_UNKNOWN';
+      const uncertain=previewPassed&&(Number(e?.status)===503||Number(e?.status)===504||e?.code==='BROKER_EXECUTION_STATE_UNKNOWN');
       const detail=e?.message||'broker execution failed';
       if(!previewPassed&&!uncertain)previewResult(`Pre-trade preview failed; no order was submitted. ${detail}`,'error');
       if(uncertain){executionUncertain=true;syncExecutionControls();result(`Execution could not be confirmed. Do not retry. The selected account remains locked until broker state is reconciled. ${detail}`,'error');void loadRecords();}
