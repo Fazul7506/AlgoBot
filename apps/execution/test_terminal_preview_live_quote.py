@@ -225,3 +225,11 @@ class TerminalLivePreviewTests(TestCase):
         self.assertEqual(result.status_code, 409)
         self.assertEqual(result.data["code"], "BROKER_PROPOSAL_REJECTED")
         self.assertTrue(result.data["no_order_submitted"])
+
+    def test_preview_rejects_when_plan_order_quota_is_exhausted(self):
+        with patch("apps.execution.views.check", return_value=(False, 10, 10)):
+            result = self.preview()
+
+        self.assertEqual(result.status_code, 429)
+        self.assertEqual(result.data["code"], "ORDER_LIMIT_REACHED")
+
