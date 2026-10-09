@@ -1,5 +1,6 @@
 from rest_framework import viewsets, permissions, response
 from .models import RiskProfile, RiskRule, RiskAssessment, Exposure, DrawdownHistory
+from django.db.models import Q
 from .serializers import *
 
 
@@ -21,18 +22,21 @@ class RiskProfileViewSet(OwnQuerysetMixin, viewsets.ModelViewSet):
         return super().get_queryset().order_by("-created_at")
 
     def list(self, request, *args, **kwargs):
-        profile, _ = RiskProfile.objects.get_or_create(
-            user=request.user,
-            defaults={
-                "profile_name": "Default Risk Profile",
-                "risk_level": "moderate",
-                "max_risk_per_trade": 0.02,
-                "max_daily_loss": 0.04,
-                "max_drawdown": 0.10,
-                "max_open_positions": 10,
-                "max_exposure": 0.35,
-            },
-        )
+        # The browser risk panel is a single-profile editor. Select a stable
+        # existing profile rather than get_or_create(), which raises if older
+        # accounts already have multiple profiles.
+        profile = RiskProfile.objects.filter(user=request.user).order_by("created_at", "id").first()
+        if profile is None:
+            profile = RiskProfile.objects.create(
+                user=request.user,
+                profile_name="Default Risk Profile",
+                risk_level="moderate",
+                max_risk_per_trade=0.02,
+                max_daily_loss=0.04,
+                max_drawdown=0.10,
+                max_open_positions=10,
+                max_exposure=0.35,
+            )
         serializer = self.get_serializer(profile)
         return response.Response([serializer.data])
 
@@ -50,7 +54,9 @@ class RiskAssessmentViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return RiskAssessment.objects.filter(trade__user=self.request.user).order_by("-assessment_time")
+        return RiskAssessment.objects.filter(
+            Q(trade__user=self.request.user) | Q(broker_trade__user=self.request.user)
+        ).order_by("-assessment_time").distinct()
 
 
 class ExposureViewSet(OwnQuerysetMixin, viewsets.ReadOnlyModelViewSet):
