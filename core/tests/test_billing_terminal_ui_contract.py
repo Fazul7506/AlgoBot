@@ -111,7 +111,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("/api/auth/browser-token/", client)
         self.assertIn("ensureApiAccessToken", client)
         self.assertIn("headers.set('Authorization'", client)
-        self.assertIn("credentials:'omit'", client)
+        self.assertIn("credentials:sessionAccountSelect?'include':'omit'", client)
         self.assertNotIn("ensureCsrfCookie", client)
         self.assertIn("sessionAccountSelect", client)
         self.assertIn("ensureApiAccessToken", client)
