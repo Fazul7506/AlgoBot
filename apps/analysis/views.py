@@ -755,6 +755,7 @@ def broker_proposal(request):
             signal=payload.get("signal"),
             confidence=confidence,
             volatility=payload.get("volatility"),
+            broker_data=_broker_data,
         )
         amount = payload.get("amount")
         if amount in (None, ""):
