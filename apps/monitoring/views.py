@@ -1,5 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.db import connection
+from django.db.models import Q
 from django.shortcuts import render
 
 from apps.brokers.models import BrokerAccount, BrokerConnection, Position, Order
@@ -61,8 +62,8 @@ def dashboard(request):
     ).count()
     dashboard["active_alerts"] = Alert.objects.filter(user=request.user).exclude(status="resolved").count()
     dashboard["open_incidents"] = Incident.objects.filter(
-        user=request.user
-    ).exclude(status="resolved").count()
+        Q(assigned_to=request.user) | Q(alert__user=request.user)
+    ).exclude(status="resolved").distinct().count()
     dashboard["trading"]["pending_orders"] = Order.objects.filter(
         account_id__in=account_ids,
         status__in=["created", "pending", "submitted"],
