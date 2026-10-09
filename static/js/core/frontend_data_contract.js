@@ -14,10 +14,6 @@
   let apiAccessToken=null;
   let apiTokenPromise=null;
   const browserApiTokenUrl=()=>apiBase+'/api/auth/browser-token/';
-  const readCsrfToken=()=>{
-    const match=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : '';
-  };
   async function ensureApiAccessToken(controller,force=false){
     if(apiAccessToken&&!force)return apiAccessToken;
     if(apiTokenPromise&&!force)return apiTokenPromise;
@@ -65,6 +61,7 @@
     return `${apiBase}${raw.startsWith('/')?raw:`/${raw}`}`;
   };
   const normalizeEndpoint=url=>url==='/api/market/snapshots/all_snapshots/'?'/api/market/snapshots/?page_size=8':url;
+  const isSessionAccountSelectUrl=url=>{const path=new URL(resolveUrl(url),window.location.origin).pathname.split('/').filter(Boolean);return path.length===5&&path[0]==='api'&&path[1]==='brokers'&&path[2]==='accounts'&&Boolean(path[3])&&path[4]==='select';};
   const isCloudflareChallenge=(response,text)=>{if(!response)return false;const mitigated=String(response.headers?.get('cf-mitigated')||'').toLowerCase();if(mitigated==='challenge')return true;if(!text)return false;const body=String(text).toLowerCase();return[400,403,429,503,520,521,522,524].includes(response.status)&&(body.includes('just a moment')||body.includes('challenge-platform')||body.includes('cf_chl_opt')||body.includes('cf_chl-')||body.includes('challenges.cloudflare.com')||body.includes('enable javascript and cookies to continue')||(body.includes('cloudflare')&&String(response.headers?.get('content-type')||'').toLowerCase().includes('text/html')))};
   const parseDjangoResponse=(response,text)=>{const ct=String(response?.headers?.get('content-type')||'').toLowerCase();if(!ct.includes('text/html')||!text)return null;try{const doc=new DOMParser().parseFromString(text,'text/html'),env=doc.querySelector('[data-django-response]');if(!env)return null;const payloadNode=doc.querySelector('#django-response-payload'),messageNode=doc.querySelector('[data-response-message], [data-django-message]');let payload={};if(payloadNode?.textContent)payload=JSON.parse(payloadNode.textContent);return{django:true,status:Number(env.dataset.status||response.status||200),kind:env.dataset.kind||'info',message:messageNode?.textContent?.trim()||'',payload}}catch(_){return null}};
   const parsePayload=(response,text)=>{const django=parseDjangoResponse(response,text);if(django)return django;try{return text?JSON.parse(text):{}}catch(_){if(isCloudflareChallenge(response,text))return{detail:'Dedicated API edge challenge encountered.',code:'EDGE_CHALLENGE'};const ct=String(response?.headers?.get('content-type')||'').toLowerCase();return{detail:ct.includes('text/html')?`API returned an unexpected HTML response (${response.status}).`:String(text||`HTTP ${response?.status||'unknown'} request failure`)}}};
@@ -87,17 +84,9 @@
     // cookie received by the API origin.
     const accessToken=await ensureApiAccessToken(controller);
     if(accessToken&&!headers.has('Authorization'))headers.set('Authorization','Bearer '+accessToken);
-    if(sessionAccountSelect && !headers.has('X-CSRFToken')){
-      const csrfToken=readCsrfToken();
-      if(!csrfToken){
-        const error=new Error('The browser security token is unavailable. Refresh the workspace before switching accounts.');
-        error.code='CSRF_TOKEN_UNAVAILABLE';
-        error.status=403;
-        error.retryable=false;
-        throw error;
-      }
-      headers.set('X-CSRFToken',csrfToken);
-    }
+    // Account selection authenticates with the short-lived Bearer JWT. Keep the
+    // same-site session cookie only to persist the selected account in Django's
+    // session; do not require or forward a potentially stale CSRF token.
     const requestInit={credentials:sessionAccountSelect?'include':'omit',...options,headers,cache:'no-store',signal:controller.signal};
     const response=await nativeFetch(target,requestInit);
     return{response,text:await response.text()};
@@ -106,6 +95,7 @@
   const protectedPublicPaths = /^\/api\/(?:brokers\/|orders(?:\/|$)|positions(?:\/|$)|dashboard(?:\/|$)|ai(?:\/|$)|predictions(?:\/|$)|automation(?:\/|$)|portfolio(?:\/|$)|backtesting(?:\/|$)|settings(?:\/|$)|tenants(?:\/|$))/;
   async function request(rawUrl,options={},timeout=25000){
     const url=normalizeEndpoint(rawUrl),method=(options.method||'GET').toUpperCase();
+    const sessionAccountSelect=isSessionAccountSelectUrl(url);
     if (document.body?.dataset.authenticated !== 'true' && protectedPublicPaths.test(url)) {
       const error=new Error('Sign in to access your workspace data.');
       error.status=401; error.code='AUTH_REQUIRED'; error.retryable=false;
@@ -144,7 +134,7 @@
           const retryToken=await ensureApiAccessToken(controller,true);
           const retryHeaders=new Headers({Accept:'application/json',...(options.headers||{})});
           retryHeaders.set('Authorization','Bearer '+retryToken);
-          const retryResponse=await nativeFetch(resolveUrl(url),{credentials:'omit',...options,headers:retryHeaders,cache:'no-store',signal:controller.signal});
+          const retryResponse=await nativeFetch(resolveUrl(url),{credentials:sessionAccountSelect?'include':'omit',...options,headers:retryHeaders,cache:'no-store',signal:controller.signal});
           const retryText=await retryResponse.text();
           result={response:retryResponse,text:retryText};
         }catch(_){ }

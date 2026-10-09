@@ -36,8 +36,9 @@ USE_POSTGRES = True
 USE_REDIS = True
 EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 
-if DERIV_OAUTH_CLIENT_ID and DERIV_APP_ID and DERIV_APP_ID != DERIV_OAUTH_CLIENT_ID:  # noqa: F405
-    raise RuntimeError("DERIV_APP_ID must match DERIV_OAUTH_CLIENT_ID in production.")
+# DERIV_APP_ID is Deriv's numeric application ID; DERIV_OAUTH_CLIENT_ID
+# is the OAuth client identifier. They are separate credentials and must not
+# be compared for equality. Validate that each is configured independently below.
 
 validate_required_settings(
     production=True,
