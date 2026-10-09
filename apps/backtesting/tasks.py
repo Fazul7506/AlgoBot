@@ -270,7 +270,9 @@ def execute_backtest(backtest_id):
             mode=backtest.mode,
         )
         result = _window_result(result if isinstance(result, dict) else {}, evaluation_start_epoch, evaluation_end_epoch)
-        result['strategy_confidence'] = _strategy_confidence(result)
+        result['research_score'] = _strategy_confidence(result)
+        result['research_score_basis'] = 'heuristic_directional_hit_rate_not_calibrated'
+        result['strategy_confidence'] = None
         result = _json_safe(result)
         result['research_training'] = {'eligible': bool(result.get('total_trades', 0)), 'purpose': 'ai_training_research_only', 'live_authority': False, 'source': 'completed_historical_backtest'}
         with transaction.atomic():
