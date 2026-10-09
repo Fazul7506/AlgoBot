@@ -71,18 +71,20 @@ class OrderService:
                 raise OrderValidationError(
                     "This order has reached broker submission or a terminal state; local cancellation cannot change broker state."
                 )
-            if locked_order.status == c.ORDER_STATUS_QUEUED:
-                if queue_entry is None or queue_entry.status not in {c.QUEUE_STATUS_PENDING, c.QUEUE_STATUS_RETRY}:
-                    raise OrderValidationError(
-                        "The queue is already processing or its state is unknown. Reconcile before attempting cancellation."
-                    )
-                queue_entry.status = c.QUEUE_STATUS_CANCELLED
-                queue_entry.next_retry = None
-                queue_entry.save(update_fields=['status', 'next_retry', 'updated_at'])
-            elif queue_entry and queue_entry.status == c.QUEUE_STATUS_PROCESSING:
+            if locked_order.status == c.ORDER_STATUS_QUEUED and (
+                queue_entry is None or queue_entry.status not in {c.QUEUE_STATUS_PENDING, c.QUEUE_STATUS_RETRY}
+            ):
+                raise OrderValidationError(
+                    "The queue is already processing or its state is unknown. Reconcile before attempting cancellation."
+                )
+            if queue_entry and queue_entry.status == c.QUEUE_STATUS_PROCESSING:
                 raise OrderValidationError(
                     "The execution worker has already claimed this order. Reconcile broker state instead of cancelling locally."
                 )
+            if queue_entry and queue_entry.status in {c.QUEUE_STATUS_PENDING, c.QUEUE_STATUS_RETRY}:
+                queue_entry.status = c.QUEUE_STATUS_CANCELLED
+                queue_entry.next_retry = None
+                queue_entry.save(update_fields=['status', 'next_retry', 'updated_at'])
             locked_order.status = c.ORDER_STATUS_CANCELLED
             locked_order.save(update_fields=['status', 'updated_at'])
             ExecutionLogRepository().log(locked_order, 'OrderCancelled', 'success', 'Order cancelled before broker submission')
