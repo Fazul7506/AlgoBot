@@ -242,10 +242,16 @@ class StatisticsViewSet(viewsets.ReadOnlyModelViewSet):
 @decorators.api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def optimization_start(request):
-    allowed, used, limit = check(request.user, 'backtests')
-    if not allowed:
-        plan = effective_plan(request.user); return response.Response({'status':'rejected','code':'BACKTEST_LIMIT_REACHED','detail':f'Your {plan.name} backtest allowance has been reached for today.','plan':plan.key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-    return response.Response({'status':'started','results':ParameterOptimizationService().optimize(request.data.get('optimizer','grid'), request.data.get('space',{'x':[1]}))})
+    # The current optimizer scores parameter magnitudes, not historical strategy
+    # performance. Never present that heuristic as an actual backtest optimization.
+    return response.Response(
+        {
+            'status': 'unavailable',
+            'code': 'OPTIMIZATION_ENGINE_UNAVAILABLE',
+            'detail': 'Parameter optimization is disabled until candidates are evaluated against the persisted historical-data backtesting engine.',
+        },
+        status=status.HTTP_501_NOT_IMPLEMENTED,
+    )
 
 @decorators.api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
@@ -253,4 +259,14 @@ def optimization_results(request): return response.Response({'results':[]})
 
 @decorators.api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
-def replay(request): return response.Response(ReplayService().play())
+def replay(request):
+    # ReplayService currently only mutates process-local flags and does not read
+    # persisted market events. Do not claim a real replay session has started.
+    return response.Response(
+        {
+            'status': 'unavailable',
+            'code': 'MARKET_REPLAY_UNAVAILABLE',
+            'detail': 'Market replay is unavailable until a persisted-data replay session is connected.',
+        },
+        status=status.HTTP_501_NOT_IMPLEMENTED,
+    )
