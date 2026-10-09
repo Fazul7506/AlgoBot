@@ -48,7 +48,7 @@
         <h2>Contracts &amp; executions</h2>
         <p data-history-message class="trade-history-message" aria-live="polite">Loading broker history…</p>
       </div>
-      <button class="btn" type="button" data-history-export>Export CSV</button>
+      <button class="btn" type="button" data-history-export aria-label="Export the current page of broker trade history to CSV">Export page CSV</button>
     </div>
     <div class="trade-history-table-wrap">
       <table class="trade-history-table" data-history-table>
@@ -70,4 +70,4 @@
   </section>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/trade_history.js' %}?v=20260925-trade-history1" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/trade_history.js' %}?v=20261009-account-safe2" defer></script>{% endblock %}
