@@ -138,7 +138,12 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     def open(self,request):return response.Response(self.get_serializer(self.get_queryset().filter(status='open'),many=True).data)
 class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=TradeReconciliationSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
-    def get_queryset(self):return TradeReconciliation.objects.filter(broker__broker_accounts__user=self.request.user).distinct()
+    def get_queryset(self):
+        # Reconciliation payloads can contain account and execution identifiers. A broker-level
+        # filter leaks other customers' trades when they use the same provider; scope by the
+        # explicit local order association written by ReconciliationService.
+        user_order_ids = Order.objects.filter(user=self.request.user).values_list('pk', flat=True)
+        return TradeReconciliation.objects.filter(trade__algobot_order_id__in=user_order_ids).distinct()
 class BrokerHealthViewSet(viewsets.ViewSet):
     permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def list(self,request):
