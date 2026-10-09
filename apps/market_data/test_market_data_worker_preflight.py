@@ -19,7 +19,7 @@ class MarketDataWorkerPreflightTests(SimpleTestCase):
         "CELERY_BROKER_URL": "redis://ci",
         "CELERY_RESULT_BACKEND": "redis://ci",
     }, clear=False)
-    def test_preflight_accepts_registered_task_and_market_data_route(self, app):
+    def test_preflight_accepts_registered_task_and_market_data_route(self, app, table_names):
         app.tasks = {
             "apps.market_data.tasks.run_initial_candle_backfill": object(),
         }
@@ -53,7 +53,7 @@ class MarketDataWorkerPreflightTests(SimpleTestCase):
         "CELERY_BROKER_URL": "redis://ci",
         "CELERY_RESULT_BACKEND": "redis://ci",
     }, clear=False)
-    def test_preflight_rejects_missing_market_data_schema(self, app):
+    def test_preflight_rejects_missing_market_data_schema(self, app, table_names):
         app.tasks = {
             "apps.market_data.tasks.run_initial_candle_backfill": object(),
         }
