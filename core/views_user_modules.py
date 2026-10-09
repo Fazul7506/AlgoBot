@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.shortcuts import render
 
 from apps.automation.models import ScheduledTask, Workflow, WorkflowExecution
-from apps.deployment.models import BackupRecord, ClusterStatus, DeploymentRecord
+from apps.deployment.models import BackupRecord, DeploymentRecord
 from apps.developer.models import APIKey
 from apps.monitoring.models import AuditLog
 from core.account_context import get_active_account
@@ -27,7 +27,19 @@ def automation_workspace(request):
 
 @login_required
 def bot_runtime_workspace(request):
-    return render(request, "core/bot_runtime.html", {"deployments": DeploymentRecord.objects.filter(user=request.user).order_by("-created_at")[:15], "backups": BackupRecord.objects.filter(user=request.user).order_by("-created_at")[:10], "clusters": ClusterStatus.objects.order_by("name")[:10], "account": _account(request), "live_enabled": bool(getattr(settings, "ALLOW_LIVE_TRADING", False))})
+    account = _account(request)
+    account_connected = bool(account and account.is_connection_eligible)
+    return render(
+        request,
+        "core/bot_runtime.html",
+        {
+            "deployments": DeploymentRecord.objects.filter(user=request.user).order_by("-created_at")[:15],
+            "backups": BackupRecord.objects.filter(user=request.user).order_by("-created_at")[:10],
+            "account": account,
+            "account_connected": account_connected,
+            "live_enabled": bool(getattr(settings, "ALLOW_LIVE_TRADING", False)),
+        },
+    )
 
 
 @login_required
