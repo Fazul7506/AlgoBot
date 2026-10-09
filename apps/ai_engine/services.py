@@ -64,7 +64,7 @@ class InferenceService:
         return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'no_trained_model','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'no_trained_model'}}
 
 class PredictionService:
-    def predict(self,symbol,timeframe,context=None):
+    def predict(self,symbol,timeframe,context=None,user=None):
         start=time.perf_counter()
         context=context or {}
         feats=FeatureEngineeringService().build_features(symbol,timeframe,context)
@@ -85,6 +85,7 @@ class PredictionService:
         cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score'])
         model_features=list(MODEL_FEATURE_NAMES)
         return Prediction.objects.create(
+            user=user,
             symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],
             confidence=round(consensus_confidence,2),expected_return=raw['expected_return'],risk_score=raw['risk_score'],
             payload={
@@ -92,6 +93,7 @@ class PredictionService:
                 'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),
                 'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,
                 'price_action':{k:feats.get(k) for k in FEATURE_NAMES},
+                'feature_values': feats,
                 'ai_feedback':{'accuracy':feedback_accuracy,'mean_return':feedback_return,'sample_count':feedback_count},
                 'strategy_signal':{'bias':signal_bias,'confidence':signal_confidence,'sample_count':signal_count},
                 'reference_price':float(candles[-1].get('close')) if candles and candles[-1].get('close') is not None else None,
@@ -153,5 +155,14 @@ class AIRiskAdvisor:
 class AIStrategyAdvisor:
     def advise(self,prediction):return {'strategy_bias':prediction.prediction,'confidence':prediction.confidence,'note':'AI assists but does not replace the configured strategy and risk engine.'}
 class AIEngine:
-    def analyze(self,symbol,timeframe='M1',context=None):
-        p=PredictionService().predict(symbol,timeframe,context); features=FeatureStoreService().latest(symbol,timeframe); return {'prediction':p,'recommendation':RecommendationService().recommend(symbol,p),'regime':MarketRegimeService().detect(symbol,features),'explainability':ExplainabilityService().explain(features,p)}
+    def analyze(self,symbol,timeframe='M1',context=None,user=None):
+        p = PredictionService().predict(symbol, timeframe, context, user=user)
+        features = (p.payload or {}).get("feature_values")
+        if not isinstance(features, dict) or not features:
+            features = FeatureEngineeringService().build_features(symbol, timeframe, context)
+        return {
+            "prediction": p,
+            "recommendation": RecommendationService().recommend(symbol, p),
+            "regime": MarketRegimeService().detect(symbol, features),
+            "explainability": ExplainabilityService().explain(features, p),
+        }
