@@ -220,7 +220,7 @@ class DashboardViewSet(viewsets.ViewSet):
 
         stats = self._position_stats(self._positions_for_account(request.user, account))
         closed = self._positions_for_account(request.user, account).filter(status="closed")
-        closed_values = list(closed.values_list("profit_loss", flat=True))
+        closed_values = list(closed.values_list("profit", flat=True).exclude(profit__isnull=True))
         total_profit = stats["realized_pnl"]
         best_trade = max(closed_values) if closed_values else None
         worst_trade = min(closed_values) if closed_values else None
