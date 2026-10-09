@@ -76,6 +76,7 @@ CELERY_TASK_ROUTES = {
     # Recovery/observability must not share the single-consumer market-data queue.
     "apps.market_data.tasks.reconcile_candle_backfill_runs": {"queue": "celery"},
     "apps.market_data.tasks.ensure_initial_candle_backfill": {"queue": "celery"},
+    "apps.market_data.tasks.ensure_research_candle_backfill": {"queue": "celery"},
 }
 
 CELERY_TASK_ANNOTATIONS = {

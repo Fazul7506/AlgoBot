@@ -53,10 +53,13 @@ app.conf.beat_schedule = {
         "schedule": crontab(minute="*/5"),
         "kwargs": {"timeframe": "M1", "horizon_candles": 1, "batch_size": 500},
     },
-    "research-candle-backfill-every-30-minutes": {
-        "task": "apps.market_data.tasks.backfill_research_candles",
-        "schedule": crontab(minute="*/30"),
+    # Completion-relative scheduling is primary; this minute tick recovers
+    # a lost countdown and checks the persisted completion timestamp.
+    "research-candle-backfill-completion-relative-scheduler": {
+        "task": "apps.market_data.tasks.ensure_research_candle_backfill",
+        "schedule": 60.0,
         "kwargs": {"count": 250},
+        "options": {"queue": "celery", "expires": 50},
     },
     "candle-backfill-recovery-every-minute": {
         "task": "apps.market_data.tasks.reconcile_candle_backfill_runs",

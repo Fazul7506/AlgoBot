@@ -503,6 +503,16 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
         initial = CandleBackfillRun.objects.filter(scope="initial", status="running").order_by("-requested_at", "-id").first()
         if initial:
             logger.info("Skipping scheduled research backfill while initial warm-up is active", extra={"initial_run_id": initial.pk})
+            if run_id is not None:
+                with transaction.atomic():
+                    pending = CandleBackfillRun.objects.select_for_update().filter(
+                        pk=run_id, status="running"
+                    ).first()
+                    if pending:
+                        pending.status = "failed"
+                        pending.error = "Research backfill was deferred because the initial warm-up was active."
+                        pending.completed_at = timezone.now()
+                        pending.save(update_fields=["status", "error", "completed_at"])
             return {"status": "skipped", "reason": "initial_backfill_active", "initial_run_id": initial.pk}
 
         started = timezone.now()
@@ -564,6 +574,128 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
     finally:
         if dispatch_lock is not None:
             dispatch_lock.release()
+        terminal_run_id = run_id or getattr(run, "pk", None)
+        if terminal_run_id:
+            try:
+                terminal_run = CandleBackfillRun.objects.filter(
+                    pk=terminal_run_id, status__in=("completed", "failed")
+                ).first()
+                if terminal_run and terminal_run.completed_at:
+                    ensure_research_candle_backfill.apply_async(
+                        kwargs={"count": int(count)},
+                        countdown=1800,
+                        queue="celery",
+                    )
+            except Exception:
+                logger.exception(
+                    "Unable to schedule the next research backfill cooldown",
+                    extra={"run_id": terminal_run_id},
+                )
+        close_old_connections()
+
+
+
+@shared_task
+def ensure_research_candle_backfill(count=250):
+    """Dispatch research backfill only after a 30-minute completion cooldown.
+
+    A countdown is queued when each research run reaches a terminal state.
+    Celery Beat calls this once per minute only as a recovery path if the
+    countdown could not be published or was lost.
+    """
+    from django.db import close_old_connections, transaction
+    from .models import CandleBackfillEvent, CandleBackfillRun
+
+    close_old_connections()
+    now = timezone.now()
+    run = None
+    task_id = uuid4().hex
+    try:
+        with transaction.atomic():
+            # Lock the latest record first so the countdown and Beat recovery
+            # tick serialize before checking whether a run is already active.
+            latest = CandleBackfillRun.objects.select_for_update().filter(
+                scope="research"
+            ).order_by("-requested_at", "-id").first()
+
+            initial = CandleBackfillRun.objects.select_for_update().filter(
+                scope="initial", status="running"
+            ).order_by("-requested_at", "-id").first()
+            if initial:
+                return {"status": "waiting_for_initial", "initial_run_id": initial.pk}
+
+            active = CandleBackfillRun.objects.select_for_update().filter(
+                scope="research", status="running"
+            ).order_by("-requested_at", "-id").first()
+            if active:
+                return {"status": "running", "run_id": active.pk}
+
+            if latest:
+                last_completed = latest.completed_at or latest.requested_at
+                due_at = last_completed + timedelta(minutes=30)
+                if now < due_at:
+                    return {
+                        "status": "cooldown",
+                        "run_id": latest.pk,
+                        "next_run_at": due_at.isoformat(),
+                        "seconds_remaining": max(0, int((due_at - now).total_seconds())),
+                    }
+
+            run = CandleBackfillRun.objects.create(
+                scope="research",
+                status="running",
+                count=int(count),
+                requested_at=now,
+                task_id=task_id,
+                dispatch_at=now,
+                result={
+                    "symbols_total": 0,
+                    "symbols_completed": 0,
+                    "symbols_succeeded": 0,
+                    "symbols_failed": 0,
+                    "percent": 0,
+                    "results": {},
+                    "trigger": "automatic",
+                    "minimum_interval_seconds": 1800,
+                    "eligible_at": now.isoformat(),
+                },
+            )
+
+        task = backfill_research_candles.apply_async(
+            args=(run.pk,),
+            kwargs={"count": int(count), "symbol": None},
+            queue=BACKFILL_QUEUE,
+            task_id=task_id,
+        )
+        if task.id and task.id != run.task_id:
+            run.task_id = task.id
+            run.save(update_fields=["task_id"])
+        CandleBackfillEvent.objects.create(
+            run=run,
+            level="notice",
+            event_type="dispatch",
+            message="Celery Beat dispatched research backfill after the 30-minute completion cooldown.",
+            task_id=task.id,
+            payload={"queue": BACKFILL_QUEUE, "trigger": "automatic", "minimum_interval_seconds": 1800},
+        )
+        return {"status": "dispatched", "run_id": run.pk, "task_id": task.id, "queue": BACKFILL_QUEUE}
+    except Exception as exc:
+        if run is not None:
+            run.status = "failed"
+            run.error = f"Automatic research backfill dispatch failed: {exc}"
+            run.completed_at = timezone.now()
+            run.save(update_fields=["status", "error", "completed_at"])
+            CandleBackfillEvent.objects.create(
+                run=run,
+                level="error",
+                event_type="error",
+                message=run.error,
+                task_id=task_id,
+                payload={"queue": BACKFILL_QUEUE, "trigger": "automatic"},
+            )
+        logger.exception("Automatic research candle backfill dispatch failed")
+        return {"status": "failed", "error": str(exc)}
+    finally:
         close_old_connections()
 
 
@@ -776,6 +908,21 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     | Q(
                         last_heartbeat_at__isnull=True,
                         started_at__lt=running_cutoff,
+                    )
+                    | Q(
+                        started_at__isnull=True,
+                        accepted_at__isnull=True,
+                        dispatch_at__isnull=True,
+                        requested_at__lt=dispatch_cutoff,
+                    )
+                    | Q(
+                        started_at__isnull=True,
+                        accepted_at__isnull=True,
+                        dispatch_at__lt=dispatch_cutoff,
+                    )
+                    | Q(
+                        started_at__isnull=True,
+                        accepted_at__lt=now - BACKFILL_RECEIVED_STALE_AFTER,
                     )
                 )
                 .order_by("requested_at", "id")
