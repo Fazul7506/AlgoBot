@@ -532,6 +532,29 @@ class CandleBackfillReliabilityTests(TestCase):
         publish.assert_not_called()
         self.assertEqual(CandleBackfillRun.objects.filter(scope="research").count(), 1)
 
+    def test_research_scheduler_repairs_missing_terminal_completion_and_waits_full_cooldown(self):
+        run = CandleBackfillRun.objects.create(
+            scope="research",
+            status="failed",
+            count=250,
+            requested_at=timezone.now() - timedelta(hours=2),
+            completed_at=None,
+        )
+        with patch("apps.market_data.tasks.backfill_research_candles.apply_async") as publish:
+            result = ensure_research_candle_backfill(count=250)
+        run.refresh_from_db()
+        self.assertEqual(result["status"], "cooldown")
+        self.assertEqual(result["run_id"], run.pk)
+        self.assertIsNotNone(run.completed_at)
+        self.assertLess((timezone.now() - run.completed_at).total_seconds(), 5)
+        self.assertEqual(result["seconds_remaining"], 1800)
+        self.assertTrue(
+            CandleBackfillEvent.objects.filter(
+                run=run, event_type="completion_timestamp_repaired"
+            ).exists()
+        )
+        publish.assert_not_called()
+
     def test_research_backfill_scheduler_dispatches_after_30_minute_cooldown(self):
         completed_at = timezone.now() - timedelta(minutes=31)
         previous = CandleBackfillRun.objects.create(
