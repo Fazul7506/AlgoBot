@@ -164,7 +164,9 @@
   function boot() {
     $('[data-dashboard-refresh]')?.addEventListener('click', load);
     document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(timer); else { clearTimeout(timer); timer = setTimeout(load, 250); } });
-    window.addEventListener('algobot:account-changed', (event) => { selectedAccountId = event.detail?.id != null ? String(event.detail.id) : null; loadSeq += 1; busy = false; clearTimeout(timer); timer = setTimeout(load, 250); });
+    const accountChanged = (event) => { selectedAccountId = event.detail?.id != null ? String(event.detail.id) : null; loadSeq += 1; busy = false; clearTimeout(timer); timer = setTimeout(load, 250); };
+    window.addEventListener('algobot:account-changed', accountChanged);
+    window.addEventListener('algobot:account-synced', accountChanged);
     load();
   }
 
