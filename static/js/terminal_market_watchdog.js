@@ -12,6 +12,7 @@
   let healthTimer = null;
   let stopped = false;
   let lastTickAt = 0;
+  let socketStartedAt = 0;
 
   const fmt = value => Number.isFinite(Number(value))
     ? Number(value).toLocaleString(undefined, {maximumFractionDigits: 8})
@@ -57,6 +58,7 @@
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     const previous = ws;
     ws = null;
+    socketStartedAt = 0;
     try { previous?.close(); } catch (_) {}
   }
 
@@ -72,6 +74,7 @@
     activeSymbol = normalized;
     closeSocket();
     lastTickAt = 0;
+    socketStartedAt = Date.now();
     setState('waiting', `Connecting to Deriv ticks for ${normalized}…`);
     let connection;
     try { connection = new WebSocket(WS); ws = connection; }
@@ -123,8 +126,10 @@
     });
     healthTimer = setInterval(() => {
       if (document.hidden) return;
-      if (ws && ws.readyState === WebSocket.OPEN && lastTickAt && Date.now() - lastTickAt > 15000) {
-        setState('stale', 'No Deriv ticks received for 15 seconds; reconnecting…');
+      const silenceSince = lastTickAt || socketStartedAt;
+      if (ws && silenceSince && Date.now() - silenceSince > 15000 &&
+          (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        setState('stale', 'No Deriv ticks received within 15 seconds; reconnecting…');
         closeSocket();
         scheduleReconnect();
         return;
