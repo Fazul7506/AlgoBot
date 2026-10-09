@@ -86,7 +86,8 @@
     const accountState = connected && freshness === 'fresh' ? 'ok' : (freshness === 'stale' || freshness === 'unknown' || !connected ? 'warn' : 'error');
     const accountStatus = !connected ? 'Broker connection unconfirmed' : freshness === 'fresh' ? 'Broker account synchronized' : freshness === 'stale' ? 'Broker snapshot is stale' : 'Broker snapshot freshness unknown';
     status('account', accountState, accountStatus);
-    if (persistSnapshot) writeLastAccountSnapshot(account);
+    // Only cache a snapshot confirmed fresh by the broker and connection layer.
+    if (persistSnapshot && connected && freshness === 'fresh') writeLastAccountSnapshot(account);
   }
 
   function renderRows(selector, values, renderer, fallback) {
@@ -172,7 +173,8 @@
         const stale = readLastAccountSnapshot();
         if (stale?.account) {
           renderAccount(stale.account, '', false);
-          setText('[data-kpi-state="balance"]', `Last verified broker snapshot · refresh timed out${stale.at ? ` · ${new Date(stale.at).toLocaleTimeString()}` : ''}`);
+          const verifiedAt = stale.account.last_synced_at || stale.at;
+          setText('[data-kpi-state="balance"]', `Last verified broker snapshot · refresh timed out${verifiedAt ? ` · ${new Date(verifiedAt).toLocaleTimeString()}` : ''}`);
           status('account', 'warn', 'Broker refresh timed out · last verified snapshot shown');
         } else renderAccount(null, 'Broker snapshot timed out · refresh again');
       } else renderAccount(null, 'Broker snapshot unavailable');
