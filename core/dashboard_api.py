@@ -124,6 +124,8 @@ class DashboardViewSet(viewsets.ViewSet):
 
         positions = self._positions_for_account(request.user, account)
         stats = self._position_stats(positions)
+        snapshot_synced = account.last_synced_at is not None
+        snapshot_age = (timezone.now() - account.last_synced_at).total_seconds() if snapshot_synced else None
         return Response({
             "status": "success",
             "data": {
@@ -132,20 +134,22 @@ class DashboardViewSet(viewsets.ViewSet):
                     "account_id": account.account_id,
                     "broker": account.broker.name,
                     "currency": account.currency,
-                    "balance": account.balance,
-                    "equity": account.equity if account.equity != 0 else None,
-                    "margin": account.margin if account.margin != 0 else None,
-                    "free_margin": account.free_margin if account.free_margin != 0 else None,
+                    # Zero is a valid broker value. Only an absent sync timestamp
+                    # means these model defaults are not yet an authoritative snapshot.
+                    "balance": account.balance if snapshot_synced else None,
+                    "equity": account.equity if snapshot_synced else None,
+                    "margin": account.margin if snapshot_synced else None,
+                    "free_margin": account.free_margin if snapshot_synced else None,
                     "net_profit_loss": stats["total_pnl"],
                     "realized_pnl": stats["realized_pnl"],
                     "unrealized_pnl": stats["unrealized_pnl"],
                     "last_synced_at": account.last_synced_at,
                     "data_freshness": (
-                        "unknown" if account.last_synced_at is None
-                        else "fresh" if (timezone.now() - account.last_synced_at).total_seconds() <= 60
+                        "unknown" if snapshot_age is None
+                        else "fresh" if 0 <= snapshot_age <= 60
                         else "stale"
                     ),
-                    "is_connected": account.is_connected,
+                    "is_connected": account.is_connection_eligible,
                 },
                 "trading_stats": stats,
             },
