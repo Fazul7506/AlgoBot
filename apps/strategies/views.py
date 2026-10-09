@@ -1,5 +1,6 @@
 from django.db import transaction
 from rest_framework import viewsets, decorators, response, status, permissions
+from rest_framework.exceptions import ValidationError
 from .models import Strategy, StrategyConfiguration, StrategyExecution, StrategyPerformance, StrategySignal
 from .serializers import StrategySerializer, StrategyExecutionSerializer, StrategyPerformanceSerializer, StrategySignalSerializer, StrategyConfigurationSerializer
 from .engine import StrategyEngine
@@ -12,6 +13,11 @@ class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     queryset = Strategy.objects.all()
     serializer_class = StrategySerializer
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if request.method in {'POST', 'PUT', 'PATCH'} and not isinstance(request.data, dict):
+            raise ValidationError({'detail': 'A JSON object is required.', 'code': 'STRATEGY_PAYLOAD_INVALID'})
 
     def get_queryset(self):
         return Strategy.objects.filter(enabled=True).order_by('name')
