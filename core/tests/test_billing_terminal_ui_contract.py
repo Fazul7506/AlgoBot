@@ -290,6 +290,16 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertNotIn("executed by Deriv", terminal)
         self.assertNotIn("is_preferred", terminal)
 
+    def test_terminal_ai_discards_results_for_changed_account_market_or_timeframe(self):
+        from pathlib import Path
+        ai = Path("static/js/trading_terminal_ai.js").read_text(encoding="utf-8")
+        template = Path("templates/core/trading.html").read_text(encoding="utf-8")
+        self.assertIn("const context={symbol,accountId:String(account.id),timeframe:selectedTimeframe}", ai)
+        self.assertIn("String(currentAccount?.id||'')!==context.accountId", ai)
+        self.assertIn("selectedTimeframe!==context.timeframe", ai)
+        self.assertIn("function scheduleAnalyse(){clearTimeout(scheduled);resetForSymbol();", ai)
+        self.assertIn("v=20261009-ai-context-guard1", template)
+
     def test_terminal_preview_displays_broker_estimate_and_submits_duration(self):
         from pathlib import Path
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
