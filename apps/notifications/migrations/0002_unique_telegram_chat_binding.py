@@ -1,6 +1,5 @@
 from django.db import migrations, models
 from django.db.models import Q
-import django.db.models.deletion
 
 
 def remove_duplicate_telegram_bindings(apps, schema_editor):
@@ -40,7 +39,7 @@ class Migration(migrations.Migration):
             model_name="notificationchannelconnection",
             constraint=models.UniqueConstraint(
                 fields=("external_id",),
-                condition=Q(("provider", "telegram"), ~Q(("external_id", ""))),
+                condition=Q(provider="telegram") & ~Q(external_id=""),
                 name="uniq_telegram_chat_binding",
             ),
         ),
