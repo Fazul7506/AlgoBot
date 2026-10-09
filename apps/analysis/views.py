@@ -220,6 +220,7 @@ def analysis_data(request):
         limit = 300
 
     refresh_requested = str(request.GET.get("refresh", "1")).lower() in {"1", "true", "yes"}
+    account_refresh_requested = str(request.GET.get("refresh_account", "0")).lower() in {"1", "true", "yes"}
     active_account = get_active_account(request.user, request=request)
     cache_key = "algobot:analysis:v5:" + hashlib.sha256(
         json.dumps([
@@ -229,6 +230,7 @@ def analysis_data(request):
             timeframe.lower(),
             limit,
             bool(refresh_requested),
+            bool(account_refresh_requested),
         ]).encode("utf-8")
     ).hexdigest()
     cached = cache.get(cache_key)
@@ -399,7 +401,12 @@ def analysis_data(request):
         "strategy_ready": strategy_ready,
         "strategy_confluence": strategy_confluence,
         "ai_ready": ai_result["models_used"] > 0 and ai_result["decision"] in {"BUY", "SELL"} and ai_result.get("confidence") is not None and ai_result.get("recommendation") == ai_result["decision"],
-        "broker_contracts_confirmed": bool(broker_capabilities.get("available_contract_types")),
+        "broker_contracts_confirmed": bool(
+            active_account is not None
+            and getattr(active_account.broker, "broker_type", "") == "deriv"
+            and broker_capabilities.get("source") == "deriv_authenticated_contracts_for"
+            and broker_capabilities.get("available_contract_types")
+        ),
         "account_scope_confirmed": bool(active_account is not None and getattr(active_account, "user_id", request.user.pk) == request.user.pk),
         "account_ready": False,
         "risk_ready": False,
@@ -412,7 +419,7 @@ def analysis_data(request):
     broker_data = None
     if active_account is not None:
         try:
-            if refresh_requested:
+            if account_refresh_requested:
                 synced_account, broker_data = asyncio.run(
                     asyncio.wait_for(
                         SynchronizationService().sync_account(active_account),
@@ -429,7 +436,7 @@ def analysis_data(request):
                 broker_data=broker_data,
             )
         except Exception as exc:
-            if refresh_requested:
+            if account_refresh_requested:
                 return JsonResponse(
                     {
                         "status": "error",
@@ -501,8 +508,7 @@ def analysis_data(request):
     result["execution_gate"]["live_quote_fresh"] = bool(result["live_quote"]["fresh"])
     result["execution_gate"]["account_ready"] = bool(
         active_account is not None
-        and getattr(active_account, "token_status", "") == "active"
-        and not getattr(active_account, "is_token_expired", False)
+        and getattr(active_account, "is_connection_eligible", False)
     )
     recommended_stake = account_context.get("recommended_stake") if account_context else None
     try:
@@ -536,7 +542,7 @@ def analysis_data(request):
     live_ready = bool(gate["live_quote_confirmed"] and gate["live_quote_fresh"])
     risk_ready = bool(gate["risk_ready"])
     result["research_state"] = "READY" if gate["data_fresh"] else "STALE"
-    result["broker_state"] = "BROKER_CONNECTED" if live_ready and broker_ready else "BROKER_UNAVAILABLE" if not gate["live_quote_confirmed"] else "BROKER_CONNECTED"
+    result["broker_state"] = "BROKER_CONNECTED" if live_ready and broker_ready and account_ready else "BROKER_UNAVAILABLE"
     result["analysis_layers"] = {
         "market_data": {
             "state": "READY" if gate["data_fresh"] else "STALE",
