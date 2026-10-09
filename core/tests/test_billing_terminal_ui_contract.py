@@ -259,6 +259,8 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertIn("window.__algobotPreparedManualDirection", terminal)
         self.assertIn("String(b.dataset.direction||'').toUpperCase()===prepared", terminal)
         self.assertIn("contract_type:contract,direction:orderDirection.toLowerCase()", terminal)
+        broker_contracts = Path("static/js/broker_native_market.js").read_text(encoding="utf-8")
+        self.assertIn("DIGITDIFF|DIGITODD", broker_contracts)
 
     def test_public_market_quote_loading_does_not_require_a_connected_trading_account(self):
         from pathlib import Path
