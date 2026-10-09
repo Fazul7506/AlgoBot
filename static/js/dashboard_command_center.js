@@ -132,7 +132,9 @@
     const seq = ++loadSeq;
     const active = window.AlgoBotBrokerState?.get?.()?.account;
     const requestedAccountId = active?.id != null ? String(active.id) : null;
-    if (requestedAccountId != null) selectedAccountId = requestedAccountId;
+    // Clear the previous account identity when no account is selected; otherwise
+    // its cached snapshot could survive a disconnect and be shown on a timeout.
+    selectedAccountId = requestedAccountId;
     busy = true;
     setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
     document.documentElement.dataset.dashboardLoading = 'true';
