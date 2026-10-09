@@ -32,7 +32,7 @@ class RiskPageHardeningTests(TestCase):
             symbol="R_75", direction="sell", order_type="market", stake=Decimal("1"),
         )
         own = RiskAssessment.objects.create(broker_trade=own_order, risk_score=10, approved=True)
-        foreign = RiskAssessment.objects.create(broker_trade=foreign_order, risk_score=90, approved=False)
+        RiskAssessment.objects.create(broker_trade=foreign_order, risk_score=90, approved=False)
         self.client.force_login(self.user)
         response = self.client.get("/api/risk/assessment/")
         self.assertEqual(response.status_code, 200)
