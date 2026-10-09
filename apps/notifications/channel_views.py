@@ -9,7 +9,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 
-from .channel_service import connection_status, gmail_authorize_url, gmail_callback, telegram_start, telegram_webhook
+from .channel_service import connection_status, gmail_authorize_url, gmail_callback, gmail_revoke, telegram_start, telegram_webhook
 from .models import Notification, NotificationChannelConnection, NotificationPreference
 from .services import send_transactional_email
 
@@ -144,7 +144,17 @@ def telegram_disconnect(request):
 def gmail_disconnect(request):
     if request.method != "POST":
         return redirect(BROWSER_NOTIFICATIONS_URL)
+    connection = NotificationChannelConnection.objects.filter(user=request.user, provider="gmail").first()
+    revoked = True
+    if connection:
+        try:
+            gmail_revoke(connection)
+        except Exception:
+            revoked = False
     _delete_channel_connection(request.user, "gmail")
     request.session.pop("algobot_gmail_oauth_state", None)
-    messages.success(request, "Gmail disconnected. Its saved connection and notification history were deleted.")
+    if revoked:
+        messages.success(request, "Gmail disconnected. Google access revocation was requested, and saved connection data and notification history were deleted.")
+    else:
+        messages.warning(request, "Gmail was disconnected locally and saved credentials were deleted, but Google access revocation could not be confirmed. Review AlgoBot in your Google Account's third-party access settings.")
     return redirect(BROWSER_NOTIFICATIONS_URL)
