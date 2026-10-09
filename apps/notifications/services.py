@@ -13,7 +13,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.template import Context, Template
 from django.utils import timezone
 
-from .channel_service import send_telegram, send_gmail_notification
+from .channel_service import connection_status, send_telegram, send_gmail_notification
 from .models import Broadcast, DeliveryLog, Notification, NotificationChannelConnection, NotificationPreference, NotificationTemplate
 
 
@@ -85,7 +85,15 @@ class PreferenceService:
 
 class RoutingService:
     def routes(self, user, category="general", priority="info"):
-        return PreferenceService().enabled_channels(user)
+        enabled = PreferenceService().enabled_channels(user)
+        channels = connection_status(user)
+        available = [
+            channel for channel in enabled
+            if channel == "in_app" or (channel in {"gmail", "telegram"} and channels.get(channel, {}).get("connected"))
+        ]
+        # Always retain a durable in-app notification if every selected external
+        # channel is currently disconnected or missing usable credentials.
+        return available or ["in_app"]
 
 
 def _enqueue_telegram(notification: Notification) -> None:
