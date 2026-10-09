@@ -50,7 +50,7 @@ class AutomationSafetyTests(TestCase):
         self.client.force_login(self.other)
         listing = self.client.get("/api/automation/events/")
         self.assertEqual(listing.status_code, 200)
-        self.assertEqual(list(listing.data.get("results", [])), [])
+        self.assertEqual(list(listing.json().get("results", [])), [])
 
     def test_schedule_endpoint_does_not_create_unconsumed_scheduled_task(self):
         workflow = Workflow.objects.create(user=self.user, name="Scheduled workflow")
