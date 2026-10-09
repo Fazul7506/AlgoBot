@@ -271,10 +271,12 @@
   };
 
   const load = async () => {
+    const before = loadSeq;
     render('Loading connected broker market catalogue…');
     try {
       await loadSymbols();
     } catch (error) {
+      if (loadSeq !== before + 1) return;
       render('Broker market catalogue unavailable: ' + error.message);
     }
   };
@@ -291,9 +293,11 @@
     });
     $('[data-market-refresh]')?.addEventListener('click', async event => {
       event.currentTarget.disabled = true;
+      const before = loadSeq;
       try {
         await loadSymbols();
       } catch (error) {
+          if (loadSeq !== before + 1) return;
           if (rows.length) render();
           else render('Broker catalogue refresh unavailable: ' + error.message);
       } finally {
