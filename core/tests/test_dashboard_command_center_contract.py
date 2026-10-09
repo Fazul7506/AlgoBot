@@ -43,3 +43,11 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
     def test_account_response_with_missing_identity_is_rejected_during_account_switch(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("accountPayload && (accountPayload.id == null || String(accountPayload.id) !== requestedAccountId)", source)
+
+    def test_market_snapshot_age_and_missing_timestamps_are_visible(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("function snapshotAge(value)", source)
+        self.assertIn("updated ${seconds}s ago", source)
+        self.assertIn("freshness unavailable", source)
+        self.assertIn("const marketsTimestamped = markets.some(item => Number.isFinite(Date.parse(item.timestamp)))", source)
+        self.assertIn("Market data returned · freshness unknown", source)
