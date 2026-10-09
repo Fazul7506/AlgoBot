@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import time
 from datetime import datetime
 from decimal import InvalidOperation
@@ -35,8 +36,9 @@ def _selected_deriv_account(request):
 
 def _as_float(value):
     try:
-        return float(value)
-    except (TypeError, ValueError, InvalidOperation):
+        result = float(value)
+        return result if math.isfinite(result) else None
+    except (TypeError, ValueError, InvalidOperation, OverflowError):
         return None
 
 
@@ -189,7 +191,7 @@ async def _live_deriv_ticks(symbols):
 
                 quote = _as_float(tick.get("quote"))
                 epoch = _as_float(tick.get("epoch"))
-                if quote is None or epoch is None:
+                if quote is None or epoch is None or epoch <= 0 or epoch > time.time() + 5:
                     continue
 
                 results[symbol] = tick
@@ -204,8 +206,8 @@ def _persisted_live_ticks(markets):
     results = {}
     snapshots = MarketSnapshot.objects.filter(symbol__in=markets).select_related("symbol")
     for snapshot in snapshots:
-        age = max(0.0, (now - snapshot.timestamp).total_seconds())
-        if age > LIVE_SNAPSHOT_MAX_AGE_SECONDS:
+        age = (now - snapshot.timestamp).total_seconds()
+        if age < -5 or age > LIVE_SNAPSHOT_MAX_AGE_SECONDS:
             continue
         results[snapshot.symbol.symbol] = {
             "symbol": snapshot.symbol.symbol,
@@ -230,7 +232,8 @@ def _signal_evidence(signal):
             if key in {"passed", "reasons"}:
                 continue
             if isinstance(value, (str, int, float, bool)) or value is None:
-                evidence.append({"condition": str(key), "observed": value, "result": "PASS" if bool(value) else "FAIL"})
+                outcome = ("PASS" if value else "FAIL") if isinstance(value, bool) else "OBSERVED"
+                evidence.append({"condition": str(key), "observed": value, "result": outcome})
     indicators = metadata.get("indicators") or metadata.get("indicator_data")
     if isinstance(indicators, dict):
         for key, value in indicators.items():
@@ -319,9 +322,8 @@ def _revise_signal(signal, live_tick, now, market, account):
         status = "LIVE_CONFIRMATION_UNAVAILABLE"
         direction = None
         evidence.append("analysis_entry_price_unavailable")
-    threshold = _as_float(metadata.get("live_confidence_threshold"))
-    if threshold is None:
-        threshold = DEFAULT_CONFIDENCE_THRESHOLD
+    configured_threshold = _as_float(getattr(settings, "SIGNAL_LIVE_CONFIDENCE_THRESHOLD", DEFAULT_CONFIDENCE_THRESHOLD))
+    threshold = max(DEFAULT_CONFIDENCE_THRESHOLD, configured_threshold if configured_threshold is not None else DEFAULT_CONFIDENCE_THRESHOLD)
     confidence_gate = revised is not None and revised >= threshold
     signal_valid = direction in {"BUY", "SELL"} and status == "LIVE_REVIEW"
     execution_ready = signal_valid and confidence_gate
@@ -383,7 +385,7 @@ def _strategy_signals_impl(request):
     account = _selected_deriv_account(request)
     if account is None:
         return JsonResponse({"status": "error", "code": "DERIV_ACCOUNT_REQUIRED", "message": "Connect and select a Deriv account before reading live signals."}, status=409)
-    account_credentials_valid = account.token_status == "active" and not account.is_token_expired
+    account_credentials_valid = bool(account.is_connection_eligible)
     account_risk_context = build_account_risk_context(request.user, account)
     symbol_filter = str(request.GET.get("symbol") or "").strip()
     timeframe = str(request.GET.get("timeframe") or "M1").strip()
@@ -440,14 +442,33 @@ def _strategy_signals_impl(request):
         else:
             row.update(_revise_signal(baseline, live_tick, now, market, account))
         rows.append(row)
-    if not account_credentials_valid:
-        for row in rows:
-            if row.get("execution_ready") or row.get("direction") in {"BUY", "SELL"}:
-                row["execution_ready"] = False
-                row["signal_valid"] = False
-                row["evidence"] = [*row.get("evidence", []), "selected_account_credentials_not_ready_for_execution"]
-                row["status"] = "ACCOUNT_AUTH_REQUIRED"
-                row["lifecycle"] = "BLOCKED"
+
+    risk_ready = bool(account_risk_context.get("risk_inputs_complete")) and (_as_float(account_risk_context.get("recommended_stake")) or 0) > 0
+    live_mode_ready = (
+        account.account_type != "real"
+        or (
+            bool(getattr(account.broker, "supports_live", False))
+            and bool(getattr(settings, "ALLOW_LIVE_TRADING", False))
+        )
+    )
+    for row in rows:
+        if row.get("direction") not in {"BUY", "SELL"}:
+            continue
+        reason = None
+        if not account_credentials_valid:
+            reason = "selected_account_connection_not_eligible"
+            row["status"] = "ACCOUNT_AUTH_REQUIRED"
+        elif not risk_ready:
+            reason = "risk_context_incomplete_or_zero_stake"
+            row["status"] = "RISK_CONTEXT_INCOMPLETE"
+        elif not live_mode_ready:
+            reason = "live_account_or_platform_gate_not_enabled"
+            row["status"] = "LIVE_TRADING_DISABLED"
+        if reason:
+            row["execution_ready"] = False
+            row["signal_valid"] = False
+            row["evidence"] = [*row.get("evidence", []), reason, *account_risk_context.get("risk_data_issues", [])]
+            row["lifecycle"] = "BLOCKED"
 
     actionable = [r for r in rows if r.get("execution_ready")]
     live_data_available_count = sum(1 for r in rows if r.get("live"))
