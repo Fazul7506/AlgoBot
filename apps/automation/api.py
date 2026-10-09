@@ -1,3 +1,4 @@
+import math
 from rest_framework import decorators, permissions, response, status, viewsets
 from django.shortcuts import get_object_or_404
 
@@ -83,6 +84,8 @@ def _safe_payload(value, depth=0):
         return [_safe_payload(item, depth + 1) for item in value[:100]]
     if isinstance(value, str):
         return value[:2000]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
     if value is None or isinstance(value, (bool, int, float)):
         return value
     return str(value)[:2000]
