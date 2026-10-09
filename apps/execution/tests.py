@@ -253,9 +253,12 @@ class ExecutionQueueTaskTests(TestCase):
         queue = ExecutionQueue.objects.create(order=order, status='pending', next_retry=None, queue_type='priority')
 
         async def post_submit_failure(candidate):
-            candidate.status = 'sent_to_broker'
-            candidate.validation_context = {'execution_mode': 'manual_command'}
-            candidate.save(update_fields=['status', 'validation_context', 'updated_at'])
+            from asgiref.sync import sync_to_async
+
+            await sync_to_async(Order.objects.filter(pk=candidate.pk).update)(
+                status='sent_to_broker',
+                validation_context={'execution_mode': 'manual_command'},
+            )
             raise RuntimeError('simulated response decode failure')
 
         with patch('apps.execution.tasks.ExecutionEngine.execute', new=AsyncMock(side_effect=post_submit_failure)):
