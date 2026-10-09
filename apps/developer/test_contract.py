@@ -7,7 +7,7 @@ class DeveloperContractTests(SimpleTestCase):
     def test_contract_contains_only_registered_developer_routes(self):
         contract = build_contract()
         self.assertEqual(contract["openapi"], "3.0.3")
-        self.assertEqual(contract["servers"][0]["url"], "/api/developer")
+        self.assertEqual(contract["servers"][0]["url"], "")
         self.assertTrue(contract["paths"])
         self.assertTrue(all(path.startswith("/api/developer/") for path in contract["paths"]))
 
