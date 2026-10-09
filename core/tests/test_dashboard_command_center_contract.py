@@ -85,3 +85,8 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("persistSnapshot && connected && freshness === 'fresh'", source)
         self.assertIn("const verifiedAt = stale.account.last_synced_at || stale.at", source)
+
+    def test_dashboard_orders_use_the_active_account_scoped_history_endpoint(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("request('/api/dashboard/trade_history/?days=30&limit=8'", source)
+        self.assertNotIn("request('/api/orders/'", source)
