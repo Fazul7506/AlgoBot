@@ -99,14 +99,14 @@
         <h2 id="backfill-history-title">Every candle backfill execution</h2>
         <p>Manual starts, scheduled refreshes, automatic warm-ups and recovered deliveries remain visible as separate durable runs.</p>
       </div>
-      <div class="rb-history-meta"><span data-history-count>0 runs</span><button type="button" class="rb-icon-btn" data-history-refresh aria-label="Refresh execution history"><span class="material-symbols-rounded">refresh</span></button></div>
+      <div class="rb-history-meta"><span data-history-count>{{ history_total|default:"0" }} {% if history_total == 1 %}run{% else %}runs{% endif %}</span><button type="button" class="rb-icon-btn" data-history-refresh aria-label="Refresh execution history"><span class="material-symbols-rounded">refresh</span></button></div>
     </div>
     <div class="rb-history-table-wrap">
       <table class="rb-history-table">
         <thead><tr><th>Run</th><th>Type</th><th>Trigger</th><th>Status</th><th>Requested</th><th>Duration</th><th>Progress</th><th>Worker</th></tr></thead>
         <tbody data-history-body>
           {% for item in history_payload %}
-          <tr data-run-id="{{ item.id|default:forloop.counter }}" tabindex="0">
+          <tr data-run-id="{{ item.id|default:forloop.counter }}" tabindex="0" role="button" aria-label="Select execution #{{ item.id|default:forloop.counter }}">
             <td><strong>#{{ item.id|default:"—" }}</strong><small>{{ item.task_id|default:"No task ID" }}</small></td>
             <td>{{ item.scope|default:"—" }}</td>
             <td>{{ item.trigger|default:"manual"|title }}</td>
@@ -148,8 +148,16 @@
     <div class="rb-log-body" data-log-body aria-live="polite">
       {% if not run %}
       <div class="rb-log-empty">No backfill execution exists yet. Start one above to create durable dispatch and worker log events.</div>
-      {% elif not run_payload.event_count %}
+      {% elif not initial_events %}
       <div class="rb-log-empty">No durable operator events have been recorded for this run.</div>
+      {% else %}
+      {% for event in initial_events %}
+      <div class="rb-log-line" data-event-id="{{ event.id }}">
+        <span class="rb-log-time">{{ event.created_at|date:"H:i:s" }}</span>
+        <span class="rb-log-level {{ event.level }}">{{ event.level }}</span>
+        <span class="rb-log-message">{{ event.message }}{% if event.symbol or event.timeframe %}<span class="rb-log-meta">{{ event.symbol }}{% if event.symbol and event.timeframe %} · {% endif %}{{ event.timeframe }}</span>{% endif %}</span>
+      </div>
+      {% endfor %}
       {% endif %}
     </div>
   </section>
