@@ -405,8 +405,24 @@ def telegram_webhook(payload):
 
 
 def connection_status(user):
-    return {
-        provider: {"connected": bool(connection and connection.status == "verified"), "status": connection.status if connection else "not_connected", "address": connection.address if connection else ""}
-        for provider in ("gmail", "telegram")
-        for connection in [NotificationChannelConnection.objects.filter(user=user, provider=provider).first()]
-    }
+    result = {}
+    for provider in ("gmail", "telegram"):
+        connection = NotificationChannelConnection.objects.filter(user=user, provider=provider).first()
+        if not connection:
+            result[provider] = {"connected": False, "status": "not_connected", "address": ""}
+            continue
+        credentials_present = bool(
+            connection.address and (
+                connection.refresh_token if provider == "gmail" else connection.external_id
+            )
+        )
+        connected = connection.status == "verified" and credentials_present
+        state = connection.status
+        if connection.status == "verified" and not credentials_present:
+            state = "error"
+        result[provider] = {
+            "connected": connected,
+            "status": state,
+            "address": connection.address if connected else "",
+        }
+    return result
