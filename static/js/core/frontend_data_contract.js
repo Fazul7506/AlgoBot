@@ -14,10 +14,6 @@
   let apiAccessToken=null;
   let apiTokenPromise=null;
   const browserApiTokenUrl=()=>apiBase+'/api/auth/browser-token/';
-  const readCsrfToken=()=>{
-    const match=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : '';
-  };
   async function ensureApiAccessToken(controller,force=false){
     if(apiAccessToken&&!force)return apiAccessToken;
     if(apiTokenPromise&&!force)return apiTokenPromise;
