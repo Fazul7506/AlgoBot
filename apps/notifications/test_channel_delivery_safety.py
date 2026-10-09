@@ -131,3 +131,29 @@ class TelegramBindingSafetyTests(TestCase):
         self.assertEqual(pending.status, "pending")
         self.assertEqual(pending.external_id, "")
         self.assertIn("already linked", result["reply"]["text"])
+
+
+class NotificationApiInputTests(TestCase):
+    def test_notification_send_rejects_malformed_channels_without_creating_records(self):
+        user = get_user_model().objects.create_user(username="notification-api-test", password="test-password")
+        self.client.force_login(user)
+        response = self.client.post(
+            "/api/notifications/send/",
+            data={"title": "Test", "message": "Body", "channels": [{"unexpected": "object"}]},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Notification.objects.filter(user=user).count(), 0)
+
+    def test_unimplemented_inbound_notification_webhook_is_not_acknowledged_as_accepted(self):
+        admin = get_user_model().objects.create_superuser(
+            username="notification-admin", email="notification-admin@example.com", password="test-password"
+        )
+        self.client.force_login(admin)
+        response = self.client.post(
+            "/api/notifications/webhook/",
+            data={"event": "test"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 501)
+        self.assertEqual(response.json()["status"], "not_configured")
