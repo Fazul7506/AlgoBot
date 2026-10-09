@@ -56,3 +56,12 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("selectedAccountId = requestedAccountId;", source)
         self.assertIn("its cached snapshot could survive a disconnect", source)
+
+    def test_dashboard_health_states_have_distinct_colors_and_cache_busting(self):
+        css = (ROOT / "static" / "css" / "dashboard.css").read_text(encoding="utf-8")
+        template = (ROOT / "templates" / "core" / "dashboard.html").read_text(encoding="utf-8")
+        self.assertIn(".status-dot.ok{background:#22c55e", css)
+        self.assertIn(".status-dot.warn{background:#f59e0b", css)
+        self.assertIn(".status-dot.error{background:#ef4444", css)
+        self.assertIn("css/dashboard.css' %}?v=20261009-dashboard-audit2", template)
+        self.assertIn("dashboard_command_center.js' %}?v=20261009-dashboard-audit2", template)
