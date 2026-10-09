@@ -73,13 +73,19 @@
     setText('[data-kpi="equity"]', money(equity, currency));
     setText('[data-kpi="available"]', money(account.free_margin ?? account.available_margin ?? account.available, currency));
     setText('[data-kpi="pnl"]', pnl == null ? 'Unavailable' : money(pnl, currency));
-    setText('[data-kpi-state="balance"]', 'Authoritative broker snapshot');
-    setText('[data-kpi-state="equity"]', account.equity == null ? 'Not reported by broker' : 'Authoritative broker equity');
+    const freshness = String(account.data_freshness || 'unknown').toLowerCase();
+    const connected = account.is_connected === true;
+    const snapshotLabel = freshness === 'fresh' ? 'Fresh broker snapshot' : freshness === 'stale' ? 'Stale broker snapshot' : 'Broker snapshot freshness unknown';
+    setText('[data-kpi-state="balance"]', freshness === 'fresh' ? 'Authoritative broker snapshot' : snapshotLabel);
+    setText('[data-kpi-state="equity"]', account.equity == null ? 'Not reported by broker' : (freshness === 'fresh' ? 'Authoritative broker equity' : snapshotLabel));
     const broker = typeof account.broker === 'string' ? account.broker : (account.broker?.name || account.broker_name || 'Broker');
     const id = account.account_id || account.broker_account_id || account.loginid || 'Account';
-    const sync = account.last_synced_at ? new Date(account.last_synced_at).toLocaleTimeString() : 'snapshot';
-    setHtml('[data-dashboard-brokers]', `<span><b></b><strong>${esc(broker)}</strong> · ${esc(id)} · CONNECTED</span><small>Broker snapshot · ${esc(sync)}</small>`);
-    status('account', 'ok', 'Broker account available');
+    const sync = account.last_synced_at ? new Date(account.last_synced_at).toLocaleTimeString() : 'not verified';
+    const connectionLabel = connected ? 'CONNECTED' : 'CONNECTION UNCONFIRMED';
+    setHtml('[data-dashboard-brokers]', `<span><b></b><strong>${esc(broker)}</strong> · ${esc(id)} · ${esc(connectionLabel)}</span><small>${esc(snapshotLabel)} · ${esc(sync)}</small>`);
+    const accountState = connected && freshness === 'fresh' ? 'ok' : (freshness === 'stale' || freshness === 'unknown' || !connected ? 'warn' : 'error');
+    const accountStatus = !connected ? 'Broker connection unconfirmed' : freshness === 'fresh' ? 'Broker account synchronized' : freshness === 'stale' ? 'Broker snapshot is stale' : 'Broker snapshot freshness unknown';
+    status('account', accountState, accountStatus);
     if (persistSnapshot) writeLastAccountSnapshot(account);
   }
 
@@ -134,7 +140,7 @@
         : null;
       // Never paint an account response that belongs to a different selection.
       // Internal account IDs are compared only when both sides expose one.
-      if (requestedAccountId != null && accountPayload?.id != null && String(accountPayload.id) !== requestedAccountId) {
+      if (requestedAccountId != null && accountPayload && (accountPayload.id == null || String(accountPayload.id) !== requestedAccountId)) {
         renderAccount(null, 'Account changed during refresh · retrying');
         setText('[data-dashboard-sync]', 'Account selection changed · refreshing');
         loadSeq += 1; // Prevent this request's finally block from replacing the fast retry.
