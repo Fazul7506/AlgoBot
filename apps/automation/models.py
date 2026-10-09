@@ -54,6 +54,7 @@ class ScheduledTask(models.Model):
     metadata=models.JSONField(default=dict,blank=True)
 
 class AutomationEvent(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True,related_name="automation_events")
     event_name=models.CharField(max_length=120,db_index=True)
     source=models.CharField(max_length=120,db_index=True)
     payload=models.JSONField(default=dict,blank=True)
