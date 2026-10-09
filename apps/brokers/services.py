@@ -120,7 +120,7 @@ class OrderManagementSystem:
         order = Order.objects.create(user=user, broker=account.broker, account=account, status='created', **{k: v for k, v in data.items() if k != 'account'})
         order.status = 'validated'; order.save(update_fields=['status', 'updated_at']); return order
     def _validate_environment(self, account, routing):
-        verified = str((account.credentials or {}).get('account_type') or '').lower().strip()
+        verified = account.account_type
         requested = str(routing.get('account_type') or '').lower().strip()
         if not verified:
             raise BrokerRoutingError('Broker account environment has not been verified; synchronize the account before trading.')
@@ -182,7 +182,7 @@ class ExecutionEngine:
         client_order_id = str(data.get('client_order_id') or '').strip()
         if account.user_id != user.id: raise BrokerRoutingError('The selected broker account does not belong to this user')
         if not account.is_connection_eligible: raise BrokerRoutingError('The selected broker account is not connected or its credentials are not usable')
-        verified_environment = str((account.credentials or {}).get('account_type') or '').lower().strip()
+        verified_environment = account.account_type
         requested_environment = str(routing.get('account_type') or '').lower().strip()
         if requested_environment and requested_environment != verified_environment:
             raise BrokerRoutingError(f'Execution environment mismatch: selected account is {verified_environment}, request asked for {requested_environment}.')
