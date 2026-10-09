@@ -87,17 +87,9 @@
     // cookie received by the API origin.
     const accessToken=await ensureApiAccessToken(controller);
     if(accessToken&&!headers.has('Authorization'))headers.set('Authorization','Bearer '+accessToken);
-    if(sessionAccountSelect && !headers.has('X-CSRFToken')){
-      const csrfToken=readCsrfToken();
-      if(!csrfToken){
-        const error=new Error('The browser security token is unavailable. Refresh the workspace before switching accounts.');
-        error.code='CSRF_TOKEN_UNAVAILABLE';
-        error.status=403;
-        error.retryable=false;
-        throw error;
-      }
-      headers.set('X-CSRFToken',csrfToken);
-    }
+    // Account selection authenticates with the short-lived Bearer JWT. Keep the
+    // same-site session cookie only to persist the selected account in Django's
+    // session; do not require or forward a potentially stale CSRF token.
     const requestInit={credentials:sessionAccountSelect?'include':'omit',...options,headers,cache:'no-store',signal:controller.signal};
     const response=await nativeFetch(target,requestInit);
     return{response,text:await response.text()};
@@ -144,7 +136,7 @@
           const retryToken=await ensureApiAccessToken(controller,true);
           const retryHeaders=new Headers({Accept:'application/json',...(options.headers||{})});
           retryHeaders.set('Authorization','Bearer '+retryToken);
-          const retryResponse=await nativeFetch(resolveUrl(url),{credentials:'omit',...options,headers:retryHeaders,cache:'no-store',signal:controller.signal});
+          const retryResponse=await nativeFetch(resolveUrl(url),{credentials:sessionAccountSelect?'include':'omit',...options,headers:retryHeaders,cache:'no-store',signal:controller.signal});
           const retryText=await retryResponse.text();
           result={response:retryResponse,text:retryText};
         }catch(_){ }
