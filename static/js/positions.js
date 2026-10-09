@@ -36,7 +36,7 @@
     if (count) count.textContent = state.status === 'unavailable' ? 'Unavailable' : String(state.rows.length);
     const known = state.rows.filter(r => knownNumber(r.profit)).map(r => Number(r.profit));
     const currency = state.rows.find(r => r.currency)?.currency || '';
-    if (pnl) pnl.textContent = known.length ? money(known.reduce((a,b)=>a+b,0),currency) : 'Unavailable';
+    if (pnl) pnl.textContent = known.length ? (state.status === 'stale' ? 'Cached · ' : '') + money(known.reduce((a,b)=>a+b,0),currency) : 'Unavailable';
     if (updated) updated.textContent = state.meta?.synchronized_at ? new Date(state.meta.synchronized_at).toLocaleString() : '—';
   }
   function filtered() {
