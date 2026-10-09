@@ -1,5 +1,6 @@
 import importlib
 import logging
+import math
 import os
 from datetime import datetime, timezone as dt_timezone, timedelta
 from decimal import Decimal, InvalidOperation
@@ -27,7 +28,7 @@ def _strategy_confidence(result):
     sharpe = float(result.get('sharpe_ratio', 0) or 0)
     drawdown = abs(float(result.get('max_drawdown', result.get('maximum_drawdown', 0)) or 0))
     sample_score = min(1.0, trades / 100.0)
-    pf_score = min(1.0, max(0.0, pf / 2.0)) if pf != float('inf') else 1.0
+    pf_score = 1.0 if result.get('profit_factor_unbounded') else min(1.0, max(0.0, pf / 2.0))
     sharpe_score = min(1.0, max(0.0, (sharpe + 1.0) / 3.0))
     dd_score = 1.0 / (1.0 + drawdown / 100.0)
     score = 100.0 * (0.35 * win_rate + 0.25 * pf_score + 0.15 * sharpe_score + 0.15 * dd_score + 0.10 * sample_score)
@@ -36,9 +37,23 @@ def _strategy_confidence(result):
 
 def _decimal(value, default='0'):
     try:
-        return Decimal(str(value if value is not None else default))
+        result = Decimal(str(value if value is not None else default))
+        return result if result.is_finite() else Decimal(default)
     except (InvalidOperation, TypeError, ValueError):
         return Decimal(default)
+
+
+def _json_safe(value):
+    """Replace non-finite numeric values before writing PostgreSQL JSONB."""
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, Decimal) and not value.is_finite():
+        return None
+    return value
 
 
 def _trade_datetime(value):
@@ -83,7 +98,7 @@ def _persist_trades(backtest, result):
             profit=_decimal(raw.get('profit', raw.get('pnl', 0))),
             fees=_decimal(raw.get('fees', 0)),
             duration=duration,
-            metadata=raw,
+            metadata=_json_safe(raw),
         ))
     if rows:
         BacktestTrade.objects.bulk_create(rows, batch_size=500)
@@ -164,7 +179,8 @@ def _window_result(result, start_epoch, end_epoch):
     gross_profit = float(sum(p for p in profits if p > 0))
     gross_loss = float(abs(sum(p for p in profits if p < 0)))
     expectancy = total_profit / len(profits) if profits else 0.0
-    profit_factor = gross_profit / gross_loss if gross_loss else (float('inf') if gross_profit else 0.0)
+    profit_factor_unbounded = bool(gross_profit and not gross_loss)
+    profit_factor = gross_profit / gross_loss if gross_loss else (None if gross_profit else 0.0)
     equity = [1000.0]
     for profit in profits:
         equity.append(equity[-1] + profit)
@@ -182,6 +198,7 @@ def _window_result(result, start_epoch, end_epoch):
         'gross_profit': gross_profit,
         'gross_loss': gross_loss,
         'profit_factor': profit_factor,
+        'profit_factor_unbounded': profit_factor_unbounded,
         'total_profit': total_profit,
         'roi': total_profit / 1000 * 100,
         'max_drawdown': max_drawdown,
@@ -246,6 +263,7 @@ def execute_backtest(backtest_id):
         )
         result = _window_result(result if isinstance(result, dict) else {}, evaluation_start_epoch, evaluation_end_epoch)
         result['strategy_confidence'] = _strategy_confidence(result)
+        result = _json_safe(result)
         result['research_training'] = {'eligible': bool(result.get('total_trades', 0)), 'purpose': 'ai_training_research_only', 'live_authority': False, 'source': 'completed_historical_backtest'}
         with transaction.atomic():
             current = Backtest.objects.select_for_update().filter(pk=backtest_id).first()
