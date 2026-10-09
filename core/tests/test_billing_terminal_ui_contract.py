@@ -262,6 +262,14 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         broker_contracts = Path("static/js/broker_native_market.js").read_text(encoding="utf-8")
         self.assertIn("DIGITDIFF|DIGITODD", broker_contracts)
 
+    def test_terminal_does_not_cache_stale_market_or_contract_catalogues_as_fresh(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        contracts = Path("static/js/broker_native_market.js").read_text(encoding="utf-8")
+        self.assertIn("p?.stale!==true", terminal)
+        self.assertIn("if(!stale)writeCapabilitiesCache(normalized,payload)", contracts)
+        self.assertIn("Using stale broker contract metadata", contracts)
+
     def test_terminal_timeframe_control_does_not_reference_out_of_scope_variable(self):
         from pathlib import Path
         chart = Path("static/js/deriv_pro_chart.js").read_text(encoding="utf-8")
