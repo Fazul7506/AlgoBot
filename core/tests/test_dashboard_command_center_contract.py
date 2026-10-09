@@ -19,3 +19,15 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("!Number.isFinite(Number(value))", source)
         self.assertIn("Number.isFinite(Number(item.confidence))", source)
         self.assertIn("item.ask_price ?? item.ask ?? 'Unavailable'", source)
+
+    def test_stale_snapshot_render_does_not_refresh_its_cache_timestamp(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("function renderAccount(account, message = '', persistSnapshot = true)", source)
+        self.assertIn("renderAccount(stale.account, '', false)", source)
+        self.assertIn("if (persistSnapshot) writeLastAccountSnapshot(account)", source)
+
+    def test_account_overview_response_is_checked_against_requested_account(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("const accountPayload = account.status === 'fulfilled'", source)
+        self.assertIn("String(accountPayload.id) !== requestedAccountId", source)
+        self.assertIn("Account changed during refresh · retrying", source)
