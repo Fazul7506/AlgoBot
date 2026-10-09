@@ -117,7 +117,21 @@ class ExecutionEngine:
         broker_order=SimpleNamespace(symbol=order.symbol,stake=order.stake,quantity=order.stake,direction=order.direction,order_type=order.order_type,price=order.price,contract_type=getattr(order,'contract_type',None),routing_context=validation)
         response = await adapter.place_order(broker_order)
         if not isinstance(response, dict):
-            raise BrokerOrderError("Broker returned an invalid execution response")
+            # The adapter may have submitted the order before returning a
+            # malformed payload. Treat this as unknown broker state, never as
+            # a definitive rejection eligible for automatic retry.
+            order.validation_context = {
+                **(order.validation_context or {}),
+                "execution_state": "invalid_broker_response",
+                "reconciliation_required": True,
+            }
+            await asyncio.to_thread(
+                order.save,
+                update_fields=["validation_context", "updated_at"],
+            )
+            raise BrokerConnectionError(
+                "Broker returned an invalid execution response; reconciliation is required before retrying."
+            )
 
         order.broker_response = response
         order.broker_reference = str(
