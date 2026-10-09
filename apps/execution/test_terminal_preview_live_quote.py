@@ -233,3 +233,15 @@ class TerminalLivePreviewTests(TestCase):
         self.assertEqual(result.status_code, 429)
         self.assertEqual(result.data["code"], "ORDER_LIMIT_REACHED")
 
+
+    def test_preview_rejects_real_account_when_live_trading_is_disabled(self):
+        self.account.credentials = {"account_type": "real"}
+        self.account.save(update_fields=["credentials"])
+        adapter = self.adapter()
+        with patch("apps.execution.views.BrokerRegistry.adapter", return_value=adapter):
+            result = self.preview()
+
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data["code"], "LIVE_TRADING_DISABLED")
+        adapter.get_trade_capabilities.assert_not_awaited()
+
