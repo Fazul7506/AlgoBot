@@ -31,3 +31,15 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("const accountPayload = account.status === 'fulfilled'", source)
         self.assertIn("String(accountPayload.id) !== requestedAccountId", source)
         self.assertIn("Account changed during refresh · retrying", source)
+
+    def test_stale_or_unverified_broker_snapshot_is_not_rendered_as_connected_and_fresh(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("const freshness = String(account.data_freshness || 'unknown').toLowerCase()", source)
+        self.assertIn("const connected = account.is_connected === true", source)
+        self.assertIn("Stale broker snapshot", source)
+        self.assertIn("CONNECTION UNCONFIRMED", source)
+        self.assertIn("Broker snapshot freshness unknown", source)
+
+    def test_account_response_with_missing_identity_is_rejected_during_account_switch(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("accountPayload && (accountPayload.id == null || String(accountPayload.id) !== requestedAccountId)", source)
