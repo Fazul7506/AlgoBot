@@ -2,6 +2,8 @@
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.utils import timezone
 from django.shortcuts import render
 
 from apps.automation.models import ScheduledTask, Workflow, WorkflowExecution
@@ -39,6 +41,27 @@ def audit_workspace(request):
 def security_workspace(request):
     account = _account(request)
     keys = APIKey.objects.filter(user=request.user)
-    subscription = Subscription.objects.filter(user=request.user).first()
-    checks = [("Broker connection", bool(account and account.token_status == "active" and not account.is_token_expired)), ("Secure HTTPS session", bool(getattr(settings, "SESSION_COOKIE_SECURE", False))), ("Account protection", bool(request.user.is_active and request.user.has_usable_password())), ("Developer access", bool(keys.filter(status="active").exists()))]
-    return render(request, "core/security_center.html", {"account": account, "keys_count": keys.filter(status="active").count(), "subscription": subscription, "checks": checks})
+    now = timezone.now()
+    usable_keys = keys.filter(status="active").filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+    expired_active_keys = keys.filter(status="active", expires_at__lte=now).exists()
+    account_connected = bool(account and account.is_connection_eligible)
+    secure_session = bool(
+        getattr(settings, "SESSION_COOKIE_SECURE", False)
+        and getattr(settings, "CSRF_COOKIE_SECURE", False)
+    )
+    checks = [
+        ("Broker connection", account_connected),
+        ("Secure session cookies", secure_session),
+        ("Account protection", bool(request.user.is_active and request.user.has_usable_password())),
+        ("Developer key expiry", not expired_active_keys),
+    ]
+    return render(
+        request,
+        "core/security_center.html",
+        {
+            "account": account,
+            "account_connected": account_connected,
+            "keys_count": usable_keys.count(),
+            "checks": checks,
+        },
+    )
