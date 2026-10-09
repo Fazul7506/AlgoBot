@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .allocation import AllocationService
+from .exceptions import AllocationError
 from .engine import PortfolioEngine
 from .models import CashFlow, Portfolio, PortfolioAllocation, PortfolioExposure, PortfolioForecast, PortfolioPerformance
 from .serializers import CashFlowSerializer, PortfolioAllocationSerializer, PortfolioExposureSerializer, PortfolioForecastSerializer, PortfolioPerformanceSerializer, PortfolioSerializer
@@ -28,7 +29,17 @@ class PortfolioViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def allocate(self, request, pk=None):
-        allocations = AllocationService().allocate(self.get_object(), request.data.get("targets", []), request.data.get("method", "percentage"))
+        try:
+            allocations = AllocationService().allocate(
+                self.get_object(),
+                request.data.get("targets", []),
+                request.data.get("method", "percentage"),
+            )
+        except AllocationError as exc:
+            return Response(
+                {"detail": str(exc), "code": "INVALID_PORTFOLIO_ALLOCATION"},
+                status=400,
+            )
         return Response(PortfolioAllocationSerializer(allocations, many=True).data)
 
 
