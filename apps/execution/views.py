@@ -5,6 +5,7 @@ import asyncio
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import viewsets, permissions, decorators, response, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
 from .models import Order, ExecutionLog, ReconciliationEvent, BrokerTradeHistory
@@ -330,6 +331,8 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(direction__iexact=direction)
         start = self._date_filter("date_from", False)
         end = self._date_filter("date_to", True)
+        if start and end and start > end:
+            raise ValidationError({"date_range": "date_from must not be later than date_to."})
         if start:
             qs = qs.filter(broker_timestamp__gte=start)
         if end:
@@ -345,8 +348,8 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=dt_timezone.utc)
             return parsed.replace(hour=23, minute=59, second=59, microsecond=999999) if end_of_day else parsed.replace(hour=0, minute=0, second=0, microsecond=0)
-        except ValueError:
-            return None
+        except ValueError as exc:
+            raise ValidationError({name: f"Invalid {name} value."}) from exc
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
