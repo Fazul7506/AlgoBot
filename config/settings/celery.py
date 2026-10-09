@@ -15,7 +15,7 @@ from .utils import env_bool
 USE_CELERY = env_bool("USE_CELERY", True)
 
 CELERY_BROKER_CONNECTION_TIMEOUT = 3
-CELERY_BROKER_POOL_LIMIT = max(1, int(os.environ.get("CELERY_BROKER_POOL_LIMIT", "2")))
+CELERY_BROKER_POOL_LIMIT = max(1, int(os.environ.get("CELERY_BROKER_POOL_LIMIT", "1")))
 CELERY_BROKER_CONNECTION_RETRY = env_bool("CELERY_WORKER_BROKER_RETRY", False)
 CELERY_BROKER_CONNECTION_MAX_RETRIES = None if CELERY_BROKER_CONNECTION_RETRY else 0
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = env_bool(
@@ -41,7 +41,7 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
 }
 CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
     "visibility_timeout": 4 * 60 * 60,
-    "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "4"))),
+    "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "1"))),
 }
 
 # Long-running broker-data tasks expose STARTED state and are acknowledged only
@@ -81,6 +81,7 @@ CELERY_TASK_ROUTES = {
 
 CELERY_TASK_ANNOTATIONS = {
     "apps.market_data.tasks.run_initial_candle_backfill": {
+        "ignore_result": True,
         "acks_late": True,
         "reject_on_worker_lost": True,
         "track_started": True,
@@ -88,6 +89,7 @@ CELERY_TASK_ANNOTATIONS = {
         "time_limit": 4 * 60 * 60 + 5 * 60,
     },
     "apps.market_data.tasks.backfill_research_candles": {
+        "ignore_result": True,
         "acks_late": True,
         "reject_on_worker_lost": True,
         "track_started": True,
