@@ -230,7 +230,7 @@ class TerminalAiTimeframeContractTests(SimpleTestCase):
         chart = Path("static/js/deriv_pro_chart.js").read_text(encoding="utf-8")
         self.assertIn("algobot:chart-timeframe-changed", chart)
         self.assertIn("seconds:state.tf", chart)
-        self.assertIn("label:x[0]", chart)
+        self.assertIn("label:b.textContent.trim()", chart)
 
     def test_ai_candle_lookup_reconciles_model_and_canonical_market_timeframes(self):
         from pathlib import Path
@@ -269,6 +269,17 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertIn("p?.stale!==true", terminal)
         self.assertIn("if(!stale)writeCapabilitiesCache(normalized,payload)", contracts)
         self.assertIn("Using stale broker contract metadata", contracts)
+
+    def test_terminal_orders_are_account_scoped_and_uncertain_execution_is_locked(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        reconcile = Path("static/js/terminal_phase2.js").read_text(encoding="utf-8")
+        self.assertIn("account_scope=active", terminal)
+        self.assertIn("account_scope=active", reconcile)
+        self.assertIn("executionUncertain", terminal)
+        self.assertIn("remains locked until broker state is reconciled", terminal)
+        self.assertNotIn("executed by Deriv", terminal)
+        self.assertNotIn("is_preferred", terminal)
 
     def test_terminal_timeframe_control_does_not_reference_out_of_scope_variable(self):
         from pathlib import Path
