@@ -238,7 +238,7 @@ class TerminalLivePreviewTests(TestCase):
         self.account.credentials = {"account_type": "real"}
         self.account.save(update_fields=["credentials"])
         adapter = self.adapter()
-        with patch("apps.execution.views.BrokerRegistry.adapter", return_value=adapter):
+        with patch("apps.execution.views.check_live_order", return_value=(True, 0, 5)), patch("apps.execution.views.BrokerRegistry.adapter", return_value=adapter):
             result = self.preview()
 
         self.assertEqual(result.status_code, 409)
