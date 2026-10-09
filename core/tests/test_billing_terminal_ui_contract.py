@@ -262,6 +262,12 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         broker_contracts = Path("static/js/broker_native_market.js").read_text(encoding="utf-8")
         self.assertIn("DIGITDIFF|DIGITODD", broker_contracts)
 
+    def test_terminal_timeframe_control_does_not_reference_out_of_scope_variable(self):
+        from pathlib import Path
+        chart = Path("static/js/deriv_pro_chart.js").read_text(encoding="utf-8")
+        self.assertIn("label:b.textContent.trim()", chart)
+        self.assertNotIn("label:x[0]", chart)
+
     def test_public_market_quote_loading_does_not_require_a_connected_trading_account(self):
         from pathlib import Path
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
