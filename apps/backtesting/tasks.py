@@ -115,17 +115,17 @@ def _persist_statistics(backtest, result):
     return BacktestStatistics.objects.update_or_create(
         backtest=backtest,
         defaults={
-            'net_profit': result.get('net_profit', result.get('total_profit', 0)),
-            'gross_profit': result.get('gross_profit', 0),
-            'gross_loss': result.get('gross_loss', 0),
+            'net_profit': result.get('net_profit') or 0,
+            'gross_profit': result.get('gross_profit') or 0,
+            'gross_loss': result.get('gross_loss') or 0,
             'profit_factor': pf,
-            'expectancy': result.get('expectancy', 0),
+            'expectancy': result.get('expectancy') or 0,
             'win_rate': result.get('win_rate', 0),
             'loss_rate': result.get('loss_rate', 0),
-            'drawdown': result.get('maximum_drawdown', result.get('max_drawdown', 0)),
-            'sharpe': result.get('sharpe_ratio', 0),
-            'sortino': result.get('sortino_ratio', 0),
-            'calmar': result.get('calmar_ratio', 0),
+            'drawdown': result.get('maximum_drawdown') or result.get('max_drawdown') or 0,
+            'sharpe': result.get('sharpe_ratio') or 0,
+            'sortino': result.get('sortino_ratio') or 0,
+            'calmar': result.get('calmar_ratio') or 0,
             'metrics': result,
             'equity_curve': result.get('equity_curve', []),
             'monthly_returns': result.get('monthly_returns', {}),
@@ -173,26 +173,20 @@ def _window_result(result, start_epoch, end_epoch):
             continue
         if entry >= start_epoch and exit_epoch <= end_epoch:
             try:
-                profit = float(trade.get('profit', trade.get('pnl', 0)) or 0)
+                score = float(trade.get('directional_score', trade.get('profit', trade.get('pnl', 0))) or 0)
             except (TypeError, ValueError, OverflowError):
                 continue
-            if not math.isfinite(profit):
+            if not math.isfinite(score):
                 continue
-            trades.append(trade)
+            # StrategyService currently scores direction (+1/-1) against the
+            # next close. That is not money P&L and has no stake, spread, fee,
+            # slippage or contract payout model.
+            trades.append({**trade, 'directional_score': score, 'profit': None})
 
-    profits = [float(trade.get('profit', trade.get('pnl', 0)) or 0) for trade in trades]
-    wins = sum(p > 0 for p in profits)
-    losses = sum(p < 0 for p in profits)
-    total_profit = float(sum(profits))
-    gross_profit = float(sum(p for p in profits if p > 0))
-    gross_loss = float(abs(sum(p for p in profits if p < 0)))
-    expectancy = total_profit / len(profits) if profits else 0.0
-    profit_factor_unbounded = bool(gross_profit and not gross_loss)
-    profit_factor = gross_profit / gross_loss if gross_loss else (None if gross_profit else 0.0)
-    equity = [1000.0]
-    for profit in profits:
-        equity.append(equity[-1] + profit)
-    max_drawdown = max((max(equity[:i + 1]) - equity[i] for i in range(len(equity))), default=0.0)
+    scores = [float(trade.get('directional_score', 0) or 0) for trade in trades]
+    wins = sum(score > 0 for score in scores)
+    losses = sum(score < 0 for score in scores)
+    directional_score = float(sum(scores))
 
     return {
         **result,
@@ -201,18 +195,24 @@ def _window_result(result, start_epoch, end_epoch):
         'wins': wins,
         'losses': losses,
         'win_rate': (wins / len(trades) * 100) if trades else 0.0,
+        'directional_hit_rate': (wins / len(trades) * 100) if trades else 0.0,
         'loss_rate': (losses / len(trades) * 100) if trades else 0.0,
-        'expectancy': expectancy,
-        'gross_profit': gross_profit,
-        'gross_loss': gross_loss,
-        'profit_factor': profit_factor,
-        'profit_factor_unbounded': profit_factor_unbounded,
-        'total_profit': total_profit,
-        'roi': total_profit / 1000 * 100,
-        'max_drawdown': max_drawdown,
-        'sharpe_ratio': 0,
-        'sortino_ratio': 0,
-        'equity_curve': equity,
+        'directional_score': directional_score,
+        'performance_basis': 'directional_unit_score_no_costs',
+        'financial_metrics_available': False,
+        'expectancy': None,
+        'gross_profit': None,
+        'gross_loss': None,
+        'profit_factor': None,
+        'profit_factor_unbounded': False,
+        'total_profit': None,
+        'net_profit': None,
+        'roi': None,
+        'max_drawdown': None,
+        'maximum_drawdown': None,
+        'sharpe_ratio': None,
+        'sortino_ratio': None,
+        'equity_curve': [],
         'evaluation_start_epoch': start_epoch,
         'evaluation_end_epoch': end_epoch,
         'warmup_trade_count': int(result.get('total_trades', 0) or 0) - len(trades),
