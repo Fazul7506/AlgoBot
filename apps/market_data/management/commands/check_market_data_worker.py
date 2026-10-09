@@ -115,7 +115,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 "Market-data Celery preflight OK: required environment present, "
-                "Redis broker/backend aligned, task registered, queue=market_data, "
-                "queue topology declared, and broker reachable."
+                "application schema verified, Redis broker/backend aligned, task "
+                "registered, queue=market_data, queue topology declared, and broker reachable."
             )
         )
