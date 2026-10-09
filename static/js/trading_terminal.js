@@ -15,8 +15,7 @@
   // Account selection is owned by the canonical account context. Keep the
   // authoritative endpoint shape explicit here for UI-contract validation and
   // future diagnostics; no second account-selection implementation is created.
-  const authoritativeAccountSelectPath=id=>`/api/brokers/accounts/${encodeURIComponent(id)}/select/`;
-  const switchAuthoritativeAccount=id=>{void authoritativeAccountSelectPath(id);return window.AlgoBotAccountContext.selectAccount(id)};
+  const switchAuthoritativeAccount=id=>window.AlgoBotAccountContext.selectAccount(id);
   let accounts=[],symbols=[],direction='BUY',busy=false,activeAccountId=null,directExecutionBusy=false,executionUncertain=false,catalogueLoadSeq=0,recordsLoadSeq=0,signalsLoadSeq=0;
   const requestedParams=new URLSearchParams(location.search),requestedStrategy=requestedParams.get('strategy')||'',requestedDirection=String(requestedParams.get('direction')||'').toUpperCase(),requestedSignalId=requestedParams.get('signal_id')||'';
   const selectedAccount=()=>window.AlgoBotAccountContext?.getSelected?.()||accounts.find(a=>String(a.id)===String(activeAccountId))||window.AlgoBotBrokerState?.get?.()?.account||null;
