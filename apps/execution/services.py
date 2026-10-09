@@ -10,7 +10,6 @@ from .exceptions import OrderValidationError, NonRetryableExecutionError
 from . import constants as c
 from .models import Order, ExecutionQueue, ExecutionLog
 from .repositories import OrderRepository, ExecutionLogRepository, ExecutionQueueRepository
-from . import constants as c
 
 
 def _broker_decimal(value):
