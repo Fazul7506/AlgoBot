@@ -165,9 +165,45 @@ class ExecutionManagementSystem:
             order.status = 'rejected'; await sync_to_async(order.save)(update_fields=['status', 'updated_at']); raise
         except Exception:
             order.status = 'failed'; await sync_to_async(order.save)(update_fields=['status', 'updated_at']); raise
-        latency = (time.perf_counter() - start) * 1000; status_value = 'filled' if result.get('status') in ['filled', 'executed'] else result.get('status', 'executed')
+        if not isinstance(result, dict):
+            await self._mark_connection_issue(order, 'malformed_broker_response')
+            await sync_to_async(TradeReconciliation.objects.create)(
+                broker=order.broker,
+                trade={'algobot_order_id': order.pk, 'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'malformed_broker_response'},
+                matched=False,
+                difference={'order': 'broker_response_invalid'},
+                repaired=False,
+            )
+            raise BrokerConnectionError('Broker returned an invalid order response; execution state is unknown and must be reconciled before retrying.')
+        reported_status = str(result.get('status') or '').strip().lower()
+        if reported_status in {'rejected', 'failed', 'error'}:
+            order.status = 'rejected' if reported_status == 'rejected' else 'failed'
+            await sync_to_async(order.save)(update_fields=['status', 'updated_at'])
+            raise BrokerOrderError(str(result.get('detail') or result.get('message') or 'Broker rejected the order.'))
+        broker_order_id = str(result.get('broker_order_id') or '').strip()
+        if not broker_order_id:
+            await self._mark_connection_issue(order, 'missing_broker_order_id')
+            await sync_to_async(TradeReconciliation.objects.create)(
+                broker=order.broker,
+                trade={'algobot_order_id': order.pk, 'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'missing_broker_order_id', 'broker_response': result},
+                matched=False,
+                difference={'order': 'broker_order_id_missing'},
+                repaired=False,
+            )
+            raise BrokerConnectionError('Broker returned no order identifier; execution state is unknown and must be reconciled before retrying.')
+        if reported_status not in {'filled', 'executed', 'partially_filled', 'pending', 'submitted', 'queued', 'open'}:
+            await self._mark_connection_issue(order, 'unrecognized_broker_status')
+            await sync_to_async(TradeReconciliation.objects.create)(
+                broker=order.broker,
+                trade={'algobot_order_id': order.pk, 'order_id': order.pk, 'client_order_id': order.client_order_id, 'state': 'unrecognized_broker_status', 'broker_response': result},
+                matched=False,
+                difference={'order': 'broker_status_unrecognized'},
+                repaired=False,
+            )
+            raise BrokerConnectionError('Broker returned an unrecognized order status; execution state is unknown and must be reconciled before retrying.')
+        latency = (time.perf_counter() - start) * 1000; status_value = 'filled' if reported_status in ['filled', 'executed'] else reported_status
         requested = order.price or Decimal('0'); executed_value = result.get('execution_price'); executed = Decimal(str(executed_value if executed_value is not None else requested or 0)); slippage = executed - requested
-        order.status = status_value; order.broker_order_id = str(result.get('broker_order_id', '')); update_fields = ['status', 'broker_order_id', 'updated_at']
+        order.status = status_value; order.broker_order_id = broker_order_id; update_fields = ['status', 'broker_order_id', 'updated_at']
         if status_value in {'filled', 'executed', 'partially_filled'}: order.executed_at = timezone.now(); update_fields.append('executed_at')
         await sync_to_async(order.save)(update_fields=update_fields)
         return await sync_to_async(ExecutionReport.objects.create)(order=order, execution_price=executed, requested_price=requested, slippage=slippage, latency=result.get('latency', latency), fees=Decimal(str(result.get('fees', 0))), status=status_value, raw_report=result)
