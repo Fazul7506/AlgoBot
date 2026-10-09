@@ -255,6 +255,8 @@ class ExecutionQueueTaskTests(TestCase):
         async def post_submit_failure(candidate):
             from asgiref.sync import sync_to_async
 
+            candidate.status = 'sent_to_broker'
+            candidate.validation_context = {'execution_mode': 'manual_command'}
             await sync_to_async(Order.objects.filter(pk=candidate.pk).update)(
                 status='sent_to_broker',
                 validation_context={'execution_mode': 'manual_command'},
