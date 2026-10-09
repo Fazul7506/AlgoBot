@@ -98,6 +98,10 @@ class OrderViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True); data = serializer.validated_data; account = data.get('broker_account')
             if account is None or account.user_id != request.user.id: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_REQUIRED','detail':'Select a connected broker account.'}, status=status.HTTP_409_CONFLICT)
             if not account.is_connection_eligible: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_NOT_READY','detail':'The selected broker account is not connected or its credentials are not usable.'}, status=status.HTTP_409_CONFLICT)
+            allowed_orders, used_orders, order_limit = check(request.user, 'orders')
+            if not allowed_orders:
+                plan = effective_plan(request.user)
+                return response.Response({'status':'rejected','code':'ORDER_LIMIT_REACHED','detail':f'Your {plan.name} order allowance has been reached for today.','plan':plan.key,'used':used_orders,'limit':order_limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             environment = self._environment(account)
             if not environment: return response.Response({'status':'rejected','code':'ACCOUNT_ENVIRONMENT_UNVERIFIED','detail':'Broker account environment has not been verified.'}, status=status.HTTP_409_CONFLICT)
             if environment == 'real' and not bool(getattr(account.broker, 'supports_live', False)): return response.Response({'status':'rejected','code':'LIVE_BROKER_UNSUPPORTED','detail':'The selected broker is not live-trading capable.'}, status=status.HTTP_409_CONFLICT)
