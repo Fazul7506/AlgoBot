@@ -77,7 +77,7 @@
          void api('/api/market/catalogue/',{notifyOnError:false},7000).then(p=>{
            if(!isCurrent())return;
            const rows=list(p?.symbols??p).filter(r=>r?.symbol&&r.is_active!==false&&r.is_tradable!==false);
-           if(rows.length){writeCatalogueCache(rows);paintSymbols(s,rows,s.value)}
+           if(rows.length){if(p?.stale!==true&&String(p?.status||'').toLowerCase()!=='stale')writeCatalogueCache(rows);else result('Broker market catalogue is stale. Instrument availability will be rechecked before order preview.','warning');paintSymbols(s,rows,s.value)}
          }).catch(()=>{});
          return cachedValue;
        }
@@ -87,7 +87,7 @@
        if(!isCurrent())return'';
        const rows=list(p?.symbols??p).filter(r=>r?.symbol&&r.is_active!==false&&r.is_tradable!==false);
        if(!rows.length)throw new Error('No active tradable broker instruments are available');
-       writeCatalogueCache(rows);return paintSymbols(s,rows,previous);
+       if(p?.stale!==true&&String(p?.status||'').toLowerCase()!=='stale')writeCatalogueCache(rows);else result('Broker market catalogue is stale. Instrument availability will be rechecked before order preview.','warning');return paintSymbols(s,rows,previous);
      }catch(e){
        if(!isCurrent())return'';
        if(cached?.symbols){const value=paintSymbols(s,cached.symbols,previous);if(value)return value}
