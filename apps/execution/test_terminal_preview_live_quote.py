@@ -1,0 +1,123 @@
+from datetime import timedelta
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase, override_settings
+from django.utils import timezone
+from rest_framework.test import APIRequestFactory, force_authenticate
+
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from apps.execution.views import OrderViewSet
+
+
+@override_settings(BROKER_MARKET_DATA_MAX_AGE_SECONDS=30)
+class TerminalLivePreviewTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="terminal-live-preview", password="test-password"
+        )
+        self.broker = Broker.objects.create(
+            name="Deriv",
+            broker_type="deriv",
+            status="active",
+            supports_live=True,
+            metadata={"auth": "oauth"},
+        )
+        self.account = BrokerAccount.objects.create(
+            user=self.user,
+            broker=self.broker,
+            account_id="VRTC-TERMINAL",
+            status="active",
+            credentials={"account_type": "demo"},
+        )
+        self.account.set_access_token("isolated-test-token")
+        self.account.save(update_fields=["access_token"])
+        BrokerConnection.objects.create(
+            broker=self.broker,
+            broker_account=self.account,
+            status="connected",
+        )
+        self.factory = APIRequestFactory()
+
+    def preview(self, contract_type="CALL", direction="buy"):
+        request = self.factory.post(
+            "/api/orders/preview/",
+            {
+                "broker_account": self.account.pk,
+                "symbol": "R_100",
+                "contract_type": contract_type,
+                "direction": direction,
+                "order_type": "market",
+                "stake": "1.00",
+            },
+            format="json",
+        )
+        force_authenticate(request, user=self.user)
+        return OrderViewSet.as_view({"post": "preview"})(request)
+
+    def adapter(self, quote=None, contracts=None):
+        return SimpleNamespace(
+            get_trade_capabilities=AsyncMock(
+                return_value=contracts if contracts is not None else [{"contract_type": "CALL"}]
+            ),
+            get_market_data=AsyncMock(
+                return_value=quote
+                if quote is not None
+                else {
+                    "symbol": "R_100",
+                    "price": "100.25",
+                    "bid": "100.20",
+                    "ask": "100.30",
+                    "epoch": int(timezone.now().timestamp()),
+                }
+            ),
+        )
+
+    def test_preview_uses_fresh_quote_and_verifies_selected_contract(self):
+        adapter = self.adapter()
+        with patch("apps.execution.views.BrokerRegistry.adapter", return_value=adapter):
+            result = self.preview()
+
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data["status"], "ready")
+        self.assertEqual(result.data["source"], "authoritative_pre_trade_preview")
+        self.assertEqual(result.data["order"]["contract_type"], "CALL")
+        self.assertTrue(result.data["gates"]["contract_verified"])
+        self.assertTrue(result.data["gates"]["fresh_market_data"])
+        self.assertEqual(result.data["market"]["source"], "selected_broker_live_quote")
+        adapter.get_trade_capabilities.assert_awaited_once_with("R_100")
+        adapter.get_market_data.assert_awaited_once_with("R_100")
+
+    def test_preview_rejects_stale_broker_quote(self):
+        adapter = self.adapter(
+            quote={
+                "symbol": "R_100",
+                "price": "100.25",
+                "epoch": int((timezone.now() - timedelta(minutes=2)).timestamp()),
+            }
+        )
+        with patch("apps.execution.views.BrokerRegistry.adapter", return_value=adapter):
+            result = self.preview()
+
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data["code"], "BROKER_MARKET_DATA_STALE")
+        self.assertNotEqual(result.data["status"], "ready")
+
+    def test_preview_rejects_contract_missing_from_live_broker_capabilities(self):
+        adapter = self.adapter(contracts=[{"contract_type": "PUT"}])
+        with patch("apps.execution.views.BrokerRegistry.adapter", return_value=adapter):
+            result = self.preview(contract_type="CALL", direction="buy")
+
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data["code"], "BROKER_CONTRACT_UNAVAILABLE")
+        adapter.get_market_data.assert_not_awaited()
+
+    def test_preview_rejects_direction_inconsistent_with_contract(self):
+        adapter = self.adapter()
+        with patch("apps.execution.views.BrokerRegistry.adapter", return_value=adapter):
+            result = self.preview(contract_type="CALL", direction="sell")
+
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data["code"], "BROKER_CONTRACT_DIRECTION_MISMATCH")
+        adapter.get_market_data.assert_not_awaited()
