@@ -23,6 +23,10 @@ class LiveSignalsContractTests(TestCase):
             status="active",
             token_status="active",
             credentials={"account_type": "demo"},
+            balance="1000.00",
+            margin="0.00",
+            free_margin="1000.00",
+            last_synced_at=timezone.now(),
         )
         self.account.set_access_token("test-access-token")
         self.account.save(update_fields=["access_token"])
