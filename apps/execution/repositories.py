@@ -32,5 +32,12 @@ class ExecutionQueueRepository:
     def enqueue(self, order, priority=5, queue_type='priority'):
         return ExecutionQueue.objects.update_or_create(
             order=order,
-            defaults={'priority': priority, 'queue_type': queue_type, 'status': 'pending'},
+            defaults={
+                'priority': priority,
+                'queue_type': queue_type,
+                'status': 'pending',
+                # Failed/retried queue rows may retain a future retry deadline;
+                # an explicit manual retry must become immediately claimable.
+                'next_retry': None,
+            },
         )[0]
