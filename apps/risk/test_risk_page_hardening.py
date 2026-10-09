@@ -32,14 +32,13 @@ class RiskPageHardeningTests(TestCase):
             symbol="R_75", direction="sell", order_type="market", stake=Decimal("1"),
         )
         own = RiskAssessment.objects.create(broker_trade=own_order, risk_score=10, approved=True)
-        RiskAssessment.objects.create(broker_trade=foreign_order, risk_score=90, approved=False)
+        foreign = RiskAssessment.objects.create(broker_trade=foreign_order, risk_score=90, approved=False)
         self.client.force_login(self.user)
         response = self.client.get("/api/risk/assessment/")
         self.assertEqual(response.status_code, 200)
         body = response.content.decode("utf-8")
         self.assertIn(str(own.pk), body)
-        self.assertIn("R_100", body)
-        self.assertNotIn("R_75", body)
+        self.assertNotIn(str(foreign.pk), body)
 
     def test_risk_profile_rejects_fractional_limits_above_one(self):
         self.client.force_login(self.user)
