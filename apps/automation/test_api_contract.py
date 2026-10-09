@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from .api import approve
+from .api import _safe_payload, approve
 from .models import ApprovalRequest, Workflow
 
 
@@ -29,6 +29,15 @@ class AutomationApprovalApiContractTests(TestCase):
         result = self._post(self.user, {})
         self.assertEqual(result.status_code, 400)
         self.assertEqual(result.data["code"], "APPROVAL_ID_REQUIRED")
+
+    def test_non_finite_payload_values_are_normalized_before_json_persistence(self):
+        import math
+
+        cleaned = _safe_payload({"nested": [float("nan"), float("inf"), 3.0]})
+
+        self.assertIsNone(cleaned["nested"][0])
+        self.assertIsNone(cleaned["nested"][1])
+        self.assertTrue(math.isfinite(cleaned["nested"][2]))
 
     def test_other_users_approval_is_not_disclosed(self):
         result = self._post(self.other_user, {"approval": self.approval.pk})
