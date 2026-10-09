@@ -252,6 +252,14 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertIn("if(!brokerReady()){result(", terminal)
         self.assertIn("syncExecutionControls", terminal)
 
+
+    def test_terminal_manual_direction_is_bound_to_selected_broker_contract(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        self.assertIn("window.__algobotPreparedManualDirection", terminal)
+        self.assertIn("String(b.dataset.direction||'').toUpperCase()===prepared", terminal)
+        self.assertIn("contract_type:contract,direction:orderDirection.toLowerCase()", terminal)
+
     def test_public_market_quote_loading_does_not_require_a_connected_trading_account(self):
         from pathlib import Path
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
