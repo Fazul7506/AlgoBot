@@ -4,8 +4,6 @@ The server-side session is the only active-account authority for browser/API
 requests. Client-supplied account IDs are never interpreted as active context.
 Account selection happens only through the authenticated account-select action.
 """
-from django.db.models import Q
-
 from apps.brokers.models import BrokerAccount
 
 SESSION_KEY = "active_broker_account_id"
@@ -19,11 +17,6 @@ def connected_accounts(user):
             connections__status="connected",
         )
         .select_related("broker")
-        .filter(
-            ~Q(broker__broker_type="deriv")
-            | Q(credentials__account_type__in=("demo", "real"))
-            | Q(credentials__realtime__account_type__in=("demo", "real"))
-        )
         .distinct()
     )
 
