@@ -26,12 +26,18 @@
   }
   async function analyse(){
     if(analysing)return;const button=$('[data-ai-analyze]'),symbol=$('#symbol')?.value,account=selectedAccount();if(!symbol||!account?.id){show(!symbol?'Select a broker instrument before running AI analysis.':'Select a connected broker account before running AI analysis.');return}
+    const context={symbol,accountId:String(account.id),timeframe:selectedTimeframe};
     analysing=true;if(button){button.disabled=true;button.textContent='Analysing…'}show('Running AI inference from the latest persisted broker market feed…');
-    try{const data=await api('/api/ai/predict/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol,timeframe:selectedTimeframe,account_id:account.id})},30000);render(data);window.dispatchEvent(new CustomEvent('algobot:ai-analysis-updated',{detail:data}))}
+    try{
+      const data=await api('/api/ai/predict/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol,timeframe:context.timeframe,account_id:context.accountId})},30000);
+      const currentAccount=selectedAccount();
+      if($('#symbol')?.value!==context.symbol||String(currentAccount?.id||'')!==context.accountId||selectedTimeframe!==context.timeframe||String(data?.symbol||context.symbol)!==context.symbol)return;
+      render(data);window.dispatchEvent(new CustomEvent('algobot:ai-analysis-updated',{detail:data}))
+    }
     catch(error){text('[data-ai-prediction]','Unavailable');text('[data-ai-recommendation]','Unavailable');text('[data-ai-confidence-card]','Unavailable');text('[data-ai-confidence]','Unavailable');text('[data-ai-regime]','Unavailable');window.__algobotAiOrderContext=null;const code=String(error?.code||'').toUpperCase(),message=String(error?.message||'AI analysis is temporarily unavailable.');if(code==='REQUEST_ABORTED'||code==='API_TIMEOUT')show('AI analysis timed out while waiting for broker data. No trade action was taken.');else if(code==='EDGE_CHALLENGE'||message.includes('<html')||message.includes('Just a moment'))show('AI analysis is temporarily unavailable at the production edge. No trade action was taken.');else show(message);window.dispatchEvent(new CustomEvent('algobot:ai-gate-updated',{detail:{actionable:false,error:true,code:error?.code||null}}))}
-    finally{analysing=false;if(button){button.disabled=false;button.textContent='Analyse market'}}
+    finally{analysing=false;if(button){button.disabled=false;button.textContent='Analyse market'}const current=selectedAccount();if(context&&($('#symbol')?.value!==context.symbol||String(current?.id||'')!==context.accountId||selectedTimeframe!==context.timeframe))scheduleAnalyse()}
   }
-  function scheduleAnalyse(){clearTimeout(scheduled);scheduled=setTimeout(()=>{scheduled=null;resetForSymbol();void analyse()},500)}
+  function scheduleAnalyse(){clearTimeout(scheduled);resetForSymbol();scheduled=setTimeout(()=>{scheduled=null;void analyse()},500)}
   function boot(){if(!$('.terminal-page'))return;$('[data-ai-analyze]')?.addEventListener('click',()=>analyse());window.addEventListener('algobot:market-symbol-changed',scheduleAnalyse);window.addEventListener('algobot:chart-timeframe-changed',event=>{setTimeframe(event.detail||{})});window.addEventListener('algobot:broker-contract-selected',()=>{if(!analysing)show('Broker contract ready. AI context will use the selected account and market.')});window.addEventListener('algobot:account-changed',scheduleAnalyse);window.addEventListener('algobot:account-synced',scheduleAnalyse);if($('#symbol')?.value&&selectedAccount()?.id)scheduleAnalyse()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();

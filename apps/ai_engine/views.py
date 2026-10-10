@@ -177,7 +177,7 @@ def _persisted_market_context(symbol, timeframe):
     aliases = {"TICK": "tick"}
     if raw_timeframe.upper() not in aliases:
         import re
-        match = re.fullmatch(r"([SMHD])(\\d+)", raw_timeframe.upper())
+        match = re.fullmatch(r"([SMHD])(\d+)", raw_timeframe.upper())
         if match:
             unit, amount = match.groups()
             aliases[raw_timeframe.upper()] = f"{amount}{unit.lower()}"

@@ -70,7 +70,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("const canonicalApi=(u,o={},t=10000)=>window.AlgoBotFrontendData.request(u,o,t);", terminal)
         self.assertIn("window.AlgoBotServices?.request?.('trading'", terminal)
         self.assertIn("switchAuthoritativeAccount", terminal)
-        self.assertIn("/api/brokers/accounts/${encodeURIComponent(id)}/select/", terminal)
+        self.assertIn("window.AlgoBotAccountContext.selectAccount(id)", terminal)
+        self.assertNotIn("/api/brokers/accounts/${encodeURIComponent(id)}/select/", terminal)
         self.assertNotIn("same-origin", terminal)
         self.assertNotIn("X-CSRFToken", terminal)
 
@@ -230,7 +231,7 @@ class TerminalAiTimeframeContractTests(SimpleTestCase):
         chart = Path("static/js/deriv_pro_chart.js").read_text(encoding="utf-8")
         self.assertIn("algobot:chart-timeframe-changed", chart)
         self.assertIn("seconds:state.tf", chart)
-        self.assertIn("label:x[0]", chart)
+        self.assertIn("label:b.textContent.trim()", chart)
 
     def test_ai_candle_lookup_reconciles_model_and_canonical_market_timeframes(self):
         from pathlib import Path
@@ -238,6 +239,7 @@ class TerminalAiTimeframeContractTests(SimpleTestCase):
         self.assertIn("candle_timeframe", views)
         self.assertIn("raw_timeframe.upper()", views)
         self.assertIn("amount}{unit.lower()}", views)
+        self.assertIn('r"([SMHD])(\\d+)"', views)
         self.assertIn("timeframe=candle_timeframe", views)
 
 
@@ -251,6 +253,74 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertIn("if(!brokerReady())throw new Error(brokerReadinessReason())", terminal)
         self.assertIn("if(!brokerReady()){result(", terminal)
         self.assertIn("syncExecutionControls", terminal)
+
+
+    def test_terminal_manual_direction_is_bound_to_selected_broker_contract(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        self.assertIn("window.__algobotPreparedManualDirection", terminal)
+        self.assertIn("String(b.dataset.direction||'').toUpperCase()===prepared", terminal)
+        self.assertIn("contract_type:contract,direction:orderDirection.toLowerCase()", terminal)
+        broker_contracts = Path("static/js/broker_native_market.js").read_text(encoding="utf-8")
+        self.assertIn("DIGITDIFF|DIGITODD", broker_contracts)
+
+    def test_terminal_clears_live_quote_values_when_stream_is_not_live(self):
+        from pathlib import Path
+        watchdog = Path("static/js/terminal_market_watchdog.js").read_text(encoding="utf-8")
+        self.assertIn("if (state !== 'live')", watchdog)
+        self.assertIn("data-q=\"ask\"", watchdog)
+        self.assertIn("Unavailable", watchdog)
+
+    def test_terminal_does_not_cache_stale_market_or_contract_catalogues_as_fresh(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        contracts = Path("static/js/broker_native_market.js").read_text(encoding="utf-8")
+        self.assertIn("p?.stale!==true", terminal)
+        self.assertIn("if(!stale)writeCapabilitiesCache(normalized,payload)", contracts)
+        self.assertIn("Using stale broker contract metadata", contracts)
+
+    def test_terminal_orders_are_account_scoped_and_uncertain_execution_is_locked(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        reconcile = Path("static/js/terminal_phase2.js").read_text(encoding="utf-8")
+        self.assertIn("account_scope=active", terminal)
+        self.assertIn("credentials:'include'", terminal)
+        self.assertIn("account_scope=active", reconcile)
+        self.assertIn("credentials:'include'", reconcile)
+        self.assertIn("executionUncertain", terminal)
+        self.assertIn("const uncertain=previewPassed&&", terminal)
+        self.assertIn("remains locked until broker state is reconciled", terminal)
+        self.assertNotIn("executed by Deriv", terminal)
+        self.assertNotIn("is_preferred", terminal)
+        self.assertNotIn("accounts[0]?.id", terminal)
+
+    def test_terminal_ai_discards_results_for_changed_account_market_or_timeframe(self):
+        from pathlib import Path
+        ai = Path("static/js/trading_terminal_ai.js").read_text(encoding="utf-8")
+        template = Path("templates/core/trading.html").read_text(encoding="utf-8")
+        self.assertIn("const context={symbol,accountId:String(account.id),timeframe:selectedTimeframe}", ai)
+        self.assertIn("String(currentAccount?.id||'')!==context.accountId", ai)
+        self.assertIn("selectedTimeframe!==context.timeframe", ai)
+        self.assertIn("function scheduleAnalyse(){clearTimeout(scheduled);resetForSymbol();", ai)
+        self.assertIn("v=20261009-ai-context-guard1", template)
+
+    def test_terminal_preview_displays_broker_estimate_and_submits_duration(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        template = Path("templates/core/trading.html").read_text(encoding="utf-8")
+        self.assertIn('name="duration"', template)
+        self.assertIn('name="duration_unit"', template)
+        self.assertIn('data-order-preview-result', template)
+        self.assertIn("PRE-TRADE ESTIMATE — NOT AN EXECUTED ORDER", terminal)
+        self.assertIn("duration_unit:durationUnit", terminal)
+        self.assertIn("preview.estimate", terminal)
+        self.assertIn("estimate.payout", terminal)
+
+    def test_terminal_timeframe_control_does_not_reference_out_of_scope_variable(self):
+        from pathlib import Path
+        chart = Path("static/js/deriv_pro_chart.js").read_text(encoding="utf-8")
+        self.assertIn("label:b.textContent.trim()", chart)
+        self.assertNotIn("label:x[0]", chart)
 
     def test_public_market_quote_loading_does_not_require_a_connected_trading_account(self):
         from pathlib import Path

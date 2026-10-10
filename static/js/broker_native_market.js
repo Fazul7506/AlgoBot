@@ -12,14 +12,14 @@
   const list=v=>window.AlgoBotFrontendData?.list?.(v)||[];
   const api=(url,options={},timeout=12000)=>window.AlgoBotServices?.request?.('market-data',url,options,timeout)||window.AlgoBotFrontendData?.request?.(url,options,timeout);
   let contracts=[],capabilitiesRequest=0,capabilitiesInFlight=null,capabilitiesSymbol='';
-  const capabilitiesCacheKey=symbol=>'algobot:broker-capabilities:v2:'+String(window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'none')+':'+symbol;
-  const readCapabilitiesCache=symbol=>{try{const item=JSON.parse(sessionStorage.getItem(capabilitiesCacheKey(symbol))||'null');return item?.payload||null}catch(_){return null}};
+  const capabilitiesCacheKey=symbol=>'algobot:broker-capabilities:v3:'+String(window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'none')+':'+symbol;
+  const readCapabilitiesCache=symbol=>{try{const item=JSON.parse(sessionStorage.getItem(capabilitiesCacheKey(symbol))||'null');if(!item?.payload||Date.now()-Number(item.at||0)>300000)return null;return item.payload}catch(_){return null}};
   const writeCapabilitiesCache=(symbol,payload)=>{try{sessionStorage.setItem(capabilitiesCacheKey(symbol),JSON.stringify({at:Date.now(),payload}))}catch(_){} };
 
-  const directionFor=type=>/PUT|FALL|LOWER|MULTDOWN|DIGITUNDER|NOTOUCH|TURBOSSHORT|RUNLOW|EXPIRYMISS/i.test(String(type||''))?'SELL':'BUY';
+  const directionFor=type=>/PUT|FALL|LOWER|MULTDOWN|DIGITUNDER|DIGITDIFF|DIGITODD|NOTOUCH|TURBOSSHORT|RUNLOW|EXPIRYMISS/i.test(String(type||''))?'SELL':'BUY';
   const setStatus=message=>$('[data-contract-status]')?.replaceChildren(document.createTextNode(String(message||'')));
   const setPreparedDirection=direction=>{const normalized=String(direction||'').toUpperCase();if(!['BUY','SELL'].includes(normalized))return;[$('[data-direct-buy]'),$('[data-direct-sell]')].filter(Boolean).forEach(button=>{const buttonDirection=String(button.dataset.direction||'').toUpperCase();const active=buttonDirection===normalized;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));button.disabled=!active});window.__algobotPreparedManualDirection=normalized;window.dispatchEvent(new CustomEvent('algobot:broker-direction-prepared',{detail:{direction:normalized}}))};
-  function disableDirections(disabled=true){[$('[data-direct-buy]'),$('[data-direct-sell]')].filter(Boolean).forEach(button=>{button.disabled=disabled;if(disabled){button.classList.remove('active');button.setAttribute('aria-pressed','false')}})}
+  function disableDirections(disabled=true){if(disabled)window.__algobotPreparedManualDirection='';[$('[data-direct-buy]'),$('[data-direct-sell]')].filter(Boolean).forEach(button=>{button.disabled=disabled;if(disabled){button.classList.remove('active');button.setAttribute('aria-pressed','false')}});if(disabled)window.dispatchEvent(new CustomEvent('algobot:broker-direction-prepared',{detail:{direction:''}}))}
   function renderContracts(payload){
     const root=payload?.contracts_for||payload?.data?.contracts_for||payload;
     const raw=Array.isArray(payload)?payload:(payload?.contracts||payload?.available||root?.available||[]);
@@ -45,7 +45,7 @@
      capabilitiesInFlight=(async()=>{
        try{
          const payload=await api(`/api/market/broker-capabilities/?symbol=${encodeURIComponent(normalized)}`,{notifyOnError:false},12000);
-         if(requestId===capabilitiesRequest){writeCapabilitiesCache(normalized,payload);renderContracts(payload);}
+         if(requestId===capabilitiesRequest){const stale=payload?.stale===true||String(payload?.status||'').toLowerCase()==='stale';if(!stale)writeCapabilitiesCache(normalized,payload);renderContracts(payload);if(stale)setStatus('Using stale broker contract metadata. Live contract availability is rechecked before preview.');}
          return payload;
        }catch(error){
          if(requestId!==capabilitiesRequest)return null;

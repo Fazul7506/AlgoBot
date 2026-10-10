@@ -2,6 +2,7 @@
 import asyncio
 import inspect
 import json
+import math
 import time
 
 import requests
@@ -200,6 +201,50 @@ class DerivAdapter(BrokerAdapter):
     async def get_chart_capabilities(self):
         return {"modes": ["ticks", "candles"], "timeframes": [{"label": "1m", "seconds": 60}, {"label": "2m", "seconds": 120}, {"label": "5m", "seconds": 300}, {"label": "10m", "seconds": 600}, {"label": "15m", "seconds": 900}, {"label": "30m", "seconds": 1800}, {"label": "1h", "seconds": 3600}, {"label": "2h", "seconds": 7200}, {"label": "4h", "seconds": 14400}, {"label": "8h", "seconds": 28800}, {"label": "1d", "seconds": 86400}], "granularity": {"minimum_seconds": 1, "type": "integer_seconds"}}
     async def subscribe_ticks(self, symbol, callback=None): return self._start_stream([{"ticks": symbol, "subscribe": 1, "req_id": 1}], callback=callback, authenticated=False, stream_name=f"ticks:{symbol}")
+
+    async def get_order_preview(self, *, symbol, contract_type, amount, duration, duration_unit):
+        """Return a broker-priced proposal without submitting a purchase."""
+        symbol = str(symbol or "").strip()
+        contract_type = str(contract_type or "").upper().strip()
+        try:
+            amount_value = float(amount)
+            duration_value = int(duration)
+        except (TypeError, ValueError):
+            raise BrokerOrderError("A valid stake and duration are required for a proposal")
+        unit = str(duration_unit or "s").lower().strip()
+        if not symbol or not contract_type:
+            raise BrokerOrderError("A symbol and contract type are required for a proposal")
+        if not math.isfinite(amount_value) or amount_value <= 0 or duration_value <= 0 or unit not in {"s", "m", "h", "d", "t"}:
+            raise BrokerOrderError("The proposal stake, duration or duration unit is invalid")
+        payload = {
+            "proposal": 1,
+            "amount": amount_value,
+            "basis": "stake",
+            "contract_type": contract_type,
+            "currency": str(getattr(self.account, "currency", None) or "USD").upper(),
+            "duration": duration_value,
+            "duration_unit": unit,
+            "underlying_symbol": symbol,
+        }
+        # Match the execution path's existing accumulator default; contracts
+        # requiring other parameters are rejected by the broker proposal API.
+        if contract_type == "ACCU":
+            payload["growth_rate"] = 0.01
+        response = await self._request(payload, authenticated=True)
+        proposal = response.get("proposal") or {}
+        if not proposal.get("id") or proposal.get("ask_price") is None or proposal.get("payout") is None:
+            raise BrokerOrderError("Deriv returned an incomplete proposal; no order was submitted")
+        return {
+            "proposal_id": str(proposal["id"]),
+            "ask_price": proposal["ask_price"],
+            "payout": proposal["payout"],
+            "spot": proposal.get("spot"),
+            "contract_type": contract_type,
+            "symbol": symbol,
+            "currency": payload["currency"],
+            "duration": duration_value,
+            "duration_unit": unit,
+        }
 
     async def place_order(self, order):
         routing = order.routing_context or {}; account_type = str(getattr(self.account, "account_type", "") or "").lower().strip()

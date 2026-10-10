@@ -20,13 +20,19 @@ from core.billing_entitlements import check, check_live_order, effective_plan
 from core.account_context import get_active_account
 from .trade_history import DerivTradeHistoryService, TradeHistorySyncError
 from apps.brokers.position_sync import BrokerPositionSyncService, PositionSyncError
+from apps.brokers.services import BrokerRegistry
 
 log = logging.getLogger(__name__)
 
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
-    def get_queryset(self): return Order.objects.filter(user=self.request.user)
+    def get_queryset(self):
+        queryset = Order.objects.filter(user=self.request.user)
+        if str(self.request.query_params.get('account_scope') or '').lower() == 'active':
+            account = get_active_account(self.request.user, request=self.request)
+            return queryset.filter(broker_account=account) if account else queryset.none()
+        return queryset
     @staticmethod
     def _environment(account): return str(getattr(account, 'account_type', '') or '').lower().strip() if account else ''
     @staticmethod
@@ -92,6 +98,10 @@ class OrderViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True); data = serializer.validated_data; account = data.get('broker_account')
             if account is None or account.user_id != request.user.id: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_REQUIRED','detail':'Select a connected broker account.'}, status=status.HTTP_409_CONFLICT)
             if not account.is_connection_eligible: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_NOT_READY','detail':'The selected broker account is not connected or its credentials are not usable.'}, status=status.HTTP_409_CONFLICT)
+            allowed_orders, used_orders, order_limit = check(request.user, 'orders')
+            if not allowed_orders:
+                plan = effective_plan(request.user)
+                return response.Response({'status':'rejected','code':'ORDER_LIMIT_REACHED','detail':f'Your {plan.name} order allowance has been reached for today.','plan':plan.key,'used':used_orders,'limit':order_limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             environment = self._environment(account)
             if not environment: return response.Response({'status':'rejected','code':'ACCOUNT_ENVIRONMENT_UNVERIFIED','detail':'Broker account environment has not been verified.'}, status=status.HTTP_409_CONFLICT)
             if environment == 'real' and not bool(getattr(account.broker, 'supports_live', False)): return response.Response({'status':'rejected','code':'LIVE_BROKER_UNSUPPORTED','detail':'The selected broker is not live-trading capable.'}, status=status.HTTP_409_CONFLICT)
@@ -99,22 +109,148 @@ class OrderViewSet(viewsets.ModelViewSet):
                 allowed, used, limit = check_live_order(request.user)
                 if not allowed: return response.Response({'status':'rejected','code':'LIVE_ORDER_LIMIT_REACHED','detail':f'Your {effective_plan(request.user).name} live-trading allowance has been reached for today.','plan':effective_plan(request.user).key,'used':used,'limit':limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
                 if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)): return response.Response({'status':'rejected','code':'LIVE_TRADING_DISABLED','detail':'Live-money trading is disabled by platform configuration.'}, status=status.HTTP_409_CONFLICT)
+            symbol = str(data.get('symbol') or '').strip()
+            contract_type = str(data.get('contract_type') or '').strip().upper()
+            direction = str(data.get('direction') or '').strip().upper()
+            if not symbol:
+                return response.Response({'status':'rejected','code':'MARKET_SYMBOL_REQUIRED','detail':'Select a broker instrument.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not contract_type:
+                return response.Response({'status':'rejected','code':'BROKER_CONTRACT_REQUIRED','detail':'Select a broker-supported contract type before previewing.'}, status=status.HTTP_409_CONFLICT)
+            duration = data.get('duration') or 60
+            duration_unit = str(data.get('duration_unit') or 's').lower().strip()
             try:
-                from apps.brokers.services import MarketDataFreshnessService
-                quote = MarketDataFreshnessService().latest(data.get('symbol'))
-            except BrokerRoutingError as exc:
-                return response.Response({'status':'rejected','code':'MARKET_DATA_GATE_FAILED','detail':str(exc)}, status=status.HTTP_409_CONFLICT)
+                stake_value = Decimal(str(data.get('stake')))
+                if not stake_value.is_finite() or stake_value <= 0:
+                    raise ValueError('Stake must be greater than zero')
+                from types import SimpleNamespace
+                from apps.risk.validator import RiskValidator
+                RiskValidator().validate_order(SimpleNamespace(
+                    user=request.user, broker_account=account, stake=stake_value
+                ))
+            except Exception as exc:
+                log.info('Terminal preview rejected by risk validation', extra={
+                    'user_id': request.user.id, 'account_id': account.id,
+                    'symbol': symbol, 'reason': str(exc),
+                })
+                return response.Response({
+                    'status':'rejected','code':'PREVIEW_RISK_REJECTED',
+                    'detail':str(exc) or 'The stake failed pre-trade risk validation.',
+                }, status=status.HTTP_409_CONFLICT)
+
+            # Preview against the selected broker now, rather than treating a
+            # persisted snapshot as proof that a live quote is still fresh.
+            # This path only reads broker metadata/quotes; it never buys.
+            try:
+                adapter = BrokerRegistry().adapter(account.broker, account)
+                capability_reader = getattr(adapter, 'get_trade_capabilities', None)
+                market_reader = getattr(adapter, 'get_market_data', None)
+                if not callable(capability_reader) or not callable(market_reader):
+                    return response.Response({'status':'rejected','code':'BROKER_PREVIEW_UNSUPPORTED','detail':'The selected broker does not provide the live contract and quote checks required for a safe preview.'}, status=status.HTTP_409_CONFLICT)
+                capabilities = asyncio.run(asyncio.wait_for(capability_reader(symbol), timeout=7.0))
+                supported = {
+                    str(item.get('contract_type') or '').strip().upper()
+                    for item in (capabilities or [])
+                    if isinstance(item, dict) and item.get('contract_type')
+                }
+                if contract_type not in supported:
+                    return response.Response({'status':'rejected','code':'BROKER_CONTRACT_UNAVAILABLE','detail':f'The selected broker does not currently offer {contract_type} for {symbol}.'}, status=status.HTTP_409_CONFLICT)
+                expected_direction = {
+                    'ACCU':'BUY','MULTUP':'BUY','MULTDOWN':'SELL','CALL':'BUY',
+                    'PUT':'SELL','RISE':'BUY','FALL':'SELL',
+                    'DIGITOVER':'BUY','DIGITUNDER':'SELL','DIGITMATCH':'BUY',
+                    'DIGITDIFF':'SELL','DIGITEVEN':'BUY','DIGITODD':'SELL',
+                    'NOTOUCH':'SELL','ONETOUCH':'BUY','TURBOSLONG':'BUY',
+                    'TURBOSSHORT':'SELL','RUNHIGH':'BUY','RUNLOW':'SELL',
+                    'EXPIRYRANGE':'BUY','EXPIRYMISS':'SELL',
+                }.get(contract_type)
+                if expected_direction and direction != expected_direction:
+                    return response.Response({'status':'rejected','code':'BROKER_CONTRACT_DIRECTION_MISMATCH','detail':f'{contract_type} requires {expected_direction}; select the matching direction and preview again.'}, status=status.HTTP_409_CONFLICT)
+                quote_data = asyncio.run(asyncio.wait_for(market_reader(symbol), timeout=7.0))
+            except (BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError) as exc:
+                return response.Response({'status':'rejected','code':'BROKER_MARKET_DATA_UNAVAILABLE','detail':'The selected broker could not verify contract availability and a live quote. No order was submitted.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            except (asyncio.TimeoutError, TimeoutError):
+                return response.Response({'status':'rejected','code':'BROKER_MARKET_DATA_TIMEOUT','detail':'The selected broker quote timed out. No order was submitted; retry only after the live feed recovers.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             except Exception:
-                log.exception('Authoritative market-data lookup failed', extra={'user_id':request.user.id,'symbol':data.get('symbol')})
-                return response.Response({'status':'rejected','code':'MARKET_DATA_UNAVAILABLE','detail':'Authoritative broker market data could not be verified safely.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-            stake = data.get('stake')
-            try: stake_value = float(Decimal(str(stake)))
-            except (InvalidOperation, TypeError, ValueError): stake_value = None
-            last_price = getattr(quote, 'last_price', None)
-            if last_price is None: raise ValueError('The authoritative market snapshot has no last price.')
-            timestamp = getattr(quote, 'timestamp', None)
-            market = {'price':float(last_price),'bid':float(quote.bid) if quote.bid is not None else None,'ask':float(quote.ask) if quote.ask is not None else None,'spread':float(quote.spread or 0),'timestamp':timestamp.isoformat() if timestamp else None}
-            return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':data.get('symbol'),'direction':data.get('direction'),'order_type':data.get('order_type'),'stake':stake_value,'strategy':data.get('strategy','')},'market':market,'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'fresh_market_data':True,'ai_verified':False,'ai_required':False}})
+                log.exception('Authoritative broker preview lookup failed', extra={'user_id':request.user.id,'symbol':symbol,'account_id':account.id})
+                return response.Response({'status':'rejected','code':'BROKER_MARKET_DATA_UNAVAILABLE','detail':'The selected broker could not verify contract availability and a live quote. No order was submitted.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            try:
+                quote_symbol = str(quote_data.get('symbol') or '').strip()
+                price = Decimal(str(quote_data.get('price', quote_data.get('quote'))))
+                epoch = int(quote_data.get('epoch'))
+                now_epoch = timezone.now().timestamp()
+                max_age = max(1, int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30)))
+                age = now_epoch - epoch
+                if quote_symbol != symbol or not price.is_finite() or price <= 0:
+                    raise ValueError('Broker quote identity or price is invalid')
+                if age < -5 or age > max_age:
+                    return response.Response({'status':'rejected','code':'BROKER_MARKET_DATA_STALE','detail':f'The broker quote is stale or has an invalid timestamp ({max(0, int(age))}s old; limit {max_age}s). No order was submitted.'}, status=status.HTTP_409_CONFLICT)
+                bid_raw, ask_raw = quote_data.get('bid'), quote_data.get('ask')
+                bid = Decimal(str(bid_raw)) if bid_raw not in (None, '') else None
+                ask = Decimal(str(ask_raw)) if ask_raw not in (None, '') else None
+                if (bid is not None and (not bid.is_finite() or bid <= 0)) or (ask is not None and (not ask.is_finite() or ask <= 0)):
+                    raise ValueError('Broker bid/ask values are invalid')
+                if bid is not None and ask is not None and ask < bid:
+                    raise ValueError('Broker ask is below bid')
+            except (TypeError, ValueError, InvalidOperation):
+                log.warning('Broker returned an invalid live quote during Terminal preview', extra={'user_id':request.user.id,'symbol':symbol,'account_id':account.id})
+                return response.Response({'status':'rejected','code':'BROKER_MARKET_DATA_INVALID','detail':'The broker returned an invalid or incomplete live quote. No order was submitted.'}, status=status.HTTP_502_BAD_GATEWAY)
+
+            proposal_reader = getattr(adapter, 'get_order_preview', None)
+            if not callable(proposal_reader):
+                return response.Response({'status':'rejected','code':'BROKER_PROPOSAL_UNSUPPORTED','detail':'The selected broker cannot provide an authoritative payout estimate for this contract. No order was submitted.'}, status=status.HTTP_409_CONFLICT)
+            try:
+                proposal = asyncio.run(asyncio.wait_for(proposal_reader(
+                    symbol=symbol,
+                    contract_type=contract_type,
+                    amount=stake_value,
+                    duration=duration,
+                    duration_unit=duration_unit,
+                ), timeout=7.0))
+                if not isinstance(proposal, dict):
+                    raise ValueError('Broker proposal response is not an object')
+                proposal_cost = Decimal(str(proposal.get('ask_price')))
+                payout = Decimal(str(proposal.get('payout')))
+                proposal_symbol = str(proposal.get('symbol') or '').strip()
+                proposal_contract = str(proposal.get('contract_type') or '').strip().upper()
+                proposal_currency = str(proposal.get('currency') or '').upper()
+                proposal_duration = int(proposal.get('duration'))
+                proposal_duration_unit = str(proposal.get('duration_unit') or '').lower().strip()
+                if (not proposal.get('proposal_id') or proposal_symbol != symbol
+                        or proposal_contract != contract_type
+                        or proposal_currency != str(account.currency or 'USD').upper()
+                        or proposal_duration != int(duration) or proposal_duration_unit != duration_unit
+                        or not proposal_cost.is_finite() or proposal_cost <= 0
+                        or not payout.is_finite() or payout <= 0):
+                    raise ValueError('Broker proposal identity or price is invalid')
+            except BrokerOrderError as exc:
+                return response.Response({'status':'rejected','code':'BROKER_PROPOSAL_REJECTED','detail':str(exc),'no_order_submitted':True}, status=status.HTTP_409_CONFLICT)
+            except (BrokerAuthenticationError, BrokerConnectionError):
+                return response.Response({'status':'rejected','code':'BROKER_PROPOSAL_UNAVAILABLE','detail':'The selected broker could not price this contract. No order was submitted.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            except (asyncio.TimeoutError, TimeoutError):
+                return response.Response({'status':'rejected','code':'BROKER_PROPOSAL_TIMEOUT','detail':'The broker payout estimate timed out. No order was submitted.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            except (TypeError, ValueError, InvalidOperation):
+                log.warning('Broker returned an invalid proposal during Terminal preview', extra={'user_id':request.user.id,'symbol':symbol,'account_id':account.id})
+                return response.Response({'status':'rejected','code':'BROKER_PROPOSAL_INVALID','detail':'The broker returned an invalid payout estimate. No order was submitted.'}, status=status.HTTP_502_BAD_GATEWAY)
+            except Exception:
+                log.exception('Broker proposal lookup failed during Terminal preview', extra={'user_id':request.user.id,'symbol':symbol,'account_id':account.id})
+                return response.Response({'status':'rejected','code':'BROKER_PROPOSAL_UNAVAILABLE','detail':'The selected broker could not price this contract. No order was submitted.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            age = timezone.now().timestamp() - epoch
+            if age < -5 or age > max_age:
+                return response.Response({'status':'rejected','code':'BROKER_MARKET_DATA_STALE','detail':'The broker quote became stale while the payout estimate was being verified. No order was submitted.'}, status=status.HTTP_409_CONFLICT)
+            potential_profit = float(payout - stake_value)
+            stake_value = float(stake_value)
+            market = {
+                'price': float(price),
+                'bid': float(bid) if bid is not None else None,
+                'ask': float(ask) if ask is not None else None,
+                'spread': float(ask - bid) if bid is not None and ask is not None else None,
+                'timestamp': datetime.fromtimestamp(epoch, tz=dt_timezone.utc).isoformat(),
+                'age_seconds': max(0, int(age)),
+                'source': 'selected_broker_live_quote',
+            }
+            return response.Response({'status':'ready','source':'authoritative_pre_trade_preview','account':{'id':account.id,'broker':account.broker.name,'account_id':account.account_id,'environment':environment,'supports_live':bool(getattr(account.broker,'supports_live',False))},'order':{'symbol':symbol,'contract_type':contract_type,'direction':direction.lower(),'order_type':data.get('order_type'),'stake':stake_value,'duration':duration,'duration_unit':duration_unit,'strategy':data.get('strategy','')},'market':market,'estimate':{'proposal_cost':float(proposal_cost),'payout':float(payout),'potential_profit':potential_profit,'currency':str(account.currency or 'USD').upper(),'duration':duration,'duration_unit':duration_unit,'source':'selected_broker_proposal'},'gates':{'account_connected':True,'environment_verified':True,'plan_live_trading':True,'live_trading_allowed':environment != 'real' or bool(getattr(settings,'ALLOW_LIVE_TRADING',False)),'live_order_limit':True,'risk_verified':True,'fresh_market_data':True,'contract_verified':True,'payout_verified':True,'ai_verified':False,'ai_required':False}})
         except Exception:
             log.exception('Pre-trade preview failed', extra={'user_id':request.user.id,'symbol':request.data.get('symbol')})
             return response.Response({'status':'rejected','code':'PREVIEW_INTERNAL_ERROR','detail':'Pre-trade preview could not be completed safely. Check market/broker status and retry.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
