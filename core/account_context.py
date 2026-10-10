@@ -1,4 +1,4 @@
-"""Authoritative authenticated-user broker account context.
+""""Authoritative authenticated-user broker account context.
 
 The server-side session is the only active-account authority for browser/API
 requests. Client-supplied account IDs are never interpreted as active context.
@@ -21,7 +21,6 @@ def connected_accounts(user):
     )
 
 
-
 def _session(request):
     """Return a session mapping when session middleware is installed."""
     return getattr(request, "session", None) if request is not None else None
@@ -31,7 +30,10 @@ def get_active_account(user, request=None, broker_type=None):
     """Resolve the authenticated user's server-side active broker account.
 
     Request headers and query parameters are transport metadata, not account
-    authority. Only the authenticated Django session selects the active account.
+    authority. A stale or ineligible explicit session selection is cleared and
+    returns no account; it must never silently route the request to another
+    connected account. Requests without a browser session retain the existing
+    default-account behavior for background consumers.
     """
     qs = connected_accounts(user)
     if broker_type:
@@ -43,6 +45,12 @@ def get_active_account(user, request=None, broker_type=None):
         selected = qs.filter(pk=selected_id).first()
         if selected:
             return selected
+        # The explicitly selected account is no longer eligible. Clear the
+        # stale selection and fail closed instead of silently using another
+        # account, especially across DEMO/REAL boundaries.
+        session.pop(SESSION_KEY, None)
+        session.modified = True
+        return None
 
     return qs.order_by("-last_synced_at", "-id").first()
 
