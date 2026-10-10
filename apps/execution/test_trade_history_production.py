@@ -21,9 +21,10 @@ class DerivTradeHistoryAuthTests(SimpleTestCase):
         response.json.return_value = {"data": {"url": "wss://api.derivws.com/trading/v1/options/ws/demo?otp=test"}}
         post.return_value = response
 
-        broker = Mock(broker_type="deriv")
+        broker = Mock(broker_type="deriv", pk=7)
         account = Mock(
             broker=broker,
+            broker_id=7,
             account_id="DOT123456",
             token_status="active",
             is_token_expired=False,
@@ -128,9 +129,10 @@ class DerivTradeHistoryAccountsAuthTests(SimpleTestCase):
         response.json.return_value = {"data": [{"account_id": "DOT123456"}]}
         get.return_value = response
 
-        broker = Mock(broker_type="deriv")
+        broker = Mock(broker_type="deriv", pk=7)
         account = Mock(
             broker=broker,
+            broker_id=7,
             account_id="DOT123456",
             token_status="active",
             is_token_expired=False,
