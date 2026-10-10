@@ -88,5 +88,26 @@ class AccountSwitchingTests(TestCase):
         self.assertIsNone(get_active_account(self.user, request=request))
         self.assertNotIn(SESSION_KEY, request.session)
 
+    def test_unknown_deriv_environment_cannot_become_active(self):
+        account = BrokerAccount.objects.create(
+            user=self.user,
+            broker=self.broker,
+            account_id="UNKNOWN-ENVIRONMENT",
+            credentials={},
+        )
+        account.set_access_token("ci-test-token-unknown")
+        account.save(update_fields=["access_token"])
+        BrokerConnection.objects.create(
+            broker=self.broker,
+            broker_account=account,
+            status="connected",
+        )
+        request = self._request()
+        request.session[SESSION_KEY] = account.pk
+
+        self.assertFalse(account.is_connection_eligible)
+        self.assertIsNone(get_active_account(self.user, request=request))
+        self.assertNotIn(SESSION_KEY, request.session)
+
     def test_account_has_no_persistent_preference_field(self):
         self.assertNotIn('is_preferred', [field.name for field in BrokerAccount._meta.fields])
