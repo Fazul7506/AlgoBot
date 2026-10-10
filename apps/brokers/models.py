@@ -51,14 +51,7 @@ class BrokerAccount(models.Model):
     @property
     def is_connected(self): return self.connections.filter(status='connected').exists()
     @property
-    def is_connection_eligible(self):
-        if self.status != 'active' or self.broker.status != 'active' or self.credential_status != 'ready' or not self.is_connected:
-            return False
-        # Deriv DEMO/REAL is an execution-safety boundary. Unknown or conflicting
-        # provider metadata must not be eligible for account selection or orders.
-        if self.broker.broker_type == 'deriv' and self.account_type not in {'demo', 'real'}:
-            return False
-        return True
+    def is_connection_eligible(self): return self.status=='active' and self.broker.status=='active' and self.credential_status=='ready' and self.is_connected
 
 class BrokerConnection(models.Model):
     broker=models.ForeignKey(Broker,on_delete=models.CASCADE,related_name='connections'); broker_account=models.ForeignKey(BrokerAccount,on_delete=models.CASCADE,related_name='connections',null=True,blank=True); status=models.CharField(max_length=24,choices=choices(c.CONNECTION_STATUSES),default='disconnected'); latency=models.FloatField(default=0); last_ping=models.DateTimeField(null=True,blank=True); heartbeat=models.JSONField(default=dict,blank=True); connected_at=models.DateTimeField(null=True,blank=True); updated_at=models.DateTimeField(auto_now=True)
