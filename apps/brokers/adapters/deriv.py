@@ -137,7 +137,13 @@ class DerivAdapter(BrokerAdapter):
     async def authenticate(self):
         response = await self._request({"balance": 1, "req_id": 1}, authenticated=True); balance = response.get("balance") or {}; loginid = str(balance.get("loginid") or self._account_id()); broker_virtual = balance.get("is_virtual")
         if broker_virtual is None: broker_virtual = response.get("is_virtual")
-        configured_type = str((self.credentials or {}).get("account_type") or "demo").lower(); is_virtual = bool(broker_virtual) if broker_virtual is not None else configured_type == "demo"
+        configured_type = str((self.credentials or {}).get("account_type") or "").lower().strip()
+        if broker_virtual is not None:
+            is_virtual = bool(broker_virtual)
+        elif configured_type in {"demo", "real"}:
+            is_virtual = configured_type == "demo"
+        else:
+            is_virtual = None
         return {"loginid": loginid, "account_id": loginid, "balance": balance.get("balance"), "currency": balance.get("currency"), "is_virtual": is_virtual, "avatar_url": balance.get("avatar_url") or response.get("avatar_url")}
 
     async def refresh_token(self): raise BrokerAuthenticationError("Deriv token refresh must be completed through the OAuth flow")
@@ -154,9 +160,15 @@ class DerivAdapter(BrokerAdapter):
         account_id = self._account_id(); accounts = await self.get_accounts(); record = next((item for item in accounts if str(item.get("account_id") or item.get("loginid") or "") == account_id), None)
         if record is None: raise BrokerAuthenticationError("The selected Deriv account is no longer available to this OAuth credential")
         if record.get("balance") is None:
-            account = await self.authenticate(); return {"account_id": account["account_id"], "balance": account.get("balance"), "currency": account.get("currency"), "account_type": "demo" if account.get("is_virtual") else "real", "avatar_url": account.get("avatar_url")}
-        is_virtual = record.get("is_virtual"); account_type = str(record.get("account_type") or "").lower()
-        return {"account_id": str(record.get("account_id") or record.get("loginid") or account_id), "balance": record.get("balance"), "currency": record.get("currency"), "account_type": "demo" if is_virtual is True or account_type == "demo" else "real", "avatar_url": record.get("avatar_url")}
+            account = await self.authenticate(); is_virtual = account.get("is_virtual"); account_type = "demo" if is_virtual is True else "real" if is_virtual is False else "unknown"; return {"account_id": account["account_id"], "balance": account.get("balance"), "currency": account.get("currency"), "account_type": account_type, "avatar_url": account.get("avatar_url")}
+        is_virtual = record.get("is_virtual"); account_type = str(record.get("account_type") or "").lower().strip()
+        if is_virtual is True or account_type == "demo":
+            verified_type = "demo"
+        elif is_virtual is False or account_type == "real":
+            verified_type = "real"
+        else:
+            verified_type = "unknown"
+        return {"account_id": str(record.get("account_id") or record.get("loginid") or account_id), "balance": record.get("balance"), "currency": record.get("currency"), "account_type": verified_type, "avatar_url": record.get("avatar_url")}
 
     async def get_positions(self): return (await self._request({"portfolio": 1}, authenticated=True)).get("portfolio", {}).get("contracts", [])
     async def get_orders(self): return (await self._request({"statement": 1, "limit": 50}, authenticated=True)).get("statement", {}).get("transactions", [])
