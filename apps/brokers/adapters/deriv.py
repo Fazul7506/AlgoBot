@@ -162,12 +162,14 @@ class DerivAdapter(BrokerAdapter):
         if record.get("balance") is None:
             account = await self.authenticate(); is_virtual = account.get("is_virtual"); account_type = "demo" if is_virtual is True else "real" if is_virtual is False else "unknown"; return {"account_id": account["account_id"], "balance": account.get("balance"), "currency": account.get("currency"), "account_type": account_type, "avatar_url": account.get("avatar_url")}
         is_virtual = record.get("is_virtual"); account_type = str(record.get("account_type") or "").lower().strip()
-        if is_virtual is True or account_type == "demo":
-            verified_type = "demo"
-        elif is_virtual is False or account_type == "real":
-            verified_type = "real"
+        if account_type not in {"demo", "real"}:
+            account_type = ""
+        if isinstance(is_virtual, bool):
+            verified_type = "demo" if is_virtual else "real"
+            if account_type and account_type != verified_type:
+                verified_type = "unknown"
         else:
-            verified_type = "unknown"
+            verified_type = account_type or "unknown"
         return {"account_id": str(record.get("account_id") or record.get("loginid") or account_id), "balance": record.get("balance"), "currency": record.get("currency"), "account_type": verified_type, "avatar_url": record.get("avatar_url")}
 
     async def get_positions(self): return (await self._request({"portfolio": 1}, authenticated=True)).get("portfolio", {}).get("contracts", [])
