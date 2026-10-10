@@ -26,6 +26,11 @@ def _session(request):
     return getattr(request, "session", None) if request is not None else None
 
 
+def _has_known_environment(account):
+    """Require explicit DEMO/REAL metadata for Deriv execution context."""
+    return account.broker.broker_type != "deriv" or account.account_type in {"demo", "real"}
+
+
 def get_active_account(user, request=None, broker_type=None):
     """Resolve the authenticated user's server-side active broker account.
 
@@ -43,7 +48,7 @@ def get_active_account(user, request=None, broker_type=None):
     selected_id = session.get(SESSION_KEY) if session is not None else None
     if selected_id:
         selected = qs.filter(pk=selected_id).first()
-        if selected:
+        if selected and _has_known_environment(selected):
             return selected
         # The explicitly selected account is no longer eligible. Clear the
         # stale selection and fail closed instead of silently using another
@@ -52,7 +57,10 @@ def get_active_account(user, request=None, broker_type=None):
         session.modified = True
         return None
 
-    return qs.order_by("-last_synced_at", "-id").first()
+    for account in qs.order_by("-last_synced_at", "-id"):
+        if _has_known_environment(account):
+            return account
+    return None
 
 
 def require_active_account(user, request):
@@ -65,8 +73,8 @@ def require_active_account(user, request):
 def select_account(request, account):
     if not account or account.user_id != request.user.id:
         raise ValueError("Account does not belong to the authenticated user.")
-    if not account.is_connection_eligible:
-        raise ValueError("The selected broker account is not connected and ready.")
+    if not account.is_connection_eligible or not _has_known_environment(account):
+        raise ValueError("The selected broker account is not connected, ready, or has an unknown environment.")
     session = _session(request)
     if session is None:
         raise ValueError("Account selection requires an authenticated browser session.")
