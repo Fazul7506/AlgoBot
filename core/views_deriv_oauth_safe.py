@@ -71,10 +71,22 @@ def callback(request):
         logger.exception("deriv_oauth_broker_account_verification_failed")
         return _fail(request, "Deriv authorization succeeded, but AlgoBot could not verify the trading account. Your dashboard was not opened; retry from Broker Management.", "deriv_oauth_broker_account_verification_failed", error=exc.__class__.__name__)
     deriv_identity = {}
+    websocket_verification_error = None
     try:
+        # This helper performs a real Deriv WebSocket authorize request. A REST
+        # account-list response alone is not evidence of a live authorized session.
         deriv_identity = fetch_deriv_identity(access_token)
+        identity_loginid = str(
+            deriv_identity.get("loginid") or deriv_identity.get("account_id") or ""
+        ).strip()
+        if identity_loginid != selected_account_id:
+            websocket_verification_error = "identity_mismatch"
     except Exception as exc:
-        logger.warning("deriv_oauth_identity_sync_unavailable", extra={"error": exc.__class__.__name__})
+        websocket_verification_error = exc.__class__.__name__
+        logger.warning(
+            "deriv_oauth_websocket_verification_unavailable",
+            extra={"error": websocket_verification_error},
+        )
     broker, _ = Broker.objects.get_or_create(broker_type="deriv", defaults={"name":"Deriv","status":"active","supports_live":True,"websocket_endpoint":settings.DERIV_AUTH_WS_BASE_URL})
     if request.user.is_authenticated:
         user = request.user
@@ -111,7 +123,17 @@ def callback(request):
             if current_id == selected_account_id:
                 return _fail(request, "That Deriv account is already connected to another AlgoBot user. Your dashboard was not opened.", "deriv_oauth_account_ownership_conflict")
             continue
-        persisted = _persist_deriv_account(user=user, broker=broker, record=record, access_token=access_token, refresh_token=refresh_token, expires_at=expires_at, websocket_balance={}, websocket_health="not_checked", deriv_identity=deriv_identity)
+        # Only mark the selected account connected when the OAuth token was also
+        # successfully authorized over Deriv WebSocket and the provider identity
+        # matches that exact account. OAuth REST verification alone is not a live
+        # WebSocket/session health check, so all other accounts remain degraded.
+        identity_loginid = str(deriv_identity.get("loginid") or deriv_identity.get("account_id") or "").strip()
+        websocket_health = (
+            "verified"
+            if current_id == selected_account_id and identity_loginid == selected_account_id
+            else "not_checked"
+        )
+        persisted = _persist_deriv_account(user=user, broker=broker, record=record, access_token=access_token, refresh_token=refresh_token, expires_at=expires_at, websocket_balance={}, websocket_health=websocket_health, deriv_identity=deriv_identity)
         if persisted:
             persisted_ids.append(current_id)
             if current_id == selected_account_id:
@@ -122,5 +144,16 @@ def callback(request):
         select_account(request, selected_broker_account)
     DerivOAuthService.clear_oauth_session(request)
     logger.info("deriv_oauth_authorized_account_persisted", extra={"account_id":selected_account_id,"account_count":len(persisted_ids)})
-    messages.success(request, f"Deriv account {selected_account_id} authorized. Broker connection verification is now available in Broker Management.")
+    if websocket_verification_error:
+        messages.warning(
+            request,
+            f"Deriv account {selected_account_id} was saved, but its live connection could not be verified. "
+            "Balance, equity, and trading remain unavailable until Broker Management completes a successful connection check.",
+        )
+    else:
+        messages.success(
+            request,
+            f"Deriv account {selected_account_id} was authorized and its WebSocket identity verified. "
+            "Refresh the dashboard to load the latest broker snapshot.",
+        )
     return redirect("broker_marketplace_page")
