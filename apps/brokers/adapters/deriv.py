@@ -25,7 +25,12 @@ class DerivAdapter(BrokerAdapter):
         return settings.DERIV_PUBLIC_WS_URL
 
     def _token(self):
-        if self.account is None or self.account.broker.broker_type != self.broker_type:
+        if (
+            self.account is None
+            or self.broker is None
+            or self.broker.broker_type != self.broker_type
+            or self.account.broker_id != self.broker.pk
+        ):
             raise BrokerAuthenticationError("A connected Deriv account is required")
         if self.account.token_status != "active" or self.account.is_token_expired:
             raise BrokerAuthenticationError("Deriv credentials are expired or revoked")
