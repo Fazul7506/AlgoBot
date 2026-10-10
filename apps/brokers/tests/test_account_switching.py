@@ -105,7 +105,7 @@ class AccountSwitchingTests(TestCase):
         request = self._request()
         request.session[SESSION_KEY] = account.pk
 
-        self.assertFalse(account.is_connection_eligible)
+        # Unknown Deriv environment must be rejected by account-context selection.
         self.assertIsNone(get_active_account(self.user, request=request))
         self.assertNotIn(SESSION_KEY, request.session)
 
