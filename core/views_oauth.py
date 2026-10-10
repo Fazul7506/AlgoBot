@@ -1,6 +1,7 @@
 """OAuth API endpoints backed exclusively by the canonical brokers.BrokerAccount model."""
 
 import logging
+from django.db import transaction
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -18,11 +19,39 @@ def _account(request):
     return get_active_account(request.user, request=request, broker_type="deriv")
 
 
+def _persist_refreshed_credentials(account, token_data):
+    """Persist rotated Deriv OAuth credentials consistently for this user's active accounts."""
+    access_token = token_data.get('access_token') or ''
+    if not access_token:
+        raise ValueError('Refreshed access token is missing')
+    refresh_token = token_data.get('refresh_token')
+    expires_at = DerivOAuthService.parse_token_expiry(int(token_data.get('expires_in', 3600)))
+    refreshed_at = timezone.now()
+    with transaction.atomic():
+        linked_accounts = BrokerAccount.objects.filter(
+            user_id=account.user_id,
+            broker_id=account.broker_id,
+            status='active',
+        ).select_for_update()
+        for linked in linked_accounts:
+            linked.set_access_token(access_token)
+            if refresh_token:
+                linked.set_refresh_token(refresh_token)
+            linked.expires_at = expires_at
+            linked.token_status = 'active'
+            linked.last_refresh = refreshed_at
+            linked.save(update_fields=['access_token', 'refresh_token', 'expires_at', 'token_status', 'last_refresh'])
+    return expires_at
+
+
 def _serialize(account):
     if not account: return None
     credentials = account.credentials or {}
     metadata = account.broker.metadata or {}
-    return {'account_id':account.account_id,'account_type':str(credentials.get('account_type') or 'demo').lower(),'currency':account.currency,'token_status':account.token_status,'is_token_expired':account.is_token_expired,'expires_at':account.expires_at.isoformat() if account.expires_at else None,'last_refresh':account.last_refresh.isoformat() if account.last_refresh else None,'connected_at':account.created_at.isoformat(),'avatar_url':str(credentials.get('avatar_url') or metadata.get('avatar_url') or ''),'broker':account.broker.name}
+    account_type = str(credentials.get('account_type') or '').lower().strip()
+    if account_type not in {'demo', 'real'}:
+        account_type = 'unknown'
+    return {'account_id':account.account_id,'account_type':account_type,'currency':account.currency,'token_status':account.token_status,'is_token_expired':account.is_token_expired,'expires_at':account.expires_at.isoformat() if account.expires_at else None,'last_refresh':account.last_refresh.isoformat() if account.last_refresh else None,'connected_at':account.created_at.isoformat(),'avatar_url':str(credentials.get('avatar_url') or metadata.get('avatar_url') or ''),'broker':account.broker.name}
 
 
 @api_view(['POST'])
@@ -53,10 +82,9 @@ def refresh_deriv_token(request):
             return Response({'status':'error','message':f'Token refresh failed: {error}'},status=status.HTTP_502_BAD_GATEWAY)
         valid,validation_error=DerivOAuthService.validate_token_response(token_data)
         if not valid: return Response({'status':'error','message':f'Invalid token response: {validation_error}'},status=status.HTTP_502_BAD_GATEWAY)
-        account.set_access_token(token_data.get('access_token') or '')
-        if token_data.get('refresh_token'): account.set_refresh_token(token_data['refresh_token'])
-        account.expires_at=DerivOAuthService.parse_token_expiry(int(token_data.get('expires_in',3600))); account.token_status='active'; account.status='active'; account.last_refresh=timezone.now(); account.save()
-        return Response({'status':'success','message':'Token refreshed successfully','expires_at':account.expires_at.isoformat() if account.expires_at else None},status=status.HTTP_200_OK)
+        expires_at = _persist_refreshed_credentials(account, token_data)
+        account.refresh_from_db()
+        return Response({'status':'success','message':'Token refreshed successfully','expires_at':expires_at.isoformat() if expires_at else None},status=status.HTTP_200_OK)
     except Exception as exc:
         logger.exception('deriv_oauth_refresh_exception',extra={'error':str(exc)})
         return Response({'status':'error','message':'Failed to refresh token'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -80,8 +108,6 @@ def reconnect_deriv(request):
         if success:
             valid,_=DerivOAuthService.validate_token_response(token_data)
             if valid:
-                account.set_access_token(token_data.get('access_token') or '')
-                if token_data.get('refresh_token'): account.set_refresh_token(token_data['refresh_token'])
-                account.expires_at=DerivOAuthService.parse_token_expiry(int(token_data.get('expires_in',3600))); account.token_status='active'; account.status='active'; account.last_refresh=timezone.now(); account.save()
+                _persist_refreshed_credentials(account, token_data)
                 return Response({'status':'success','message':'Reconnected successfully','requires_oauth':False},status=status.HTTP_200_OK)
     return Response({'status':'success','message':'Full re-authentication required','requires_oauth':True,'oauth_url':'/brokers/connect/?broker=deriv'},status=status.HTTP_200_OK)

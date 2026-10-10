@@ -87,6 +87,11 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         if requested not in {'demo','real'}:requested=''
         if actual not in {'demo','real'}:return response.Response({'detail':'The broker has not confirmed this account type yet. Synchronize the account first.'},status=status.HTTP_409_CONFLICT)
         if requested and requested!=actual:return response.Response({'detail':f'Selected account is {actual}, not {requested}.'},status=status.HTTP_409_CONFLICT)
+        # A browser JWT can authenticate a different principal than the Django session cookie.
+        # Never write one user's account selection into another user's session.
+        session_user_id = request.session.get('_auth_user_id')
+        if session_user_id and str(session_user_id) != str(request.user.pk):
+            return response.Response({'detail':'The browser session and API credentials belong to different users.'},status=status.HTTP_403_FORBIDDEN)
         previous_id=request.session.get('active_broker_account_id');select_account(request,account);serialized=BrokerAccountSerializer(account,context={'request':request}).data
         return response.Response({'switch_enabled':True,'active_account':serialized,'account':serialized,'previous_account_id':previous_id,'active_account_id':account.id})
     @decorators.action(detail=False,methods=['get'])

@@ -46,11 +46,19 @@ def _account_id(record: dict) -> str:
 def _account_type(record: dict, websocket_balance: dict | None = None) -> str:
     websocket_balance = websocket_balance or {}
     value = str(record.get("account_type") or "").lower().strip()
-    if value in {"real", "demo"}:
-        return value
-    if record.get("is_virtual") is True or websocket_balance.get("is_virtual") is True:
-        return "demo"
-    return "real"
+    if value not in {"real", "demo"}:
+        value = ""
+    is_virtual = record.get("is_virtual")
+    if is_virtual is None:
+        is_virtual = websocket_balance.get("is_virtual")
+    if isinstance(is_virtual, bool):
+        verified_type = "demo" if is_virtual else "real"
+        if value and value != verified_type:
+            return "unknown"
+        return verified_type
+    # Do not infer REAL when the provider has not supplied a verifiable
+    # account type; an unknown environment must never pass account-switch gates.
+    return value or "unknown"
 
 
 def _verify_account(access_token: str) -> tuple[dict | None, list[dict]]:
@@ -173,7 +181,11 @@ def _persist_deriv_account(*, user, broker, record, access_token, refresh_token,
     account_type = _account_type(record, websocket_balance)
 
     broker_account, _ = BrokerAccount.objects.get_or_create(broker=broker, account_id=account_id, defaults={"user": user})
-    broker_account.user = user
+    # Broker/account_id is globally unique. Never transfer an existing account
+    # to whichever user happens to complete an OAuth callback; ownership must
+    # be established before any credentials or account metadata are changed.
+    if broker_account.user_id != user.pk:
+        return None
     broker_account.currency = currency
     broker_account.balance = balance_value
     broker_account.equity = equity_value

@@ -52,6 +52,37 @@ class DerivBalanceSyncTests(SimpleTestCase):
         self.assertEqual(result["account_type"], "real")
         self.adapter.authenticate.assert_awaited_once()
 
+    async def test_unknown_account_type_is_not_inferred_as_real_or_demo(self):
+        self.adapter.get_accounts = AsyncMock(return_value=[{
+            "account_id": "VRTC123",
+            "balance": "12.00",
+            "currency": "USD",
+        }])
+        self.adapter.authenticate = AsyncMock(return_value={
+            "account_id": "VRTC123",
+            "balance": "12.00",
+            "currency": "USD",
+            "is_virtual": None,
+            "avatar_url": None,
+        })
+
+        result = await self.adapter.get_balance()
+
+        self.assertEqual(result["account_type"], "unknown")
+
+    async def test_conflicting_provider_environment_fields_fail_closed(self):
+        self.adapter.get_accounts = AsyncMock(return_value=[{
+            "account_id": "VRTC123",
+            "balance": "12.00",
+            "currency": "USD",
+            "is_virtual": False,
+            "account_type": "demo",
+        }])
+
+        result = await self.adapter.get_balance()
+
+        self.assertEqual(result["account_type"], "unknown")
+
     async def test_get_balance_rejects_an_account_missing_from_oauth_scope(self):
         self.adapter.get_accounts = AsyncMock(return_value=[{"account_id": "VRTC999", "balance": "1.00"}])
 
