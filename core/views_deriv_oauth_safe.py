@@ -144,5 +144,16 @@ def callback(request):
         select_account(request, selected_broker_account)
     DerivOAuthService.clear_oauth_session(request)
     logger.info("deriv_oauth_authorized_account_persisted", extra={"account_id":selected_account_id,"account_count":len(persisted_ids)})
-    messages.success(request, f"Deriv account {selected_account_id} authorized. Broker connection verification is now available in Broker Management.")
+    if websocket_verification_error:
+        messages.warning(
+            request,
+            f"Deriv account {selected_account_id} was saved, but its live connection could not be verified. "
+            "Balance, equity, and trading remain unavailable until Broker Management completes a successful connection check.",
+        )
+    else:
+        messages.success(
+            request,
+            f"Deriv account {selected_account_id} was authorized and its WebSocket identity verified. "
+            "Refresh the dashboard to load the latest broker snapshot.",
+        )
     return redirect("broker_marketplace_page")
