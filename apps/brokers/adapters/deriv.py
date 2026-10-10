@@ -2,6 +2,7 @@
 import asyncio
 import inspect
 import json
+import logging
 import math
 import time
 
@@ -11,6 +12,8 @@ from django.conf import settings
 
 from ..exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
 from .base import BrokerAdapter
+
+logger = logging.getLogger(__name__)
 
 
 class DerivAdapter(BrokerAdapter):
@@ -123,7 +126,7 @@ class DerivAdapter(BrokerAdapter):
                     try:
                         await ws.close()
                     except Exception:
-                        pass
+                        logger.warning("Deriv websocket shutdown failed", exc_info=True)
 
     def _start_stream(self, subscriptions, callback=None, authenticated=False, stream_name="broker"):
         task = asyncio.create_task(self._stream(subscriptions, callback=callback, authenticated=authenticated, stream_name=stream_name))

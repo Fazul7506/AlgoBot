@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 import time
 from decimal import Decimal, InvalidOperation
@@ -13,6 +14,7 @@ from django.db import IntegrityError, transaction
 
 from .models import MarketSymbol
 
+logger = logging.getLogger(__name__)
 
 DERIV_PUBLIC_WS = getattr(settings, "DERIV_PUBLIC_WS_URL", "wss://api.derivws.com/trading/v1/options/ws/public")
 MARKET_SYNC_LOCK = "algobot:deriv:market-sync"
@@ -155,7 +157,7 @@ def sync_active_symbols() -> int:
         try:
             cache.delete(MARKET_SYNC_LOCK)
         except Exception:
-            pass
+            logger.warning("Deriv market sync lock release failed", exc_info=True)
 
 
 def fetch_contracts_for(symbol: str) -> dict:

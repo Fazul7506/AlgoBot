@@ -1,7 +1,11 @@
 """Portfolio return forecasting with statistical models and measurable accuracy."""
 from __future__ import annotations
 
+import logging
+
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class ForecastingService:
@@ -136,6 +140,7 @@ class ForecastingService:
                 actual = float(values[index + horizon - 1])
                 errors.append(actual - prediction)
             except Exception:
+                logger.warning("Walk-forward forecast validation failed for index=%s horizon=%s", index, horizon, exc_info=True)
                 continue
         if not errors:
             return {"mae": None, "rmse": None, "observations": 0, "method": "walk_forward_arima"}

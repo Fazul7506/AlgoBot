@@ -1,4 +1,5 @@
 import json
+import logging
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth.decorators import login_required
@@ -10,6 +11,8 @@ from django.utils import timezone
 from .models import CopyProvider, CopyFollower, CopySubscription, CopyTrade
 from .services import CopyTradingEngine, ProviderDiscoveryService
 
+logger = logging.getLogger(__name__)
+
 
 def _tenant(request):
     tenant = getattr(request.user, "tenant", None)
@@ -19,6 +22,7 @@ def _tenant(request):
         from apps.tenants.models import Tenant
         return Tenant.objects.filter(owner=request.user).first()
     except Exception:
+        logger.warning("Copy-trading tenant lookup failed", exc_info=True)
         return None
 
 

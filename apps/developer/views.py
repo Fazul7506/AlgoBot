@@ -1,3 +1,4 @@
+import logging
 import secrets
 from functools import wraps
 
@@ -16,6 +17,7 @@ from .services import AnalyticsService, APIKeyService, DeveloperPlatformService,
 
 AUTH_CLASSES = [APIKeyAuthentication, SessionAuthentication]
 RESPONSE_TEMPLATE = "developer/response.html"
+logger = logging.getLogger(__name__)
 
 
 def _safe_call(request, label, callback, default):
@@ -25,7 +27,8 @@ def _safe_call(request, label, callback, default):
         try:
             messages.error(request, f"{label} is temporarily unavailable: {exc}")
         except Exception:
-            pass
+            logger.warning("Developer page message delivery failed for %s", label, exc_info=True)
+        logger.warning("Developer service call failed for %s", label, exc_info=True)
         return default
 
 
@@ -328,6 +331,7 @@ def _authenticate(request):
         try:
             result = auth_class().authenticate(request)
         except Exception:
+            logger.warning("Developer auth backend %s failed", auth_class.__name__, exc_info=True)
             continue
         if result:
             request.user, request.auth = result
@@ -359,7 +363,7 @@ def _django_response(request, *, title, payload=None, message="", status=200, ki
                 message,
             )
         except Exception:
-            pass
+            logger.warning("Developer response message queue failed", exc_info=True)
 
     data = payload if payload is not None else {}
     if isinstance(data, dict):
@@ -395,6 +399,7 @@ def _developer_endpoint(scope):
             try:
                 return view(request, *args, **kwargs)
             except Exception:
+                logger.exception("Developer endpoint failed: %s", view.__name__)
                 # Do not disclose exception text, provider responses, or secrets to API callers.
                 return _django_response(
                     request, title="Developer service error",

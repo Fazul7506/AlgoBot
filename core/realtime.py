@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 
 import websockets
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.core.cache import cache
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 
 class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
@@ -155,7 +158,8 @@ class PortfolioConsumer(AuthenticatedStateConsumer):
         if self._broker_ws:
             ws = self._broker_ws; self._broker_ws = None
             try: await ws.close()
-            except Exception: pass
+            except Exception:
+                logger.warning("Websocket broker stream close failed during cleanup", exc_info=True)
 
     async def disconnect(self, close_code):
         await self._close_broker_stream(); await super().disconnect(close_code)

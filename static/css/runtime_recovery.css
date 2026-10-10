@@ -264,6 +264,16 @@ body.sidebar-collapsed .app-shell{margin-left:var(--algobot-shell-collapsed);}
 .toast.is-leaving{animation:algobot-toast-out .16s ease both;}
 @keyframes algobot-toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-4px)}}
 
+@media (min-width:901px) and (max-width:1200px){
+  :root{
+    --algobot-shell-rail:220px;
+    --algobot-shell-collapsed:68px;
+  }
+  .topbar{padding-inline:18px;}
+  .topbar-title{max-width:42vw;}
+  .app-sidebar .brand-name{font-size:.96rem;}
+}
+
 @media (max-width:900px){
   html.mobile-drawer-locked,body.mobile-drawer-locked{overscroll-behavior:none;}
   body.mobile-drawer-locked{width:100%;}

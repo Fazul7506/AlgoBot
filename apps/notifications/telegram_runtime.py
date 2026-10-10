@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import random
 import time
 from datetime import timedelta
@@ -10,6 +11,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import Notification, TelegramRuntimeState, TelegramUpdate
+
+logger = logging.getLogger(__name__)
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 
@@ -97,8 +100,9 @@ def mark_telegram_success() -> None:
         state.last_error = ""
         state.save(update_fields=["mode", "status", "last_success_at", "heartbeat_at", "consecutive_failures", "last_error", "updated_at"])
     except Exception:
-        # Health telemetry must never break trading or notification delivery.
-        pass
+        # Health telemetry must never break trading or notification delivery,
+        # but it must still leave an auditable signal behind for operators.
+        logger.warning("Telegram runtime telemetry success update failed", exc_info=True)
 
 
 def mark_telegram_failure(error: str) -> None:
@@ -110,7 +114,7 @@ def mark_telegram_failure(error: str) -> None:
         state.heartbeat_at = timezone.now()
         state.save(update_fields=["status", "consecutive_failures", "last_error", "heartbeat_at", "updated_at"])
     except Exception:
-        pass
+        logger.warning("Telegram runtime telemetry failure update failed", exc_info=True)
 
 
 def mark_update(update_id: int) -> bool:
@@ -142,7 +146,7 @@ def mark_delivery() -> None:
         state.heartbeat_at = timezone.now()
         state.save(update_fields=["last_delivery_at", "heartbeat_at", "updated_at"])
     except Exception:
-        pass
+        logger.warning("Telegram runtime delivery update failed", exc_info=True)
 
 
 def telegram_health() -> dict:

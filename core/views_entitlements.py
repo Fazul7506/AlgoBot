@@ -1,11 +1,13 @@
-from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from core.billing_entitlements import PLAN_ENTITLEMENTS, entitlement_payload
 
 
-@login_required
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def billing_entitlements(request):
-    return JsonResponse({
+    return Response({
         "current": entitlement_payload(request.user),
         "plans": {
             key: {

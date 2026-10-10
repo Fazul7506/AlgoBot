@@ -6,6 +6,7 @@ observed broker facts and never a source for manufacturing trading data.
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from datetime import datetime, timezone as dt_timezone
 from decimal import Decimal, InvalidOperation
@@ -16,6 +17,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from .exceptions import BrokerAuthenticationError, BrokerConnectionError
+
+logger = logging.getLogger(__name__)
 
 
 class PositionSyncError(RuntimeError):
@@ -180,6 +183,7 @@ class BrokerPositionSyncService:
                 except NotImplementedError:
                     return None
                 except Exception:
+                    logger.warning("Position reconciliation contract lookup failed for %s", contract_id, exc_info=True)
                     return None
             try:
                 final_records = await asyncio.gather(*(fetch_final(cid) for cid in stale_ids))
@@ -244,6 +248,7 @@ class BrokerPositionSyncService:
             except NotImplementedError:
                 return None
             except Exception:
+                logger.warning("Closed-position reconciliation lookup failed for %s", contract_id, exc_info=True)
                 return None
 
         try:

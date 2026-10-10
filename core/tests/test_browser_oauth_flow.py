@@ -75,3 +75,33 @@ class BrowserOAuthFlowTests(TestCase):
         self.assertEqual(account.status, "active")
         self.assertNotIn(SESSION_KEY, self.client.session)
         self.assertFalse(BrokerConnection.objects.filter(broker_account=account, status="connected").exists())
+
+    @patch("core.views_deriv_oauth_safe._verify_account")
+    @patch("core.views_deriv_oauth_safe.DerivOAuthService.exchange_code_for_token")
+    @patch("core.views_deriv_oauth_safe.DerivOAuthService.validate_token_response", return_value=(True, None))
+    @patch("core.views_deriv_oauth_safe.DerivOAuthService.validate_pkce", return_value=(True, None))
+    @patch("core.views_deriv_oauth_safe.DerivOAuthService.validate_state", return_value=(True, None))
+    def test_oauth_rejects_active_browser_session_mismatch_before_persisting_account(
+        self, validate_state, validate_pkce, validate_token, exchange, verify_account
+    ):
+        exchange.return_value = (True, {"access_token": "verified-token", "refresh_token": "refresh-token", "expires_in": 3600}, None)
+        verify_account.return_value = (
+            {"loginid": "CR1234567", "account_type": "demo", "currency": "USD", "balance": 125.5},
+            [{"loginid": "CR1234567", "account_type": "demo", "currency": "USD", "balance": 125.5}],
+        )
+        session = self.client.session
+        session["oauth_state"] = "state"
+        session["pkce_verifier"] = "verifier"
+        session["oauth_redirect_uri"] = "https://algobot.dpdns.org/callback/"
+        session["_auth_user_id"] = "999"
+        session.save()
+
+        user = User.objects.create_user(username="actual-user", password="pass12345")
+        self.client.force_login(user)
+
+        response = self.client.get("/callback/?state=state&code=code")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/brokers/connect/")
+        self.assertFalse(BrokerAccount.objects.filter(account_id="CR1234567").exists())
+        self.assertTrue(any("different user" in str(msg) for msg in response.wsgi_request._messages))

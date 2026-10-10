@@ -1,6 +1,11 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 try:
     from deriv_platform.celery import app
 except Exception:
+    logger.warning("Monitoring task Celery app import failed; falling back to synchronous task execution.", exc_info=True)
     app = None
 from .services import AlertEngine, HealthMonitoringService, LogAggregationService, MetricsService, MonitoringEngine, SelfHealingService
 

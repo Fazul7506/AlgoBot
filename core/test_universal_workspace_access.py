@@ -69,7 +69,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         css = self._css("runtime_recovery.css")
         self.assertLess(len(css.splitlines()), 500)
         self.assertEqual(css.count("!important"), 0)
-        self.assertEqual(css.count("@media"), 4)
+        self.assertEqual(css.count("@media"), 5)
         self.assertIn(".app-sidebar{", css)
         self.assertIn(".app-shell{", css)
         self.assertIn(".app-sidebar nav{", css)
@@ -77,6 +77,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("width:var(--algobot-shell-collapsed)", css)
         self.assertIn("@media (max-width:900px)", css)
         self.assertIn("@media (min-width:901px)", css)
+        self.assertIn("@media (min-width:901px) and (max-width:1200px)", css)
 
     def test_desktop_sidebar_is_viewport_owned_and_nav_is_only_scroll_region(self):
         css = self._css("runtime_recovery.css")

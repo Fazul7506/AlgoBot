@@ -1,10 +1,13 @@
 import hashlib
+import logging
 import time
 import uuid
 from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils import timezone
 from .models import APIKey, APIUsageEvent, RateLimitEvent
+
+logger = logging.getLogger(__name__)
 
 
 class DeveloperAPIMiddleware:
@@ -53,7 +56,7 @@ class DeveloperAPIMiddleware:
             if api_key:
                 APIKey.objects.filter(pk=api_key.pk).update(last_used=timezone.now())
         except Exception:
-            pass
+            logger.warning("Developer API usage tracking failed", exc_info=True)
         response["X-RateLimit-Limit"] = str(limit)
         response["X-RateLimit-Remaining"] = str(max(0, limit - count))
         response["X-Request-ID"] = request_id

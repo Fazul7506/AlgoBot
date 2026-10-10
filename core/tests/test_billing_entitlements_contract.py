@@ -1,10 +1,24 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
 
 from core.billing_entitlements import PLAN_ENTITLEMENTS, entitlement_payload, effective_plan, usage
 
 
 class BillingEntitlementsContractTests(TestCase):
+    def test_entitlements_endpoint_accepts_the_billing_page_bearer_token(self):
+        user = get_user_model().objects.create_user(username="billing-api-user", password="test-password")
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(user)}")
+
+        response = client.get(reverse("billing_entitlements"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["current"]["plan"], "FREE")
+        self.assertIn("usage", response.data["current"])
+
     def test_all_customer_plans_exist_and_enterprise_is_unlimited(self):
         self.assertEqual(set(PLAN_ENTITLEMENTS), {"FREE", "BASIC", "PRO", "ENTERPRISE"})
         enterprise = PLAN_ENTITLEMENTS["ENTERPRISE"]

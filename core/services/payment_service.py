@@ -546,7 +546,7 @@ class PaymentService:
                 try:
                     cache.set(cache_key, token, timeout=240)
                 except Exception:
-                    pass
+                    logger.warning("Pesapal token cache write failed", exc_info=True)
             return token
         except requests.RequestException:
             logger.exception("Pesapal authentication request failed")

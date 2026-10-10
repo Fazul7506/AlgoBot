@@ -1,10 +1,13 @@
 """Production ensemble inference for broker-independent trading models."""
 from __future__ import annotations
+import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 import numpy as np
 from .training_dataset import MODEL_FEATURE_NAMES
+
+logger = logging.getLogger(__name__)
 
 MODEL_DIR=os.environ.get("AI_MODEL_DIR",os.path.join(os.path.dirname(__file__),"models"))
 DEFAULT_WEIGHTS={"rf":1.0,"xgb":1.0,"lgb":1.0,"lstm":1.0}
@@ -27,12 +30,14 @@ class EnsemblePredictor:
                 path=os.path.join(MODEL_DIR,f"{self.symbol}_{self.timeframe}_{model_type}.pkl")
                 if os.path.exists(path):
                     try: self.models[model_type]=joblib.load(path)
-                    except Exception: pass
+                    except Exception:
+                        logger.warning("Failed to load AI model %s/%s/%s", self.symbol, self.timeframe, model_type, exc_info=True)
         try:
             from tensorflow import keras
             path=os.path.join(MODEL_DIR,f"{self.symbol}_{self.timeframe}_lstm.keras")
             if os.path.exists(path): self.models["lstm"]=keras.models.load_model(path)
-        except Exception: pass
+        except Exception:
+            logger.warning("Failed to load LSTM model %s/%s", self.symbol, self.timeframe, exc_info=True)
     @staticmethod
     def _predict_one(model_type:str,model:Any,X:np.ndarray)->float:
         if model_type=="lstm":
@@ -54,11 +59,13 @@ class EnsemblePredictor:
                 futures={pool.submit(run,n,m):n for n,m in self.models.items()}
                 for f in as_completed(futures):
                     try: results.append(f.result())
-                    except Exception: pass
+                    except Exception:
+                        logger.warning("Concurrent AI ensemble model evaluation failed", exc_info=True)
         else:
             for name,model in self.models.items():
                 try: results.append(run(name,model))
-                except Exception: pass
+                except Exception:
+                    logger.warning("AI ensemble model evaluation failed for %s", name, exc_info=True)
         return results
     @staticmethod
     def consensus(predictions:list[dict[str,Any]],avoid_band=.10,min_confidence=.65)->dict[str,Any]:

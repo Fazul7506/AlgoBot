@@ -1,6 +1,9 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from apps.notifications import telegram_runtime
 from apps.notifications.models import NotificationPreference, NotificationTemplate
 from apps.notifications.services import DeliveryService, NotificationEngine, TemplateService, WebhookService
 
@@ -20,3 +23,13 @@ class NotificationEngineTests(TestCase):
 
     def test_webhook_hmac_signature(self):
         self.assertEqual(WebhookService().sign(b"{}", "secret"), WebhookService().sign(b"{}", "secret"))
+
+    @patch("apps.notifications.telegram_runtime.logger")
+    @patch("apps.notifications.telegram_runtime.runtime_state")
+    def test_mark_telegram_success_logs_when_telemetry_fails(self, runtime_state_mock, logger_mock):
+        runtime_state_mock.side_effect = RuntimeError("telemetry store unavailable")
+
+        telegram_runtime.mark_telegram_success()
+
+        logger_mock.warning.assert_called_once()
+        self.assertIn("Telegram runtime telemetry success update failed", logger_mock.warning.call_args[0][0])
