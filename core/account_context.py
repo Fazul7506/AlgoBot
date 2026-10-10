@@ -57,16 +57,17 @@ def get_active_account(user, request=None, broker_type=None):
         session.modified = True
         return None
 
-    for account in qs.order_by("-last_synced_at", "-id"):
-        if _has_known_environment(account):
-            return account
-    return None
+    # Read-only broker/market-data views may need a default context without an
+    # explicit browser selection. This fallback is not permission to execute trades.
+    return qs.order_by("-last_synced_at", "-id").first()
 
 
 def require_active_account(user, request):
     account = get_active_account(user, request=request)
     if not account:
         raise ValueError("No connected broker account is available for this request.")
+    if not _has_known_environment(account):
+        raise ValueError("The broker account environment is unknown; trading is blocked until DEMO/REAL is verified.")
     return account
 
 
