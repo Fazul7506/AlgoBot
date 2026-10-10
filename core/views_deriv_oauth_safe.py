@@ -111,7 +111,17 @@ def callback(request):
             if current_id == selected_account_id:
                 return _fail(request, "That Deriv account is already connected to another AlgoBot user. Your dashboard was not opened.", "deriv_oauth_account_ownership_conflict")
             continue
-        persisted = _persist_deriv_account(user=user, broker=broker, record=record, access_token=access_token, refresh_token=refresh_token, expires_at=expires_at, websocket_balance={}, websocket_health="not_checked", deriv_identity=deriv_identity)
+        # Only mark the selected account connected when the OAuth token was also
+        # successfully authorized over Deriv WebSocket and the provider identity
+        # matches that exact account. OAuth REST verification alone is not a live
+        # WebSocket/session health check, so all other accounts remain degraded.
+        identity_loginid = str(deriv_identity.get("loginid") or deriv_identity.get("account_id") or "").strip()
+        websocket_health = (
+            "verified"
+            if current_id == selected_account_id and identity_loginid == selected_account_id
+            else "not_checked"
+        )
+        persisted = _persist_deriv_account(user=user, broker=broker, record=record, access_token=access_token, refresh_token=refresh_token, expires_at=expires_at, websocket_balance={}, websocket_health=websocket_health, deriv_identity=deriv_identity)
         if persisted:
             persisted_ids.append(current_id)
             if current_id == selected_account_id:
