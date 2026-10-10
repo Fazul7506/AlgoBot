@@ -173,7 +173,11 @@ def _persist_deriv_account(*, user, broker, record, access_token, refresh_token,
     account_type = _account_type(record, websocket_balance)
 
     broker_account, _ = BrokerAccount.objects.get_or_create(broker=broker, account_id=account_id, defaults={"user": user})
-    broker_account.user = user
+    # Broker/account_id is globally unique. Never transfer an existing account
+    # to whichever user happens to complete an OAuth callback; ownership must
+    # be established before any credentials or account metadata are changed.
+    if broker_account.user_id != user.pk:
+        return None
     broker_account.currency = currency
     broker_account.balance = balance_value
     broker_account.equity = equity_value
