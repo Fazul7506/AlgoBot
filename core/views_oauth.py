@@ -22,7 +22,10 @@ def _serialize(account):
     if not account: return None
     credentials = account.credentials or {}
     metadata = account.broker.metadata or {}
-    return {'account_id':account.account_id,'account_type':str(credentials.get('account_type') or 'demo').lower(),'currency':account.currency,'token_status':account.token_status,'is_token_expired':account.is_token_expired,'expires_at':account.expires_at.isoformat() if account.expires_at else None,'last_refresh':account.last_refresh.isoformat() if account.last_refresh else None,'connected_at':account.created_at.isoformat(),'avatar_url':str(credentials.get('avatar_url') or metadata.get('avatar_url') or ''),'broker':account.broker.name}
+    account_type = str(credentials.get('account_type') or '').lower().strip()
+    if account_type not in {'demo', 'real'}:
+        account_type = 'unknown'
+    return {'account_id':account.account_id,'account_type':account_type,'currency':account.currency,'token_status':account.token_status,'is_token_expired':account.is_token_expired,'expires_at':account.expires_at.isoformat() if account.expires_at else None,'last_refresh':account.last_refresh.isoformat() if account.last_refresh else None,'connected_at':account.created_at.isoformat(),'avatar_url':str(credentials.get('avatar_url') or metadata.get('avatar_url') or ''),'broker':account.broker.name}
 
 
 @api_view(['POST'])
