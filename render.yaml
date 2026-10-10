@@ -89,7 +89,7 @@ services:
         value: "true"
       - key: CSRF_COOKIE_SAMESITE
         value: Lax
-    buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt && DJANGO_ENV=production python manage.py migrate --fake-initial --noinput && DJANGO_ENV=production python manage.py set_telegram_webhook && DJANGO_ENV=production python manage.py collectstatic --noinput
+    buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt && DJANGO_ENV=production python manage.py collectstatic --noinput
     # Run database migrations before the new web instance receives traffic.
     # Keep network-dependent Telegram registration out of the web start path so
     # a provider timeout cannot leave the HTTP service unavailable during deploys.
