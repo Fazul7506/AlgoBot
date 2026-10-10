@@ -50,7 +50,9 @@ def _account_type(record: dict, websocket_balance: dict | None = None) -> str:
         return value
     if record.get("is_virtual") is True or websocket_balance.get("is_virtual") is True:
         return "demo"
-    return "real"
+    # Do not infer REAL when the provider has not supplied a verifiable
+    # account type; an unknown environment must never pass account-switch gates.
+    return "unknown"
 
 
 def _verify_account(access_token: str) -> tuple[dict | None, list[dict]]:
