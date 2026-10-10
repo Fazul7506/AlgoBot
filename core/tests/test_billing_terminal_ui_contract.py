@@ -70,7 +70,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("const canonicalApi=(u,o={},t=10000)=>window.AlgoBotFrontendData.request(u,o,t);", terminal)
         self.assertIn("window.AlgoBotServices?.request?.('trading'", terminal)
         self.assertIn("switchAuthoritativeAccount", terminal)
-        self.assertIn("/api/brokers/accounts/${encodeURIComponent(id)}/select/", terminal)
+        self.assertIn("window.AlgoBotAccountContext.selectAccount(id)", terminal)
+        self.assertNotIn("/api/brokers/accounts/${encodeURIComponent(id)}/select/", terminal)
         self.assertNotIn("same-origin", terminal)
         self.assertNotIn("X-CSRFToken", terminal)
 
