@@ -71,10 +71,22 @@ def callback(request):
         logger.exception("deriv_oauth_broker_account_verification_failed")
         return _fail(request, "Deriv authorization succeeded, but AlgoBot could not verify the trading account. Your dashboard was not opened; retry from Broker Management.", "deriv_oauth_broker_account_verification_failed", error=exc.__class__.__name__)
     deriv_identity = {}
+    websocket_verification_error = None
     try:
+        # This helper performs a real Deriv WebSocket authorize request. A REST
+        # account-list response alone is not evidence of a live authorized session.
         deriv_identity = fetch_deriv_identity(access_token)
+        identity_loginid = str(
+            deriv_identity.get("loginid") or deriv_identity.get("account_id") or ""
+        ).strip()
+        if identity_loginid != selected_account_id:
+            websocket_verification_error = "identity_mismatch"
     except Exception as exc:
-        logger.warning("deriv_oauth_identity_sync_unavailable", extra={"error": exc.__class__.__name__})
+        websocket_verification_error = exc.__class__.__name__
+        logger.warning(
+            "deriv_oauth_websocket_verification_unavailable",
+            extra={"error": websocket_verification_error},
+        )
     broker, _ = Broker.objects.get_or_create(broker_type="deriv", defaults={"name":"Deriv","status":"active","supports_live":True,"websocket_endpoint":settings.DERIV_AUTH_WS_BASE_URL})
     if request.user.is_authenticated:
         user = request.user
