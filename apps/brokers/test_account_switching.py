@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
 from .models import Broker, BrokerAccount, BrokerConnection
 
 User = get_user_model()
@@ -77,6 +78,29 @@ class AccountSwitchingTests(TestCase):
         self.assertEqual(result.status_code, 409)
         self.assertIn('not real', result.data['detail'])
 
+
+    @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
+    def test_jwt_for_another_user_cannot_write_to_browser_session_account_selection(self):
+        account = self.make_account('DEMO-CROSS-USER', 'demo')
+        other_user = User.objects.create_user(username='different-browser-session', password='test-password')
+        client = __import__('django.test', fromlist=['Client']).Client(enforce_csrf_checks=True)
+        self.assertTrue(client.login(username=other_user.username, password='test-password'))
+        page = client.get('/trading/')
+        self.assertEqual(page.status_code, 200)
+        csrf_token = client.cookies['csrftoken'].value
+        token = str(AccessToken.for_user(self.user))
+
+        result = client.post(
+            f'/api/brokers/accounts/{account.pk}/select/',
+            {},
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {token}',
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        self.assertEqual(result.status_code, 403)
+        self.assertIn('different users', result.json()['detail'])
+        self.assertNotIn('active_broker_account_id', client.session)
 
     def test_session_authenticated_switch_requires_csrf_token(self):
         self.make_account('DEMO-CSRF-1', 'demo')
