@@ -79,5 +79,14 @@ class AccountSwitchingTests(TestCase):
         self.assertEqual(get_active_account(self.user, request=request), self.account_one)
         self.assertEqual(request.session[SESSION_KEY], self.account_one.pk)
 
+    def test_stale_explicit_selection_fails_closed_without_account_fallback(self):
+        request = self._request()
+        request.session[SESSION_KEY] = self.account_one.pk
+        self.account_one.status = 'disabled'
+        self.account_one.save(update_fields=['status'])
+
+        self.assertIsNone(get_active_account(self.user, request=request))
+        self.assertNotIn(SESSION_KEY, request.session)
+
     def test_account_has_no_persistent_preference_field(self):
         self.assertNotIn('is_preferred', [field.name for field in BrokerAccount._meta.fields])
