@@ -398,6 +398,34 @@
     refresh();
   });
 
+  const controlPanel = $("[data-operator-controls]");
+  if (controlPanel) {
+    controlPanel.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-backfill-action]");
+      if (!button) return;
+      const action = button.dataset.backfillAction;
+      const feedback = $("[data-control-feedback]");
+      controlPanel.querySelectorAll("button").forEach((item) => { item.disabled = true; });
+      if (feedback) feedback.textContent = action[0].toUpperCase() + action.slice(1) + " requested…";
+      try {
+        const csrf = document.querySelector("[name=csrfmiddlewaretoken]")?.value || "";
+        const response = await fetch("/operations/candle-backfill/control/", {
+          method: "POST", credentials: "same-origin",
+          headers: {"Content-Type":"application/json","X-CSRFToken":csrf,"Accept":"application/json"},
+          body: JSON.stringify({action, run_id: Number(controlPanel.dataset.runId)})
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Control request failed.");
+        if (feedback) feedback.textContent = payload.message || "Control request accepted.";
+        await refresh();
+      } catch (error) {
+        if (feedback) feedback.textContent = error.message || "Unable to control this backfill.";
+      } finally {
+        controlPanel.querySelectorAll("button").forEach((item) => { item.disabled = false; });
+      }
+    });
+  }
+
   const refreshButton = $("[data-refresh]");
   if (refreshButton) {
     refreshButton.addEventListener("click", () => {
