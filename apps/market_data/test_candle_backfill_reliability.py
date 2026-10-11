@@ -445,7 +445,7 @@ class CandleBackfillReliabilityTests(TestCase):
             "celery",
         )
         from deriv_platform.celery import app
-        entry = app.conf.beat_schedule["initial-candle-backfill-automatic-every-5-minutes"]
+        entry = app.conf.beat_schedule["initial-candle-backfill-automatic-every-30-minutes"]
         self.assertEqual(entry["task"], "apps.market_data.tasks.ensure_initial_candle_backfill")
         self.assertEqual(entry["options"]["queue"], "celery")
 
