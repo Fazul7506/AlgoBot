@@ -16,6 +16,14 @@
         <span class="rb-live" data-live {% if not run_payload or not run_payload.live %}hidden{% endif %}><i></i>Live</span>
       </div>
     </div>
+      {% if run and run.status == "running" %}
+      <div class="rb-operator-controls" data-operator-controls data-run-id="{{ run.id }}">
+        <button type="button" class="rb-start-btn" data-backfill-action="pause">Pause</button>
+        <button type="button" class="rb-start-btn" data-backfill-action="resume">Resume</button>
+        <button type="button" class="rb-start-btn" data-backfill-action="stop">Stop</button>
+        <span data-control-feedback role="status" aria-live="polite"></span>
+      </div>
+      {% endif %}
     {% if not run or run.status != "running" %}
     <form class="rb-start-form" method="post" action="{% url 'initial_candle_backfill' %}">
       {% csrf_token %}

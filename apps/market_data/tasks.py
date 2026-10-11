@@ -302,6 +302,59 @@ def _symbol_backfill_failed(payload):
     )
 
 
+def _replace_stale_candle_window_after_success(result):
+    """Keep only candle epochs represented by the latest fully successful run.
+
+    Cleanup is scoped to Candle rows for symbols/timeframes in this run. Tick
+    rows, logs, run history, snapshots, and unrelated tables are untouched.
+    """
+    from .constants import TIMEFRAMES
+    from .models import Candle, MarketSymbol
+    removed = 0
+    for symbol, symbol_result in (result.get("results") or {}).items():
+        timeframes = (symbol_result or {}).get("timeframes") or {}
+        market_symbol = MarketSymbol.objects.filter(symbol=symbol).first()
+        if not market_symbol:
+            continue
+        for timeframe, payload in timeframes.items():
+            if timeframe == "tick-derived" or not isinstance(payload, dict):
+                continue
+            minimum = payload.get("min_epoch")
+            if minimum is None or payload.get("status") == "failed":
+                continue
+            deleted, _ = Candle.objects.filter(symbol=market_symbol, timeframe=timeframe, epoch__lt=int(minimum)).delete()
+            removed += deleted
+        tick_payload = timeframes.get("tick-derived") or {}
+        minimum_tick = tick_payload.get("min_epoch") if isinstance(tick_payload, dict) else None
+        if minimum_tick is not None and tick_payload.get("status") != "failed":
+            minimum_tick = int(minimum_tick)
+            for timeframe, seconds in TIMEFRAMES.items():
+                if timeframe == "tick" or seconds >= 60:
+                    continue
+                cutoff = minimum_tick - (minimum_tick % seconds) if seconds else minimum_tick
+                deleted, _ = Candle.objects.filter(symbol=market_symbol, timeframe=timeframe, epoch__lt=cutoff).delete()
+                removed += deleted
+            deleted, _ = Candle.objects.filter(symbol=market_symbol, timeframe="tick", epoch__lt=minimum_tick).delete()
+            removed += deleted
+    logger.info("Pruned stale candle rows after successful backfill", extra={"deleted_candle_rows": removed})
+    return removed
+
+def _honor_backfill_operator_command(run_id):
+    """Apply pause/stop requests at safe symbol boundaries."""
+    import time
+    from .models import CandleBackfillRun, CandleBackfillEvent
+    while True:
+        run = CandleBackfillRun.objects.filter(pk=run_id).first()
+        if not run:
+            raise RuntimeError("Backfill run disappeared; refusing to continue.")
+        command = str((run.result or {}).get("operator_command", "")).lower()
+        if command == "stop":
+            raise RuntimeError("Backfill stopped by operator.")
+        if command != "pause":
+            return
+        time.sleep(2)
+
+
 def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
     from .historical import TIMEFRAME_GRANULARITY, fetch_and_store_all_timeframes
 
@@ -326,6 +379,8 @@ def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
             },
         )
     for index, value in enumerate(symbols, start=1):
+        if run_id:
+            _honor_backfill_operator_command(run_id)
         if scope:
             from .models import CandleBackfillRun
             task_id = (CandleBackfillRun.objects.filter(pk=run_id).values_list("task_id", flat=True).first() if run_id else CandleBackfillRun.objects.filter(scope=scope, status="running").order_by("-requested_at", "-id").values_list("task_id", flat=True).first()) or ""
@@ -454,6 +509,14 @@ def _mark_backfill_run(
             ("error", str(error) if error is not None else None),
         ):
             if value is not None:
+                if field == "result" and isinstance(value, dict):
+                    # Worker progress updates must never erase durable operator commands.
+                    current_result = dict(run.result or {})
+                    next_result = dict(value)
+                    for control_key in ("operator_command", "operator_command_at", "operator_command_by"):
+                        if control_key in current_result:
+                            next_result[control_key] = current_result[control_key]
+                    value = next_result
                 setattr(run, field, value)
                 updates.append(field)
         if updates:
@@ -556,6 +619,8 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
         failed = [value for value, payload in result["results"].items() if _symbol_backfill_failed(payload)]
         error = f"Historical backfill failed for: {', '.join(failed)}" if failed else ""
         result["trigger"] = (run.result or {}).get("trigger", "automatic")
+        if not failed:
+            result["retention_deleted_candle_rows"] = _replace_stale_candle_window_after_success(result)
         _mark_backfill_run(
             "research", run_id=run.pk, status="failed" if failed else "completed",
             result=result, error=error, completed_at=timezone.now(),
@@ -848,6 +913,7 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
                 "trigger": trigger,
                 "automatic_attempts": metadata.get("automatic_attempts", 0),
                 "last_automatic_dispatch_at": metadata.get("last_automatic_dispatch_at", ""),
+                **{key: metadata[key] for key in ("operator_command", "operator_command_at", "operator_command_by") if key in metadata},
             }
             run.save(update_fields=["status", "started_at", "accepted_at", "last_heartbeat_at", "error", "task_id", "worker_hostname", "result"])
 
@@ -865,6 +931,8 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
         result["trigger"] = trigger
         result["automatic_attempts"] = metadata.get("automatic_attempts", 0)
         result["last_automatic_dispatch_at"] = metadata.get("last_automatic_dispatch_at", "")
+        if not failed:
+            result["retention_deleted_candle_rows"] = _replace_stale_candle_window_after_success(result)
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
             if run.status == "completed" and run.completed_at:

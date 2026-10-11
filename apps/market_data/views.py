@@ -291,6 +291,47 @@ def _dispatch_backfill(run, *, task, count, symbol, queue_name, task_id, trigger
         return False
 
 
+@login_required
+def candle_backfill_control(request):
+    """Durable operator controls for a single active candle-backfill run."""
+    if not _staff_required(request.user):
+        raise PermissionDenied
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required."}, status=405)
+    import json
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (ValueError, UnicodeDecodeError):
+        payload = request.POST
+    action = str(payload.get("action", "")).strip().lower()
+    if action not in {"pause", "resume", "stop"}:
+        return JsonResponse({"error": "Action must be pause, resume, or stop."}, status=400)
+    try:
+        run_id = int(payload.get("run_id"))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "A valid run_id is required."}, status=400)
+    with transaction.atomic():
+        run = CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
+        if not run:
+            return JsonResponse({"error": "Backfill run not found."}, status=404)
+        if run.status != "running":
+            return JsonResponse({"error": "Only a running backfill can be controlled."}, status=409)
+        result = dict(run.result or {})
+        result["operator_command"] = action
+        result["operator_command_at"] = timezone.now().isoformat()
+        result["operator_command_by"] = request.user.pk
+        run.result = result
+        run.save(update_fields=["result"])
+        CandleBackfillEvent.objects.create(
+            run=run, level="warning" if action in {"pause", "stop"} else "notice",
+            event_type="warning",
+            message=f"Operator requested {action}; worker will apply it at the next safe checkpoint.",
+            task_id=run.task_id, payload={"action": action, "checkpointed": False},
+        )
+    return JsonResponse({"ok": True, "action": action, "run_id": run.pk,
+                         "message": f"{action.title()} requested; worker applies it at the next safe checkpoint."})
+
+
 def initial_candle_backfill(request):
     """Staff-only control plane for every broker-authoritative candle-backfill execution."""
     if not request.user.is_authenticated:
