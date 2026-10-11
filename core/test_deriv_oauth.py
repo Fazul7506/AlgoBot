@@ -75,7 +75,7 @@ class DerivOAuthTests(TestCase):
         user = User.objects.get(username="deriv_DOT90004580")
         account = BrokerAccount.objects.get(user=user, account_id="DOT90004580")
         self.assertEqual(account.status, "active")
-        self.assertEqual(account.credentials.get("connection_health"), "not_checked")
+        self.assertEqual(account.credentials.get("connection_health"), "verified")
         identity = account.credentials.get("deriv_identity")
         self.assertEqual(identity["email"], "deriv-user@example.com")
         self.assertEqual(identity["username"], "derivuser")
