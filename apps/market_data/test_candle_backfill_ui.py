@@ -82,9 +82,12 @@ class CandleBackfillUiTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-run-status="running"')
-        self.assertContains(response, 'data-backfill-action="pause">Pause')
-        self.assertContains(response, 'data-backfill-action="resume">Resume')
-        self.assertContains(response, 'data-backfill-action="stop">Stop')
+        self.assertContains(response, 'data-backfill-action="pause"')
+        self.assertContains(response, '>Pause</button>')
+        self.assertContains(response, 'data-backfill-action="resume"')
+        self.assertContains(response, '>Resume</button>')
+        self.assertContains(response, 'data-backfill-action="stop"')
+        self.assertContains(response, '>Stop</button>')
 
     def test_json_empty_state_is_explicit_and_contains_config(self):
         response = self.client.get(
