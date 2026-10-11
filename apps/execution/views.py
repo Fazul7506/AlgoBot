@@ -2,6 +2,7 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime, timezone as dt_timezone
 import logging
 import asyncio
+import contextvars
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import viewsets, permissions, decorators, response, status
@@ -23,6 +24,11 @@ from apps.brokers.position_sync import BrokerPositionSyncService, PositionSyncEr
 from apps.brokers.services import BrokerRegistry
 
 log = logging.getLogger(__name__)
+
+
+def _run_in_isolated_context(coro):
+    """Run async broker work without inheriting asgiref's thread-sensitive executor."""
+    return contextvars.Context().run(asyncio.run, coro)
 
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
@@ -146,7 +152,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 market_reader = getattr(adapter, 'get_market_data', None)
                 if not callable(capability_reader) or not callable(market_reader):
                     return response.Response({'status':'rejected','code':'BROKER_PREVIEW_UNSUPPORTED','detail':'The selected broker does not provide the live contract and quote checks required for a safe preview.'}, status=status.HTTP_409_CONFLICT)
-                capabilities = asyncio.run(asyncio.wait_for(capability_reader(symbol), timeout=7.0))
+                capabilities = _run_in_isolated_context(asyncio.wait_for(capability_reader(symbol), timeout=7.0))
                 supported = {
                     str(item.get('contract_type') or '').strip().upper()
                     for item in (capabilities or [])
@@ -165,7 +171,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 }.get(contract_type)
                 if expected_direction and direction != expected_direction:
                     return response.Response({'status':'rejected','code':'BROKER_CONTRACT_DIRECTION_MISMATCH','detail':f'{contract_type} requires {expected_direction}; select the matching direction and preview again.'}, status=status.HTTP_409_CONFLICT)
-                quote_data = asyncio.run(asyncio.wait_for(market_reader(symbol), timeout=7.0))
+                quote_data = _run_in_isolated_context(asyncio.wait_for(market_reader(symbol), timeout=7.0))
             except (BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError) as exc:
                 return response.Response({'status':'rejected','code':'BROKER_MARKET_DATA_UNAVAILABLE','detail':'The selected broker could not verify contract availability and a live quote. No order was submitted.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             except (asyncio.TimeoutError, TimeoutError):
@@ -200,7 +206,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             if not callable(proposal_reader):
                 return response.Response({'status':'rejected','code':'BROKER_PROPOSAL_UNSUPPORTED','detail':'The selected broker cannot provide an authoritative payout estimate for this contract. No order was submitted.'}, status=status.HTTP_409_CONFLICT)
             try:
-                proposal = asyncio.run(asyncio.wait_for(proposal_reader(
+                proposal = _run_in_isolated_context(asyncio.wait_for(proposal_reader(
                     symbol=symbol,
                     contract_type=contract_type,
                     amount=stake_value,
@@ -340,7 +346,7 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
                 'data':[],
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         try:
-            sync_result = asyncio.run(BrokerPositionSyncService().synchronize(account))
+            sync_result = _run_in_isolated_context(BrokerPositionSyncService().synchronize(account))
             qs = self._apply_filters(self.get_queryset().filter(status__in=['open','active','pending']), request)
             payload = self.get_serializer(qs, many=True).data
             return response.Response({
@@ -400,7 +406,7 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
                 'data':[],
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         try:
-            sync_result = asyncio.run(BrokerPositionSyncService().synchronize_closed(account))
+            sync_result = _run_in_isolated_context(BrokerPositionSyncService().synchronize_closed(account))
             qs = self._apply_filters(
                 self.get_queryset().filter(status__in=['closed','expired','settled','won','lost']),
                 request,
@@ -578,7 +584,7 @@ class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-                result = asyncio.run(
+                result = _run_in_isolated_context(
                     DerivTradeHistoryService(account).sync(
                         limit=100, date_from=from_epoch, date_to=to_epoch
                     )
