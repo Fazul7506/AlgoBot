@@ -52,14 +52,16 @@ def callback(request):
     if not valid:
         return _fail(request, "Deriv returned an invalid authorization response. Your dashboard was not opened; retry from Broker Management.", "deriv_oauth_invalid_token_response", error=reason)
     access_token = token_data["access_token"]
-    session_user_id = request.session.get("_auth_user_id")
-    if request.user.is_authenticated and session_user_id and str(session_user_id) != str(request.user.pk):
-        return _fail(
-            request,
-            "Your browser session is mapped to a different user. Sign out and reconnect the broker account to continue.",
-            "deriv_oauth_session_user_mismatch",
-            error={"session_user_id": session_user_id, "request_user_id": request.user.pk},
-        )
+    initiating_user_id = request.session.get("oauth_initiating_user_id")
+    if initiating_user_id is not None:
+        callback_user_id = str(request.user.pk) if request.user.is_authenticated else "__anonymous__"
+        if str(initiating_user_id) != callback_user_id:
+            return _fail(
+                request,
+                "Your browser session changed during broker authorization. Start a new connection from Broker Management.",
+                "deriv_oauth_session_user_mismatch",
+                error={"initiating_user_id": initiating_user_id, "callback_user_id": callback_user_id},
+            )
     try:
         selected, accounts = _verify_account(access_token)
         if not selected or not accounts:
