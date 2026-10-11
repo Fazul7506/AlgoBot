@@ -108,4 +108,4 @@ class BrowserOAuthFlowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/brokers/marketplace/")
         self.assertFalse(BrokerAccount.objects.filter(account_id="CR1234567").exists())
-        self.assertTrue(any("different user" in str(msg) for msg in response.wsgi_request._messages))
+        self.assertTrue(any("browser session changed" in str(msg) for msg in response.wsgi_request._messages))
