@@ -103,6 +103,7 @@ urlpatterns = [
     path("operations/audit/", login_required(lambda request: operations_center(request, "audit")), name="audit_center"),
     path("operations/security/", login_required(lambda request: operations_center(request, "security")), name="security_center"),
     path("operations/candle-backfill/", market_data_views.initial_candle_backfill, name="initial_candle_backfill"),
+    path("operations/candle-backfill/control/", market_data_views.candle_backfill_control, name="candle_backfill_control"),
     path("operations/<str:module>/", login_required(operations_module_page), name="operations_module"),
     path("brokers/connect/", broker_connect_page, name="broker_connect_page"),
     path("brokers/marketplace/", broker_marketplace_page, name="broker_marketplace_page"),
