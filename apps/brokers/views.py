@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import logging
 from django.conf import settings
 from django.shortcuts import get_object_or_404
@@ -20,7 +21,12 @@ BROKER_SYNC_TIMEOUT_SECONDS=15.0
 
 def _run_bounded(coro,timeout=8.0):
     async def runner(): return await asyncio.wait_for(coro,timeout=timeout)
-    return asyncio.run(runner())
+    # ASGI may call this synchronous view inside asgiref's thread-sensitive
+    # executor. Running asyncio.run in that inherited context makes nested
+    # sync_to_async ORM calls try to submit work to the executor from its own
+    # thread. Isolate the event loop from those context variables so ORM work
+    # can be dispatched safely to its own executor.
+    return contextvars.Context().run(asyncio.run, runner())
 
 def _prepare_user_broker_accounts(user, broker, primary_account):
     accounts=list(BrokerAccount.objects.filter(user=user, broker=broker, status__in=['active','disabled']).select_related('broker').order_by('id'))
