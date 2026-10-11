@@ -93,15 +93,19 @@ class BrowserOAuthFlowTests(TestCase):
         session["oauth_state"] = "state"
         session["pkce_verifier"] = "verifier"
         session["oauth_redirect_uri"] = "https://algobot.dpdns.org/callback/"
-        session["_auth_user_id"] = "999"
         session.save()
 
         user = User.objects.create_user(username="actual-user", password="pass12345")
         self.client.force_login(user)
+        # Simulate OAuth having started under a different identity, then the
+        # browser session changing before the provider callback.
+        session = self.client.session
+        session["oauth_initiating_user_id"] = "999"
+        session.save()
 
         response = self.client.get("/callback/?state=state&code=code")
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/brokers/connect/")
+        self.assertEqual(response["Location"], "/brokers/marketplace/")
         self.assertFalse(BrokerAccount.objects.filter(account_id="CR1234567").exists())
-        self.assertTrue(any("different user" in str(msg) for msg in response.wsgi_request._messages))
+        self.assertTrue(any("browser session changed" in str(msg) for msg in response.wsgi_request._messages))

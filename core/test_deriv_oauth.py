@@ -75,7 +75,7 @@ class DerivOAuthTests(TestCase):
         user = User.objects.get(username="deriv_DOT90004580")
         account = BrokerAccount.objects.get(user=user, account_id="DOT90004580")
         self.assertEqual(account.status, "active")
-        self.assertEqual(account.credentials.get("connection_health"), "not_checked")
+        self.assertEqual(account.credentials.get("connection_health"), "verified")
         identity = account.credentials.get("deriv_identity")
         self.assertEqual(identity["email"], "deriv-user@example.com")
         self.assertEqual(identity["username"], "derivuser")
@@ -84,7 +84,8 @@ class DerivOAuthTests(TestCase):
         self.assertEqual(user.first_name, "Deriv")
         self.assertEqual(user.last_name, "User")
         self.assertEqual(user.trading_profile.country, "Kenya")
-        self.assertNotIn(SESSION_KEY, self.client.session)
+        # A verified, eligible account becomes the explicit browser selection.
+        self.assertEqual(self.client.session.get(SESSION_KEY), account.pk)
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
         self.assertTrue(Subscription.objects.filter(user=user).exists())
         self.assertTrue(BotSettings.objects.filter(user=user).exists())
