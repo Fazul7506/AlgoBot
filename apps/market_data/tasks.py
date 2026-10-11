@@ -302,6 +302,22 @@ def _symbol_backfill_failed(payload):
     )
 
 
+def _honor_backfill_operator_command(run_id):
+    """Apply pause/stop requests at safe symbol boundaries."""
+    import time
+    from .models import CandleBackfillRun, CandleBackfillEvent
+    while True:
+        run = CandleBackfillRun.objects.filter(pk=run_id).first()
+        if not run:
+            raise RuntimeError("Backfill run disappeared; refusing to continue.")
+        command = str((run.result or {}).get("operator_command", "")).lower()
+        if command == "stop":
+            raise RuntimeError("Backfill stopped by operator.")
+        if command != "pause":
+            return
+        time.sleep(2)
+
+
 def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
     from .historical import TIMEFRAME_GRANULARITY, fetch_and_store_all_timeframes
 
@@ -326,6 +342,8 @@ def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
             },
         )
     for index, value in enumerate(symbols, start=1):
+        if run_id:
+            _honor_backfill_operator_command(run_id)
         if scope:
             from .models import CandleBackfillRun
             task_id = (CandleBackfillRun.objects.filter(pk=run_id).values_list("task_id", flat=True).first() if run_id else CandleBackfillRun.objects.filter(scope=scope, status="running").order_by("-requested_at", "-id").values_list("task_id", flat=True).first()) or ""
