@@ -92,6 +92,12 @@ class DerivOAuthService:
         request.session["oauth_state"] = state
         request.session["pkce_verifier"] = code_verifier
         request.session["oauth_redirect_uri"] = redirect_uri
+        # Bind this authorization attempt to the browser's initiating identity.
+        # The explicit anonymous sentinel distinguishes an anonymous start from
+        # a session that later becomes authenticated during the provider round-trip.
+        request.session["oauth_initiating_user_id"] = (
+            str(request.user.pk) if request.user.is_authenticated else "__anonymous__"
+        )
         request.session.modified = True
 
     @staticmethod
@@ -190,7 +196,7 @@ class DerivOAuthService:
 
     @staticmethod
     def clear_oauth_session(request) -> None:
-        for key in ("oauth_state", "pkce_verifier", "oauth_redirect_uri"):
+        for key in ("oauth_state", "pkce_verifier", "oauth_redirect_uri", "oauth_initiating_user_id"):
             request.session.pop(key, None)
         request.session.modified = True
 
