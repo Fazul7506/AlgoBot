@@ -203,3 +203,13 @@
 @media (max-width:760px){.rb-history-head{padding:16px;flex-direction:column}.rb-history-table{min-width:780px}.rb-history-table-wrap{max-height:360px}}
 
 [data-progress-bar]{width:0;}
+
+/* Operator controls stay visible for every selected execution. Terminal runs
+   expose the controls but disable actions until a running execution is selected. */
+.rb-operator-controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:16px;padding:12px 14px;border:1px solid #2b3037;border-radius:9px;background:#0d1014}
+.rb-operator-label{margin-right:auto;color:#84919e;font-size:10px;font-weight:800;letter-spacing:.12em}
+.rb-operator-controls [data-control-feedback]{flex:1 1 100%;color:#8995a1;font-size:11px;line-height:1.45}
+.rb-operator-controls .rb-stop-btn{height:42px;border:1px solid #773b40;border-radius:5px;background:#35191c;color:#ffc1c4;padding:0 16px;font-size:12px;font-weight:800;cursor:pointer}
+.rb-operator-controls button:disabled{opacity:.38;cursor:not-allowed}
+.rb-operator-controls button:focus-visible{outline:2px solid #8dc7ff;outline-offset:2px}
+@media(max-width:600px){.rb-operator-controls{align-items:stretch}.rb-operator-label,.rb-operator-controls [data-control-feedback]{flex-basis:100%}.rb-operator-controls button{flex:1;justify-content:center}}

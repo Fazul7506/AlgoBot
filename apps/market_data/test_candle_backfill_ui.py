@@ -51,6 +51,44 @@ class CandleBackfillUiTests(TestCase):
         self.assertContains(response, "No backfill execution exists yet")
         self.assertNotContains(response, "Loading live state")
 
+    def test_operator_controls_are_visible_but_disabled_for_terminal_run(self):
+        run = CandleBackfillRun.objects.create(
+            scope="research",
+            status="failed",
+            count=250,
+            error="Redis max clients reached",
+        )
+        response = self.client.get(
+            reverse("initial_candle_backfill"),
+            {"run_id": run.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-operator-controls')
+        self.assertContains(response, 'data-run-status="failed"')
+        self.assertContains(response, 'data-backfill-action="pause" disabled')
+        self.assertContains(response, 'data-backfill-action="resume" disabled')
+        self.assertContains(response, 'data-backfill-action="stop" disabled')
+        self.assertContains(response, "Select a running execution to enable controls.")
+
+    def test_operator_controls_are_enabled_for_running_run(self):
+        run = CandleBackfillRun.objects.create(
+            scope="research",
+            status="running",
+            count=250,
+        )
+        response = self.client.get(
+            reverse("initial_candle_backfill"),
+            {"run_id": run.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-run-status="running"')
+        self.assertContains(response, 'data-backfill-action="pause"')
+        self.assertContains(response, '>Pause</button>')
+        self.assertContains(response, 'data-backfill-action="resume"')
+        self.assertContains(response, '>Resume</button>')
+        self.assertContains(response, 'data-backfill-action="stop"')
+        self.assertContains(response, '>Stop</button>')
+
     def test_json_empty_state_is_explicit_and_contains_config(self):
         response = self.client.get(
             reverse("initial_candle_backfill"),

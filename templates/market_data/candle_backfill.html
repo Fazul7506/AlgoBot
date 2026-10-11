@@ -16,14 +16,13 @@
         <span class="rb-live" data-live {% if not run_payload or not run_payload.live %}hidden{% endif %}><i></i>Live</span>
       </div>
     </div>
-      {% if run and run.status == "running" %}
-      <div class="rb-operator-controls" data-operator-controls data-run-id="{{ run.id }}">
-        <button type="button" class="rb-start-btn" data-backfill-action="pause">Pause</button>
-        <button type="button" class="rb-start-btn" data-backfill-action="resume">Resume</button>
-        <button type="button" class="rb-start-btn" data-backfill-action="stop">Stop</button>
-        <span data-control-feedback role="status" aria-live="polite"></span>
-      </div>
-      {% endif %}
+      <div class="rb-operator-controls" data-operator-controls data-run-id="{{ run.id|default:'' }}" data-run-status="{{ run.status|default:'none' }}" aria-label="Backfill operator controls">
+      <span class="rb-operator-label">RUN CONTROLS</span>
+      <button type="button" class="rb-start-btn" data-backfill-action="pause" {% if not run or run.status != "running" %}disabled{% endif %}>Pause</button>
+      <button type="button" class="rb-start-btn" data-backfill-action="resume" {% if not run or run.status != "running" %}disabled{% endif %}>Resume</button>
+      <button type="button" class="rb-stop-btn" data-backfill-action="stop" {% if not run or run.status != "running" %}disabled{% endif %}>Stop</button>
+      <span data-control-feedback role="status" aria-live="polite">{% if run and run.status == "running" %}Controls target execution #{{ run.id }}.{% else %}Select a running execution to enable controls.{% endif %}</span>
+    </div>
     {% if not run or run.status != "running" %}
     <form class="rb-start-form" method="post" action="{% url 'initial_candle_backfill' %}">
       {% csrf_token %}
@@ -248,5 +247,5 @@
   </section>
 </section>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20261008-execution-history2">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20261008-execution-history1" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/candle_backfill.css' %}?v=20261012-operator-controls1">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/candle_backfill.js' %}?v=20261012-operator-controls1" defer></script>{% endblock %}
