@@ -84,7 +84,8 @@ class DerivOAuthTests(TestCase):
         self.assertEqual(user.first_name, "Deriv")
         self.assertEqual(user.last_name, "User")
         self.assertEqual(user.trading_profile.country, "Kenya")
-        self.assertNotIn(SESSION_KEY, self.client.session)
+        # A verified, eligible account becomes the explicit browser selection.
+        self.assertEqual(self.client.session.get(SESSION_KEY), account.pk)
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
         self.assertTrue(Subscription.objects.filter(user=user).exists())
         self.assertTrue(BotSettings.objects.filter(user=user).exists())
