@@ -472,6 +472,14 @@ def _mark_backfill_run(
             ("error", str(error) if error is not None else None),
         ):
             if value is not None:
+                if field == "result" and isinstance(value, dict):
+                    # Worker progress updates must never erase durable operator commands.
+                    current_result = dict(run.result or {})
+                    next_result = dict(value)
+                    for control_key in ("operator_command", "operator_command_at", "operator_command_by"):
+                        if control_key in current_result:
+                            next_result[control_key] = current_result[control_key]
+                    value = next_result
                 setattr(run, field, value)
                 updates.append(field)
         if updates:
