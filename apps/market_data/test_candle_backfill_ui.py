@@ -364,3 +364,33 @@ class CandleBackfillUiTests(TestCase):
         self.assertEqual(publish.call_args.kwargs["args"], (run.pk,))
         self.assertEqual(publish.call_args.kwargs["kwargs"], {"count": 250, "symbol": "R_100"})
         self.assertEqual(publish.call_args.kwargs["queue"], "market_data")
+
+
+    def test_pause_resume_and_stop_commands_are_durable_and_staff_only(self):
+        run = CandleBackfillRun.objects.create(
+            scope="initial", status="running", count=5000, result={}
+        )
+        endpoint = reverse("candle_backfill_control")
+        for action in ("pause", "resume", "stop"):
+            response = self.client.post(
+                endpoint,
+                data=__import__("json").dumps({"action": action, "run_id": run.pk}),
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 200, response.content)
+            run.refresh_from_db()
+            self.assertEqual(run.result["operator_command"], action)
+            self.assertTrue(CandleBackfillEvent.objects.filter(
+                run=run, message__icontains=f"requested {action}"
+            ).exists())
+
+    def test_backfill_control_rejects_terminal_runs(self):
+        run = CandleBackfillRun.objects.create(
+            scope="initial", status="completed", count=5000, result={}
+        )
+        response = self.client.post(
+            reverse("candle_backfill_control"),
+            data=__import__("json").dumps({"action": "pause", "run_id": run.pk}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 409)
