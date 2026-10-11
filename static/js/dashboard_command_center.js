@@ -20,6 +20,17 @@
   const ACCOUNT_TIMEOUT_MS = 15000;
   const SNAPSHOT_KEY = 'algobot:dashboard:last-verified-account:v2';
 
+  function withDeadline(promise, timeout, label) {
+    return new Promise((resolve, reject) => {
+      const timerId = setTimeout(() => {
+        const error = new Error(`${label} request exceeded ${timeout}ms`);
+        error.code = 'API_TIMEOUT';
+        reject(error);
+      }, timeout);
+      Promise.resolve(promise).then(value => { clearTimeout(timerId); resolve(value); }, error => { clearTimeout(timerId); reject(error); });
+    });
+  }
+
   function request(url, options = {}, timeout = 8000) {
     const shared = window.AlgoBotFrontendData?.request;
     if (typeof shared !== 'function') {
@@ -149,12 +160,14 @@
     setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
     document.documentElement.dataset.dashboardLoading = 'true';
     try {
+      // Bound the whole refresh as well as individual requests. A transport or
+      // server that never settles must not leave the command center in "Checking…".
       const responses = await Promise.allSettled([
-        request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS),
-        request('/api/positions/open/', {}, 8000),
-        request('/api/dashboard/trade_history/?days=30&limit=8', {}, 8000),
-        request('/api/market/snapshots/all_snapshots/', {}, 8000),
-        request('/api/dashboard/signals/?limit=8', {}, 8000)
+        withDeadline(request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS), ACCOUNT_TIMEOUT_MS, 'Account overview'),
+        withDeadline(request('/api/positions/open/', {}, 8000), 8500, 'Open positions'),
+        withDeadline(request('/api/dashboard/trade_history/?days=30&limit=8', {}, 8000), 8500, 'Trade history'),
+        withDeadline(request('/api/market/snapshots/all_snapshots/', {}, 8000), 8500, 'Market snapshots'),
+        withDeadline(request('/api/dashboard/signals/?limit=8', {}, 8000), 8500, 'Signals')
       ]);
       const currentId = window.AlgoBotBrokerState?.get?.()?.account?.id;
       if (seq !== loadSeq || (requestedAccountId != null && currentId != null && String(currentId) !== requestedAccountId)) return;
