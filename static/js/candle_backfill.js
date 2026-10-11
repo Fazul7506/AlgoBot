@@ -50,7 +50,26 @@
     });
   };
 
+  const syncOperatorControls = (run) => {
+    const panel = $("[data-operator-controls]");
+    if (!panel) return;
+    const status = run?.status || "none";
+    panel.dataset.runId = run?.id ? String(run.id) : "";
+    panel.dataset.runStatus = status;
+    const canControl = status === "running";
+    panel.querySelectorAll("[data-backfill-action]").forEach((button) => {
+      button.disabled = !canControl;
+    });
+    const feedback = panel.querySelector("[data-control-feedback]");
+    if (feedback && !feedback.dataset.pending) {
+      feedback.textContent = canControl
+        ? "Controls target execution #" + run.id + "."
+        : "Select a running execution to enable controls.";
+    }
+  };
+
   const renderRun = (run) => {
+    syncOperatorControls(run);
     if (!run) {
       text("[data-status]", "Not started");
       text("[data-status-large]", "Not started");
@@ -406,7 +425,10 @@
       const action = button.dataset.backfillAction;
       const feedback = $("[data-control-feedback]");
       controlPanel.querySelectorAll("button").forEach((item) => { item.disabled = true; });
-      if (feedback) feedback.textContent = action[0].toUpperCase() + action.slice(1) + " requested…";
+      if (feedback) {
+        feedback.dataset.pending = "true";
+        feedback.textContent = action[0].toUpperCase() + action.slice(1) + " requested…";
+      }
       try {
         const csrf = document.querySelector("[name=csrfmiddlewaretoken]")?.value || "";
         const response = await fetch("/operations/candle-backfill/control/", {
@@ -417,11 +439,13 @@
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "Control request failed.");
         if (feedback) feedback.textContent = payload.message || "Control request accepted.";
-        await refresh();
+        await refresh({force: true});
       } catch (error) {
         if (feedback) feedback.textContent = error.message || "Unable to control this backfill.";
       } finally {
-        controlPanel.querySelectorAll("button").forEach((item) => { item.disabled = false; });
+        if (feedback) delete feedback.dataset.pending;
+        const running = controlPanel.dataset.runStatus === "running";
+        controlPanel.querySelectorAll("[data-backfill-action]").forEach((item) => { item.disabled = !running; });
       }
     });
   }
