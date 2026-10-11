@@ -27,11 +27,13 @@ def _close_task_connections(*args, **kwargs):
 
 
 app.conf.beat_schedule = {
-    "initial-candle-backfill-automatic-every-5-minutes": {
+    # Initial broker-history backfill is scheduled every 30 minutes, not every
+    # five minutes. The task's own persisted run/lock checks prevent overlap.
+    "initial-candle-backfill-automatic-every-30-minutes": {
         "task": "apps.market_data.tasks.ensure_initial_candle_backfill",
-        "schedule": 300.0,
+        "schedule": 1800.0,
         "kwargs": {"count": 5000},
-        "options": {"queue": "celery", "expires": 240},
+        "options": {"queue": "celery", "expires": 1700},
     },
     "execution-queue-every-2-seconds": {
         "task": "apps.execution.process_execution_queue",
