@@ -619,6 +619,8 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
         failed = [value for value, payload in result["results"].items() if _symbol_backfill_failed(payload)]
         error = f"Historical backfill failed for: {', '.join(failed)}" if failed else ""
         result["trigger"] = (run.result or {}).get("trigger", "automatic")
+        if not failed:
+            result["retention_deleted_candle_rows"] = _replace_stale_candle_window_after_success(result)
         _mark_backfill_run(
             "research", run_id=run.pk, status="failed" if failed else "completed",
             result=result, error=error, completed_at=timezone.now(),
