@@ -185,6 +185,8 @@ def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
         "timeframe": timeframe,
         "received": len(items),
         "valid": len(rows),
+        "min_epoch": min((row.epoch for row in rows), default=None),
+        "max_epoch": max((row.epoch for row in rows), default=None),
         "stored_total": Candle.objects.filter(symbol=market_symbol, timeframe=timeframe).count(),
         "source": "deriv_candles",
     }
@@ -313,6 +315,8 @@ def fetch_and_store_ticks(symbol: str, count: int = 5000) -> dict:
         "symbol": symbol,
         "received": len(items),
         "valid": len(rows),
+        "min_epoch": min((int(item["epoch"]) for item in items if "epoch" in item), default=None),
+        "max_epoch": max((int(item["epoch"]) for item in items if "epoch" in item), default=None),
         "stored_ticks": Tick.objects.filter(symbol=market_symbol).count(),
         "built_candles": built,
     }
