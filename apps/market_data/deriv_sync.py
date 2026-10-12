@@ -11,6 +11,7 @@ import websockets
 from django.conf import settings
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
+from redis.exceptions import RedisError
 
 from .models import MarketSymbol
 
@@ -132,9 +133,28 @@ def _sync_one_symbol(item: dict) -> bool:
 
 
 def sync_active_symbols() -> int:
-    """Refresh the cached broker catalogue without allowing concurrent bursts."""
-    if not cache.add(MARKET_SYNC_LOCK, "1", timeout=15):
+    """Refresh the broker catalogue, tolerating Redis exhaustion during startup.
+
+    The Redis lock only suppresses duplicate catalogue refreshes; it is not a
+    correctness or ownership boundary. If Redis rejects writes (including
+    maxmemory/OOM), perform the idempotent database upserts without the
+    distributed lock so the live market stream can recover. Other application
+    cache operations remain subject to their own error handling.
+    """
+    lock_acquired = False
+    lock_available = True
+    try:
+        lock_acquired = cache.add(MARKET_SYNC_LOCK, "1", timeout=15)
+    except RedisError:
+        lock_available = False
+        logger.exception(
+            "Redis refused the market sync lock; continuing without the "
+            "optional distributed lock so market streaming can recover"
+        )
+
+    if lock_available and not lock_acquired:
         raise RuntimeError("Deriv market catalogue refresh is already in progress")
+
     try:
         response = asyncio.run(_request({"active_symbols": "brief"}))
         symbols = response.get("active_symbols", [])
@@ -154,10 +174,11 @@ def sync_active_symbols() -> int:
             ).exclude(symbol__in=active_values).update(is_active=False, is_tradable=False)
         return synced
     finally:
-        try:
-            cache.delete(MARKET_SYNC_LOCK)
-        except Exception:
-            logger.warning("Deriv market sync lock release failed", exc_info=True)
+        if lock_acquired:
+            try:
+                cache.delete(MARKET_SYNC_LOCK)
+            except RedisError:
+                logger.warning("Deriv market sync lock release failed", exc_info=True)
 
 
 def fetch_contracts_for(symbol: str) -> dict:
