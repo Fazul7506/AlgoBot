@@ -93,6 +93,45 @@ class DerivOAuthTests(TestCase):
         get.assert_called_once()
         fetch_identity.assert_called_once_with("token")
 
+    @patch("core.views_deriv_oauth_safe.fetch_deriv_identity")
+    @patch("core.views_deriv_oauth_safe.requests.get")
+    @patch("core.views_deriv_oauth_safe.requests.post")
+    def test_separate_oauth_sessions_for_same_provider_identity_reuse_algobot_user(self, post, get, fetch_identity):
+        # First OAuth session establishes the provider identity and its owner.
+        self._oauth_session()
+        self._mock_token_exchange(post)
+        self._mock_account_response(get, [{
+            "account_id": "DOT90004580", "balance": 10000, "currency": "USD",
+            "account_type": "demo", "status": "active",
+        }])
+        fetch_identity.return_value = {
+            "user_id": 12345, "loginid": "DOT90004580",
+            "email": "deriv-user@example.com", "fullname": "Deriv User",
+        }
+        first = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+        self.assertEqual(first.status_code, 302)
+        first_account = BrokerAccount.objects.get(account_id="DOT90004580")
+        original_user_id = first_account.user_id
+
+        # A separate anonymous browser session authorizing another login ID
+        # for the same provider user must not create a duplicate AlgoBot user.
+        self.client.logout()
+        self._oauth_session()
+        self._mock_token_exchange(post)
+        self._mock_account_response(get, [{
+            "account_id": "CR123456", "balance": 2500, "currency": "USD",
+            "account_type": "real", "status": "active",
+        }])
+        fetch_identity.return_value = {
+            "user_id": 12345, "loginid": "CR123456",
+            "email": "deriv-user@example.com", "fullname": "Deriv User",
+        }
+        second = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+        self.assertEqual(second.status_code, 302)
+        second_account = BrokerAccount.objects.get(account_id="CR123456")
+        self.assertEqual(second_account.user_id, original_user_id)
+        self.assertEqual(User.objects.filter(email="deriv-user@example.com").count(), 1)
+
     @patch("core.views_deriv_oauth_safe.requests.get")
     @patch("core.views_deriv_oauth_safe.requests.post")
     def test_callback_does_not_create_user_without_verified_account(self, post, get):
