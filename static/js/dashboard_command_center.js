@@ -95,7 +95,7 @@
     const broker = typeof account.broker === 'string' ? account.broker : (account.broker?.name || account.broker_name || 'Broker');
     const id = account.account_id || account.broker_account_id || account.loginid || 'Account';
     const sync = account.last_synced_at ? new Date(account.last_synced_at).toLocaleTimeString() : 'not verified';
-    const connectionLabel = staleDisplay ? 'CONNECTION LAST VERIFIED' : connected ? 'CONNECTED' : 'CONNECTION UNCONFIRMED';
+    const connectionLabel = staleDisplay ? 'CONNECTION LAST VERIFIED' : connected && freshness === 'fresh' ? 'CONNECTED · DATA FRESH' : connected ? 'CONNECTION PRESENT · DATA STALE' : 'CONNECTION UNCONFIRMED';
     setHtml('[data-dashboard-brokers]', `<span><b></b><strong>${esc(broker)}</strong> · ${esc(id)} · ${esc(connectionLabel)}</span><small>${esc(snapshotLabel)} · ${esc(sync)}</small>`);
     const accountState = staleDisplay ? 'warn' : connected && freshness === 'fresh' ? 'ok' : (freshness === 'stale' || freshness === 'unknown' || !connected ? 'warn' : 'error');
     const accountStatus = staleDisplay ? 'Broker refresh timed out · last verified snapshot shown' : !connected ? 'Broker connection unconfirmed' : freshness === 'fresh' ? 'Broker account synchronized' : freshness === 'stale' ? 'Broker snapshot is stale' : 'Broker snapshot freshness unknown';
