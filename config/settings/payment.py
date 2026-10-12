@@ -7,13 +7,13 @@ on a guessed Render host or local development URL.
 import os
 
 PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "intasend").strip().lower()
-PAYMENT_HTTP_TIMEOUT = int(os.getenv("PAYMENT_HTTP_TIMEOUT", "20"))
+PAYMENT_HTTP_TIMEOUT = int(os.getenv("PAYMENT_HTTP_TIMEOUT", "").strip() or "20")
 ALGOBOT_BILLING_CURRENCY = os.getenv("ALGOBOT_BILLING_CURRENCY", "KES").strip().upper()
 # KES cents. Deployment values override these defaults without a code change.
 ALGOBOT_BASIC_PRICE_CENTS = os.getenv("ALGOBOT_BASIC_PRICE_CENTS", "99900").strip() or None
 ALGOBOT_PRO_PRICE_CENTS = os.getenv("ALGOBOT_PRO_PRICE_CENTS", "499900").strip() or None
 ALGOBOT_ENTERPRISE_PRICE_CENTS = os.getenv("ALGOBOT_ENTERPRISE_PRICE_CENTS", "2499900").strip() or None
-ALGOBOT_SUBSCRIPTION_PERIOD_DAYS = int(os.getenv("ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", "30"))
+ALGOBOT_SUBSCRIPTION_PERIOD_DAYS = int(os.getenv("ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", "").strip() or "30")
 
 # Explicit application return URLs. Provider checkout URLs are dynamic and
 # must be created per invoice/amount; they should never be stored as env vars.
