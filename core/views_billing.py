@@ -325,12 +325,28 @@ def _checkout(request, plan_name, provider=None):
             provider=selected,
         )
     except Exception as exc:
-        result = {"url": "", "error": "Payment provider is temporarily unavailable.", "error_classification": "unknown provider failure"}
+        # Keep the browser response generic, but emit enough sanitized server-side
+        # evidence to distinguish transport/configuration failures from provider
+        # rejections. Never log credentials, provider payloads, or checkout URLs.
+        logger.exception(
+            "billing_checkout_provider_exception",
+            extra={
+                "provider": selected,
+                "plan": plan["plan"],
+                "user_id": request.user.pk,
+                "error_type": type(exc).__name__,
+            },
+        )
+        result = {
+            "url": "",
+            "error": "Payment provider is temporarily unavailable.",
+            "error_classification": "provider_transport_or_configuration_failure",
+        }
         invoice.metadata = {
             **(invoice.metadata or {}),
             "state": "checkout_failed",
             "error": type(exc).__name__,
-            "error_classification": "unknown provider failure",
+            "error_classification": "provider_transport_or_configuration_failure",
         }
         invoice.save(update_fields=["metadata"])
 

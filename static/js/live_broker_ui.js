@@ -193,6 +193,8 @@
     if (document.querySelector('.algobot-logout-backdrop')) return;
     const backdrop = document.createElement('div');
     backdrop.className = 'algobot-logout-backdrop';
+    // Keep the confirmation in a top-level viewport layer, outside sidebar stacking contexts.
+    Object.assign(backdrop.style, {position:'fixed',inset:'0',zIndex:'2147483647',isolation:'isolate',display:'grid',placeItems:'center'});
     backdrop.innerHTML = '<div class="algobot-logout-dialog" role="dialog" aria-modal="true" aria-labelledby="algobot-logout-title"><h2 id="algobot-logout-title">Log out of AlgoBot?</h2><p>Your current workspace session will be ended. You can sign back in at any time.</p><div class="algobot-logout-actions"><button type="button" class="cancel">Cancel</button><button type="button" class="confirm">Log out</button></div></div>';
     document.body.appendChild(backdrop);
     const close = () => backdrop.remove(), cancel = backdrop.querySelector('.cancel'), confirm = backdrop.querySelector('.confirm');

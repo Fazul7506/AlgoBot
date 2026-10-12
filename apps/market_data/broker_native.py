@@ -171,7 +171,12 @@ def capabilities(request):
             return Response({"detail": "Deriv reports no contracts for this instrument.", "symbol": symbol}, status=status.HTTP_409_CONFLICT)
         return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,**payload})
     except Exception as exc:
-        stale = cache.get(f"{CAPABILITIES_STALE_PREFIX}{symbol}")
+        try:
+            stale = cache.get(f"{CAPABILITIES_STALE_PREFIX}{symbol}")
+        except Exception as cache_exc:
+            # Redis may reject even reads under maxmemory; never let that mask
+            # the original provider failure or turn this endpoint into HTTP 500.
+            stale = None
         if isinstance(stale, dict) and stale.get("contracts"):
             return Response({
                 "status": "stale",
