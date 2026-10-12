@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -27,7 +28,7 @@ class MarketCatalogueCacheResilienceTests(TestCase):
         response = market_catalogue(self.request)
 
         self.assertEqual(response.status_code, 200)
-        payload = response.json()
+        payload = json.loads(response.content)
         self.assertEqual(payload["source"], "backend_market_catalogue")
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["symbols"][0]["symbol"], "TEST")
