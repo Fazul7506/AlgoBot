@@ -69,7 +69,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
     # authentication remains the fallback for legacy/browser-session clients,
     # while the authenticated Django session is still used by select_account()
     # to persist the active account context.
-    authentication_classes=[JWTAuthentication,BrowserSessionAuthentication]
+    authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):
         connected = BrokerConnection.objects.filter(status='connected').only('id','broker_account_id','status')
         return (BrokerAccount.objects.filter(user=self.request.user)
