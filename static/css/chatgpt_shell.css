@@ -122,3 +122,24 @@
 .rb-operator-controls [data-backfill-action="stop"]{border-color:rgba(248,113,113,.6);color:#fca5a5}
 .rb-operator-controls [data-control-feedback]{flex:1 1 100%;font-size:.875rem;opacity:.9}
 @media(max-width:600px){.rb-operator-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.rb-operator-controls button{padding:8px 4px;font-size:.875rem}.rb-operator-controls [data-control-feedback]{grid-column:1/-1}}
+
+
+/* Global overlays must sit above the mobile navigation drawer and its backdrop. */
+#logout-modal,
+.logout-modal,
+[data-logout-modal],
+[role="dialog"][aria-modal="true"] {
+  position: fixed !important;
+  z-index: 2147483000 !important;
+  isolation: isolate;
+}
+#logout-modal[hidden],
+.logout-modal[hidden],
+[data-logout-modal][hidden] { display: none !important; }
+.logout-modal-backdrop,
+[data-logout-modal-backdrop] { z-index: 0; }
+.logout-modal-card,
+[data-logout-modal] [role="document"] { position: relative; z-index: 1; }
+.sidebar-backdrop { z-index: 900 !important; }
+.app-sidebar { z-index: 1000 !important; }
+.mobile-menu-button { z-index: 1001 !important; }

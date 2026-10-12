@@ -90,15 +90,36 @@ def callback(request):
             extra={"error": websocket_verification_error},
         )
     broker, _ = Broker.objects.get_or_create(broker_type="deriv", defaults={"name":"Deriv","status":"active","supports_live":True,"websocket_endpoint":settings.DERIV_AUTH_WS_BASE_URL})
+    # Deriv's provider-issued user_id is the stable identity across that user's
+    # authorized DEMO/REAL login IDs. Reuse the owning AlgoBot user when that
+    # identity was previously verified, rather than creating one user per account.
+    identity_user_id = deriv_identity.get("user_id")
+    identity_account = None
+    if identity_user_id not in (None, ""):
+        identity_account = (
+            BrokerAccount.objects.filter(
+                broker=broker,
+                credentials__deriv_identity__user_id=identity_user_id,
+            )
+            .select_related("user")
+            .order_by("id")
+            .first()
+        )
     if request.user.is_authenticated:
         user = request.user
         existing_selected = BrokerAccount.objects.filter(broker=broker, account_id=selected_account_id).select_related("user").first()
         if existing_selected and existing_selected.user_id != user.id:
             return _fail(request, "That Deriv account is already connected to another AlgoBot user. Your dashboard was not opened.", "deriv_oauth_account_ownership_conflict")
+        if identity_account and identity_account.user_id != user.id:
+            return _fail(request, "This Deriv identity is already linked to another AlgoBot user. Your dashboard was not opened.", "deriv_oauth_identity_ownership_conflict")
     else:
         existing_selected = BrokerAccount.objects.filter(broker=broker, account_id=selected_account_id).select_related("user").first()
+        if existing_selected and identity_account and existing_selected.user_id != identity_account.user_id:
+            return _fail(request, "Deriv account ownership does not match the previously verified provider identity. Your dashboard was not opened.", "deriv_oauth_identity_account_conflict")
         if existing_selected:
             user = existing_selected.user
+        elif identity_account:
+            user = identity_account.user
         else:
             user = User.objects.create(username=f"deriv_{selected_account_id}", first_name="Deriv")
             user.set_unusable_password()

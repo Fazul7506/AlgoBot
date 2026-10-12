@@ -13,7 +13,7 @@ from time import monotonic
 
 from django.core.cache.backends.locmem import LocMemCache
 from django_redis.exceptions import ConnectionInterrupted
-from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import ConnectionError as RedisConnectionError, RedisError
 
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
@@ -51,7 +51,7 @@ class _RedisResilientThrottleMixin:
             allowed = super().allow_request(request, view)
             _redis_unavailable_until = 0.0
             return allowed
-        except (ConnectionInterrupted, RedisConnectionError, TimeoutError, OSError):
+        except (ConnectionInterrupted, RedisError, TimeoutError, OSError):
             now = monotonic()
             was_open = now >= _redis_unavailable_until
             _redis_unavailable_until = now + _REDIS_FAILURE_COOLDOWN_SECONDS
