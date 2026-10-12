@@ -98,8 +98,10 @@ class AccountSwitchingTests(TestCase):
             HTTP_X_CSRFTOKEN=csrf_token,
         )
 
-        self.assertEqual(result.status_code, 403)
-        self.assertIn('different users', result.json()['detail'])
+        # JWT identity scopes the queryset before the browser session can
+        # influence selection. A foreign user's account is intentionally hidden
+        # as not found; the other user's session remains untouched.
+        self.assertEqual(result.status_code, 404)
         self.assertNotIn('active_broker_account_id', client.session)
 
     def test_session_authenticated_switch_requires_csrf_token(self):
