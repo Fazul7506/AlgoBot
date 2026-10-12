@@ -110,7 +110,28 @@ ROOT_URLCONF = "deriv_platform.urls"
 WSGI_APPLICATION = "deriv_platform.wsgi.application"
 ASGI_APPLICATION = "deriv_platform.asgi.application"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-CHANNEL_LAYERS = {"default": {"BACKEND": "channels_redis.core.RedisChannelLayer" if USE_REDIS else "channels.layers.InMemoryChannelLayer", **({"CONFIG": {"hosts": [REDIS_URL]}} if USE_REDIS else {})}}
+# channels_redis otherwise uses redis-py's default async pool ceiling, which is
+# far too large for a shared hosted Redis account. Bound each ASGI process's
+# channel-layer pool independently from the synchronous Django/Celery pools.
+try:
+    REDIS_CHANNEL_MAX_CONNECTIONS = max(1, int(os.getenv("REDIS_CHANNEL_MAX_CONNECTIONS", "2")))
+except (TypeError, ValueError):
+    REDIS_CHANNEL_MAX_CONNECTIONS = 2
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer" if USE_REDIS else "channels.layers.InMemoryChannelLayer",
+        **(
+            {
+                "CONFIG": {
+                    "hosts": [{"address": REDIS_URL, "max_connections": REDIS_CHANNEL_MAX_CONNECTIONS}],
+                }
+            }
+            if USE_REDIS
+            else {}
+        ),
+    }
+}
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
