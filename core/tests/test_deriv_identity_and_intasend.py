@@ -33,7 +33,8 @@ class DerivIdentityProjectionTests(TestCase):
 
         user.refresh_from_db()
         profile.refresh_from_db()
-        self.assertEqual(user.email, "new@example.com")
+        self.assertEqual(user.email, "old@example.com")
+        self.assertEqual(user.username, "deriv_123")
         self.assertEqual(user.first_name, "Jane")
         self.assertEqual(user.last_name, "Doe")
         self.assertEqual(profile.country, "Kenya")
@@ -54,6 +55,29 @@ class DerivIdentityProjectionTests(TestCase):
         self.assertEqual(safe["email"], "user@example.com")
         self.assertNotIn("token", safe)
         self.assertNotIn("nested", safe)
+
+
+    def test_broker_email_only_fills_blank_local_email_and_never_verifies_it(self):
+        User = get_user_model()
+        user = User.objects.create_user(username="broker-identity", password="strong-password-123", email="")
+        profile = UserProfile.objects.get(user=user)
+
+        sync_deriv_user_identity(user, {"email": "  NEW@Example.com  ", "username": "provider-name"}, profile=profile)
+        user.refresh_from_db()
+        profile.refresh_from_db()
+
+        self.assertEqual(user.email, "new@example.com")
+        self.assertEqual(user.username, "broker-identity")
+        self.assertFalse(profile.email_verified)
+
+    def test_broker_email_does_not_overwrite_another_users_address(self):
+        User = get_user_model()
+        User.objects.create_user(username="email-owner", password="strong-password-123", email="shared@example.com")
+        user = User.objects.create_user(username="broker-blank", password="strong-password-123", email="")
+        sync_deriv_user_identity(user, {"email": "SHARED@example.com"})
+
+        user.refresh_from_db()
+        self.assertEqual(user.email, "")
 
 
 class IntaSendRecurringCustomerValidationTests(TestCase):
