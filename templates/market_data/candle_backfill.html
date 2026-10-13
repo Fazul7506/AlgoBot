@@ -55,7 +55,7 @@
     {% elif run.status == "running" %}
     <div class="rb-start-state">
       <span class="material-symbols-rounded">sync</span>
-      <div><strong data-start-state>Selected backfill is running under the durable worker lifecycle.</strong><small>Only one execution of the selected backfill family may run at a time.</small></div>
+      <div><strong data-start-state>{% if run.result.operator_command == "pause" %}Selected backfill is paused by the operator.{% else %}Selected backfill is running under the durable worker lifecycle.{% endif %}</strong><small>Only one execution of the selected backfill family may run at a time.</small></div>
     </div>
     {% else %}
     <div class="rb-start-state rb-start-complete">
@@ -66,7 +66,7 @@
   </header>
 
   <section class="rb-run-summary">
-    <div class="rb-summary-item rb-summary-status"><span>STATUS</span><strong data-status-large>{% if run_payload %}{{ run_payload.status_label }}{% else %}Not started{% endif %}</strong><em data-status-sub>{% if run %}{% if run.status == "completed" %}Backfill is persisted{% elif run.status == "failed" %}Worker stopped with an error{% elif run.started_at %}Worker is processing broker history{% elif run_payload.accepted_at %}Worker received the task; execution has not started yet{% else %}Waiting for worker receipt{% endif %}{% else %}No backfill execution exists{% endif %}</em></div>
+    <div class="rb-summary-item rb-summary-status"><span>STATUS</span><strong data-status-large>{% if run_payload %}{{ run_payload.status_label }}{% else %}Not started{% endif %}</strong><em data-status-sub>{% if run %}{% if run.status == "completed" %}Backfill is persisted{% elif run.status == "failed" %}Worker stopped with an error{% elif run.result.operator_command == "pause" %}Worker is paused and will not issue another broker request until resumed{% elif run.started_at %}Worker is processing broker history{% elif run_payload.accepted_at %}Worker received the task; execution has not started yet{% else %}Waiting for worker receipt{% endif %}{% else %}No backfill execution exists{% endif %}</em></div>
     <div class="rb-summary-item"><span>DURATION</span><strong data-duration>{% if run_payload and run_payload.started_at %}{{ run_payload.duration_seconds }}s{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>REQUESTED</span><strong data-requested>{% if run %}{{ run.requested_at|date:"d/m/Y, H:i:s" }}{% else %}—{% endif %}</strong></div>
     <div class="rb-summary-item"><span>STARTED</span><strong data-started>{% if run and run.started_at %}{{ run.started_at|date:"d/m/Y, H:i:s" }}{% else %}—{% endif %}</strong></div>
