@@ -175,7 +175,7 @@ class CandleBackfillStagedTick(models.Model):
     class Meta:
         ordering = ["epoch"]
         unique_together = [("run", "symbol", "epoch", "quote")]
-        indexes = [models.Index(fields=["run", "symbol", "epoch"])]
+        indexes = [models.Index(fields=["run", "symbol", "epoch"], name="md_stagedtick_run_sym_epoch")]
 
 
 class CandleBackfillStagedCandle(models.Model):
@@ -196,7 +196,7 @@ class CandleBackfillStagedCandle(models.Model):
     class Meta:
         ordering = ["-epoch"]
         unique_together = [("run", "symbol", "timeframe", "epoch")]
-        indexes = [models.Index(fields=["run", "symbol", "timeframe", "epoch"])]
+        indexes = [models.Index(fields=["run", "symbol", "timeframe", "epoch"], name="md_stagedcandle_run_sym_tf_ep")]
 
 
 class CandleBackfillEvent(models.Model):
