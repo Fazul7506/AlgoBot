@@ -84,7 +84,7 @@ class CandleBackfillUiTests(TestCase):
         self.assertContains(response, 'data-run-status="running"')
         self.assertContains(response, 'data-backfill-action="pause"')
         self.assertContains(response, '>Pause</button>')
-        self.assertContains(response, 'data-backfill-action="resume"')
+        self.assertContains(response, 'data-backfill-action="resume" disabled')
         self.assertContains(response, '>Resume</button>')
         self.assertContains(response, 'data-backfill-action="stop"')
         self.assertContains(response, '>Stop</button>')
