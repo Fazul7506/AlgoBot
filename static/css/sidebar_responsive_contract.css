@@ -109,6 +109,7 @@ body.sidebar-collapsed .app-shell { margin-left:var(--algobot-shell-collapsed); 
   .app-sidebar.is-collapsed .algobot-account-switch { display:inline-flex; }
   .app-sidebar.is-collapsed .sidebar-user-actions { display:flex; }
   .app-sidebar.is-collapsed .sidebar-header { justify-content:space-between; }
+  .app-sidebar.is-collapsed .sidebar-header .brand { flex:1 1 auto; width:auto; justify-content:flex-start; gap:8px; }
   .app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle { display:none; }
   .app-sidebar.is-collapsed nav a { justify-content:flex-start; padding-inline:initial; }
   .app-sidebar.is-collapsed .sidebar-user { display:block; }
