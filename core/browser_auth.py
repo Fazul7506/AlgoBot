@@ -238,6 +238,7 @@ def account_identity_page(request):
                 errors.extend(exc.messages)
             if User.objects.filter(username__iexact=username).exclude(pk=user.pk).exists():
                 errors.append("That username is already in use.")
+        username_changed = bool(username and username != user.username)
         email_changed = bool(email and email != str(user.email or "").strip().lower())
         if email_changed:
             try:
@@ -252,7 +253,7 @@ def account_identity_page(request):
                 "email_verified": profile.email_verified,
                 "password_required": user.has_usable_password(), "errors": errors,
             })
-        if username != user.username:
+        if username_changed:
             user.username = username
             user.save(update_fields=["username"])
             messages.success(request, "Your AlgoBot username has been updated.")
@@ -265,7 +266,7 @@ def account_identity_page(request):
                 messages.info(request, "A verification link was sent to your new email. Your current email remains active until verification.")
             else:
                 messages.warning(request, "Your username was saved, but the email verification message could not be sent. Request a new link after checking email configuration.")
-        elif username == user.username and not errors:
+        elif not username_changed:
             messages.info(request, "No email change was requested.")
         return redirect("account_identity_page")
     return render(request, "core/account_identity.html", {
