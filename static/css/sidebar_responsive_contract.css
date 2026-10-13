@@ -21,7 +21,7 @@ body { min-width: 320px; min-height: 100vh; margin: 0; overflow-x: clip; }
   border-right: 1px solid var(--line,#203653); isolation: isolate;
   transition: width .2s ease, transform .22s ease;
 }
-.app-sidebar .sidebar-header { flex: 0 0 auto; min-width: 0; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.app-sidebar .sidebar-header { position:relative; flex: 0 0 auto; min-width: 0; display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .app-sidebar .sidebar-header .brand { flex: 1 1 auto; min-width:0; display:inline-flex; align-items:center; gap:8px; overflow:hidden; }
 .app-sidebar .sidebar-header .brand-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .app-sidebar nav { flex: 1 1 auto; min-height: 0; min-width: 0; width:100%; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; scrollbar-width:thin; touch-action:pan-y; }
@@ -40,8 +40,9 @@ body { min-width: 320px; min-height: 100vh; margin: 0; overflow-x: clip; }
 .app-sidebar.is-collapsed .sidebar-user-copy,
 .app-sidebar.is-collapsed .sidebar-user-actions { display:none; }
 .app-sidebar.is-collapsed .sidebar-header { justify-content:center; padding-inline:0; }
-.app-sidebar.is-collapsed .sidebar-header .brand { flex:0 0 44px; width:44px; justify-content:center; }
-.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle { position:absolute; inset:10px; width:auto; opacity:0; }
+.app-sidebar.is-collapsed .sidebar-header .brand { flex:0 0 28px; width:28px; justify-content:center; gap:0; }
+.app-sidebar.is-collapsed .sidebar-header .brand-mark { flex:0 0 28px; width:28px; height:28px; }
+.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle { position:absolute; top:50%; right:0; inset:auto 0 auto auto; transform:translateY(-50%); width:28px; min-width:28px; height:28px; padding:0; opacity:0; }
 .app-sidebar.is-collapsed .sidebar-header:hover > .sidebar-toggle,
 .app-sidebar.is-collapsed .sidebar-header:focus-within > .sidebar-toggle,
 .app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:focus-visible { opacity:1; }
