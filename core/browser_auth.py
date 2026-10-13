@@ -14,7 +14,6 @@ from django.contrib.auth import authenticate, login as auth_login, logout as aut
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render
@@ -38,8 +37,14 @@ def _render(request, mode, **context):
 
 def _send_account_email(subject, body, email):
     try:
-        sent = send_mail(subject, body, None, [email], fail_silently=False)
-        return sent == 1
+        # Reuse AlgoBot's configured transactional delivery path (Brevo when
+        # configured, Django email backend otherwise) for auth/security mail.
+        from apps.notifications.services import send_transactional_email
+        send_transactional_email(
+            recipient=email, subject=subject, message=body,
+            category="authentication",
+        )
+        return True
     except Exception:
         logger.exception("account_email_delivery_failed")
         return False
