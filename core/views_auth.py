@@ -7,6 +7,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -224,6 +225,23 @@ def login_view(request):
         'refresh': str(refresh),
         'user': {'id': user.id, 'username': user.username, 'email': user.email},
     }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def logout_view(request):
+    """Revoke the caller's refresh token without allowing cross-user revocation."""
+    raw_refresh = request.data.get('refresh')
+    if not raw_refresh:
+        return Response({'status': 'error', 'message': 'Refresh token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        token = RefreshToken(raw_refresh)
+    except TokenError:
+        return Response({'status': 'error', 'message': 'Refresh token is invalid or already revoked.'}, status=status.HTTP_400_BAD_REQUEST)
+    if str(token.get('user_id')) != str(request.user.pk):
+        return Response({'status': 'error', 'message': 'Refresh token does not belong to the authenticated user.'}, status=status.HTTP_403_FORBIDDEN)
+    token.blacklist()
+    return Response({'status': 'success', 'message': 'Refresh token revoked.'}, status=status.HTTP_205_RESET_CONTENT)
 
 
 @api_view(['POST'])
