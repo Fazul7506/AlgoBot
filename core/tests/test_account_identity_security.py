@@ -12,6 +12,7 @@ from core.models import UserProfile
 @override_settings(
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     DEFAULT_FROM_EMAIL="noreply@example.com",
+    BREVO_API_KEY="",
 )
 class BrowserAccountAuthenticationTests(TestCase):
     def test_registration_normalizes_email_and_preserves_password_whitespace(self):
