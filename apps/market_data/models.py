@@ -120,6 +120,7 @@ class CandleBackfillRun(models.Model):
         ("running", "Running"),
         ("completed", "Completed"),
         ("failed", "Failed"),
+        ("stopped", "Stopped"),
     ]
 
     scope = models.CharField(max_length=32, default="initial", db_index=True)
