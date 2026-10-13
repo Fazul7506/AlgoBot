@@ -46,6 +46,23 @@ def _recovery_backfill_queue(_attempts=0):
     return BACKFILL_QUEUE
 
 
+def _backfill_delivery_guard(run_id, task_id):
+    """Reject queued, stale, stopped, or terminal deliveries before any data writes."""
+    from .models import CandleBackfillRun
+
+    run = CandleBackfillRun.objects.filter(pk=run_id).first()
+    if not run:
+        logger.warning("Ignoring candle backfill delivery for a missing run", extra={"run_id": run_id, "task_id": task_id})
+        return False, "missing_run"
+    if run.status != "running":
+        logger.info("Ignoring candle backfill delivery for a terminal run", extra={"run_id": run_id, "status": run.status, "task_id": task_id})
+        return False, f"terminal_{run.status}"
+    if not task_id or not run.task_id or run.task_id != str(task_id):
+        logger.warning("Ignoring superseded candle backfill delivery", extra={"run_id": run_id, "task_id": task_id, "current_task_id": run.task_id})
+        return False, "superseded_delivery"
+    return True, "current"
+
+
 def _active_symbols(symbol=None):
     from .models import MarketSymbol
 
@@ -524,6 +541,10 @@ def _mark_backfill_run(
                     value = next_result
                 setattr(run, field, value)
                 updates.append(field)
+        # Once a run reaches a terminal state, stale/duplicate deliveries must
+        # not overwrite its status or progress and accidentally resurrect it.
+        if run.status in {"completed", "failed"}:
+            return run
         if updates:
             run.save(update_fields=sorted(set(updates)))
         return run
@@ -546,6 +567,10 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
     run = None
     dispatch_lock = None
     try:
+        if run_id is not None:
+            allowed, reason = _backfill_delivery_guard(run_id, task_id)
+            if not allowed:
+                return {"status": "skipped", "reason": reason, "run_id": run_id}
         if run_id is None:
             from .backfill_lock import acquire_backfill_dispatch_lock
             dispatch_lock = acquire_backfill_dispatch_lock("research")
@@ -610,6 +635,10 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
             message=f"Worker accepted research candle backfill task {task_id}",
             task_id=task_id, worker_hostname=_worker_identity(),
         )
+        allowed, reason = _backfill_delivery_guard(run.pk, task_id)
+        if not allowed:
+            return {"status": "skipped", "reason": reason, "run_id": run.pk}
+
         # The lock protects dispatch/run creation, not the multi-hour broker
         # fetch. The durable running row now prevents overlap; release the
         # short-TTL Redis lock before doing slow work so it cannot expire and
@@ -656,7 +685,7 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
         if terminal_run_id:
             try:
                 terminal_run = CandleBackfillRun.objects.filter(
-                    pk=terminal_run_id, status__in=("completed", "failed")
+                    pk=terminal_run_id, status="completed"
                 ).first()
                 if terminal_run and terminal_run.completed_at:
                     ensure_research_candle_backfill.apply_async(
@@ -715,6 +744,13 @@ def ensure_research_candle_backfill(count=250):
             ).order_by("-requested_at", "-id").first()
             if active:
                 return {"status": "running", "run_id": active.pk}
+
+            if latest and latest.status == "failed":
+                return {
+                    "status": "failed_requires_manual_restart",
+                    "run_id": latest.pk,
+                    "reason": "The last research execution failed; automatic redispatch is disabled until an operator starts a new run.",
+                }
 
             if latest:
                 # A terminal run without completed_at is legacy/inconsistent
@@ -829,18 +865,16 @@ def ensure_initial_candle_backfill(count=5000):
             if latest and latest.status == "completed":
                 return {"status": "completed", "run_id": latest.pk}
 
-            automatic_attempts = int((latest.result or {}).get("automatic_attempts", 0) or 0) if latest else 0
+            # A failed initial run is terminal. Automatic recovery may re-publish
+            # the same still-running run, but it must not create a fresh run over
+            # and over after a terminal failure. Require an explicit operator start.
             if latest and latest.status == "failed":
-                last_auto = (latest.result or {}).get("last_automatic_dispatch_at")
-                if last_auto:
-                    try:
-                        last_auto_at = timezone.datetime.fromisoformat(last_auto)
-                        if timezone.is_naive(last_auto_at):
-                            last_auto_at = last_auto_at.replace(tzinfo=dt_timezone.utc)
-                        if now - last_auto_at < BACKFILL_AUTOMATIC_RETRY_AFTER:
-                            return {"status": "cooldown", "run_id": latest.pk}
-                    except (TypeError, ValueError):
-                        pass
+                return {
+                    "status": "failed_requires_manual_restart",
+                    "run_id": latest.pk,
+                    "reason": "The last initial backfill failed; automatic redispatch is disabled until an operator starts a new run.",
+                }
+            automatic_attempts = int((latest.result or {}).get("automatic_attempts", 0) or 0) if latest else 0
             automatic_attempts += 1
             run = CandleBackfillRun.objects.create(
                 scope="initial",
@@ -897,9 +931,9 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
     try:
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
-            if run.status == "completed" and run.completed_at:
-                return run.result or {"status": "completed"}
-            if run.task_id and task_id and run.task_id != task_id:
+            if run.status != "running":
+                return {"status": "skipped", "reason": f"terminal_{run.status}", "run_id": run_id}
+            if not run.task_id or not task_id or run.task_id != task_id:
                 logger.warning("Ignoring superseded candle backfill delivery", extra={"run_id": run_id, "task_id": task_id})
                 return {"status": "superseded", "run_id": run_id}
             now = timezone.now()
