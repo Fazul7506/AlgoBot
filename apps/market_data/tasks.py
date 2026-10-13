@@ -325,20 +325,24 @@ def _symbol_backfill_failed(payload):
 
 
 def _truncate_empty_staging_tables():
-    """Release staging-table storage when no run still owns staged rows."""
-    from django.db import connection
+    """Release staging-table storage only while holding locks against new staged writes."""
+    from django.db import connection, transaction
     from .models import CandleBackfillStagedCandle, CandleBackfillStagedTick
 
     if connection.vendor != "postgresql":
         return
-    if CandleBackfillStagedCandle.objects.exists() or CandleBackfillStagedTick.objects.exists():
-        return
     quote = connection.ops.quote_name
-    with connection.cursor() as cursor:
-        cursor.execute(
-            f"TRUNCATE TABLE {quote(CandleBackfillStagedCandle._meta.db_table)}, "
-            f"{quote(CandleBackfillStagedTick._meta.db_table)}"
-        )
+    candle_table = quote(CandleBackfillStagedCandle._meta.db_table)
+    tick_table = quote(CandleBackfillStagedTick._meta.db_table)
+    with transaction.atomic():
+        # Lock before checking emptiness; otherwise a concurrent run could
+        # insert rows between the check and TRUNCATE.
+        with connection.cursor() as cursor:
+            cursor.execute(f"LOCK TABLE {candle_table}, {tick_table} IN ACCESS EXCLUSIVE MODE")
+        if CandleBackfillStagedCandle.objects.exists() or CandleBackfillStagedTick.objects.exists():
+            return
+        with connection.cursor() as cursor:
+            cursor.execute(f"TRUNCATE TABLE {candle_table}, {tick_table}")
 
 
 def _discard_staged_backfill(run_id):
