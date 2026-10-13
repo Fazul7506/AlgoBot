@@ -120,6 +120,13 @@ class UniversalWorkspaceAccessTests(TestCase):
             html.index("page_stability.css"),
         )
 
+    def test_sidebar_active_route_matching_sets_one_longest_match_and_accessible_state(self):
+        shell = (Path(settings.BASE_DIR) / "static" / "js" / "base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("function routeMatches(path,href)", shell)
+        self.assertIn("path.startsWith(`${target}/`)", shell)
+        self.assertIn("href.length>activeLength", shell)
+        self.assertIn("link.setAttribute('aria-current','page')", shell)
+        self.assertIn("link.setAttribute('title',collapsed?label:'')", shell)
     def test_sidebar_account_switch_requires_same_broker_and_verified_target(self):
         switcher = (Path(settings.BASE_DIR) / "static" / "js" / "sidebar_account_switch.js").read_text(encoding="utf-8")
         self.assertIn("const sameBroker=", switcher)
