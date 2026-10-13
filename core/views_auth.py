@@ -9,6 +9,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db import transaction
+from django.core.exceptions import ValidationError
+from django.contrib.auth.password_validation import validate_password
 from django.conf import settings
 from datetime import timedelta
 import secrets
@@ -105,125 +108,85 @@ def browser_api_token(request):
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def register(request):
-    """User registration endpoint"""
+    """Create a local AlgoBot identity with normalized, collision-checked identifiers."""
+    username = str(request.data.get('username') or '').strip()
+    email = str(request.data.get('email') or '').strip().lower()
+    # Passwords are secrets, not identifiers: do not trim valid leading/trailing spaces.
+    password = request.data.get('password') or ''
+    password_confirm = request.data.get('password_confirm') or ''
+
+    if not username or not email or not password:
+        return Response({'status': 'error', 'message': 'Username, email, and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+    if password != password_confirm:
+        return Response({'status': 'error', 'message': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
+    if User.objects.filter(username__iexact=username).exists():
+        return Response({'status': 'error', 'message': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
+    if User.objects.filter(email__iexact=email).exists():
+        return Response({'status': 'error', 'message': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
-        username = request.data.get('username', '').strip()
-        email = request.data.get('email', '').strip()
-        password = request.data.get('password', '').strip()
-        password_confirm = request.data.get('password_confirm', '').strip()
-        
-        # Validation
-        if not username or not email or not password:
-            return Response({
-                'status': 'error',
-                'message': 'Username, email, and password are required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if password != password_confirm:
-            return Response({
-                'status': 'error',
-                'message': 'Passwords do not match'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if len(password) < 8:
-            return Response({
-                'status': 'error',
-                'message': 'Password must be at least 8 characters'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if User.objects.filter(username=username).exists():
-            return Response({
-                'status': 'error',
-                'message': 'Username already exists'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if User.objects.filter(email=email).exists():
-            return Response({
-                'status': 'error',
-                'message': 'Email already registered'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Create user
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password
-        )
-        
-        # Create related objects
-        UserProfile.objects.get_or_create(user=user)
-        Subscription.objects.get_or_create(user=user)
-        BotSettings.objects.get_or_create(user=user)
-        
-        logger.info(f"New user registered: {username}")
-        
-        return Response({
-            'status': 'success',
-            'message': 'User registered successfully',
-            'user_id': user.id,
-            'username': user.username,
-            'email': user.email
-        }, status=status.HTTP_201_CREATED)
-    
-    except Exception as e:
-        logger.error(f"Registration error: {str(e)}", exc_info=True)
-        return Response({
-            'status': 'error',
-            'message': 'Registration failed'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        validate_password(password)
+    except ValidationError as exc:
+        return Response({'status': 'error', 'message': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        with transaction.atomic():
+            user = User.objects.create_user(username=username, email=email, password=password)
+            UserProfile.objects.get_or_create(user=user)
+            Subscription.objects.get_or_create(user=user)
+            BotSettings.objects.get_or_create(user=user)
+    except Exception:
+        # Keep account identifiers and database details out of the public response.
+        logger.exception('user_registration_failed')
+        return Response({'status': 'error', 'message': 'Registration could not be completed. Check the username and email, then retry.'}, status=status.HTTP_409_CONFLICT)
+
+    logger.info('user_registered', extra={'user_id': user.pk})
+    return Response({
+        'status': 'success',
+        'message': 'User registered successfully',
+        'user_id': user.id,
+        'username': user.username,
+        'email': user.email,
+    }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def login_view(request):
-    """JWT login endpoint"""
-    try:
-        username = request.data.get('username', '').strip()
-        password = request.data.get('password', '').strip()
-        
-        if not username or not password:
-            return Response({
-                'status': 'error',
-                'message': 'Username and password are required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        from django.contrib.auth import authenticate
-        user = authenticate(username=username, password=password)
-        
-        if not user:
-            return Response({
-                'status': 'error',
-                'message': 'Invalid credentials'
-            }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        # Update last login without silently discarding a missing/corrupt profile.
-        UserProfile.objects.update_or_create(
-            user=user,
-            defaults={'last_login_at': timezone.now()},
-        )
-        
-        # Generate JWT token
-        refresh = RefreshToken.for_user(user)
-        
-        logger.info(f"User login: {username}")
-        
-        return Response({
-            'status': 'success',
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email
-            }
-        }, status=status.HTTP_200_OK)
-    
-    except Exception as e:
-        logger.error(f"Login error: {str(e)}", exc_info=True)
-        return Response({
-            'status': 'error',
-            'message': 'Login failed'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    """Authenticate by username or a unique email address."""
+    identifier = str(request.data.get('identifier') or request.data.get('username') or request.data.get('email') or '').strip()
+    password = request.data.get('password') or ''
+    if not identifier or not password:
+        return Response({'status': 'error', 'message': 'Username/email and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    from django.contrib.auth import authenticate
+    user = None
+    if '@' in identifier:
+        matches = User.objects.filter(email__iexact=identifier)
+        if matches.count() == 1:
+            candidate = matches.first()
+            user = authenticate(request, username=candidate.get_username(), password=password)
+    else:
+        user = authenticate(request, username=identifier, password=password)
+        if user is None:
+            matches = User.objects.filter(username__iexact=identifier)
+            if matches.count() == 1:
+                candidate = matches.first()
+                user = authenticate(request, username=candidate.get_username(), password=password)
+
+    if not user:
+        # Use the same public response for unknown users and bad passwords.
+        return Response({'status': 'error', 'message': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    UserProfile.objects.update_or_create(user=user, defaults={'last_login_at': timezone.now()})
+    refresh = RefreshToken.for_user(user)
+    logger.info('user_login_succeeded', extra={'user_id': user.pk})
+    return Response({
+        'status': 'success',
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
+        'user': {'id': user.id, 'username': user.username, 'email': user.email},
+    }, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
