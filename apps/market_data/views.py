@@ -310,26 +310,55 @@ def candle_backfill_control(request):
         run_id = int(payload.get("run_id"))
     except (TypeError, ValueError):
         return JsonResponse({"error": "A valid run_id is required."}, status=400)
+    task_id = ""
     with transaction.atomic():
         run = CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
         if not run:
             return JsonResponse({"error": "Backfill run not found."}, status=404)
-        if run.status != "running":
-            return JsonResponse({"error": "Only a running backfill can be controlled."}, status=409)
         result = dict(run.result or {})
+        if action == "resume":
+            if run.status != "running" or result.get("operator_command") != "pause":
+                return JsonResponse({"error": "Only a paused execution can be resumed."}, status=409)
+        elif run.status != "running":
+            return JsonResponse({"error": "Only a running backfill can be controlled."}, status=409)
         result["operator_command"] = action
         result["operator_command_at"] = timezone.now().isoformat()
         result["operator_command_by"] = request.user.pk
-        run.result = result
-        run.save(update_fields=["result"])
+        task_id = run.task_id
+        if action == "stop":
+            # Persist a terminal state before revoking delivery. Workers also
+            # check the run state before every broker request.
+            result["operator_stopped"] = True
+            run.result = result
+            run.status = "failed"
+            run.error = "Backfill stopped by operator."
+            run.completed_at = timezone.now()
+            run.save(update_fields=["result", "status", "error", "completed_at"])
+        else:
+            run.result = result
+            run.save(update_fields=["result"])
         CandleBackfillEvent.objects.create(
-            run=run, level="warning" if action in {"pause", "stop"} else "notice",
-            event_type="warning",
-            message=f"Operator requested {action}; worker will apply it at the next safe checkpoint.",
-            task_id=run.task_id, payload={"action": action, "checkpointed": False},
+            run=run,
+            level="warning" if action in {"pause", "stop"} else "notice",
+            event_type="failed" if action == "stop" else "warning",
+            message=("Operator stopped this run; queued delivery was revoked and active work will stop before its next broker request."
+                     if action == "stop" else
+                     f"Operator requested {action}; worker checkpoint enforcement is active."),
+            task_id=run.task_id,
+            payload={"action": action, "checkpointed": action == "stop", "terminal": action == "stop"},
         )
-    return JsonResponse({"ok": True, "action": action, "run_id": run.pk,
-                         "message": f"{action.title()} requested; worker applies it at the next safe checkpoint."})
+    if action == "stop" and task_id:
+        try:
+            from celery import current_app
+            current_app.control.revoke(task_id, terminate=False)
+        except Exception:
+            logger.exception("Unable to revoke stopped candle backfill task", extra={"run_id": run_id, "task_id": task_id})
+    return JsonResponse({
+        "ok": True, "action": action, "run_id": run_id,
+        "message": ("Stopped. Queued delivery was revoked; active work will stop before its next broker request."
+                    if action == "stop" else
+                    f"{action.title()} accepted; worker checkpoint enforcement is active."),
+    })
 
 
 def initial_candle_backfill(request):
