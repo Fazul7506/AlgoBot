@@ -417,7 +417,7 @@
 
   const historyRefresh = $("[data-history-refresh]");
   if (historyRefresh) historyRefresh.addEventListener("click", () => {
-    historyLimit = 50;
+    historyLimit = 10;
     lastEventId = 0;
     refresh({force: true});
   });
