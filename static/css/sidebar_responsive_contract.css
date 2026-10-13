@@ -100,13 +100,14 @@ body.sidebar-collapsed .app-shell { margin-left:var(--algobot-shell-collapsed); 
   }
   .app-sidebar.is-open { transform:translate3d(0,0,0); }
   .app-sidebar .sidebar-toggle { display:none; }
-  .app-sidebar.is-collapsed .brand-name,
-  .app-sidebar.is-collapsed nav h2,
+  .app-sidebar.is-collapsed .brand-name { display:inline; }
+  .app-sidebar.is-collapsed nav h2 { display:block; }
   .app-sidebar.is-collapsed nav a > span:not(.material-symbols-rounded),
-  .app-sidebar.is-collapsed .algobot-account-copy,
-  .app-sidebar.is-collapsed .algobot-account-fresh,
-  .app-sidebar.is-collapsed .algobot-account-switch,
-  .app-sidebar.is-collapsed .sidebar-user-actions { display:initial; }
+  .app-sidebar.is-collapsed .sidebar-new-trade span:not(.material-symbols-rounded) { display:inline; }
+  .app-sidebar.is-collapsed .algobot-account-copy { display:grid; }
+  .app-sidebar.is-collapsed .algobot-account-fresh { display:block; }
+  .app-sidebar.is-collapsed .algobot-account-switch { display:inline-flex; }
+  .app-sidebar.is-collapsed .sidebar-user-actions { display:flex; }
   .app-sidebar.is-collapsed .sidebar-header { justify-content:space-between; }
   .app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle { display:none; }
   .app-sidebar.is-collapsed nav a { justify-content:flex-start; padding-inline:initial; }
