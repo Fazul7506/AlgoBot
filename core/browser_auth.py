@@ -13,6 +13,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from django.core import signing
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
@@ -51,7 +52,7 @@ def _send_account_email(subject, body, email):
 
 
 def _send_verification(request, user, profile):
-    raw_token = secrets.token_urlsafe(32)
+    raw_token = signing.dumps({"uid": user.pk, "nonce": secrets.token_urlsafe(24)}, salt="algobot-email-verification")
     profile.email_verification_token = _digest(raw_token)
     profile.save(update_fields=["email_verification_token", "updated_at"])
     link = request.build_absolute_uri(
@@ -213,10 +214,18 @@ def reset_password_page(request, token=None):
 def verify_email_page(request):
     raw_token = str(request.GET.get("token") or request.POST.get("token") or "")
     if raw_token:
+        try:
+            signed_payload = signing.loads(
+                raw_token, salt="algobot-email-verification", max_age=24 * 60 * 60
+            )
+            signed_user_id = signed_payload.get("uid")
+        except signing.BadSignature:
+            signed_user_id = None
         with transaction.atomic():
             profile = UserProfile.objects.select_for_update().filter(
-                email_verification_token=_digest(raw_token)
-            ).select_related("user").first()
+                user_id=signed_user_id,
+                email_verification_token=_digest(raw_token),
+            ).select_related("user").first() if signed_user_id else None
             if profile and profile.user.email and not profile.email_verified:
                 profile.email_verified = True
                 profile.email_verified_at = timezone.now()
