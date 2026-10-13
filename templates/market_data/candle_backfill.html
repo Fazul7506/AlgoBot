@@ -183,7 +183,7 @@
     <article class="rb-detail-card">
       <span class="rb-eyebrow">BROKER DATA CONTRACT</span>
       <h3>Deriv is the OHLC source of truth</h3>
-      <p>Minute-and-higher candles are persisted from Deriv native candle history. Sub-minute and tick research series are built only from persisted Deriv ticks. No synthetic market prices are generated.</p>
+      <p>Minute-and-higher candles come from native Deriv history. Tick research bars are derived from that run's staged broker ticks. Failed or incomplete runs never become canonical.</p>
     </article>
   </section>
 
@@ -192,7 +192,7 @@
       <div>
         <span class="rb-eyebrow">BACKFILL CONTROL PLANE</span>
         <h2 id="backfill-contract-title">Production-grade data contract</h2>
-        <p>These controls make the existing ingestion guarantees visible to the operator without introducing an alternate execution path.</p>
+        <p>Each execution stages its own broker data, validates every required series, and only then atomically replaces the canonical dataset.</p>
       </div>
       <span class="rb-contract-badge"><span class="material-symbols-rounded">verified</span> Broker authoritative</span>
     </div>
@@ -235,14 +235,14 @@
       <span class="rb-pipeline-arrow">→</span>
       <div class="rb-pipeline-step"><span>02</span><strong>Broker history</strong><small>Native OHLC / persisted ticks</small></div>
       <span class="rb-pipeline-arrow">→</span>
-      <div class="rb-pipeline-step"><span>03</span><strong>Validation</strong><small>Integrity + duplicate safety</small></div>
+      <div class="rb-pipeline-step"><span>03</span><strong>Run staging</strong><small>Isolated candles + raw ticks</small></div>
       <span class="rb-pipeline-arrow">→</span>
-      <div class="rb-pipeline-step"><span>04</span><strong>Persistence</strong><small>Research-ready Django data</small></div>
+      <div class="rb-pipeline-step"><span>04</span><strong>Atomic promotion</strong><small>Replace only after full validation</small></div>
     </div>
   </section>
 
   <section class="rb-details-grid rb-details-secondary">
-    <article class="rb-detail-card"><span class="rb-eyebrow">WORKER TELEMETRY</span><h3>Database-backed lifecycle</h3><p>Worker acceptance, start time, heartbeat, symbol progress, timeframe results and terminal state are persisted in Django. Celery <code>PENDING</code> cannot overwrite confirmed application lifecycle evidence.</p></article>
+    <article class="rb-detail-card"><span class="rb-eyebrow">WORKER TELEMETRY</span><h3>Database-backed lifecycle</h3><p>Worker receipt, heartbeat, progress, and terminal state are persisted in Django. Stale or terminal deliveries are rejected; failed runs cannot publish staged data or trigger a new automatic run.</p></article>
     <article class="rb-detail-card"><span class="rb-eyebrow">ADMIN CONSISTENCY</span><h3>Same run, same evidence</h3><p>Django admin reads the same execution and durable event records shown here. Deleting one run removes only that execution; the remaining history stays intact.</p><a href="{% url 'admin:market_data_candlebackfillrun_changelist' %}">Open Django admin →</a></article>
   </section>
 </section>
