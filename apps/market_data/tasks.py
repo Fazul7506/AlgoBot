@@ -866,11 +866,11 @@ def ensure_research_candle_backfill(count=250):
             if active:
                 return {"status": "running", "run_id": active.pk}
 
-            if latest and latest.status == "failed":
+            if latest and latest.status in {"failed", "stopped"}:
                 return {
-                    "status": "failed_requires_manual_restart",
+                    "status": "failed_requires_manual_restart" if latest.status == "failed" else "stopped_requires_manual_restart",
                     "run_id": latest.pk,
-                    "reason": "The last research execution failed; automatic redispatch is disabled until an operator starts a new run.",
+                    "reason": "The last research execution is terminal; automatic redispatch is disabled until an operator explicitly starts a new run.",
                 }
 
             if latest:
@@ -989,11 +989,11 @@ def ensure_initial_candle_backfill(count=5000):
             # A failed initial run is terminal. Automatic recovery may re-publish
             # the same still-running run, but it must not create a fresh run over
             # and over after a terminal failure. Require an explicit operator start.
-            if latest and latest.status == "failed":
+            if latest and latest.status in {"failed", "stopped"}:
                 return {
-                    "status": "failed_requires_manual_restart",
+                    "status": "failed_requires_manual_restart" if latest.status == "failed" else "stopped_requires_manual_restart",
                     "run_id": latest.pk,
-                    "reason": "The last initial backfill failed; automatic redispatch is disabled until an operator starts a new run.",
+                    "reason": "The last initial backfill is terminal; automatic redispatch is disabled until an operator explicitly starts a new run.",
                 }
             automatic_attempts = int((latest.result or {}).get("automatic_attempts", 0) or 0) if latest else 0
             automatic_attempts += 1
