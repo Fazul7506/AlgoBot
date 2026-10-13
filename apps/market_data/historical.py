@@ -385,10 +385,12 @@ def fetch_and_store_all_timeframes(
 
     # Native broker bars provide authoritative OHLC for minute-and-higher data.
     for timeframe in TIMEFRAME_GRANULARITY:
-        if progress_callback:
-            progress_callback(timeframe, {"status": "started"})
         try:
             pace()
+            # The operator checkpoint runs after pacing and immediately before
+            # the broker request, so a pause during the delay blocks the request.
+            if progress_callback:
+                progress_callback(timeframe, {"status": "started"})
             results[timeframe] = fetch_and_store(symbol, timeframe, count, backfill_run_id=backfill_run_id)
         except Exception as exc:
             results[timeframe] = {"status": "failed", "error": str(exc)}
@@ -397,10 +399,10 @@ def fetch_and_store_all_timeframes(
                 progress_callback(timeframe, results[timeframe])
 
     # Raw broker ticks are the source for tick, 1s, 5s, 15s and 30s research bars.
-    if progress_callback:
-        progress_callback("tick-derived", {"status": "started"})
     try:
         pace()
+        if progress_callback:
+            progress_callback("tick-derived", {"status": "started"})
         results["tick-derived"] = fetch_and_store_ticks(symbol, count=count, backfill_run_id=backfill_run_id)
     except Exception as exc:
         results["tick-derived"] = {"status": "failed", "error": str(exc)}
