@@ -76,6 +76,9 @@ def reset_password_page(request,token=None):
 def verify_email_page(request):
     from core.browser_auth import verify_email_page as view
     return view(request)
+def account_identity_page(request):
+    from core.browser_auth import account_identity_page as view
+    return view(request)
 def cookie_policy_page(request): return render(request,'core/cookies.html')
 def licensing_page(request): return render(request,'core/licensing.html')
 def contact_page(request): return render(request,'core/contact.html')
