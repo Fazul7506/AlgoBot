@@ -1193,6 +1193,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 )
                 stale_research.completed_at = now
                 stale_research.save(update_fields=["status", "error", "completed_at"])
+                _discard_staged_backfill(stale_research.pk)
                 CandleBackfillEvent.objects.create(
                     run=stale_research,
                     level="error",
@@ -1245,6 +1246,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 run.error = "No market-data worker confirmed this job after three delivery attempts."
                 run.completed_at = now
                 run.save(update_fields=["status", "error", "completed_at"])
+                _discard_staged_backfill(run_id)
                 CandleBackfillEvent.objects.create(run=run, level="error", event_type="failed", message=run.error, task_id=old_task_id, payload={"recovery_attempts": recovery_attempts})
                 return _recovery_result(failed=run_id)
             run.task_id = ""
@@ -1295,6 +1297,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     current.error = f"Automatic Celery retry failed: {exc}"
                     current.completed_at = timezone.now()
                     current.save(update_fields=["status", "error", "completed_at"])
+                    _discard_staged_backfill(current.pk)
                     CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts), "recovery_attempts": recovery_attempts},)
             logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
         return _recovery_result()
