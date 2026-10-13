@@ -55,19 +55,19 @@ app.conf.beat_schedule = {
         "schedule": crontab(minute="*/5"),
         "kwargs": {"timeframe": "M1", "horizon_candles": 1, "batch_size": 500},
     },
-    # Completion-relative scheduling is primary; this minute tick recovers
-    # a lost countdown and checks the persisted completion timestamp.
+    # Completion-relative countdowns are primary. Five-minute Beat checks
+    # recover a lost countdown and reconcile stale deliveries with fewer poll jobs.
     "research-candle-backfill-completion-relative-scheduler": {
         "task": "apps.market_data.tasks.ensure_research_candle_backfill",
-        "schedule": 60.0,
+        "schedule": 300.0,
         "kwargs": {"count": 250},
-        "options": {"queue": "celery", "expires": 50},
+        "options": {"queue": "celery", "expires": 290},
     },
-    "candle-backfill-recovery-every-minute": {
+    "candle-backfill-recovery-every-five-minutes": {
         "task": "apps.market_data.tasks.reconcile_candle_backfill_runs",
-        "schedule": 60.0,
+        "schedule": 300.0,
         "kwargs": {"max_age_seconds": 300},
-        "options": {"queue": "celery", "expires": 50},
+        "options": {"queue": "celery", "expires": 290},
     },
     "ai-training-every-6-hours": {
         "task": "apps.ai_engine.tasks.scheduled_ai_training",
