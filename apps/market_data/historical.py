@@ -12,7 +12,10 @@ from django.conf import settings
 from django.db import transaction
 
 from .constants import TIMEFRAMES
-from .models import Candle, MarketSymbol, Tick
+from .models import (
+    Candle, CandleBackfillRun, CandleBackfillStagedCandle,
+    CandleBackfillStagedTick, MarketSymbol, Tick,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -119,11 +122,13 @@ def _market_symbol(symbol: str) -> MarketSymbol:
     return market_symbol
 
 
-def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
-    """Idempotently persist broker OHLC bars without replacing valid history."""
+def persist_candles(symbol: str, timeframe: str, items: list[dict], backfill_run_id: int | None = None) -> dict:
+    """Persist validated broker OHLC, isolating backfill rows until promotion."""
     timeframe = normalize_timeframe(timeframe)
     market_symbol = _market_symbol(symbol)
-    unique_items: dict[int, Candle] = {}
+    run = CandleBackfillRun.objects.get(pk=backfill_run_id) if backfill_run_id else None
+    row_model = CandleBackfillStagedCandle if run else Candle
+    unique_items = {}
     seconds = TIMEFRAMES[timeframe]
     for item in items:
         try:
@@ -137,7 +142,8 @@ def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
                 raise ValueError("candle epoch is not aligned to its timeframe boundary")
             if high_price < max(open_price, close_price) or low_price > min(open_price, close_price):
                 raise ValueError("invalid OHLC relationship")
-            unique_items[epoch] = Candle(
+            unique_items[epoch] = row_model(
+                **({"run": run} if run else {}),
                 symbol=market_symbol, timeframe=timeframe, epoch=epoch,
                 open=open_price, high=high_price, low=low_price, close=close_price,
                 volume=volume, source="deriv_candles",
@@ -150,17 +156,14 @@ def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
     rows = list(unique_items.values())
 
     if rows:
-        # The unique constraint makes the write idempotent, but a select-before-
-        # insert is not enough under concurrent API/backfill writers because a
-        # row can be inserted after the select. Insert missing rows with the
-        # database constraint as the arbiter, then upsert the authoritative
-        # broker values in the same transaction.
+        # Backfill rows are run-scoped. Live ingestion retains the existing
+        # duplicate-safe canonical upsert path.
         with transaction.atomic():
-            Candle.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
+            row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
             stored = list(
-                Candle.objects.select_for_update().filter(
-                    symbol=market_symbol,
-                    timeframe=timeframe,
+                row_model.objects.select_for_update().filter(
+                    **({"run": run} if run else {}),
+                    symbol=market_symbol, timeframe=timeframe,
                     epoch__in=[row.epoch for row in rows],
                 )
             )
@@ -174,10 +177,8 @@ def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
                 current.volume = incoming.volume
                 current.source = "deriv_candles"
             if stored:
-                Candle.objects.bulk_update(
-                    stored,
-                    ["open", "high", "low", "close", "volume", "source"],
-                    batch_size=500,
+                row_model.objects.bulk_update(
+                    stored, ["open", "high", "low", "close", "volume", "source"], batch_size=500,
                 )
 
     return {
@@ -187,16 +188,18 @@ def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
         "valid": len(rows),
         "min_epoch": min((row.epoch for row in rows), default=None),
         "max_epoch": max((row.epoch for row in rows), default=None),
-        "stored_total": Candle.objects.filter(symbol=market_symbol, timeframe=timeframe).count(),
+        "stored_total": row_model.objects.filter(**({"run": run} if run else {}), symbol=market_symbol, timeframe=timeframe).count(),
         "source": "deriv_candles",
     }
 
 
-def _aggregate_ticks_to_candles(symbol: str, ticks: list[Tick], timeframe: str) -> int:
+def _aggregate_ticks_to_candles(symbol: str, ticks: list, timeframe: str, backfill_run_id: int | None = None) -> int:
     """Create missing sub-minute/tick research candles from persisted ticks."""
     timeframe = normalize_timeframe(timeframe)
     seconds = TIMEFRAMES[timeframe]
     market_symbol = _market_symbol(symbol)
+    run = CandleBackfillRun.objects.get(pk=backfill_run_id) if backfill_run_id else None
+    row_model = CandleBackfillStagedCandle if run else Candle
     buckets: dict[int, dict[str, Decimal]] = {}
 
     for tick in sorted(ticks, key=lambda value: value.epoch):
@@ -218,7 +221,8 @@ def _aggregate_ticks_to_candles(symbol: str, ticks: list[Tick], timeframe: str) 
             row["volume"] += tick.volume
 
     rows = [
-        Candle(
+        row_model(
+            **({"run": run} if run else {}),
             symbol=market_symbol,
             timeframe=timeframe,
             epoch=epoch,
@@ -235,11 +239,11 @@ def _aggregate_ticks_to_candles(symbol: str, ticks: list[Tick], timeframe: str) 
         # newer ticks change its high/low/close. Ignore-conflicts alone would
         # leave the first version permanently stale.
         with transaction.atomic():
-            Candle.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
+            row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
             stored = list(
-                Candle.objects.select_for_update().filter(
-                    symbol=market_symbol,
-                    timeframe=timeframe,
+                row_model.objects.select_for_update().filter(
+                    **({"run": run} if run else {}),
+                    symbol=market_symbol, timeframe=timeframe,
                     epoch__in=[row.epoch for row in rows],
                 )
             )
@@ -253,10 +257,8 @@ def _aggregate_ticks_to_candles(symbol: str, ticks: list[Tick], timeframe: str) 
                 current.volume = row.volume
                 current.source = "tick_stream"
             if stored:
-                Candle.objects.bulk_update(
-                    stored,
-                    ["open", "high", "low", "close", "volume", "source"],
-                    batch_size=500,
+                row_model.objects.bulk_update(
+                    stored, ["open", "high", "low", "close", "volume", "source"], batch_size=500,
                 )
     return len(rows)
 
@@ -266,27 +268,30 @@ def persist_broker_chart_history(symbol: str, timeframe: str, items: list[dict])
     return persist_candles(symbol, timeframe, items)
 
 
-def fetch_and_store(symbol: str, timeframe: str = "1m", count: int = 5000) -> dict:
+def fetch_and_store(symbol: str, timeframe: str = "1m", count: int = 5000, backfill_run_id: int | None = None) -> dict:
     timeframe = normalize_timeframe(timeframe)
     if timeframe == "tick":
-        return fetch_and_store_ticks(symbol, count=count)
+        return fetch_and_store_ticks(symbol, count=count, backfill_run_id=backfill_run_id)
     if timeframe not in TIMEFRAME_GRANULARITY:
         raise ValueError(
             f"{timeframe} is a tick-derived timeframe; persisted ticks are required to build it"
         )
     candles = asyncio.run(_fetch_candles(symbol, count, TIMEFRAME_GRANULARITY[timeframe]))
-    return persist_candles(symbol, timeframe, candles)
+    return persist_candles(symbol, timeframe, candles, backfill_run_id=backfill_run_id)
 
 
-def fetch_and_store_ticks(symbol: str, count: int = 5000) -> dict:
-    """Fetch raw broker ticks and persist them; ticks drive all live sub-minute bars."""
+def fetch_and_store_ticks(symbol: str, count: int = 5000, backfill_run_id: int | None = None) -> dict:
+    """Fetch broker ticks; backfills remain isolated until the run is promoted."""
     market_symbol = _market_symbol(symbol)
+    run = CandleBackfillRun.objects.get(pk=backfill_run_id) if backfill_run_id else None
+    row_model = CandleBackfillStagedTick if run else Tick
     items = asyncio.run(_fetch_ticks(symbol, count))
-    rows: list[Tick] = []
+    rows = []
     for item in items:
         try:
             rows.append(
-                Tick(
+                row_model(
+                    **({"run": run} if run else {}),
                     symbol=market_symbol,
                     quote=Decimal(str(item["quote"])),
                     epoch=int(item["epoch"]),
@@ -298,38 +303,41 @@ def fetch_and_store_ticks(symbol: str, count: int = 5000) -> dict:
 
     if rows:
         with transaction.atomic():
-            Tick.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
+            row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
 
-    # Rebuild every canonical timeframe that can be derived from these ticks.
+    # Aggregate from this run's ticks, never from previous canonical history.
     persisted_ticks = list(
-        Tick.objects.filter(symbol=market_symbol).order_by("epoch").filter(
-            epoch__gte=min((row.epoch for row in rows), default=0)
-        )
+        row_model.objects.filter(**({"run": run} if run else {}), symbol=market_symbol)
+        .order_by("epoch")
+        .filter(epoch__gte=min((row.epoch for row in rows), default=0))
     ) if rows else []
     built = {}
     for timeframe in TIMEFRAMES:
         if timeframe != "tick" and TIMEFRAMES[timeframe] < 60:
-            built[timeframe] = _aggregate_ticks_to_candles(symbol, persisted_ticks, timeframe)
-    built["tick"] = persist_tick_candles(symbol, items)
+            built[timeframe] = _aggregate_ticks_to_candles(symbol, persisted_ticks, timeframe, backfill_run_id=backfill_run_id)
+    built["tick"] = persist_tick_candles(symbol, items, backfill_run_id=backfill_run_id)
     return {
         "symbol": symbol,
         "received": len(items),
         "valid": len(rows),
         "min_epoch": min((int(item["epoch"]) for item in items if "epoch" in item), default=None),
         "max_epoch": max((int(item["epoch"]) for item in items if "epoch" in item), default=None),
-        "stored_ticks": Tick.objects.filter(symbol=market_symbol).count(),
+        "stored_ticks": row_model.objects.filter(**({"run": run} if run else {}), symbol=market_symbol).count(),
         "built_candles": built,
     }
 
 
-def persist_tick_candles(symbol: str, items: list[dict]) -> int:
+def persist_tick_candles(symbol: str, items: list[dict], backfill_run_id: int | None = None) -> int:
     market_symbol = _market_symbol(symbol)
-    rows: list[Candle] = []
+    run = CandleBackfillRun.objects.get(pk=backfill_run_id) if backfill_run_id else None
+    row_model = CandleBackfillStagedCandle if run else Candle
+    rows = []
     for item in items:
         try:
             quote = Decimal(str(item["quote"]))
             rows.append(
-                Candle(
+                row_model(
+                    **({"run": run} if run else {}),
                     symbol=market_symbol,
                     timeframe="tick",
                     epoch=int(item["epoch"]),
@@ -344,7 +352,7 @@ def persist_tick_candles(symbol: str, items: list[dict]) -> int:
             continue
     if rows:
         with transaction.atomic():
-            Candle.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
+            row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
     return len(rows)
 
 
@@ -353,6 +361,7 @@ def fetch_and_store_all_timeframes(
     count: int = 5000,
     request_interval: float = 0.30,
     progress_callback=None,
+    backfill_run_id: int | None = None,
 ) -> dict:
     """Populate canonical broker history while pacing Deriv WebSocket calls.
 
@@ -380,7 +389,7 @@ def fetch_and_store_all_timeframes(
             progress_callback(timeframe, {"status": "started"})
         try:
             pace()
-            results[timeframe] = fetch_and_store(symbol, timeframe, count)
+            results[timeframe] = fetch_and_store(symbol, timeframe, count, backfill_run_id=backfill_run_id)
         except Exception as exc:
             results[timeframe] = {"status": "failed", "error": str(exc)}
         finally:
@@ -392,7 +401,7 @@ def fetch_and_store_all_timeframes(
         progress_callback("tick-derived", {"status": "started"})
     try:
         pace()
-        results["tick-derived"] = fetch_and_store_ticks(symbol, count=count)
+        results["tick-derived"] = fetch_and_store_ticks(symbol, count=count, backfill_run_id=backfill_run_id)
     except Exception as exc:
         results["tick-derived"] = {"status": "failed", "error": str(exc)}
     finally:
