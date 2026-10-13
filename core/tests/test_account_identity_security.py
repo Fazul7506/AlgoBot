@@ -315,3 +315,80 @@ class BrokerAccountEndpointSafetyTests(TestCase):
         self.assertEqual(first.get_access_token(), "access-token-for-test")
         self.assertEqual(second.get_access_token(), "")
         self.assertNotIn(SESSION_KEY, self.client.session)
+
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    DEFAULT_FROM_EMAIL="noreply@example.com",
+    BREVO_API_KEY="",
+)
+class AccountIdentityManagementTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="identity-user", email="old-address@example.com",
+            password="A-Strong-Password-2026!",
+        )
+        self.profile = UserProfile.objects.get(user=self.user)
+        self.client.force_login(self.user)
+
+    def test_username_change_requires_current_password_and_is_persisted(self):
+        response = self.client.post("/account/identity/", {
+            "current_password": "A-Strong-Password-2026!",
+            "username": "identity-user-updated",
+            "email": "old-address@example.com",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "identity-user-updated")
+        self.assertEqual(self.user.email, "old-address@example.com")
+
+    def test_email_change_waits_for_verification_of_new_address(self):
+        response = self.client.post("/account/identity/", {
+            "current_password": "A-Strong-Password-2026!",
+            "username": "identity-user",
+            "email": "new-address@example.com",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "old-address@example.com")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["new-address@example.com"])
+        match = re.search(r"/verify-email/\?token=([^\s]+)", mail.outbox[0].body)
+        self.assertIsNotNone(match)
+        raw_token = match.group(1).strip()
+
+        response = self.client.get(f"/verify-email/?token={raw_token}")
+        self.assertEqual(response.status_code, 302)
+        self.user.refresh_from_db()
+        self.profile.refresh_from_db()
+        self.assertEqual(self.user.email, "new-address@example.com")
+        self.assertTrue(self.profile.email_verified)
+        self.assertEqual(self.profile.email_verification_token, "")
+
+    def test_email_change_rejects_an_address_owned_by_another_user(self):
+        get_user_model().objects.create_user(
+            username="other-email-owner", email="owned@example.com",
+            password="A-Strong-Password-2026!",
+        )
+        response = self.client.post("/account/identity/", {
+            "current_password": "A-Strong-Password-2026!",
+            "username": "identity-user",
+            "email": "OWNED@example.com",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "old-address@example.com")
+        self.assertContains(response, "already registered")
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_wrong_current_password_prevents_identity_changes(self):
+        response = self.client.post("/account/identity/", {
+            "current_password": "wrong-password",
+            "username": "identity-user-taken-over",
+            "email": "new-address@example.com",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "identity-user")
+        self.assertEqual(self.user.email, "old-address@example.com")
+        self.assertEqual(len(mail.outbox), 0)
