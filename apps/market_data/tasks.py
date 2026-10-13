@@ -434,43 +434,6 @@ def _promote_staged_backfill(run_id, result):
     return result["dataset_promotion"]
 
 
-def _replace_stale_candle_window_after_success(result):
-    """Keep only candle epochs represented by the latest fully successful run.
-
-    Cleanup is scoped to Candle rows for symbols/timeframes in this run. Tick
-    rows, logs, run history, snapshots, and unrelated tables are untouched.
-    """
-    from .constants import TIMEFRAMES
-    from .models import Candle, MarketSymbol
-    removed = 0
-    for symbol, symbol_result in (result.get("results") or {}).items():
-        timeframes = (symbol_result or {}).get("timeframes") or {}
-        market_symbol = MarketSymbol.objects.filter(symbol=symbol).first()
-        if not market_symbol:
-            continue
-        for timeframe, payload in timeframes.items():
-            if timeframe == "tick-derived" or not isinstance(payload, dict):
-                continue
-            minimum = payload.get("min_epoch")
-            if minimum is None or payload.get("status") == "failed":
-                continue
-            deleted, _ = Candle.objects.filter(symbol=market_symbol, timeframe=timeframe, epoch__lt=int(minimum)).delete()
-            removed += deleted
-        tick_payload = timeframes.get("tick-derived") or {}
-        minimum_tick = tick_payload.get("min_epoch") if isinstance(tick_payload, dict) else None
-        if minimum_tick is not None and tick_payload.get("status") != "failed":
-            minimum_tick = int(minimum_tick)
-            for timeframe, seconds in TIMEFRAMES.items():
-                if timeframe == "tick" or seconds >= 60:
-                    continue
-                cutoff = minimum_tick - (minimum_tick % seconds) if seconds else minimum_tick
-                deleted, _ = Candle.objects.filter(symbol=market_symbol, timeframe=timeframe, epoch__lt=cutoff).delete()
-                removed += deleted
-            deleted, _ = Candle.objects.filter(symbol=market_symbol, timeframe="tick", epoch__lt=minimum_tick).delete()
-            removed += deleted
-    logger.info("Pruned stale candle rows after successful backfill", extra={"deleted_candle_rows": removed})
-    return removed
-
 def _honor_backfill_operator_command(run_id):
     """Block broker requests while paused and fail closed after stop/terminal state."""
     import time
@@ -1122,11 +1085,17 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
         _discard_staged_backfill(run_id)
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
-            if not (run.status == "completed" and run.completed_at):
+            # Preserve an operator stop or another already-recorded terminal
+            # failure instead of replacing its reason with a late task exception.
+            if run.status == "running":
                 run.status = "failed"
                 run.error = str(exc)
                 run.completed_at = timezone.now()
                 run.save(update_fields=["status", "error", "completed_at"])
+            elif run.status == "failed" and not run.error:
+                run.error = str(exc)
+                run.completed_at = run.completed_at or timezone.now()
+                run.save(update_fields=["error", "completed_at"])
         _emit_backfill_event(
             "initial", run_id=run_id, level="error", event_type="failed",
             message=f"Candle backfill failed: {exc}",
