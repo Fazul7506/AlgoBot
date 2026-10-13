@@ -336,6 +336,36 @@ def _discard_staged_backfill(run_id):
         logger.exception("Unable to discard staged candle backfill rows", extra={"run_id": run_id})
 
 
+def _copy_staged_backfill_rows(run_id):
+    """Copy staged rows with database-side INSERT...SELECT instead of Python row loops."""
+    from django.db import connection
+    from .models import Candle, CandleBackfillStagedCandle, CandleBackfillStagedTick, Tick
+
+    candle_fields = ("symbol", "timeframe", "open", "high", "low", "close", "volume", "epoch", "source", "created_at")
+    tick_fields = ("symbol", "bid", "ask", "quote", "spread", "epoch", "volume", "received_at", "created_at")
+    quote = connection.ops.quote_name
+
+    def copy_rows(target_model, staging_model, fields, run_id):
+        target_columns = ", ".join(quote(target_model._meta.get_field(name).column) for name in fields)
+        source_columns = ", ".join(quote(staging_model._meta.get_field(name).column) for name in fields)
+        target_table = quote(target_model._meta.db_table)
+        source_table = quote(staging_model._meta.db_table)
+        run_column = quote(staging_model._meta.get_field("run").column)
+        count = staging_model.objects.filter(run_id=run_id).count()
+        if count:
+            sql = (
+                f"INSERT INTO {target_table} ({target_columns}) "
+                f"SELECT {source_columns} FROM {source_table} WHERE {run_column} = %s"
+            )
+            with connection.cursor() as cursor:
+                cursor.execute(sql, [run_id])
+        return count
+
+    candle_count = copy_rows(Candle, CandleBackfillStagedCandle, candle_fields, run_id)
+    tick_count = copy_rows(Tick, CandleBackfillStagedTick, tick_fields, run_id)
+    return candle_count, tick_count
+
+
 def _promote_staged_backfill(run_id, result):
     """Atomically replace canonical candles/ticks with one complete validated run."""
     from django.db import transaction
@@ -389,34 +419,7 @@ def _promote_staged_backfill(run_id, result):
         Candle.objects.all().delete()
         Tick.objects.all().delete()
 
-        batch = []
-        for row in CandleBackfillStagedCandle.objects.filter(run_id=run_id).order_by("id").iterator(chunk_size=1000):
-            batch.append(Candle(
-                symbol_id=row.symbol_id, timeframe=row.timeframe, open=row.open, high=row.high,
-                low=row.low, close=row.close, volume=row.volume, epoch=row.epoch,
-                source=row.source, created_at=row.created_at,
-            ))
-            if len(batch) >= 1000:
-                Candle.objects.bulk_create(batch, batch_size=1000)
-                promoted_candles += len(batch)
-                batch = []
-        if batch:
-            Candle.objects.bulk_create(batch, batch_size=1000)
-            promoted_candles += len(batch)
-
-        batch = []
-        for row in CandleBackfillStagedTick.objects.filter(run_id=run_id).order_by("id").iterator(chunk_size=1000):
-            batch.append(Tick(
-                symbol_id=row.symbol_id, bid=row.bid, ask=row.ask, quote=row.quote, spread=row.spread,
-                epoch=row.epoch, volume=row.volume, received_at=row.received_at, created_at=row.created_at,
-            ))
-            if len(batch) >= 1000:
-                Tick.objects.bulk_create(batch, batch_size=1000)
-                promoted_ticks += len(batch)
-                batch = []
-        if batch:
-            Tick.objects.bulk_create(batch, batch_size=1000)
-            promoted_ticks += len(batch)
+        promoted_candles, promoted_ticks = _copy_staged_backfill_rows(run_id)
 
         CandleBackfillStagedCandle.objects.filter(run_id=run_id).delete()
         CandleBackfillStagedTick.objects.filter(run_id=run_id).delete()
