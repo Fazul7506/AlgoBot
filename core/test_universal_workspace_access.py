@@ -105,9 +105,27 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("mobile-drawer-locked", css)
         self.assertIn("document.body.style.position='fixed'", js)
         self.assertIn("window.scrollTo(0,mobileScrollY)", js)
-        self.assertIn("document.addEventListener('scroll', isolateFromDocumentScroll", js)
+        self.assertNotIn("isolateFromDocumentScroll", js)
+        self.assertNotIn("document.addEventListener('scroll'", js)
         self.assertNotIn("sidebar.scrollTop", js)
         self.assertNotIn("sidebar.scrollHeight", js)
+
+    def test_final_sidebar_contract_loads_after_page_specific_styles(self):
+        response = self.client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode("utf-8")
+        self.assertIn("css/sidebar_responsive_contract.css?v=20261013-shell1", html)
+        self.assertGreater(
+            html.index("sidebar_responsive_contract.css?v=20261013-shell1"),
+            html.index("block extra_css"),
+        )
+
+    def test_sidebar_account_switch_requires_same_broker_and_verified_target(self):
+        switcher = (Path(settings.BASE_DIR) / "static" / "js" / "sidebar_account_switch.js").read_text(encoding="utf-8")
+        self.assertIn("const sameBroker=", switcher)
+        self.assertIn("accounts.find(a=>eligible(a)&&sameBroker(a))||null", switcher)
+        self.assertNotIn("||accounts.find(eligible)||null", switcher)
+        self.assertIn("current.is_connected===true&&String(current.status||'').toLowerCase()==='active'", switcher)
 
     def test_sidebar_account_area_remains_inside_drawer_end_to_end(self):
         css = self._css("runtime_recovery.css")
