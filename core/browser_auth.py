@@ -131,7 +131,7 @@ def register_page(request):
                 profile, _ = UserProfile.objects.get_or_create(user=user)
                 Subscription.objects.get_or_create(user=user)
                 BotSettings.objects.get_or_create(user=user)
-                email_sent = _send_verification(request, user, profile)
+            email_sent = _send_verification(request, user, profile)
         except IntegrityError:
             return _render(
                 request, "register",
