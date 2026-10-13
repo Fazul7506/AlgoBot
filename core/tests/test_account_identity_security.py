@@ -54,6 +54,43 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertEqual(response.json()["user"]["id"], user.pk)
         self.assertIn("access", response.json())
 
+    def test_simplejwt_token_endpoint_accepts_email_identifier(self):
+        user = get_user_model().objects.create_user(
+            username="token-mail-user", email="token@example.com", password="A-Strong-Password-2026!"
+        )
+        response = self.client.post("/api/auth/token/", {
+            "email": "TOKEN@EXAMPLE.COM",
+            "password": "A-Strong-Password-2026!",
+        }, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.json())
+        self.assertIn("refresh", response.json())
+
+    def test_password_change_blacklists_refresh_tokens(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+
+        user = get_user_model().objects.create_user(
+            username="password-change-user", email="change@example.com", password="Old-Password-2026!"
+        )
+        refresh = RefreshToken.for_user(user)
+        response = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "old_password": "Old-Password-2026!",
+                "new_password": "New-Password-2026!$",
+                "new_password_confirm": "New-Password-2026!$",
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(OutstandingToken.objects.filter(user=user).count(), 0)
+        self.assertEqual(
+            BlacklistedToken.objects.filter(token__user=user).count(),
+            OutstandingToken.objects.filter(user=user).count(),
+        )
+
     def test_password_reset_is_single_use_and_updates_password(self):
         user = get_user_model().objects.create_user(
             username="reset-user", email="reset@example.com", password="Old-Password-2026!"
