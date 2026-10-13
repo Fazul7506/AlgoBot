@@ -432,3 +432,22 @@ class CandleBackfillUiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 409)
+
+
+    def test_json_reports_paused_run_without_marking_it_terminal(self):
+        run = CandleBackfillRun.objects.create(
+            scope="research", status="running", count=250,
+            task_id="paused-ui-task", started_at=timezone.now(),
+            result={"operator_command": "pause"},
+        )
+        response = self.client.get(
+            reverse("initial_candle_backfill"),
+            {"format": "json", "run_id": run.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["selected"]
+        self.assertEqual(payload["status"], "running")
+        self.assertEqual(payload["status_label"], "Paused")
+        self.assertEqual(payload["worker_state"], "PAUSED")
+        self.assertEqual(payload["operator_command"], "pause")
+        self.assertIn("will not issue another broker-history request", payload["notices"][0]["message"])
