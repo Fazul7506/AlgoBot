@@ -81,7 +81,9 @@ def callback(request):
         identity_loginid = str(
             deriv_identity.get("loginid") or deriv_identity.get("account_id") or ""
         ).strip()
-        if identity_loginid != selected_account_id:
+        if not identity_loginid:
+            websocket_verification_error = "identity_missing"
+        elif identity_loginid != selected_account_id:
             websocket_verification_error = "identity_mismatch"
     except Exception as exc:
         websocket_verification_error = exc.__class__.__name__
@@ -92,8 +94,10 @@ def callback(request):
     identity_loginid = str(
         deriv_identity.get("loginid") or deriv_identity.get("account_id") or ""
     ).strip()
-    if identity_loginid != selected_account_id:
+    if identity_loginid and identity_loginid != selected_account_id:
         websocket_verification_error = "identity_mismatch"
+    elif not identity_loginid and not websocket_verification_error:
+        websocket_verification_error = "identity_missing"
 
     # An anonymous OAuth callback is an account sign-in, not merely a broker
     # connection. Require a live, matching provider identity before creating or
