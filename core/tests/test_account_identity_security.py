@@ -5,7 +5,8 @@ from django.core import mail
 from django.test import TestCase, override_settings
 from unittest.mock import patch
 
-from apps.brokers.models import BrokerAccount
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from core.account_context import SESSION_KEY
 from core.models import UserProfile
 
 
@@ -184,3 +185,89 @@ class AnonymousBrokerOAuthFailClosedTests(TestCase):
         self.assertEqual(get_user_model().objects.count(), 0)
         self.assertEqual(BrokerAccount.objects.count(), 0)
         self.assertNotIn("_auth_user_id", self.client.session)
+
+
+class BrokerAccountEndpointSafetyTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="broker-safety-user", email="broker-safety@example.com",
+            password="A-Strong-Password-2026!",
+        )
+        self.broker = Broker.objects.create(
+            name="Deriv", broker_type="deriv", status="active", supports_demo=True, supports_live=True
+        )
+
+    def make_account(self, account_id):
+        account = BrokerAccount.objects.create(
+            user=self.user, broker=self.broker, account_id=account_id,
+            status="active", token_status="active",
+            credentials={"account_type": "demo"},
+        )
+        account.set_access_token("access-token-for-test")
+        account.set_refresh_token("refresh-token-for-test")
+        account.save(update_fields=["access_token", "refresh_token"])
+        BrokerConnection.objects.create(
+            broker=self.broker, broker_account=account, status="connected"
+        )
+        return account
+
+    def test_deriv_account_endpoints_are_registered(self):
+        from django.urls import reverse
+        self.assertEqual(reverse("deriv_disconnect"), "/api/deriv/disconnect/")
+        self.assertEqual(reverse("deriv_refresh_token"), "/api/deriv/refresh-token/")
+        self.assertEqual(reverse("deriv_account_status"), "/api/deriv/status/")
+        self.assertEqual(reverse("deriv_reconnect"), "/api/deriv/reconnect/")
+
+    def test_disconnect_requires_explicit_choice_when_user_has_multiple_accounts(self):
+        first = self.make_account("CR111111")
+        second = self.make_account("CR222222")
+        self.client.force_login(self.user)
+
+        response = self.client.post("/api/deriv/disconnect/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.status, "active")
+        self.assertEqual(second.status, "active")
+        self.assertEqual(first.get_access_token(), "access-token-for-test")
+        self.assertEqual(second.get_access_token(), "access-token-for-test")
+
+    def test_explicit_disconnect_clears_local_tokens_and_connection_state(self):
+        account = self.make_account("CR333333")
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            "/api/deriv/disconnect/", {"broker_account_id": account.account_id}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        account.refresh_from_db()
+        self.assertEqual(account.status, "disabled")
+        self.assertEqual(account.token_status, "revoked")
+        self.assertEqual(account.access_token, "")
+        self.assertEqual(account.refresh_token, "")
+        self.assertEqual(account.get_access_token(), "")
+        self.assertEqual(account.get_refresh_token(), "")
+        connection = BrokerConnection.objects.get(broker_account=account)
+        self.assertEqual(connection.status, "disconnected")
+        self.assertIsNone(connection.last_ping)
+
+    def test_session_selection_disconnects_only_the_selected_account(self):
+        first = self.make_account("CR444444")
+        second = self.make_account("CR555555")
+        self.client.force_login(self.user)
+        session = self.client.session
+        session[SESSION_KEY] = second.pk
+        session.save()
+
+        response = self.client.post("/api/deriv/disconnect/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.status, "active")
+        self.assertEqual(second.status, "disabled")
+        self.assertEqual(first.get_access_token(), "access-token-for-test")
+        self.assertEqual(second.get_access_token(), "")
+        self.assertNotIn(SESSION_KEY, self.client.session)
