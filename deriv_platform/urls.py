@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 
 from core.views_auth import (
-    CustomTokenObtainPairView, register, login_view, change_password, browser_api_token,
+    CustomTokenObtainPairView, register, login_view, change_password, browser_api_token, logout_view,
     UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet,
 )
 from core.browser_views import browser_logout
@@ -139,6 +139,7 @@ urlpatterns = [
     path("api/auth/register/", register, name="register"),
     path("api/auth/login/", login_view, name="login"),
     path("api/auth/change-password/", change_password, name="change_password"),
+    path("api/auth/logout/", logout_view, name="logout_api"),
     path("api/", include("apps.brokers.urls")),
     path("api/", include("apps.execution.urls")),
     path("api/", include("apps.market_data.urls", namespace="market_data_api")),
