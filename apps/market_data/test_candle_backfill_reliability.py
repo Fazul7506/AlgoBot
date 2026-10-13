@@ -104,6 +104,25 @@ class CandleBackfillReliabilityTests(TestCase):
             "celery",
         )
 
+    def test_stopped_run_is_terminal_and_cannot_write_staged_data(self):
+        from .historical import _backfill_write_guard
+        from .views import _run_payload
+
+        run = CandleBackfillRun.objects.create(
+            scope="research",
+            status="stopped",
+            count=250,
+            task_id="stopped-task",
+            result={"operator_command": "stop"},
+            error="Backfill stopped by operator.",
+        )
+        with self.assertRaisesRegex(RuntimeError, "terminal"):
+            with _backfill_write_guard(run.pk):
+                self.fail("Stopped run must never enter a staged-write transaction")
+        payload = _run_payload(run)
+        self.assertEqual(payload["status_label"], "Stopped")
+        self.assertEqual(payload["worker_state"], "STOPPED")
+
     def test_execution_duration_is_not_request_age(self):
         requested = timezone.now() - timedelta(hours=2)
         started = requested + timedelta(hours=1, minutes=30)
@@ -126,7 +145,7 @@ class CandleBackfillReliabilityTests(TestCase):
     def test_status_choices_exclude_queued(self):
         self.assertEqual(
             [value for value, _ in CandleBackfillRun.STATUS_CHOICES],
-            ["running", "completed", "failed"],
+            ["running", "completed", "failed", "stopped"],
         )
         run = CandleBackfillRun.objects.create(scope="initial", count=5000)
         self.assertEqual(run.status, "running")
