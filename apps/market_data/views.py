@@ -355,7 +355,7 @@ def candle_backfill_control(request):
             run=run,
             level="warning" if action in {"pause", "stop"} else "notice",
             event_type="failed" if action == "stop" else "warning",
-            message=("Operator stopped this run; queued delivery was revoked and active work will stop before its next broker request."
+            message=("Operator requested stop; queued delivery was revoked and active work will stop before its next broker request."
                      if action == "stop" else
                      f"Operator requested {action}; worker checkpoint enforcement is active."),
             task_id=run.task_id,
