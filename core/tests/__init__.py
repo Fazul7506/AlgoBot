@@ -34,22 +34,18 @@ class AlgoBotExperienceTests(TestCase):
 
 
 class AuthExperienceCleanupTests(TestCase):
-    @patch('core.views.DerivOAuthService.create_authorization_url', return_value='https://auth.deriv.test/authorize')
-    @patch('core.views.DerivOAuthService.store_oauth_state_in_session')
-    @patch('core.views.DerivOAuthService.generate_state', return_value='state')
-    @patch('core.views.DerivOAuthService.generate_pkce_pair', return_value=('verifier', 'challenge'))
-    @patch('core.views.DerivOAuthService.validate_configuration', return_value=(True, None))
-    @override_settings(DERIV_REDIRECT_URI='http://testserver/brokers/callback/')
-    def test_auth_aliases_start_deriv_oauth_without_a_local_login(self, validate_configuration, generate_pkce, generate_state, store_state, create_url):
-        for path in ('/login/', '/register/', '/forgot-password/', '/reset-password/demo-token/', '/verify-email/'):
+    def test_account_pages_render_real_forms_without_redirecting_to_deriv_oauth(self):
+        pages = (
+            ("/login/", "Username or email"),
+            ("/register/", "Create your account"),
+            ("/forgot-password/", "Reset your password"),
+            ("/reset-password/demo-token/", "Choose a new password"),
+            ("/verify-email/", "Verify your email"),
+        )
+        for path, expected in pages:
             response = self.client.get(path)
-            self.assertEqual(response.status_code, 302, path)
-            self.assertEqual(response['Location'], 'https://auth.deriv.test/authorize', path)
-        self.assertEqual(validate_configuration.call_count, 5)
-        self.assertEqual(generate_pkce.call_count, 5)
-        self.assertEqual(generate_state.call_count, 5)
-        self.assertEqual(store_state.call_count, 5)
-        self.assertEqual(create_url.call_count, 5)
+            self.assertEqual(response.status_code, 200, path)
+            self.assertContains(response, expected, msg_prefix=path)
 
     @patch('core.views.DerivOAuthService.create_authorization_url', return_value='https://auth.deriv.test/authorize')
     @patch('core.views.DerivOAuthService.store_oauth_state_in_session')
