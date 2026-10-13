@@ -251,6 +251,9 @@ def _backfill_timeframe_progress(scope, symbol, timeframe, payload, run_id=None)
     phase = payload.get("status")
     failed = phase == "failed"
     completed = phase != "started"
+    # Check operator commands immediately before each broker request.
+    if phase == "started" and run_id:
+        _honor_backfill_operator_command(run_id)
     with transaction.atomic():
         run = (
             CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
@@ -340,19 +343,21 @@ def _replace_stale_candle_window_after_success(result):
     return removed
 
 def _honor_backfill_operator_command(run_id):
-    """Apply pause/stop requests at safe symbol boundaries."""
+    """Block broker requests while paused and fail closed after stop/terminal state."""
     import time
-    from .models import CandleBackfillRun, CandleBackfillEvent
+    from .models import CandleBackfillRun
     while True:
-        run = CandleBackfillRun.objects.filter(pk=run_id).first()
+        run = CandleBackfillRun.objects.filter(pk=run_id).only("status", "result").first()
         if not run:
             raise RuntimeError("Backfill run disappeared; refusing to continue.")
+        if run.status != "running":
+            raise RuntimeError(f"Backfill run is terminal ({run.status}); refusing further broker requests.")
         command = str((run.result or {}).get("operator_command", "")).lower()
         if command == "stop":
-            raise RuntimeError("Backfill stopped by operator.")
+            raise RuntimeError("Backfill stopped by operator; refusing further broker requests.")
         if command != "pause":
             return
-        time.sleep(2)
+        time.sleep(1)
 
 
 def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
