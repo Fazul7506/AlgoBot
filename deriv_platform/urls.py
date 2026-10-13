@@ -38,6 +38,7 @@ from core.views_operations_v2 import operations_center
 from core.views_portfolio_v2 import portfolio_center, performance_center, trade_postmortems
 from core.views_entitlements import billing_entitlements
 from core.settings_api import account_settings_api
+from core.views_oauth import disconnect_deriv, refresh_deriv_token, deriv_account_status, reconnect_deriv
 from apps.developer import views as developer_views
 from apps.notifications.channel_views import notification_channels_page
 
@@ -140,6 +141,10 @@ urlpatterns = [
     path("api/auth/login/", login_view, name="login"),
     path("api/auth/change-password/", change_password, name="change_password"),
     path("api/auth/logout/", logout_view, name="logout_api"),
+    path("api/deriv/disconnect/", disconnect_deriv, name="deriv_disconnect"),
+    path("api/deriv/refresh-token/", refresh_deriv_token, name="deriv_refresh_token"),
+    path("api/deriv/status/", deriv_account_status, name="deriv_account_status"),
+    path("api/deriv/reconnect/", reconnect_deriv, name="deriv_reconnect"),
     path("api/", include("apps.brokers.urls")),
     path("api/", include("apps.execution.urls")),
     path("api/", include("apps.market_data.urls", namespace="market_data_api")),
