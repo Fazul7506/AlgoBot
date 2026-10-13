@@ -730,3 +730,65 @@ class CandleBackfillReliabilityTests(TestCase):
         run.refresh_from_db()
         self.assertEqual(run.status, "failed")
         self.assertEqual(run.error, "broker request failed")
+
+    def test_promotion_preserves_canonical_rows_for_unselected_symbols(self):
+        from apps.market_data.constants import TIMEFRAMES
+        from apps.market_data.models import (
+            Candle, CandleBackfillStagedCandle, CandleBackfillStagedTick, Tick,
+        )
+        from apps.market_data.tasks import _promote_staged_backfill
+
+        other_symbol = MarketSymbol.objects.create(
+            symbol="OTHER_100",
+            display_name="Other market",
+            market="Volatility Indices",
+            broker="deriv",
+            is_active=True,
+            is_tradable=True,
+        )
+        Candle.objects.create(
+            symbol=self.symbol, timeframe="1m", open="1", high="2", low="1",
+            close="2", epoch=100, source="old_selected",
+        )
+        Candle.objects.create(
+            symbol=other_symbol, timeframe="1m", open="3", high="4", low="3",
+            close="4", epoch=200, source="preserve_other",
+        )
+        Tick.objects.create(symbol=self.symbol, quote="1", epoch=100)
+        Tick.objects.create(symbol=other_symbol, quote="3", epoch=200)
+
+        run = CandleBackfillRun.objects.create(
+            scope="research", status="running", count=250,
+        )
+        for index, timeframe in enumerate(TIMEFRAMES):
+            CandleBackfillStagedCandle.objects.create(
+                run=run, symbol=self.symbol, timeframe=timeframe,
+                open="10", high="12", low="9", close="11",
+                epoch=1700000000 + index * 3600, source="deriv_candles",
+            )
+        CandleBackfillStagedTick.objects.create(
+            run=run, symbol=self.symbol, quote="11", epoch=1700000000,
+        )
+        series = {
+            timeframe: {"valid": 1}
+            for timeframe, seconds in TIMEFRAMES.items()
+            if timeframe != "tick" and seconds >= 60
+        }
+        series["tick-derived"] = {"valid": 1}
+        result = {"results": {self.symbol.symbol: {"timeframes": series}}}
+
+        promotion = _promote_staged_backfill(run.pk, result)
+
+        self.assertEqual(promotion["status"], "completed")
+        self.assertEqual(promotion["replaced_symbols"], [self.symbol.symbol])
+        self.assertTrue(
+            Candle.objects.filter(
+                symbol=other_symbol, timeframe="1m", epoch=200,
+                source="preserve_other",
+            ).exists()
+        )
+        self.assertTrue(Tick.objects.filter(symbol=other_symbol, epoch=200, quote="3").exists())
+        self.assertFalse(Candle.objects.filter(symbol=self.symbol, epoch=100).exists())
+        self.assertFalse(Tick.objects.filter(symbol=self.symbol, epoch=100, quote="1").exists())
+        self.assertTrue(Candle.objects.filter(symbol=self.symbol, source="deriv_candles").exists())
+
