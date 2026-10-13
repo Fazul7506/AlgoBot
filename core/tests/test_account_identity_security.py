@@ -121,7 +121,7 @@ class BrowserAccountAuthenticationTests(TestCase):
         response = self.client.post("/forgot-password/", {"email": "RESET@example.com"})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(mail.outbox), 1)
-        match = re.search(r"/reset-password/([^\s]+)", mail.outbox[0].body)
+        match = re.search(r"/reset-password/([^/\s]+)", mail.outbox[0].body)
         self.assertIsNotNone(match)
         raw_token = match.group(1).strip()
         self.assertEqual(self.client.get(f"/reset-password/{raw_token}/").status_code, 200)
