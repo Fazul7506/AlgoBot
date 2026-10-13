@@ -132,9 +132,11 @@ def register(request):
     try:
         with transaction.atomic():
             user = User.objects.create_user(username=username, email=email, password=password)
-            UserProfile.objects.get_or_create(user=user)
+            profile, _ = UserProfile.objects.get_or_create(user=user)
             Subscription.objects.get_or_create(user=user)
             BotSettings.objects.get_or_create(user=user)
+        from core.browser_auth import _send_verification
+        _send_verification(request, user, profile)
     except Exception:
         # Keep account identifiers and database details out of the public response.
         logger.exception('user_registration_failed')
@@ -194,9 +196,10 @@ def login_view(request):
 def change_password(request):
     """Change user password endpoint"""
     try:
-        old_password = request.data.get('old_password', '').strip()
-        new_password = request.data.get('new_password', '').strip()
-        new_password_confirm = request.data.get('new_password_confirm', '').strip()
+        # Passwords may legitimately contain whitespace; never normalize them.
+        old_password = request.data.get('old_password', '')
+        new_password = request.data.get('new_password', '')
+        new_password_confirm = request.data.get('new_password_confirm', '')
         
         if not old_password or not new_password:
             return Response({
@@ -210,13 +213,15 @@ def change_password(request):
                 'message': 'New passwords do not match'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        if len(new_password) < 8:
+        user = request.user
+        try:
+            validate_password(new_password, user=user)
+        except ValidationError as exc:
             return Response({
                 'status': 'error',
-                'message': 'Password must be at least 8 characters'
+                'message': ' '.join(exc.messages)
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        user = request.user
         if not user.check_password(old_password):
             return Response({
                 'status': 'error',
@@ -226,15 +231,15 @@ def change_password(request):
         user.set_password(new_password)
         user.save()
         
-        logger.info(f"Password changed: {user.username}")
+        logger.info('user_password_changed', extra={'user_id': user.pk})
         
         return Response({
             'status': 'success',
             'message': 'Password changed successfully'
         }, status=status.HTTP_200_OK)
     
-    except Exception as e:
-        logger.error(f"Change password error: {str(e)}", exc_info=True)
+    except Exception:
+        logger.exception('user_password_change_failed')
         return Response({
             'status': 'error',
             'message': 'Password change failed'
