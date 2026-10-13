@@ -120,6 +120,15 @@ def _run_payload(run, *, include_delivery=True):
         })
     if run.error:
         notices.append({"level": "error", "message": run.error})
+    promotion = result.get("dataset_promotion") or {}
+    if promotion.get("status") == "completed":
+        notices.append({
+            "level": "success",
+            "message": (
+                f"Validated dataset promoted atomically: {int(promotion.get('canonical_candles', 0)):,} candles "
+                f"and {int(promotion.get('canonical_ticks', 0)):,} ticks. The prior canonical candle/tick dataset was replaced."
+            ),
+        })
     event_count = 0
     delivery_queue = result.get("queue") or ""
     if include_delivery:
@@ -483,6 +492,8 @@ def initial_candle_backfill(request):
             "Duplicate-safe persistence",
             "Chronological epoch integrity",
             "Explicit failed-series reporting",
+            "Run-scoped staging with full-series validation",
+            "Atomic canonical dataset promotion",
         ],
         "research_contract": [
             "Native OHLC for minute-and-higher timeframes",
@@ -492,7 +503,9 @@ def initial_candle_backfill(request):
         "recovery_contract": [
             "Single market_data queue",
             "Durable lifecycle telemetry",
-            "Controlled automatic recovery",
+            "Re-publish only the same still-running run",
+            "Terminal failures require an explicit operator restart",
+            "Failed-run staging is discarded",
         ],
     }
 
