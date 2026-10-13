@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import time
+from contextlib import contextmanager
 from decimal import Decimal
 
 import websockets
@@ -121,6 +122,32 @@ def _market_symbol(symbol: str) -> MarketSymbol:
         raise ValueError(f"Unknown active market symbol: {symbol}")
     return market_symbol
 
+@contextmanager
+def _backfill_write_guard(backfill_run_id: int | None):
+    """Serialize staged writes with Pause/Stop so stale workers cannot write after control is accepted."""
+    if not backfill_run_id:
+        with transaction.atomic():
+            yield
+        return
+
+    from .tasks import _honor_backfill_operator_command
+
+    while True:
+        # Wait outside the transaction while paused. Then lock the run row while
+        # writing so a concurrent Pause/Stop cannot commit ahead of this write.
+        _honor_backfill_operator_command(backfill_run_id)
+        with transaction.atomic():
+            run = CandleBackfillRun.objects.select_for_update().filter(pk=backfill_run_id).first()
+            if not run or run.status != "running":
+                raise RuntimeError("Backfill run is terminal or missing; refusing staged data writes.")
+            command = str((run.result or {}).get("operator_command", "")).lower()
+            if command == "stop":
+                raise RuntimeError("Backfill stopped by operator; refusing staged data writes.")
+            if command == "pause":
+                continue
+            yield
+            return
+
 
 def persist_candles(symbol: str, timeframe: str, items: list[dict], backfill_run_id: int | None = None) -> dict:
     """Persist validated broker OHLC, isolating backfill rows until promotion."""
@@ -158,7 +185,7 @@ def persist_candles(symbol: str, timeframe: str, items: list[dict], backfill_run
     if rows:
         # Backfill rows are run-scoped. Live ingestion retains the existing
         # duplicate-safe canonical upsert path.
-        with transaction.atomic():
+        with _backfill_write_guard(backfill_run_id):
             row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
             stored = list(
                 row_model.objects.select_for_update().filter(
@@ -238,7 +265,7 @@ def _aggregate_ticks_to_candles(symbol: str, ticks: list, timeframe: str, backfi
         # Repeated broker backfills must repair an existing derived bucket when
         # newer ticks change its high/low/close. Ignore-conflicts alone would
         # leave the first version permanently stale.
-        with transaction.atomic():
+        with _backfill_write_guard(backfill_run_id):
             row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
             stored = list(
                 row_model.objects.select_for_update().filter(
@@ -302,7 +329,7 @@ def fetch_and_store_ticks(symbol: str, count: int = 5000, backfill_run_id: int |
             logger.warning("Skipping malformed historical tick", extra={"symbol": symbol})
 
     if rows:
-        with transaction.atomic():
+        with _backfill_write_guard(backfill_run_id):
             row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
 
     # Aggregate from this run's ticks, never from previous canonical history.
@@ -351,7 +378,7 @@ def persist_tick_candles(symbol: str, items: list[dict], backfill_run_id: int | 
         except (KeyError, TypeError, ValueError, ArithmeticError):
             continue
     if rows:
-        with transaction.atomic():
+        with _backfill_write_guard(backfill_run_id):
             row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
     return len(rows)
 
