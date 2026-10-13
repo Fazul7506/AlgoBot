@@ -660,3 +660,26 @@ class CandleBackfillReliabilityTests(TestCase):
         with patch("time.sleep", side_effect=resume_run) as sleep:
             _honor_backfill_operator_command(self.run.pk)
         sleep.assert_called_once_with(1)
+
+
+    def test_terminal_transition_is_saved_and_cannot_be_resurrected(self):
+        from .tasks import _mark_backfill_run
+
+        run = CandleBackfillRun.objects.create(
+            scope="research", status="running", count=250,
+            task_id="terminal-guard-task",
+        )
+        _mark_backfill_run(
+            "research", run_id=run.pk, status="failed",
+            error="broker request failed", completed_at=timezone.now(),
+        )
+        run.refresh_from_db()
+        self.assertEqual(run.status, "failed")
+        self.assertEqual(run.error, "broker request failed")
+        _mark_backfill_run(
+            "research", run_id=run.pk, status="running",
+            result={"symbols_completed": 0},
+        )
+        run.refresh_from_db()
+        self.assertEqual(run.status, "failed")
+        self.assertEqual(run.error, "broker request failed")
