@@ -66,6 +66,29 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertIn("access", response.json())
         self.assertIn("refresh", response.json())
 
+    def test_api_logout_revokes_only_the_authenticated_users_refresh_token(self):
+        from rest_framework_simplejwt.exceptions import TokenError
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        user = get_user_model().objects.create_user(
+            username="logout-owner", email="logout@example.com", password="A-Strong-Password-2026!"
+        )
+        other = get_user_model().objects.create_user(
+            username="logout-other", email="other@example.com", password="A-Strong-Password-2026!"
+        )
+        refresh = RefreshToken.for_user(user)
+        other_refresh = RefreshToken.for_user(other)
+        response = self.client.post(
+            "/api/auth/logout/",
+            {"refresh": str(refresh)},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}",
+        )
+        self.assertEqual(response.status_code, 205)
+        with self.assertRaises(TokenError):
+            RefreshToken(str(refresh))
+        self.assertEqual(str(RefreshToken(str(other_refresh))["user_id"]), str(other.pk))
+
     def test_password_change_blacklists_refresh_tokens(self):
         from rest_framework_simplejwt.tokens import RefreshToken
         from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
