@@ -148,6 +148,8 @@ def _run_payload(run, *, include_delivery=True):
         "current_symbol": run.current_symbol, "current_timeframe": run.current_timeframe,
         "worker_hostname": run.worker_hostname, "duration_seconds": duration_seconds,
         "result": result,
+        "operator_command": result.get("operator_command", ""),
+        "dataset_promotion": result.get("dataset_promotion", {}),
         "progress": {
             "total": result.get("symbols_total", 0),
             "completed": result.get("symbols_completed", 0),
@@ -195,7 +197,7 @@ def symbol_detail(request, symbol):
     return render(request, "market_data/symbol_detail.html", {"symbol": symbol})
 
 
-def _history_payload(limit=50):
+def _history_payload(limit=10):
     runs = CandleBackfillRun.objects.order_by("-requested_at", "-id")[:limit]
     return [_run_payload(run) for run in runs]
 
@@ -492,16 +494,16 @@ def initial_candle_backfill(request):
     }
 
     history_total = CandleBackfillRun.objects.count()
-    history = list(CandleBackfillRun.objects.order_by("-requested_at", "-id")[:50])
+    history = list(CandleBackfillRun.objects.order_by("-requested_at", "-id")[:10])
     selected = _run_from_request(request)
     if selected is None and history:
         selected = history[0]
 
     if request.GET.get("format") == "json":
         try:
-            limit = min(max(int(request.GET.get("history_limit", "50") or 50), 1), 500)
+            limit = min(max(int(request.GET.get("history_limit", "10") or 10), 1), 500)
         except ValueError:
-            limit = 50
+            limit = 10
         selected = _run_from_request(request)
         if selected is None:
             selected = CandleBackfillRun.objects.order_by("-requested_at", "-id").first()
