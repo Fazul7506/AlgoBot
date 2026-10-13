@@ -21,7 +21,7 @@ from core.views import (
     register_page, dashboard_page, markets_page, strategies_page, trading_page,
     backtesting_page, predictions_page, settings_page, profile_page,
     terms_page, privacy_page, forgot_password_page, reset_password_page,
-    verify_email_page, cookie_policy_page, licensing_page, contact_page,
+    verify_email_page, account_identity_page, cookie_policy_page, licensing_page, contact_page,
     about_page, public_status_page, risk_page, orders_page, positions_page,
     signals_page, analysis_page, operations_module_page, strategy_builder_page,
 )
@@ -134,6 +134,7 @@ urlpatterns = [
     path("forgot-password/", forgot_password_page, name="forgot_password_page"),
     re_path(r"^reset-password/(?P<token>[A-Za-z0-9_-]+)/$", reset_password_page, name="reset_password_page"),
     path("verify-email/", verify_email_page, name="verify_email_page"),
+    path("account/identity/", login_required(account_identity_page), name="account_identity_page"),
     path("api/auth/browser-token/", browser_api_token, name="browser_api_token"),
     path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
