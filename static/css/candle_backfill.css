@@ -220,3 +220,7 @@
 .rb-operator-controls [data-backfill-action=pause]:not(:disabled):hover{background:#3b3019}
 .rb-operator-controls [data-backfill-action=resume]:not(:disabled):hover{background:#173827}
 .rb-operator-controls [data-control-feedback]{min-height:16px}
+
+/* Operator cancellation is distinct from broker/worker failure. */
+.rb-pill[data-state=stopped]{background:#26232d;color:#d0b8ff;border-color:#55446e}
+.rb-history-status[data-state="stopped"]{background:rgba(168,139,250,.14);color:#d0b8ff}
