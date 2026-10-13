@@ -636,7 +636,7 @@ def _mark_backfill_run(
             )
         # A terminal run may receive stale progress or duplicate deliveries;
         # reject those updates before mutating the in-memory model instance.
-        if run.status in {"completed", "failed"}:
+        if run.status in {"completed", "failed", "stopped"}:
             return run
         updates = []
         for field, value in (
