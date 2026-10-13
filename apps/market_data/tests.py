@@ -7,7 +7,12 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
-from .models import Candle, MarketSymbol, Tick
+from .constants import TIMEFRAMES
+from .historical import persist_candles
+from .models import (
+    Candle, CandleBackfillRun, CandleBackfillStagedCandle,
+    CandleBackfillStagedTick, MarketSymbol, Tick,
+)
 
 
 class BrokerTickApiTests(TestCase):
@@ -97,3 +102,98 @@ class DataCenterQualityApiTests(TestCase):
         response = self.client.get("/api/data-center/quality/")
         row = next(item for item in response.json()["symbols"] if item["symbol"] == "DC_EMPTY")
         self.assertEqual(row["status"], "no_data")
+
+
+class CandleBackfillStagingTests(TestCase):
+    def setUp(self):
+        self.symbol = MarketSymbol.objects.create(
+            symbol="STAGE_TEST", display_name="Staging Test",
+            market="Derived Indices", broker="deriv",
+            is_active=True, is_tradable=True,
+        )
+        self.run = CandleBackfillRun.objects.create(
+            scope="research", status="running", count=10, task_id="stage-test-task",
+        )
+
+    def test_backfill_candles_are_staged_not_written_to_canonical_table(self):
+        result = persist_candles(
+            "STAGE_TEST", "1m",
+            [{"epoch": 60, "open": "100", "high": "102", "low": "99", "close": "101", "volume": 1}],
+            backfill_run_id=self.run.pk,
+        )
+        self.assertEqual(result["valid"], 1)
+        self.assertEqual(Candle.objects.filter(symbol=self.symbol).count(), 0)
+        self.assertEqual(
+            CandleBackfillStagedCandle.objects.filter(run=self.run, symbol=self.symbol, timeframe="1m").count(),
+            1,
+        )
+
+    def test_failed_run_delivery_is_rejected_before_work(self):
+        from .tasks import _backfill_delivery_guard
+
+        self.run.status = "failed"
+        self.run.save(update_fields=["status"])
+        allowed, reason = _backfill_delivery_guard(self.run.pk, "stage-test-task")
+        self.assertFalse(allowed)
+        self.assertEqual(reason, "terminal_failed")
+
+    def _complete_staged_dataset(self):
+        for timeframe, seconds in TIMEFRAMES.items():
+            epoch = 86400 if seconds == 0 else 86400 - (86400 % seconds)
+            CandleBackfillStagedCandle.objects.create(
+                run=self.run, symbol=self.symbol, timeframe=timeframe, epoch=epoch,
+                open="100", high="102", low="99", close="101", volume="1",
+                source="deriv_candles" if seconds >= 60 else "tick_stream",
+            )
+        CandleBackfillStagedTick.objects.create(
+            run=self.run, symbol=self.symbol, quote="101", epoch=86400, volume="0",
+        )
+        native = {
+            timeframe: {"valid": 1}
+            for timeframe, seconds in TIMEFRAMES.items()
+            if timeframe != "tick" and seconds >= 60
+        }
+        native["tick-derived"] = {"valid": 1}
+        return {"results": {"STAGE_TEST": {"timeframes": native}}}
+
+    def test_promotion_replaces_old_candles_and_ticks_only_after_validation(self):
+        from .tasks import _promote_staged_backfill
+
+        old_candle = Candle.objects.create(
+            symbol=self.symbol, timeframe="1m", epoch=60,
+            open="1", high="1", low="1", close="1",
+        )
+        old_tick = Tick.objects.create(symbol=self.symbol, quote="1", epoch=60)
+        result = self._complete_staged_dataset()
+
+        promoted = _promote_staged_backfill(self.run.pk, result)
+
+        self.assertTrue(promoted["replaced_previous_dataset"])
+        self.assertFalse(Candle.objects.filter(pk=old_candle.pk).exists())
+        self.assertFalse(Tick.objects.filter(pk=old_tick.pk).exists())
+        self.assertEqual(Candle.objects.filter(symbol=self.symbol).count(), len(TIMEFRAMES))
+        self.assertEqual(Tick.objects.filter(symbol=self.symbol).count(), 1)
+        self.run.refresh_from_db()
+        self.assertEqual(self.run.status, "completed")
+        self.assertEqual(self.run.result["dataset_promotion"]["run_id"], self.run.pk)
+
+    def test_failed_promotion_rolls_back_old_dataset(self):
+        from unittest.mock import patch
+        from .tasks import _promote_staged_backfill
+
+        old_candle = Candle.objects.create(
+            symbol=self.symbol, timeframe="1m", epoch=60,
+            open="1", high="1", low="1", close="1",
+        )
+        old_tick = Tick.objects.create(symbol=self.symbol, quote="1", epoch=60)
+        result = self._complete_staged_dataset()
+
+        with patch.object(Candle.objects, "bulk_create", side_effect=RuntimeError("simulated insert failure")):
+            with self.assertRaises(RuntimeError):
+                _promote_staged_backfill(self.run.pk, result)
+
+        self.assertTrue(Candle.objects.filter(pk=old_candle.pk).exists())
+        self.assertTrue(Tick.objects.filter(pk=old_tick.pk).exists())
+        self.assertTrue(CandleBackfillStagedCandle.objects.filter(run=self.run).exists())
+        self.run.refresh_from_db()
+        self.assertEqual(self.run.status, "running")
