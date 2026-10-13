@@ -324,6 +324,23 @@ def _symbol_backfill_failed(payload):
     )
 
 
+def _truncate_empty_staging_tables():
+    """Release staging-table storage when no run still owns staged rows."""
+    from django.db import connection
+    from .models import CandleBackfillStagedCandle, CandleBackfillStagedTick
+
+    if connection.vendor != "postgresql":
+        return
+    if CandleBackfillStagedCandle.objects.exists() or CandleBackfillStagedTick.objects.exists():
+        return
+    quote = connection.ops.quote_name
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"TRUNCATE TABLE {quote(CandleBackfillStagedCandle._meta.db_table)}, "
+            f"{quote(CandleBackfillStagedTick._meta.db_table)}"
+        )
+
+
 def _discard_staged_backfill(run_id):
     """Drop unpromoted rows after a failed or stopped run to reclaim DB space."""
     if not run_id:
@@ -332,6 +349,7 @@ def _discard_staged_backfill(run_id):
         from .models import CandleBackfillStagedCandle, CandleBackfillStagedTick
         CandleBackfillStagedCandle.objects.filter(run_id=run_id).delete()
         CandleBackfillStagedTick.objects.filter(run_id=run_id).delete()
+        _truncate_empty_staging_tables()
     except Exception:
         logger.exception("Unable to discard staged candle backfill rows", extra={"run_id": run_id})
 
@@ -433,6 +451,7 @@ def _promote_staged_backfill(run_id, result):
 
         CandleBackfillStagedCandle.objects.filter(run_id=run_id).delete()
         CandleBackfillStagedTick.objects.filter(run_id=run_id).delete()
+        _truncate_empty_staging_tables()
         result["dataset_promotion"] = {
             "status": "completed", "run_id": run_id,
             "canonical_candles": promoted_candles, "canonical_ticks": promoted_ticks,
