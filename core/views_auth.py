@@ -5,6 +5,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.models import User
@@ -23,6 +24,34 @@ logger = logging.getLogger(__name__)
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    identifier = serializers.CharField(required=False, write_only=True)
+    email = serializers.EmailField(required=False, write_only=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Keep the legacy username field while allowing email/identifier clients.
+        self.fields[self.username_field].required = False
+
+    def validate(self, attrs):
+        identifier = str(
+            attrs.pop('identifier', None)
+            or attrs.pop('email', None)
+            or attrs.get(self.username_field)
+            or ''
+        ).strip()
+        if not identifier:
+            raise serializers.ValidationError({self.username_field: 'Username or email is required.'})
+        if '@' in identifier:
+            matches = User.objects.filter(email__iexact=identifier)
+            if matches.count() != 1:
+                raise serializers.ValidationError('Invalid credentials.')
+            attrs[self.username_field] = matches.first().get_username()
+        elif not User.objects.filter(**{self.username_field: identifier}).exists():
+            matches = User.objects.filter(**{f'{self.username_field}__iexact': identifier})
+            if matches.count() == 1:
+                attrs[self.username_field] = matches.first().get_username()
+        return super().validate(attrs)
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
