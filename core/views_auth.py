@@ -153,6 +153,7 @@ def register(request):
     try:
         User._meta.get_field('username').clean(username, None)
         validate_email(email)
+        validate_password(password, user=User(username=username, email=email))
     except ValidationError as exc:
         return Response({'status': 'error', 'message': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
     if User.objects.filter(username__iexact=username).exists():
@@ -161,30 +162,28 @@ def register(request):
         return Response({'status': 'error', 'message': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        validate_password(password, user=User(username=username, email=email))
-    except ValidationError as exc:
-        return Response({'status': 'error', 'message': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
         with transaction.atomic():
             user = User.objects.create_user(username=username, email=email, password=password)
             profile, _ = UserProfile.objects.get_or_create(user=user)
             Subscription.objects.get_or_create(user=user)
             BotSettings.objects.get_or_create(user=user)
-        from core.browser_auth import _send_verification
-        _send_verification(request, user, profile)
+    except IntegrityError:
+        logger.info('user_registration_conflict')
+        return Response({'status': 'error', 'message': 'Username or email already registered'}, status=status.HTTP_409_CONFLICT)
     except Exception:
-        # Keep account identifiers and database details out of the public response.
         logger.exception('user_registration_failed')
-        return Response({'status': 'error', 'message': 'Registration could not be completed. Check the username and email, then retry.'}, status=status.HTTP_409_CONFLICT)
+        return Response({'status': 'error', 'message': 'Registration could not be completed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    from core.browser_auth import _send_verification
+    email_sent = _send_verification(request, user, profile)
     logger.info('user_registered', extra={'user_id': user.pk})
     return Response({
         'status': 'success',
-        'message': 'User registered successfully',
+        'message': 'User registered successfully' if email_sent else 'User registered; verification email delivery is temporarily unavailable.',
         'user_id': user.id,
         'username': user.username,
         'email': user.email,
+        'email_verification_sent': email_sent,
     }, status=status.HTTP_201_CREATED)
 
 
