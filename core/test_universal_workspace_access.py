@@ -125,8 +125,10 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("function routeMatches(path,href)", shell)
         self.assertIn("path.startsWith(`${target}/`)", shell)
         self.assertIn("href.length>activeLength", shell)
-        self.assertIn("link.setAttribute('aria-current','page')", shell)
+        # Assert the actual active-link variable is given the accessible current-page state.
+        self.assertIn("active.setAttribute('aria-current','page')", shell)
         self.assertIn("link.setAttribute('title',collapsed?label:'')", shell)
+
     def test_sidebar_account_switch_requires_same_broker_and_verified_target(self):
         switcher = (Path(settings.BASE_DIR) / "static" / "js" / "sidebar_account_switch.js").read_text(encoding="utf-8")
         self.assertIn("const sameBroker=", switcher)
@@ -183,7 +185,6 @@ class UniversalWorkspaceAccessTests(TestCase):
                 r"(?is)(?:app-sidebar|app-shell|mobile-menu-button)[^{}]*\{[^{}]*\b(?:margin-left\s*:|position\s*:\s*fixed|inset\s*:|width\s*:\s*260px|min-width\s*:\s*260px|transform\s*:\s*translate)",
                 name,
             )
-
 
     def test_shared_component_styles_and_transport_contracts_are_canonical(self):
         response = self.client.get("/dashboard/")
