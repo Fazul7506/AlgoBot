@@ -1090,13 +1090,19 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
             _discard_staged_backfill(run_id)
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
-            if run.status == "completed" and run.completed_at:
+            already_promoted_by_this_run = (
+                run.status == "completed"
+                and run.completed_at
+                and (run.result or {}).get("dataset_promotion", {}).get("run_id") == run_id
+            )
+            if run.status == "completed" and run.completed_at and not already_promoted_by_this_run:
                 return run.result or {"status": "completed"}
-            run.result = result
-            run.status = "failed" if failed else "completed"
-            run.error = error
-            run.completed_at = timezone.now()
-            run.save(update_fields=["result", "status", "error", "completed_at"])
+            if not already_promoted_by_this_run:
+                run.result = result
+                run.status = "failed" if failed else "completed"
+                run.error = error
+                run.completed_at = timezone.now()
+                run.save(update_fields=["result", "status", "error", "completed_at"])
         _emit_backfill_event(
             "initial", run_id=run_id, level="error" if failed else "success",
             event_type="failed" if failed else "completed",
