@@ -418,6 +418,9 @@ class CandleBackfillUiTests(TestCase):
             self.assertEqual(response.status_code, 200, response.content)
             run.refresh_from_db()
             self.assertEqual(run.result["operator_command"], action)
+            if action == "stop":
+                self.assertEqual(run.status, "stopped")
+                self.assertEqual(run.error, "Backfill stopped by operator.")
             self.assertTrue(CandleBackfillEvent.objects.filter(
                 run=run, message__icontains=f"requested {action}"
             ).exists())
