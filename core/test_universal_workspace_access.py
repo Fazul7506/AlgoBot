@@ -130,6 +130,7 @@ class UniversalWorkspaceAccessTests(TestCase):
     def test_sidebar_account_switch_requires_same_broker_and_verified_target(self):
         switcher = (Path(settings.BASE_DIR) / "static" / "js" / "sidebar_account_switch.js").read_text(encoding="utf-8")
         self.assertIn("const sameBroker=", switcher)
+        self.assertIn("!!brokerName&&String(a.broker?.name||a.broker_name||'').trim().toLowerCase()===brokerName", switcher)
         self.assertIn("accounts.find(a=>eligible(a)&&sameBroker(a))||null", switcher)
         self.assertNotIn("||accounts.find(eligible)||null", switcher)
         # An alternate account can be credential-ready before its own broker connection is established.
