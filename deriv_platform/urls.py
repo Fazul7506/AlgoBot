@@ -1,6 +1,6 @@
 """Canonical URL configuration for the AlgoBot Django project."""
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, re_path, include
 from django.views.generic import RedirectView
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
@@ -132,7 +132,7 @@ urlpatterns = [
     path("data-deletion/", lambda request: render(request, "core/data_deletion.html"), name="data_deletion_page"),
     path("status/", public_status_page, name="public_status_page"),
     path("forgot-password/", forgot_password_page, name="forgot_password_page"),
-    path("reset-password/<str:token>/", reset_password_page, name="reset_password_page"),
+    re_path(r"^reset-password/(?P<token>[A-Za-z0-9_-]+)/$", reset_password_page, name="reset_password_page"),
     path("verify-email/", verify_email_page, name="verify_email_page"),
     path("api/auth/browser-token/", browser_api_token, name="browser_api_token"),
     path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
