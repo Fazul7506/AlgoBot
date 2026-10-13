@@ -70,7 +70,9 @@
     const feedback = panel.querySelector("[data-control-feedback]");
     if (feedback && !feedback.dataset.pending) {
       feedback.textContent = !canControl
-        ? "Select a running execution to enable controls."
+        ? command === "stop"
+          ? "Stopped by operator. This run is terminal; queued delivery was revoked."
+          : "Select a running execution to enable controls."
         : command === "pause"
           ? "Paused — the worker is waiting for Resume before its next broker request."
           : "Controls target execution #" + run.id + ".";
