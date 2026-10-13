@@ -589,6 +589,9 @@ def _mark_backfill_run(
                 scope=scope, status="running"
             ).order_by("-requested_at", "-id").first()
         )
+        if run is None and run_id is not None:
+            # A stale delivery must never recreate a deleted run under a new ID.
+            return None
         if run is None:
             run = CandleBackfillRun.objects.create(
                 scope=scope,
