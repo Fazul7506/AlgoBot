@@ -611,6 +611,10 @@ def _mark_backfill_run(
                 count=int(count or 5000),
                 symbol=symbol or "",
             )
+        # A terminal run may receive stale progress or duplicate deliveries;
+        # reject those updates before mutating the in-memory model instance.
+        if run.status in {"completed", "failed"}:
+            return run
         updates = []
         for field, value in (
             ("status", status),
@@ -633,10 +637,6 @@ def _mark_backfill_run(
                     value = next_result
                 setattr(run, field, value)
                 updates.append(field)
-        # Once a run reaches a terminal state, stale/duplicate deliveries must
-        # not overwrite its status or progress and accidentally resurrect it.
-        if run.status in {"completed", "failed"}:
-            return run
         if updates:
             run.save(update_fields=sorted(set(updates)))
         return run
