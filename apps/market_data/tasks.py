@@ -414,10 +414,20 @@ def _promote_staged_backfill(run_id, result):
         if command in {"pause", "stop"}:
             raise RuntimeError(f"Run command is {command}; refusing to promote its data.")
 
-        # Canonical replacement and run completion commit together. A database
-        # error rolls back the deletion and leaves the old dataset intact.
-        Candle.objects.all().delete()
-        Tick.objects.all().delete()
+        # Canonical replacement and run completion commit together. PostgreSQL
+        # TRUNCATE reclaims the old table storage immediately and is transactional;
+        # the fallback keeps SQLite-based tests supported. Any later insert error
+        # rolls back the replacement and preserves the previous canonical dataset.
+        from django.db import connection
+        if connection.vendor == "postgresql":
+            quote = connection.ops.quote_name
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"TRUNCATE TABLE {quote(Candle._meta.db_table)}, {quote(Tick._meta.db_table)}"
+                )
+        else:
+            Candle.objects.all().delete()
+            Tick.objects.all().delete()
 
         promoted_candles, promoted_ticks = _copy_staged_backfill_rows(run_id)
 
