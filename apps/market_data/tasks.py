@@ -418,6 +418,20 @@ def _promote_staged_backfill(run_id, result):
         for row in CandleBackfillStagedCandle.objects.filter(run_id=run_id)
         .values("symbol__symbol", "timeframe").annotate(count=Count("id"))
     }
+    run_symbols = set(symbol_results)
+    staged_candle_symbols = set(
+        CandleBackfillStagedCandle.objects.filter(run_id=run_id)
+        .values_list("symbol__symbol", flat=True).distinct()
+    )
+    staged_tick_symbols = set(
+        CandleBackfillStagedTick.objects.filter(run_id=run_id)
+        .values_list("symbol__symbol", flat=True).distinct()
+    )
+    if staged_candle_symbols != run_symbols or staged_tick_symbols != run_symbols:
+        raise RuntimeError(
+            "Staging validation failed: staged symbols do not exactly match the validated run; "
+            "canonical data was not changed."
+        )
     for symbol in symbol_results:
         for timeframe in expected_timeframes:
             if staged_counts.get((symbol, timeframe), 0) < 1:
@@ -436,20 +450,14 @@ def _promote_staged_backfill(run_id, result):
         if command in {"pause", "stop"}:
             raise RuntimeError(f"Run command is {command}; refusing to promote its data.")
 
-        # Canonical replacement and run completion commit together. PostgreSQL
-        # TRUNCATE reclaims the old table storage immediately and is transactional;
-        # the fallback keeps SQLite-based tests supported. Any later insert error
-        # rolls back the replacement and preserves the previous canonical dataset.
-        from django.db import connection
-        if connection.vendor == "postgresql":
-            quote = connection.ops.quote_name
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    f"TRUNCATE TABLE {quote(Candle._meta.db_table)}, {quote(Tick._meta.db_table)}"
-                )
-        else:
-            Candle.objects.all().delete()
-            Tick.objects.all().delete()
+        # Replace only symbols represented by this validated run. A user can
+        # intentionally backfill one market; deleting/truncating the whole tables
+        # here would silently erase every other market's canonical history.
+        # Keep the scoped deletes and staged copy in this same transaction so any
+        # insert failure rolls back and preserves the previous canonical dataset.
+        symbol_codes = sorted(run_symbols)
+        Candle.objects.filter(symbol__symbol__in=symbol_codes).delete()
+        Tick.objects.filter(symbol__symbol__in=symbol_codes).delete()
 
         promoted_candles, promoted_ticks = _copy_staged_backfill_rows(run_id)
 
@@ -459,7 +467,7 @@ def _promote_staged_backfill(run_id, result):
         result["dataset_promotion"] = {
             "status": "completed", "run_id": run_id,
             "canonical_candles": promoted_candles, "canonical_ticks": promoted_ticks,
-            "replaced_previous_dataset": True,
+            "replaced_previous_dataset": True, "replaced_symbols": symbol_codes,
         }
         run.status = "completed"
         run.completed_at = timezone.now()
