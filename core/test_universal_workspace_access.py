@@ -125,6 +125,10 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("const sameBroker=", switcher)
         self.assertIn("accounts.find(a=>eligible(a)&&sameBroker(a))||null", switcher)
         self.assertNotIn("||accounts.find(eligible)||null", switcher)
+        # account_context.js handles [data-account-switch] in document capture;
+        # pin the exact eligible ID so its generic fallback cannot select another broker.
+        self.assertIn("data-account-id=\"${safe(target?.id||'')}\"", switcher)
+        self.assertIn("const explicit=b.dataset.accountId||b.dataset.accountTarget", (Path(settings.BASE_DIR) / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8"))
         self.assertIn("current.is_connected===true&&String(current.status||'').toLowerCase()==='active'", switcher)
 
     def test_sidebar_account_area_remains_inside_drawer_end_to_end(self):
