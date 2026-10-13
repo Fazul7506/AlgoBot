@@ -207,12 +207,17 @@ def reset_password_page(request, token=None):
             return _render(request, "reset_password", token=raw_token, errors=exc.messages)
         now = timezone.now()
         with transaction.atomic():
-            locked = PasswordResetToken.objects.select_for_update().filter(pk=reset.pk).first()
-            if not locked or not locked.is_valid():
+            locked = PasswordResetToken.objects.select_for_update().select_related("user").filter(pk=reset.pk).first()
+            if not locked or not locked.is_valid() or not locked.user.is_active:
                 return _render(request, "reset_password", token=raw_token, invalid=True)
             locked.user.set_password(password)
             locked.user.save(update_fields=["password"])
             PasswordResetToken.objects.filter(user=locked.user, used=False).update(used=True, used_at=now)
+            # Password recovery invalidates every existing refresh token just
+            # like an authenticated password change does.
+            from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+            for outstanding in OutstandingToken.objects.filter(user=locked.user):
+                BlacklistedToken.objects.get_or_create(token=outstanding)
         auth_logout(request)
         messages.success(request, "Your password has been reset. Sign in with your new password.")
         return redirect("login_page")
