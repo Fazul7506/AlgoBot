@@ -32,11 +32,21 @@ def _account(request):
         status="active",
     ).select_related("broker")
     if supplied_id:
-        return accounts.filter(pk=supplied_id).first()
+        supplied_text = str(supplied_id).strip()
+        if supplied_text.isdigit():
+            selected = accounts.filter(pk=int(supplied_text)).first()
+            if selected:
+                return selected
+        return accounts.filter(account_id=supplied_text).first()
     session = getattr(request, "session", None)
     selected_id = session.get(SESSION_KEY) if session is not None else None
     if selected_id:
-        return accounts.filter(pk=selected_id).first()
+        try:
+            return accounts.filter(pk=int(selected_id)).first()
+        except (TypeError, ValueError):
+            session.pop(SESSION_KEY, None)
+            session.modified = True
+            return None
     # One account is unambiguous; multiple accounts require an explicit choice.
     if accounts.count() == 1:
         return accounts.first()
