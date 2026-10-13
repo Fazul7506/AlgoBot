@@ -8,7 +8,8 @@
   // after the newest rendered event so live polling never duplicates those rows.
   let lastEventId = Number(body?.querySelector("[data-event-id]:last-child")?.dataset.eventId || 0);
   let selectedRunId = new URLSearchParams(window.location.search).get("run_id") || "";
-  let historyLimit = 50;
+  let selectedRun = null;
+  let historyLimit = 10;
   let polling = false;
   let tail = true;
   let query = "";
@@ -54,21 +55,30 @@
     const panel = $("[data-operator-controls]");
     if (!panel) return;
     const status = run?.status || "none";
+    const command = String(run?.operator_command || "").toLowerCase();
     panel.dataset.runId = run?.id ? String(run.id) : "";
     panel.dataset.runStatus = status;
+    panel.dataset.operatorCommand = command;
     const canControl = status === "running";
     panel.querySelectorAll("[data-backfill-action]").forEach((button) => {
-      button.disabled = !canControl;
+      const action = button.dataset.backfillAction;
+      button.disabled = !canControl
+        || (action === "pause" && command === "pause")
+        || (action === "resume" && command !== "pause");
+      button.setAttribute("aria-disabled", button.disabled ? "true" : "false");
     });
     const feedback = panel.querySelector("[data-control-feedback]");
     if (feedback && !feedback.dataset.pending) {
-      feedback.textContent = canControl
-        ? "Controls target execution #" + run.id + "."
-        : "Select a running execution to enable controls.";
+      feedback.textContent = !canControl
+        ? "Select a running execution to enable controls."
+        : command === "pause"
+          ? "Paused — the worker is waiting for Resume before its next broker request."
+          : "Controls target execution #" + run.id + ".";
     }
   };
 
   const renderRun = (run) => {
+    selectedRun = run || null;
     syncOperatorControls(run);
     if (!run) {
       text("[data-status]", "Not started");
@@ -120,6 +130,7 @@
     text("[data-status-sub]",
       state === "completed" ? "Backfill is live and persisted"
       : state === "failed" ? "Worker stopped with an error"
+      : run.operator_command === "pause" ? "Worker is paused; resume to continue broker requests."
       : run.started_at ? "Worker is processing broker history" : "Waiting for worker confirmation"
     );
     // Duration is calculated by the server from confirmed worker timestamps;
@@ -444,8 +455,7 @@
         if (feedback) feedback.textContent = error.message || "Unable to control this backfill.";
       } finally {
         if (feedback) delete feedback.dataset.pending;
-        const running = controlPanel.dataset.runStatus === "running";
-        controlPanel.querySelectorAll("[data-backfill-action]").forEach((item) => { item.disabled = !running; });
+        syncOperatorControls(selectedRun);
       }
     });
   }
