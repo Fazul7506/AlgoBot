@@ -654,6 +654,34 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertEqual(result.get("recovered"), [])
         self.assertNotIn(run.pk, result.get("stale_research_failed", []))
 
+    def test_stopped_research_run_is_not_automatically_restarted(self):
+        stopped = CandleBackfillRun.objects.create(
+            scope="research", status="stopped", count=250,
+            completed_at=timezone.now() - timedelta(hours=2),
+            error="Backfill stopped by operator.",
+            result={"operator_command": "stop"},
+        )
+        before = CandleBackfillRun.objects.filter(scope="research").count()
+        with patch("apps.market_data.tasks.backfill_research_candles.apply_async") as publish:
+            result = ensure_research_candle_backfill(count=250)
+        self.assertEqual(result["status"], "stopped_requires_manual_restart")
+        self.assertEqual(result["run_id"], stopped.pk)
+        self.assertEqual(CandleBackfillRun.objects.filter(scope="research").count(), before)
+        publish.assert_not_called()
+
+    def test_stopped_initial_run_is_not_automatically_restarted(self):
+        stopped = CandleBackfillRun.objects.create(
+            scope="initial", status="stopped", count=5000,
+            completed_at=timezone.now() - timedelta(hours=2),
+            error="Backfill stopped by operator.",
+            result={"operator_command": "stop"},
+        )
+        before = CandleBackfillRun.objects.filter(scope="initial").count()
+        result = ensure_initial_candle_backfill(count=5000)
+        self.assertEqual(result["status"], "stopped_requires_manual_restart")
+        self.assertEqual(result["run_id"], stopped.pk)
+        self.assertEqual(CandleBackfillRun.objects.filter(scope="initial").count(), before)
+
     def test_failed_initial_run_requires_manual_restart(self):
         failed = CandleBackfillRun.objects.create(
             scope="initial", status="failed", count=5000,
