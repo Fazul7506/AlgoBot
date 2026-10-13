@@ -188,7 +188,7 @@ class CandleBackfillStagingTests(TestCase):
         old_tick = Tick.objects.create(symbol=self.symbol, quote="1", epoch=60)
         result = self._complete_staged_dataset()
 
-        with patch.object(Candle.objects, "bulk_create", side_effect=RuntimeError("simulated insert failure")):
+        with patch("apps.market_data.tasks._copy_staged_backfill_rows", side_effect=RuntimeError("simulated insert failure")):
             with self.assertRaises(RuntimeError):
                 _promote_staged_backfill(self.run.pk, result)
 
