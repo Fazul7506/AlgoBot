@@ -126,12 +126,14 @@
     text("[data-start-state]",
       state === "completed" ? ((run.scope || "Backfill") + " execution completed.")
       : state === "failed" ? ((run.scope || "Backfill") + " execution failed.")
+      : state === "stopped" ? ((run.scope || "Backfill") + " execution stopped by operator.")
       : run.accepted_at ? "Worker received the backfill task."
       : "Backfill is being dispatched to the market-data worker."
     );
     text("[data-status-sub]",
       state === "completed" ? "Backfill is live and persisted"
       : state === "failed" ? "Worker stopped with an error"
+      : state === "stopped" ? "Execution stopped; no further worker writes are allowed."
       : run.operator_command === "pause" ? "Worker is paused; resume to continue broker requests."
       : run.started_at ? "Worker is processing broker history" : "Waiting for worker confirmation"
     );
