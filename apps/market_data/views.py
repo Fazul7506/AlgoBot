@@ -25,6 +25,8 @@ def _celery_state(run):
         return "SUCCESS"
     if run.status == "failed":
         return "FAILURE"
+    if run.status == "stopped":
+        return "REVOKED"
     if run.started_at:
         return "STARTED"
     # PostgreSQL is the authoritative lifecycle store for Candle Backfill.
@@ -53,6 +55,7 @@ def _run_payload(run, *, include_delivery=True):
     status_label = {
         "completed": "Completed",
         "failed": "Failed",
+        "stopped": "Stopped",
         "running": "Running",
     }.get(run.status, run.get_status_display())
     heartbeat_age = None
@@ -77,6 +80,8 @@ def _run_payload(run, *, include_delivery=True):
         worker_state = "COMPLETED"
     elif run.status == "failed":
         worker_state = "FAILED"
+    elif run.status == "stopped":
+        worker_state = "STOPPED"
     elif not run.started_at and run.accepted_at:
         worker_state = "RECEIVED"
     elif not run.started_at:
@@ -94,6 +99,9 @@ def _run_payload(run, *, include_delivery=True):
     elif run.status == "failed":
         render_status = "failed"
         render_status_label = "Failed"
+    elif run.status == "stopped":
+        render_status = "canceled"
+        render_status_label = "Stopped"
     elif run.started_at:
         render_status = "running"
         render_status_label = "Running"
@@ -102,7 +110,15 @@ def _run_payload(run, *, include_delivery=True):
         render_status_label = "Pending"
     if run.status == "running" and not run.started_at:
         status_label = "Worker received" if run.accepted_at else "Dispatching"
+    if run.status == "running" and str(result.get("operator_command", "")).lower() == "pause":
+        status_label = "Paused"
+        worker_state = "PAUSED"
     notices = []
+    if run.status == "running" and str(result.get("operator_command", "")).lower() == "pause":
+        notices.append({
+            "level": "warning",
+            "message": "This execution is paused by the operator. The worker will not issue another broker-history request until Resume is selected.",
+        })
     if run.status == "running" and not run.started_at and run.accepted_at:
         notices.append({
             "level": "info",
@@ -120,6 +136,15 @@ def _run_payload(run, *, include_delivery=True):
         })
     if run.error:
         notices.append({"level": "error", "message": run.error})
+    promotion = result.get("dataset_promotion") or {}
+    if promotion.get("status") == "completed":
+        notices.append({
+            "level": "success",
+            "message": (
+                f"Validated dataset promoted atomically: {int(promotion.get('canonical_candles', 0)):,} candles "
+                f"and {int(promotion.get('canonical_ticks', 0)):,} ticks. The prior canonical candle/tick dataset was replaced."
+            ),
+        })
     event_count = 0
     delivery_queue = result.get("queue") or ""
     if include_delivery:
@@ -148,6 +173,8 @@ def _run_payload(run, *, include_delivery=True):
         "current_symbol": run.current_symbol, "current_timeframe": run.current_timeframe,
         "worker_hostname": run.worker_hostname, "duration_seconds": duration_seconds,
         "result": result,
+        "operator_command": result.get("operator_command", ""),
+        "dataset_promotion": result.get("dataset_promotion", {}),
         "progress": {
             "total": result.get("symbols_total", 0),
             "completed": result.get("symbols_completed", 0),
@@ -195,7 +222,7 @@ def symbol_detail(request, symbol):
     return render(request, "market_data/symbol_detail.html", {"symbol": symbol})
 
 
-def _history_payload(limit=50):
+def _history_payload(limit=10):
     runs = CandleBackfillRun.objects.order_by("-requested_at", "-id")[:limit]
     return [_run_payload(run) for run in runs]
 
@@ -310,26 +337,63 @@ def candle_backfill_control(request):
         run_id = int(payload.get("run_id"))
     except (TypeError, ValueError):
         return JsonResponse({"error": "A valid run_id is required."}, status=400)
+    task_id = ""
     with transaction.atomic():
         run = CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
         if not run:
             return JsonResponse({"error": "Backfill run not found."}, status=404)
-        if run.status != "running":
-            return JsonResponse({"error": "Only a running backfill can be controlled."}, status=409)
         result = dict(run.result or {})
+        current_command = str(result.get("operator_command", "")).lower()
+        if action == "resume":
+            if run.status != "running" or current_command != "pause":
+                return JsonResponse({"error": "Only a paused execution can be resumed."}, status=409)
+        elif run.status != "running":
+            return JsonResponse({"error": "Only a running backfill can be controlled."}, status=409)
+        elif action == "pause" and current_command == "pause":
+            return JsonResponse({"error": "This execution is already paused."}, status=409)
         result["operator_command"] = action
         result["operator_command_at"] = timezone.now().isoformat()
         result["operator_command_by"] = request.user.pk
-        run.result = result
-        run.save(update_fields=["result"])
+        task_id = run.task_id
+        if action == "stop":
+            # Persist a terminal state before revoking delivery. Workers also
+            # check the run state before every broker request.
+            result["operator_stopped"] = True
+            run.result = result
+            run.status = "stopped"
+            run.error = "Backfill stopped by operator."
+            run.completed_at = timezone.now()
+            run.save(update_fields=["result", "status", "error", "completed_at"])
+        else:
+            run.result = result
+            run.save(update_fields=["result"])
         CandleBackfillEvent.objects.create(
-            run=run, level="warning" if action in {"pause", "stop"} else "notice",
+            run=run,
+            level="warning" if action in {"pause", "stop"} else "notice",
             event_type="warning",
-            message=f"Operator requested {action}; worker will apply it at the next safe checkpoint.",
-            task_id=run.task_id, payload={"action": action, "checkpointed": False},
+            message=("Operator requested stop; queued delivery was revoked and active work will stop before its next broker request."
+                     if action == "stop" else
+                     f"Operator requested {action}; worker checkpoint enforcement is active."),
+            task_id=run.task_id,
+            payload={"action": action, "checkpointed": action == "stop", "terminal": action == "stop"},
         )
-    return JsonResponse({"ok": True, "action": action, "run_id": run.pk,
-                         "message": f"{action.title()} requested; worker applies it at the next safe checkpoint."})
+    if action == "stop":
+        if task_id:
+            try:
+                from celery import current_app
+                current_app.control.revoke(task_id, terminate=False)
+            except Exception:
+                logger.exception("Unable to revoke stopped candle backfill task", extra={"run_id": run_id, "task_id": task_id})
+        # The stop transition has committed and staged-write transactions lock
+        # the run row, so no in-flight writer can pass its fence after this point.
+        from .tasks import _discard_staged_backfill
+        _discard_staged_backfill(run_id)
+    return JsonResponse({
+        "ok": True, "action": action, "run_id": run_id,
+        "message": ("Stopped. Queued delivery was revoked; active work will stop before its next broker request."
+                    if action == "stop" else
+                    f"{action.title()} accepted; worker checkpoint enforcement is active."),
+    })
 
 
 def initial_candle_backfill(request):
@@ -449,6 +513,8 @@ def initial_candle_backfill(request):
             "Duplicate-safe persistence",
             "Chronological epoch integrity",
             "Explicit failed-series reporting",
+            "Run-scoped staging with full-series validation",
+            "Atomic canonical dataset promotion",
         ],
         "research_contract": [
             "Native OHLC for minute-and-higher timeframes",
@@ -458,21 +524,23 @@ def initial_candle_backfill(request):
         "recovery_contract": [
             "Single market_data queue",
             "Durable lifecycle telemetry",
-            "Controlled automatic recovery",
+            "Re-publish only the same still-running run",
+            "Terminal failures require an explicit operator restart",
+            "Failed-run staging is discarded",
         ],
     }
 
     history_total = CandleBackfillRun.objects.count()
-    history = list(CandleBackfillRun.objects.order_by("-requested_at", "-id")[:50])
+    history = list(CandleBackfillRun.objects.order_by("-requested_at", "-id")[:10])
     selected = _run_from_request(request)
     if selected is None and history:
         selected = history[0]
 
     if request.GET.get("format") == "json":
         try:
-            limit = min(max(int(request.GET.get("history_limit", "50") or 50), 1), 500)
+            limit = min(max(int(request.GET.get("history_limit", "10") or 10), 1), 500)
         except ValueError:
-            limit = 50
+            limit = 10
         selected = _run_from_request(request)
         if selected is None:
             selected = CandleBackfillRun.objects.order_by("-requested_at", "-id").first()

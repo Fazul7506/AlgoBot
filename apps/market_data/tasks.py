@@ -46,6 +46,23 @@ def _recovery_backfill_queue(_attempts=0):
     return BACKFILL_QUEUE
 
 
+def _backfill_delivery_guard(run_id, task_id):
+    """Reject queued, stale, stopped, or terminal deliveries before any data writes."""
+    from .models import CandleBackfillRun
+
+    run = CandleBackfillRun.objects.filter(pk=run_id).first()
+    if not run:
+        logger.warning("Ignoring candle backfill delivery for a missing run", extra={"run_id": run_id, "task_id": task_id})
+        return False, "missing_run"
+    if run.status != "running":
+        logger.info("Ignoring candle backfill delivery for a terminal run", extra={"run_id": run_id, "status": run.status, "task_id": task_id})
+        return False, f"terminal_{run.status}"
+    if not task_id or not run.task_id or run.task_id != str(task_id):
+        logger.warning("Ignoring superseded candle backfill delivery", extra={"run_id": run_id, "task_id": task_id, "current_task_id": run.task_id})
+        return False, "superseded_delivery"
+    return True, "current"
+
+
 def _active_symbols(symbol=None):
     from .models import MarketSymbol
 
@@ -89,7 +106,9 @@ def _record_candle_backfill_worker_received(sender=None, request=None, **kwargs)
         now = timezone.now()
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
-            if not run or (run.task_id and task_id and run.task_id != task_id):
+            if not run or run.status != "running" or (run.task_id and task_id and run.task_id != task_id):
+                # A revoked or stale delivery may still reach a worker process;
+                # do not treat it as an accepted active execution.
                 return
             delivery_info = getattr(request, "delivery_info", None) or {}
             queue_name = (
@@ -251,6 +270,9 @@ def _backfill_timeframe_progress(scope, symbol, timeframe, payload, run_id=None)
     phase = payload.get("status")
     failed = phase == "failed"
     completed = phase != "started"
+    # Check operator commands immediately before each broker request.
+    if phase == "started" and run_id:
+        _honor_backfill_operator_command(run_id)
     with transaction.atomic():
         run = (
             CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
@@ -302,57 +324,176 @@ def _symbol_backfill_failed(payload):
     )
 
 
-def _replace_stale_candle_window_after_success(result):
-    """Keep only candle epochs represented by the latest fully successful run.
+def _truncate_empty_staging_tables():
+    """Release staging-table storage only while holding locks against new staged writes."""
+    from django.db import connection, transaction
+    from .models import CandleBackfillStagedCandle, CandleBackfillStagedTick
 
-    Cleanup is scoped to Candle rows for symbols/timeframes in this run. Tick
-    rows, logs, run history, snapshots, and unrelated tables are untouched.
-    """
+    if connection.vendor != "postgresql":
+        return
+    quote = connection.ops.quote_name
+    candle_table = quote(CandleBackfillStagedCandle._meta.db_table)
+    tick_table = quote(CandleBackfillStagedTick._meta.db_table)
+    with transaction.atomic():
+        # Lock before checking emptiness; otherwise a concurrent run could
+        # insert rows between the check and TRUNCATE.
+        with connection.cursor() as cursor:
+            cursor.execute(f"LOCK TABLE {candle_table}, {tick_table} IN ACCESS EXCLUSIVE MODE")
+        if CandleBackfillStagedCandle.objects.exists() or CandleBackfillStagedTick.objects.exists():
+            return
+        with connection.cursor() as cursor:
+            cursor.execute(f"TRUNCATE TABLE {candle_table}, {tick_table}")
+
+
+def _discard_staged_backfill(run_id):
+    """Drop unpromoted rows after a failed or stopped run to reclaim DB space."""
+    if not run_id:
+        return
+    try:
+        from .models import CandleBackfillStagedCandle, CandleBackfillStagedTick
+        CandleBackfillStagedCandle.objects.filter(run_id=run_id).delete()
+        CandleBackfillStagedTick.objects.filter(run_id=run_id).delete()
+        _truncate_empty_staging_tables()
+    except Exception:
+        logger.exception("Unable to discard staged candle backfill rows", extra={"run_id": run_id})
+
+
+def _copy_staged_backfill_rows(run_id):
+    """Copy staged rows with database-side INSERT...SELECT instead of Python row loops."""
+    from django.db import connection
+    from .models import Candle, CandleBackfillStagedCandle, CandleBackfillStagedTick, Tick
+
+    candle_fields = ("symbol", "timeframe", "open", "high", "low", "close", "volume", "epoch", "source", "created_at")
+    tick_fields = ("symbol", "bid", "ask", "quote", "spread", "epoch", "volume", "received_at", "created_at")
+    quote = connection.ops.quote_name
+
+    def copy_rows(target_model, staging_model, fields, run_id):
+        target_columns = ", ".join(quote(target_model._meta.get_field(name).column) for name in fields)
+        source_columns = ", ".join(quote(staging_model._meta.get_field(name).column) for name in fields)
+        target_table = quote(target_model._meta.db_table)
+        source_table = quote(staging_model._meta.db_table)
+        run_column = quote(staging_model._meta.get_field("run").column)
+        count = staging_model.objects.filter(run_id=run_id).count()
+        if count:
+            sql = (
+                f"INSERT INTO {target_table} ({target_columns}) "
+                f"SELECT {source_columns} FROM {source_table} WHERE {run_column} = %s"
+            )
+            with connection.cursor() as cursor:
+                cursor.execute(sql, [run_id])
+        return count
+
+    candle_count = copy_rows(Candle, CandleBackfillStagedCandle, candle_fields, run_id)
+    tick_count = copy_rows(Tick, CandleBackfillStagedTick, tick_fields, run_id)
+    return candle_count, tick_count
+
+
+def _promote_staged_backfill(run_id, result):
+    """Atomically replace canonical candles/ticks with one complete validated run."""
+    from django.db import transaction
+    from django.db.models import Count
     from .constants import TIMEFRAMES
-    from .models import Candle, MarketSymbol
-    removed = 0
-    for symbol, symbol_result in (result.get("results") or {}).items():
-        timeframes = (symbol_result or {}).get("timeframes") or {}
-        market_symbol = MarketSymbol.objects.filter(symbol=symbol).first()
-        if not market_symbol:
-            continue
-        for timeframe, payload in timeframes.items():
-            if timeframe == "tick-derived" or not isinstance(payload, dict):
-                continue
-            minimum = payload.get("min_epoch")
-            if minimum is None or payload.get("status") == "failed":
-                continue
-            deleted, _ = Candle.objects.filter(symbol=market_symbol, timeframe=timeframe, epoch__lt=int(minimum)).delete()
-            removed += deleted
-        tick_payload = timeframes.get("tick-derived") or {}
-        minimum_tick = tick_payload.get("min_epoch") if isinstance(tick_payload, dict) else None
-        if minimum_tick is not None and tick_payload.get("status") != "failed":
-            minimum_tick = int(minimum_tick)
-            for timeframe, seconds in TIMEFRAMES.items():
-                if timeframe == "tick" or seconds >= 60:
-                    continue
-                cutoff = minimum_tick - (minimum_tick % seconds) if seconds else minimum_tick
-                deleted, _ = Candle.objects.filter(symbol=market_symbol, timeframe=timeframe, epoch__lt=cutoff).delete()
-                removed += deleted
-            deleted, _ = Candle.objects.filter(symbol=market_symbol, timeframe="tick", epoch__lt=minimum_tick).delete()
-            removed += deleted
-    logger.info("Pruned stale candle rows after successful backfill", extra={"deleted_candle_rows": removed})
-    return removed
+    from .models import Candle, CandleBackfillRun, CandleBackfillStagedCandle, CandleBackfillStagedTick, Tick
+
+    symbol_results = result.get("results") or {}
+    if not symbol_results:
+        raise RuntimeError("Backfill produced no symbol results; refusing to replace canonical data.")
+    required_native = {key for key, seconds in TIMEFRAMES.items() if key != "tick" and seconds >= 60}
+    expected_timeframes = set(TIMEFRAMES)
+    for symbol, payload in symbol_results.items():
+        if _symbol_backfill_failed(payload):
+            raise RuntimeError(f"Backfill validation failed for {symbol}; canonical data was not changed.")
+        timeframes = (payload or {}).get("timeframes") or {}
+        missing_native = required_native - (set(timeframes) - {"tick-derived"})
+        tick_payload = timeframes.get("tick-derived")
+        if missing_native or not isinstance(tick_payload, dict) or int(tick_payload.get("valid", 0) or 0) < 1:
+            raise RuntimeError(f"Incomplete broker series for {symbol}; missing {sorted(missing_native)} or usable ticks.")
+        for timeframe in required_native:
+            series = timeframes.get(timeframe) or {}
+            if not isinstance(series, dict) or int(series.get("valid", 0) or 0) < 1:
+                raise RuntimeError(f"Empty or invalid native series {symbol} · {timeframe}; canonical data was not changed.")
+
+    staged_counts = {
+        (row["symbol__symbol"], row["timeframe"]): row["count"]
+        for row in CandleBackfillStagedCandle.objects.filter(run_id=run_id)
+        .values("symbol__symbol", "timeframe").annotate(count=Count("id"))
+    }
+    run_symbols = set(symbol_results)
+    staged_candle_symbols = set(
+        CandleBackfillStagedCandle.objects.filter(run_id=run_id)
+        .values_list("symbol__symbol", flat=True).distinct()
+    )
+    staged_tick_symbols = set(
+        CandleBackfillStagedTick.objects.filter(run_id=run_id)
+        .values_list("symbol__symbol", flat=True).distinct()
+    )
+    if staged_candle_symbols != run_symbols or staged_tick_symbols != run_symbols:
+        raise RuntimeError(
+            "Staging validation failed: staged symbols do not exactly match the validated run; "
+            "canonical data was not changed."
+        )
+    for symbol in symbol_results:
+        for timeframe in expected_timeframes:
+            if staged_counts.get((symbol, timeframe), 0) < 1:
+                raise RuntimeError(f"Staging validation failed: no rows for {symbol} · {timeframe}.")
+        if not CandleBackfillStagedTick.objects.filter(run_id=run_id, symbol__symbol=symbol).exists():
+            raise RuntimeError(f"Staging validation failed: no raw broker ticks for {symbol}.")
+
+    _honor_backfill_operator_command(run_id)
+    promoted_candles = 0
+    promoted_ticks = 0
+    with transaction.atomic():
+        run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
+        if run.status != "running":
+            raise RuntimeError(f"Run is terminal ({run.status}); refusing to promote its data.")
+        command = str((run.result or {}).get("operator_command", "")).lower()
+        if command in {"pause", "stop"}:
+            raise RuntimeError(f"Run command is {command}; refusing to promote its data.")
+
+        # Replace only symbols represented by this validated run. A user can
+        # intentionally backfill one market; deleting/truncating the whole tables
+        # here would silently erase every other market's canonical history.
+        # Keep the scoped deletes and staged copy in this same transaction so any
+        # insert failure rolls back and preserves the previous canonical dataset.
+        symbol_codes = sorted(run_symbols)
+        Candle.objects.filter(symbol__symbol__in=symbol_codes).delete()
+        Tick.objects.filter(symbol__symbol__in=symbol_codes).delete()
+
+        promoted_candles, promoted_ticks = _copy_staged_backfill_rows(run_id)
+
+        CandleBackfillStagedCandle.objects.filter(run_id=run_id).delete()
+        CandleBackfillStagedTick.objects.filter(run_id=run_id).delete()
+        _truncate_empty_staging_tables()
+        result["dataset_promotion"] = {
+            "status": "completed", "run_id": run_id,
+            "canonical_candles": promoted_candles, "canonical_ticks": promoted_ticks,
+            "replaced_previous_dataset": True, "replaced_symbols": symbol_codes,
+        }
+        run.status = "completed"
+        run.completed_at = timezone.now()
+        run.error = ""
+        run.result = result
+        run.save(update_fields=["status", "completed_at", "error", "result"])
+    logger.info("Promoted validated candle backfill dataset", extra={"run_id": run_id, "candles": promoted_candles, "ticks": promoted_ticks})
+    return result["dataset_promotion"]
+
 
 def _honor_backfill_operator_command(run_id):
-    """Apply pause/stop requests at safe symbol boundaries."""
+    """Block broker requests while paused and fail closed after stop/terminal state."""
     import time
-    from .models import CandleBackfillRun, CandleBackfillEvent
+    from .models import CandleBackfillRun
     while True:
-        run = CandleBackfillRun.objects.filter(pk=run_id).first()
+        run = CandleBackfillRun.objects.filter(pk=run_id).only("status", "result").first()
         if not run:
             raise RuntimeError("Backfill run disappeared; refusing to continue.")
+        if run.status != "running":
+            raise RuntimeError(f"Backfill run is terminal ({run.status}); refusing further broker requests.")
         command = str((run.result or {}).get("operator_command", "")).lower()
         if command == "stop":
-            raise RuntimeError("Backfill stopped by operator.")
+            raise RuntimeError("Backfill stopped by operator; refusing further broker requests.")
         if command != "pause":
             return
-        time.sleep(2)
+        time.sleep(1)
 
 
 def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
@@ -403,6 +544,7 @@ def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
                         scope, symbol, timeframe, payload, run_id=run_id
                     )
                 ) if scope else None,
+                backfill_run_id=run_id,
             )
         except Exception as exc:
             logger.warning(
@@ -491,12 +633,19 @@ def _mark_backfill_run(
                 scope=scope, status="running"
             ).order_by("-requested_at", "-id").first()
         )
+        if run is None and run_id is not None:
+            # A stale delivery must never recreate a deleted run under a new ID.
+            return None
         if run is None:
             run = CandleBackfillRun.objects.create(
                 scope=scope,
                 count=int(count or 5000),
                 symbol=symbol or "",
             )
+        # A terminal run may receive stale progress or duplicate deliveries;
+        # reject those updates before mutating the in-memory model instance.
+        if run.status in {"completed", "failed", "stopped"}:
+            return run
         updates = []
         for field, value in (
             ("status", status),
@@ -541,6 +690,13 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
     run = None
     dispatch_lock = None
     try:
+        if run_id is not None:
+            allowed, reason = _backfill_delivery_guard(run_id, task_id)
+            if not allowed:
+                return {"status": "skipped", "reason": reason, "run_id": run_id}
+            # A recovered delivery starts with a clean staging area. Canonical
+            # data is untouched until this attempt passes validation.
+            _discard_staged_backfill(run_id)
         if run_id is None:
             from .backfill_lock import acquire_backfill_dispatch_lock
             dispatch_lock = acquire_backfill_dispatch_lock("research")
@@ -605,6 +761,10 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
             message=f"Worker accepted research candle backfill task {task_id}",
             task_id=task_id, worker_hostname=_worker_identity(),
         )
+        allowed, reason = _backfill_delivery_guard(run.pk, task_id)
+        if not allowed:
+            return {"status": "skipped", "reason": reason, "run_id": run.pk}
+
         # The lock protects dispatch/run creation, not the multi-hour broker
         # fetch. The durable running row now prevents overlap; release the
         # short-TTL Redis lock before doing slow work so it cannot expire and
@@ -620,7 +780,9 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
         error = f"Historical backfill failed for: {', '.join(failed)}" if failed else ""
         result["trigger"] = (run.result or {}).get("trigger", "automatic")
         if not failed:
-            result["retention_deleted_candle_rows"] = _replace_stale_candle_window_after_success(result)
+            _promote_staged_backfill(run.pk, result)
+        else:
+            _discard_staged_backfill(run.pk)
         _mark_backfill_run(
             "research", run_id=run.pk, status="failed" if failed else "completed",
             result=result, error=error, completed_at=timezone.now(),
@@ -636,6 +798,7 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
         return result
     except Exception as exc:
         if run is not None:
+            _discard_staged_backfill(run.pk)
             _mark_backfill_run("research", run_id=run.pk, status="failed", error=str(exc), completed_at=timezone.now())
             _emit_backfill_event(
                 "research", run_id=run.pk, level="error", event_type="failed",
@@ -651,7 +814,7 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
         if terminal_run_id:
             try:
                 terminal_run = CandleBackfillRun.objects.filter(
-                    pk=terminal_run_id, status__in=("completed", "failed")
+                    pk=terminal_run_id, status="completed"
                 ).first()
                 if terminal_run and terminal_run.completed_at:
                     ensure_research_candle_backfill.apply_async(
@@ -710,6 +873,13 @@ def ensure_research_candle_backfill(count=250):
             ).order_by("-requested_at", "-id").first()
             if active:
                 return {"status": "running", "run_id": active.pk}
+
+            if latest and latest.status in {"failed", "stopped"}:
+                return {
+                    "status": "failed_requires_manual_restart" if latest.status == "failed" else "stopped_requires_manual_restart",
+                    "run_id": latest.pk,
+                    "reason": "The last research execution is terminal; automatic redispatch is disabled until an operator explicitly starts a new run.",
+                }
 
             if latest:
                 # A terminal run without completed_at is legacy/inconsistent
@@ -824,18 +994,16 @@ def ensure_initial_candle_backfill(count=5000):
             if latest and latest.status == "completed":
                 return {"status": "completed", "run_id": latest.pk}
 
+            # A failed initial run is terminal. Automatic recovery may re-publish
+            # the same still-running run, but it must not create a fresh run over
+            # and over after a terminal failure. Require an explicit operator start.
+            if latest and latest.status in {"failed", "stopped"}:
+                return {
+                    "status": "failed_requires_manual_restart" if latest.status == "failed" else "stopped_requires_manual_restart",
+                    "run_id": latest.pk,
+                    "reason": "The last initial backfill is terminal; automatic redispatch is disabled until an operator explicitly starts a new run.",
+                }
             automatic_attempts = int((latest.result or {}).get("automatic_attempts", 0) or 0) if latest else 0
-            if latest and latest.status == "failed":
-                last_auto = (latest.result or {}).get("last_automatic_dispatch_at")
-                if last_auto:
-                    try:
-                        last_auto_at = timezone.datetime.fromisoformat(last_auto)
-                        if timezone.is_naive(last_auto_at):
-                            last_auto_at = last_auto_at.replace(tzinfo=dt_timezone.utc)
-                        if now - last_auto_at < BACKFILL_AUTOMATIC_RETRY_AFTER:
-                            return {"status": "cooldown", "run_id": latest.pk}
-                    except (TypeError, ValueError):
-                        pass
             automatic_attempts += 1
             run = CandleBackfillRun.objects.create(
                 scope="initial",
@@ -892,9 +1060,9 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
     try:
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
-            if run.status == "completed" and run.completed_at:
-                return run.result or {"status": "completed"}
-            if run.task_id and task_id and run.task_id != task_id:
+            if run.status != "running":
+                return {"status": "skipped", "reason": f"terminal_{run.status}", "run_id": run_id}
+            if not run.task_id or not task_id or run.task_id != task_id:
                 logger.warning("Ignoring superseded candle backfill delivery", extra={"run_id": run_id, "task_id": task_id})
                 return {"status": "superseded", "run_id": run_id}
             now = timezone.now()
@@ -917,6 +1085,7 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
             }
             run.save(update_fields=["status", "started_at", "accepted_at", "last_heartbeat_at", "error", "task_id", "worker_hostname", "result"])
 
+        _discard_staged_backfill(run_id)
         _emit_backfill_event(
             "initial", run_id=run_id, event_type="worker_started",
             message=f"Worker accepted candle backfill task {task_id}",
@@ -932,16 +1101,24 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
         result["automatic_attempts"] = metadata.get("automatic_attempts", 0)
         result["last_automatic_dispatch_at"] = metadata.get("last_automatic_dispatch_at", "")
         if not failed:
-            result["retention_deleted_candle_rows"] = _replace_stale_candle_window_after_success(result)
+            _promote_staged_backfill(run_id, result)
+        else:
+            _discard_staged_backfill(run_id)
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
-            if run.status == "completed" and run.completed_at:
+            already_promoted_by_this_run = (
+                run.status == "completed"
+                and run.completed_at
+                and (run.result or {}).get("dataset_promotion", {}).get("run_id") == run_id
+            )
+            if run.status == "completed" and run.completed_at and not already_promoted_by_this_run:
                 return run.result or {"status": "completed"}
-            run.result = result
-            run.status = "failed" if failed else "completed"
-            run.error = error
-            run.completed_at = timezone.now()
-            run.save(update_fields=["result", "status", "error", "completed_at"])
+            if not already_promoted_by_this_run:
+                run.result = result
+                run.status = "failed" if failed else "completed"
+                run.error = error
+                run.completed_at = timezone.now()
+                run.save(update_fields=["result", "status", "error", "completed_at"])
         _emit_backfill_event(
             "initial", run_id=run_id, level="error" if failed else "success",
             event_type="failed" if failed else "completed",
@@ -952,13 +1129,20 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
             raise RuntimeError(error)
         return result
     except Exception as exc:
+        _discard_staged_backfill(run_id)
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
-            if not (run.status == "completed" and run.completed_at):
+            # Preserve an operator stop or another already-recorded terminal
+            # failure instead of replacing its reason with a late task exception.
+            if run.status == "running":
                 run.status = "failed"
                 run.error = str(exc)
                 run.completed_at = timezone.now()
                 run.save(update_fields=["status", "error", "completed_at"])
+            elif run.status == "failed" and not run.error:
+                run.error = str(exc)
+                run.completed_at = run.completed_at or timezone.now()
+                run.save(update_fields=["error", "completed_at"])
         _emit_backfill_event(
             "initial", run_id=run_id, level="error", event_type="failed",
             message=f"Candle backfill failed: {exc}",
@@ -1007,6 +1191,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             stale_research_runs = (
                 CandleBackfillRun.objects.select_for_update()
                 .filter(scope="research", status="running")
+                .filter(~Q(result__operator_command="pause") | Q(result__operator_command__isnull=True))
                 .filter(
                     Q(last_heartbeat_at__lt=running_cutoff)
                     | Q(
@@ -1039,6 +1224,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 )
                 stale_research.completed_at = now
                 stale_research.save(update_fields=["status", "error", "completed_at"])
+                _discard_staged_backfill(stale_research.pk)
                 CandleBackfillEvent.objects.create(
                     run=stale_research,
                     level="error",
@@ -1053,6 +1239,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             run = (
                 CandleBackfillRun.objects.select_for_update()
                 .filter(scope="initial", status="running")
+                .filter(~Q(result__operator_command="pause") | Q(result__operator_command__isnull=True))
                 .filter(
                     Q(last_heartbeat_at__lt=running_cutoff)
                     | Q(
@@ -1090,6 +1277,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 run.error = "No market-data worker confirmed this job after three delivery attempts."
                 run.completed_at = now
                 run.save(update_fields=["status", "error", "completed_at"])
+                _discard_staged_backfill(run_id)
                 CandleBackfillEvent.objects.create(run=run, level="error", event_type="failed", message=run.error, task_id=old_task_id, payload={"recovery_attempts": recovery_attempts})
                 return _recovery_result(failed=run_id)
             run.task_id = ""
@@ -1140,6 +1328,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     current.error = f"Automatic Celery retry failed: {exc}"
                     current.completed_at = timezone.now()
                     current.save(update_fields=["status", "error", "completed_at"])
+                    _discard_staged_backfill(current.pk)
                     CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts), "recovery_attempts": recovery_attempts},)
             logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
         return _recovery_result()

@@ -213,3 +213,14 @@
 .rb-operator-controls button:disabled{opacity:.38;cursor:not-allowed}
 .rb-operator-controls button:focus-visible{outline:2px solid #8dc7ff;outline-offset:2px}
 @media(max-width:600px){.rb-operator-controls{align-items:stretch}.rb-operator-label,.rb-operator-controls [data-control-feedback]{flex-basis:100%}.rb-operator-controls button{flex:1;justify-content:center}}
+
+.rb-pill[data-state=running]{background:#10283a;color:#7dc7ff;border-color:#255a7e}
+.rb-operator-controls [data-backfill-action=pause]:not(:disabled){border-color:#75602b;background:#2b2414;color:#f2d48b}
+.rb-operator-controls [data-backfill-action=resume]:not(:disabled){border-color:#245b43;background:#10281d;color:#9be6bd}
+.rb-operator-controls [data-backfill-action=pause]:not(:disabled):hover{background:#3b3019}
+.rb-operator-controls [data-backfill-action=resume]:not(:disabled):hover{background:#173827}
+.rb-operator-controls [data-control-feedback]{min-height:16px}
+
+/* Operator cancellation is distinct from broker/worker failure. */
+.rb-pill[data-state=stopped]{background:#26232d;color:#d0b8ff;border-color:#55446e}
+.rb-history-status[data-state="stopped"]{background:rgba(168,139,250,.14);color:#d0b8ff}

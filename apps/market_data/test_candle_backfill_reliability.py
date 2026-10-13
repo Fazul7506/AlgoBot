@@ -104,6 +104,25 @@ class CandleBackfillReliabilityTests(TestCase):
             "celery",
         )
 
+    def test_stopped_run_is_terminal_and_cannot_write_staged_data(self):
+        from .historical import _backfill_write_guard
+        from .views import _run_payload
+
+        run = CandleBackfillRun.objects.create(
+            scope="research",
+            status="stopped",
+            count=250,
+            task_id="stopped-task",
+            result={"operator_command": "stop"},
+            error="Backfill stopped by operator.",
+        )
+        with self.assertRaisesRegex(RuntimeError, "terminal"):
+            with _backfill_write_guard(run.pk):
+                self.fail("Stopped run must never enter a staged-write transaction")
+        payload = _run_payload(run)
+        self.assertEqual(payload["status_label"], "Stopped")
+        self.assertEqual(payload["worker_state"], "STOPPED")
+
     def test_execution_duration_is_not_request_age(self):
         requested = timezone.now() - timedelta(hours=2)
         started = requested + timedelta(hours=1, minutes=30)
@@ -126,7 +145,7 @@ class CandleBackfillReliabilityTests(TestCase):
     def test_status_choices_exclude_queued(self):
         self.assertEqual(
             [value for value, _ in CandleBackfillRun.STATUS_CHOICES],
-            ["running", "completed", "failed"],
+            ["running", "completed", "failed", "stopped"],
         )
         run = CandleBackfillRun.objects.create(scope="initial", count=5000)
         self.assertEqual(run.status, "running")
@@ -172,7 +191,7 @@ class CandleBackfillReliabilityTests(TestCase):
     @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
     @patch("apps.market_data.historical.fetch_and_store_all_timeframes")
     def test_initial_backfill_marks_success_after_real_ingestion_call(self, fetch):
-        def ingest(symbol, count, request_interval, progress_callback):
+        def ingest(symbol, count, request_interval, progress_callback, backfill_run_id=None):
             payload = {
                 "symbol": symbol,
                 "timeframes": {},
@@ -191,15 +210,13 @@ class CandleBackfillReliabilityTests(TestCase):
 
         fetch.side_effect = ingest
         run = CandleBackfillRun.objects.create(
-            scope="initial",
-            status="running",
-            count=5000,
+            scope="initial", status="running", count=5000, task_id="initial-success-task",
         )
 
-        result = run_initial_candle_backfill.apply(
-            args=(run.pk,),
-            kwargs={"count": 5000},
-        )
+        with patch("apps.market_data.tasks._promote_staged_backfill", return_value={"status": "completed"}):
+            result = run_initial_candle_backfill.apply(
+                args=(run.pk,), kwargs={"count": 5000}, task_id=run.task_id,
+            )
 
         self.assertEqual(result.state, "SUCCESS")
         run.refresh_from_db()
@@ -223,8 +240,8 @@ class CandleBackfillReliabilityTests(TestCase):
                 "5m": {"status": "failed", "error": "Deriv timeout"},
             },
         }
-        run = CandleBackfillRun.objects.create(scope="initial", status="running", count=5000)
-        result = run_initial_candle_backfill.apply(args=(run.pk,), kwargs={"count": 5000})
+        run = CandleBackfillRun.objects.create(scope="initial", status="running", count=5000, task_id="initial-failure-task")
+        result = run_initial_candle_backfill.apply(args=(run.pk,), kwargs={"count": 5000}, task_id=run.task_id)
         self.assertEqual(result.state, "FAILURE")
         run.refresh_from_db()
         self.assertEqual(run.status, "failed")
@@ -388,8 +405,8 @@ class CandleBackfillReliabilityTests(TestCase):
                 "5m": {"status": "failed", "error": "Deriv timeout"},
             },
         }
-        run = CandleBackfillRun.objects.create(scope="initial", status="running", count=5000)
-        result = run_initial_candle_backfill.apply(args=(run.pk,), kwargs={"count": 5000})
+        run = CandleBackfillRun.objects.create(scope="initial", status="running", count=5000, task_id="initial-partial-task")
+        result = run_initial_candle_backfill.apply(args=(run.pk,), kwargs={"count": 5000}, task_id=run.task_id)
         run.refresh_from_db()
         self.assertEqual(result.state, "FAILURE")
         self.assertEqual(run.status, "failed")
@@ -534,26 +551,16 @@ class CandleBackfillReliabilityTests(TestCase):
 
     def test_research_scheduler_repairs_missing_terminal_completion_and_waits_full_cooldown(self):
         run = CandleBackfillRun.objects.create(
-            scope="research",
-            status="failed",
-            count=250,
-            requested_at=timezone.now() - timedelta(hours=2),
-            completed_at=None,
+            scope="research", status="failed", count=250,
+            requested_at=timezone.now() - timedelta(hours=2), completed_at=None,
         )
         with patch("apps.market_data.tasks.backfill_research_candles.apply_async") as publish:
             result = ensure_research_candle_backfill(count=250)
         run.refresh_from_db()
-        self.assertEqual(result["status"], "cooldown")
+        self.assertEqual(result["status"], "failed_requires_manual_restart")
         self.assertEqual(result["run_id"], run.pk)
-        self.assertIsNotNone(run.completed_at)
-        self.assertLess((timezone.now() - run.completed_at).total_seconds(), 5)
-        self.assertGreater(result["seconds_remaining"], 1790)
-        self.assertLessEqual(result["seconds_remaining"], 1800)
-        self.assertTrue(
-            CandleBackfillEvent.objects.filter(
-                run=run, event_type="completion_timestamp_repaired"
-            ).exists()
-        )
+        self.assertIsNone(run.completed_at)
+        self.assertFalse(CandleBackfillRun.objects.filter(scope="research", status="running").exists())
         publish.assert_not_called()
 
     def test_research_scheduler_fails_closed_when_dispatch_lock_is_held(self):
@@ -600,7 +607,8 @@ class CandleBackfillReliabilityTests(TestCase):
     @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
     @patch("apps.market_data.historical.fetch_and_store_all_timeframes")
     @patch("apps.market_data.tasks.ensure_research_candle_backfill.apply_async")
-    def test_research_completion_schedules_next_check_after_30_minutes(self, schedule_next, fetch):
+    @patch("apps.market_data.tasks._promote_staged_backfill", return_value={"status": "completed"})
+    def test_research_completion_schedules_next_check_after_30_minutes(self, promote, schedule_next, fetch):
         fetch.return_value = {"symbol": "R_100", "timeframes": {"1m": {"source": "deriv_candles"}}}
         result = backfill_research_candles.apply(kwargs={"count": 250})
         self.assertEqual(result.state, "SUCCESS")
@@ -621,10 +629,166 @@ class CandleBackfillReliabilityTests(TestCase):
         from deriv_platform.celery import app
         entry = app.conf.beat_schedule["research-candle-backfill-completion-relative-scheduler"]
         self.assertEqual(entry["task"], "apps.market_data.tasks.ensure_research_candle_backfill")
-        self.assertEqual(entry["schedule"], 60.0)
+        self.assertEqual(entry["schedule"], 300.0)
         self.assertEqual(entry["options"]["queue"], "celery")
+        self.assertEqual(entry["options"]["expires"], 290)
 
     def test_recovery_queue_helper_is_defined_and_canonical(self):
         from .tasks import BACKFILL_QUEUE, _recovery_backfill_queue
         self.assertEqual(_recovery_backfill_queue(1), BACKFILL_QUEUE)
         self.assertEqual(BACKFILL_QUEUE, "market_data")
+
+
+    def test_paused_stale_runs_are_not_failed_or_republished_by_recovery(self):
+        run = CandleBackfillRun.objects.create(
+            scope="research", status="running", count=250,
+            started_at=timezone.now() - timedelta(hours=1),
+            last_heartbeat_at=timezone.now() - timedelta(hours=1),
+            task_id="paused-research-task",
+            result={"operator_command": "pause"},
+        )
+        result = reconcile_candle_backfill_runs()
+        run.refresh_from_db()
+        self.assertEqual(run.status, "running")
+        self.assertEqual((run.result or {}).get("operator_command"), "pause")
+        self.assertEqual(result.get("recovered"), [])
+        self.assertNotIn(run.pk, result.get("stale_research_failed", []))
+
+    def test_stopped_research_run_is_not_automatically_restarted(self):
+        stopped = CandleBackfillRun.objects.create(
+            scope="research", status="stopped", count=250,
+            completed_at=timezone.now() - timedelta(hours=2),
+            error="Backfill stopped by operator.",
+            result={"operator_command": "stop"},
+        )
+        before = CandleBackfillRun.objects.filter(scope="research").count()
+        with patch("apps.market_data.tasks.backfill_research_candles.apply_async") as publish:
+            result = ensure_research_candle_backfill(count=250)
+        self.assertEqual(result["status"], "stopped_requires_manual_restart")
+        self.assertEqual(result["run_id"], stopped.pk)
+        self.assertEqual(CandleBackfillRun.objects.filter(scope="research").count(), before)
+        publish.assert_not_called()
+
+    def test_stopped_initial_run_is_not_automatically_restarted(self):
+        stopped = CandleBackfillRun.objects.create(
+            scope="initial", status="stopped", count=5000,
+            completed_at=timezone.now() - timedelta(hours=2),
+            error="Backfill stopped by operator.",
+            result={"operator_command": "stop"},
+        )
+        before = CandleBackfillRun.objects.filter(scope="initial").count()
+        result = ensure_initial_candle_backfill(count=5000)
+        self.assertEqual(result["status"], "stopped_requires_manual_restart")
+        self.assertEqual(result["run_id"], stopped.pk)
+        self.assertEqual(CandleBackfillRun.objects.filter(scope="initial").count(), before)
+
+    def test_failed_initial_run_requires_manual_restart(self):
+        failed = CandleBackfillRun.objects.create(
+            scope="initial", status="failed", count=5000,
+            completed_at=timezone.now(), error="prior failure",
+        )
+        before = CandleBackfillRun.objects.filter(scope="initial").count()
+        result = ensure_initial_candle_backfill(count=5000)
+        self.assertEqual(result["status"], "failed_requires_manual_restart")
+        self.assertEqual(result["run_id"], failed.pk)
+        self.assertEqual(CandleBackfillRun.objects.filter(scope="initial").count(), before)
+
+    def test_pause_waits_until_resume_before_continuing(self):
+        from .tasks import _honor_backfill_operator_command
+
+        self.run = CandleBackfillRun.objects.create(
+            scope="research", status="running", count=250,
+            task_id="pause-resume-task", result={"operator_command": "pause"},
+        )
+
+        def resume_run(_seconds):
+            CandleBackfillRun.objects.filter(pk=self.run.pk).update(result={})
+
+        with patch("time.sleep", side_effect=resume_run) as sleep:
+            _honor_backfill_operator_command(self.run.pk)
+        sleep.assert_called_once_with(1)
+
+
+    def test_terminal_transition_is_saved_and_cannot_be_resurrected(self):
+        from .tasks import _mark_backfill_run
+
+        run = CandleBackfillRun.objects.create(
+            scope="research", status="running", count=250,
+            task_id="terminal-guard-task",
+        )
+        _mark_backfill_run(
+            "research", run_id=run.pk, status="failed",
+            error="broker request failed", completed_at=timezone.now(),
+        )
+        run.refresh_from_db()
+        self.assertEqual(run.status, "failed")
+        self.assertEqual(run.error, "broker request failed")
+        _mark_backfill_run(
+            "research", run_id=run.pk, status="running",
+            result={"symbols_completed": 0},
+        )
+        run.refresh_from_db()
+        self.assertEqual(run.status, "failed")
+        self.assertEqual(run.error, "broker request failed")
+
+    def test_promotion_preserves_canonical_rows_for_unselected_symbols(self):
+        from apps.market_data.constants import TIMEFRAMES
+        from apps.market_data.models import (
+            Candle, CandleBackfillStagedCandle, CandleBackfillStagedTick, Tick,
+        )
+        from apps.market_data.tasks import _promote_staged_backfill
+
+        other_symbol = MarketSymbol.objects.create(
+            symbol="OTHER_100",
+            display_name="Other market",
+            market="Volatility Indices",
+            broker="deriv",
+            is_active=True,
+            is_tradable=True,
+        )
+        Candle.objects.create(
+            symbol=self.symbol, timeframe="1m", open="1", high="2", low="1",
+            close="2", epoch=100, source="old_selected",
+        )
+        Candle.objects.create(
+            symbol=other_symbol, timeframe="1m", open="3", high="4", low="3",
+            close="4", epoch=200, source="preserve_other",
+        )
+        Tick.objects.create(symbol=self.symbol, quote="1", epoch=100)
+        Tick.objects.create(symbol=other_symbol, quote="3", epoch=200)
+
+        run = CandleBackfillRun.objects.create(
+            scope="research", status="running", count=250,
+        )
+        for index, timeframe in enumerate(TIMEFRAMES):
+            CandleBackfillStagedCandle.objects.create(
+                run=run, symbol=self.symbol, timeframe=timeframe,
+                open="10", high="12", low="9", close="11",
+                epoch=1700000000 + index * 3600, source="deriv_candles",
+            )
+        CandleBackfillStagedTick.objects.create(
+            run=run, symbol=self.symbol, quote="11", epoch=1700000000,
+        )
+        series = {
+            timeframe: {"valid": 1}
+            for timeframe, seconds in TIMEFRAMES.items()
+            if timeframe != "tick" and seconds >= 60
+        }
+        series["tick-derived"] = {"valid": 1}
+        result = {"results": {self.symbol.symbol: {"timeframes": series}}}
+
+        promotion = _promote_staged_backfill(run.pk, result)
+
+        self.assertEqual(promotion["status"], "completed")
+        self.assertEqual(promotion["replaced_symbols"], [self.symbol.symbol])
+        self.assertTrue(
+            Candle.objects.filter(
+                symbol=other_symbol, timeframe="1m", epoch=200,
+                source="preserve_other",
+            ).exists()
+        )
+        self.assertTrue(Tick.objects.filter(symbol=other_symbol, epoch=200, quote="3").exists())
+        self.assertFalse(Candle.objects.filter(symbol=self.symbol, epoch=100).exists())
+        self.assertFalse(Tick.objects.filter(symbol=self.symbol, epoch=100, quote="1").exists())
+        self.assertTrue(Candle.objects.filter(symbol=self.symbol, source="deriv_candles").exists())
+

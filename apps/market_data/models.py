@@ -120,6 +120,7 @@ class CandleBackfillRun(models.Model):
         ("running", "Running"),
         ("completed", "Completed"),
         ("failed", "Failed"),
+        ("stopped", "Stopped"),
     ]
 
     scope = models.CharField(max_length=32, default="initial", db_index=True)
@@ -156,6 +157,47 @@ class CandleBackfillRun(models.Model):
 
     def __str__(self):
         return f"{self.scope}:{self.status}"
+
+
+class CandleBackfillStagedTick(models.Model):
+    """Run-isolated raw Deriv ticks; never visible to live market-data queries."""
+
+    run = models.ForeignKey(CandleBackfillRun, on_delete=models.CASCADE, related_name="staged_ticks")
+    symbol = models.ForeignKey(MarketSymbol, on_delete=models.CASCADE, related_name="staged_backfill_ticks")
+    bid = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    ask = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    quote = models.DecimalField(max_digits=20, decimal_places=8)
+    spread = models.DecimalField(max_digits=20, decimal_places=8, default=0)
+    epoch = models.BigIntegerField(db_index=True)
+    volume = models.DecimalField(max_digits=20, decimal_places=8, default=0)
+    received_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["epoch"]
+        unique_together = [("run", "symbol", "epoch", "quote")]
+        indexes = [models.Index(fields=["run", "symbol", "epoch"], name="md_stagedtick_run_sym_epoch")]
+
+
+class CandleBackfillStagedCandle(models.Model):
+    """Run-isolated broker OHLC and tick-derived bars awaiting promotion."""
+
+    run = models.ForeignKey(CandleBackfillRun, on_delete=models.CASCADE, related_name="staged_candles")
+    symbol = models.ForeignKey(MarketSymbol, on_delete=models.CASCADE, related_name="staged_backfill_candles")
+    timeframe = models.CharField(max_length=8, choices=[(k, k) for k in TIMEFRAMES], db_index=True)
+    open = models.DecimalField(max_digits=20, decimal_places=8)
+    high = models.DecimalField(max_digits=20, decimal_places=8)
+    low = models.DecimalField(max_digits=20, decimal_places=8)
+    close = models.DecimalField(max_digits=20, decimal_places=8)
+    volume = models.DecimalField(max_digits=20, decimal_places=8, default=0)
+    epoch = models.BigIntegerField(db_index=True)
+    source = models.CharField(max_length=32, default="tick_stream", db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-epoch"]
+        unique_together = [("run", "symbol", "timeframe", "epoch")]
+        indexes = [models.Index(fields=["run", "symbol", "timeframe", "epoch"], name="md_stagedcandle_run_sym_tf_ep")]
 
 
 class CandleBackfillEvent(models.Model):
