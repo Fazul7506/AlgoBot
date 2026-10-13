@@ -617,3 +617,45 @@ class CandleBackfillReliabilityTests(TestCase):
         from .tasks import BACKFILL_QUEUE, _recovery_backfill_queue
         self.assertEqual(_recovery_backfill_queue(1), BACKFILL_QUEUE)
         self.assertEqual(BACKFILL_QUEUE, "market_data")
+
+
+    def test_paused_stale_runs_are_not_failed_or_republished_by_recovery(self):
+        run = CandleBackfillRun.objects.create(
+            scope="research", status="running", count=250,
+            started_at=timezone.now() - timedelta(hours=1),
+            last_heartbeat_at=timezone.now() - timedelta(hours=1),
+            task_id="paused-research-task",
+            result={"operator_command": "pause"},
+        )
+        result = reconcile_candle_backfill_runs()
+        run.refresh_from_db()
+        self.assertEqual(run.status, "running")
+        self.assertEqual((run.result or {}).get("operator_command"), "pause")
+        self.assertEqual(result.get("recovered"), [])
+        self.assertNotIn(run.pk, result.get("stale_research_failed", []))
+
+    def test_failed_initial_run_requires_manual_restart(self):
+        failed = CandleBackfillRun.objects.create(
+            scope="initial", status="failed", count=5000,
+            completed_at=timezone.now(), error="prior failure",
+        )
+        before = CandleBackfillRun.objects.filter(scope="initial").count()
+        result = ensure_initial_candle_backfill(count=5000)
+        self.assertEqual(result["status"], "failed_requires_manual_restart")
+        self.assertEqual(result["run_id"], failed.pk)
+        self.assertEqual(CandleBackfillRun.objects.filter(scope="initial").count(), before)
+
+    def test_pause_waits_until_resume_before_continuing(self):
+        from .tasks import _honor_backfill_operator_command
+
+        self.run = CandleBackfillRun.objects.create(
+            scope="research", status="running", count=250,
+            task_id="pause-resume-task", result={"operator_command": "pause"},
+        )
+
+        def resume_run(_seconds):
+            CandleBackfillRun.objects.filter(pk=self.run.pk).update(result={})
+
+        with patch("time.sleep", side_effect=resume_run) as sleep:
+            _honor_backfill_operator_command(self.run.pk)
+        sleep.assert_called_once_with(1)
