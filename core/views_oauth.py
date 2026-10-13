@@ -9,14 +9,38 @@ from rest_framework import status
 from django.utils import timezone
 
 from apps.brokers.models import BrokerAccount, BrokerConnection
-from core.account_context import clear_selected_account, get_active_account
+from core.account_context import SESSION_KEY, clear_selected_account
 from core.services.oauth_service import DerivOAuthService
 
 logger = logging.getLogger("oauth")
 
 
 def _account(request):
-    return get_active_account(request.user, request=request, broker_type="deriv")
+    """Resolve a Deriv account only from an explicit ID or this user's session selection.
+
+    Refresh/disconnect must still find a degraded account, so this intentionally
+    does not use get_active_account(), which filters for currently connected
+    accounts and may fall back to an arbitrary default account.
+    """
+    supplied_id = (
+        getattr(request, "data", {}).get("broker_account_id")
+        or getattr(request, "query_params", {}).get("broker_account_id")
+    )
+    accounts = BrokerAccount.objects.filter(
+        user_id=request.user.pk,
+        broker__broker_type="deriv",
+        status="active",
+    ).select_related("broker")
+    if supplied_id:
+        return accounts.filter(pk=supplied_id).first()
+    session = getattr(request, "session", None)
+    selected_id = session.get(SESSION_KEY) if session is not None else None
+    if selected_id:
+        return accounts.filter(pk=selected_id).first()
+    # One account is unambiguous; multiple accounts require an explicit choice.
+    if accounts.count() == 1:
+        return accounts.first()
+    return None
 
 
 def _persist_refreshed_credentials(account, token_data):
@@ -63,7 +87,12 @@ def disconnect_deriv(request):
         with transaction.atomic():
             account.token_status = 'revoked'
             account.status = 'disabled'
-            account.save(update_fields=['token_status', 'status'])
+            # A local disconnect must also erase stored bearer credentials.
+            # The provider token may expire later, but AlgoBot must no longer
+            # retain or reuse it after the user disconnects this account.
+            account.access_token = ''
+            account.refresh_token = ''
+            account.save(update_fields=['token_status', 'status', 'access_token', 'refresh_token'])
             # Keep the connection table consistent with the credential state;
             # a disabled account must not continue to display as live/connected.
             BrokerConnection.objects.filter(broker_account=account).update(
