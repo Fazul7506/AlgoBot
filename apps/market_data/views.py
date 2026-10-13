@@ -102,7 +102,15 @@ def _run_payload(run, *, include_delivery=True):
         render_status_label = "Pending"
     if run.status == "running" and not run.started_at:
         status_label = "Worker received" if run.accepted_at else "Dispatching"
+    if run.status == "running" and str(result.get("operator_command", "")).lower() == "pause":
+        status_label = "Paused"
+        worker_state = "PAUSED"
     notices = []
+    if run.status == "running" and str(result.get("operator_command", "")).lower() == "pause":
+        notices.append({
+            "level": "warning",
+            "message": "This execution is paused by the operator. The worker will not issue another broker-history request until Resume is selected.",
+        })
     if run.status == "running" and not run.started_at and run.accepted_at:
         notices.append({
             "level": "info",
