@@ -12,6 +12,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db import transaction
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.contrib.auth.password_validation import validate_password
 from django.conf import settings
 from datetime import timedelta
@@ -148,13 +149,18 @@ def register(request):
         return Response({'status': 'error', 'message': 'Username, email, and password are required'}, status=status.HTTP_400_BAD_REQUEST)
     if password != password_confirm:
         return Response({'status': 'error', 'message': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        User._meta.get_field('username').clean(username, None)
+        validate_email(email)
+    except ValidationError as exc:
+        return Response({'status': 'error', 'message': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
     if User.objects.filter(username__iexact=username).exists():
         return Response({'status': 'error', 'message': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
     if User.objects.filter(email__iexact=email).exists():
         return Response({'status': 'error', 'message': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        validate_password(password)
+        validate_password(password, user=User(username=username, email=email))
     except ValidationError as exc:
         return Response({'status': 'error', 'message': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -257,9 +263,14 @@ def change_password(request):
                 'message': 'Current password is incorrect'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        user.set_password(new_password)
-        user.save()
-        
+        with transaction.atomic():
+            user.set_password(new_password)
+            user.save(update_fields=['password'])
+            # Revoke outstanding refresh tokens immediately after credential change.
+            from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+            for outstanding in OutstandingToken.objects.filter(user=user):
+                BlacklistedToken.objects.get_or_create(token=outstanding)
+
         logger.info('user_password_changed', extra={'user_id': user.pk})
         
         return Response({
