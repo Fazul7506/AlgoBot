@@ -318,11 +318,14 @@ def candle_backfill_control(request):
         if not run:
             return JsonResponse({"error": "Backfill run not found."}, status=404)
         result = dict(run.result or {})
+        current_command = str(result.get("operator_command", "")).lower()
         if action == "resume":
-            if run.status != "running" or result.get("operator_command") != "pause":
+            if run.status != "running" or current_command != "pause":
                 return JsonResponse({"error": "Only a paused execution can be resumed."}, status=409)
         elif run.status != "running":
             return JsonResponse({"error": "Only a running backfill can be controlled."}, status=409)
+        elif action == "pause" and current_command == "pause":
+            return JsonResponse({"error": "This execution is already paused."}, status=409)
         result["operator_command"] = action
         result["operator_command_at"] = timezone.now().isoformat()
         result["operator_command_by"] = request.user.pk
