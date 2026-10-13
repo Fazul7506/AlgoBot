@@ -27,9 +27,13 @@ def _connection_destination(request):
 
 def _fail(request, message, event, **extra):
     logger.warning(event, extra=extra)
+    # Resolve request.user before clearing OAuth/session state: Django's
+    # request.user is lazy, and clearing the session first can make an
+    # authenticated callback look anonymous and send it to the wrong page.
+    authenticated = bool(request.user.is_authenticated)
     DerivOAuthService.clear_oauth_session(request)
     messages.error(request, message)
-    return redirect(_connection_destination(request))
+    return redirect("broker_marketplace_page" if authenticated else "broker_connect_page")
 
 
 def callback(request):
