@@ -138,6 +138,48 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertEqual(self.client.get(f"/reset-password/{raw_token}/").status_code, 200)
         self.assertContains(self.client.get(f"/reset-password/{raw_token}/"), "invalid, expired, or already used")
 
+    def test_password_reset_blacklists_existing_refresh_tokens(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+
+        user = get_user_model().objects.create_user(
+            username="reset-revoke-user", email="reset-revoke@example.com",
+            password="Old-Password-2026!",
+        )
+        refresh = RefreshToken.for_user(user)
+        from core.models import PasswordResetToken
+        import hashlib
+        raw_token = "one-time-reset-token"
+        PasswordResetToken.objects.create(
+            user=user,
+            token=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+            expires_at=__import__("django.utils.timezone", fromlist=["now"]).now() + __import__("datetime").timedelta(hours=1),
+        )
+        response = self.client.post(f"/reset-password/{raw_token}/", {
+            "password": "New-Password-2026!$",
+            "password_confirm": "New-Password-2026!$",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertGreater(OutstandingToken.objects.filter(user=user).count(), 0)
+        self.assertEqual(
+            BlacklistedToken.objects.filter(token__user=user).count(),
+            OutstandingToken.objects.filter(user=user).count(),
+        )
+
+    def test_profile_api_serializer_cannot_forge_mfa_or_verified_channel_state(self):
+        from core.serializers import UserProfileSerializer
+        serializer = UserProfileSerializer(data={
+            "two_factor_enabled": True,
+            "telegram_chat_id": "attacker-controlled",
+            "telegram_username": "attacker-controlled",
+            "brevo_sender_email": "attacker@example.com",
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("two_factor_enabled", serializer.validated_data)
+        self.assertNotIn("telegram_chat_id", serializer.validated_data)
+        self.assertNotIn("telegram_username", serializer.validated_data)
+        self.assertNotIn("brevo_sender_email", serializer.validated_data)
+
     def test_registration_sends_verification_and_verification_is_single_use(self):
         response = self.client.post("/register/", {
             "username": "verify-user",
