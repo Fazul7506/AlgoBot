@@ -25,6 +25,8 @@ def _celery_state(run):
         return "SUCCESS"
     if run.status == "failed":
         return "FAILURE"
+    if run.status == "stopped":
+        return "REVOKED"
     if run.started_at:
         return "STARTED"
     # PostgreSQL is the authoritative lifecycle store for Candle Backfill.
@@ -53,6 +55,7 @@ def _run_payload(run, *, include_delivery=True):
     status_label = {
         "completed": "Completed",
         "failed": "Failed",
+        "stopped": "Stopped",
         "running": "Running",
     }.get(run.status, run.get_status_display())
     heartbeat_age = None
@@ -77,6 +80,8 @@ def _run_payload(run, *, include_delivery=True):
         worker_state = "COMPLETED"
     elif run.status == "failed":
         worker_state = "FAILED"
+    elif run.status == "stopped":
+        worker_state = "STOPPED"
     elif not run.started_at and run.accepted_at:
         worker_state = "RECEIVED"
     elif not run.started_at:
@@ -352,7 +357,7 @@ def candle_backfill_control(request):
             # check the run state before every broker request.
             result["operator_stopped"] = True
             run.result = result
-            run.status = "failed"
+            run.status = "stopped"
             run.error = "Backfill stopped by operator."
             run.completed_at = timezone.now()
             run.save(update_fields=["result", "status", "error", "completed_at"])
@@ -362,7 +367,7 @@ def candle_backfill_control(request):
         CandleBackfillEvent.objects.create(
             run=run,
             level="warning" if action in {"pause", "stop"} else "notice",
-            event_type="failed" if action == "stop" else "warning",
+            event_type="warning",
             message=("Operator requested stop; queued delivery was revoked and active work will stop before its next broker request."
                      if action == "stop" else
                      f"Operator requested {action}; worker checkpoint enforcement is active."),
