@@ -1160,7 +1160,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             stale_research_runs = (
                 CandleBackfillRun.objects.select_for_update()
                 .filter(scope="research", status="running")
-                .exclude(result__operator_command="pause")
+                .filter(~Q(result__operator_command="pause") | Q(result__operator_command__isnull=True))
                 .filter(
                     Q(last_heartbeat_at__lt=running_cutoff)
                     | Q(
@@ -1208,7 +1208,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
             run = (
                 CandleBackfillRun.objects.select_for_update()
                 .filter(scope="initial", status="running")
-                .exclude(result__operator_command="pause")
+                .filter(~Q(result__operator_command="pause") | Q(result__operator_command__isnull=True))
                 .filter(
                     Q(last_heartbeat_at__lt=running_cutoff)
                     | Q(
