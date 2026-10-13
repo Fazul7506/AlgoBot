@@ -51,20 +51,28 @@ def _send_account_email(subject, body, email):
         return False
 
 
-def _send_verification(request, user, profile):
-    raw_token = signing.dumps({"uid": user.pk, "nonce": secrets.token_urlsafe(24)}, salt="algobot-email-verification")
+def _send_verification(request, user, profile, *, recipient=None, purpose="verify_email", extra_payload=None):
+    payload = {
+        "uid": user.pk,
+        "purpose": purpose,
+        "nonce": secrets.token_urlsafe(24),
+    }
+    if extra_payload:
+        payload.update(extra_payload)
+    raw_token = signing.dumps(payload, salt="algobot-email-verification")
     profile.email_verification_token = _digest(raw_token)
     profile.save(update_fields=["email_verification_token", "updated_at"])
     link = request.build_absolute_uri(
         reverse("verify_email_page") + "?" + urlencode({"token": raw_token})
     )
-    return _send_account_email(
-        "Verify your AlgoBot email address",
-        "To verify your AlgoBot email address, open this link:\n\n"
-        + link
-        + "\n\nIf you did not create this account, you can ignore this message.",
-        user.email,
-    )
+    email = str(recipient or user.email or "").strip().lower()
+    if purpose == "change_email":
+        subject = "Confirm your new AlgoBot email address"
+        body = "To change your AlgoBot email address, confirm ownership of the new address here:\n\n" + link + "\n\nYour current email remains unchanged until you verify this link."
+    else:
+        subject = "Verify your AlgoBot email address"
+        body = "To verify your AlgoBot email address, open this link:\n\n" + link + "\n\nIf you did not create this account, you can ignore this message."
+    return _send_account_email(subject, body, email)
 
 
 def login_page(request):
@@ -211,6 +219,62 @@ def reset_password_page(request, token=None):
     return _render(request, "reset_password", token=raw_token)
 
 
+def account_identity_page(request):
+    user = request.user
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    if request.method == "POST":
+        current_password = request.POST.get("current_password") or ""
+        username = str(request.POST.get("username") or "").strip()
+        email = str(request.POST.get("email") or "").strip().lower()
+        errors = []
+        if user.has_usable_password() and not user.check_password(current_password):
+            errors.append("Enter your current password to change account identity.")
+        if not username:
+            errors.append("Username is required.")
+        elif username != user.username:
+            try:
+                User._meta.get_field("username").clean(username, None)
+            except ValidationError as exc:
+                errors.extend(exc.messages)
+            if User.objects.filter(username__iexact=username).exclude(pk=user.pk).exists():
+                errors.append("That username is already in use.")
+        email_changed = bool(email and email != str(user.email or "").strip().lower())
+        if email_changed:
+            try:
+                validate_email(email)
+            except ValidationError as exc:
+                errors.extend(exc.messages)
+            if User.objects.filter(email__iexact=email).exclude(pk=user.pk).exists():
+                errors.append("That email address is already registered.")
+        if errors:
+            return render(request, "core/account_identity.html", {
+                "username": username or user.username, "email": email or user.email,
+                "email_verified": profile.email_verified,
+                "password_required": user.has_usable_password(), "errors": errors,
+            })
+        if username != user.username:
+            user.username = username
+            user.save(update_fields=["username"])
+            messages.success(request, "Your AlgoBot username has been updated.")
+        if email_changed:
+            email_sent = _send_verification(
+                request, user, profile, recipient=email, purpose="change_email",
+                extra_payload={"email": email},
+            )
+            if email_sent:
+                messages.info(request, "A verification link was sent to your new email. Your current email remains active until verification.")
+            else:
+                messages.warning(request, "Your username was saved, but the email verification message could not be sent. Request a new link after checking email configuration.")
+        elif username == user.username and not errors:
+            messages.info(request, "No email change was requested.")
+        return redirect("account_identity_page")
+    return render(request, "core/account_identity.html", {
+        "username": user.username, "email": user.email,
+        "email_verified": profile.email_verified,
+        "password_required": user.has_usable_password(),
+    })
+
+
 def verify_email_page(request):
     raw_token = str(request.GET.get("token") or request.POST.get("token") or "")
     if raw_token:
@@ -219,14 +283,37 @@ def verify_email_page(request):
                 raw_token, salt="algobot-email-verification", max_age=24 * 60 * 60
             )
             signed_user_id = signed_payload.get("uid")
+            purpose = signed_payload.get("purpose", "verify_email")
+            pending_email = str(signed_payload.get("email") or "").strip().lower()
         except signing.BadSignature:
             signed_user_id = None
+            purpose = "verify_email"
+            pending_email = ""
         with transaction.atomic():
             profile = UserProfile.objects.select_for_update().filter(
                 user_id=signed_user_id,
                 email_verification_token=_digest(raw_token),
             ).select_related("user").first() if signed_user_id else None
-            if profile and profile.user.email and not profile.email_verified:
+            if profile and purpose == "change_email" and pending_email:
+                try:
+                    validate_email(pending_email)
+                except ValidationError:
+                    profile = None
+                if profile and User.objects.filter(email__iexact=pending_email).exclude(pk=profile.user_id).exists():
+                    messages.error(request, "That email address is now in use. Request a new verification link for a different address.")
+                    profile.email_verification_token = ""
+                    profile.save(update_fields=["email_verification_token", "updated_at"])
+                    return _render(request, "verify_email", invalid=True)
+                if profile:
+                    profile.user.email = pending_email
+                    profile.user.save(update_fields=["email"])
+                    profile.email_verified = True
+                    profile.email_verified_at = timezone.now()
+                    profile.email_verification_token = ""
+                    profile.save(update_fields=["email_verified", "email_verified_at", "email_verification_token", "updated_at"])
+                    messages.success(request, "Your new email address has been verified and saved.")
+                    return redirect("account_identity_page")
+            elif profile and purpose == "verify_email" and profile.user.email and not profile.email_verified:
                 profile.email_verified = True
                 profile.email_verified_at = timezone.now()
                 profile.email_verification_token = ""
