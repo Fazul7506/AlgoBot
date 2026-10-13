@@ -117,7 +117,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("css/sidebar_responsive_contract.css?v=20261013-shell1", html)
         self.assertGreater(
             html.index("sidebar_responsive_contract.css?v=20261013-shell1"),
-            html.index("block extra_css"),
+            html.index("page_stability.css"),
         )
 
     def test_sidebar_account_switch_requires_same_broker_and_verified_target(self):
@@ -203,5 +203,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "css/runtime_recovery.css?v=20261008-css-recovery1")
-        self.assertContains(response, "js/base_shell.js?v=20260921-sidebar-desktop-collapse2")
+        self.assertContains(response, "css/sidebar_responsive_contract.css?v=20261013-shell1")
+        self.assertContains(response, "js/sidebar_account_switch.js?v=20261013-samescope1")
+        self.assertContains(response, "js/base_shell.js?v=20261013-sidebar-scrollfix1")
         self.assertContains(response, 'href="/static/icons/favicon.ico')
