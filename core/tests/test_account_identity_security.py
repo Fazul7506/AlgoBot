@@ -1,8 +1,10 @@
 import re
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from unittest.mock import patch
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
@@ -153,7 +155,7 @@ class BrowserAccountAuthenticationTests(TestCase):
         PasswordResetToken.objects.create(
             user=user,
             token=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
-            expires_at=__import__("django.utils.timezone", fromlist=["now"]).now() + __import__("datetime").timedelta(hours=1),
+            expires_at=timezone.now() + timedelta(hours=1),
         )
         response = self.client.post(f"/reset-password/{raw_token}/", {
             "password": "New-Password-2026!$",
