@@ -106,7 +106,9 @@ def _record_candle_backfill_worker_received(sender=None, request=None, **kwargs)
         now = timezone.now()
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
-            if not run or (run.task_id and task_id and run.task_id != task_id):
+            if not run or run.status != "running" or (run.task_id and task_id and run.task_id != task_id):
+                # A revoked or stale delivery may still reach a worker process;
+                # do not treat it as an accepted active execution.
                 return
             delivery_info = getattr(request, "delivery_info", None) or {}
             queue_name = (
