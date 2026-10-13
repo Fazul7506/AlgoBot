@@ -99,6 +99,9 @@ def _run_payload(run, *, include_delivery=True):
     elif run.status == "failed":
         render_status = "failed"
         render_status_label = "Failed"
+    elif run.status == "stopped":
+        render_status = "canceled"
+        render_status_label = "Stopped"
     elif run.started_at:
         render_status = "running"
         render_status_label = "Running"
