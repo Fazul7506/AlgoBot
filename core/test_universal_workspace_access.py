@@ -135,8 +135,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertNotIn("||accounts.find(eligible)||null", switcher)
         # An alternate account can be credential-ready before its own broker connection is established.
         self.assertNotIn("&&a.is_connected===true&&a.switch_enabled", switcher)
-        # account_context.js handles [data-account-switch] in document capture;
-        # pin the exact eligible ID so its generic fallback cannot select another broker.
+        # Keep the sidebar click separate from the shared generic switch listener;
+        # verify the rendered target is still eligible before starting a switch.
         self.assertIn("data-account-id=\"${safe(target?.id||'')}\"", switcher)
         self.assertIn("data-sidebar-account-switch", switcher)
         self.assertIn("closest?.('[data-sidebar-account-switch]')", switcher)
