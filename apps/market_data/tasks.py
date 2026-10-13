@@ -322,6 +322,116 @@ def _symbol_backfill_failed(payload):
     )
 
 
+def _discard_staged_backfill(run_id):
+    """Drop unpromoted rows after a failed or stopped run to reclaim DB space."""
+    if not run_id:
+        return
+    try:
+        from .models import CandleBackfillStagedCandle, CandleBackfillStagedTick
+        CandleBackfillStagedCandle.objects.filter(run_id=run_id).delete()
+        CandleBackfillStagedTick.objects.filter(run_id=run_id).delete()
+    except Exception:
+        logger.exception("Unable to discard staged candle backfill rows", extra={"run_id": run_id})
+
+
+def _promote_staged_backfill(run_id, result):
+    """Atomically replace canonical candles/ticks with one complete validated run."""
+    from django.db import transaction
+    from django.db.models import Count
+    from .constants import TIMEFRAMES
+    from .models import Candle, CandleBackfillRun, CandleBackfillStagedCandle, CandleBackfillStagedTick, Tick
+
+    symbol_results = result.get("results") or {}
+    if not symbol_results:
+        raise RuntimeError("Backfill produced no symbol results; refusing to replace canonical data.")
+    required_native = {key for key, seconds in TIMEFRAMES.items() if key != "tick" and seconds >= 60}
+    expected_timeframes = set(TIMEFRAMES)
+    for symbol, payload in symbol_results.items():
+        if _symbol_backfill_failed(payload):
+            raise RuntimeError(f"Backfill validation failed for {symbol}; canonical data was not changed.")
+        timeframes = (payload or {}).get("timeframes") or {}
+        missing_native = required_native - (set(timeframes) - {"tick-derived"})
+        tick_payload = timeframes.get("tick-derived")
+        if missing_native or not isinstance(tick_payload, dict) or int(tick_payload.get("valid", 0) or 0) < 1:
+            raise RuntimeError(f"Incomplete broker series for {symbol}; missing {sorted(missing_native)} or usable ticks.")
+        for timeframe in required_native:
+            series = timeframes.get(timeframe) or {}
+            if not isinstance(series, dict) or int(series.get("valid", 0) or 0) < 1:
+                raise RuntimeError(f"Empty or invalid native series {symbol} · {timeframe}; canonical data was not changed.")
+
+    staged_counts = {
+        (row["symbol__symbol"], row["timeframe"]): row["count"]
+        for row in CandleBackfillStagedCandle.objects.filter(run_id=run_id)
+        .values("symbol__symbol", "timeframe").annotate(count=Count("id"))
+    }
+    for symbol in symbol_results:
+        for timeframe in expected_timeframes:
+            if staged_counts.get((symbol, timeframe), 0) < 1:
+                raise RuntimeError(f"Staging validation failed: no rows for {symbol} · {timeframe}.")
+        if not CandleBackfillStagedTick.objects.filter(run_id=run_id, symbol__symbol=symbol).exists():
+            raise RuntimeError(f"Staging validation failed: no raw broker ticks for {symbol}.")
+
+    _honor_backfill_operator_command(run_id)
+    promoted_candles = 0
+    promoted_ticks = 0
+    with transaction.atomic():
+        run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
+        if run.status != "running":
+            raise RuntimeError(f"Run is terminal ({run.status}); refusing to promote its data.")
+        command = str((run.result or {}).get("operator_command", "")).lower()
+        if command in {"pause", "stop"}:
+            raise RuntimeError(f"Run command is {command}; refusing to promote its data.")
+
+        # Canonical replacement and run completion commit together. A database
+        # error rolls back the deletion and leaves the old dataset intact.
+        Candle.objects.all().delete()
+        Tick.objects.all().delete()
+
+        batch = []
+        for row in CandleBackfillStagedCandle.objects.filter(run_id=run_id).order_by("id").iterator(chunk_size=1000):
+            batch.append(Candle(
+                symbol_id=row.symbol_id, timeframe=row.timeframe, open=row.open, high=row.high,
+                low=row.low, close=row.close, volume=row.volume, epoch=row.epoch,
+                source=row.source, created_at=row.created_at,
+            ))
+            if len(batch) >= 1000:
+                Candle.objects.bulk_create(batch, batch_size=1000)
+                promoted_candles += len(batch)
+                batch = []
+        if batch:
+            Candle.objects.bulk_create(batch, batch_size=1000)
+            promoted_candles += len(batch)
+
+        batch = []
+        for row in CandleBackfillStagedTick.objects.filter(run_id=run_id).order_by("id").iterator(chunk_size=1000):
+            batch.append(Tick(
+                symbol_id=row.symbol_id, bid=row.bid, ask=row.ask, quote=row.quote, spread=row.spread,
+                epoch=row.epoch, volume=row.volume, received_at=row.received_at, created_at=row.created_at,
+            ))
+            if len(batch) >= 1000:
+                Tick.objects.bulk_create(batch, batch_size=1000)
+                promoted_ticks += len(batch)
+                batch = []
+        if batch:
+            Tick.objects.bulk_create(batch, batch_size=1000)
+            promoted_ticks += len(batch)
+
+        CandleBackfillStagedCandle.objects.filter(run_id=run_id).delete()
+        CandleBackfillStagedTick.objects.filter(run_id=run_id).delete()
+        result["dataset_promotion"] = {
+            "status": "completed", "run_id": run_id,
+            "canonical_candles": promoted_candles, "canonical_ticks": promoted_ticks,
+            "replaced_previous_dataset": True,
+        }
+        run.status = "completed"
+        run.completed_at = timezone.now()
+        run.error = ""
+        run.result = result
+        run.save(update_fields=["status", "completed_at", "error", "result"])
+    logger.info("Promoted validated candle backfill dataset", extra={"run_id": run_id, "candles": promoted_candles, "ticks": promoted_ticks})
+    return result["dataset_promotion"]
+
+
 def _replace_stale_candle_window_after_success(result):
     """Keep only candle epochs represented by the latest fully successful run.
 
@@ -425,6 +535,7 @@ def _backfill_symbols(symbols, count, *, scope=None, run_id=None):
                         scope, symbol, timeframe, payload, run_id=run_id
                     )
                 ) if scope else None,
+                backfill_run_id=run_id,
             )
         except Exception as exc:
             logger.warning(
@@ -654,7 +765,9 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
         error = f"Historical backfill failed for: {', '.join(failed)}" if failed else ""
         result["trigger"] = (run.result or {}).get("trigger", "automatic")
         if not failed:
-            result["retention_deleted_candle_rows"] = _replace_stale_candle_window_after_success(result)
+            _promote_staged_backfill(run.pk, result)
+        else:
+            _discard_staged_backfill(run.pk)
         _mark_backfill_run(
             "research", run_id=run.pk, status="failed" if failed else "completed",
             result=result, error=error, completed_at=timezone.now(),
@@ -670,6 +783,7 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
         return result
     except Exception as exc:
         if run is not None:
+            _discard_staged_backfill(run.pk)
             _mark_backfill_run("research", run_id=run.pk, status="failed", error=str(exc), completed_at=timezone.now())
             _emit_backfill_event(
                 "research", run_id=run.pk, level="error", event_type="failed",
@@ -971,7 +1085,9 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
         result["automatic_attempts"] = metadata.get("automatic_attempts", 0)
         result["last_automatic_dispatch_at"] = metadata.get("last_automatic_dispatch_at", "")
         if not failed:
-            result["retention_deleted_candle_rows"] = _replace_stale_candle_window_after_success(result)
+            _promote_staged_backfill(run_id, result)
+        else:
+            _discard_staged_backfill(run_id)
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
             if run.status == "completed" and run.completed_at:
@@ -991,6 +1107,7 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
             raise RuntimeError(error)
         return result
     except Exception as exc:
+        _discard_staged_backfill(run_id)
         with transaction.atomic():
             run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
             if not (run.status == "completed" and run.completed_at):
