@@ -682,6 +682,9 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
             allowed, reason = _backfill_delivery_guard(run_id, task_id)
             if not allowed:
                 return {"status": "skipped", "reason": reason, "run_id": run_id}
+            # A recovered delivery starts with a clean staging area. Canonical
+            # data is untouched until this attempt passes validation.
+            _discard_staged_backfill(run_id)
         if run_id is None:
             from .backfill_lock import acquire_backfill_dispatch_lock
             dispatch_lock = acquire_backfill_dispatch_lock("research")
@@ -1070,6 +1073,7 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
             }
             run.save(update_fields=["status", "started_at", "accepted_at", "last_heartbeat_at", "error", "task_id", "worker_hostname", "result"])
 
+        _discard_staged_backfill(run_id)
         _emit_backfill_event(
             "initial", run_id=run_id, event_type="worker_started",
             message=f"Worker accepted candle backfill task {task_id}",
