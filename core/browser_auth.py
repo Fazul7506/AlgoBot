@@ -1,0 +1,234 @@
+"""Browser-facing local account authentication and recovery flows.
+
+Broker OAuth is intentionally separate from AlgoBot login, registration,
+password recovery, and email verification.
+"""
+import hashlib
+import logging
+import secrets
+from datetime import timedelta
+from urllib.parse import urlencode
+
+from django.contrib import messages
+from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
+from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.core.mail import send_mail
+from django.core.validators import validate_email
+from django.db import IntegrityError, transaction
+from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
+
+from core.models import BotSettings, PasswordResetToken, Subscription, UserProfile
+
+logger = logging.getLogger("account_auth")
+RESET_TTL = timedelta(hours=1)
+
+
+def _digest(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _render(request, mode, **context):
+    return render(request, "core/auth_page.html", {"mode": mode, **context})
+
+
+def _send_account_email(subject, body, email):
+    try:
+        sent = send_mail(subject, body, None, [email], fail_silently=False)
+        return sent == 1
+    except Exception:
+        logger.exception("account_email_delivery_failed")
+        return False
+
+
+def _send_verification(request, user, profile):
+    raw_token = secrets.token_urlsafe(32)
+    profile.email_verification_token = _digest(raw_token)
+    profile.save(update_fields=["email_verification_token", "updated_at"])
+    link = request.build_absolute_uri(
+        reverse("verify_email_page") + "?" + urlencode({"token": raw_token})
+    )
+    return _send_account_email(
+        "Verify your AlgoBot email address",
+        "To verify your AlgoBot email address, open this link:\n\n"
+        + link
+        + "\n\nIf you did not create this account, you can ignore this message.",
+        user.email,
+    )
+
+
+def login_page(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard_page")
+    if request.method == "POST":
+        identifier = str(request.POST.get("identifier") or request.POST.get("username") or "").strip()
+        password = request.POST.get("password") or ""
+        user = None
+        if identifier and password:
+            if "@" in identifier:
+                matches = User.objects.filter(email__iexact=identifier)
+                if matches.count() == 1:
+                    user = authenticate(request, username=matches.first().get_username(), password=password)
+            else:
+                user = authenticate(request, username=identifier, password=password)
+                if user is None:
+                    matches = User.objects.filter(username__iexact=identifier)
+                    if matches.count() == 1:
+                        user = authenticate(request, username=matches.first().get_username(), password=password)
+        if user is None:
+            messages.error(request, "The username/email or password is incorrect.")
+            return _render(request, "login", identifier=identifier)
+        auth_login(request, user)
+        UserProfile.objects.update_or_create(user=user, defaults={"last_login_at": timezone.now()})
+        destination = request.POST.get("next") or request.GET.get("next") or ""
+        if destination and url_has_allowed_host_and_scheme(
+            destination, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        ):
+            return redirect(destination)
+        return redirect("dashboard_page")
+    return _render(request, "login", next=request.GET.get("next", ""))
+
+
+def register_page(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard_page")
+    if request.method == "POST":
+        username = str(request.POST.get("username") or "").strip()
+        email = str(request.POST.get("email") or "").strip().lower()
+        password = request.POST.get("password") or ""
+        confirm = request.POST.get("password_confirm") or ""
+        errors = []
+        if not username or not email or not password:
+            errors.append("Username, email, and password are required.")
+        if password != confirm:
+            errors.append("The passwords do not match.")
+        try:
+            if username:
+                User._meta.get_field("username").clean(username, None)
+            if email:
+                validate_email(email)
+        except ValidationError as exc:
+            errors.extend(exc.messages)
+        if username and User.objects.filter(username__iexact=username).exists():
+            errors.append("That username is already in use.")
+        if email and User.objects.filter(email__iexact=email).exists():
+            errors.append("That email address is already registered.")
+        candidate = User(username=username, email=email)
+        if password:
+            try:
+                validate_password(password, user=candidate)
+            except ValidationError as exc:
+                errors.extend(exc.messages)
+        if errors:
+            return _render(request, "register", errors=errors, username=username, email=email)
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(username=username, email=email, password=password)
+                profile, _ = UserProfile.objects.get_or_create(user=user)
+                Subscription.objects.get_or_create(user=user)
+                BotSettings.objects.get_or_create(user=user)
+                email_sent = _send_verification(request, user, profile)
+        except IntegrityError:
+            return _render(
+                request, "register",
+                errors=["The username or email was just registered. Please sign in or use different details."],
+                username=username, email=email,
+            )
+        auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        if email_sent:
+            messages.success(request, "Your AlgoBot account is ready. Check your email to verify the address.")
+        else:
+            messages.warning(request, "Your account was created, but the verification email could not be sent. Use Verify email to request another.")
+        return redirect("dashboard_page")
+    return _render(request, "register")
+
+
+def forgot_password_page(request):
+    if request.method == "POST":
+        email = str(request.POST.get("email") or "").strip().lower()
+        # Always return the same public message to avoid account enumeration.
+        if email:
+            matches = User.objects.filter(email__iexact=email, is_active=True)
+            if matches.count() == 1:
+                user = matches.first()
+                raw_token = secrets.token_urlsafe(32)
+                PasswordResetToken.objects.create(
+                    user=user, token=_digest(raw_token),
+                    expires_at=timezone.now() + RESET_TTL,
+                )
+                link = request.build_absolute_uri(
+                    reverse("reset_password_page", kwargs={"token": raw_token})
+                )
+                _send_account_email(
+                    "Reset your AlgoBot password",
+                    "A password reset was requested for your AlgoBot account. "
+                    "This link expires in one hour:\n\n"
+                    + link
+                    + "\n\nIf you did not request this, ignore this message.",
+                    user.email,
+                )
+        messages.info(request, "If an active account matches that email, password-reset instructions will be sent.")
+        return redirect("forgot_password_page")
+    return _render(request, "forgot_password")
+
+
+def reset_password_page(request, token=None):
+    raw_token = str(token or request.GET.get("token") or "")
+    reset = PasswordResetToken.objects.filter(token=_digest(raw_token)).select_related("user").first() if raw_token else None
+    valid = bool(reset and reset.is_valid() and reset.user.is_active)
+    if not valid:
+        return _render(request, "reset_password", token=raw_token, invalid=True)
+    if request.method == "POST":
+        password = request.POST.get("password") or ""
+        confirm = request.POST.get("password_confirm") or ""
+        if password != confirm:
+            return _render(request, "reset_password", token=raw_token, errors=["The passwords do not match."])
+        try:
+            validate_password(password, user=reset.user)
+        except ValidationError as exc:
+            return _render(request, "reset_password", token=raw_token, errors=exc.messages)
+        now = timezone.now()
+        with transaction.atomic():
+            locked = PasswordResetToken.objects.select_for_update().filter(pk=reset.pk).first()
+            if not locked or not locked.is_valid():
+                return _render(request, "reset_password", token=raw_token, invalid=True)
+            locked.user.set_password(password)
+            locked.user.save(update_fields=["password"])
+            PasswordResetToken.objects.filter(user=locked.user, used=False).update(used=True, used_at=now)
+        auth_logout(request)
+        messages.success(request, "Your password has been reset. Sign in with your new password.")
+        return redirect("login_page")
+    return _render(request, "reset_password", token=raw_token)
+
+
+def verify_email_page(request):
+    raw_token = str(request.GET.get("token") or request.POST.get("token") or "")
+    if raw_token:
+        with transaction.atomic():
+            profile = UserProfile.objects.select_for_update().filter(
+                email_verification_token=_digest(raw_token)
+            ).select_related("user").first()
+            if profile and profile.user.email and not profile.email_verified:
+                profile.email_verified = True
+                profile.email_verified_at = timezone.now()
+                profile.email_verification_token = ""
+                profile.save(update_fields=["email_verified", "email_verified_at", "email_verification_token", "updated_at"])
+                messages.success(request, "Your email address has been verified.")
+                return redirect("login_page")
+        messages.error(request, "That verification link is invalid or has already been used.")
+        return _render(request, "verify_email", invalid=True)
+    if request.method == "POST":
+        email = str(request.POST.get("email") or "").strip().lower()
+        matches = User.objects.filter(email__iexact=email, is_active=True)
+        if matches.count() == 1:
+            user = matches.first()
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            if not profile.email_verified:
+                _send_verification(request, user, profile)
+        messages.info(request, "If an unverified account matches that email, a verification link will be sent.")
+        return redirect("verify_email_page")
+    return _render(request, "verify_email")
