@@ -377,12 +377,17 @@ def candle_backfill_control(request):
             task_id=run.task_id,
             payload={"action": action, "checkpointed": action == "stop", "terminal": action == "stop"},
         )
-    if action == "stop" and task_id:
-        try:
-            from celery import current_app
-            current_app.control.revoke(task_id, terminate=False)
-        except Exception:
-            logger.exception("Unable to revoke stopped candle backfill task", extra={"run_id": run_id, "task_id": task_id})
+    if action == "stop":
+        if task_id:
+            try:
+                from celery import current_app
+                current_app.control.revoke(task_id, terminate=False)
+            except Exception:
+                logger.exception("Unable to revoke stopped candle backfill task", extra={"run_id": run_id, "task_id": task_id})
+        # The stop transition has committed and staged-write transactions lock
+        # the run row, so no in-flight writer can pass its fence after this point.
+        from .tasks import _discard_staged_backfill
+        _discard_staged_backfill(run_id)
     return JsonResponse({
         "ok": True, "action": action, "run_id": run_id,
         "message": ("Stopped. Queued delivery was revoked; active work will stop before its next broker request."
