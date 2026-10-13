@@ -610,8 +610,9 @@ class CandleBackfillReliabilityTests(TestCase):
         from deriv_platform.celery import app
         entry = app.conf.beat_schedule["research-candle-backfill-completion-relative-scheduler"]
         self.assertEqual(entry["task"], "apps.market_data.tasks.ensure_research_candle_backfill")
-        self.assertEqual(entry["schedule"], 60.0)
+        self.assertEqual(entry["schedule"], 300.0)
         self.assertEqual(entry["options"]["queue"], "celery")
+        self.assertEqual(entry["options"]["expires"], 290)
 
     def test_recovery_queue_helper_is_defined_and_canonical(self):
         from .tasks import BACKFILL_QUEUE, _recovery_backfill_queue
