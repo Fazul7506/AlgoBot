@@ -1,6 +1,6 @@
 import inspect
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from apps.brokers.adapters.base import BrokerAdapter
 from apps.brokers.adapters.deriv import DerivAdapter
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
@@ -13,7 +13,8 @@ class BrokerAdapterContractTests(TestCase):
         for adapter in (DerivAdapter,):
             missing = [name for name in required if not callable(getattr(adapter, name, None))]
             self.assertEqual(missing, [])
-            self.assertFalse(inspect.isabstract(adapter))
+            self.assertFalse(inspect.isab@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+stract(adapter))
 
 
 class OrderRoutingTests(TestCase):
