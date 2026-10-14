@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
@@ -75,7 +75,12 @@ class BrowserOAuthFlowTests(TestCase):
         session["oauth_initiating_user_id"] = str(user.pk)
         session.save()
 
-        response = self.client.get("/callback/?state=state&code=code")
+        with patch(
+            "apps.brokers.services.BrokerConnectionService.connect",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("demo connection check unavailable"),
+        ):
+            response = self.client.get("/callback/?state=state&code=code")
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/brokers/marketplace/")
