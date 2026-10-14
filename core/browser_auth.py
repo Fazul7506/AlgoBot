@@ -345,12 +345,43 @@ def verify_email_page(request):
             signed_user_id = None
             purpose = "verify_email"
             pending_email = ""
+
+        if purpose not in {"verify_email", "change_email"}:
+            signed_user_id = None
+
+        profile = UserProfile.objects.filter(
+            user_id=signed_user_id,
+            email_verification_token=_digest(raw_token),
+        ).select_related("user").first() if signed_user_id else None
+        valid_for_purpose = bool(
+            profile
+            and profile.user.is_active
+            and (
+                (purpose == "verify_email" and profile.user.email and not profile.email_verified)
+                or (purpose == "change_email" and pending_email)
+            )
+        )
+        if not valid_for_purpose:
+            messages.error(request, "That verification link is invalid, expired, or has already been used.")
+            return _render(request, "verify_email", invalid=True)
+
+        # Do not consume a verification token on GET: mail-security scanners
+        # commonly prefetch links. Require an explicit CSRF-protected POST.
+        if request.method == "GET":
+            return _render(
+                request, "verify_email", confirm_token=raw_token,
+                confirm_purpose=purpose,
+            )
+
         with transaction.atomic():
             profile = UserProfile.objects.select_for_update().filter(
                 user_id=signed_user_id,
                 email_verification_token=_digest(raw_token),
-            ).select_related("user").first() if signed_user_id else None
-            if profile and purpose == "change_email" and pending_email:
+            ).select_related("user").first()
+            if not profile or not profile.user.is_active:
+                return _render(request, "verify_email", invalid=True)
+
+            if purpose == "change_email":
                 try:
                     validate_email(pending_email)
                 except ValidationError:
@@ -371,7 +402,7 @@ def verify_email_page(request):
                     profile.save(update_fields=["email_verified", "email_verified_at", "email_verification_token", "email_verification_token_created_at", "updated_at"])
                     messages.success(request, "Your new email address has been verified and saved.")
                     return redirect("account_identity_page")
-            elif profile and purpose == "verify_email" and profile.user.email and not profile.email_verified:
+            elif purpose == "verify_email" and profile.user.email and not profile.email_verified:
                 profile.email_verified = True
                 profile.email_verified_at = timezone.now()
                 profile.email_verification_token = ""
@@ -379,8 +410,10 @@ def verify_email_page(request):
                 profile.save(update_fields=["email_verified", "email_verified_at", "email_verification_token", "email_verification_token_created_at", "updated_at"])
                 messages.success(request, "Your email address has been verified.")
                 return redirect("login_page")
-        messages.error(request, "That verification link is invalid or has already been used.")
+
+        messages.error(request, "That verification link is invalid, expired, or has already been used.")
         return _render(request, "verify_email", invalid=True)
+
     if request.method == "POST":
         email = str(request.POST.get("email") or "").strip().lower()
         email_allowed = allow_auth_attempt(request, "verification-resend", email, limit=3, window=3600)
