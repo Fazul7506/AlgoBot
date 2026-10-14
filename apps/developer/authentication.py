@@ -1,6 +1,6 @@
 from rest_framework.authentication import BaseAuthentication
 from core.api_authentication import BrokerGateJWTAuthentication as JWTAuthentication
-from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth.hashers import check_password
 from django.utils import timezone
 
@@ -16,12 +16,13 @@ class APIKeyAuthentication(BaseAuthentication):
       Authorization: ApiKey <key>:<secret>
       Authorization: Bearer <key>:<secret>
 
-    Returning ``None`` when no API credential is present is intentional: DRF
-    can then continue to SessionAuthentication for the logged-in Developer UI.
+    Returning None when no API credential is present is intentional: DRF can
+    continue to SessionAuthentication for the logged-in Developer UI. Broker
+    onboarding is a permission on protected trading endpoints, not on developer
+    account/key-management endpoints.
     """
 
     keywords = ("ApiKey", "Bearer")
-
     jwt_authentication = JWTAuthentication()
 
     def authenticate(self, request):
@@ -32,9 +33,6 @@ class APIKeyAuthentication(BaseAuthentication):
         if not key and authorization:
             scheme, _, credentials = authorization.partition(" ")
             if scheme == "Bearer" and ":" not in credentials:
-                # The split-origin browser transport uses a short-lived JWT.
-                # A Bearer API-key credential remains supported only in the
-                # explicit <key>:<secret> form below.
                 try:
                     jwt_result = self.jwt_authentication.authenticate(request)
                 except AuthenticationFailed:
@@ -71,16 +69,6 @@ class APIKeyAuthentication(BaseAuthentication):
 
         if not valid_secret:
             raise AuthenticationFailed("Invalid API secret")
-
-        from core.broker_onboarding import has_authorized_broker_connection
-        if not has_authorized_broker_connection(api_key.user):
-            path = request.path_info or "/"
-            if not path.startswith(("/api/auth/", "/api/brokers/", "/api/broker-health/", "/api/deriv/", "/health/")):
-                raise PermissionDenied({
-                    "detail": "Connect and verify a supported broker before accessing workspace or trading APIs.",
-                    "code": "broker_setup_required",
-                    "next_url": "/brokers/marketplace/",
-                })
 
         APIKey.objects.filter(pk=api_key.pk).update(last_used=now)
         return (api_key.user, api_key)
