@@ -41,6 +41,14 @@ class AuthRateLimitTests(SimpleTestCase):
         self.assertTrue(allow_auth_attempt(self.request, "global-ip", "", limit=1, window=60))
         self.assertFalse(allow_auth_attempt(self.request, "global-ip", "", limit=1, window=60))
 
+class BrokerOnboardingPermissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="permission-user",
+            email="permission@example.test",
+            password="Test-password-123!secure",
+        )
+
     @patch("rest_framework_simplejwt.authentication.JWTAuthentication.authenticate")
     @patch("core.api_authentication.has_authorized_broker_connection", return_value=False)
     def test_jwt_authentication_denies_workspace_before_broker_setup(self, _gate, jwt_auth):
@@ -62,14 +70,6 @@ class AuthRateLimitTests(SimpleTestCase):
         request = RequestFactory().get("/api/brokers/accounts/")
         self.assertEqual(BrokerGateJWTAuthentication().authenticate(request)[0], self.user)
 
-
-class BrokerOnboardingPermissionTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(
-            username="permission-user",
-            email="permission@example.test",
-            password="Test-password-123!secure",
-        )
 
     @patch("core.permissions.has_authorized_broker_connection", return_value=False)
     def test_authenticated_bearer_api_principal_is_denied_without_broker(self, _gate):
