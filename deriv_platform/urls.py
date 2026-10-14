@@ -2,16 +2,19 @@
 from django.contrib import admin
 from django.urls import path, re_path, include
 from django.views.generic import RedirectView
-from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 
 from core.views_auth import (
-    CustomTokenObtainPairView, register, login_view, change_password, browser_api_token, logout_view,
+    CustomTokenObtainPairView, CustomTokenRefreshSerializer, register, login_view, change_password, browser_api_token, logout_view,
     UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet,
 )
 from core.browser_views import browser_logout
+from rest_framework_simplejwt.views import TokenRefreshView
+
+class CustomTokenRefreshView(TokenRefreshView):
+    serializer_class = CustomTokenRefreshSerializer
 from core.google_auth import google_login_start, google_login_callback
 from core.dashboard_api import DashboardViewSet
 from apps.market_data.web_views import market_catalogue
@@ -141,7 +144,7 @@ urlpatterns = [
     path("account/google/unlink/", login_required(unlink_google_identity), name="google_unlink"),
     path("api/auth/browser-token/", browser_api_token, name="browser_api_token"),
     path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/auth/token/refresh/", CustomTokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/register/", register, name="register"),
     path("api/auth/login/", login_view, name="login"),
     path("api/auth/change-password/", change_password, name="change_password"),
