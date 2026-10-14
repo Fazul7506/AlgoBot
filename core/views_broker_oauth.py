@@ -11,6 +11,7 @@ import json
 
 import requests
 import websockets
+from django.db import transaction
 from django.conf import settings
 from django.utils import timezone
 
@@ -174,6 +175,7 @@ def sync_deriv_user_identity(user, identity: dict | None, profile=None):
     return safe
 
 
+@transaction.atomic
 def _persist_deriv_account(*, user, broker, record, access_token, refresh_token, expires_at, websocket_balance=None, websocket_health="not_checked", deriv_identity=None):
     """Persist one Deriv account returned by OAuth without preferred-account state."""
     account_id = _account_id(record)
