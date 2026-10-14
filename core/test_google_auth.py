@@ -51,7 +51,7 @@ class GoogleLoginSecurityTests(TestCase):
         self.assertEqual(response.url, "/brokers/marketplace/")
         user = User.objects.get(email="google-user@example.test")
         self.assertTrue(user.trading_profile.email_verified)
-        self.assertTrue(user.is_authenticated is False)
+        self.assertEqual(self.client.session.get("_auth_user_id"), str(user.pk))
         verify_id_token.assert_called_once()
         self.assertEqual(token_exchange.call_args.kwargs["data"]["code_verifier"], "pkce-verifier")
 
