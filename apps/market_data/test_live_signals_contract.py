@@ -8,10 +8,10 @@ from django.utils import timezone
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from apps.strategies.models import Strategy, StrategyConfiguration, StrategySignal
 
-from .models import MarketSnapsh@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
-ot, MarketSymbol
+from .models import MarketSnapshot, MarketSymbol
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class LiveSignalsContractTests(TestCase):
     def setUp(self):
         self.client = self.client_class()
