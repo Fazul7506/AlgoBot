@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from django.urls import reverse
 
 from apps.brokers.models import BrokerAccount
@@ -15,6 +16,7 @@ from core.services.oauth_service import DerivOAuthService
     DERIV_APP_ID="app",
     DERIV_OAUTH_CLIENT_ID="app",
     DERIV_REDIRECT_URI="http://testserver/callback/",
+    CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key",
 )
 class DerivOAuthTests(TestCase):
     def _oauth_session(self):
@@ -65,6 +67,13 @@ class DerivOAuthTests(TestCase):
     @patch("core.views_deriv_oauth_safe.requests.get")
     @patch("core.views_deriv_oauth_safe.requests.post")
     def test_callback_persists_account_without_blocking_on_websocket(self, post, get, fetch_identity):
+        local_user = User.objects.create_user(
+            username="existing-deriv-user",
+            email="deriv-user@example.com",
+            password="Local-password-123!secure",
+        )
+        UserProfile.objects.create(user=local_user, email_verified=True, email_verified_at=timezone.now())
+        self.client.force_login(local_user)
         self._oauth_session()
         self._mock_token_exchange(post)
         self._mock_account_response(get)
@@ -73,7 +82,8 @@ class DerivOAuthTests(TestCase):
         self.assertEqual(result.status_code, 302)
         self.assertTrue(result.wsgi_request.user.is_authenticated)
         self.assertEqual(result.url, reverse("broker_marketplace_page"))
-        user = User.objects.get(username="deriv_DOT90004580")
+        user = local_user
+        user.refresh_from_db()
         account = BrokerAccount.objects.get(user=user, account_id="DOT90004580")
         self.assertEqual(account.status, "active")
         self.assertEqual(account.credentials.get("connection_health"), "verified")
@@ -98,7 +108,15 @@ class DerivOAuthTests(TestCase):
     @patch("core.views_deriv_oauth_safe.requests.get")
     @patch("core.views_deriv_oauth_safe.requests.post")
     def test_separate_oauth_sessions_for_same_provider_identity_reuse_algobot_user(self, post, get, fetch_identity):
-        # First OAuth session establishes the provider identity and its owner.
+        # Provider account authorization attaches only to an existing verified
+        # AlgoBot identity; a separate browser session must sign in as that user.
+        local_user = User.objects.create_user(
+            username="multi-account-owner",
+            email="deriv-user@example.com",
+            password="Local-password-123!secure",
+        )
+        UserProfile.objects.create(user=local_user, email_verified=True, email_verified_at=timezone.now())
+        self.client.force_login(local_user)
         self._oauth_session()
         self._mock_token_exchange(post)
         self._mock_account_response(get, [{
@@ -118,6 +136,7 @@ class DerivOAuthTests(TestCase):
         # A separate anonymous browser session authorizing another login ID
         # for the same provider user must not create a duplicate AlgoBot user.
         self.client.logout()
+        self.client.force_login(local_user)
         self._oauth_session()
         self._mock_token_exchange(post)
         self._mock_account_response(get, [{
