@@ -4,7 +4,7 @@
 
 Password login, API/JWT login, Google login, browser workspace routes, standard JWT API requests, and developer API credentials must not authorize workspace/trading access unless the authenticated AlgoBot user owns a currently eligible, provider-validated Deriv connection. Broker catalog, connect/callback, status, refresh, reconnect, disconnect, authentication recovery, and health paths remain available so a user can complete or repair onboarding. A provider callback alone is not enough: the canonical broker adapter must validate the account connection.
 
-The only production-supported broker adapter currently declared by the project is **Deriv**. Binance, Bybit, OANDA, Interactive Brokers, MT4/MT5 and the other names in `apps/brokers/constants.py` are scaffold entries and must not be presented as production-ready authorization integrations.
+The only production-supported broker adapter currently declared by the project is **Deriv**. Binance, Bybit, OANDA, Interactive Brokers, MT4/MT5 and the other names in `apps/brokers/constants.py` are scaffold entries and must not be presented as production-ready authorization integrations. Disconnect currently disables the local connection and erases AlgoBot-held tokens. This integration does not yet call a documented Deriv token-revocation endpoint; users should revoke provider-side app authorization in their Deriv account settings when required.
 
 ## Environment configuration
 
