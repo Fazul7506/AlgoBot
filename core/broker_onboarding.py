@@ -75,6 +75,12 @@ def require_broker_onboarding(view_func):
         user = getattr(request, "user", None)
         if not user or not getattr(user, "is_authenticated", False):
             return JsonResponse({"detail": "Authentication credentials are required.", "code": "not_authenticated"}, status=401)
+        if not has_verified_account_email(user):
+            return JsonResponse({
+                "detail": "Verify your AlgoBot email before using trading features.",
+                "code": "email_verification_required",
+                "next_url": "/verify-email/",
+            }, status=403)
         if has_authorized_broker_connection(user):
             return view_func(request, *args, **kwargs)
         return JsonResponse({
