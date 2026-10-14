@@ -8,6 +8,7 @@ from .models import Broker, BrokerAccount, BrokerConnection
 User = get_user_model()
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class AccountSwitchingTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='account-switch-user', password='test-password')
