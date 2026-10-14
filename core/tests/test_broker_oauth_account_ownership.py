@@ -1,8 +1,9 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.brokers.models import Broker, BrokerAccount
-from core.views_broker_oauth import _persist_deriv_account
+from core.views_broker_oauth import _persi@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+st_deriv_account
 
 
 class DerivOAuthAccountOwnershipTests(TestCase):
