@@ -20,11 +20,13 @@ class AuthenticationTokenCleanupTests(TestCase):
             email="cleanup@example.test",
             password="Secure-cleanup-123!",
         )
-        profile = UserProfile.objects.create(
+        profile, _ = UserProfile.objects.update_or_create(
             user=user,
+            defaults={
             email_verified=False,
             email_verification_token="hashed-expired-token",
             email_verification_token_created_at=timezone.now() - timedelta(hours=25),
+            },
         )
         PasswordResetToken.objects.create(
             user=user,
