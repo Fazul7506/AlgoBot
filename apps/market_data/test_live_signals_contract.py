@@ -2,13 +2,14 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from apps.strategies.models import Strategy, StrategyConfiguration, StrategySignal
 
-from .models import MarketSnapshot, MarketSymbol
+from .models import MarketSnapsh@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+ot, MarketSymbol
 
 
 class LiveSignalsContractTests(TestCase):
