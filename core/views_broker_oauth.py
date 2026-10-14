@@ -131,10 +131,16 @@ def sync_deriv_user_identity(user, identity: dict | None, profile=None):
         return {}
 
     changed = []
-    email = str(safe.get("email") or "").strip()
-    if email:
-        user.email = email
-        changed.append("email")
+    # A broker email is provider metadata, not authority to replace an
+    # existing AlgoBot login/recovery address. Only seed a blank local email,
+    # and only when no other local user already owns that address. Never mark
+    # the address verified here; verification is a separate local workflow.
+    email = str(safe.get("email") or "").strip().lower()
+    if email and not str(getattr(user, "email", "") or "").strip():
+        email_exists = user.__class__.objects.filter(email__iexact=email).exclude(pk=user.pk).exists()
+        if not email_exists:
+            user.email = email
+            changed.append("email")
 
     first_name = str(safe.get("first_name") or "").strip()
     last_name = str(safe.get("last_name") or "").strip()

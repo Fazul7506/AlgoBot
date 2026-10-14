@@ -32,8 +32,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'last_login_at', 'created_at', 'updated_at', 'deriv_account_id'
         ]
         read_only_fields = [
-            'id', 'user', 'email_verified', 'referral_code', 'referral_credits',
-            'last_login_at', 'created_at', 'updated_at', 'deriv_account_id'
+            'id', 'user', 'email_verified', 'two_factor_enabled',
+            'telegram_chat_id', 'telegram_username', 'brevo_sender_email',
+            'referral_code', 'referral_credits', 'last_login_at',
+            'created_at', 'updated_at', 'deriv_account_id'
         ]
 
     def get_deriv_account_id(self, obj):

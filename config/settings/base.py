@@ -35,7 +35,7 @@ CSRF_FAILURE_VIEW = "django.views.csrf.csrf_failure"
 INSTALLED_APPS = [
     "daphne", "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
-    "rest_framework", "rest_framework_simplejwt", "corsheaders", "django_filters", "core", "apps.ai_engine", "apps.analysis", "apps.automation", "apps.backtesting", "apps.brokers",
+    "rest_framework", "rest_framework_simplejwt", "rest_framework_simplejwt.token_blacklist", "corsheaders", "django_filters", "core", "apps.ai_engine", "apps.analysis", "apps.automation", "apps.backtesting", "apps.brokers",
     "apps.copy_trading", "apps.deployment", "apps.developer", "apps.enterprise", "apps.execution",
     "apps.feature_store", "apps.health", "apps.indicators", "apps.market_data", "apps.monitoring", "apps.notifications", "apps.observability",
     "apps.optimization", "apps.portfolio", "apps.risk", "apps.simulation",
@@ -143,7 +143,7 @@ LOGIN_REDIRECT_URL = "/dashboard/"
 LOGOUT_REDIRECT_URL = "/"
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_OAUTH_REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", f'{os.getenv("BASE_URL", "http://127.0.0.1:8000")}/notifications/channels/gmail/callback/')
+GOOGLE_OAUTH_REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", f'{os.getenv("BASE_URL", "http://127.0.0.1:8000")}/api/notifications/channels/gmail/callback/')
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")

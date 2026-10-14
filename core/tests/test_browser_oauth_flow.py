@@ -48,23 +48,27 @@ class BrowserOAuthFlowTests(TestCase):
             )
         )
 
+    @patch("core.views_deriv_oauth_safe.fetch_deriv_identity", side_effect=RuntimeError("provider temporarily unavailable"))
     @patch("core.views_deriv_oauth_safe._verify_account")
     @patch("core.views_deriv_oauth_safe.DerivOAuthService.exchange_code_for_token")
     @patch("core.views_deriv_oauth_safe.DerivOAuthService.validate_token_response", return_value=(True, None))
     @patch("core.views_deriv_oauth_safe.DerivOAuthService.validate_pkce", return_value=(True, None))
     @patch("core.views_deriv_oauth_safe.DerivOAuthService.validate_state", return_value=(True, None))
     def test_oauth_persists_selected_account_without_selecting_unready_connection(
-        self, validate_state, validate_pkce, validate_token, exchange, verify_account
+        self, validate_state, validate_pkce, validate_token, exchange, verify_account, fetch_identity
     ):
         exchange.return_value = (True, {"access_token": "verified-token", "refresh_token": "refresh-token", "expires_in": 3600}, None)
         verify_account.return_value = (
             {"loginid": "CR1234567", "account_type": "demo", "currency": "USD", "balance": 125.5},
             [{"loginid": "CR1234567", "account_type": "demo", "currency": "USD", "balance": 125.5}],
         )
+        user = User.objects.create_user(username="connected-user", password="pass12345")
+        self.client.force_login(user)
         session = self.client.session
         session["oauth_state"] = "state"
         session["pkce_verifier"] = "verifier"
         session["oauth_redirect_uri"] = "https://algobot.dpdns.org/callback/"
+        session["oauth_initiating_user_id"] = str(user.pk)
         session.save()
 
         response = self.client.get("/callback/?state=state&code=code")

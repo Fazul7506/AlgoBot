@@ -1,0 +1,82 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="same-origin">
+  <title>{% if mode == "login" %}Sign in{% elif mode == "register" %}Create account{% elif mode == "forgot_password" %}Reset password{% elif mode == "reset_password" %}Choose a new password{% else %}Verify email{% endif %} · AlgoBot</title>
+  <style>
+    :root{color-scheme:dark;--bg:#090f1b;--panel:#101a2a;--line:#29364b;--muted:#a6b4c8;--text:#f4f7fb;--accent:#7c9cff;--danger:#ffb6b6;--ok:#a9e7c4}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at top,#172744 0%,var(--bg) 58%);font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text)}
+    main{width:min(100%,460px);padding:clamp(24px,5vw,40px);border:1px solid var(--line);border-radius:22px;background:rgba(16,26,42,.96);box-shadow:0 24px 80px #0005}
+    .brand{display:flex;align-items:center;gap:12px;margin-bottom:26px;font-weight:750;letter-spacing:.02em}.mark{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:#1e3152;color:#c8d7ff;font-size:21px}
+    h1{font-size:clamp(25px,5vw,31px);line-height:1.2;margin:0 0 10px}.sub{color:var(--muted);margin:0 0 25px}
+    label{display:block;font-size:14px;font-weight:650;margin:16px 0 7px}input{display:block;width:100%;min-height:48px;padding:12px 14px;border:1px solid #3a4962;border-radius:11px;background:#0b1321;color:var(--text);font:inherit}input:focus{outline:2px solid var(--accent);outline-offset:2px}button,.link-button{display:flex;justify-content:center;align-items:center;width:100%;min-height:48px;margin-top:22px;padding:12px 16px;border:0;border-radius:11px;background:var(--accent);color:#081226;font:inherit;font-weight:750;text-decoration:none;cursor:pointer}
+    .links{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;margin-top:22px;font-size:14px}.links a,.secondary{color:#c8d7ff;text-decoration:none}.links a:hover,.secondary:hover{text-decoration:underline}
+    .notice{padding:11px 13px;margin:12px 0;border:1px solid var(--line);border-radius:10px;color:var(--muted);overflow-wrap:anywhere}.notice.error{color:var(--danger);border-color:#79434b}.notice.success{color:var(--ok);border-color:#315d4a}
+    ul.errors{color:var(--danger);padding-left:20px}small{display:block;color:var(--muted);margin-top:8px}.divider{display:flex;align-items:center;gap:12px;margin:22px 0;color:var(--muted);font-size:12px}.divider:before,.divider:after{content:"";height:1px;flex:1;background:var(--line)}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand"><span class="mark" aria-hidden="true">A</span><span>AlgoBot</span></div>
+  {% if mode == "login" %}
+    <h1>Welcome back</h1><p class="sub">Sign in to your AlgoBot account to manage your workspace and broker connections.</p>
+    {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
+    {% if errors %}<ul class="errors">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    <form method="post" action="{% url 'login_page' %}">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next|default:'' }}">
+      <label for="identifier">Username or email</label><input id="identifier" name="identifier" autocomplete="username" value="{{ identifier|default:'' }}" required>
+      <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">Sign in securely</button>
+    </form>
+    <div class="links"><a href="{% url 'forgot_password_page' %}">Forgot password?</a><a href="{% url 'register_page' %}">Create an account</a></div>
+    <div class="divider">OR CONNECT A BROKER</div><a class="link-button" href="/brokers/connect/?broker=deriv">Continue with Deriv</a>
+  {% elif mode == "register" %}
+    <h1>Create your account</h1><p class="sub">Your AlgoBot login remains separate from your broker identity.</p>
+    {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
+    {% if errors %}<ul class="errors">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    <form method="post" action="{% url 'register_page' %}">{% csrf_token %}
+      <label for="username">Username</label><input id="username" name="username" autocomplete="username" value="{{ username|default:'' }}" minlength="1" maxlength="150" required>
+      <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" value="{{ email|default:'' }}" required>
+      <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="new-password" required>
+      <label for="password_confirm">Confirm password</label><input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password" required>
+      <button type="submit">Create account</button>
+    </form>
+    <div class="links"><a href="{% url 'login_page' %}">Already registered? Sign in</a><a href="{% url 'verify_email_page' %}">Verify email</a></div>
+  {% elif mode == "forgot_password" %}
+    <h1>Reset your password</h1><p class="sub">Enter your account email. If it matches an active account, we’ll send reset instructions.</p>
+    {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
+    <form method="post" action="{% url 'forgot_password_page' %}">{% csrf_token %}
+      <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" required>
+      <button type="submit">Send reset instructions</button>
+    </form>
+    <div class="links"><a href="{% url 'login_page' %}">Back to sign in</a></div>
+  {% elif mode == "reset_password" %}
+    <h1>Choose a new password</h1><p class="sub">Reset links expire after one hour and can only be used once.</p>
+    {% if invalid %}<div class="notice error">This reset link is invalid, expired, or already used. Request a new one.</div><div class="links"><a href="{% url 'forgot_password_page' %}">Request a new link</a></div>
+    {% else %}
+      {% if errors %}<ul class="errors">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+      <form method="post">{% csrf_token %}
+        <label for="password">New password</label><input id="password" name="password" type="password" autocomplete="new-password" required>
+        <label for="password_confirm">Confirm new password</label><input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password" required>
+        <button type="submit">Update password</button>
+      </form>
+    {% endif %}
+    <div class="links"><a href="{% url 'login_page' %}">Back to sign in</a></div>
+  {% else %}
+    <h1>Verify your email</h1><p class="sub">We’ll send a fresh verification link if this email belongs to an unverified AlgoBot account.</p>
+    {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
+    {% if invalid %}<div class="notice error">That verification link is invalid or has already been used.</div>{% endif %}
+    <form method="post" action="{% url 'verify_email_page' %}">{% csrf_token %}
+      <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" required>
+      <button type="submit">Send verification link</button>
+    </form>
+    <div class="links"><a href="{% url 'login_page' %}">Back to sign in</a><a href="{% url 'register_page' %}">Create an account</a></div>
+  {% endif %}
+  <small>Keep your AlgoBot password private. Broker credentials are managed separately and must never be shared.</small>
+</main>
+</body>
+</html>

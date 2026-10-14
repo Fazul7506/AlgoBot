@@ -17,8 +17,12 @@ def home(request):
     if request.method=='HEAD': return HttpResponse(status=200)
     if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)): return redirect('/dashboard/')
     return render(request,'core/home.html',{'hero_title':'AlgoBot AI trading platform','hero_copy':'Institutional-grade AI trading infrastructure for market intelligence, strategies, risk controls and broker execution.'})
-def login_page(request): return broker_connect_page(request)
-def register_page(request): return broker_connect_page(request)
+def login_page(request):
+    from core.browser_auth import login_page as view
+    return view(request)
+def register_page(request):
+    from core.browser_auth import register_page as view
+    return view(request)
 @login_required
 def dashboard_page(request): return render(request,'core/dashboard.html')
 @login_required
@@ -63,9 +67,18 @@ def settings_page(request): return render(request,'core/settings.html')
 def profile_page(request): return render(request,'core/profile.html')
 def terms_page(request): return render(request,'core/terms.html')
 def privacy_page(request): return render(request,'core/privacy.html')
-def forgot_password_page(request): return broker_connect_page(request)
-def reset_password_page(request,token=None): return broker_connect_page(request)
-def verify_email_page(request): return broker_connect_page(request)
+def forgot_password_page(request):
+    from core.browser_auth import forgot_password_page as view
+    return view(request)
+def reset_password_page(request,token=None):
+    from core.browser_auth import reset_password_page as view
+    return view(request, token=token)
+def verify_email_page(request):
+    from core.browser_auth import verify_email_page as view
+    return view(request)
+def account_identity_page(request):
+    from core.browser_auth import account_identity_page as view
+    return view(request)
 def cookie_policy_page(request): return render(request,'core/cookies.html')
 def licensing_page(request): return render(request,'core/licensing.html')
 def contact_page(request): return render(request,'core/contact.html')

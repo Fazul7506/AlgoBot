@@ -27,9 +27,13 @@ def _connection_destination(request):
 
 def _fail(request, message, event, **extra):
     logger.warning(event, extra=extra)
+    # Resolve request.user before clearing OAuth/session state: Django's
+    # request.user is lazy, and clearing the session first can make an
+    # authenticated callback look anonymous and send it to the wrong page.
+    authenticated = bool(request.user.is_authenticated)
     DerivOAuthService.clear_oauth_session(request)
     messages.error(request, message)
-    return redirect(_connection_destination(request))
+    return redirect("broker_marketplace_page" if authenticated else "broker_connect_page")
 
 
 def callback(request):
@@ -81,7 +85,9 @@ def callback(request):
         identity_loginid = str(
             deriv_identity.get("loginid") or deriv_identity.get("account_id") or ""
         ).strip()
-        if identity_loginid != selected_account_id:
+        if not identity_loginid:
+            websocket_verification_error = "identity_missing"
+        elif identity_loginid != selected_account_id:
             websocket_verification_error = "identity_mismatch"
     except Exception as exc:
         websocket_verification_error = exc.__class__.__name__
@@ -89,6 +95,36 @@ def callback(request):
             "deriv_oauth_websocket_verification_unavailable",
             extra={"error": websocket_verification_error},
         )
+    identity_loginid = str(
+        deriv_identity.get("loginid") or deriv_identity.get("account_id") or ""
+    ).strip()
+    if identity_loginid and identity_loginid != selected_account_id:
+        websocket_verification_error = "identity_mismatch"
+    elif not identity_loginid and not websocket_verification_error:
+        websocket_verification_error = "identity_missing"
+
+    # An anonymous OAuth callback is an account sign-in, not merely a broker
+    # connection. Require a live, matching provider identity before creating or
+    # reusing a local user; REST account-list data alone cannot authenticate a
+    # person into an existing AlgoBot account.
+    if websocket_verification_error == "identity_mismatch":
+        return _fail(
+            request,
+            "Deriv verified a different account identity. No AlgoBot account was signed in or changed; retry from the correct broker account.",
+            "deriv_oauth_identity_mismatch",
+        )
+    if not request.user.is_authenticated and (
+        websocket_verification_error
+        or not identity_loginid
+        or deriv_identity.get("user_id") in (None, "")
+    ):
+        return _fail(
+            request,
+            "AlgoBot could not securely verify your Deriv identity. No account was signed in or linked. Please retry, or sign in to AlgoBot first and connect Deriv from Broker Management.",
+            "deriv_oauth_anonymous_identity_unverified",
+            error=websocket_verification_error or "identity_fields_missing",
+        )
+
     broker, _ = Broker.objects.get_or_create(broker_type="deriv", defaults={"name":"Deriv","status":"active","supports_live":True,"websocket_endpoint":settings.DERIV_AUTH_WS_BASE_URL})
     # Deriv's provider-issued user_id is the stable identity across that user's
     # authorized DEMO/REAL login IDs. Reuse the owning AlgoBot user when that
@@ -117,6 +153,15 @@ def callback(request):
         if existing_selected and identity_account and existing_selected.user_id != identity_account.user_id:
             return _fail(request, "Deriv account ownership does not match the previously verified provider identity. Your dashboard was not opened.", "deriv_oauth_identity_account_conflict")
         if existing_selected:
+            # Never turn knowledge of a broker login ID into local account
+            # authentication. Reuse an existing AlgoBot identity only when the
+            # verified stable Deriv user ID already maps to that same owner.
+            if not identity_account or identity_account.user_id != existing_selected.user_id:
+                return _fail(
+                    request,
+                    "This Deriv account is already linked. Sign in to the existing AlgoBot account before reconnecting it.",
+                    "deriv_oauth_existing_account_requires_local_auth",
+                )
             user = existing_selected.user
         elif identity_account:
             user = identity_account.user

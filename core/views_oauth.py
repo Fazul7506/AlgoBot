@@ -8,15 +8,49 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 
-from apps.brokers.models import BrokerAccount
-from core.account_context import get_active_account
+from apps.brokers.models import BrokerAccount, BrokerConnection
+from core.account_context import SESSION_KEY, clear_selected_account
 from core.services.oauth_service import DerivOAuthService
 
 logger = logging.getLogger("oauth")
 
 
 def _account(request):
-    return get_active_account(request.user, request=request, broker_type="deriv")
+    """Resolve a Deriv account only from an explicit ID or this user's session selection.
+
+    Refresh/disconnect must still find a degraded account, so this intentionally
+    does not use get_active_account(), which filters for currently connected
+    accounts and may fall back to an arbitrary default account.
+    """
+    supplied_id = (
+        getattr(request, "data", {}).get("broker_account_id")
+        or getattr(request, "query_params", {}).get("broker_account_id")
+    )
+    accounts = BrokerAccount.objects.filter(
+        user_id=request.user.pk,
+        broker__broker_type="deriv",
+        status="active",
+    ).select_related("broker")
+    if supplied_id:
+        supplied_text = str(supplied_id).strip()
+        if supplied_text.isdigit():
+            selected = accounts.filter(pk=int(supplied_text)).first()
+            if selected:
+                return selected
+        return accounts.filter(account_id=supplied_text).first()
+    session = getattr(request, "session", None)
+    selected_id = session.get(SESSION_KEY) if session is not None else None
+    if selected_id:
+        try:
+            return accounts.filter(pk=int(selected_id)).first()
+        except (TypeError, ValueError):
+            session.pop(SESSION_KEY, None)
+            session.modified = True
+            return None
+    # One account is unambiguous; multiple accounts require an explicit choice.
+    if accounts.count() == 1:
+        return accounts.first()
+    return None
 
 
 def _persist_refreshed_credentials(account, token_data):
@@ -60,7 +94,22 @@ def disconnect_deriv(request):
     account=_account(request)
     if not account: return Response({'status':'success','message':'No Deriv account connected'},status=status.HTTP_200_OK)
     try:
-        account.token_status='revoked'; account.status='disabled'; account.save(update_fields=['token_status','status'])
+        with transaction.atomic():
+            account.token_status = 'revoked'
+            account.status = 'disabled'
+            # A local disconnect must also erase stored bearer credentials.
+            # The provider token may expire later, but AlgoBot must no longer
+            # retain or reuse it after the user disconnects this account.
+            account.access_token = ''
+            account.refresh_token = ''
+            account.save(update_fields=['token_status', 'status', 'access_token', 'refresh_token'])
+            # Keep the connection table consistent with the credential state;
+            # a disabled account must not continue to display as live/connected.
+            BrokerConnection.objects.filter(broker_account=account).update(
+                status='disconnected', last_ping=None, updated_at=timezone.now()
+            )
+            if str(request.session.get('active_broker_account_id') or '') == str(account.pk):
+                clear_selected_account(request)
         logger.info('deriv_oauth_disconnected',extra={'user_id':request.user.id,'account_id':account.account_id})
         return Response({'status':'success','message':'Deriv account disconnected successfully'},status=status.HTTP_200_OK)
     except Exception as exc:
@@ -78,13 +127,25 @@ def refresh_deriv_token(request):
     try:
         success,token_data,error=DerivOAuthService.refresh_access_token(refresh_token)
         if not success:
-            account.token_status='expired'; account.save(update_fields=['token_status'])
-            return Response({'status':'error','message':f'Token refresh failed: {error}'},status=status.HTTP_502_BAD_GATEWAY)
+            account.token_status='expired'
+            account.save(update_fields=['token_status'])
+            BrokerConnection.objects.filter(broker_account=account).update(
+                status='degraded', last_ping=None, updated_at=timezone.now()
+            )
+            return Response({'status':'error','message':'Token refresh failed; reconnect the broker account.'},status=status.HTTP_502_BAD_GATEWAY)
         valid,validation_error=DerivOAuthService.validate_token_response(token_data)
-        if not valid: return Response({'status':'error','message':f'Invalid token response: {validation_error}'},status=status.HTTP_502_BAD_GATEWAY)
+        if not valid:
+            BrokerConnection.objects.filter(broker_account=account).update(
+                status='degraded', last_ping=None, updated_at=timezone.now()
+            )
+            return Response({'status':'error','message':'The broker returned an invalid token response.'},status=status.HTTP_502_BAD_GATEWAY)
         expires_at = _persist_refreshed_credentials(account, token_data)
         account.refresh_from_db()
-        return Response({'status':'success','message':'Token refreshed successfully','expires_at':expires_at.isoformat() if expires_at else None},status=status.HTTP_200_OK)
+        # Token rotation is not itself proof of a healthy WebSocket session.
+        BrokerConnection.objects.filter(broker_account=account).update(
+            status='degraded', last_ping=None, updated_at=timezone.now()
+        )
+        return Response({'status':'success','message':'Token refreshed. Run account sync to verify the live broker connection.','connection_status':'degraded','expires_at':expires_at.isoformat() if expires_at else None},status=status.HTTP_200_OK)
     except Exception as exc:
         logger.exception('deriv_oauth_refresh_exception',extra={'error':str(exc)})
         return Response({'status':'error','message':'Failed to refresh token'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -109,5 +170,10 @@ def reconnect_deriv(request):
             valid,_=DerivOAuthService.validate_token_response(token_data)
             if valid:
                 _persist_refreshed_credentials(account, token_data)
-                return Response({'status':'success','message':'Reconnected successfully','requires_oauth':False},status=status.HTTP_200_OK)
+                account.refresh_from_db()
+                # Do not claim a live reconnection from token rotation alone.
+                BrokerConnection.objects.filter(broker_account=account).update(
+                    status='degraded', last_ping=None, updated_at=timezone.now()
+                )
+                return Response({'status':'success','message':'Credentials refreshed; synchronize the account to verify its live connection.','connection_status':'degraded','requires_connection_check':True,'requires_oauth':False},status=status.HTTP_200_OK)
     return Response({'status':'success','message':'Full re-authentication required','requires_oauth':True,'oauth_url':'/brokers/connect/?broker=deriv'},status=status.HTTP_200_OK)

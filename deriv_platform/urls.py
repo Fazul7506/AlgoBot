@@ -1,6 +1,6 @@
 """Canonical URL configuration for the AlgoBot Django project."""
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, re_path, include
 from django.views.generic import RedirectView
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 
 from core.views_auth import (
-    CustomTokenObtainPairView, register, login_view, change_password, browser_api_token,
+    CustomTokenObtainPairView, register, login_view, change_password, browser_api_token, logout_view,
     UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet,
 )
 from core.browser_views import browser_logout
@@ -21,7 +21,7 @@ from core.views import (
     register_page, dashboard_page, markets_page, strategies_page, trading_page,
     backtesting_page, predictions_page, settings_page, profile_page,
     terms_page, privacy_page, forgot_password_page, reset_password_page,
-    verify_email_page, cookie_policy_page, licensing_page, contact_page,
+    verify_email_page, account_identity_page, cookie_policy_page, licensing_page, contact_page,
     about_page, public_status_page, risk_page, orders_page, positions_page,
     signals_page, analysis_page, operations_module_page, strategy_builder_page,
 )
@@ -38,6 +38,7 @@ from core.views_operations_v2 import operations_center
 from core.views_portfolio_v2 import portfolio_center, performance_center, trade_postmortems
 from core.views_entitlements import billing_entitlements
 from core.settings_api import account_settings_api
+from core.views_oauth import disconnect_deriv, refresh_deriv_token, deriv_account_status, reconnect_deriv
 from apps.developer import views as developer_views
 from apps.notifications.channel_views import notification_channels_page
 
@@ -131,14 +132,20 @@ urlpatterns = [
     path("data-deletion/", lambda request: render(request, "core/data_deletion.html"), name="data_deletion_page"),
     path("status/", public_status_page, name="public_status_page"),
     path("forgot-password/", forgot_password_page, name="forgot_password_page"),
-    path("reset-password/<str:token>/", reset_password_page, name="reset_password_page"),
+    re_path(r"^reset-password/(?P<token>[A-Za-z0-9_-]+)/$", reset_password_page, name="reset_password_page"),
     path("verify-email/", verify_email_page, name="verify_email_page"),
+    path("account/identity/", login_required(account_identity_page), name="account_identity_page"),
     path("api/auth/browser-token/", browser_api_token, name="browser_api_token"),
     path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/register/", register, name="register"),
     path("api/auth/login/", login_view, name="login"),
     path("api/auth/change-password/", change_password, name="change_password"),
+    path("api/auth/logout/", logout_view, name="logout_api"),
+    path("api/deriv/disconnect/", disconnect_deriv, name="deriv_disconnect"),
+    path("api/deriv/refresh-token/", refresh_deriv_token, name="deriv_refresh_token"),
+    path("api/deriv/status/", deriv_account_status, name="deriv_account_status"),
+    path("api/deriv/reconnect/", reconnect_deriv, name="deriv_reconnect"),
     path("api/", include("apps.brokers.urls")),
     path("api/", include("apps.execution.urls")),
     path("api/", include("apps.market_data.urls", namespace="market_data_api")),
