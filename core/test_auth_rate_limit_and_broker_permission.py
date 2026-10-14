@@ -50,7 +50,7 @@ class BrokerOnboardingPermissionTests(TestCase):
             email="permission@example.test",
             password="Test-password-123!secure",
         )
-        UserProfile.objects.create(user=self.user, email_verified=True, email_verified_at=timezone.now())
+        UserProfile.objects.update_or_create(user=self.user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
 
     @patch("rest_framework_simplejwt.authentication.JWTAuthentication.authenticate")
     @patch("core.permissions.has_authorized_broker_connection", return_value=False)
