@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
+from core.permissions import BrokerOnboardingRequired
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -126,7 +127,7 @@ def _technical_context(candles):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def scanner(request):
     """Scan the selected user's broker universe using persisted broker data only."""
     account = get_active_account(request.user, request=request)
