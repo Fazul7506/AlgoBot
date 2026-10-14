@@ -58,6 +58,19 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertEqual(response.json()["user"]["id"], user.pk)
         self.assertIn("access", response.json())
 
+    def test_password_api_login_rejects_unverified_account(self):
+        get_user_model().objects.create_user(
+            username="unverified-api-user",
+            email="unverified@example.com",
+            password="A-Strong-Password-2026!",
+        )
+        response = self.client.post("/api/auth/login/", {
+            "identifier": "unverified@example.com",
+            "password": "A-Strong-Password-2026!",
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("access", response.json())
+
     def test_simplejwt_token_endpoint_accepts_email_identifier(self):
         user = get_user_model().objects.create_user(
             username="token-mail-user", email="token@example.com", password="A-Strong-Password-2026!"
