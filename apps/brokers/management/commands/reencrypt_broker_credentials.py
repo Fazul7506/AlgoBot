@@ -35,7 +35,12 @@ class Command(BaseCommand):
                     if stored.startswith("gAAAA"):
                         # Validate that the configured key can decrypt already
                         # encrypted values before skipping them.
-                        encryption.decrypt(stored)
+                        try:
+                            encryption.decrypt(stored)
+                        except Exception as exc:
+                            raise CommandError(
+                                "The configured key cannot decrypt an existing encrypted broker token."
+                            ) from exc
                         continue
                     # Decode only the legacy reversible encoding here. Normal
                     # runtime reads refuse these values until re-encryption.
