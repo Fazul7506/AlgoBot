@@ -21,6 +21,7 @@ jobs:
     env:
       DJANGO_ENV: development
       SECRET_KEY: ci-test-secret-key
+      CREDENTIALS_ENCRYPTION_KEY: ci-test-credentials-encryption-key
       DEBUG: "True"
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
