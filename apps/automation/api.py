@@ -45,7 +45,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
 
 class EventViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AutomationEventSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return AutomationEvent.objects.filter(user=self.request.user).order_by("-created_at")
@@ -54,7 +54,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
 class RuleViewSet(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get", "head", "options"]
     serializer_class = AutomationRuleSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def get_queryset(self):
         # Rules are currently system-owned configuration. They must never be exposed
@@ -64,7 +64,7 @@ class RuleViewSet(viewsets.ReadOnlyModelViewSet):
 
 class HistoryViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = WorkflowExecutionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return WorkflowExecution.objects.filter(workflow__user=self.request.user)
@@ -109,7 +109,7 @@ def execute(request):
 
 
 @decorators.api_view(["POST"])
-@decorators.permission_classes([permissions.IsAuthenticated])
+@decorators.permission_classes([permissions.IsAuthenticated, BrokerOnboardingRequired])
 def schedule(request):
     workflow_id = request.data.get("workflow") if isinstance(request.data, dict) else None
     if not workflow_id:
@@ -126,7 +126,7 @@ def schedule(request):
 
 
 @decorators.api_view(["POST"])
-@decorators.permission_classes([permissions.IsAuthenticated])
+@decorators.permission_classes([permissions.IsAuthenticated, BrokerOnboardingRequired])
 def approve(request):
     if not isinstance(request.data, dict) or not request.data.get("approval"):
         return response.Response(
