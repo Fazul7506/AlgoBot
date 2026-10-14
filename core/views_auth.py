@@ -56,6 +56,13 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         profile = UserProfile.objects.filter(user=self.user).first()
         if not profile or not profile.email_verified:
             raise serializers.ValidationError("Please verify your email before signing in.")
+        from core.broker_onboarding import has_authorized_broker_connection
+        from django.urls import reverse
+        broker_setup_required = not has_authorized_broker_connection(self.user)
+        data["broker_setup_required"] = broker_setup_required
+        data["next_url"] = reverse(
+            "broker_marketplace_page" if broker_setup_required else "dashboard_page"
+        )
         return data
 
     @classmethod
@@ -134,9 +141,14 @@ def browser_api_token(request):
     so browser-session API mutations do not depend on Django CSRF cookies.
     """
     refresh = RefreshToken.for_user(request.user)
+    from core.broker_onboarding import has_authorized_broker_connection
+    from django.urls import reverse
+    broker_setup_required = not has_authorized_broker_connection(request.user)
     return Response({
         'access': str(refresh.access_token),
         'expires_in': int(settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME', timedelta(hours=1)).total_seconds()),
+        'broker_setup_required': broker_setup_required,
+        'next_url': reverse('broker_marketplace_page' if broker_setup_required else 'dashboard_page'),
     }, status=status.HTTP_200_OK)
 
 
@@ -228,12 +240,17 @@ def login_view(request):
 
     UserProfile.objects.update_or_create(user=user, defaults={'last_login_at': timezone.now()})
     refresh = RefreshToken.for_user(user)
+    from core.broker_onboarding import has_authorized_broker_connection
+    from django.urls import reverse
+    broker_setup_required = not has_authorized_broker_connection(user)
     logger.info('user_login_succeeded', extra={'user_id': user.pk})
     return Response({
         'status': 'success',
         'access': str(refresh.access_token),
         'refresh': str(refresh),
         'user': {'id': user.id, 'username': user.username, 'email': user.email},
+        'broker_setup_required': broker_setup_required,
+        'next_url': reverse('broker_marketplace_page' if broker_setup_required else 'dashboard_page'),
     }, status=status.HTTP_200_OK)
 
 
