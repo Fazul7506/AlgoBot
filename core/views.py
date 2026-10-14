@@ -29,7 +29,11 @@ def register_page(request):
     return view(request)
 @login_required
 def dashboard_page(request):
-    from core.broker_onboarding import has_authorized_broker_connection
+    from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
+    if not has_verified_account_email(request.user):
+        from django.contrib import messages
+        messages.info(request, 'Verify your AlgoBot email before opening the dashboard.')
+        return redirect('verify_email_page')
     if not has_authorized_broker_connection(request.user):
         from django.contrib import messages
         messages.info(request, 'Connect and verify your Deriv account before opening the dashboard.')
@@ -100,6 +104,14 @@ def about_page(request): return render(request,'core/about.html')
 def public_status_page(request): return render(request,'core/system_status.html')
 @never_cache
 def deriv_login(request):
+    from django.contrib import messages
+    from core.broker_onboarding import has_verified_account_email
+    if not request.user.is_authenticated:
+        messages.info(request, 'Create or sign in to your AlgoBot account and verify your email before connecting Deriv.')
+        return redirect('login_page')
+    if not has_verified_account_email(request.user):
+        messages.info(request, 'Verify your AlgoBot email before connecting Deriv.')
+        return redirect('verify_email_page')
     is_valid,error_message=DerivOAuthService.validate_configuration()
     if not is_valid: logger.error('deriv_oauth_misconfigured',extra={'error':error_message}); return HttpResponse('Deriv OAuth is unavailable. Please try again later.',status=503)
     if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)): return redirect('dashboard_page')
