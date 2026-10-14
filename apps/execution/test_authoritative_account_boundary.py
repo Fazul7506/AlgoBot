@@ -3,13 +3,14 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import TransactionTestCase
+from django.test import TransactionTestCase, override_settings
 from django.utils import timezone
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from apps.execution.constants import ORDER_STATUS_QUEUED
 from apps.execution.engine import ExecutionEngine
-from apps.execution.models import Order
+from apps.execution.mod@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+els import Order
 
 
 class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
