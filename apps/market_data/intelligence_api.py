@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.utils import timezone
 from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
+from core.permissions import BrokerOnboardingRequired
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -49,7 +50,7 @@ def _signal_confluence(signals):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def market_intelligence(request):
     """Return broker-backed market intelligence without fabricating observations."""
     symbol_filter = str(request.query_params.get("symbol") or "").strip()
@@ -126,7 +127,7 @@ def market_intelligence(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def signal_lifecycle(request):
     """Expose deterministic signal lifecycle state from persisted strategy signals."""
     symbol = str(request.query_params.get("symbol") or "").strip()
