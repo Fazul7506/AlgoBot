@@ -17,7 +17,7 @@ class BrokerOnboardingMiddleware:
         "/admin/", "/static/", "/media/", "/health/",
         "/login/", "/register/", "/logout/", "/accounts/login/",
         "/verify-email/", "/forgot-password/", "/reset-password/",
-        "/account/identity/", "/auth/google/",
+        "/account/identity/", "/account/google/unlink/", "/auth/google/",
         "/brokers/connect/", "/brokers/callback/", "/brokers/marketplace/", "/callback/",
         # Broker catalog, connection status/sync, and recovery actions remain
         # available so a user can complete or repair the required connection.
