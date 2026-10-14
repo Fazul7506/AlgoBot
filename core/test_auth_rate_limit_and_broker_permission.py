@@ -3,9 +3,11 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import RequestFactory, SimpleTestCase, TestCase
+from django.utils import timezone
 
 from core.auth_rate_limit import allow_auth_attempt
 from core.permissions import BrokerOnboardingRequired
+from core.models import UserProfile
 from rest_framework.exceptions import PermissionDenied
 
 
@@ -48,6 +50,7 @@ class BrokerOnboardingPermissionTests(TestCase):
             email="permission@example.test",
             password="Test-password-123!secure",
         )
+        UserProfile.objects.create(user=self.user, email_verified=True, email_verified_at=timezone.now())
 
     @patch("rest_framework_simplejwt.authentication.JWTAuthentication.authenticate")
     @patch("core.api_authentication.has_authorized_broker_connection", return_value=False)
