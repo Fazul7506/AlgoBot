@@ -1,3 +1,4 @@
+import json
 """Regression tests for mandatory broker onboarding in copy trading."""
 from unittest.mock import patch
 
@@ -42,4 +43,4 @@ class CopyTradingBrokerOnboardingTests(TestCase):
                 response = getattr(views, name)(request)
 
                 self.assertEqual(response.status_code, 403)
-                self.assertEqual(response.json()["code"], "broker_setup_required")
+                self.assertEqual(json.loads(response.content)["code"], "broker_setup_required")
