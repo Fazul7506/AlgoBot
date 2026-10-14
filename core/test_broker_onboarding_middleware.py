@@ -2,7 +2,9 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from django.urls import reverse
+from core.models import UserProfile
 
 
 User = get_user_model()
@@ -15,6 +17,7 @@ class BrokerOnboardingMiddlewareTests(TestCase):
             email="middleware@example.test",
             password="Test-password-123!secure",
         )
+        UserProfile.objects.create(user=self.user, email_verified=True, email_verified_at=timezone.now())
         self.client.force_login(self.user)
 
     @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=False)
