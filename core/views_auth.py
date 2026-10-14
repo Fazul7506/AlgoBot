@@ -198,10 +198,14 @@ def register(request):
         validate_password(password, user=User(username=username, email=email))
     except ValidationError as exc:
         return Response({'status': 'error', 'message': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
-    if User.objects.filter(username__iexact=username).exists():
-        return Response({'status': 'error', 'message': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
-    if User.objects.filter(email__iexact=email).exists():
-        return Response({'status': 'error', 'message': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
+    if (
+        User.objects.filter(username__iexact=username).exists()
+        or User.objects.filter(email__iexact=email).exists()
+    ):
+        return Response(
+            {'status': 'error', 'message': 'An account could not be created with those details. If you already have an account, sign in or use account recovery.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     try:
         with transaction.atomic():
@@ -211,7 +215,7 @@ def register(request):
             BotSettings.objects.get_or_create(user=user)
     except IntegrityError:
         logger.info('user_registration_conflict')
-        return Response({'status': 'error', 'message': 'Username or email already registered'}, status=status.HTTP_409_CONFLICT)
+        return Response({'status': 'error', 'message': 'An account could not be created with those details. If you already have an account, sign in or use account recovery.'}, status=status.HTTP_409_CONFLICT)
     except Exception:
         logger.exception('user_registration_failed')
         return Response({'status': 'error', 'message': 'Registration could not be completed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
