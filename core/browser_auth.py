@@ -23,6 +23,7 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from core.models import BotSettings, PasswordResetToken, Subscription, UserProfile
+from core.auth_rate_limit import allow_auth_attempt
 
 logger = logging.getLogger("account_auth")
 RESET_TTL = timedelta(hours=1)
@@ -82,6 +83,9 @@ def login_page(request):
     if request.method == "POST":
         identifier = str(request.POST.get("identifier") or request.POST.get("username") or "").strip()
         password = request.POST.get("password") or ""
+        if not allow_auth_attempt(request, "password-login", identifier, limit=10, window=900) or not allow_auth_attempt(request, "password-login-ip", "", limit=30, window=900):
+            messages.error(request, "Too many sign-in attempts. Please wait and try again.")
+            return _render(request, "login", identifier=identifier)
         user = None
         if identifier and password:
             if "@" in identifier:
@@ -120,6 +124,8 @@ def register_page(request):
         from core.broker_onboarding import has_authorized_broker_connection
         return redirect("dashboard_page" if has_authorized_broker_connection(request.user) else "broker_marketplace_page")
     if request.method == "POST":
+        if not allow_auth_attempt(request, "registration-ip", "", limit=5, window=3600):
+            return _render(request, "register", errors=["Too many registration attempts. Please try again later."])
         username = str(request.POST.get("username") or "").strip()
         email = str(request.POST.get("email") or "").strip().lower()
         password = request.POST.get("password") or ""
@@ -173,7 +179,8 @@ def forgot_password_page(request):
     if request.method == "POST":
         email = str(request.POST.get("email") or "").strip().lower()
         # Always return the same public message to avoid account enumeration.
-        if email:
+        rate_allowed = allow_auth_attempt(request, "password-reset", email, limit=5, window=3600) and allow_auth_attempt(request, "password-reset-ip", "", limit=15, window=3600)
+        if email and rate_allowed:
             matches = User.objects.filter(email__iexact=email, is_active=True)
             if matches.count() == 1:
                 user = matches.first()
@@ -205,6 +212,8 @@ def reset_password_page(request, token=None):
     if not valid:
         return _render(request, "reset_password", token=raw_token, invalid=True)
     if request.method == "POST":
+        if not allow_auth_attempt(request, "password-reset-submit", raw_token, limit=10, window=900):
+            return _render(request, "reset_password", token=raw_token, invalid=True)
         password = request.POST.get("password") or ""
         confirm = request.POST.get("password_confirm") or ""
         if password != confirm:
@@ -338,7 +347,8 @@ def verify_email_page(request):
         return _render(request, "verify_email", invalid=True)
     if request.method == "POST":
         email = str(request.POST.get("email") or "").strip().lower()
-        matches = User.objects.filter(email__iexact=email, is_active=True)
+        rate_allowed = allow_auth_attempt(request, "verification-resend", email, limit=3, window=3600) and allow_auth_attempt(request, "verification-resend-ip", "", limit=10, window=3600)
+        matches = User.objects.filter(email__iexact=email, is_active=True) if rate_allowed else User.objects.none()
         if matches.count() == 1:
             user = matches.first()
             profile, _ = UserProfile.objects.get_or_create(user=user)
