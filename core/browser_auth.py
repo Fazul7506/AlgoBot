@@ -242,7 +242,9 @@ def reset_password_page(request, token=None):
     if not valid:
         return _render(request, "reset_password", token=raw_token, invalid=True)
     if request.method == "POST":
-        if not allow_auth_attempt(request, "password-reset-submit", raw_token, limit=10, window=900):
+        identity_allowed = allow_auth_attempt(request, "password-reset-submit", raw_token, limit=10, window=900)
+        ip_allowed = allow_auth_attempt(request, "password-reset-submit-ip", "", limit=20, window=900)
+        if not identity_allowed or not ip_allowed:
             return _render(request, "reset_password", token=raw_token, invalid=True)
         password = request.POST.get("password") or ""
         confirm = request.POST.get("password_confirm") or ""
