@@ -31,6 +31,16 @@ class AuthRateLimitTests(SimpleTestCase):
         self.assertFalse(allow_auth_attempt(self.request, "login", "one@example.test", limit=1, window=60))
         self.assertTrue(allow_auth_attempt(self.request, "login", "two@example.test", limit=1, window=60))
 
+    def test_identity_limit_is_shared_across_source_ips(self):
+        self.assertTrue(allow_auth_attempt(self.request, "global-identity", "user@example.test", limit=1, window=60))
+        second_request = RequestFactory().post("/login/")
+        second_request.META["REMOTE_ADDR"] = "198.51.100.20"
+        self.assertFalse(allow_auth_attempt(second_request, "global-identity", "user@example.test", limit=1, window=60))
+
+    def test_ip_limit_is_shared_across_identities(self):
+        self.assertTrue(allow_auth_attempt(self.request, "global-ip", "", limit=1, window=60))
+        self.assertFalse(allow_auth_attempt(self.request, "global-ip", "", limit=1, window=60))
+
 
 class BrokerOnboardingPermissionTests(TestCase):
     def setUp(self):
