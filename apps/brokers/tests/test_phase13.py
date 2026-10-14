@@ -13,10 +13,10 @@ class BrokerAdapterContractTests(TestCase):
         for adapter in (DerivAdapter,):
             missing = [name for name in required if not callable(getattr(adapter, name, None))]
             self.assertEqual(missing, [])
-            self.assertFalse(inspect.isab@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
-stract(adapter))
+            self.assertFalse(inspect.isabstract(adapter))
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class OrderRoutingTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user('phase13@example.com', 'phase13@example.com', 'pass')
