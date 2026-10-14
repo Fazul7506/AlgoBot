@@ -251,7 +251,7 @@ def predict(request):
 
 
 @decorators.api_view(["GET"])
-@decorators.permission_classes([JWTAuthenticatedPermission])
+@decorators.permission_classes([JWTAuthenticatedPermission, BrokerOnboardingRequired])
 @decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
 def explain(request):
     symbol = str(request.query_params.get("symbol") or "").strip()
