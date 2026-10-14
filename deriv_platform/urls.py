@@ -12,9 +12,6 @@ from core.views_auth import (
 )
 from core.browser_views import browser_logout
 from rest_framework_simplejwt.views import TokenRefreshView
-
-class CustomTokenRefreshView(TokenRefreshView):
-    serializer_class = CustomTokenRefreshSerializer
 from core.google_auth import google_login_start, google_login_callback
 from core.dashboard_api import DashboardViewSet
 from apps.market_data.web_views import market_catalogue
@@ -69,6 +66,10 @@ def billing_cancel_dispatch(request):
 
 router = DefaultRouter()
 router.register(r"dashboard", DashboardViewSet, basename="dashboard")
+
+class CustomTokenRefreshView(TokenRefreshView):
+    serializer_class = CustomTokenRefreshSerializer
+
 
 urlpatterns = [
     path("health/", include("apps.health.urls")),
