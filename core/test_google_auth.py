@@ -81,3 +81,64 @@ class GoogleLoginSecurityTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, "/login/")
         self.assertFalse(User.objects.filter(email="google-user@example.test").exists())
+
+
+    @patch("google.oauth2.id_token.verify_oauth2_token")
+    @patch("core.google_auth.requests.post")
+    def test_authenticated_user_can_explicitly_link_google_identity(self, token_exchange, verify_id_token):
+        from core.models import GoogleIdentity, UserProfile
+
+        user = User.objects.create_user(
+            username="existing-password-user",
+            email="existing-password@example.test",
+            password="Local-password-123!secure",
+        )
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.email_verified = True
+        profile.save(update_fields=["email_verified"])
+        self.client.force_login(user)
+
+        start_response = self.client.get("/auth/google/?intent=link")
+        self.assertEqual(start_response.status_code, 302)
+        session = self.client.session
+        state = session["algobot_google_login_state"]
+        nonce = session["algobot_google_login_nonce"]
+
+        token_response = Mock()
+        token_response.raise_for_status.return_value = None
+        token_response.json.return_value = {"id_token": "signed-test-id-token"}
+        token_exchange.return_value = token_response
+        verify_id_token.return_value = {
+            "sub": "explicitly-linked-subject",
+            "email": "google-identity@example.test",
+            "email_verified": True,
+            "nonce": nonce,
+        }
+
+        response = self.client.get(f"/auth/google/callback/?code=auth-code&state={state}")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/account/identity/")
+        identity = GoogleIdentity.objects.get(provider="google", subject="explicitly-linked-subject")
+        self.assertEqual(identity.user_id, user.pk)
+        self.assertEqual(user.email, "existing-password@example.test")
+
+    def test_google_identity_unlink_requires_local_password_and_removes_link(self):
+        from core.models import GoogleIdentity
+
+        user = User.objects.create_user(
+            username="unlink-user",
+            email="unlink@example.test",
+            password="Local-password-123!secure",
+        )
+        GoogleIdentity.objects.create(
+            user=user, provider="google", subject="unlink-subject", email="unlink@example.test"
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/account/google/unlink/",
+            {"current_password": "Local-password-123!secure"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/account/identity/")
+        self.assertFalse(GoogleIdentity.objects.filter(user=user, provider="google").exists())
