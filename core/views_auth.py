@@ -4,9 +4,10 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.models import User
@@ -72,6 +73,43 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['username'] = user.username
         token['email'] = user.email
         return token
+
+
+class CustomTokenRefreshSerializer(TokenRefreshSerializer):
+    """Refresh only active accounts whose local email remains verified."""
+
+    def validate(self, attrs):
+        raw_refresh = attrs.get("refresh")
+        try:
+            refresh = RefreshToken(raw_refresh)
+            user_id = refresh.get(api_settings.USER_ID_CLAIM)
+            user = User.objects.filter(
+                **{api_settings.USER_ID_FIELD: user_id},
+                is_active=True,
+            ).first()
+        except (TokenError, TypeError, ValueError):
+            user = None
+        if user is None:
+            raise serializers.ValidationError("The refresh token is invalid or the account is inactive.")
+
+        from core.broker_onboarding import has_verified_account_email
+        if not has_verified_account_email(user):
+            raise serializers.ValidationError({
+                "code": "email_verification_required",
+                "detail": "Verify your AlgoBot email before refreshing workspace credentials.",
+            })
+
+        # Let SimpleJWT perform expiry, blacklist, rotation and token-family
+        # validation after the account eligibility checks above.
+        data = super().validate(attrs)
+        from core.broker_onboarding import has_authorized_broker_connection
+        broker_setup_required = not has_authorized_broker_connection(user)
+        data["broker_setup_required"] = broker_setup_required
+        from django.urls import reverse
+        data["next_url"] = reverse(
+            "broker_marketplace_page" if broker_setup_required else "dashboard_page"
+        )
+        return data
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
