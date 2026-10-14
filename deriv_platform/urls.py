@@ -12,6 +12,7 @@ from core.views_auth import (
     UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet,
 )
 from core.browser_views import browser_logout
+from core.google_auth import google_login_start, google_login_callback
 from core.dashboard_api import DashboardViewSet
 from apps.market_data.web_views import market_catalogue
 from apps.market_data.signal_views import strategy_signals
@@ -71,6 +72,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("", home, name="home"),
     path("login/", login_page, name="login_page"),
+    path("auth/google/", google_login_start, name="google_login_start"),
+    path("auth/google/callback/", google_login_callback, name="google_login_callback"),
     path("register/", register_page, name="register_page"),
     path("logout/", browser_logout, name="logout"),
     path("accounts/login/", RedirectView.as_view(url="/login/", permanent=False)),
