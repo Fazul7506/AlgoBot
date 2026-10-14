@@ -49,7 +49,10 @@ class BrowserAccountAuthenticationTests(TestCase):
         user = get_user_model().objects.create_user(
             username="mail-login-user", email="mail@example.com", password="A-Strong-Password-2026!"
         )
-        UserProfile.objects.create(user=user, email_verified=True, email_verified_at=timezone.now())
+        UserProfile.objects.update_or_create(
+            user=user,
+            defaults={"email_verified": True, "email_verified_at": timezone.now()},
+        )
         response = self.client.post("/api/auth/login/", {
             "identifier": "MAIL@EXAMPLE.COM",
             "password": "A-Strong-Password-2026!",
