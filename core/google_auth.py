@@ -22,6 +22,7 @@ from django.views.decorators.http import require_GET
 from core.models import BotSettings, Subscription, UserProfile
 
 logger = logging.getLogger("account_auth")
+from core.auth_rate_limit import allow_auth_attempt
 _STATE_KEY = "algobot_google_login_state"
 _STARTED_KEY = "algobot_google_login_started"
 _NONCE_KEY = "algobot_google_login_nonce"
@@ -38,6 +39,9 @@ def _redirect_uri():
 
 @require_GET
 def google_login_start(request):
+    if not allow_auth_attempt(request, "google-login-start", "", limit=15, window=900):
+        messages.error(request, "Too many Google sign-in attempts. Please wait and try again.")
+        return redirect("login_page")
     client_id = getattr(settings, "GOOGLE_CLIENT_ID", "")
     if not client_id or not getattr(settings, "GOOGLE_CLIENT_SECRET", ""):
         messages.error(request, "Google sign-in is not configured on this deployment.")
