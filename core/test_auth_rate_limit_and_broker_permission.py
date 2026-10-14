@@ -53,20 +53,21 @@ class BrokerOnboardingPermissionTests(TestCase):
         UserProfile.objects.create(user=self.user, email_verified=True, email_verified_at=timezone.now())
 
     @patch("rest_framework_simplejwt.authentication.JWTAuthentication.authenticate")
-    @patch("core.api_authentication.has_authorized_broker_connection", return_value=False)
-    def test_jwt_authentication_denies_workspace_before_broker_setup(self, _gate, jwt_auth):
+    @patch("core.permissions.has_authorized_broker_connection", return_value=False)
+    def test_jwt_authentication_establishes_identity_and_permission_blocks_workspace(self, _gate, jwt_auth):
         from core.api_authentication import BrokerGateJWTAuthentication
-        from rest_framework.exceptions import PermissionDenied
 
         jwt_auth.return_value = (self.user, object())
         request = RequestFactory().get("/api/orders/")
+        authenticated = BrokerGateJWTAuthentication().authenticate(request)
+        self.assertEqual(authenticated[0], self.user)
+        request.user = self.user
         with self.assertRaises(PermissionDenied) as raised:
-            BrokerGateJWTAuthentication().authenticate(request)
+            BrokerOnboardingRequired().has_permission(request, object())
         self.assertEqual(raised.exception.detail["code"], "broker_setup_required")
 
     @patch("rest_framework_simplejwt.authentication.JWTAuthentication.authenticate")
-    @patch("core.api_authentication.has_authorized_broker_connection", return_value=False)
-    def test_jwt_authentication_allows_broker_management_before_setup(self, _gate, jwt_auth):
+    def test_jwt_authentication_allows_broker_management_before_setup(self, jwt_auth):
         from core.api_authentication import BrokerGateJWTAuthentication
 
         jwt_auth.return_value = (self.user, object())
