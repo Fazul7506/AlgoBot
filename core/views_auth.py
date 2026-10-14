@@ -52,7 +52,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             matches = User.objects.filter(**{f'{self.username_field}__iexact': identifier})
             if matches.count() == 1:
                 attrs[self.username_field] = matches.first().get_username()
-        return super().validate(attrs)
+        data = super().validate(attrs)
+        profile = UserProfile.objects.filter(user=self.user).first()
+        if not profile or not profile.email_verified:
+            raise serializers.ValidationError("Please verify your email before signing in.")
+        return data
 
     @classmethod
     def get_token(cls, user):
