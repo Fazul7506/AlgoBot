@@ -24,6 +24,7 @@ from apps.market_data.historical import fetch_and_store, fetch_and_store_ticks
 from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.research_data import ResearchDataService
 from apps.ai_engine.services import PredictionService, RecommendationService
+from core.permissions import BrokerOnboardingRequired
 
 
 ANALYSIS_MARKETS_CACHE_SECONDS = 15
@@ -211,7 +212,7 @@ def _broker_trade_spec(result, market, capabilities, account_context=None):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def analysis_data(request):
     symbol = (request.GET.get("symbol") or "R_100").strip().upper()
     timeframe = (request.GET.get("timeframe") or "1m").strip()
@@ -630,13 +631,13 @@ def _analysis_markets():
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def analysis_markets(request):
     return JsonResponse({"markets": _analysis_markets()})
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def analysis_contracts(request):
     symbol = (request.GET.get("symbol") or "").strip().upper()
     if not symbol:
@@ -682,7 +683,7 @@ def analysis_contracts(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def broker_account_context(request):
     """Return the selected broker account's fresh balance and risk context."""
     account = get_active_account(request.user, request=request)
@@ -713,7 +714,7 @@ def broker_account_context(request):
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def broker_proposal(request):
     """Return a live Deriv proposal using the selected account and risk-capped amount.
 
