@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from .models import CopyProvider, CopyFollower, CopySubscription, CopyTrade
 from .services import CopyTradingEngine, ProviderDiscoveryService
+from core.broker_onboarding import require_broker_onboarding
 
 logger = logging.getLogger(__name__)
 
