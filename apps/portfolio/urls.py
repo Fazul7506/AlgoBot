@@ -1,5 +1,6 @@
 from django.urls import include, path
 from rest_framework.decorators import api_view, permission_classes
+from core.permissions import BrokerOnboardingRequired
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.routers import DefaultRouter
@@ -36,7 +37,7 @@ def _portfolio_for_request(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def diversification(request):
     portfolio = _portfolio_for_request(request)
     if portfolio is None:
@@ -51,7 +52,7 @@ def diversification(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def correlation(request):
     # A correlation matrix requires time-series observations. The portfolio
     # schema does not contain a canonical asset-return series, so an empty
@@ -66,7 +67,7 @@ def correlation(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def reports(request):
     return Response(
         {
@@ -77,7 +78,7 @@ def reports(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def benchmark(request):
     portfolio_return = request.GET.get("portfolio_return")
     benchmark_return = request.GET.get("benchmark_return")
