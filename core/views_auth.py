@@ -77,6 +77,26 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+    def post(self, request, *args, **kwargs):
+        identifier = str(
+            request.data.get("identifier")
+            or request.data.get("email")
+            or request.data.get("username")
+            or ""
+        ).strip()
+        identity_allowed = allow_auth_attempt(
+            request, "jwt-token-login", identifier, limit=10, window=900
+        )
+        ip_allowed = allow_auth_attempt(
+            request, "jwt-token-login-ip", "", limit=30, window=900
+        )
+        if not identity_allowed or not ip_allowed:
+            return Response(
+                {"detail": "Too many sign-in attempts. Please wait and try again."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        return super().post(request, *args, **kwargs)
+
 
 class UserProfileViewSet(viewsets.ModelViewSet):
     """API endpoints for user profiles"""
