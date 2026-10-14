@@ -277,7 +277,7 @@ def account_identity_page(request):
             return render(request, "core/account_identity.html", {
                 "username": username or user.username, "email": email or user.email,
                 "email_verified": profile.email_verified,
-                "password_required": user.has_usable_password(), "errors": errors,
+                "password_required": user.has_usable_password(), "google_identity_linked": GoogleIdentity.objects.filter(user=user, provider="google").exists(), "errors": errors,
             })
         if username_changed:
             user.username = username
