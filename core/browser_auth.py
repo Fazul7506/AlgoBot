@@ -22,7 +22,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from core.models import BotSettings, PasswordResetToken, Subscription, UserProfile
+from core.models import BotSettings, GoogleIdentity, PasswordResetToken, Subscription, UserProfile
 from core.auth_rate_limit import allow_auth_attempt
 
 logger = logging.getLogger("account_auth")
@@ -299,6 +299,7 @@ def account_identity_page(request):
         "username": user.username, "email": user.email,
         "email_verified": profile.email_verified,
         "password_required": user.has_usable_password(),
+        "google_identity_linked": GoogleIdentity.objects.filter(user=user, provider="google").exists(),
     })
 
 
@@ -363,3 +364,26 @@ def verify_email_page(request):
         messages.info(request, "If an unverified account matches that email, a verification link will be sent.")
         return redirect("verify_email_page")
     return _render(request, "verify_email")
+
+
+
+def unlink_google_identity(request):
+    """Unlink Google only after local password proof, preserving a login method."""
+    from django.views.decorators.http import require_POST
+
+    if request.method != "POST":
+        return render(request, "core/account_identity.html", status=405)
+    user = request.user
+    identity = GoogleIdentity.objects.filter(user=user, provider="google").first()
+    if identity is None:
+        messages.info(request, "No Google identity is linked to this account.")
+        return redirect("account_identity_page")
+    if not user.has_usable_password():
+        messages.error(request, "Set and verify a local password before unlinking Google so you do not lose access.")
+        return redirect("account_identity_page")
+    if not user.check_password(request.POST.get("current_password") or ""):
+        messages.error(request, "Enter your current AlgoBot password to unlink Google.")
+        return redirect("account_identity_page")
+    identity.delete()
+    messages.success(request, "Google sign-in has been unlinked from your AlgoBot account.")
+    return redirect("account_identity_page")
