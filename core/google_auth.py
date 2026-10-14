@@ -19,7 +19,7 @@ from django.shortcuts import redirect
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
-from core.models import BotSettings, Subscription, UserProfile
+from core.models import BotSettings, GoogleIdentity, Subscription, UserProfile
 
 logger = logging.getLogger("account_auth")
 from core.auth_rate_limit import allow_auth_attempt
@@ -27,6 +27,7 @@ _STATE_KEY = "algobot_google_login_state"
 _STARTED_KEY = "algobot_google_login_started"
 _NONCE_KEY = "algobot_google_login_nonce"
 _VERIFIER_KEY = "algobot_google_login_pkce_verifier"
+_LINK_USER_KEY = "algobot_google_link_user_id"
 
 
 def _redirect_uri():
@@ -39,6 +40,13 @@ def _redirect_uri():
 
 @require_GET
 def google_login_start(request):
+    if request.GET.get("intent") == "link":
+        if not request.user.is_authenticated:
+            messages.info(request, "Sign in to AlgoBot before linking Google.")
+            return redirect("login_page")
+        request.session[_LINK_USER_KEY] = str(request.user.pk)
+    else:
+        request.session.pop(_LINK_USER_KEY, None)
     if not allow_auth_attempt(request, "google-login-start", "", limit=15, window=900):
         messages.error(request, "Too many Google sign-in attempts. Please wait and try again.")
         return redirect("login_page")
@@ -76,6 +84,7 @@ def google_login_callback(request):
     started = request.session.pop(_STARTED_KEY, None)
     expected_nonce = request.session.pop(_NONCE_KEY, None)
     code_verifier = request.session.pop(_VERIFIER_KEY, None)
+    link_user_id = request.session.pop(_LINK_USER_KEY, None)
     received = str(request.GET.get("state") or "")
     if not expected or not received or not hmac.compare_digest(str(expected), received):
         messages.error(request, "Google sign-in could not be verified. Please try again.")
@@ -141,16 +150,55 @@ def google_login_callback(request):
         messages.error(request, "Google did not provide a verified email identity.")
         return redirect("login_page")
 
-    # The stable Google subject is deterministically mapped to a local username.
-    # An existing email is never silently linked to a Google identity.
-    username = "google_" + hashlib.sha256(subject.encode("utf-8")).hexdigest()[:32]
+    # Provider subject, not email or a derived username, is the durable identity key.
     try:
         with transaction.atomic():
-            user = User.objects.select_for_update().filter(username=username).first()
-            if user is None:
-                if User.objects.filter(email__iexact=email).exists():
-                    messages.info(request, "An account already uses this email. Sign in with that account; Google identity linking requires explicit authorization.")
+            google_identity = (
+                GoogleIdentity.objects.select_for_update()
+                .select_related("user")
+                .filter(provider="google", subject=subject)
+                .first()
+            )
+
+            if link_user_id:
+                if not request.user.is_authenticated or str(request.user.pk) != str(link_user_id):
+                    messages.error(request, "Your AlgoBot session changed during Google linking. Sign in and try again.")
                     return redirect("login_page")
+                if google_identity and google_identity.user_id != request.user.pk:
+                    messages.error(request, "That Google identity is already linked to another AlgoBot account.")
+                    return redirect("account_identity_page")
+                if google_identity is None:
+                    GoogleIdentity.objects.create(
+                        user=request.user, provider="google", subject=subject, email=email
+                    )
+                else:
+                    google_identity.email = email
+                    google_identity.save(update_fields=["email", "updated_at"])
+                messages.success(request, "Google sign-in is now linked to your AlgoBot account.")
+                return redirect("account_identity_page")
+
+            if google_identity:
+                user = google_identity.user
+                if not user.is_active:
+                    messages.error(request, "This AlgoBot account is disabled. Contact support.")
+                    return redirect("login_page")
+                # Provider identity proves the Google address, but never silently
+                # changes the local account email or links by email equality.
+                profile, _ = UserProfile.objects.get_or_create(user=user)
+            else:
+                if User.objects.filter(email__iexact=email).exists():
+                    messages.info(
+                        request,
+                        "An AlgoBot account already uses this email. Sign in to that account first, then explicitly link Google from Account Identity.",
+                    )
+                    return redirect("login_page")
+
+                username = "google_" + hashlib.sha256(subject.encode("utf-8")).hexdigest()[:32]
+                if User.objects.filter(username=username).exists():
+                    # A username collision is not proof of provider ownership.
+                    messages.error(request, "Google identity could not be linked safely. Please contact support.")
+                    return redirect("login_page")
+
                 user = User.objects.create_user(username=username, email=email, password=None)
                 profile, _ = UserProfile.objects.get_or_create(user=user)
                 profile.email_verified = True
@@ -158,15 +206,23 @@ def google_login_callback(request):
                 profile.save(update_fields=["email_verified", "email_verified_at", "updated_at"])
                 Subscription.objects.get_or_create(user=user)
                 BotSettings.objects.get_or_create(user=user)
-            else:
-                profile, _ = UserProfile.objects.get_or_create(user=user)
-                if not profile.email_verified:
-                    profile.email_verified = True
-                    profile.email_verified_at = timezone.now()
-                    profile.save(update_fields=["email_verified", "email_verified_at", "updated_at"])
+                GoogleIdentity.objects.create(
+                    user=user, provider="google", subject=subject, email=email
+                )
     except IntegrityError:
-        messages.error(request, "The Google account could not be linked safely. Please try again.")
-        return redirect("login_page")
+        # Concurrent first-time callbacks may race on provider subject/email.
+        # Re-resolve only by the verified subject; never fall back to email.
+        google_identity = (
+            GoogleIdentity.objects.select_related("user")
+            .filter(provider="google", subject=subject)
+            .first()
+        )
+        if google_identity and not link_user_id and google_identity.user.is_active:
+            user = google_identity.user
+        else:
+            messages.error(request, "The Google identity could not be linked safely. Please try again.")
+            return redirect("account_identity_page" if request.user.is_authenticated else "login_page")
+
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     UserProfile.objects.filter(user=user).update(last_login_at=timezone.now())
     from core.broker_onboarding import has_authorized_broker_connection
