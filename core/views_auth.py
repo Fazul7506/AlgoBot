@@ -161,6 +161,14 @@ def browser_api_token(request):
     client-side in memory. Subsequent API requests use Bearer authentication,
     so browser-session API mutations do not depend on Django CSRF cookies.
     """
+    from core.broker_onboarding import has_verified_account_email
+    if not has_verified_account_email(request.user):
+        return Response({
+            'status': 'error',
+            'code': 'email_verification_required',
+            'message': 'Verify your AlgoBot email before requesting workspace API credentials.',
+            'next_url': '/verify-email/',
+        }, status=status.HTTP_403_FORBIDDEN)
     refresh = RefreshToken.for_user(request.user)
     from core.broker_onboarding import has_authorized_broker_connection
     from django.urls import reverse
