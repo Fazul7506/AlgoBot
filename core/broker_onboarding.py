@@ -31,11 +31,3 @@ def has_authorized_broker_connection(user):
         for account in accounts
     )
 
-
-def post_auth_destination(user, requested_destination=""):
-    """Force users without a verified broker connection through broker setup."""
-    from django.urls import reverse
-
-    if not has_authorized_broker_connection(user):
-        return reverse("broker_marketplace_page")
-    return requested_destination or reverse("dashboard_page")
