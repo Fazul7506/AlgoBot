@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Prefetch
 from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.exceptions import APIException
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from core.api_authentication import BrokerGateJWTAuthentication as JWTAuthentication
 from core.api_authentication import BrowserSessionAuthentication
 from core.billing_entitlements import check, effective_plan
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
