@@ -8,11 +8,12 @@ logger = logging.getLogger("account_auth")
 
 
 def allow_auth_attempt(request, action, identity="", *, limit=5, window=3600):
-    """Allow a bounded number of attempts per client IP and normalized identity.
+    """Allow bounded attempts per normalized identity or per source IP.
 
-    Only a one-way digest is stored in cache; emails and usernames are never
-    written to cache keys in plaintext. If the configured cache is unavailable,
-    deny sensitive attempts rather than silently disabling abuse protection.
+    Callers apply both counters for sensitive operations. Identity counters are
+    global across IPs; blank-identity counters are scoped to the source IP.
+    Only a one-way digest is stored in cache keys, and cache failures deny
+    sensitive attempts rather than silently disabling abuse protection.
     """
     remote_ip = str(request.META.get("REMOTE_ADDR") or "unknown")
     normalized = str(identity or "").strip().lower()
