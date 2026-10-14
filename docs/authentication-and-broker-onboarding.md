@@ -14,7 +14,7 @@ Set these in the server's secret/configuration manager; never commit populated v
 - `GOOGLE_LOGIN_REDIRECT_URI=https://algobot.dpdns.org/auth/google/callback/`: register this exact URI under Authorized redirect URIs for that existing Google OAuth client. Gmail notification OAuth uses the separate `GOOGLE_OAUTH_REDIRECT_URI`.
 - `BASE_URL=https://algobot.dpdns.org`: canonical public origin used to build account-verification and password-reset links.
 - `DERIV_OAUTH_CLIENT_ID`, `DERIV_APP_ID`, and `DERIV_REDIRECT_URI=https://algobot.dpdns.org/callback/`: Deriv OAuth client, numeric app ID, and exact registered callback. The app ID and OAuth client ID are distinct settings.
-- `CREDENTIALS_ENCRYPTION_KEY`: a stable Fernet key stored outside the database and repository. Production startup now fails if this key is absent. Back it up securely; losing or rotating it without a planned re-encryption process can make stored credentials unreadable.
+- `CREDENTIALS_ENCRYPTION_KEY`: a stable Fernet key stored outside the database and repository. The service can boot without it, but broker credential writes fail closed until it is configured. Back it up securely; losing or rotating it without a planned re-encryption process can make stored credentials unreadable.
 - Email delivery: configure the existing Brevo route with `BREVO_API_KEY` and `BREVO_SENDER_EMAIL`, or configure SMTP with `EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, and `EMAIL_PASSWORD`. A console email backend is for development only and is not proof of delivery.
 - Production infrastructure: configure `SECRET_KEY`, database variables/`DATABASE_URL`, `REDIS_URL`, and the required existing Deriv and payment-provider settings.
 
