@@ -14,10 +14,11 @@ logger=logging.getLogger(__name__)
 def _preferred_deriv_account(user):
     accounts = list(BrokerAccount.objects.filter(user=user, broker__broker_type='deriv').select_related('broker').prefetch_related('connections').order_by('-last_synced_at', '-id'))
     return next((account for account in accounts if _deriv_connected(account)), None) or (accounts[0] if accounts else None)
-def _deriv_connected(account): return bool(account and not account.is_token_expired and account.is_connection_eligible)
+def _deriv_connected(account): return bool(account and account.status == "active" and account.broker.status == "active" and account.token_status == "active" and not account.is_token_expired and account.is_connection_eligible)
 def home(request):
     if request.method=='HEAD': return HttpResponse(status=200)
-    broker_connected = bool(request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)))
+    from core.broker_onboarding import has_authorized_broker_connection
+    broker_connected = bool(request.user.is_authenticated and has_authorized_broker_connection(request.user))
     if broker_connected: return redirect('/dashboard/')
     return render(request,'core/home.html',{'hero_title':'AlgoBot AI trading platform','hero_copy':'Institutional-grade AI trading infrastructure for market intelligence, strategies, risk controls and broker execution.','broker_connected':broker_connected})
 def login_page(request):
@@ -28,7 +29,8 @@ def register_page(request):
     return view(request)
 @login_required
 def dashboard_page(request):
-    if not _deriv_connected(_preferred_deriv_account(request.user)):
+    from core.broker_onboarding import has_authorized_broker_connection
+    if not has_authorized_broker_connection(request.user):
         from django.contrib import messages
         messages.info(request, 'Connect and verify your Deriv account before opening the dashboard.')
         return redirect('broker_marketplace_page')
