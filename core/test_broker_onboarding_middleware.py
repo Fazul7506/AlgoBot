@@ -20,6 +20,20 @@ class BrokerOnboardingMiddlewareTests(TestCase):
         UserProfile.objects.create(user=self.user, email_verified=True, email_verified_at=timezone.now())
         self.client.force_login(self.user)
 
+    def test_unverified_legacy_session_is_sent_to_email_verification(self):
+        unverified = User.objects.create_user(
+            username="unverified-legacy-session",
+            email="unverified-legacy@example.test",
+            password="Test-password-123!secure",
+        )
+        self.client.force_login(unverified)
+        response = self.client.get(reverse("dashboard_page"))
+        self.assertRedirects(
+            response,
+            reverse("verify_email_page"),
+            fetch_redirect_response=False,
+        )
+
     @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=False)
     def test_authenticated_workspace_pages_redirect_to_broker_setup(self, _gate):
         response = self.client.get(reverse("markets_page"))
