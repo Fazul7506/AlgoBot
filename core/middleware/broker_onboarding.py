@@ -19,8 +19,6 @@ class BrokerOnboardingMiddleware:
         "/verify-email/", "/forgot-password/", "/reset-password/",
         "/account/identity/", "/auth/google/",
         "/brokers/connect/", "/brokers/callback/", "/brokers/marketplace/",
-        "/api/brokers/", "/api/deriv/", "/api/notifications/",
-        "/api/payments/", "/api/billing/webhooks/",
         "/webhooks/", "/payments/callback/",
     )
 
