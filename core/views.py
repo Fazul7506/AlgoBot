@@ -87,6 +87,10 @@ def verify_email_page(request):
 def account_identity_page(request):
     from core.browser_auth import account_identity_page as view
     return view(request)
+
+def unlink_google_identity(request):
+    from core.browser_auth import unlink_google_identity as view
+    return view(request)
 def cookie_policy_page(request): return render(request,'core/cookies.html')
 def licensing_page(request): return render(request,'core/licensing.html')
 def contact_page(request): return render(request,'core/contact.html')
