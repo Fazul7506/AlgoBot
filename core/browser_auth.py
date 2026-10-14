@@ -181,10 +181,11 @@ def register_page(request):
                 validate_email(email)
         except ValidationError as exc:
             errors.extend(exc.messages)
-        if username and User.objects.filter(username__iexact=username).exists():
-            errors.append("That username is already in use.")
-        if email and User.objects.filter(email__iexact=email).exists():
-            errors.append("That email address is already registered.")
+        if (
+            (username and User.objects.filter(username__iexact=username).exists())
+            or (email and User.objects.filter(email__iexact=email).exists())
+        ):
+            errors.append("An account could not be created with those details. If you already have an account, sign in or use account recovery.")
         candidate = User(username=username, email=email)
         if password:
             try:
@@ -203,7 +204,7 @@ def register_page(request):
         except IntegrityError:
             return _render(
                 request, "register",
-                errors=["The username or email was just registered. Please sign in or use different details."],
+                errors=["An account could not be created with those details. If you already have an account, sign in or use account recovery."],
                 username=username, email=email,
             )
         if email_sent:
