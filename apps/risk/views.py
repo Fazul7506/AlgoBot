@@ -2,10 +2,11 @@ from rest_framework import viewsets, permissions, response
 from .models import RiskProfile, RiskRule, RiskAssessment, Exposure, DrawdownHistory
 from django.db.models import Q
 from .serializers import *
+from core.permissions import BrokerOnboardingRequired
 
 
 class OwnQuerysetMixin:
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def get_queryset(self):
         queryset = self.queryset
