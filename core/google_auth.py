@@ -170,6 +170,10 @@ def google_login_callback(request):
                 if not request.user.is_authenticated or str(request.user.pk) != str(link_user_id):
                     messages.error(request, "Your AlgoBot session changed during Google linking. Sign in and try again.")
                     return redirect("login_page")
+                local_profile = UserProfile.objects.filter(user=request.user).first()
+                if not local_profile or not local_profile.email_verified:
+                    messages.error(request, "Verify your AlgoBot email before linking Google sign-in.")
+                    return redirect("verify_email_page")
                 if google_identity and google_identity.user_id != request.user.pk:
                     messages.error(request, "That Google identity is already linked to another AlgoBot account.")
                     return redirect("account_identity_page")
