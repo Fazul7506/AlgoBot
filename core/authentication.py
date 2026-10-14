@@ -1,7 +1,7 @@
 """Authentication helpers for browser-rendered AlgoBot pages and DRF APIs."""
 
 from rest_framework.authentication import BaseAuthentication, SessionAuthentication
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from core.api_authentication import BrokerGateJWTAuthentication as JWTAuthentication
 
 
 class BrowserSessionOrJWTAuthentication(BaseAuthentication):
