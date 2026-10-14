@@ -41,6 +41,27 @@ class AuthRateLimitTests(SimpleTestCase):
         self.assertTrue(allow_auth_attempt(self.request, "global-ip", "", limit=1, window=60))
         self.assertFalse(allow_auth_attempt(self.request, "global-ip", "", limit=1, window=60))
 
+    @patch("rest_framework_simplejwt.authentication.JWTAuthentication.authenticate")
+    @patch("core.api_authentication.has_authorized_broker_connection", return_value=False)
+    def test_jwt_authentication_denies_workspace_before_broker_setup(self, _gate, jwt_auth):
+        from core.api_authentication import BrokerGateJWTAuthentication
+        from rest_framework.exceptions import PermissionDenied
+
+        jwt_auth.return_value = (self.user, object())
+        request = RequestFactory().get("/api/orders/")
+        with self.assertRaises(PermissionDenied) as raised:
+            BrokerGateJWTAuthentication().authenticate(request)
+        self.assertEqual(raised.exception.detail["code"], "broker_setup_required")
+
+    @patch("rest_framework_simplejwt.authentication.JWTAuthentication.authenticate")
+    @patch("core.api_authentication.has_authorized_broker_connection", return_value=False)
+    def test_jwt_authentication_allows_broker_management_before_setup(self, _gate, jwt_auth):
+        from core.api_authentication import BrokerGateJWTAuthentication
+
+        jwt_auth.return_value = (self.user, object())
+        request = RequestFactory().get("/api/brokers/accounts/")
+        self.assertEqual(BrokerGateJWTAuthentication().authenticate(request)[0], self.user)
+
 
 class BrokerOnboardingPermissionTests(TestCase):
     def setUp(self):
