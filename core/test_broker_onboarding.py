@@ -7,6 +7,7 @@ from django.urls import reverse
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from core.broker_onboarding import has_authorized_broker_connection
+from core.models import UserProfile
 
 User = get_user_model()
 
@@ -18,7 +19,7 @@ class BrokerOnboardingGateTests(TestCase):
             email="onboarding@example.test",
             password="A-secure-test-password-123!",
         )
-        UserProfile.objects.create(user=self.user, email_verified=True, email_verified_at=timezone.now())
+        UserProfile.objects.update_or_create(user=self.user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
         self.broker = Broker.objects.create(
             name="Deriv",
             broker_type="deriv",
