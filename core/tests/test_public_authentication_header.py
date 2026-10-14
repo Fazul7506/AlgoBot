@@ -1,5 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
+from core.models import UserProfile
 
 
 class PublicAuthenticationHeaderTests(TestCase):
@@ -15,6 +17,7 @@ class PublicAuthenticationHeaderTests(TestCase):
             email="header-needs-broker@example.test",
             password="Strong-header-test-password-123!",
         )
+        UserProfile.objects.create(user=user, email_verified=True, email_verified_at=timezone.now())
         self.client.force_login(user)
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
