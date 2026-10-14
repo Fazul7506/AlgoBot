@@ -47,6 +47,7 @@ validate_required_settings(
         "ALLOWED_HOSTS": ",".join(ALLOWED_HOSTS),
         "CSRF_TRUSTED_ORIGINS": ",".join(CSRF_TRUSTED_ORIGINS),
         "BASE_URL": BASE_URL,
+        "CREDENTIALS_ENCRYPTION_KEY": CREDENTIALS_ENCRYPTION_KEY,  # noqa: F405
         "REDIS_URL": REDIS_URL,  # noqa: F405
         "DERIV_OAUTH_CLIENT_ID": DERIV_OAUTH_CLIENT_ID,  # noqa: F405
         "DERIV_APP_ID": DERIV_APP_ID,  # noqa: F405
