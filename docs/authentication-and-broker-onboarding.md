@@ -28,7 +28,7 @@ After configuring the key, perform a one-time, non-destructive migration of lega
 DJANGO_ENV=production python manage.py reencrypt_broker_credentials
 ```
 
-This command does not print credential values and validates that the configured key can read already encrypted tokens. Back up the key securely before running it.
+This command does not print credential values and validates that the configured key can read already encrypted tokens. Runtime reads of legacy reversible-encoding values fail closed until this migration succeeds. Back up the key securely before running it.
 
 Schedule this non-destructive Django management command using the existing Render Cron/worker process or an equivalent scheduler:
 
