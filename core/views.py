@@ -11,7 +11,9 @@ from django.views.decorators.cache import never_cache
 from apps.brokers.models import Broker,BrokerAccount
 from core.services.oauth_service import DerivOAuthService
 logger=logging.getLogger(__name__)
-def _preferred_deriv_account(user): return BrokerAccount.objects.filter(user=user,broker__broker_type='deriv').select_related('broker').order_by('-last_synced_at','-id').first()
+def _preferred_deriv_account(user):
+    accounts = list(BrokerAccount.objects.filter(user=user, broker__broker_type='deriv').select_related('broker').prefetch_related('connections').order_by('-last_synced_at', '-id'))
+    return next((account for account in accounts if _deriv_connected(account)), None) or (accounts[0] if accounts else None)
 def _deriv_connected(account): return bool(account and not account.is_token_expired and account.is_connection_eligible)
 def home(request):
     if request.method=='HEAD': return HttpResponse(status=200)
