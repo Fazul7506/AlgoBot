@@ -142,7 +142,10 @@ def register_page(request):
         from core.broker_onboarding import has_authorized_broker_connection
         return redirect("dashboard_page" if has_authorized_broker_connection(request.user) else "broker_marketplace_page")
     if request.method == "POST":
-        if not allow_auth_attempt(request, "registration-ip", "", limit=5, window=3600):
+        registration_identifier = str(request.POST.get("email") or request.POST.get("username") or "").strip().lower()
+        identity_allowed = allow_auth_attempt(request, "registration-identity", registration_identifier, limit=5, window=3600)
+        ip_allowed = allow_auth_attempt(request, "registration-ip", "", limit=10, window=3600)
+        if not identity_allowed or not ip_allowed:
             return _render(request, "register", errors=["Too many registration attempts. Please try again later."])
         username = str(request.POST.get("username") or "").strip()
         email = str(request.POST.get("email") or "").strip().lower()
