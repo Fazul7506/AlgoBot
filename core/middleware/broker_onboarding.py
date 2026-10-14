@@ -51,4 +51,7 @@ class BrokerOnboardingMiddleware:
                 "next_url": reverse("broker_marketplace_page"),
             }, status=403)
 
+        requested = request.get_full_path()
+        if requested.startswith("/") and not requested.startswith("//") and "\\\\" not in requested:
+            request.session["broker_onboarding_next"] = requested
         return redirect("broker_marketplace_page")
