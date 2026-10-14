@@ -35,6 +35,16 @@ def _digest(token):
 
 
 def _render(request, mode, **context):
+    candidate = (
+        context.get("next")
+        or request.GET.get("next")
+        or request.POST.get("next")
+        or request.session.get("broker_onboarding_next", "")
+    )
+    if candidate and url_has_allowed_host_and_scheme(
+        str(candidate), allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        context.setdefault("next", candidate)
     return render(request, "core/auth_page.html", {"mode": mode, **context})
 
 
@@ -141,6 +151,11 @@ def login_page(request):
 
 
 def register_page(request):
+    requested_next = str(request.POST.get("next") or request.GET.get("next") or "")
+    if requested_next and url_has_allowed_host_and_scheme(
+        requested_next, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        request.session["broker_onboarding_next"] = requested_next
     if request.user.is_authenticated:
         from core.broker_onboarding import has_authorized_broker_connection
         return redirect("dashboard_page" if has_authorized_broker_connection(request.user) else "broker_marketplace_page")
