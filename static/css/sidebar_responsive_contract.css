@@ -1,0 +1,132 @@
+/* AlgoBot final shell contract — loaded after global and page styles.
+ * Owns sidebar geometry, responsive navigation, and account dock only.
+ */
+:root {
+  --algobot-shell-rail: 260px;
+  --algobot-shell-collapsed: 78px;
+  --algobot-shell-mobile: 320px;
+  --algobot-shell-topbar: 64px;
+  --algobot-shell-layer: 1000;
+  --algobot-overlay-layer: 900;
+}
+*,*::before,*::after { box-sizing: border-box; }
+html { min-width: 320px; min-height: 100%; overflow-x: clip; }
+body { min-width: 320px; min-height: 100vh; margin: 0; overflow-x: clip; }
+.app-sidebar {
+  position: fixed; inset: 0 auto 0 0; z-index: var(--algobot-shell-layer);
+  display: flex; flex-direction: column; width: var(--algobot-shell-rail);
+  min-width: 0; height: 100vh; height: 100dvh; max-height: 100dvh;
+  margin: 0; padding: 10px; overflow: hidden; overscroll-behavior: none;
+  background: linear-gradient(180deg,rgba(4,11,21,.98),rgba(5,12,23,.96));
+  border-right: 1px solid var(--line,#203653); isolation: isolate;
+  transition: width .2s ease, transform .22s ease;
+}
+.app-sidebar .sidebar-header { position:relative; flex: 0 0 auto; min-width: 0; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.app-sidebar .sidebar-header .brand { flex: 1 1 auto; min-width:0; display:inline-flex; align-items:center; gap:8px; overflow:hidden; }
+.app-sidebar .sidebar-header .brand-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.app-sidebar nav { flex: 1 1 auto; min-height: 0; min-width: 0; width:100%; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; scrollbar-width:thin; touch-action:pan-y; }
+.app-sidebar nav a { min-width:0; }
+.app-sidebar nav a > span:not(.material-symbols-rounded) { min-width:0; overflow-wrap:anywhere; }
+.app-sidebar .sidebar-user { flex: 0 0 auto; min-width:0; width:100%; margin-top:auto; padding-top:10px; padding-bottom:max(4px,env(safe-area-inset-bottom)); }
+.app-sidebar .algobot-sidebar-account { min-width:0; max-width:100%; }
+.app-sidebar .sidebar-user-actions { flex:0 0 auto; }
+.app-sidebar .sidebar-user-actions form { margin:0; }
+.app-sidebar .sidebar-user-actions button { min-width:40px; min-height:40px; }
+.app-sidebar.is-collapsed { width:var(--algobot-shell-collapsed); min-width:0; }
+.app-sidebar.is-collapsed .brand-name,
+.app-sidebar.is-collapsed nav h2,
+.app-sidebar.is-collapsed nav a > span:not(.material-symbols-rounded),
+.app-sidebar.is-collapsed .sidebar-new-trade span:not(.material-symbols-rounded),
+.app-sidebar.is-collapsed .sidebar-user-copy,
+.app-sidebar.is-collapsed .sidebar-user-actions { display:none; }
+.app-sidebar.is-collapsed .sidebar-header { justify-content:space-between; padding-inline:0; }
+.app-sidebar.is-collapsed .sidebar-header .brand { flex:0 0 28px; width:28px; justify-content:center; gap:0; margin-right:auto; }
+.app-sidebar.is-collapsed .sidebar-header .brand-mark { flex:0 0 28px; width:28px; height:28px; }
+.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle { position:absolute; top:50%; right:0; inset:auto 0 auto auto; transform:translateY(-50%); width:28px; min-width:28px; height:28px; padding:0; opacity:0; }
+.app-sidebar.is-collapsed .sidebar-header:hover > .sidebar-toggle,
+.app-sidebar.is-collapsed .sidebar-header:focus-within > .sidebar-toggle,
+.app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle:focus-visible { opacity:1; }
+.app-sidebar.is-collapsed nav a,
+.app-sidebar.is-collapsed .sidebar-new-trade { justify-content:center; padding-inline:0; }
+.app-sidebar.is-collapsed .sidebar-user { display:flex; justify-content:center; }
+.app-sidebar.is-collapsed .algobot-sidebar-account { max-width:48px; padding:6px; overflow:hidden; }
+.app-sidebar.is-collapsed .algobot-account-copy,
+.app-sidebar.is-collapsed .algobot-account-fresh,
+.app-sidebar.is-collapsed .algobot-account-switch { display:none; }
+.app-shell { display:block; min-width:0; width:auto; min-height:100vh; margin-left:var(--algobot-shell-rail); transition:margin-left .2s ease; }
+.app-shell.public-shell { margin-left:0; }
+.app-sidebar.is-collapsed ~ .app-shell,
+.app-shell.sidebar-collapsed,
+body.sidebar-collapsed .app-shell { margin-left:var(--algobot-shell-collapsed); }
+.app-shell > .topbar { width:100%; min-width:0; }
+.app-content { min-width:0; width:100%; }
+.app-content > * { min-width:0; max-width:100%; }
+.topbar { min-width:0; min-height:var(--algobot-shell-topbar); }
+.topbar-title,.topbar-actions { min-width:0; }
+.topbar-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
+.mobile-menu-button { display:none; }
+.sidebar-backdrop[hidden] { display:none; }
+#app-sidebar nav a.active,
+#app-sidebar nav a[aria-current="page"],
+#app-sidebar .sidebar-new-trade.active,
+#app-sidebar .sidebar-new-trade[aria-current="page"] {
+  color:var(--text); background:rgba(53,217,255,.10);
+  border-color:rgba(53,217,255,.18); box-shadow:inset 3px 0 0 var(--accent); font-weight:700;
+}
+#app-sidebar nav a.active .material-symbols-rounded,
+#app-sidebar nav a[aria-current="page"] .material-symbols-rounded { color:var(--accent); }
+#app-sidebar nav a:focus-visible,
+#app-sidebar button:focus-visible,
+.mobile-menu-button:focus-visible { outline:2px solid var(--accent,#35d9ff); outline-offset:2px; }
+@media (min-width:901px) and (max-width:1200px) {
+  :root { --algobot-shell-rail:220px; --algobot-shell-collapsed:68px; }
+  .topbar { padding-inline:16px; }
+}
+@media (max-width:900px) {
+  html.mobile-drawer-locked,body.mobile-drawer-locked { overscroll-behavior:none; }
+  body.mobile-drawer-locked { width:100%; }
+  .mobile-menu-button {
+    display:grid; place-items:center; position:fixed; top:max(10px,env(safe-area-inset-top));
+    left:max(10px,env(safe-area-inset-left)); z-index:calc(var(--algobot-shell-layer) + 1);
+    width:44px; height:44px; padding:0; border:1px solid var(--line,#203653);
+    border-radius:12px; background:rgba(17,21,27,.96); color:var(--text,#e7f0ff);
+    box-shadow:0 8px 30px rgba(0,0,0,.22); cursor:pointer;
+  }
+  .sidebar-backdrop { position:fixed; inset:0; z-index:var(--algobot-overlay-layer); background:rgba(0,0,0,.62); backdrop-filter:blur(3px); }
+  .app-sidebar,.app-sidebar.is-collapsed,body.sidebar-collapsed .app-sidebar {
+    position:fixed; inset:0 auto 0 0; width:min(var(--algobot-shell-mobile),88vw);
+    min-width:0; height:100vh; height:100dvh; max-height:100dvh; margin:0;
+    padding:10px; transform:translate3d(-105%,0,0); transition:transform .22s ease;
+    z-index:var(--algobot-shell-layer);
+  }
+  .app-sidebar.is-open { transform:translate3d(0,0,0); }
+  .app-sidebar .sidebar-toggle { display:none; }
+  .app-sidebar.is-collapsed .brand-name { display:inline; }
+  .app-sidebar.is-collapsed nav h2 { display:block; }
+  .app-sidebar.is-collapsed nav a > span:not(.material-symbols-rounded),
+  .app-sidebar.is-collapsed .sidebar-new-trade span:not(.material-symbols-rounded) { display:inline; }
+  .app-sidebar.is-collapsed .algobot-account-copy { display:grid; }
+  .app-sidebar.is-collapsed .algobot-account-fresh { display:block; }
+  .app-sidebar.is-collapsed .algobot-account-switch { display:inline-flex; }
+  .app-sidebar.is-collapsed .sidebar-user-actions { display:flex; }
+  .app-sidebar.is-collapsed .sidebar-header { justify-content:space-between; }
+  .app-sidebar.is-collapsed .sidebar-header .brand { flex:1 1 auto; width:auto; justify-content:flex-start; gap:8px; }
+  .app-sidebar.is-collapsed .sidebar-header > .sidebar-toggle { display:none; }
+  .app-sidebar.is-collapsed nav a { justify-content:flex-start; padding-inline:initial; }
+  .app-sidebar.is-collapsed .sidebar-user { display:block; }
+  .app-sidebar.is-collapsed .algobot-sidebar-account { max-width:100%; padding:14px; }
+  .app-shell,.app-shell.sidebar-collapsed,.app-sidebar.is-collapsed ~ .app-shell,body.sidebar-collapsed .app-shell { margin-left:0; }
+  .topbar { padding-top:max(10px,env(safe-area-inset-top)); padding-right:max(12px,env(safe-area-inset-right)); padding-bottom:10px; padding-left:64px; min-height:58px; }
+  .topbar-actions kbd { display:none; }
+  .topbar-actions > button[data-theme-toggle] span:last-child { display:none; }
+  .app-content { padding-bottom:max(12px,env(safe-area-inset-bottom)); }
+}
+@media (max-width:420px) {
+  .app-sidebar,.app-sidebar.is-collapsed,body.sidebar-collapsed .app-sidebar { width:min(300px,90vw); }
+  .topbar-title { max-width:52vw; }
+  .topbar-actions { gap:5px; }
+  .algobot-sidebar-account { padding:10px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .app-sidebar,.app-shell,.mobile-menu-button { transition:none; }
+}

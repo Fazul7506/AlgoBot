@@ -105,9 +105,45 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("mobile-drawer-locked", css)
         self.assertIn("document.body.style.position='fixed'", js)
         self.assertIn("window.scrollTo(0,mobileScrollY)", js)
-        self.assertIn("document.addEventListener('scroll', isolateFromDocumentScroll", js)
+        self.assertNotIn("isolateFromDocumentScroll", js)
+        self.assertNotIn("document.addEventListener('scroll'", js)
         self.assertNotIn("sidebar.scrollTop", js)
         self.assertNotIn("sidebar.scrollHeight", js)
+
+    def test_final_sidebar_contract_loads_after_page_specific_styles(self):
+        response = self.client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode("utf-8")
+        self.assertIn("css/sidebar_responsive_contract.css?v=20261013-shell2", html)
+        self.assertGreater(
+            html.index("sidebar_responsive_contract.css?v=20261013-shell2"),
+            html.index("page_stability.css"),
+        )
+
+    def test_sidebar_active_route_matching_sets_one_longest_match_and_accessible_state(self):
+        shell = (Path(settings.BASE_DIR) / "static" / "js" / "base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("function routeMatches(path,href)", shell)
+        self.assertIn("path.startsWith(`${target}/`)", shell)
+        self.assertIn("href.length>activeLength", shell)
+        # Assert the actual active-link variable is given the accessible current-page state.
+        self.assertIn("active.setAttribute('aria-current','page')", shell)
+        self.assertIn("link.setAttribute('title',collapsed?label:'')", shell)
+
+    def test_sidebar_account_switch_requires_same_broker_and_verified_target(self):
+        switcher = (Path(settings.BASE_DIR) / "static" / "js" / "sidebar_account_switch.js").read_text(encoding="utf-8")
+        self.assertIn("const sameBroker=", switcher)
+        self.assertIn("!!brokerName&&String(a.broker?.name||a.broker_name||'').trim().toLowerCase()===brokerName", switcher)
+        self.assertIn("accounts.find(a=>eligible(a)&&sameBroker(a))||null", switcher)
+        self.assertNotIn("||accounts.find(eligible)||null", switcher)
+        # An alternate account can be credential-ready before its own broker connection is established.
+        self.assertNotIn("&&a.is_connected===true&&a.switch_enabled", switcher)
+        # Keep the sidebar click separate from the shared generic switch listener;
+        # verify the rendered target is still eligible before starting a switch.
+        self.assertIn("data-account-id=\"${safe(target?.id||'')}\"", switcher)
+        self.assertIn("data-sidebar-account-switch", switcher)
+        self.assertIn("closest?.('[data-sidebar-account-switch]')", switcher)
+        self.assertIn("if(!target||String(target.id)!==String(b.dataset.accountId||''))return", switcher)
+        self.assertIn("current.is_connected===true&&String(current.status||'').toLowerCase()==='active'", switcher)
 
     def test_sidebar_account_area_remains_inside_drawer_end_to_end(self):
         css = self._css("runtime_recovery.css")
@@ -150,7 +186,6 @@ class UniversalWorkspaceAccessTests(TestCase):
                 name,
             )
 
-
     def test_shared_component_styles_and_transport_contracts_are_canonical(self):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
@@ -185,5 +220,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "css/runtime_recovery.css?v=20261008-css-recovery1")
-        self.assertContains(response, "js/base_shell.js?v=20260921-sidebar-desktop-collapse2")
+        self.assertContains(response, "css/sidebar_responsive_contract.css?v=20261013-shell2")
+        self.assertContains(response, "js/sidebar_account_switch.js?v=20261013-samescope1")
+        self.assertContains(response, "js/base_shell.js?v=20261013-sidebar-scrollfix1")
         self.assertContains(response, 'href="/static/icons/favicon.ico')
