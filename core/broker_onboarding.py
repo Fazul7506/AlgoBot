@@ -15,6 +15,14 @@ from apps.brokers.models import BrokerAccount
 logger = logging.getLogger("broker_onboarding")
 
 
+def has_verified_account_email(user):
+    """Require explicit local email verification before protected workspace access."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    from core.models import UserProfile
+    return UserProfile.objects.filter(user_id=user.pk, email_verified=True).exists()
+
+
 def has_authorized_broker_connection(user):
     """Return True only when this user owns a currently usable Deriv connection."""
     if not user or not getattr(user, "is_authenticated", False):
