@@ -28,11 +28,11 @@ class CopyTradingBrokerOnboardingTests(TestCase):
         )
         for name, method in endpoints:
             with self.subTest(endpoint=name):
-                request = getattr(self.factory, method)(
-                    f"/copy-trading/{name}/",
-                    data="{}" if method == "post" else None,
-                    content_type="application/json",
-                )
+                path = f"/copy-trading/{name}/"
+                if method == "post":
+                    request = self.factory.post(path, data="{}", content_type="application/json")
+                else:
+                    request = self.factory.get(path)
                 request.user = self.user
 
                 response = getattr(views, name)(request)
