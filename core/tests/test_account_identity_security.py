@@ -94,6 +94,42 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertTrue(response.json()["broker_setup_required"])
         self.assertEqual(response.json()["next_url"], "/brokers/marketplace/")
 
+    def test_refresh_token_requires_verified_email_and_reports_broker_setup(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        user = get_user_model().objects.create_user(
+            username="verified-refresh-user",
+            email="verified-refresh@example.com",
+            password="A-Strong-Password-2026!",
+        )
+        UserProfile.objects.update_or_create(
+            user=user,
+            defaults={"email_verified": True, "email_verified_at": timezone.now()},
+        )
+        refresh = RefreshToken.for_user(user)
+        response = self.client.post(
+            "/api/auth/token/refresh/", {"refresh": str(refresh)}, format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.json())
+        self.assertTrue(response.json()["broker_setup_required"])
+        self.assertEqual(response.json()["next_url"], "/brokers/marketplace/")
+
+    def test_refresh_token_rejects_unverified_account(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        user = get_user_model().objects.create_user(
+            username="unverified-refresh-user",
+            email="unverified-refresh@example.com",
+            password="A-Strong-Password-2026!",
+        )
+        refresh = RefreshToken.for_user(user)
+        response = self.client.post(
+            "/api/auth/token/refresh/", {"refresh": str(refresh)}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn("access", response.json())
+
     def test_api_logout_revokes_only_the_authenticated_users_refresh_token(self):
         from rest_framework_simplejwt.exceptions import TokenError
         from rest_framework_simplejwt.tokens import RefreshToken
