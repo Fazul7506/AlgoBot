@@ -42,10 +42,10 @@ class BrokerOnboardingPermissionTests(TestCase):
 
     @patch("core.permissions.has_authorized_broker_connection", return_value=False)
     def test_authenticated_bearer_api_principal_is_denied_without_broker(self, _gate):
-        from rest_framework.test import APIRequestFactory, force_authenticate
+        from rest_framework.test import APIRequestFactory
 
         request = APIRequestFactory().get("/api/orders/")
-        force_authenticate(request, user=self.user)
+        request.user = self.user
         with self.assertRaises(PermissionDenied) as raised:
             BrokerOnboardingRequired().has_permission(request, object())
         self.assertEqual(raised.exception.detail["code"], "broker_setup_required")
