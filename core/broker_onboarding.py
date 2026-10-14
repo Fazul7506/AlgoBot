@@ -3,9 +3,13 @@
 Only a provider-verified, active Deriv connection qualifies as completed onboarding.
 A local login or OAuth callback alone is never evidence of broker authorization.
 """
+import logging
+
 from django.utils import timezone
 
 from apps.brokers.models import BrokerAccount
+
+logger = logging.getLogger("broker_onboarding")
 
 
 def has_authorized_broker_connection(user):
@@ -25,9 +29,22 @@ def has_authorized_broker_connection(user):
         .prefetch_related("connections")
     )
     now = timezone.now()
-    return any(
-        (account.expires_at is None or account.expires_at > now)
-        and account.is_connection_eligible
-        for account in accounts
-    )
+    for account in accounts:
+        if account.expires_at is not None and account.expires_at <= now:
+            continue
+        try:
+            if account.is_connection_eligible:
+                return True
+        except Exception as exc:
+            # Missing/invalid encryption keys or unreadable legacy tokens must
+            # fail closed as an incomplete connection, not crash a request.
+            logger.warning(
+                "broker_onboarding_credential_check_failed",
+                extra={
+                    "user_id": user.pk,
+                    "broker_account_id": account.pk,
+                    "error_type": exc.__class__.__name__,
+                },
+            )
+    return False
 
