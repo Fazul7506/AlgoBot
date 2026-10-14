@@ -205,6 +205,15 @@ def callback(request):
                 "deriv_oauth_account_persistence_failed",
                 error_type=exc.__class__.__name__,
             )
+        if current_id == selected_account_id and persisted is None:
+            # The globally unique broker/account key may have been claimed by
+            # another user between the preflight ownership check and this write.
+            # Fail closed rather than dereferencing None or transferring ownership.
+            return _fail(
+                request,
+                "That Deriv account could not be attached to this AlgoBot user. Refresh Broker Management and retry.",
+                "deriv_oauth_selected_account_unavailable",
+            )
         if persisted:
             persisted_ids.append(current_id)
             if current_id == selected_account_id:
@@ -239,6 +248,12 @@ def callback(request):
                 extra={"error": websocket_verification_error},
             )
 
+    if selected_broker_account is None:
+        return _fail(
+            request,
+            "AlgoBot could not securely persist the selected Deriv account. No dashboard access was granted.",
+            "deriv_oauth_selected_account_unavailable",
+        )
     if selected_broker_account.is_connection_eligible:
         select_account(request, selected_broker_account)
     DerivOAuthService.clear_oauth_session(request)
