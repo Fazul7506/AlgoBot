@@ -19,6 +19,8 @@ def has_verified_account_email(user):
     """Require explicit local email verification before protected workspace access."""
     if not user or not getattr(user, "is_authenticated", False):
         return False
+    if not str(getattr(user, "email", "") or "").strip():
+        return False
     from core.models import UserProfile
     return UserProfile.objects.filter(user_id=user.pk, email_verified=True).exists()
 
