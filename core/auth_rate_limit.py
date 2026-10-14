@@ -16,7 +16,13 @@ def allow_auth_attempt(request, action, identity="", *, limit=5, window=3600):
     """
     remote_ip = str(request.META.get("REMOTE_ADDR") or "unknown")
     normalized = str(identity or "").strip().lower()
-    material = f"{action}|{remote_ip}|{normalized}".encode("utf-8")
+    # Identity counters are global across source IPs; blank-identity calls are
+    # IP counters. Callers apply both limits separately so distributed clients
+    # cannot evade an identity cap and one account cannot evade an IP cap.
+    material = (
+        f"{action}|identity|{normalized}" if normalized
+        else f"{action}|ip|{remote_ip}"
+    ).encode("utf-8")
     key = "algobot:auth-rate:" + hashlib.sha256(material).hexdigest()
     try:
         if cache.add(key, 1, timeout=window):
