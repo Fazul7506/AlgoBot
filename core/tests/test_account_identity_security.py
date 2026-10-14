@@ -57,6 +57,8 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["user"]["id"], user.pk)
         self.assertIn("access", response.json())
+        self.assertTrue(response.json()["broker_setup_required"])
+        self.assertEqual(response.json()["next_url"], "/brokers/marketplace/")
 
     def test_password_api_login_rejects_unverified_account(self):
         get_user_model().objects.create_user(
@@ -83,6 +85,8 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("access", response.json())
         self.assertIn("refresh", response.json())
+        self.assertTrue(response.json()["broker_setup_required"])
+        self.assertEqual(response.json()["next_url"], "/brokers/marketplace/")
 
     def test_api_logout_revokes_only_the_authenticated_users_refresh_token(self):
         from rest_framework_simplejwt.exceptions import TokenError
