@@ -75,10 +75,18 @@
     <h1>Verify your email</h1><p class="sub">We’ll send a fresh verification link if this email belongs to an unverified AlgoBot account.</p>
     {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
     {% if invalid %}<div class="notice error">That verification link is invalid or has already been used.</div>{% endif %}
-    <form method="post" action="{% url 'verify_email_page' %}">{% csrf_token %}
-      <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" required>
-      <button type="submit">Send verification link</button>
-    </form>
+    {% if confirm_token %}
+      <p class="notice">Confirm that you want to {% if confirm_purpose == "change_email" %}verify and save your new email address{% else %}verify your AlgoBot email address{% endif %}. This step protects the link from being consumed by automatic email scanners.</p>
+      <form method="post" action="{% url 'verify_email_page' %}">{% csrf_token %}
+        <input type="hidden" name="token" value="{{ confirm_token }}">
+        <button type="submit">Confirm email verification</button>
+      </form>
+    {% else %}
+      <form method="post" action="{% url 'verify_email_page' %}">{% csrf_token %}
+        <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" required>
+        <button type="submit">Send verification link</button>
+      </form>
+    {% endif %}
     <div class="links"><a href="{% url 'login_page' %}">Back to sign in</a><a href="{% url 'register_page' %}">Create an account</a></div>
   {% endif %}
   <small>Keep your AlgoBot password private. Broker credentials are managed separately and must never be shared.</small>
