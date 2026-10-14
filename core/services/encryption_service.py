@@ -39,12 +39,17 @@ class CredentialEncryptionService:
         if payload is None:
             return ''
         text = payload if isinstance(payload, str) else json.dumps(payload, separators=(',', ':'))
-        if self._fernet:
-            try:
-                return self._fernet.encrypt(text.encode('utf-8')).decode('utf-8')
-            except Exception as exc:
-                logger.warning('Fernet encryption failed: %s', exc)
-        return base64.urlsafe_b64encode(text.encode('utf-8')).decode('utf-8')
+        if not self._fernet:
+            # Base64 is reversible encoding, not encryption. Never persist new
+            # broker credentials in plaintext when key material is missing.
+            raise RuntimeError(
+                "CREDENTIALS_ENCRYPTION_KEY must be configured before storing credentials."
+            )
+        try:
+            return self._fernet.encrypt(text.encode('utf-8')).decode('utf-8')
+        except Exception as exc:
+            logger.error("broker_credential_encryption_failed", extra={"error_type": exc.__class__.__name__})
+            raise RuntimeError("Broker credentials could not be encrypted.") from exc
 
     def decrypt(self, token):
         if not token:
