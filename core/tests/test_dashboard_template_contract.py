@@ -1,8 +1,9 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from apps.brokers.models import Broker, BrokerAccount, @override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+BrokerConnection
 
 
 class DashboardTemplateContractTests(TestCase):
