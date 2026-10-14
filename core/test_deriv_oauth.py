@@ -38,10 +38,17 @@ class DerivOAuthTests(TestCase):
         self.assertNotIn("app_id", query)
 
     def test_callback_rejects_state_mismatch_without_restarting_oauth(self):
+        user = User.objects.create_user(
+            username="state-mismatch-user",
+            email="state-mismatch@example.test",
+            password="Local-password-123!secure",
+        )
+        UserProfile.objects.create(user=user, email_verified=True, email_verified_at=timezone.now())
+        self.client.force_login(user)
         self._oauth_session()
         response = self.client.get(reverse("callback"), {"state": "wrong", "code": "abc"})
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("broker_connect_page"))
+        self.assertEqual(response.url, reverse("broker_marketplace_page"))
 
     def _mock_token_exchange(self, post):
         token_response = Mock()
