@@ -52,7 +52,7 @@ class RiskRuleViewSet(OwnQuerysetMixin, viewsets.ModelViewSet):
 
 class RiskAssessmentViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = RiskAssessmentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return RiskAssessment.objects.filter(
