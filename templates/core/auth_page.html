@@ -35,14 +35,15 @@
       <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required>
       <button type="submit">Sign in securely</button>
     </form>
-    <a class="link-button" href="{% url 'google_login_start' %}" aria-label="Continue with Google">Continue with Google</a>
-    <div class="links"><a href="{% url 'forgot_password_page' %}">Forgot password?</a><a href="{% url 'register_page' %}">Create an account</a></div>
+    <a class="link-button" href="{% url 'google_login_start' %}{% if next %}?next={{ next|urlencode }}{% endif %}" aria-label="Continue with Google">Continue with Google</a>
+    <div class="links"><a href="{% url 'forgot_password_page' %}">Forgot password?</a><a href="{% url 'register_page' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create an account</a></div>
     <div class="divider">OR CONNECT A BROKER</div><a class="link-button" href="/brokers/connect/?broker=deriv">Continue with Deriv</a>
   {% elif mode == "register" %}
     <h1>Create your account</h1><p class="sub">Your AlgoBot login remains separate from your broker identity.</p>
     {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
     {% if errors %}<ul class="errors">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
     <form method="post" action="{% url 'register_page' %}">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next|default:'' }}">
       <label for="username">Username</label><input id="username" name="username" autocomplete="username" value="{{ username|default:'' }}" minlength="1" maxlength="150" required>
       <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" value="{{ email|default:'' }}" required>
       <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="new-password" required>
@@ -50,7 +51,7 @@
       <button type="submit">Create account</button>
     </form>
     <a class="link-button" href="{% url 'google_login_start' %}" aria-label="Continue with Google">Continue with Google</a>
-    <div class="links"><a href="{% url 'login_page' %}">Already registered? Sign in</a><a href="{% url 'verify_email_page' %}">Verify email</a></div>
+    <div class="links"><a href="{% url 'login_page' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Already registered? Sign in</a><a href="{% url 'verify_email_page' %}">Verify email</a></div>
   {% elif mode == "forgot_password" %}
     <h1>Reset your password</h1><p class="sub">Enter your account email. If it matches an active account, we’ll send reset instructions.</p>
     {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
