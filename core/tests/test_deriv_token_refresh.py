@@ -1,8 +1,9 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.brokers.models import Broker, BrokerAccount
-from core.views_oauth import _persist_refreshed_credentials
+from core.views_oauth import _persist_refre@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+shed_credentials
 
 
 class DerivTokenRefreshTests(TestCase):
