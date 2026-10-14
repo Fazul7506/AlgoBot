@@ -40,6 +40,17 @@
 
     <aside class="panel">
       <h2>Connected identities</h2>
+      {% if google_identity_linked %}
+        <p><strong>Google sign-in</strong><br>Linked to this AlgoBot account.</p>
+        <form method="post" action="{% url 'google_unlink' %}">
+          {% csrf_token %}
+          {% if password_required %}<label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>{% endif %}
+          <button type="submit" class="button">Unlink Google</button>
+        </form>
+      {% else %}
+        <p><strong>Google sign-in</strong><br>Not linked. Linking requires an authenticated AlgoBot session and verified Google identity.</p>
+        <a class="button" href="/auth/google/?intent=link">Link Google sign-in</a>
+      {% endif %}
       <p><strong>AlgoBot login</strong><br>Username and login email are controlled here.</p>
       <p><strong>Broker account</strong><br>Deriv account IDs, tokens, and connection status are managed separately.</p>
       <p><strong>Gmail notifications</strong><br>Connect or disconnect a verified Gmail sending address from notification settings. It does not replace your AlgoBot login email.</p>
