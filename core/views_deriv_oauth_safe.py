@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.contrib.auth import login as auth_login
 from django.contrib.auth.models import User
 from django.shortcuts import redirect
+from django.utils.http import url_has_allowed_host_and_scheme
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from core.account_context import select_account
 from core.models import BotSettings, Subscription, UserProfile
@@ -252,4 +253,11 @@ def callback(request):
             f"Deriv account {selected_account_id} was authorized and its WebSocket identity verified. "
             "Refresh the dashboard to load the latest broker snapshot.",
         )
+    if selected_broker_account.is_connection_eligible:
+        requested = request.session.pop("broker_onboarding_next", "")
+        if requested and url_has_allowed_host_and_scheme(
+            requested, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        ) and not requested.startswith(("/brokers/", "/auth/google/", "/login/", "/register/")):
+            return redirect(requested)
+        return redirect("dashboard_page")
     return redirect("broker_marketplace_page")
