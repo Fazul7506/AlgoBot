@@ -104,7 +104,10 @@ def _send_verification(request, user, profile, *, recipient=None, purpose="verif
 
 def login_page(request):
     if request.user.is_authenticated:
-        from core.broker_onboarding import has_authorized_broker_connection
+        from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
+        if not has_verified_account_email(request.user):
+            messages.info(request, "Verify your AlgoBot email before continuing.")
+            return redirect("verify_email_page")
         return redirect("dashboard_page" if has_authorized_broker_connection(request.user) else "broker_marketplace_page")
     if request.method == "POST":
         identifier = str(request.POST.get("identifier") or request.POST.get("username") or "").strip()
@@ -157,7 +160,10 @@ def register_page(request):
     ):
         request.session["broker_onboarding_next"] = requested_next
     if request.user.is_authenticated:
-        from core.broker_onboarding import has_authorized_broker_connection
+        from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
+        if not has_verified_account_email(request.user):
+            messages.info(request, "Verify your AlgoBot email before continuing.")
+            return redirect("verify_email_page")
         return redirect("dashboard_page" if has_authorized_broker_connection(request.user) else "broker_marketplace_page")
     if request.method == "POST":
         registration_identifier = str(request.POST.get("email") or request.POST.get("username") or "").strip().lower()
