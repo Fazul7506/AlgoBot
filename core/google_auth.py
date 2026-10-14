@@ -2,6 +2,7 @@
 
 This flow is distinct from the Gmail notification-channel OAuth flow.
 """
+import base64
 import hashlib
 import hmac
 import logging
@@ -44,7 +45,7 @@ def google_login_start(request):
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
     code_verifier = secrets.token_urlsafe(64)
-    code_challenge = __import__("base64").urlsafe_b64encode(
+    code_challenge = base64.urlsafe_b64encode(
         hashlib.sha256(code_verifier.encode("ascii")).digest()
     ).rstrip(b"=").decode("ascii")
     request.session[_STATE_KEY] = state
