@@ -1,6 +1,6 @@
 from rest_framework.authentication import BaseAuthentication
 from core.api_authentication import BrokerGateJWTAuthentication as JWTAuthentication
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from django.contrib.auth.hashers import check_password
 from django.utils import timezone
 
@@ -37,7 +37,7 @@ class APIKeyAuthentication(BaseAuthentication):
                 # explicit <key>:<secret> form below.
                 try:
                     jwt_result = self.jwt_authentication.authenticate(request)
-                except Exception:
+                except AuthenticationFailed:
                     jwt_result = None
                 if jwt_result:
                     return jwt_result
@@ -71,6 +71,16 @@ class APIKeyAuthentication(BaseAuthentication):
 
         if not valid_secret:
             raise AuthenticationFailed("Invalid API secret")
+
+        from core.broker_onboarding import has_authorized_broker_connection
+        if not has_authorized_broker_connection(api_key.user):
+            path = request.path_info or "/"
+            if not path.startswith(("/api/auth/", "/api/brokers/", "/api/broker-health/", "/api/deriv/", "/health/")):
+                raise PermissionDenied({
+                    "detail": "Connect and verify a supported broker before accessing workspace or trading APIs.",
+                    "code": "broker_setup_required",
+                    "next_url": "/brokers/marketplace/",
+                })
 
         APIKey.objects.filter(pk=api_key.pk).update(last_used=now)
         return (api_key.user, api_key)
