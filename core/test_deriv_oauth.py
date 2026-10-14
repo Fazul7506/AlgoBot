@@ -43,7 +43,7 @@ class DerivOAuthTests(TestCase):
             email="state-mismatch@example.test",
             password="Local-password-123!secure",
         )
-        UserProfile.objects.create(user=user, email_verified=True, email_verified_at=timezone.now())
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
         self.client.force_login(user)
         self._oauth_session()
         response = self.client.get(reverse("callback"), {"state": "wrong", "code": "abc"})
@@ -79,7 +79,7 @@ class DerivOAuthTests(TestCase):
             email="deriv-user@example.com",
             password="Local-password-123!secure",
         )
-        UserProfile.objects.create(user=local_user, email_verified=True, email_verified_at=timezone.now())
+        UserProfile.objects.update_or_create(user=local_user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
         self.client.force_login(local_user)
         self._oauth_session()
         self._mock_token_exchange(post)
@@ -122,7 +122,7 @@ class DerivOAuthTests(TestCase):
             email="deriv-user@example.com",
             password="Local-password-123!secure",
         )
-        UserProfile.objects.create(user=local_user, email_verified=True, email_verified_at=timezone.now())
+        UserProfile.objects.update_or_create(user=local_user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
         self.client.force_login(local_user)
         self._oauth_session()
         self._mock_token_exchange(post)
