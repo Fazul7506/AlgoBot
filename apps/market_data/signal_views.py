@@ -15,6 +15,7 @@ from apps.brokers.exceptions import BrokerConnectionError
 from apps.analysis.broker_intelligence import build_account_risk_context
 from apps.strategies.models import StrategySignal
 from core.account_context import get_active_account
+from core.broker_onboarding import require_broker_onboarding
 
 from .models import MarketSnapshot, MarketSymbol
 from .deriv_sync import sync_active_symbols
@@ -529,6 +530,7 @@ def _strategy_signals_impl(request):
     })
 
 
+@require_broker_onboarding
 def strategy_signals(request):
     """Return the canonical Signals JSON contract without leaking HTML errors."""
     try:
