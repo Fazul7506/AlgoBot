@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from core.models import PasswordResetToken, UserProfile
@@ -22,8 +23,13 @@ class Command(BaseCommand):
             stale_verification = UserProfile.objects.filter(
                 email_verified=False,
                 email_verification_token__gt="",
-                email_verification_token_created_at__isnull=False,
-                email_verification_token_created_at__lte=now - timedelta(hours=24),
+                (
+                    Q(email_verification_token_created_at__lte=now - timedelta(hours=24))
+                    | Q(
+                        email_verification_token_created_at__isnull=True,
+                        updated_at__lte=now - timedelta(hours=24),
+                    )
+                ),
             )
             verification_cleared = stale_verification.update(
                 email_verification_token="",
