@@ -28,3 +28,4 @@ statsmodels>=0.14,<1
 psycopg[binary,pool]
 sentry-sdk
 gunicorn
+google-auth>=2.40,<3
