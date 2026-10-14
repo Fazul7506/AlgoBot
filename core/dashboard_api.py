@@ -12,12 +12,13 @@ from apps.notifications.models import Notification
 from apps.strategies.models import StrategySignal
 from apps.brokers.models import Position
 from core.account_context import get_active_account
+from core.permissions import BrokerOnboardingRequired
 
 
 class DashboardViewSet(viewsets.ViewSet):
     """Canonical dashboard API backed by the authenticated user's active broker account."""
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     @staticmethod
     def _limit(request, default=50, maximum=100):
