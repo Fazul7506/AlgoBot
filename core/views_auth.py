@@ -23,6 +23,7 @@ from core.models import UserProfile, Subscription, BotSettings, PasswordResetTok
 from core.serializers import UserProfileSerializer, SubscriptionSerializer, BotSettingsSerializer
 
 logger = logging.getLogger(__name__)
+from core.auth_rate_limit import allow_auth_attempt
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -162,6 +163,8 @@ def register(request):
     password = request.data.get('password') or ''
     password_confirm = request.data.get('password_confirm') or ''
 
+    if not allow_auth_attempt(request, 'api-registration-ip', '', limit=5, window=3600):
+        return Response({'status': 'error', 'message': 'Too many registration attempts. Please try again later.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
     if not username or not email or not password:
         return Response({'status': 'error', 'message': 'Username, email, and password are required'}, status=status.HTTP_400_BAD_REQUEST)
     if password != password_confirm:
@@ -209,6 +212,8 @@ def login_view(request):
     """Authenticate by username or a unique email address."""
     identifier = str(request.data.get('identifier') or request.data.get('username') or request.data.get('email') or '').strip()
     password = request.data.get('password') or ''
+    if not allow_auth_attempt(request, 'api-password-login', identifier, limit=10, window=900) or not allow_auth_attempt(request, 'api-password-login-ip', '', limit=30, window=900):
+        return Response({'status': 'error', 'message': 'Too many sign-in attempts. Please wait and try again.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
     if not identifier or not password:
         return Response({'status': 'error', 'message': 'Username/email and password are required'}, status=status.HTTP_400_BAD_REQUEST)
 
