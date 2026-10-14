@@ -15,6 +15,7 @@ class UserProfile(models.Model):
     timezone = models.CharField(max_length=100, default='UTC')
     email_verified = models.BooleanField(default=False)
     email_verification_token = models.CharField(max_length=255, blank=True)
+    email_verification_token_created_at = models.DateTimeField(null=True, blank=True)
     email_verified_at = models.DateTimeField(null=True, blank=True)
     two_factor_enabled = models.BooleanField(default=False)
     notifications_enabled = models.BooleanField(default=True)
