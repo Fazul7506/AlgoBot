@@ -87,4 +87,7 @@ class BrokerOnboardingPermissionTests(TestCase):
 
         request = APIRequestFactory().get("/api/orders/")
         force_authenticate(request, user=self.user)
+        # Call the permission directly with an authenticated request principal;
+        # force_authenticate is normally applied by DRF's Request wrapper.
+        request.user = self.user
         self.assertTrue(BrokerOnboardingRequired().has_permission(request, object()))
