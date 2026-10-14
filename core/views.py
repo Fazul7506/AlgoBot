@@ -12,11 +12,12 @@ from apps.brokers.models import Broker,BrokerAccount
 from core.services.oauth_service import DerivOAuthService
 logger=logging.getLogger(__name__)
 def _preferred_deriv_account(user): return BrokerAccount.objects.filter(user=user,broker__broker_type='deriv').select_related('broker').order_by('-last_synced_at','-id').first()
-def _deriv_connected(account): return bool(account and account.status=='active' and account.broker.status=='active' and account.token_status=='active' and not account.is_token_expired)
+def _deriv_connected(account): return bool(account and not account.is_token_expired and account.is_connection_eligible)
 def home(request):
     if request.method=='HEAD': return HttpResponse(status=200)
-    if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)): return redirect('/dashboard/')
-    return render(request,'core/home.html',{'hero_title':'AlgoBot AI trading platform','hero_copy':'Institutional-grade AI trading infrastructure for market intelligence, strategies, risk controls and broker execution.'})
+    broker_connected = bool(request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)))
+    if broker_connected: return redirect('/dashboard/')
+    return render(request,'core/home.html',{'hero_title':'AlgoBot AI trading platform','hero_copy':'Institutional-grade AI trading infrastructure for market intelligence, strategies, risk controls and broker execution.','broker_connected':broker_connected})
 def login_page(request):
     from core.browser_auth import login_page as view
     return view(request)
@@ -24,7 +25,12 @@ def register_page(request):
     from core.browser_auth import register_page as view
     return view(request)
 @login_required
-def dashboard_page(request): return render(request,'core/dashboard.html')
+def dashboard_page(request):
+    if not _deriv_connected(_preferred_deriv_account(request.user)):
+        from django.contrib import messages
+        messages.info(request, 'Connect and verify your Deriv account before opening the dashboard.')
+        return redirect('broker_marketplace_page')
+    return render(request,'core/dashboard.html')
 @login_required
 def markets_page(request): return render(request,'core/markets.html')
 @login_required
