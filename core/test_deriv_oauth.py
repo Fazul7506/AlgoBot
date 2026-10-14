@@ -1,5 +1,5 @@
 from urllib.parse import parse_qs, urlparse
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
@@ -68,7 +68,8 @@ class DerivOAuthTests(TestCase):
         self._oauth_session()
         self._mock_token_exchange(post)
         self._mock_account_response(get)
-        result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock):
+            result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(result.status_code, 302)
         self.assertTrue(result.wsgi_request.user.is_authenticated)
         self.assertEqual(result.url, reverse("broker_marketplace_page"))
@@ -108,7 +109,8 @@ class DerivOAuthTests(TestCase):
             "user_id": 12345, "loginid": "DOT90004580",
             "email": "deriv-user@example.com", "fullname": "Deriv User",
         }
-        first = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock):
+            first = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(first.status_code, 302)
         first_account = BrokerAccount.objects.get(account_id="DOT90004580")
         original_user_id = first_account.user_id
@@ -126,7 +128,8 @@ class DerivOAuthTests(TestCase):
             "user_id": 12345, "loginid": "CR123456",
             "email": "deriv-user@example.com", "fullname": "Deriv User",
         }
-        second = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock):
+            second = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(second.status_code, 302)
         second_account = BrokerAccount.objects.get(account_id="CR123456")
         self.assertEqual(second_account.user_id, original_user_id)
