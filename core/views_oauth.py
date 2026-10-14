@@ -111,7 +111,7 @@ def disconnect_deriv(request):
             if str(request.session.get('active_broker_account_id') or '') == str(account.pk):
                 clear_selected_account(request)
         logger.info('deriv_oauth_disconnected',extra={'user_id':request.user.id,'account_id':account.account_id})
-        return Response({'status':'success','message':'Deriv account disconnected successfully'},status=status.HTTP_200_OK)
+        return Response({'status':'success','message':'Deriv was disconnected from AlgoBot and locally stored credentials were erased. Provider-side authorization revocation must be completed in Deriv account settings because this integration does not currently use a documented provider revocation endpoint.'},status=status.HTTP_200_OK)
     except Exception as exc:
         logger.exception('deriv_oauth_disconnect_failed',extra={'error':str(exc)})
         return Response({'status':'error','message':'Failed to disconnect Deriv account'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
