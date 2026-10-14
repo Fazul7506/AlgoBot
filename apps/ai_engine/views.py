@@ -38,7 +38,9 @@ class StaffOnlyPermission(permissions.IsAdminUser):
 class AIModelViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AIModel.objects.all()
     serializer_class = AIModelSerializer
-    permission_classes = [JWTAuthenticatedPermission, BrokerOnboardingRequired]
+    # Model catalog metadata is non-trading; keep it available to authenticated
+    # users while gating predictions, recommendations, and execution APIs.
+    permission_classes = [JWTAuthenticatedPermission]
 
 
 class ModelVersionViewSet(viewsets.ReadOnlyModelViewSet):
