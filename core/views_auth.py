@@ -219,6 +219,13 @@ def login_view(request):
         # Use the same public response for unknown users and bad passwords.
         return Response({'status': 'error', 'message': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
+    profile = UserProfile.objects.filter(user=user).first()
+    if not profile or not profile.email_verified:
+        return Response(
+            {'status': 'error', 'message': 'Please verify your email before signing in.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     UserProfile.objects.update_or_create(user=user, defaults={'last_login_at': timezone.now()})
     refresh = RefreshToken.for_user(user)
     logger.info('user_login_succeeded', extra={'user_id': user.pk})
