@@ -96,6 +96,10 @@ def login_page(request):
         if user is None:
             messages.error(request, "The username/email or password is incorrect.")
             return _render(request, "login", identifier=identifier)
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        if not profile.email_verified:
+            messages.info(request, "Please verify your email before signing in. You can request a fresh verification link below.")
+            return redirect("verify_email_page")
         auth_login(request, user)
         UserProfile.objects.update_or_create(user=user, defaults={"last_login_at": timezone.now()})
         destination = request.POST.get("next") or request.GET.get("next") or ""
@@ -152,12 +156,11 @@ def register_page(request):
                 errors=["The username or email was just registered. Please sign in or use different details."],
                 username=username, email=email,
             )
-        auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
         if email_sent:
-            messages.success(request, "Your AlgoBot account is ready. Check your email to verify the address.")
+            messages.success(request, "Your account was created. Verify your email before signing in.")
         else:
             messages.warning(request, "Your account was created, but the verification email could not be sent. Use Verify email to request another.")
-        return redirect("dashboard_page")
+        return redirect("verify_email_page")
     return _render(request, "register")
 
 
