@@ -275,7 +275,7 @@ class GoogleIdentity(models.Model):
                 name="core_google_user_provider_uniq",
             ),
         ]
-        indexes = [models.Index(fields=["user", "provider"])]
+        indexes = [models.Index(fields=["user", "provider"], name="core_google_user_prov_idx")]
 
     def __str__(self):
         return f"{self.provider} identity for user {self.user_id}"
