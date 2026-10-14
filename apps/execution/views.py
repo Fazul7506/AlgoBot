@@ -460,7 +460,7 @@ class ExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=ExecutionLogSerializer; permission_classes=[permissions.IsAuthenticated, BrokerOnboardingRequired]
     def get_queryset(self): return ExecutionLog.objects.filter(order__user=self.request.user)
 class ReconciliationEventViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=ReconciliationEventSerializer; permission_classes=[permissions.IsAuthenticated]
+    serializer_class=ReconciliationEventSerializer; permission_classes=[permissions.IsAuthenticated, BrokerOnboardingRequired]
     def get_queryset(self):
         qs=ReconciliationEvent.objects.filter(user=self.request.user).select_related('broker_account','reviewed_by'); status_value=self.request.query_params.get('status'); broker_account=self.request.query_params.get('broker_account')
         if status_value in {ReconciliationEvent.STATUS_OPEN,ReconciliationEvent.STATUS_REVIEWED}: qs=qs.filter(status=status_value)
