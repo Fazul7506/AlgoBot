@@ -297,7 +297,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PositionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def get_queryset(self):
         account = get_active_account(self.request.user, request=self.request)
@@ -482,7 +482,7 @@ class TradeHistoryPagination(PageNumberPagination):
 class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     """Serve only broker-synchronized history for the authenticated active account."""
     serializer_class = BrokerTradeHistorySerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
     pagination_class = TradeHistoryPagination
 
     def get_queryset(self):
