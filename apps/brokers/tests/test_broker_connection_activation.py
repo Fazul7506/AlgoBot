@@ -5,10 +5,10 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from apps.brokers.exceptions import BrokerConnectionError
-from apps.brokers.models import Broker, BrokerAccount, @override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
-BrokerConnection
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class BrokerConnectionActivationTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='broker-activation-test')
