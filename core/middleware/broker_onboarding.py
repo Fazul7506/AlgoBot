@@ -43,7 +43,9 @@ class BrokerOnboardingMiddleware:
             return self.get_response(request)
 
         # Import lazily to avoid app-loading and middleware import cycles.
-        from core.broker_onboarding import has_authorized_broker_connection
+        from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
+        if not has_verified_account_email(user):
+            return redirect("verify_email_page")
         if has_authorized_broker_connection(user):
             return self.get_response(request)
 
