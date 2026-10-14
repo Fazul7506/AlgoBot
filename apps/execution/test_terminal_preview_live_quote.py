@@ -15,6 +15,7 @@ from apps.execution.views import OrderViewSet
 
 
 @override_settings(BROKER_MARKET_DATA_MAX_AGE_SECONDS=30, ALLOW_LIVE_TRADING=False)
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class TerminalLivePreviewTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
