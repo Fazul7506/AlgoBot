@@ -1,5 +1,5 @@
 from rest_framework.authentication import BaseAuthentication
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from core.api_authentication import BrokerGateJWTAuthentication as JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth.hashers import check_password
 from django.utils import timezone
