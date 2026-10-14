@@ -1,9 +1,10 @@
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.contrib.sessions.middleware import SessionMiddleware
 
 from core.account_context import SESSION_KEY, get_active_account, select_account
-from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from apps.brokers.models import Broker, BrokerAccount, @override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+BrokerConnection
 
 
 class AccountSwitchingTests(TestCase):
