@@ -83,7 +83,9 @@ def login_page(request):
     if request.method == "POST":
         identifier = str(request.POST.get("identifier") or request.POST.get("username") or "").strip()
         password = request.POST.get("password") or ""
-        if not allow_auth_attempt(request, "password-login", identifier, limit=10, window=900) or not allow_auth_attempt(request, "password-login-ip", "", limit=30, window=900):
+        identifier_allowed = allow_auth_attempt(request, "password-login", identifier, limit=10, window=900)
+        ip_allowed = allow_auth_attempt(request, "password-login-ip", "", limit=30, window=900)
+        if not identifier_allowed or not ip_allowed:
             messages.error(request, "Too many sign-in attempts. Please wait and try again.")
             return _render(request, "login", identifier=identifier)
         user = None
@@ -179,7 +181,9 @@ def forgot_password_page(request):
     if request.method == "POST":
         email = str(request.POST.get("email") or "").strip().lower()
         # Always return the same public message to avoid account enumeration.
-        rate_allowed = allow_auth_attempt(request, "password-reset", email, limit=5, window=3600) and allow_auth_attempt(request, "password-reset-ip", "", limit=15, window=3600)
+        email_allowed = allow_auth_attempt(request, "password-reset", email, limit=5, window=3600)
+        ip_allowed = allow_auth_attempt(request, "password-reset-ip", "", limit=15, window=3600)
+        rate_allowed = email_allowed and ip_allowed
         if email and rate_allowed:
             matches = User.objects.filter(email__iexact=email, is_active=True)
             if matches.count() == 1:
@@ -347,7 +351,9 @@ def verify_email_page(request):
         return _render(request, "verify_email", invalid=True)
     if request.method == "POST":
         email = str(request.POST.get("email") or "").strip().lower()
-        rate_allowed = allow_auth_attempt(request, "verification-resend", email, limit=3, window=3600) and allow_auth_attempt(request, "verification-resend-ip", "", limit=10, window=3600)
+        email_allowed = allow_auth_attempt(request, "verification-resend", email, limit=3, window=3600)
+        ip_allowed = allow_auth_attempt(request, "verification-resend-ip", "", limit=10, window=3600)
+        rate_allowed = email_allowed and ip_allowed
         matches = User.objects.filter(email__iexact=email, is_active=True) if rate_allowed else User.objects.none()
         if matches.count() == 1:
             user = matches.first()
