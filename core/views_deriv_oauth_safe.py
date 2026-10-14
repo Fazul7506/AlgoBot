@@ -202,7 +202,24 @@ def callback(request):
             if current_id == selected_account_id and identity_loginid == selected_account_id
             else "not_checked"
         )
-        persisted = _persist_deriv_account(user=user, broker=broker, record=record, access_token=access_token, refresh_token=refresh_token, expires_at=expires_at, websocket_balance={}, websocket_health=websocket_health, deriv_identity=deriv_identity)
+        try:
+            persisted = _persist_deriv_account(
+                user=user, broker=broker, record=record,
+                access_token=access_token, refresh_token=refresh_token,
+                expires_at=expires_at, websocket_balance={},
+                websocket_health=websocket_health, deriv_identity=deriv_identity,
+            )
+        except Exception as exc:
+            logger.error(
+                "deriv_oauth_account_persistence_failed",
+                extra={"error_type": exc.__class__.__name__, "account_id": current_id},
+            )
+            return _fail(
+                request,
+                "AlgoBot could not securely save the broker connection. Check the deployment's credential-encryption configuration and retry from Broker Management.",
+                "deriv_oauth_account_persistence_failed",
+                error_type=exc.__class__.__name__,
+            )
         if persisted:
             persisted_ids.append(current_id)
             if current_id == selected_account_id:
