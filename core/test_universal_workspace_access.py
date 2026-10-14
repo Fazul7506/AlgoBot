@@ -4,6 +4,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+
 
 class UniversalWorkspaceAccessTests(TestCase):
     """Regression coverage for authenticated workspace access and shell geometry."""
@@ -13,6 +15,21 @@ class UniversalWorkspaceAccessTests(TestCase):
             username="free-workspace-user", password="pass12345"
         )
         self.client.force_login(self.user)
+        broker = Broker.objects.create(name="Deriv Test", broker_type="deriv", status="active")
+        account = BrokerAccount.objects.create(
+            user=self.user,
+            broker=broker,
+            account_id="TEST-ACCOUNT-001",
+            status="active",
+            token_status="active",
+        )
+        account.set_access_token("test-access-token")
+        account.save(update_fields=["access_token"])
+        BrokerConnection.objects.create(
+            broker=broker,
+            broker_account=account,
+            status="connected",
+        )
 
     def test_operations_and_developer_pages_are_available_to_authenticated_users(self):
         routes = (
