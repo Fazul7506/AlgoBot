@@ -28,7 +28,12 @@ class Command(BaseCommand):
                     ("refresh_token", account.set_refresh_token),
                 ):
                     stored = getattr(account, field) or ""
-                    if not stored or stored.startswith("gAAAA"):
+                    if not stored:
+                        continue
+                    if stored.startswith("gAAAA"):
+                        # Validate that the configured key can decrypt already
+                        # encrypted values before skipping them.
+                        encryption.decrypt(stored)
                         continue
                     # decrypt() supports the old base64/plaintext fallback only
                     # for migration; the value is never printed or logged.
