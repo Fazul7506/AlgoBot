@@ -132,4 +132,7 @@ def google_login_callback(request):
         return redirect("login_page")
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     UserProfile.objects.filter(user=user).update(last_login_at=timezone.now())
+    from core.broker_onboarding import has_authorized_broker_connection
+    if not has_authorized_broker_connection(user):
+        return redirect("broker_marketplace_page")
     return redirect("dashboard_page")
