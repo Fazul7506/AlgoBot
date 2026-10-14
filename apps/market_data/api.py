@@ -44,7 +44,7 @@ async def _bounded_market_data(adapter, symbol, timeout=7.0):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def markets(request):
     account = _connected_account(request.user, request=request)
     if not account:
@@ -64,7 +64,7 @@ def markets(request):
     })
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def symbols(request):
     account = _connected_account(request.user, request=request)
     if not account:
@@ -91,7 +91,7 @@ def broker_catalogue(request):
     return broker_native.catalogue(request)
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def symbol_detail(request, symbol):
     account = _connected_account(request.user, request=request)
     if not account:
@@ -142,7 +142,7 @@ def snapshot(request):
     return Response(MarketSnapshotSerializer(qs[:_limit(request, default=100, maximum=500)], many=True).data)
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def sync_symbols(request):
     account = _connected_account(request.user, request=request)
     if not account: return Response({"status":"error","code":"NO_CONNECTED_BROKER","detail":"Connect a broker before synchronizing its market universe."}, status=status.HTTP_409_CONFLICT)
