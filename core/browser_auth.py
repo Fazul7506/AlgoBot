@@ -393,8 +393,19 @@ def verify_email_page(request):
                     profile.save(update_fields=["email_verification_token", "email_verification_token_created_at", "updated_at"])
                     return _render(request, "verify_email", invalid=True)
                 if profile:
-                    profile.user.email = pending_email
-                    profile.user.save(update_fields=["email"])
+                    try:
+                        # The nested savepoint converts a concurrent email-claim
+                        # race into a safe response without breaking the outer
+                        # token-consumption transaction.
+                        with transaction.atomic():
+                            profile.user.email = pending_email
+                            profile.user.save(update_fields=["email"])
+                    except IntegrityError:
+                        profile.email_verification_token = ""
+                        profile.email_verification_token_created_at = None
+                        profile.save(update_fields=["email_verification_token", "email_verification_token_created_at", "updated_at"])
+                        messages.error(request, "That email address is now in use. Request a new link for a different address.")
+                        return _render(request, "verify_email", invalid=True)
                     profile.email_verified = True
                     profile.email_verified_at = timezone.now()
                     profile.email_verification_token = ""
