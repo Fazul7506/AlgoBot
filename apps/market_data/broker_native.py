@@ -11,6 +11,7 @@ import asyncio
 
 from django.core.cache import cache
 from rest_framework.decorators import api_view, permission_classes
+from core.permissions import BrokerOnboardingRequired
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -77,7 +78,7 @@ def _cached_database_catalogue():
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def catalogue(request):
     account = _account(request.user, request=request)
     if not account:
@@ -121,7 +122,7 @@ def catalogue(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def capabilities(request):
     """Return fast broker-authoritative contract capabilities for the selected symbol."""
     symbol = str(request.query_params.get("symbol") or "").strip()
