@@ -20,16 +20,17 @@ class Command(BaseCommand):
             reset_deleted, _ = PasswordResetToken.objects.filter(
                 models_expired_or_used(now)
             ).delete()
+            expired_verification_tokens = (
+                Q(email_verification_token_created_at__lte=now - timedelta(hours=24))
+                | Q(
+                    email_verification_token_created_at__isnull=True,
+                    updated_at__lte=now - timedelta(hours=24),
+                )
+            )
             stale_verification = UserProfile.objects.filter(
+                expired_verification_tokens,
                 email_verified=False,
                 email_verification_token__gt="",
-                (
-                    Q(email_verification_token_created_at__lte=now - timedelta(hours=24))
-                    | Q(
-                        email_verification_token_created_at__isnull=True,
-                        updated_at__lte=now - timedelta(hours=24),
-                    )
-                ),
             )
             verification_cleared = stale_verification.update(
                 email_verification_token="",
