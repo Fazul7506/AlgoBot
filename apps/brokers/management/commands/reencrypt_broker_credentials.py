@@ -4,6 +4,8 @@ Run once after configuring CREDENTIALS_ENCRYPTION_KEY. This command does not
 print credentials and is safe to rerun; already-Fernet-encrypted fields are
 left unchanged.
 """
+import base64
+
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
@@ -35,9 +37,16 @@ class Command(BaseCommand):
                         # encrypted values before skipping them.
                         encryption.decrypt(stored)
                         continue
-                    # decrypt() supports the old base64/plaintext fallback only
-                    # for migration; the value is never printed or logged.
-                    raw = encryption.decrypt(stored)
+                    # Decode only the legacy reversible encoding here. Normal
+                    # runtime reads refuse these values until re-encryption.
+                    try:
+                        raw = base64.urlsafe_b64decode(stored.encode("utf-8")).decode("utf-8")
+                    except Exception as exc:
+                        raise CommandError(
+                            "A legacy broker token could not be decoded safely; manual remediation is required."
+                        ) from exc
+                    if not raw:
+                        continue
                     setter(raw)
                     updates.append(field)
                 if updates:
