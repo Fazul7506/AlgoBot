@@ -8,10 +8,11 @@ from apps.brokers.exceptions import (
     BrokerOrderError,
 )
 from apps.brokers.models import BrokerAccount
+from core.permissions import BrokerOnboardingRequired
 
 
 class DerivTradingActionView(views.APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def _account(self, request):
         account_id = request.data.get("broker_account_id") or request.query_params.get("broker_account_id")
