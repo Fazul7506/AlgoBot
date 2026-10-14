@@ -21,8 +21,7 @@ class BrokerOnboardingMiddleware:
         "/brokers/connect/", "/brokers/callback/", "/brokers/marketplace/", "/callback/",
         # Broker catalog, connection status/sync, and recovery actions remain
         # available so a user can complete or repair the required connection.
-        "/api/brokers/", "/api/broker-health/", "/api/deriv/",
-        "/api/auth/logout/", "/api/auth/change-password/",
+        "/api/brokers/", "/api/broker-health/", "/api/deriv/", "/api/auth/",
         "/webhooks/", "/payments/callback/",
     )
 
