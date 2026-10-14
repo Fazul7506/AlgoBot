@@ -39,12 +39,19 @@ class Command(BaseCommand):
                         continue
                     # Decode only the legacy reversible encoding here. Normal
                     # runtime reads refuse these values until re-encryption.
+                    raw = stored
                     try:
-                        raw = base64.urlsafe_b64decode(stored.encode("utf-8")).decode("utf-8")
-                    except Exception as exc:
-                        raise CommandError(
-                            "A legacy broker token could not be decoded safely; manual remediation is required."
-                        ) from exc
+                        decoded_bytes = base64.b64decode(
+                            stored.encode("utf-8"), altchars=b"-_", validate=True
+                        )
+                        decoded = decoded_bytes.decode("utf-8")
+                        # Decode only values that exactly round-trip through the
+                        # legacy URL-safe Base64 encoder; otherwise treat the
+                        # field as a legacy plaintext token and encrypt it.
+                        if base64.urlsafe_b64encode(decoded.encode("utf-8")).decode("ascii") == stored:
+                            raw = decoded
+                    except (ValueError, UnicodeDecodeError):
+                        raw = stored
                     if not raw:
                         continue
                     setter(raw)
