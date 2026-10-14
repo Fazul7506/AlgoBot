@@ -46,7 +46,7 @@ class BrowserOAuthFlowTests(TestCase):
         self.assertEqual(User.objects.count(), 0)
         self.assertTrue(
             any(
-                "sign in to your verified AlgoBot account" in str(message)
+                "Sign in to your verified AlgoBot account" in str(message)
                 for message in response.wsgi_request._messages
             )
         )
