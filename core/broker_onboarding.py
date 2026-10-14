@@ -4,6 +4,9 @@ Only a provider-verified, active Deriv connection qualifies as completed onboard
 A local login or OAuth callback alone is never evidence of broker authorization.
 """
 import logging
+from functools import wraps
+
+from django.http import JsonResponse
 
 from django.utils import timezone
 
@@ -48,3 +51,25 @@ def has_authorized_broker_connection(user):
             )
     return False
 
+
+
+def require_broker_onboarding(view_func):
+    """Django-view decorator for JSON trading endpoints outside DRF.
+
+    The decorator is deliberately separate from authentication middleware so
+    broker setup, billing, developer tooling, and account recovery remain usable
+    before onboarding is complete.
+    """
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return JsonResponse({"detail": "Authentication credentials are required.", "code": "not_authenticated"}, status=401)
+        if has_authorized_broker_connection(user):
+            return view_func(request, *args, **kwargs)
+        return JsonResponse({
+            "detail": "Connect and verify your Deriv account before using trading features.",
+            "code": "broker_setup_required",
+            "next_url": "/brokers/marketplace/",
+        }, status=403)
+    return wrapped
