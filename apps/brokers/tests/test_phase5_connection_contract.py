@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 from apps.brokers.models import Broker, BrokerAccount
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class BrokerConnectionContractTests(APITestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user("connection-owner", "connection@example.com", "pass")
