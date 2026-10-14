@@ -17,7 +17,7 @@ class PublicAuthenticationHeaderTests(TestCase):
             email="header-needs-broker@example.test",
             password="Strong-header-test-password-123!",
         )
-        UserProfile.objects.create(user=user, email_verified=True, email_verified_at=timezone.now())
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
         self.client.force_login(user)
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
