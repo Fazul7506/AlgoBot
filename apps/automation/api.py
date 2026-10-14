@@ -5,11 +5,12 @@ from django.shortcuts import get_object_or_404
 from .models import ApprovalRequest, AutomationEvent, AutomationRule, Workflow, WorkflowExecution
 from .serializers import ApprovalRequestSerializer, AutomationEventSerializer, AutomationRuleSerializer, WorkflowExecutionSerializer, WorkflowSerializer
 from .services import ApprovalService, AutomationEngine
+from core.permissions import BrokerOnboardingRequired
 
 
 class WorkflowViewSet(viewsets.ModelViewSet):
     serializer_class = WorkflowSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return Workflow.objects.filter(user=self.request.user)
@@ -92,7 +93,7 @@ def _safe_payload(value, depth=0):
 
 
 @decorators.api_view(["POST"])
-@decorators.permission_classes([permissions.IsAuthenticated])
+@decorators.permission_classes([permissions.IsAuthenticated, BrokerOnboardingRequired])
 def execute(request):
     if not isinstance(request.data, dict):
         return response.Response({"detail": "An event object is required."}, status=status.HTTP_400_BAD_REQUEST)
