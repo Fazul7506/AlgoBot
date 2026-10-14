@@ -49,7 +49,7 @@ class ModelVersionViewSet(viewsets.ReadOnlyModelViewSet):
 
 class PredictionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PredictionSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [JWTAuthenticatedPermission, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return Prediction.objects.filter(user=self.request.user).select_related("user")
@@ -57,7 +57,7 @@ class PredictionViewSet(viewsets.ReadOnlyModelViewSet):
 
 class RecommendationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AIRecommendationSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [JWTAuthenticatedPermission, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return AIRecommendation.objects.filter(user=self.request.user).select_related("user")
@@ -65,7 +65,7 @@ class RecommendationViewSet(viewsets.ReadOnlyModelViewSet):
 
 class MarketRegimeViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = MarketRegimeSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [JWTAuthenticatedPermission, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return MarketRegime.objects.filter(user=self.request.user).select_related("user")
@@ -79,7 +79,7 @@ class FeatureVectorViewSet(viewsets.ReadOnlyModelViewSet):
 
 class AnomalyViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AnomalyEventSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [JWTAuthenticatedPermission, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return AnomalyEvent.objects.filter(user=self.request.user).select_related("user")
@@ -87,7 +87,7 @@ class AnomalyViewSet(viewsets.ReadOnlyModelViewSet):
 
 class TrainingJobViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TrainingJobSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [JWTAuthenticatedPermission, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return TrainingJob.objects.filter(user=self.request.user).select_related("model", "user")
