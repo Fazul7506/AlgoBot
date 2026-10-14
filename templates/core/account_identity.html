@@ -42,11 +42,15 @@
       <h2>Connected identities</h2>
       {% if google_identity_linked %}
         <p><strong>Google sign-in</strong><br>Linked to this AlgoBot account.</p>
-        <form method="post" action="{% url 'google_unlink' %}">
-          {% csrf_token %}
-          {% if password_required %}<label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>{% endif %}
-          <button type="submit" class="button">Unlink Google</button>
-        </form>
+        {% if password_required %}
+          <form method="post" action="{% url 'google_unlink' %}">
+            {% csrf_token %}
+            <label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>
+            <button type="submit" class="button">Unlink Google</button>
+          </form>
+        {% else %}
+          <p>Set a local password before unlinking Google so you retain a sign-in method.</p>
+        {% endif %}
       {% else %}
         <p><strong>Google sign-in</strong><br>Not linked. Linking requires an authenticated AlgoBot session and verified Google identity.</p>
         <a class="button" href="/auth/google/?intent=link">Link Google sign-in</a>
