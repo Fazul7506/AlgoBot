@@ -66,7 +66,7 @@ class BrowserOAuthFlowTests(TestCase):
             [{"loginid": "CR1234567", "account_type": "demo", "currency": "USD", "balance": 125.5}],
         )
         user = User.objects.create_user(username="connected-user", email="connected@example.test", password="pass12345")
-        UserProfile.objects.create(user=user, email_verified=True, email_verified_at=timezone.now())
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
         self.client.force_login(user)
         session = self.client.session
         session["oauth_state"] = "state"
@@ -109,7 +109,7 @@ class BrowserOAuthFlowTests(TestCase):
         session.save()
 
         user = User.objects.create_user(username="actual-user", email="actual@example.test", password="pass12345")
-        UserProfile.objects.create(user=user, email_verified=True, email_verified_at=timezone.now())
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
         self.client.force_login(user)
         # Simulate OAuth having started under a different identity, then the
         # browser session changing before the provider callback.
