@@ -16,7 +16,7 @@ class CopyTradingBrokerOnboardingTests(TestCase):
             email="copy-trading-gate@example.test",
             password="Test-password-123!secure",
         )
-        UserProfile.objects.create(user=self.user, email_verified=True, email_verified_at=timezone.now())
+        UserProfile.objects.update_or_create(user=self.user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
         self.factory = RequestFactory()
 
     @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=False)
