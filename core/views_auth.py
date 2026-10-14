@@ -163,7 +163,10 @@ def register(request):
     password = request.data.get('password') or ''
     password_confirm = request.data.get('password_confirm') or ''
 
-    if not allow_auth_attempt(request, 'api-registration-ip', '', limit=5, window=3600):
+    registration_identifier = email or username.lower()
+    identity_allowed = allow_auth_attempt(request, 'api-registration-identity', registration_identifier, limit=5, window=3600)
+    ip_allowed = allow_auth_attempt(request, 'api-registration-ip', '', limit=10, window=3600)
+    if not identity_allowed or not ip_allowed:
         return Response({'status': 'error', 'message': 'Too many registration attempts. Please try again later.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
     if not username or not email or not password:
         return Response({'status': 'error', 'message': 'Username, email, and password are required'}, status=status.HTTP_400_BAD_REQUEST)
