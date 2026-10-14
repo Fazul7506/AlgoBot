@@ -1,14 +1,12 @@
 """Authentication helpers for browser-facing APIs.
 
-JWT authentication also enforces mandatory broker onboarding on protected API
-routes. Broker management and authentication endpoints remain available so a
-new user can complete setup without getting trapped outside the application.
+Authentication establishes identity; endpoint permissions enforce the
+mandatory broker-onboarding policy only for protected workspace/trading APIs.
+This separation keeps login, broker setup, billing, and developer-management
+flows reachable before a user has connected a broker.
 """
-from rest_framework.exceptions import PermissionDenied
 from rest_framework.authentication import SessionAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
-
-from core.broker_onboarding import has_authorized_broker_connection
 
 
 class BrowserSessionAuthentication(SessionAuthentication):
@@ -18,29 +16,6 @@ class BrowserSessionAuthentication(SessionAuthentication):
 
 
 class BrokerGateJWTAuthentication(JWTAuthentication):
-    """Reject JWT-authenticated workspace/API calls until broker setup is verified."""
+    """Compatibility alias; authorization is enforced by DRF permissions."""
 
-    EXEMPT_PREFIXES = (
-        "/api/auth/",
-        "/api/brokers/",
-        "/api/broker-health/",
-        "/api/deriv/",
-        "/health/",
-        "/webhooks/",
-        "/payments/",
-    )
-
-    def authenticate(self, request):
-        result = super().authenticate(request)
-        if result is None:
-            return None
-        user, validated_token = result
-        path = request.path_info or "/"
-        if not any(path.startswith(prefix) for prefix in self.EXEMPT_PREFIXES):
-            if not has_authorized_broker_connection(user):
-                raise PermissionDenied({
-                    "detail": "Connect and verify a supported broker before accessing workspace or trading APIs.",
-                    "code": "broker_setup_required",
-                    "next_url": "/brokers/marketplace/",
-                })
-        return user, validated_token
+    pass
