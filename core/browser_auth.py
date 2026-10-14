@@ -62,7 +62,8 @@ def _send_verification(request, user, profile, *, recipient=None, purpose="verif
         payload.update(extra_payload)
     raw_token = signing.dumps(payload, salt="algobot-email-verification")
     profile.email_verification_token = _digest(raw_token)
-    profile.save(update_fields=["email_verification_token", "updated_at"])
+    profile.email_verification_token_created_at = timezone.now()
+    profile.save(update_fields=["email_verification_token", "email_verification_token_created_at", "updated_at"])
     link = request.build_absolute_uri(
         reverse("verify_email_page") + "?" + urlencode({"token": raw_token})
     )
@@ -330,7 +331,8 @@ def verify_email_page(request):
                 if profile and User.objects.filter(email__iexact=pending_email).exclude(pk=profile.user_id).exists():
                     messages.error(request, "That email address is now in use. Request a new verification link for a different address.")
                     profile.email_verification_token = ""
-                    profile.save(update_fields=["email_verification_token", "updated_at"])
+                    profile.email_verification_token_created_at = None
+                    profile.save(update_fields=["email_verification_token", "email_verification_token_created_at", "updated_at"])
                     return _render(request, "verify_email", invalid=True)
                 if profile:
                     profile.user.email = pending_email
@@ -338,14 +340,16 @@ def verify_email_page(request):
                     profile.email_verified = True
                     profile.email_verified_at = timezone.now()
                     profile.email_verification_token = ""
-                    profile.save(update_fields=["email_verified", "email_verified_at", "email_verification_token", "updated_at"])
+                    profile.email_verification_token_created_at = None
+                    profile.save(update_fields=["email_verified", "email_verified_at", "email_verification_token", "email_verification_token_created_at", "updated_at"])
                     messages.success(request, "Your new email address has been verified and saved.")
                     return redirect("account_identity_page")
             elif profile and purpose == "verify_email" and profile.user.email and not profile.email_verified:
                 profile.email_verified = True
                 profile.email_verified_at = timezone.now()
                 profile.email_verification_token = ""
-                profile.save(update_fields=["email_verified", "email_verified_at", "email_verification_token", "updated_at"])
+                profile.email_verification_token_created_at = None
+                profile.save(update_fields=["email_verified", "email_verified_at", "email_verification_token", "email_verification_token_created_at", "updated_at"])
                 messages.success(request, "Your email address has been verified.")
                 return redirect("login_page")
         messages.error(request, "That verification link is invalid or has already been used.")
