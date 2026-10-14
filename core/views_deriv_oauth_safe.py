@@ -208,6 +208,22 @@ def callback(request):
                 selected_broker_account = persisted
     if selected_broker_account is None:
         return _fail(request, "Deriv authorization succeeded, but AlgoBot could not persist the selected trading account. Your dashboard was not opened.", "deriv_oauth_selected_account_not_persisted")
+    # Establish and persist the canonical broker connection only after the provider
+    # identity check succeeded. OAuth token exchange by itself is not enough to
+    # unlock the dashboard or report the broker as connected.
+    if not websocket_verification_error:
+        try:
+            from asgiref.sync import async_to_sync
+            from apps.brokers.services import BrokerConnectionService
+            async_to_sync(BrokerConnectionService().connect)(broker, selected_broker_account)
+            selected_broker_account.refresh_from_db()
+        except Exception as exc:
+            websocket_verification_error = exc.__class__.__name__
+            logger.warning(
+                "deriv_oauth_connection_validation_failed",
+                extra={"error": websocket_verification_error},
+            )
+
     if selected_broker_account.is_connection_eligible:
         select_account(request, selected_broker_account)
     DerivOAuthService.clear_oauth_session(request)
