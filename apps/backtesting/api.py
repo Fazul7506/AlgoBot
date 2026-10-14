@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.decorators import permission_classes
+from core.permissions import BrokerOnboardingRequired
 from rest_framework.exceptions import ValidationError
 from .models import Backtest, BacktestClusterJob, BacktestStatistics
 from .serializers import BacktestSerializer, BacktestStatisticsSerializer, BacktestTradeSerializer, canonical_timeframe
@@ -20,7 +21,7 @@ log = logging.getLogger(__name__)
 
 class BacktestViewSet(viewsets.ModelViewSet):
     serializer_class = BacktestSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return Backtest.objects.filter(user=self.request.user)
@@ -232,14 +233,14 @@ class BacktestViewSet(viewsets.ModelViewSet):
 
 class StatisticsViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BacktestStatisticsSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return BacktestStatistics.objects.filter(backtest__user=self.request.user)
 
 
 @decorators.api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.IsAuthenticated, BrokerOnboardingRequired])
 def optimization_start(request):
     # The current optimizer scores parameter magnitudes, not historical strategy
     # performance. Never present that heuristic as an actual backtest optimization.
@@ -253,11 +254,11 @@ def optimization_start(request):
     )
 
 @decorators.api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.IsAuthenticated, BrokerOnboardingRequired])
 def optimization_results(request): return response.Response({'results':[]})
 
 @decorators.api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.IsAuthenticated, BrokerOnboardingRequired])
 def replay(request):
     # ReplayService currently only mutates process-local flags and does not read
     # persisted market events. Do not claim a real replay session has started.
