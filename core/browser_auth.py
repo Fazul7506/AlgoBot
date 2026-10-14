@@ -77,7 +77,8 @@ def _send_verification(request, user, profile, *, recipient=None, purpose="verif
 
 def login_page(request):
     if request.user.is_authenticated:
-        return redirect("dashboard_page")
+        from core.broker_onboarding import has_authorized_broker_connection
+        return redirect("dashboard_page" if has_authorized_broker_connection(request.user) else "broker_marketplace_page")
     if request.method == "POST":
         identifier = str(request.POST.get("identifier") or request.POST.get("username") or "").strip()
         password = request.POST.get("password") or ""
@@ -102,6 +103,9 @@ def login_page(request):
             return redirect("verify_email_page")
         auth_login(request, user)
         UserProfile.objects.update_or_create(user=user, defaults={"last_login_at": timezone.now()})
+        from core.broker_onboarding import has_authorized_broker_connection
+        if not has_authorized_broker_connection(user):
+            return redirect("broker_marketplace_page")
         destination = request.POST.get("next") or request.GET.get("next") or ""
         if destination and url_has_allowed_host_and_scheme(
             destination, allowed_hosts={request.get_host()}, require_https=request.is_secure()
@@ -113,7 +117,8 @@ def login_page(request):
 
 def register_page(request):
     if request.user.is_authenticated:
-        return redirect("dashboard_page")
+        from core.broker_onboarding import has_authorized_broker_connection
+        return redirect("dashboard_page" if has_authorized_broker_connection(request.user) else "broker_marketplace_page")
     if request.method == "POST":
         username = str(request.POST.get("username") or "").strip()
         email = str(request.POST.get("email") or "").strip().lower()
