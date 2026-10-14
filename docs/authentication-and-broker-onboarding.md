@@ -20,6 +20,10 @@ Set these in the server's secret/configuration manager; never commit populated v
 
 Do not paste credential values into PR comments or logs. Google callback URI and provider consent-screen settings must be verified in Google Cloud Console by an authorized operator. Deriv callback registration and a safe provider test account must be verified by an authorized operator. These external checks cannot be inferred from source code or GitHub CI.
 
+## Migration rollback notes
+
+The migrations are additive and reversible, but rollback changes authentication behavior. To reverse only the case-insensitive uniqueness indexes, use `python manage.py migrate core 0006_email_verification_token_expiry`. To also remove the verification-token timestamp field, target `0005_google_identity`. Reversing to `0004_remove_paper_trading` drops the `GoogleIdentity` mapping table and disables persisted Google sign-in mappings; do not do this in production without a database backup and a reviewed identity-migration plan. These commands do not require deleting user accounts.
+
 ## Expired-token cleanup
 
 After configuring the key, perform a one-time, non-destructive migration of legacy base64/plaintext token fields (if any exist):
