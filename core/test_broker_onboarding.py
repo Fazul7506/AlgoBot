@@ -2,6 +2,7 @@ from unittest.mock import PropertyMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from django.urls import reverse
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
@@ -17,6 +18,7 @@ class BrokerOnboardingGateTests(TestCase):
             email="onboarding@example.test",
             password="A-secure-test-password-123!",
         )
+        UserProfile.objects.create(user=self.user, email_verified=True, email_verified_at=timezone.now())
         self.broker = Broker.objects.create(
             name="Deriv",
             broker_type="deriv",
