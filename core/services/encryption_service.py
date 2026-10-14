@@ -58,7 +58,10 @@ class CredentialEncryptionService:
             try:
                 return self._fernet.decrypt(token.encode('utf-8')).decode('utf-8')
             except InvalidToken:
-                logger.warning('Encrypted payload could not be decrypted with provided key')
+                if str(token).startswith('gAAAA'):
+                    logger.error('broker_credential_decryption_failed')
+                    raise RuntimeError('Stored broker credentials cannot be decrypted with the configured key.')
+                logger.warning('Legacy credential encoding detected; schedule re-encryption.')
             except Exception as exc:
                 logger.warning('Fernet decryption failed: %s', exc)
         try:
