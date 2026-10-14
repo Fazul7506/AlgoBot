@@ -260,6 +260,7 @@ class AnonymousBrokerOAuthFailClosedTests(TestCase):
         self.assertNotIn("_auth_user_id", self.client.session)
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class BrokerAccountEndpointSafetyTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
