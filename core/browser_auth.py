@@ -9,6 +9,7 @@ import secrets
 from datetime import timedelta
 from urllib.parse import urlencode
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.models import User
@@ -35,6 +36,17 @@ def _digest(token):
 
 def _render(request, mode, **context):
     return render(request, "core/auth_page.html", {"mode": mode, **context})
+
+
+def _public_url(request, path):
+    """Build email links from the configured canonical origin, not an arbitrary Host header."""
+    base_url = str(getattr(settings, "BASE_URL", "") or "").strip().rstrip("/")
+    if base_url:
+        if not getattr(settings, "DEBUG", False) and not base_url.startswith("https://"):
+            logger.error("auth_public_base_url_must_use_https")
+            return ""
+        return base_url + (path if path.startswith("/") else "/" + path)
+    return request.build_absolute_uri(path)
 
 
 def _send_account_email(subject, body, email):
@@ -64,9 +76,12 @@ def _send_verification(request, user, profile, *, recipient=None, purpose="verif
     profile.email_verification_token = _digest(raw_token)
     profile.email_verification_token_created_at = timezone.now()
     profile.save(update_fields=["email_verification_token", "email_verification_token_created_at", "updated_at"])
-    link = request.build_absolute_uri(
-        reverse("verify_email_page") + "?" + urlencode({"token": raw_token})
+    link = _public_url(
+        request, reverse("verify_email_page") + "?" + urlencode({"token": raw_token})
     )
+    if not link:
+        logger.error("verification_email_not_sent_due_to_invalid_base_url")
+        return False
     email = str(recipient or user.email or "").strip().lower()
     if purpose == "change_email":
         subject = "Confirm your new AlgoBot email address"
@@ -194,9 +209,13 @@ def forgot_password_page(request):
                     user=user, token=_digest(raw_token),
                     expires_at=timezone.now() + RESET_TTL,
                 )
-                link = request.build_absolute_uri(
-                    reverse("reset_password_page", kwargs={"token": raw_token})
+                link = _public_url(
+                    request, reverse("reset_password_page", kwargs={"token": raw_token})
                 )
+                if not link:
+                    logger.error("password_reset_email_not_sent_due_to_invalid_base_url")
+                    messages.info(request, "If an active account matches that email, password-reset instructions will be sent.")
+                    return redirect("forgot_password_page")
                 _send_account_email(
                     "Reset your AlgoBot password",
                     "A password reset was requested for your AlgoBot account. "
