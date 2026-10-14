@@ -212,7 +212,9 @@ def login_view(request):
     """Authenticate by username or a unique email address."""
     identifier = str(request.data.get('identifier') or request.data.get('username') or request.data.get('email') or '').strip()
     password = request.data.get('password') or ''
-    if not allow_auth_attempt(request, 'api-password-login', identifier, limit=10, window=900) or not allow_auth_attempt(request, 'api-password-login-ip', '', limit=30, window=900):
+    identifier_allowed = allow_auth_attempt(request, 'api-password-login', identifier, limit=10, window=900)
+    ip_allowed = allow_auth_attempt(request, 'api-password-login-ip', '', limit=30, window=900)
+    if not identifier_allowed or not ip_allowed:
         return Response({'status': 'error', 'message': 'Too many sign-in attempts. Please wait and try again.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
     if not identifier or not password:
         return Response({'status': 'error', 'message': 'Username/email and password are required'}, status=status.HTTP_400_BAD_REQUEST)
