@@ -23,6 +23,8 @@ from core.models import BotSettings, Subscription, UserProfile
 logger = logging.getLogger("account_auth")
 _STATE_KEY = "algobot_google_login_state"
 _STARTED_KEY = "algobot_google_login_started"
+_NONCE_KEY = "algobot_google_login_nonce"
+_VERIFIER_KEY = "algobot_google_login_pkce_verifier"
 
 
 def _redirect_uri():
@@ -40,14 +42,24 @@ def google_login_start(request):
         messages.error(request, "Google sign-in is not configured on this deployment.")
         return redirect("login_page")
     state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    code_verifier = secrets.token_urlsafe(64)
+    code_challenge = __import__("base64").urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode("ascii")).digest()
+    ).rstrip(b"=").decode("ascii")
     request.session[_STATE_KEY] = state
     request.session[_STARTED_KEY] = int(timezone.now().timestamp())
+    request.session[_NONCE_KEY] = nonce
+    request.session[_VERIFIER_KEY] = code_verifier
     params = urlencode({
         "client_id": client_id,
         "redirect_uri": _redirect_uri(),
         "response_type": "code",
         "scope": "openid email profile",
         "state": state,
+        "nonce": nonce,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
         "prompt": "select_account",
     })
     return redirect("https://accounts.google.com/o/oauth2/v2/auth?" + params)
@@ -57,6 +69,8 @@ def google_login_start(request):
 def google_login_callback(request):
     expected = request.session.pop(_STATE_KEY, None)
     started = request.session.pop(_STARTED_KEY, None)
+    expected_nonce = request.session.pop(_NONCE_KEY, None)
+    code_verifier = request.session.pop(_VERIFIER_KEY, None)
     received = str(request.GET.get("state") or "")
     if not expected or not received or not hmac.compare_digest(str(expected), received):
         messages.error(request, "Google sign-in could not be verified. Please try again.")
@@ -76,26 +90,44 @@ def google_login_callback(request):
     if not client_id or not client_secret:
         messages.error(request, "Google sign-in is not configured on this deployment.")
         return redirect("login_page")
+    if not expected_nonce or not code_verifier:
+        messages.error(request, "Google sign-in could not be verified. Please try again.")
+        return redirect("login_page")
     try:
         response = requests.post(
             "https://oauth2.googleapis.com/token",
-            data={"code": code, "client_id": client_id, "client_secret": client_secret,
-                  "redirect_uri": _redirect_uri(), "grant_type": "authorization_code"},
+            data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": _redirect_uri(),
+                "grant_type": "authorization_code",
+                "code_verifier": code_verifier,
+            },
             timeout=10,
         )
         response.raise_for_status()
-        token = str(response.json().get("access_token") or "")
-        if not token:
-            raise ValueError("Missing access token")
-        profile_response = requests.get(
-            "https://openidconnect.googleapis.com/v1/userinfo",
-            headers={"Authorization": "Bearer " + token}, timeout=10,
+        token_payload = response.json()
+        raw_id_token = str(token_payload.get("id_token") or "")
+        if not raw_id_token:
+            raise ValueError("Missing OpenID Connect ID token")
+        # google-auth verifies Google's signing key, issuer, audience, and expiry.
+        # PKCE binds the code to this browser session; nonce binds the ID token
+        # to this authentication request.
+        from google.auth.transport.requests import Request as GoogleRequest
+        from google.oauth2 import id_token as google_id_token
+        identity = google_id_token.verify_oauth2_token(
+            raw_id_token, GoogleRequest(), audience=client_id
         )
-        profile_response.raise_for_status()
-        identity = profile_response.json()
-    except (requests.RequestException, ValueError, TypeError):
-        logger.warning("google_login_exchange_failed")
+    except Exception:
+        logger.warning("google_login_exchange_or_id_token_validation_failed")
         messages.error(request, "Google sign-in could not be completed. Please try again.")
+        return redirect("login_page")
+
+    received_nonce = str(identity.get("nonce") or "")
+    if not received_nonce or not hmac.compare_digest(expected_nonce, received_nonce):
+        logger.warning("google_login_nonce_validation_failed")
+        messages.error(request, "Google sign-in could not be verified. Please try again.")
         return redirect("login_page")
 
     subject = str(identity.get("sub") or "").strip()
