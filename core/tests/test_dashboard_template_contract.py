@@ -2,10 +2,10 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from apps.brokers.models import Broker, BrokerAccount, @override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
-BrokerConnection
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class DashboardTemplateContractTests(TestCase):
     def test_authenticated_dashboard_does_not_embed_trading_values(self):
         user = get_user_model().objects.create_user("dashboard-owner", "dashboard@example.com", "pass")
