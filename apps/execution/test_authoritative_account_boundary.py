@@ -9,10 +9,10 @@ from django.utils import timezone
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from apps.execution.constants import ORDER_STATUS_QUEUED
 from apps.execution.engine import ExecutionEngine
-from apps.execution.mod@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
-els import Order
+from apps.execution.models import Order
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='execution-account-boundary', password='test-pass')
