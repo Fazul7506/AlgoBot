@@ -52,7 +52,6 @@ CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
 # Long-running broker-data tasks expose STARTED state and are acknowledged only
 # after execution. Worker loss therefore allows Celery to redeliver them.
 CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_SEND_SENT_EVENT = False
 CELERY_WORKER_SEND_TASK_EVENTS = env_bool("CELERY_WORKER_SEND_TASK_EVENTS", False)
 CELERY_WORKER_ENABLE_REMOTE_CONTROL = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
