@@ -183,6 +183,10 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
 
 @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", return_value=True)
+@patch("core.permissions.has_verified_account_email", return_value=True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
+@patch("core.broker_onboarding.has_verified_account_email", return_value=True)
 class TerminalRuntimeBoundaryTests(TestCase):
     def test_authenticated_terminal_loads_without_csrf_cookie_bootstrap(self):
         user_model = get_user_model()
