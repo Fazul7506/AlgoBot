@@ -1,10 +1,13 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from unittest.mock import patch
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.strategies.views import StrategyViewSet
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
 class StrategyPerformanceIsolationTests(TestCase):
     def test_global_strategy_performance_is_not_presented_as_personal_pnl(self):
         user = get_user_model().objects.create_user(username="strategy-user", password="test-password")
