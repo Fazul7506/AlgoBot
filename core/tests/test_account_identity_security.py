@@ -254,7 +254,12 @@ class BrowserAccountAuthenticationTests(TestCase):
         })
         response_details = response.context[-1].get("errors") if response.status_code == 200 and response.context else response.content.decode("utf-8", errors="replace")[:1600] if response.status_code == 200 else None
         if response.status_code != 302:
-            self.fail(f"registration rejected: status={response.status_code}; errors={response_details!r}; messages={list(response.context[-1].get(\"messages\", [])) if response.context else []}; user_created={get_user_model().objects.filter(username=\"verify-user\").exists()}")
+            response_messages = list(response.context[-1].get("messages", [])) if response.context else []
+            user_created = get_user_model().objects.filter(username="verify-user").exists()
+            self.fail(
+                f"registration rejected: status={response.status_code}; errors={response_details!r}; "
+                f"messages={response_messages!r}; user_created={user_created}"
+            )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(mail.outbox), 1)
         match = re.search(r"/verify-email/\?token=([^\s]+)", mail.outbox[0].body)
