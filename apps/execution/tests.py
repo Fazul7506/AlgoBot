@@ -25,6 +25,8 @@ from .views import OrderViewSet, PositionViewSet
 from .engine import ExecutionEngine
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
 class OrderSerializerRegressionTests(APITestCase):
     def test_environment_uses_the_model_canonical_account_type(self):
         account = SimpleNamespace(
@@ -410,6 +412,8 @@ class DerivTerminalSafetyTests(SimpleTestCase):
         self.assertFalse(response.data["retryable"])
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
 class OrderCancellationSafetyTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='order-cancel-safety', password='test-password')
