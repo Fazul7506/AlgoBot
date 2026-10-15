@@ -16,6 +16,8 @@ from apps.execution.views import OrderViewSet
 
 @override_settings(BROKER_MARKET_DATA_MAX_AGE_SECONDS=30, ALLOW_LIVE_TRADING=False)
 @override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
 class TerminalLivePreviewTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
