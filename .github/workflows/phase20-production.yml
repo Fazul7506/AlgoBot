@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 25
     env:
       DJANGO_ENV: development
+      USE_REDIS: "false"
       SECRET_KEY: ci-test-secret-key
       CREDENTIALS_ENCRYPTION_KEY: ci-test-credentials-encryption-key
       DEBUG: "True"
