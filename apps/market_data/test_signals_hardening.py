@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
+from unittest.mock import patch
 from rest_framework.test import APIRequestFactory, force_authenticate
 from django.utils import timezone
 
@@ -124,6 +125,8 @@ class SignalBaselineIsolationTests(TestCase):
         self.assertEqual(_analysis_baselines(request, ["R_100"], "M1", account=account), {})
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
 class StrategySignalsApiIsolationTests(TestCase):
     def test_strategy_signal_endpoint_excludes_other_users(self):
         User = get_user_model()
