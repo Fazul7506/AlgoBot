@@ -7,6 +7,10 @@ from unittest.mock import patch
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", return_value=True)
+@patch("core.permissions.has_verified_account_email", return_value=True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
+@patch("core.broker_onboarding.has_verified_account_email", return_value=True)
 class BrokerProposalValidationTests(TestCase):
     def setUp(self):
         user = get_user_model().objects.create_user(username="proposal-validation-test", password="test-password")
