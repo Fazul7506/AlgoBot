@@ -1,4 +1,5 @@
 from django.test import SimpleTestCase, TestCase
+from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
@@ -180,6 +181,8 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261009-accountstate2", template)
         self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class TerminalRuntimeBoundaryTests(TestCase):
     def test_authenticated_terminal_loads_without_csrf_cookie_bootstrap(self):
         user_model = get_user_model()
