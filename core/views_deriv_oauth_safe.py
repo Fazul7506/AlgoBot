@@ -33,7 +33,7 @@ def _fail(request, message, event, **extra):
     authenticated = bool(request.user.is_authenticated)
     DerivOAuthService.clear_oauth_session(request)
     messages.error(request, message)
-    return redirect("broker_marketplace_page" if authenticated else "broker_connect_page")
+    return redirect("broker_marketplace_page" if authenticated else "login_page")
 
 
 def callback(request):
