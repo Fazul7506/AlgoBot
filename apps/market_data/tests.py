@@ -17,10 +17,10 @@ from .models import (
 
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", return_value=True)
-@patch("core.permissions.has_verified_account_email", return_value=True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
-@patch("core.broker_onboarding.has_verified_account_email", return_value=True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class BrokerTickApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
