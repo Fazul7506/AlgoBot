@@ -3,12 +3,14 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from core.models import UserProfile
 
 
 @override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class DashboardTemplateContractTests(TestCase):
     def test_authenticated_dashboard_does_not_embed_trading_values(self):
         user = get_user_model().objects.create_user("dashboard-owner", "dashboard@example.com", "pass")
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
         self.client.force_login(user)
         broker = Broker.objects.create(name="Deriv Dashboard Test", broker_type="deriv", status="active")
         account = BrokerAccount.objects.create(
@@ -32,6 +34,7 @@ class DashboardTemplateContractTests(TestCase):
         user = get_user_model().objects.create_user(
             "dashboard-needs-broker", "needs-broker@example.com", "pass"
         )
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
         self.client.force_login(user)
         response = self.client.get(reverse("dashboard_page"))
         self.assertEqual(response.status_code, 302)
