@@ -252,7 +252,8 @@ class BrowserAccountAuthenticationTests(TestCase):
             "password": "A-Strong-Password-2026!",
             "password_confirm": "A-Strong-Password-2026!",
         })
-        self.assertEqual(response.status_code, 302)
+        response_details = response.context[-1].get("errors") if response.status_code == 200 and response.context else response.content.decode("utf-8", errors="replace")[:1600] if response.status_code == 200 else None
+        self.assertEqual(response.status_code, 302, response_details)
         self.assertEqual(len(mail.outbox), 1)
         match = re.search(r"/verify-email/\?token=([^\s]+)", mail.outbox[0].body)
         self.assertIsNotNone(match)
@@ -417,8 +418,8 @@ class AccountIdentityManagementTests(TestCase):
             "email": "new-address@example.com",
         })
         response_errors = None
-        if response.status_code == 200 and getattr(response, "context", None):
-            response_errors = response.context[-1].get("errors")
+        if response.status_code == 200:
+            response_errors = response.context[-1].get("errors") if getattr(response, "context", None) else response.content.decode("utf-8", errors="replace")[:1600]
         self.assertEqual(response.status_code, 302, response_errors)
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "old-address@example.com")
