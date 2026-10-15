@@ -56,8 +56,9 @@ class AuthExperienceCleanupTests(TestCase):
     def test_anonymous_broker_connect_starts_deriv_oauth(self, validate_configuration, generate_pkce, generate_state, store_state, create_url):
         response = self.client.get('/brokers/connect/?broker=deriv')
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response['Location'], 'https://auth.deriv.test/authorize')
-        store_state.assert_called_once()
+        self.assertEqual(response['Location'], '/login/')
+        store_state.assert_not_called()
+        create_url.assert_not_called()
 
 
 class BillingRedirectPagesTests(TestCase):
