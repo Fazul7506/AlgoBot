@@ -7,6 +7,8 @@ from .services import StrategyService
 
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
 class StrategyBuilderApiTests(APITestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='builder-test', password='test-password')
