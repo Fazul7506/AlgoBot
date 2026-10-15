@@ -4,6 +4,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from core.models import UserProfile
+
 
 class SafeDerivOAuthCallbackTests(TestCase):
     @override_settings(
@@ -26,6 +28,7 @@ class SafeDerivOAuthCallbackTests(TestCase):
         user = get_user_model().objects.create_user(
             username="broker-failure-user", password="pass12345"
         )
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
         self.client.force_login(user)
 
         response = self.client.get(reverse("callback") + "?error=access_denied")
@@ -78,6 +81,7 @@ class SafeDerivOAuthCallbackTests(TestCase):
         user = get_user_model().objects.create_user(
             username="broker-verification-failure", password="pass12345"
         )
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
         self.client.force_login(user)
         session = self.client.session
         session["oauth_state"] = "expected-state"
