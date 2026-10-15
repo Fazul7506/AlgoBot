@@ -254,7 +254,7 @@ class BrowserAccountAuthenticationTests(TestCase):
         })
         response_details = response.context[-1].get("errors") if response.status_code == 200 and response.context else response.content.decode("utf-8", errors="replace")[:1600] if response.status_code == 200 else None
         if response.status_code != 302:
-            self.fail(f"registration rejected: status={response.status_code}; details={response_details!r}")
+            self.fail(f"registration rejected: status={response.status_code}; errors={response_details!r}; messages={list(response.context[-1].get(\"messages\", [])) if response.context else []}; user_created={get_user_model().objects.filter(username=\"verify-user\").exists()}")
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(mail.outbox), 1)
         match = re.search(r"/verify-email/\?token=([^\s]+)", mail.outbox[0].body)
@@ -423,7 +423,7 @@ class AccountIdentityManagementTests(TestCase):
         if response.status_code == 200:
             response_errors = response.context[-1].get("errors") if getattr(response, "context", None) else response.content.decode("utf-8", errors="replace")[:1600]
         if response.status_code != 302:
-            self.fail(f"email change rejected: status={response.status_code}; errors={response_errors!r}")
+            self.fail(f"email change rejected: status={response.status_code}; errors={response_errors!r}; current_password_valid={self.user.check_password(\"A-Strong-Password-2026!\")}; authenticated={self.client.session.get(\"_auth_user_id\")} ; messages={list(response.context[-1].get(\"messages\", [])) if response.context else []}")
         self.assertEqual(response.status_code, 302)
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "old-address@example.com")
