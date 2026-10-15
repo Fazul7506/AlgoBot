@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 25
     env:
       DJANGO_ENV: development
+      DJANGO_TESTING: "true"
       USE_REDIS: "false"
       SECRET_KEY: ci-test-secret-key
       CREDENTIALS_ENCRYPTION_KEY: ci-test-credentials-encryption-key
@@ -86,6 +87,9 @@ jobs:
           } > /tmp/migration-apply-comment.md
           gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/migration-apply-comment.md
           exit 1
+
+      - name: Verify Django test cache is in-memory
+        run: python -c "from django.conf import settings; assert settings.DJANGO_TESTING; assert not settings.USE_REDIS; assert settings.CACHES['default']['BACKEND'] == 'django.core.cache.backends.locmem.LocMemCache'; print('Django tests use LocMemCache; Redis is disabled.')"
 
       - name: Run Django test suite
         id: tests
