@@ -253,7 +253,9 @@ class BrowserAccountAuthenticationTests(TestCase):
             "password_confirm": "A-Strong-Password-2026!",
         })
         response_details = response.context[-1].get("errors") if response.status_code == 200 and response.context else response.content.decode("utf-8", errors="replace")[:1600] if response.status_code == 200 else None
-        self.assertEqual(response.status_code, 302, response_details)
+        if response.status_code != 302:
+            self.fail(f"registration rejected: status={response.status_code}; details={response_details!r}")
+        self.assertEqual(response.status_code, 302)
         self.assertEqual(len(mail.outbox), 1)
         match = re.search(r"/verify-email/\?token=([^\s]+)", mail.outbox[0].body)
         self.assertIsNotNone(match)
@@ -420,7 +422,9 @@ class AccountIdentityManagementTests(TestCase):
         response_errors = None
         if response.status_code == 200:
             response_errors = response.context[-1].get("errors") if getattr(response, "context", None) else response.content.decode("utf-8", errors="replace")[:1600]
-        self.assertEqual(response.status_code, 302, response_errors)
+        if response.status_code != 302:
+            self.fail(f"email change rejected: status={response.status_code}; errors={response_errors!r}")
+        self.assertEqual(response.status_code, 302)
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "old-address@example.com")
         self.assertEqual(len(mail.outbox), 1)
