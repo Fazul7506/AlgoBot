@@ -16,7 +16,7 @@ class SafeDerivOAuthCallbackTests(TestCase):
         response = self.client.get(reverse("callback") + "?error=access_denied")
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("broker_connect_page"))
+        self.assertEqual(response.url, reverse("login_page"))
         self.assertNotIn("/login/", response.url)
         self.assertNotIn("/dashboard/", response.url)
 
