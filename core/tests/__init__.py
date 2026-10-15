@@ -140,6 +140,10 @@ class ProductionRoutingRegressionTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response['Location'], '/')
 
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+    @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+    @patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
     def test_dashboard_api_routes_are_not_shadowed_by_broker_routers(self):
         self.client.force_login(self.user)
         accounts_response = self.client.get('/api/brokers/accounts/')
