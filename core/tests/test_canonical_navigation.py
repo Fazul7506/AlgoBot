@@ -2,9 +2,12 @@
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from unittest.mock import patch
 from django.urls import resolve, reverse
 
 
+@patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
+@patch("core.broker_onboarding.has_verified_account_email", return_value=True)
 class CanonicalNavigationTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
