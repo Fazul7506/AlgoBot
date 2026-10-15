@@ -9,6 +9,8 @@ from apps.execution.views import TradeHistoryViewSet
 
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
 class TradeHistoryFilterValidationTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="history-filter-user", password="test-password")
