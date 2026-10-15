@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from unittest.mock import patch
 from django.utils import timezone
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -16,6 +17,8 @@ from apps.execution.views import OrderViewSet
 
 @override_settings(BROKER_MARKET_DATA_MAX_AGE_SECONDS=30, ALLOW_LIVE_TRADING=False)
 @override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
 class TerminalLivePreviewTests(TestCase):
