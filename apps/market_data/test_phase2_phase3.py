@@ -12,6 +12,10 @@ from apps.strategies.models import Strategy, StrategyConfiguration, StrategySign
 
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", return_value=True)
+@patch("core.permissions.has_verified_account_email", return_value=True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
+@patch("core.broker_onboarding.has_verified_account_email", return_value=True)
 class Phase3MarketIntelligenceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='phase23', password='test-password')
