@@ -10,6 +10,8 @@ from apps.risk.models import RiskAssessment, RiskProfile
 
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
 class RiskPageHardeningTests(TestCase):
     def setUp(self):
         User = get_user_model()
