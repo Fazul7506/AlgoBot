@@ -184,7 +184,7 @@ class BrowserAccountAuthenticationTests(TestCase):
             username="reset-user", email="reset@example.com", password="Old-Password-2026!"
         )
         response = self.client.post("/forgot-password/", {"email": "RESET@example.com"})
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 302, (response.context[-1].get("errors") if response.context else response.content.decode("utf-8", errors="replace")[:1200]))
         self.assertEqual(len(mail.outbox), 1)
         match = re.search(r"/reset-password/([^/\s]+)", mail.outbox[0].body)
         self.assertIsNotNone(match)
