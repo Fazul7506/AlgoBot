@@ -14,6 +14,8 @@ class BrokerOAuthCanonicalizationTests(TestCase):
     @patch("core.views.DerivOAuthService.validate_configuration", return_value=(True, None))
     @patch("core.views.DerivOAuthService.generate_pkce_pair")
     @patch("core.views.DerivOAuthService.store_oauth_state_in_session")
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
     def test_oauth_start_redirects_to_canonical_host_before_creating_state(
         self, store_state, generate_pkce, validate_configuration
     ):
