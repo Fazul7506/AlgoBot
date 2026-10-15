@@ -1,4 +1,5 @@
 import re
+from urllib.parse import parse_qs, urlparse
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -188,7 +189,7 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         match = re.search(r"/reset-password/([^/\s]+)", mail.outbox[0].body)
         self.assertIsNotNone(match)
-        raw_token = match.group(1).strip()
+        raw_token = parse_qs(urlparse(match.group(0)).query).get("token", [""])[0].strip()
         self.assertEqual(self.client.get(f"/reset-password/{raw_token}/").status_code, 200)
 
         response = self.client.post(f"/reset-password/{raw_token}/", {
@@ -264,7 +265,7 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         match = re.search(r"/verify-email/\?token=([^\s]+)", mail.outbox[0].body)
         self.assertIsNotNone(match)
-        raw_token = match.group(1).strip()
+        raw_token = parse_qs(urlparse(match.group(0)).query).get("token", [""])[0].strip()
         response = self.client.get(f"/verify-email/?token={raw_token}")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Confirm email verification")
@@ -443,7 +444,7 @@ class AccountIdentityManagementTests(TestCase):
         self.assertEqual(mail.outbox[0].to, ["new-address@example.com"])
         match = re.search(r"/verify-email/\?token=([^\s]+)", mail.outbox[0].body)
         self.assertIsNotNone(match)
-        raw_token = match.group(1).strip()
+        raw_token = parse_qs(urlparse(match.group(0)).query).get("token", [""])[0].strip()
 
         response = self.client.get(f"/verify-email/?token={raw_token}")
         self.assertEqual(response.status_code, 200)
