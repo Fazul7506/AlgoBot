@@ -416,10 +416,10 @@ class AccountIdentityManagementTests(TestCase):
             "username": "identity-user",
             "email": "new-address@example.com",
         })
-        self.assertEqual(
-            response.status_code, 302,
-            getattr(response, "context", {}).get("errors") if response.status_code == 200 else None,
-        )
+        response_errors = None
+        if response.status_code == 200 and getattr(response, "context", None):
+            response_errors = response.context[-1].get("errors")
+        self.assertEqual(response.status_code, 302, response_errors)
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "old-address@example.com")
         self.assertEqual(len(mail.outbox), 1)
