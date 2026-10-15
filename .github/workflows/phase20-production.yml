@@ -91,6 +91,13 @@ jobs:
       - name: Verify Django test cache is in-memory
         run: |
           python - <<'PY'
+          import os
+
+          os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deriv_platform.settings")
+
+          import django
+          django.setup()
+
           from django.conf import settings
 
           backend = settings.CACHES["default"]["BACKEND"]
