@@ -244,7 +244,8 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertNotIn("telegram_username", serializer.validated_data)
         self.assertNotIn("brevo_sender_email", serializer.validated_data)
 
-    def test_registration_sends_verification_and_verification_is_single_use(self):
+    @patch("core.browser_auth.allow_auth_attempt", return_value=True)
+    def test_registration_sends_verification_and_verification_is_single_use(self, _allow_auth_attempt):
         response = self.client.post("/register/", {
             "username": "verify-user",
             "email": "verify@example.com",
@@ -415,7 +416,10 @@ class AccountIdentityManagementTests(TestCase):
             "username": "identity-user",
             "email": "new-address@example.com",
         })
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.status_code, 302,
+            getattr(response, "context", {}).get("errors") if response.status_code == 200 else None,
+        )
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "old-address@example.com")
         self.assertEqual(len(mail.outbox), 1)
