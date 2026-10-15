@@ -8,6 +8,10 @@ from apps.strategies.views import StrategyViewSet
 
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", return_value=True)
+@patch("core.permissions.has_verified_account_email", return_value=True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
+@patch("core.broker_onboarding.has_verified_account_email", return_value=True)
 class StrategyPerformanceIsolationTests(TestCase):
     def test_global_strategy_performance_is_not_presented_as_personal_pnl(self):
         user = get_user_model().objects.create_user(username="strategy-user", password="test-password")
