@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
@@ -9,6 +10,10 @@ from .services import StrategyService
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", return_value=True)
+@patch("core.permissions.has_verified_account_email", return_value=True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
+@patch("core.broker_onboarding.has_verified_account_email", return_value=True)
 class StrategyBuilderApiTests(APITestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='builder-test', password='test-password')
