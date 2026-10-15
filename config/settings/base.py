@@ -114,7 +114,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # far too large for a shared hosted Redis account. Bound each ASGI process's
 # channel-layer pool independently from the synchronous Django/Celery pools.
 try:
-    REDIS_CHANNEL_MAX_CONNECTIONS = max(1, int(os.getenv("REDIS_CHANNEL_MAX_CONNECTIONS", "2")))
+    REDIS_CHANNEL_MAX_CONNECTIONS = max(1, int(os.getenv("REDIS_CHANNEL_MAX_CONNECTIONS", "1")))
 except (TypeError, ValueError):
     REDIS_CHANNEL_MAX_CONNECTIONS = 2
 
