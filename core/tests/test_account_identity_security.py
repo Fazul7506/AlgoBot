@@ -428,7 +428,14 @@ class AccountIdentityManagementTests(TestCase):
         if response.status_code == 200:
             response_errors = response.context[-1].get("errors") if getattr(response, "context", None) else response.content.decode("utf-8", errors="replace")[:1600]
         if response.status_code != 302:
-            self.fail(f"email change rejected: status={response.status_code}; errors={response_errors!r}; current_password_valid={self.user.check_password(\"A-Strong-Password-2026!\")}; authenticated={self.client.session.get(\"_auth_user_id\")} ; messages={list(response.context[-1].get(\"messages\", [])) if response.context else []}")
+            current_password_valid = self.user.check_password("A-Strong-Password-2026!")
+            authenticated_user_id = self.client.session.get("_auth_user_id")
+            response_messages = list(response.context[-1].get("messages", [])) if response.context else []
+            self.fail(
+                f"email change rejected: status={response.status_code}; errors={response_errors!r}; "
+                f"current_password_valid={current_password_valid}; authenticated={authenticated_user_id}; "
+                f"messages={response_messages}"
+            )
         self.assertEqual(response.status_code, 302)
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "old-address@example.com")
