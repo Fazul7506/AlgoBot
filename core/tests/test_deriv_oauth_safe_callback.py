@@ -25,7 +25,7 @@ class SafeDerivOAuthCallbackTests(TestCase):
     )
     def test_provider_error_keeps_authenticated_user_in_broker_management(self):
         user = get_user_model().objects.create_user(
-            username="broker-failure-user", password="pass12345"
+            username="broker-failure-user", email="broker-failure@example.test", password="pass12345"
         )
         UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
         self.client.force_login(user)
@@ -77,7 +77,7 @@ class SafeDerivOAuthCallbackTests(TestCase):
         self, exchange_token, verify_account
     ):
         user = get_user_model().objects.create_user(
-            username="broker-verification-failure", password="pass12345"
+            username="broker-verification-failure", email="broker-verification-failure@example.test", password="pass12345"
         )
         UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
         self.client.force_login(user)
