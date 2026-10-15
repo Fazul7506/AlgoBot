@@ -1,8 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from unittest.mock import patch
 from django.urls import reverse
 
 
+@patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
+@patch("core.broker_onboarding.has_verified_account_email", return_value=True)
 class StrategyCenterContractTests(TestCase):
     def test_strategy_center_starts_from_broker_connection_state(self):
         user = get_user_model().objects.create_user("strategy-owner", "strategy@example.com", "pass")
