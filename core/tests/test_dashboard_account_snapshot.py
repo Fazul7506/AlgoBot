@@ -11,6 +11,10 @@ from apps.brokers.models import Broker, BrokerAccount, Position
 from core.dashboard_api import DashboardViewSet
 
 
+@patch("core.permissions.has_authorized_broker_connection", return_value=True)
+@patch("core.permissions.has_verified_account_email", return_value=True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
+@patch("core.broker_onboarding.has_verified_account_email", return_value=True)
 class DashboardAccountSnapshotTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="dashboard-snapshot-test", password="test-password")
