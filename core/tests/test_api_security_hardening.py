@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
+from unittest.mock import patch
 from rest_framework.test import APIClient, APIRequestFactory
 
 from core.api_authentication import BrowserSessionAuthentication
@@ -111,6 +112,8 @@ class APISecurityHardeningTests(TestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("broker_account", serializer.errors)
 
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
     def test_derived_portfolio_allocation_endpoint_cannot_be_mutated_directly(self):
         portfolio = Portfolio.objects.create(user=self.user, name="Owned Portfolio")
         client = APIClient()
