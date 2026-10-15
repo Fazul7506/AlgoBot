@@ -25,6 +25,11 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = env_bool(
 # A failed web publish is a failed queue operation, not a reason to hold an HTTP
 # request open while Redis is unavailable.
 CELERY_TASK_PUBLISH_RETRY = False
+
+# Bound result retention on small hosted Redis plans. Long-lived results and
+# sent-task events otherwise compete with broker queues and Django cache keys.
+CELERY_RESULT_EXPIRES = max(60, int(os.environ.get("CELERY_RESULT_EXPIRES", "900")))
+CELERY_TASK_SEND_SENT_EVENT = False
 CELERY_TASK_PUBLISH_RETRY_POLICY = {
     "max_retries": 0,
     "timeout": 3,
@@ -47,8 +52,8 @@ CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
 # Long-running broker-data tasks expose STARTED state and are acknowledged only
 # after execution. Worker loss therefore allows Celery to redeliver them.
 CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_SEND_SENT_EVENT = True
-CELERY_WORKER_SEND_TASK_EVENTS = True
+CELERY_TASK_SEND_SENT_EVENT = False
+CELERY_WORKER_SEND_TASK_EVENTS = env_bool("CELERY_WORKER_SEND_TASK_EVENTS", False)
 CELERY_WORKER_ENABLE_REMOTE_CONTROL = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
