@@ -271,7 +271,7 @@ class BrowserAccountAuthenticationTests(TestCase):
         profile = UserProfile.objects.get(user__username="verify-user")
         self.assertFalse(profile.email_verified)
         response = self.client.post("/verify-email/", {"token": raw_token})
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 302, f"email verification confirmation failed: status={response.status_code}; body={response.content.decode('utf-8', errors='replace')[:1800]!r}")
         self.assertTrue(profile.email_verified)
         self.assertIsNotNone(profile.email_verified_at)
         self.assertEqual(profile.email_verification_token, "")
