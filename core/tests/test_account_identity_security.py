@@ -189,8 +189,10 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         match = re.search(r"/reset-password/([^/\s]+)", mail.outbox[0].body)
         self.assertIsNotNone(match)
-        raw_token = parse_qs(urlparse(match.group(0)).query).get("token", [""])[0].strip()
-        self.assertEqual(self.client.get(f"/reset-password/{raw_token}/").status_code, 200)
+        raw_token = match.group(1).strip()
+        self.assertTrue(raw_token, "password-reset email did not contain a token")
+        reset_get = self.client.get(f"/reset-password/{raw_token}/")
+        self.assertEqual(reset_get.status_code, 200, f"password-reset GET redirected to {reset_get.headers.get('Location')!r}")
 
         response = self.client.post(f"/reset-password/{raw_token}/", {
             "password": "New-Password-2026!$",
@@ -267,7 +269,7 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertIsNotNone(match)
         raw_token = parse_qs(urlparse(match.group(0)).query).get("token", [""])[0].strip()
         response = self.client.get(f"/verify-email/?token={raw_token}")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 200, f"verification GET redirected to {response.headers.get('Location')!r}; token_present={bool(raw_token)}")
         self.assertContains(response, "Confirm email verification")
         profile = UserProfile.objects.get(user__username="verify-user")
         self.assertFalse(profile.email_verified)
