@@ -8,10 +8,10 @@ from django.urls import resolve, reverse
 
 @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", return_value=True)
-@patch("core.permissions.has_verified_account_email", return_value=True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
-@patch("core.broker_onboarding.has_verified_account_email", return_value=True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class CanonicalNavigationTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
