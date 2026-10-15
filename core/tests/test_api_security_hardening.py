@@ -114,6 +114,8 @@ class APISecurityHardeningTests(TestCase):
 
     @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
     @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
     def test_derived_portfolio_allocation_endpoint_cannot_be_mutated_directly(self):
         portfolio = Portfolio.objects.create(user=self.user, name="Owned Portfolio")
         client = APIClient()
