@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from unittest.mock import patch
 from django.urls import reverse
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
@@ -8,6 +9,8 @@ from core.models import UserProfile
 
 @override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class DashboardTemplateContractTests(TestCase):
+    @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+    @patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
     def test_authenticated_dashboard_does_not_embed_trading_values(self):
         user = get_user_model().objects.create_user("dashboard-owner", "dashboard@example.com", "pass")
         UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
