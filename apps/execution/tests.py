@@ -31,6 +31,10 @@ from .engine import ExecutionEngine
 @patch("core.permissions.has_verified_account_email", return_value=True)
 @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
 @patch("core.broker_onboarding.has_verified_account_email", return_value=True)
+@patch("core.permissions.has_authorized_broker_connection", return_value=True)
+@patch("core.permissions.has_verified_account_email", return_value=True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
+@patch("core.broker_onboarding.has_verified_account_email", return_value=True)
 class OrderSerializerRegressionTests(APITestCase):
     def test_environment_uses_the_model_canonical_account_type(self):
         account = SimpleNamespace(
