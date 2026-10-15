@@ -436,7 +436,7 @@ class AccountIdentityManagementTests(TestCase):
                 f"current_password_valid={current_password_valid}; authenticated={authenticated_user_id}; "
                 f"messages={response_messages}"
             )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 302, f"email change response details: {response_errors!r}; body={response.content.decode('utf-8', errors='replace')[:1600]!r}")
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "old-address@example.com")
         self.assertEqual(len(mail.outbox), 1)
