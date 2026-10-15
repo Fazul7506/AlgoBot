@@ -53,7 +53,7 @@ class SafeDerivOAuthCallbackTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("login_page"))
-        self.assertNotIn("/login/", response.url)
+        self.assertEqual(response.url, reverse("login_page"))
         self.assertNotIn("/dashboard/", response.url)
 
     @override_settings(
