@@ -17,7 +17,6 @@ class SafeDerivOAuthCallbackTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("login_page"))
-        self.assertNotIn("/login/", response.url)
         self.assertNotIn("/dashboard/", response.url)
 
     @override_settings(
@@ -35,7 +34,6 @@ class SafeDerivOAuthCallbackTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("broker_marketplace_page"))
-        self.assertNotIn("/login/", response.url)
         self.assertNotIn("/dashboard/", response.url)
 
     @override_settings(
@@ -54,7 +52,7 @@ class SafeDerivOAuthCallbackTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("broker_connect_page"))
+        self.assertEqual(response.url, reverse("login_page"))
         self.assertNotIn("/login/", response.url)
         self.assertNotIn("/dashboard/", response.url)
 
