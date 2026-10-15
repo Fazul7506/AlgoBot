@@ -3,10 +3,12 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from unittest.mock import patch
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 
 
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class UniversalWorkspaceAccessTests(TestCase):
     """Regression coverage for authenticated workspace access and shell geometry."""
 
