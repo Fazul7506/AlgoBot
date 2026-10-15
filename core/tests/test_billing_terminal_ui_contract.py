@@ -2,6 +2,7 @@ from django.test import SimpleTestCase, TestCase
 from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from core.models import UserProfile
 
 
 class BillingTerminalUiContractTests(SimpleTestCase):
@@ -190,7 +191,8 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
 class TerminalRuntimeBoundaryTests(TestCase):
     def test_authenticated_terminal_loads_without_csrf_cookie_bootstrap(self):
         user_model = get_user_model()
-        user = user_model.objects.create_user(username="terminal-bearer-test", password="test-password")
+        user = user_model.objects.create_user(username="terminal-bearer-test", email="terminal-bearer@example.test", password="test-password")
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
         self.client.force_login(user)
 
         response = self.client.get(reverse("trading_page"))
@@ -201,7 +203,8 @@ class TerminalRuntimeBoundaryTests(TestCase):
 
     def test_authenticated_browser_api_token_issues_short_lived_jwt(self):
         user_model = get_user_model()
-        user = user_model.objects.create_user(username="terminal-token-test", password="test-password")
+        user = user_model.objects.create_user(username="terminal-token-test", email="terminal-token@example.test", password="test-password")
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
         self.client.force_login(user)
 
         response = self.client.get(reverse("browser_api_token"))
@@ -212,7 +215,8 @@ class TerminalRuntimeBoundaryTests(TestCase):
 
     def test_terminal_bearer_token_authenticates_protected_api_without_csrf(self):
         user_model = get_user_model()
-        user = user_model.objects.create_user(username="terminal-bearer-api-test", password="test-password")
+        user = user_model.objects.create_user(username="terminal-bearer-api-test", email="terminal-bearer-api@example.test", password="test-password")
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
         self.client.force_login(user)
 
         token_response = self.client.get(reverse("browser_api_token"))
