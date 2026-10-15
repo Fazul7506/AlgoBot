@@ -88,7 +88,7 @@ class DerivOAuthTests(TestCase):
             result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(result.status_code, 302)
         self.assertTrue(result.wsgi_request.user.is_authenticated)
-        self.assertEqual(result.url, reverse("broker_marketplace_page"))
+        self.assertEqual(result.url, reverse("dashboard_page"))
         user = local_user
         user.refresh_from_db()
         account = BrokerAccount.objects.get(user=user, account_id="DOT90004580")
@@ -169,5 +169,5 @@ class DerivOAuthTests(TestCase):
         self._mock_account_response(get, [])
         result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(result.status_code, 302)
-        self.assertEqual(result.url, reverse("broker_connect_page"))
+        self.assertEqual(result.url, reverse("login_page"))
         self.assertFalse(User.objects.filter(username__startswith="deriv_").exists())
