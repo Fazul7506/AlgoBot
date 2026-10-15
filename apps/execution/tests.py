@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, SimpleTestCase
+from unittest.mock import patch
 from django.utils import timezone
 from rest_framework.test import APITestCase, APIRequestFactory, force_authenticate
 
@@ -92,6 +93,8 @@ class OrderSerializerRegressionTests(APITestCase):
         enqueue.assert_not_called()
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
 class BrokerAuthoritativePositionTests(APITestCase):
     def _account(self, username):
         user = get_user_model().objects.create_user(username=username, password='test-password')
