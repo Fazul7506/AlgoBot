@@ -1,27 +1,15 @@
 """Compatibility alias for the advisory-locking migrate command.
 
-Kept so deployment configurations can use an explicit, self-documenting
-command name. The custom migrate command owns the lock so even legacy
-python manage.py migrate invocations are serialized.
+The inherited Django migration parser defines all supported migration options.
+Delegating to the custom migrate command keeps locking centralized and avoids
+re-declaring argparse options that Django already registered.
 """
-from django.core.management import BaseCommand, call_command
+from django.core.management import call_command
+from django.core.management.commands.migrate import Command as DjangoMigrateCommand
 
 
-class Command(BaseCommand):
+class Command(DjangoMigrateCommand):
     help = "Run Django migrations using the PostgreSQL advisory-locked command."
 
-    def add_arguments(self, parser):
-        parser.add_argument("--database", default="default")
-        parser.add_argument("--noinput", action="store_true")
-        parser.add_argument("--fake-initial", action="store_true")
-        parser.add_argument("--verbosity", type=int, default=1)
-
     def handle(self, *args, **options):
-        migrate_options = {
-            "database": options["database"],
-            "interactive": not options["noinput"],
-            "verbosity": options["verbosity"],
-        }
-        if options.get("fake_initial"):
-            migrate_options["fake_initial"] = True
-        return call_command("migrate", **migrate_options)
+        return call_command("migrate", *args, **options)
