@@ -21,7 +21,7 @@ from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from core.auth_redirects import first_safe_auth_destination, safe_auth_destination
+from core.auth_redirects import first_safe_auth_destination
 
 from core.models import BotSettings, GoogleIdentity, PasswordResetToken, Subscription, UserProfile
 from core.auth_rate_limit import allow_auth_attempt
