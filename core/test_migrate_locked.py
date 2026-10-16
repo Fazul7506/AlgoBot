@@ -60,12 +60,12 @@ class MigrateLockedAliasTests(SimpleTestCase):
     @patch("core.management.commands.migrate_locked.call_command")
     def test_alias_forwards_fake_initial_and_noinput(self, call_command_mock):
         MigrateLockedAlias().handle(
-            database="default", noinput=True, fake_initial=True, verbosity=0
+            database="default", interactive=False, fake_initial=True, verbosity=0
         )
         call_command_mock.assert_called_once_with(
             "migrate",
             database="default",
-            noinput=True,
+            interactive=False,
             fake_initial=True,
             verbosity=0,
         )
