@@ -32,11 +32,18 @@ _LINK_USER_KEY = "algobot_google_link_user_id"
 
 
 def _redirect_uri():
+    """Return the explicit Google callback or derive it from Django canonical settings."""
     import os
-    return os.getenv(
-        "GOOGLE_LOGIN_REDIRECT_URI",
-        f'{os.getenv("BASE_URL", "http://127.0.0.1:8000").rstrip("/")}/auth/google/callback/',
-    )
+
+    configured_uri = str(os.getenv("GOOGLE_LOGIN_REDIRECT_URI", "") or "").strip()
+    if configured_uri:
+        return configured_uri
+    base_url = str(
+        getattr(settings, "BASE_URL", "")
+        or os.getenv("BASE_URL", "")
+        or "http://127.0.0.1:8000"
+    ).strip().rstrip("/")
+    return f"{base_url}/auth/google/callback/"
 
 
 @require_GET
