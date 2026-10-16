@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from django.test import RequestFactory, SimpleTestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from core.browser_auth import login_page
@@ -32,3 +32,13 @@ class AuthenticatedLoginRedirectTests(SimpleTestCase):
         response = login_page(request)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], reverse("dashboard_page"))
+
+    def test_login_page_restores_safe_destination_from_session(self):
+        session = self.client.session
+        session["broker_onboarding_next"] = "/trading/"
+        session.save()
+
+        response = self.client.get(reverse("login_page"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="next" value="/trading/"')
