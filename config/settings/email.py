@@ -17,7 +17,9 @@ if EMAIL_USE_SSL and EMAIL_USE_TLS:
 BREVO_API_KEY = env("BREVO_API_KEY", "")
 BREVO_SENDER_EMAIL = env("BREVO_SENDER_EMAIL", DEFAULT_FROM_EMAIL)
 
-# Verified Brevo senders used by AlgoBot's transactional email policy.
-ALGOBOT_SECURITY_EMAIL = env("ALGOBOT_SECURITY_EMAIL", "security@algobot.dpdns.org")
-ALGOBOT_SUPPORT_EMAIL = env("ALGOBOT_SUPPORT_EMAIL", "support@algobot.dpdns.org")
-ALGOBOT_NOREPLY_EMAIL = env("ALGOBOT_NOREPLY_EMAIL", "noreply@algobot.dpdns.org")
+# Category-specific sender overrides are optional. By default, use the
+# configured Brevo sender so every transactional category uses a verified
+# sender address unless an operator explicitly configures separate senders.
+ALGOBOT_SECURITY_EMAIL = env("ALGOBOT_SECURITY_EMAIL", BREVO_SENDER_EMAIL)
+ALGOBOT_SUPPORT_EMAIL = env("ALGOBOT_SUPPORT_EMAIL", BREVO_SENDER_EMAIL)
+ALGOBOT_NOREPLY_EMAIL = env("ALGOBOT_NOREPLY_EMAIL", BREVO_SENDER_EMAIL)
