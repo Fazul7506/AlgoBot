@@ -65,7 +65,7 @@ class MigrateLockedAliasTests(SimpleTestCase):
         call_command_mock.assert_called_once_with(
             "migrate",
             database="default",
-            interactive=False,
-            verbosity=0,
+            noinput=True,
             fake_initial=True,
+            verbosity=0,
         )
