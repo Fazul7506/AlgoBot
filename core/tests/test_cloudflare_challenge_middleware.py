@@ -29,3 +29,15 @@ class CloudflareChallengeQueryMiddlewareTests(SimpleTestCase):
         middleware = CloudflareChallengeQueryMiddleware(lambda _: called.append(True) or 'ok')
         self.assertEqual(middleware(request), 'ok')
         self.assertEqual(called, [True])
+
+    def test_signed_verification_token_query_is_not_redirected(self):
+        from django.test import RequestFactory
+        from core.middleware.cloudflare_challenge import CloudflareChallengeQueryMiddleware
+
+        token = "eyJ1aWQiOjEsInB1cnBvc2UiOiJ2ZXJpZnlfZW1haWwiIn0:1xHeOJ:kNeqT8HVLbEitPaCkEPrveXvAQq50VERbJH4h8Tqrq"
+        request = RequestFactory().get('/verify-email/?token=' + token)
+        called = []
+        middleware = CloudflareChallengeQueryMiddleware(lambda _: called.append(True) or 'view-response')
+
+        self.assertEqual(middleware(request), 'view-response')
+        self.assertEqual(called, [True])
