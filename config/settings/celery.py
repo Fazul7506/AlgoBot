@@ -59,8 +59,11 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
 CELERY_TASK_DEFAULT_QUEUE = "celery"
 CELERY_TASK_CREATE_MISSING_QUEUES = False
 CELERY_TASK_QUEUES = (
-    Queue("celery"),
-    Queue("market_data"),
+    # Bind each named queue to its own routing key. Without an explicit key,
+    # Kombu can inherit the default ``celery`` routing key for both queues,
+    # causing market-data messages to be delivered to the general worker too.
+    Queue("celery", routing_key="celery"),
+    Queue("market_data", routing_key="market_data"),
 )
 
 # Explicit imports make the production worker deterministic even if Django's
