@@ -118,7 +118,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python manage.py test --noinput --parallel 1 2>&1 | tee /tmp/django-tests.txt
+          DJANGO_TESTING=true USE_REDIS=false python manage.py test --noinput --parallel 1 2>&1 | tee /tmp/django-tests.txt
 
       - name: Upload Django test failure log
         if: steps.tests.outcome == 'failure'
