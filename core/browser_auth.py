@@ -21,7 +21,7 @@ from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.http import url_has_allowed_host_and_scheme
+from core.auth_redirects import first_safe_auth_destination
 
 from core.models import BotSettings, GoogleIdentity, PasswordResetToken, Subscription, UserProfile
 from core.auth_rate_limit import allow_auth_attempt
@@ -35,16 +35,13 @@ def _digest(token):
 
 
 def _render(request, mode, **context):
-    candidate = (
-        context.get("next")
-        or request.GET.get("next")
-        or request.POST.get("next")
-        or request.session.get("broker_onboarding_next", "")
+    context["next"] = first_safe_auth_destination(
+        request,
+        context.get("next"),
+        request.GET.get("next"),
+        request.POST.get("next"),
+        request.session.get("broker_onboarding_next", ""),
     )
-    if candidate and url_has_allowed_host_and_scheme(
-        str(candidate), allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
-        context.setdefault("next", candidate)
     return render(request, "core/auth_page.html", {"mode": mode, **context})
 
 
@@ -103,12 +100,24 @@ def _send_verification(request, user, profile, *, recipient=None, purpose="verif
 
 
 def login_page(request):
+    safe_destination = first_safe_auth_destination(
+        request,
+        request.POST.get("next"),
+        request.GET.get("next"),
+        request.session.get("broker_onboarding_next", ""),
+    )
     if request.user.is_authenticated:
         from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
         if not has_verified_account_email(request.user):
             messages.info(request, "Verify your AlgoBot email before continuing.")
             return redirect("verify_email_page")
-        return redirect("dashboard_page" if has_authorized_broker_connection(request.user) else "broker_marketplace_page")
+        if not has_authorized_broker_connection(request.user):
+            if safe_destination:
+                request.session["broker_onboarding_next"] = safe_destination
+            return redirect("broker_marketplace_page")
+        if safe_destination and not safe_destination.startswith(("/login/", "/register/", "/auth/google/")):
+            return redirect(safe_destination)
+        return redirect("dashboard_page")
     if request.method == "POST":
         identifier = str(request.POST.get("identifier") or request.POST.get("username") or "").strip()
         password = request.POST.get("password") or ""
@@ -139,10 +148,14 @@ def login_page(request):
         auth_login(request, user)
         UserProfile.objects.update_or_create(user=user, defaults={"last_login_at": timezone.now()})
         from core.broker_onboarding import has_authorized_broker_connection
-        destination = request.POST.get("next") or request.GET.get("next") or ""
-        safe_destination = destination if destination and url_has_allowed_host_and_scheme(
-            destination, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-        ) else ""
+        safe_destination = first_safe_auth_destination(
+            request,
+            request.POST.get("next"),
+            request.GET.get("next"),
+            request.session.get("broker_onboarding_next", ""),
+        )
+        if safe_destination.startswith(("/login/", "/register/", "/auth/google/")):
+            safe_destination = ""
         if not has_authorized_broker_connection(user):
             if safe_destination:
                 request.session["broker_onboarding_next"] = safe_destination
@@ -154,10 +167,13 @@ def login_page(request):
 
 
 def register_page(request):
-    requested_next = str(request.POST.get("next") or request.GET.get("next") or "")
-    if requested_next and url_has_allowed_host_and_scheme(
-        requested_next, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
+    requested_next = first_safe_auth_destination(
+        request,
+        request.POST.get("next"),
+        request.GET.get("next"),
+        request.session.get("broker_onboarding_next", ""),
+    )
+    if requested_next:
         request.session["broker_onboarding_next"] = requested_next
     if request.user.is_authenticated:
         from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
