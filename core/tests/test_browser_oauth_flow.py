@@ -1,12 +1,15 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from apps.brokers.models import BrokerAccount, BrokerConnection
 from core.account_context import SESSION_KEY
+from core.models import UserProfile
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class BrowserOAuthFlowTests(TestCase):
     def test_browser_logout_redirects_and_uses_ui_notification(self):
         user = User.objects.create_user(username="ui-user", password="pass12345")
@@ -39,11 +42,11 @@ class BrowserOAuthFlowTests(TestCase):
         response = self.client.get("/callback/?state=state&code=code")
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/brokers/connect/")
+        self.assertEqual(response["Location"], "/login/")
         self.assertEqual(User.objects.count(), 0)
         self.assertTrue(
             any(
-                "could not verify the trading account" in str(message)
+                "Sign in to your verified AlgoBot account" in str(message)
                 for message in response.wsgi_request._messages
             )
         )
@@ -62,7 +65,8 @@ class BrowserOAuthFlowTests(TestCase):
             {"loginid": "CR1234567", "account_type": "demo", "currency": "USD", "balance": 125.5},
             [{"loginid": "CR1234567", "account_type": "demo", "currency": "USD", "balance": 125.5}],
         )
-        user = User.objects.create_user(username="connected-user", password="pass12345")
+        user = User.objects.create_user(username="connected-user", email="connected@example.test", password="pass12345")
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
         self.client.force_login(user)
         session = self.client.session
         session["oauth_state"] = "state"
@@ -71,7 +75,12 @@ class BrowserOAuthFlowTests(TestCase):
         session["oauth_initiating_user_id"] = str(user.pk)
         session.save()
 
-        response = self.client.get("/callback/?state=state&code=code")
+        with patch(
+            "apps.brokers.services.BrokerConnectionService.connect",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("demo connection check unavailable"),
+        ):
+            response = self.client.get("/callback/?state=state&code=code")
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/brokers/marketplace/")
@@ -99,7 +108,8 @@ class BrowserOAuthFlowTests(TestCase):
         session["oauth_redirect_uri"] = "https://algobot.dpdns.org/callback/"
         session.save()
 
-        user = User.objects.create_user(username="actual-user", password="pass12345")
+        user = User.objects.create_user(username="actual-user", email="actual@example.test", password="pass12345")
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
         self.client.force_login(user)
         # Simulate OAuth having started under a different identity, then the
         # browser session changing before the provider callback.

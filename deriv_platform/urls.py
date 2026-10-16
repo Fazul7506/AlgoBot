@@ -2,16 +2,17 @@
 from django.contrib import admin
 from django.urls import path, re_path, include
 from django.views.generic import RedirectView
-from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 
 from core.views_auth import (
-    CustomTokenObtainPairView, register, login_view, change_password, browser_api_token, logout_view,
+    CustomTokenObtainPairView, CustomTokenRefreshSerializer, register, login_view, change_password, browser_api_token, logout_view,
     UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet,
 )
 from core.browser_views import browser_logout
+from rest_framework_simplejwt.views import TokenRefreshView
+from core.google_auth import google_login_start, google_login_callback
 from core.dashboard_api import DashboardViewSet
 from apps.market_data.web_views import market_catalogue
 from apps.market_data.signal_views import strategy_signals
@@ -21,7 +22,7 @@ from core.views import (
     register_page, dashboard_page, markets_page, strategies_page, trading_page,
     backtesting_page, predictions_page, settings_page, profile_page,
     terms_page, privacy_page, forgot_password_page, reset_password_page,
-    verify_email_page, account_identity_page, cookie_policy_page, licensing_page, contact_page,
+    verify_email_page, account_identity_page, unlink_google_identity, cookie_policy_page, licensing_page, contact_page,
     about_page, public_status_page, risk_page, orders_page, positions_page,
     signals_page, analysis_page, operations_module_page, strategy_builder_page,
 )
@@ -66,11 +67,17 @@ def billing_cancel_dispatch(request):
 router = DefaultRouter()
 router.register(r"dashboard", DashboardViewSet, basename="dashboard")
 
+class CustomTokenRefreshView(TokenRefreshView):
+    serializer_class = CustomTokenRefreshSerializer
+
+
 urlpatterns = [
     path("health/", include("apps.health.urls")),
     path("admin/", admin.site.urls),
     path("", home, name="home"),
     path("login/", login_page, name="login_page"),
+    path("auth/google/", google_login_start, name="google_login_start"),
+    path("auth/google/callback/", google_login_callback, name="google_login_callback"),
     path("register/", register_page, name="register_page"),
     path("logout/", browser_logout, name="logout"),
     path("accounts/login/", RedirectView.as_view(url="/login/", permanent=False)),
@@ -135,9 +142,10 @@ urlpatterns = [
     re_path(r"^reset-password/(?P<token>[A-Za-z0-9_-]+)/$", reset_password_page, name="reset_password_page"),
     path("verify-email/", verify_email_page, name="verify_email_page"),
     path("account/identity/", login_required(account_identity_page), name="account_identity_page"),
+    path("account/google/unlink/", login_required(unlink_google_identity), name="google_unlink"),
     path("api/auth/browser-token/", browser_api_token, name="browser_api_token"),
     path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/auth/token/refresh/", CustomTokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/register/", register, name="register"),
     path("api/auth/login/", login_view, name="login"),
     path("api/auth/change-password/", change_password, name="change_password"),

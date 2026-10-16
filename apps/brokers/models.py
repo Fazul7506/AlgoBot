@@ -40,7 +40,12 @@ class BrokerAccount(models.Model):
         auth_type=str((self.broker.metadata or {}).get('auth') or '').lower(); requires_oauth=self.broker.broker_type=='deriv' or auth_type=='oauth'
         if not requires_oauth:return 'ready'
         if self.token_status!='active' or self.is_token_expired:return 'credentials_expired'
-        access_token=self.get_access_token()
+        try:
+            access_token=self.get_access_token()
+        except Exception:
+            # Missing keys, key mismatches, and legacy unencrypted fields must
+            # never be treated as a usable broker credential.
+            return 'credentials_unavailable'
         if not access_token or access_token==self.access_token:return 'credentials_unavailable'
         return 'ready'
     @property

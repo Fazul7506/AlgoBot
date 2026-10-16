@@ -11,6 +11,10 @@ from apps.brokers.models import Broker, BrokerAccount, Position
 from core.dashboard_api import DashboardViewSet
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class DashboardAccountSnapshotTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="dashboard-snapshot-test", password="test-password")
@@ -23,7 +27,11 @@ class DashboardAccountSnapshotTests(TestCase):
     def _overview(self):
         request = APIRequestFactory().get("/api/dashboard/account_overview/")
         force_authenticate(request, user=self.user)
-        with patch("core.dashboard_api.get_active_account", return_value=self.account):
+        with (
+            patch("core.dashboard_api.get_active_account", return_value=self.account),
+            patch("core.permissions.has_verified_account_email", new=lambda user: True),
+            patch("core.permissions.has_authorized_broker_connection", new=lambda user: True),
+        ):
             return DashboardViewSet.as_view({"get": "account_overview"})(request)
 
     def test_unsynced_model_defaults_are_not_reported_as_broker_snapshot(self):
@@ -64,7 +72,11 @@ class DashboardAccountSnapshotTests(TestCase):
         )
         request = APIRequestFactory().get("/api/dashboard/performance_summary/")
         force_authenticate(request, user=self.user)
-        with patch("core.dashboard_api.get_active_account", return_value=self.account):
+        with (
+            patch("core.dashboard_api.get_active_account", return_value=self.account),
+            patch("core.permissions.has_verified_account_email", new=lambda user: True),
+            patch("core.permissions.has_authorized_broker_connection", new=lambda user: True),
+        ):
             response = DashboardViewSet.as_view({"get": "performance_summary"})(request)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"]["best_trade"], Decimal("12.50"))

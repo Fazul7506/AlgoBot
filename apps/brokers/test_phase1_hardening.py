@@ -13,6 +13,7 @@ from .services import BrokerRoutingError, MarketDataFreshnessService, OrderManag
 User = get_user_model()
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class TradingFoundationTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='phase1-user', password='test-password')

@@ -39,25 +39,36 @@ class CredentialEncryptionService:
         if payload is None:
             return ''
         text = payload if isinstance(payload, str) else json.dumps(payload, separators=(',', ':'))
-        if self._fernet:
-            try:
-                return self._fernet.encrypt(text.encode('utf-8')).decode('utf-8')
-            except Exception as exc:
-                logger.warning('Fernet encryption failed: %s', exc)
-        return base64.urlsafe_b64encode(text.encode('utf-8')).decode('utf-8')
+        if not self._fernet:
+            # Base64 is reversible encoding, not encryption. Never persist new
+            # broker credentials in plaintext when key material is missing.
+            raise RuntimeError(
+                "CREDENTIALS_ENCRYPTION_KEY must be configured before storing credentials."
+            )
+        try:
+            return self._fernet.encrypt(text.encode('utf-8')).decode('utf-8')
+        except Exception as exc:
+            logger.error("broker_credential_encryption_failed", extra={"error_type": exc.__class__.__name__})
+            raise RuntimeError("Broker credentials could not be encrypted.") from exc
 
     def decrypt(self, token):
         if not token:
             return ''
-        if self._fernet:
-            try:
-                return self._fernet.decrypt(token.encode('utf-8')).decode('utf-8')
-            except InvalidToken:
-                logger.warning('Encrypted payload could not be decrypted with provided key')
-            except Exception as exc:
-                logger.warning('Fernet decryption failed: %s', exc)
+        if not self._fernet:
+            raise RuntimeError(
+                "CREDENTIALS_ENCRYPTION_KEY is required to read stored broker credentials."
+            )
         try:
-            return base64.urlsafe_b64decode(token.encode('utf-8')).decode('utf-8')
+            return self._fernet.decrypt(token.encode('utf-8')).decode('utf-8')
+        except InvalidToken as exc:
+            logger.error("broker_credential_decryption_failed")
+            if str(token).startswith("gAAAA"):
+                raise RuntimeError(
+                    "Stored broker credentials cannot be decrypted with the configured key."
+                ) from exc
+            raise RuntimeError(
+                "Legacy broker credentials must be re-encrypted before they can be used."
+            ) from exc
         except Exception as exc:
-            logger.warning('Base64 fallback decryption failed: %s', exc)
-            return token
+            logger.error("broker_credential_decryption_failed", extra={"error_type": exc.__class__.__name__})
+            raise RuntimeError("Stored broker credentials could not be decrypted.") from exc

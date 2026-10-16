@@ -9,6 +9,7 @@ database or Django environment used by management commands/tests.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from dotenv import dotenv_values
@@ -37,12 +38,19 @@ def _dotenv_value(name: str, default: str = "") -> str:
 
 
 REDIS_URL = _dotenv_value("REDIS_URL", "redis://localhost:6379/0")
-USE_REDIS = _dotenv_value("USE_REDIS", "false").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
+
+# Django test runs must never depend on a shared/external Redis instance.
+# This protects `manage.py test` and pytest even if a developer has
+# USE_REDIS=true in their shell or .env. CI may set DJANGO_TESTING=true
+# explicitly for commands that inspect test settings outside the test runner.
+DJANGO_TESTING = (
+    env_bool("DJANGO_TESTING", False)
+    or "test" in sys.argv[1:]
+    or Path(sys.argv[0]).name in {"pytest", "py.test"}
+)
+USE_REDIS = False if DJANGO_TESTING else _dotenv_value(
+    "USE_REDIS", "false"
+).strip().lower() in {"1", "true", "yes", "on"}
 CELERY_BROKER_URL = _dotenv_value("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = _dotenv_value("CELERY_RESULT_BACKEND", REDIS_URL)
 

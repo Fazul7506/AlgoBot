@@ -4,14 +4,15 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.contrib.auth.password_validation import validate_password
@@ -23,6 +24,7 @@ from core.models import UserProfile, Subscription, BotSettings, PasswordResetTok
 from core.serializers import UserProfileSerializer, SubscriptionSerializer, BotSettingsSerializer
 
 logger = logging.getLogger(__name__)
+from core.auth_rate_limit import allow_auth_attempt
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -52,7 +54,18 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             matches = User.objects.filter(**{f'{self.username_field}__iexact': identifier})
             if matches.count() == 1:
                 attrs[self.username_field] = matches.first().get_username()
-        return super().validate(attrs)
+        data = super().validate(attrs)
+        profile = UserProfile.objects.filter(user=self.user).first()
+        if not profile or not profile.email_verified:
+            raise serializers.ValidationError("Please verify your email before signing in.")
+        from core.broker_onboarding import has_authorized_broker_connection
+        from django.urls import reverse
+        broker_setup_required = not has_authorized_broker_connection(self.user)
+        data["broker_setup_required"] = broker_setup_required
+        data["next_url"] = reverse(
+            "broker_marketplace_page" if broker_setup_required else "dashboard_page"
+        )
+        return data
 
     @classmethod
     def get_token(cls, user):
@@ -62,8 +75,65 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
 
+class CustomTokenRefreshSerializer(TokenRefreshSerializer):
+    """Refresh only active accounts whose local email remains verified."""
+
+    def validate(self, attrs):
+        raw_refresh = attrs.get("refresh")
+        try:
+            refresh = RefreshToken(raw_refresh)
+            user_id = refresh.get(api_settings.USER_ID_CLAIM)
+            user = User.objects.filter(
+                **{api_settings.USER_ID_FIELD: user_id},
+                is_active=True,
+            ).first()
+        except (TokenError, TypeError, ValueError):
+            user = None
+        if user is None:
+            raise serializers.ValidationError("The refresh token is invalid or the account is inactive.")
+
+        from core.broker_onboarding import has_verified_account_email
+        if not has_verified_account_email(user):
+            raise serializers.ValidationError({
+                "code": "email_verification_required",
+                "detail": "Verify your AlgoBot email before refreshing workspace credentials.",
+            })
+
+        # Let SimpleJWT perform expiry, blacklist, rotation and token-family
+        # validation after the account eligibility checks above.
+        data = super().validate(attrs)
+        from core.broker_onboarding import has_authorized_broker_connection
+        broker_setup_required = not has_authorized_broker_connection(user)
+        data["broker_setup_required"] = broker_setup_required
+        from django.urls import reverse
+        data["next_url"] = reverse(
+            "broker_marketplace_page" if broker_setup_required else "dashboard_page"
+        )
+        return data
+
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        identifier = str(
+            request.data.get("identifier")
+            or request.data.get("email")
+            or request.data.get("username")
+            or ""
+        ).strip()
+        identity_allowed = allow_auth_attempt(
+            request, "jwt-token-login", identifier, limit=10, window=900
+        )
+        ip_allowed = allow_auth_attempt(
+            request, "jwt-token-login-ip", "", limit=30, window=900
+        )
+        if not identity_allowed or not ip_allowed:
+            return Response(
+                {"detail": "Too many sign-in attempts. Please wait and try again."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        return super().post(request, *args, **kwargs)
 
 
 class UserProfileViewSet(viewsets.ModelViewSet):
@@ -129,10 +199,23 @@ def browser_api_token(request):
     client-side in memory. Subsequent API requests use Bearer authentication,
     so browser-session API mutations do not depend on Django CSRF cookies.
     """
+    from core.broker_onboarding import has_verified_account_email
+    if not has_verified_account_email(request.user):
+        return Response({
+            'status': 'error',
+            'code': 'email_verification_required',
+            'message': 'Verify your AlgoBot email before requesting workspace API credentials.',
+            'next_url': '/verify-email/',
+        }, status=status.HTTP_403_FORBIDDEN)
     refresh = RefreshToken.for_user(request.user)
+    from core.broker_onboarding import has_authorized_broker_connection
+    from django.urls import reverse
+    broker_setup_required = not has_authorized_broker_connection(request.user)
     return Response({
         'access': str(refresh.access_token),
         'expires_in': int(settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME', timedelta(hours=1)).total_seconds()),
+        'broker_setup_required': broker_setup_required,
+        'next_url': reverse('broker_marketplace_page' if broker_setup_required else 'dashboard_page'),
     }, status=status.HTTP_200_OK)
 
 
@@ -146,6 +229,11 @@ def register(request):
     password = request.data.get('password') or ''
     password_confirm = request.data.get('password_confirm') or ''
 
+    registration_identifier = email or username.lower()
+    identity_allowed = allow_auth_attempt(request, 'api-registration-identity', registration_identifier, limit=5, window=3600)
+    ip_allowed = allow_auth_attempt(request, 'api-registration-ip', '', limit=10, window=3600)
+    if not identity_allowed or not ip_allowed:
+        return Response({'status': 'error', 'message': 'Too many registration attempts. Please try again later.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
     if not username or not email or not password:
         return Response({'status': 'error', 'message': 'Username, email, and password are required'}, status=status.HTTP_400_BAD_REQUEST)
     if password != password_confirm:
@@ -156,10 +244,14 @@ def register(request):
         validate_password(password, user=User(username=username, email=email))
     except ValidationError as exc:
         return Response({'status': 'error', 'message': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
-    if User.objects.filter(username__iexact=username).exists():
-        return Response({'status': 'error', 'message': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
-    if User.objects.filter(email__iexact=email).exists():
-        return Response({'status': 'error', 'message': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
+    if (
+        User.objects.filter(username__iexact=username).exists()
+        or User.objects.filter(email__iexact=email).exists()
+    ):
+        return Response(
+            {'status': 'error', 'message': 'An account could not be created with those details. If you already have an account, sign in or use account recovery.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     try:
         with transaction.atomic():
@@ -169,7 +261,7 @@ def register(request):
             BotSettings.objects.get_or_create(user=user)
     except IntegrityError:
         logger.info('user_registration_conflict')
-        return Response({'status': 'error', 'message': 'Username or email already registered'}, status=status.HTTP_409_CONFLICT)
+        return Response({'status': 'error', 'message': 'An account could not be created with those details. If you already have an account, sign in or use account recovery.'}, status=status.HTTP_409_CONFLICT)
     except Exception:
         logger.exception('user_registration_failed')
         return Response({'status': 'error', 'message': 'Registration could not be completed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -193,6 +285,10 @@ def login_view(request):
     """Authenticate by username or a unique email address."""
     identifier = str(request.data.get('identifier') or request.data.get('username') or request.data.get('email') or '').strip()
     password = request.data.get('password') or ''
+    identifier_allowed = allow_auth_attempt(request, 'api-password-login', identifier, limit=10, window=900)
+    ip_allowed = allow_auth_attempt(request, 'api-password-login-ip', '', limit=30, window=900)
+    if not identifier_allowed or not ip_allowed:
+        return Response({'status': 'error', 'message': 'Too many sign-in attempts. Please wait and try again.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
     if not identifier or not password:
         return Response({'status': 'error', 'message': 'Username/email and password are required'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -215,14 +311,26 @@ def login_view(request):
         # Use the same public response for unknown users and bad passwords.
         return Response({'status': 'error', 'message': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
+    profile = UserProfile.objects.filter(user=user).first()
+    if not profile or not profile.email_verified:
+        return Response(
+            {'status': 'error', 'message': 'Please verify your email before signing in.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     UserProfile.objects.update_or_create(user=user, defaults={'last_login_at': timezone.now()})
     refresh = RefreshToken.for_user(user)
+    from core.broker_onboarding import has_authorized_broker_connection
+    from django.urls import reverse
+    broker_setup_required = not has_authorized_broker_connection(user)
     logger.info('user_login_succeeded', extra={'user_id': user.pk})
     return Response({
         'status': 'success',
         'access': str(refresh.access_token),
         'refresh': str(refresh),
         'user': {'id': user.id, 'username': user.username, 'email': user.email},
+        'broker_setup_required': broker_setup_required,
+        'next_url': reverse('broker_marketplace_page' if broker_setup_required else 'dashboard_page'),
     }, status=status.HTTP_200_OK)
 
 

@@ -1,6 +1,7 @@
 import asyncio
 from django.core.cache import cache
 from rest_framework.decorators import api_view, permission_classes
+from core.permissions import BrokerOnboardingRequired
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -43,7 +44,7 @@ async def _bounded_market_data(adapter, symbol, timeout=7.0):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def markets(request):
     account = _connected_account(request.user, request=request)
     if not account:
@@ -63,7 +64,7 @@ def markets(request):
     })
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def symbols(request):
     account = _connected_account(request.user, request=request)
     if not account:
@@ -84,13 +85,13 @@ def symbols(request):
     })
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def broker_catalogue(request):
     """Compatibility alias for the canonical broker-native catalogue."""
     return broker_native.catalogue(request)
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def symbol_detail(request, symbol):
     account = _connected_account(request.user, request=request)
     if not account:
@@ -141,7 +142,7 @@ def snapshot(request):
     return Response(MarketSnapshotSerializer(qs[:_limit(request, default=100, maximum=500)], many=True).data)
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def sync_symbols(request):
     account = _connected_account(request.user, request=request)
     if not account: return Response({"status":"error","code":"NO_CONNECTED_BROKER","detail":"Connect a broker before synchronizing its market universe."}, status=status.HTTP_409_CONFLICT)
@@ -154,7 +155,7 @@ def sync_symbols(request):
         return Response({"status":"error","code":"BROKER_MARKET_SYNC_FAILED","detail":"Live broker market catalogue is temporarily unavailable and no cached catalogue exists."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 @api_view(["GET", "POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def broker_tick(request):
     symbol = str((request.data.get("symbol") if request.method == "POST" else request.query_params.get("symbol")) or "").strip()
     if not symbol: return Response({"detail":"symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -174,7 +175,7 @@ def broker_tick(request):
         cached = _last_known_tick(symbol); return _stale_tick_response(cached, account) if cached else Response({"status":"error","code":"BROKER_TICK_FAILED","detail":"Broker market data request failed."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def broker_chart_capabilities(request):
     account = _connected_account(request.user, request=request)
     if not account: return Response({"detail":"Connect a broker before loading chart capabilities."}, status=status.HTTP_409_CONFLICT)
@@ -194,7 +195,7 @@ def broker_chart_capabilities(request):
 def awaitable_to_sync(awaitable): return asyncio.run(asyncio.wait_for(awaitable, timeout=7.0))
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def broker_chart_history(request):
     symbol = str(request.query_params.get("symbol") or "").strip()
     mode = str(request.query_params.get("mode") or "ticks").lower().strip()

@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from .models import CopyProvider, CopyFollower, CopySubscription, CopyTrade
 from .services import CopyTradingEngine, ProviderDiscoveryService
+from core.broker_onboarding import require_broker_onboarding
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ def _follower_dict(f):
 
 
 @login_required
+@require_broker_onboarding
 @require_http_methods(["GET"])
 def dashboard(request):
     tenant = _tenant(request)
@@ -88,6 +90,7 @@ def dashboard(request):
 
 
 @login_required
+@require_broker_onboarding
 @require_http_methods(["POST"])
 def subscribe(request):
     try:
@@ -146,6 +149,7 @@ def subscribe(request):
 
 
 @login_required
+@require_broker_onboarding
 @require_http_methods(["POST"])
 def pause(request):
     tenant = _tenant(request)
@@ -159,6 +163,7 @@ def pause(request):
 
 
 @login_required
+@require_broker_onboarding
 @require_http_methods(["POST"])
 def resume(request):
     tenant = _tenant(request)
@@ -172,6 +177,7 @@ def resume(request):
 
 
 @login_required
+@require_broker_onboarding
 @require_http_methods(["POST"])
 def stop(request):
     tenant = _tenant(request)
@@ -185,6 +191,7 @@ def stop(request):
 
 
 @login_required
+@require_broker_onboarding
 @require_http_methods(["POST"])
 def risk_settings(request):
     try:
@@ -211,6 +218,7 @@ def risk_settings(request):
 
 
 @login_required
+@require_broker_onboarding
 @require_http_methods(["POST"])
 def test_copy(request):
     tenant = _tenant(request)

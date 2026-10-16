@@ -4,9 +4,9 @@ import requests
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login as auth_login
-from django.contrib.auth.models import User
 from django.shortcuts import redirect
-from apps.brokers.models import Broker, BrokerAccount
+from django.utils.http import url_has_allowed_host_and_scheme
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from core.account_context import select_account
 from core.models import BotSettings, Subscription, UserProfile
 from core.services.oauth_service import DerivOAuthService
@@ -33,10 +33,23 @@ def _fail(request, message, event, **extra):
     authenticated = bool(request.user.is_authenticated)
     DerivOAuthService.clear_oauth_session(request)
     messages.error(request, message)
-    return redirect("broker_marketplace_page" if authenticated else "broker_connect_page")
+    return redirect("broker_marketplace_page" if authenticated else "login_page")
 
 
 def callback(request):
+    # Deriv OAuth connects a broker to an existing verified AlgoBot account; it
+    # is not a substitute for local registration, email verification, or login.
+    if not request.user.is_authenticated:
+        return _fail(
+            request,
+            "Sign in to your verified AlgoBot account before connecting Deriv. Broker authorization cannot create or sign in to an AlgoBot account.",
+            "deriv_oauth_requires_local_account",
+        )
+    from core.broker_onboarding import has_verified_account_email
+    if not has_verified_account_email(request.user):
+        DerivOAuthService.clear_oauth_session(request)
+        messages.info(request, "Verify your AlgoBot email before connecting Deriv.")
+        return redirect("verify_email_page")
     if request.GET.get("error"):
         return _fail(request, "Deriv sign-in was cancelled or rejected. You are still in Broker Management; start a new connection when ready.", "deriv_oauth_provider_error")
     received_state = request.GET.get("state")
@@ -103,32 +116,17 @@ def callback(request):
     elif not identity_loginid and not websocket_verification_error:
         websocket_verification_error = "identity_missing"
 
-    # An anonymous OAuth callback is an account sign-in, not merely a broker
-    # connection. Require a live, matching provider identity before creating or
-    # reusing a local user; REST account-list data alone cannot authenticate a
-    # person into an existing AlgoBot account.
     if websocket_verification_error == "identity_mismatch":
         return _fail(
             request,
-            "Deriv verified a different account identity. No AlgoBot account was signed in or changed; retry from the correct broker account.",
+            "Deriv verified a different account identity. No broker connection was changed; retry from the correct broker account.",
             "deriv_oauth_identity_mismatch",
-        )
-    if not request.user.is_authenticated and (
-        websocket_verification_error
-        or not identity_loginid
-        or deriv_identity.get("user_id") in (None, "")
-    ):
-        return _fail(
-            request,
-            "AlgoBot could not securely verify your Deriv identity. No account was signed in or linked. Please retry, or sign in to AlgoBot first and connect Deriv from Broker Management.",
-            "deriv_oauth_anonymous_identity_unverified",
-            error=websocket_verification_error or "identity_fields_missing",
         )
 
     broker, _ = Broker.objects.get_or_create(broker_type="deriv", defaults={"name":"Deriv","status":"active","supports_live":True,"websocket_endpoint":settings.DERIV_AUTH_WS_BASE_URL})
-    # Deriv's provider-issued user_id is the stable identity across that user's
-    # authorized DEMO/REAL login IDs. Reuse the owning AlgoBot user when that
-    # identity was previously verified, rather than creating one user per account.
+    # Deriv's provider-issued user_id is a stable ownership signal across a
+    # user's DEMO/REAL login IDs. It may confirm that an existing account is
+    # already owned by this local user, but never authenticates a local user.
     identity_user_id = deriv_identity.get("user_id")
     identity_account = None
     if identity_user_id not in (None, ""):
@@ -141,34 +139,22 @@ def callback(request):
             .order_by("id")
             .first()
         )
-    if request.user.is_authenticated:
-        user = request.user
-        existing_selected = BrokerAccount.objects.filter(broker=broker, account_id=selected_account_id).select_related("user").first()
-        if existing_selected and existing_selected.user_id != user.id:
-            return _fail(request, "That Deriv account is already connected to another AlgoBot user. Your dashboard was not opened.", "deriv_oauth_account_ownership_conflict")
-        if identity_account and identity_account.user_id != user.id:
-            return _fail(request, "This Deriv identity is already linked to another AlgoBot user. Your dashboard was not opened.", "deriv_oauth_identity_ownership_conflict")
-    else:
-        existing_selected = BrokerAccount.objects.filter(broker=broker, account_id=selected_account_id).select_related("user").first()
-        if existing_selected and identity_account and existing_selected.user_id != identity_account.user_id:
-            return _fail(request, "Deriv account ownership does not match the previously verified provider identity. Your dashboard was not opened.", "deriv_oauth_identity_account_conflict")
-        if existing_selected:
-            # Never turn knowledge of a broker login ID into local account
-            # authentication. Reuse an existing AlgoBot identity only when the
-            # verified stable Deriv user ID already maps to that same owner.
-            if not identity_account or identity_account.user_id != existing_selected.user_id:
-                return _fail(
-                    request,
-                    "This Deriv account is already linked. Sign in to the existing AlgoBot account before reconnecting it.",
-                    "deriv_oauth_existing_account_requires_local_auth",
-                )
-            user = existing_selected.user
-        elif identity_account:
-            user = identity_account.user
-        else:
-            user = User.objects.create(username=f"deriv_{selected_account_id}", first_name="Deriv")
-            user.set_unusable_password()
-            user.save(update_fields=["password"])
+    user = request.user
+    existing_selected = BrokerAccount.objects.filter(
+        broker=broker, account_id=selected_account_id
+    ).select_related("user").first()
+    if existing_selected and existing_selected.user_id != user.id:
+        return _fail(
+            request,
+            "That Deriv account is already connected to another AlgoBot user. Your dashboard was not opened.",
+            "deriv_oauth_account_ownership_conflict",
+        )
+    if identity_account and identity_account.user_id != user.id:
+        return _fail(
+            request,
+            "This Deriv identity is already linked to another AlgoBot user. Your dashboard was not opened.",
+            "deriv_oauth_identity_ownership_conflict",
+        )
     # Explicitly bind the OAuth user to Django's browser session backend.
     # This prevents the post-OAuth session from becoming anonymous and causing
     # the broker API to return an authentication-credentials error.
@@ -201,13 +187,73 @@ def callback(request):
             if current_id == selected_account_id and identity_loginid == selected_account_id
             else "not_checked"
         )
-        persisted = _persist_deriv_account(user=user, broker=broker, record=record, access_token=access_token, refresh_token=refresh_token, expires_at=expires_at, websocket_balance={}, websocket_health=websocket_health, deriv_identity=deriv_identity)
+        try:
+            persisted = _persist_deriv_account(
+                user=user, broker=broker, record=record,
+                access_token=access_token, refresh_token=refresh_token,
+                expires_at=expires_at, websocket_balance={},
+                websocket_health=websocket_health, deriv_identity=deriv_identity,
+            )
+        except Exception as exc:
+            logger.error(
+                "deriv_oauth_account_persistence_failed",
+                extra={"error_type": exc.__class__.__name__, "account_id": current_id},
+            )
+            return _fail(
+                request,
+                "AlgoBot could not securely save the broker connection. Check the deployment's credential-encryption configuration and retry from Broker Management.",
+                "deriv_oauth_account_persistence_failed",
+                error_type=exc.__class__.__name__,
+            )
+        if current_id == selected_account_id and persisted is None:
+            # The globally unique broker/account key may have been claimed by
+            # another user between the preflight ownership check and this write.
+            # Fail closed rather than dereferencing None or transferring ownership.
+            return _fail(
+                request,
+                "That Deriv account could not be attached to this AlgoBot user. Refresh Broker Management and retry.",
+                "deriv_oauth_selected_account_unavailable",
+            )
         if persisted:
             persisted_ids.append(current_id)
             if current_id == selected_account_id:
                 selected_broker_account = persisted
     if selected_broker_account is None:
         return _fail(request, "Deriv authorization succeeded, but AlgoBot could not persist the selected trading account. Your dashboard was not opened.", "deriv_oauth_selected_account_not_persisted")
+    # Establish and persist the canonical broker connection only after the provider
+    # identity check succeeded. OAuth token exchange by itself is not enough to
+    # unlock the dashboard or report the broker as connected.
+    if not websocket_verification_error:
+        try:
+            from asgiref.sync import async_to_sync
+            from apps.brokers.services import BrokerConnectionService
+            async_to_sync(BrokerConnectionService().connect)(broker, selected_broker_account)
+            selected_broker_account.refresh_from_db()
+        except Exception as exc:
+            websocket_verification_error = exc.__class__.__name__
+            # The preliminary identity probe is not enough if the canonical
+            # adapter cannot establish a usable authenticated connection.
+            BrokerConnection.objects.filter(broker_account=selected_broker_account).update(
+                status="degraded",
+                last_ping=None,
+                heartbeat={
+                    "oauth_verified": True,
+                    "websocket_health": "verified",
+                    "connection_validation": "failed",
+                },
+            )
+            selected_broker_account.refresh_from_db()
+            logger.warning(
+                "deriv_oauth_connection_validation_failed",
+                extra={"error": websocket_verification_error},
+            )
+
+    if selected_broker_account is None:
+        return _fail(
+            request,
+            "AlgoBot could not securely persist the selected Deriv account. No dashboard access was granted.",
+            "deriv_oauth_selected_account_unavailable",
+        )
     if selected_broker_account.is_connection_eligible:
         select_account(request, selected_broker_account)
     DerivOAuthService.clear_oauth_session(request)
@@ -224,4 +270,11 @@ def callback(request):
             f"Deriv account {selected_account_id} was authorized and its WebSocket identity verified. "
             "Refresh the dashboard to load the latest broker snapshot.",
         )
+    if selected_broker_account.is_connection_eligible:
+        requested = request.session.pop("broker_onboarding_next", "")
+        if requested and url_has_allowed_host_and_scheme(
+            requested, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        ) and not requested.startswith(("/brokers/", "/auth/google/", "/login/", "/register/")):
+            return redirect(requested)
+        return redirect("dashboard_page")
     return redirect("broker_marketplace_page")

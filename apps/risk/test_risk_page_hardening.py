@@ -2,11 +2,20 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from unittest.mock import patch
 
 from apps.brokers.models import Broker, BrokerAccount, Order as BrokerOrder
 from apps.risk.models import RiskAssessment, RiskProfile
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class RiskPageHardeningTests(TestCase):
     def setUp(self):
         User = get_user_model()

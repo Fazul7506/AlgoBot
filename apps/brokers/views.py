@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Prefetch
 from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.exceptions import APIException
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from core.api_authentication import BrokerGateJWTAuthentication as JWTAuthentication
 from core.api_authentication import BrowserSessionAuthentication
 from core.billing_entitlements import check, effective_plan
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
@@ -14,6 +14,7 @@ from .serializers import *
 from .services import BrokerConnectionService, ExecutionEngine, SynchronizationService
 from .exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerRoutingError, BrokerOrderError
 from core.account_context import select_account, get_active_account
+from core.permissions import BrokerOnboardingRequired
 logger=logging.getLogger(__name__)
 BROKER_CONNECT_TIMEOUT_SECONDS=30.0
 BROKER_SECONDARY_VERIFY_TIMEOUT_SECONDS=5.0
@@ -119,7 +120,7 @@ class BrokerConnectionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class=BrokerConnectionSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):return BrokerConnection.objects.filter(broker_account__user=self.request.user).select_related('broker','broker_account').order_by('-updated_at')
 class BrokerOrderViewSet(viewsets.ModelViewSet):
-    serializer_class=OrderSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
+    serializer_class=OrderSerializer;permission_classes=[permissions.IsAuthenticated, BrokerOnboardingRequired];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):
         qs=Order.objects.filter(user=self.request.user)
         account=get_active_account(self.request.user,request=self.request)
@@ -138,17 +139,17 @@ class BrokerOrderViewSet(viewsets.ModelViewSet):
         except BrokerOrderError as exc:return response.Response({'detail':str(exc),'status':'rejected','code':'BROKER_ORDER_REJECTED'},status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         return response.Response(ExecutionReportSerializer(report).data,status=status.HTTP_201_CREATED)
 class ExecutionReportViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=ExecutionReportSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
+    serializer_class=ExecutionReportSerializer;permission_classes=[permissions.IsAuthenticated, BrokerOnboardingRequired];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):return ExecutionReport.objects.filter(order__user=self.request.user)
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=PositionSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
+    serializer_class=PositionSerializer;permission_classes=[permissions.IsAuthenticated, BrokerOnboardingRequired];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):
         account=get_active_account(self.request.user,request=self.request)
         return Position.objects.filter(account=account) if account else Position.objects.none()
     @decorators.action(detail=False,methods=['get'])
     def open(self,request):return response.Response(self.get_serializer(self.get_queryset().filter(status='open'),many=True).data)
 class TradeReconciliationViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=TradeReconciliationSerializer;permission_classes=[permissions.IsAuthenticated];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
+    serializer_class=TradeReconciliationSerializer;permission_classes=[permissions.IsAuthenticated, BrokerOnboardingRequired];authentication_classes=[BrowserSessionAuthentication,JWTAuthentication]
     def get_queryset(self):
         # Reconciliation payloads can contain account and execution identifiers. A broker-level
         # filter leaks other customers' trades when they use the same provider; scope by the

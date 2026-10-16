@@ -4,6 +4,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from core.models import UserProfile
+
 
 class SafeDerivOAuthCallbackTests(TestCase):
     @override_settings(
@@ -14,8 +16,7 @@ class SafeDerivOAuthCallbackTests(TestCase):
         response = self.client.get(reverse("callback") + "?error=access_denied")
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("broker_connect_page"))
-        self.assertNotIn("/login/", response.url)
+        self.assertEqual(response.url, reverse("login_page"))
         self.assertNotIn("/dashboard/", response.url)
 
     @override_settings(
@@ -24,15 +25,15 @@ class SafeDerivOAuthCallbackTests(TestCase):
     )
     def test_provider_error_keeps_authenticated_user_in_broker_management(self):
         user = get_user_model().objects.create_user(
-            username="broker-failure-user", password="pass12345"
+            username="broker-failure-user", email="broker-failure@example.test", password="pass12345"
         )
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
         self.client.force_login(user)
 
         response = self.client.get(reverse("callback") + "?error=access_denied")
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("broker_marketplace_page"))
-        self.assertNotIn("/login/", response.url)
         self.assertNotIn("/dashboard/", response.url)
 
     @override_settings(
@@ -51,8 +52,8 @@ class SafeDerivOAuthCallbackTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("broker_connect_page"))
-        self.assertNotIn("/login/", response.url)
+        self.assertEqual(response.url, reverse("login_page"))
+        self.assertEqual(response.url, reverse("login_page"))
         self.assertNotIn("/dashboard/", response.url)
 
     @override_settings(
@@ -76,8 +77,9 @@ class SafeDerivOAuthCallbackTests(TestCase):
         self, exchange_token, verify_account
     ):
         user = get_user_model().objects.create_user(
-            username="broker-verification-failure", password="pass12345"
+            username="broker-verification-failure", email="broker-verification-failure@example.test", password="pass12345"
         )
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
         self.client.force_login(user)
         session = self.client.session
         session["oauth_state"] = "expected-state"

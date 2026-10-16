@@ -111,7 +111,7 @@ def disconnect_deriv(request):
             if str(request.session.get('active_broker_account_id') or '') == str(account.pk):
                 clear_selected_account(request)
         logger.info('deriv_oauth_disconnected',extra={'user_id':request.user.id,'account_id':account.account_id})
-        return Response({'status':'success','message':'Deriv account disconnected successfully'},status=status.HTTP_200_OK)
+        return Response({'status':'success','message':'Deriv was disconnected from AlgoBot and locally stored credentials were erased. Provider-side authorization revocation must be completed in Deriv account settings because this integration does not currently use a documented provider revocation endpoint.'},status=status.HTTP_200_OK)
     except Exception as exc:
         logger.exception('deriv_oauth_disconnect_failed',extra={'error':str(exc)})
         return Response({'status':'error','message':'Failed to disconnect Deriv account'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -122,7 +122,11 @@ def disconnect_deriv(request):
 def refresh_deriv_token(request):
     account=_account(request)
     if not account: return Response({'status':'error','message':'No Deriv account connected. Please reconnect your Deriv account.'},status=status.HTTP_404_NOT_FOUND)
-    refresh_token=account.get_refresh_token()
+    try:
+        refresh_token=account.get_refresh_token()
+    except Exception as exc:
+        logger.warning('deriv_oauth_refresh_credentials_unreadable', extra={'user_id':request.user.pk,'broker_account_id':account.pk,'error_type':exc.__class__.__name__})
+        return Response({'status':'error','message':'Stored broker credentials cannot be read securely. Reauthorize the broker connection.'},status=status.HTTP_409_CONFLICT)
     if not refresh_token: return Response({'status':'error','message':'No refresh token available. Please reconnect your Deriv account.'},status=status.HTTP_400_BAD_REQUEST)
     try:
         success,token_data,error=DerivOAuthService.refresh_access_token(refresh_token)
@@ -161,19 +165,25 @@ def deriv_account_status(request):
 @permission_classes([IsAuthenticated])
 def reconnect_deriv(request):
     account=_account(request)
-    if not account: return Response({'status':'success','message':'No Deriv account connected','requires_oauth':True,'oauth_url':'/brokers/connect/?broker=deriv'},status=status.HTTP_200_OK)
-    if account.token_status=='active' and not account.is_token_expired and account.status=='active': return Response({'status':'success','message':'Account is already connected','requires_oauth':False},status=status.HTTP_200_OK)
-    refresh_token=account.get_refresh_token()
-    if refresh_token:
-        success,token_data,error=DerivOAuthService.refresh_access_token(refresh_token)
-        if success:
-            valid,_=DerivOAuthService.validate_token_response(token_data)
-            if valid:
-                _persist_refreshed_credentials(account, token_data)
-                account.refresh_from_db()
-                # Do not claim a live reconnection from token rotation alone.
-                BrokerConnection.objects.filter(broker_account=account).update(
-                    status='degraded', last_ping=None, updated_at=timezone.now()
-                )
-                return Response({'status':'success','message':'Credentials refreshed; synchronize the account to verify its live connection.','connection_status':'degraded','requires_connection_check':True,'requires_oauth':False},status=status.HTTP_200_OK)
+    if not account:
+        return Response({'status':'success','message':'No Deriv account connected','requires_oauth':True,'oauth_url':'/brokers/connect/?broker=deriv'},status=status.HTTP_200_OK)
+    if account.token_status=='active' and not account.is_token_expired and account.status=='active':
+        return Response({'status':'success','message':'Account is already connected','requires_oauth':False},status=status.HTTP_200_OK)
+    try:
+        refresh_token=account.get_refresh_token()
+        if refresh_token:
+            success,token_data,error=DerivOAuthService.refresh_access_token(refresh_token)
+            if success:
+                valid,_=DerivOAuthService.validate_token_response(token_data)
+                if valid:
+                    _persist_refreshed_credentials(account, token_data)
+                    account.refresh_from_db()
+                    # Token rotation is not proof of a healthy WebSocket session.
+                    BrokerConnection.objects.filter(broker_account=account).update(
+                        status='degraded', last_ping=None, updated_at=timezone.now()
+                    )
+                    return Response({'status':'success','message':'Credentials refreshed; synchronize the account to verify its live connection.','connection_status':'degraded','requires_connection_check':True,'requires_oauth':False},status=status.HTTP_200_OK)
+    except Exception as exc:
+        logger.warning('deriv_oauth_reconnect_credentials_unavailable', extra={'user_id':request.user.pk,'broker_account_id':account.pk,'error_type':exc.__class__.__name__})
+        return Response({'status':'error','message':'Stored broker credentials cannot be read or refreshed securely. Reauthorize the broker connection.','requires_oauth':True,'oauth_url':'/brokers/connect/?broker=deriv'},status=status.HTTP_409_CONFLICT)
     return Response({'status':'success','message':'Full re-authentication required','requires_oauth':True,'oauth_url':'/brokers/connect/?broker=deriv'},status=status.HTTP_200_OK)

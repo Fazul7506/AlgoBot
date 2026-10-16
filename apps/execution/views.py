@@ -22,6 +22,7 @@ from core.account_context import get_active_account
 from .trade_history import DerivTradeHistoryService, TradeHistorySyncError
 from apps.brokers.position_sync import BrokerPositionSyncService, PositionSyncError
 from apps.brokers.services import BrokerRegistry
+from core.permissions import BrokerOnboardingRequired
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def _run_in_isolated_context(coro):
 
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
     def get_queryset(self):
         queryset = Order.objects.filter(user=self.request.user)
         if str(self.request.query_params.get('account_scope') or '').lower() == 'active':
@@ -296,7 +297,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PositionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def get_queryset(self):
         account = get_active_account(self.request.user, request=self.request)
@@ -456,10 +457,10 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
                 'data':[],
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 class ExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=ExecutionLogSerializer; permission_classes=[permissions.IsAuthenticated]
+    serializer_class=ExecutionLogSerializer; permission_classes=[permissions.IsAuthenticated, BrokerOnboardingRequired]
     def get_queryset(self): return ExecutionLog.objects.filter(order__user=self.request.user)
 class ReconciliationEventViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class=ReconciliationEventSerializer; permission_classes=[permissions.IsAuthenticated]
+    serializer_class=ReconciliationEventSerializer; permission_classes=[permissions.IsAuthenticated, BrokerOnboardingRequired]
     def get_queryset(self):
         qs=ReconciliationEvent.objects.filter(user=self.request.user).select_related('broker_account','reviewed_by'); status_value=self.request.query_params.get('status'); broker_account=self.request.query_params.get('broker_account')
         if status_value in {ReconciliationEvent.STATUS_OPEN,ReconciliationEvent.STATUS_REVIEWED}: qs=qs.filter(status=status_value)
@@ -481,7 +482,7 @@ class TradeHistoryPagination(PageNumberPagination):
 class TradeHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     """Serve only broker-synchronized history for the authenticated active account."""
     serializer_class = BrokerTradeHistorySerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
     pagination_class = TradeHistoryPagination
 
     def get_queryset(self):

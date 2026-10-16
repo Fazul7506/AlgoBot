@@ -1,3 +1,4 @@
+from core.permissions import BrokerOnboardingRequired
 from rest_framework import generics, permissions, throttling
 from rest_framework.response import Response
 
@@ -28,14 +29,14 @@ class AnalysisThrottle(throttling.UserRateThrottle):
 
 
 class IndicatorListAPIView(generics.ListAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
     throttle_classes = [AnalysisThrottle]
     serializer_class = IndicatorSerializer
     queryset = Indicator.objects.all()
 
 
 class SymbolIndicatorAPIView(generics.ListAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
     throttle_classes = [AnalysisThrottle]
     serializer_class = IndicatorValueSerializer
 
@@ -44,7 +45,7 @@ class SymbolIndicatorAPIView(generics.ListAPIView):
 
 
 class TrendAPIView(generics.GenericAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
     throttle_classes = [AnalysisThrottle]
 
     def get(self, request):
@@ -52,7 +53,7 @@ class TrendAPIView(generics.GenericAPIView):
 
 
 class PatternAPIView(generics.GenericAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
     throttle_classes = [AnalysisThrottle]
 
     def get(self, request):
@@ -60,7 +61,7 @@ class PatternAPIView(generics.GenericAPIView):
 
 
 class SupportResistanceAPIView(generics.GenericAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
     throttle_classes = [AnalysisThrottle]
 
     def get(self, request):
@@ -68,7 +69,7 @@ class SupportResistanceAPIView(generics.GenericAPIView):
 
 
 class VolatilityAPIView(generics.GenericAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
     throttle_classes = [AnalysisThrottle]
 
     def get(self, request):

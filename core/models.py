@@ -15,6 +15,7 @@ class UserProfile(models.Model):
     timezone = models.CharField(max_length=100, default='UTC')
     email_verified = models.BooleanField(default=False)
     email_verification_token = models.CharField(max_length=255, blank=True)
+    email_verification_token_created_at = models.DateTimeField(null=True, blank=True)
     email_verified_at = models.DateTimeField(null=True, blank=True)
     two_factor_enabled = models.BooleanField(default=False)
     notifications_enabled = models.BooleanField(default=True)
@@ -250,3 +251,32 @@ class PaymentWebhookEvent(models.Model):
 
     def __str__(self):
         return f"{self.provider}:{self.event_key}"
+
+
+class GoogleIdentity(models.Model):
+    """Durable mapping from a verified Google OIDC subject to one AlgoBot user."""
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="google_identities"
+    )
+    provider = models.CharField(max_length=32, default="google")
+    subject = models.CharField(max_length=255)
+    email = models.EmailField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "subject"],
+                name="core_google_provider_subject_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "provider"],
+                name="core_google_user_provider_uniq",
+            ),
+        ]
+        indexes = [models.Index(fields=["user", "provider"], name="core_google_user_prov_idx")]
+
+    def __str__(self):
+        return f"{self.provider} identity for user {self.user_id}"

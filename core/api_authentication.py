@@ -1,13 +1,21 @@
-"""Authentication for browser-facing APIs.
+"""Authentication helpers for browser-facing APIs.
 
-JWT clients authenticate without cookies. Browser-session clients use Django's
-normal SessionAuthentication, including DRF's CSRF enforcement for unsafe
-methods. API routing must not become a CSRF bypass merely because it is JSON.
+Authentication establishes identity; endpoint permissions enforce the
+mandatory broker-onboarding policy only for protected workspace/trading APIs.
+This separation keeps login, broker setup, billing, and developer-management
+flows reachable before a user has connected a broker.
 """
 from rest_framework.authentication import SessionAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
 class BrowserSessionAuthentication(SessionAuthentication):
     """Authenticate browser sessions with Django/DRF CSRF protection."""
+
+    pass
+
+
+class BrokerGateJWTAuthentication(JWTAuthentication):
+    """Compatibility alias; authorization is enforced by DRF permissions."""
 
     pass

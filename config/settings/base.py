@@ -48,14 +48,14 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware", "django.middleware.common.CommonMiddleware", "core.middleware.cloudflare_challenge.CloudflareChallengeQueryMiddleware",
     "core.middleware.wordpress_probe.WordPressProbeMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware", "core.middleware.csrf.APIAwareCsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware", "apps.developer.middleware.DeveloperAPIMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware", "core.middleware.broker_onboarding.BrokerOnboardingMiddleware", "apps.developer.middleware.DeveloperAPIMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware", "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.audit_middleware.AuditMiddleware", "core.middleware.plan_entitlement_middleware.PlanEntitlementMiddleware",
 ]
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "core.api_authentication.BrokerGateJWTAuthentication",
         "core.api_authentication.BrowserSessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],

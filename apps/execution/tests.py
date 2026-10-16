@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, SimpleTestCase
+from unittest.mock import patch
 from django.utils import timezone
 from rest_framework.test import APITestCase, APIRequestFactory, force_authenticate
 
@@ -24,6 +25,16 @@ from .views import OrderViewSet, PositionViewSet
 from .engine import ExecutionEngine
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class OrderSerializerRegressionTests(APITestCase):
     def test_environment_uses_the_model_canonical_account_type(self):
         account = SimpleNamespace(
@@ -92,6 +103,16 @@ class OrderSerializerRegressionTests(APITestCase):
         enqueue.assert_not_called()
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class BrokerAuthoritativePositionTests(APITestCase):
     def _account(self, username):
         user = get_user_model().objects.create_user(username=username, password='test-password')
@@ -407,6 +428,16 @@ class DerivTerminalSafetyTests(SimpleTestCase):
         self.assertFalse(response.data["retryable"])
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class OrderCancellationSafetyTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='order-cancel-safety', password='test-password')

@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from unittest.mock import patch
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -11,6 +12,12 @@ from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from .models import MarketSnapshot, MarketSymbol
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class Phase3MarketIntelligenceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="phase3", password="test-password")

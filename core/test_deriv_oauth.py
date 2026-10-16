@@ -1,8 +1,9 @@
 from urllib.parse import parse_qs, urlparse
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from django.urls import reverse
 
 from apps.brokers.models import BrokerAccount
@@ -15,6 +16,7 @@ from core.services.oauth_service import DerivOAuthService
     DERIV_APP_ID="app",
     DERIV_OAUTH_CLIENT_ID="app",
     DERIV_REDIRECT_URI="http://testserver/callback/",
+    CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key",
 )
 class DerivOAuthTests(TestCase):
     def _oauth_session(self):
@@ -36,10 +38,17 @@ class DerivOAuthTests(TestCase):
         self.assertNotIn("app_id", query)
 
     def test_callback_rejects_state_mismatch_without_restarting_oauth(self):
+        user = User.objects.create_user(
+            username="state-mismatch-user",
+            email="state-mismatch@example.test",
+            password="Local-password-123!secure",
+        )
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
+        self.client.force_login(user)
         self._oauth_session()
         response = self.client.get(reverse("callback"), {"state": "wrong", "code": "abc"})
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("broker_connect_page"))
+        self.assertEqual(response.url, reverse("broker_marketplace_page"))
 
     def _mock_token_exchange(self, post):
         token_response = Mock()
@@ -65,14 +74,23 @@ class DerivOAuthTests(TestCase):
     @patch("core.views_deriv_oauth_safe.requests.get")
     @patch("core.views_deriv_oauth_safe.requests.post")
     def test_callback_persists_account_without_blocking_on_websocket(self, post, get, fetch_identity):
+        local_user = User.objects.create_user(
+            username="existing-deriv-user",
+            email="deriv-user@example.com",
+            password="Local-password-123!secure",
+        )
+        UserProfile.objects.update_or_create(user=local_user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
+        self.client.force_login(local_user)
         self._oauth_session()
         self._mock_token_exchange(post)
         self._mock_account_response(get)
-        result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock):
+            result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(result.status_code, 302)
         self.assertTrue(result.wsgi_request.user.is_authenticated)
-        self.assertEqual(result.url, reverse("broker_marketplace_page"))
-        user = User.objects.get(username="deriv_DOT90004580")
+        self.assertEqual(result.url, reverse("dashboard_page"))
+        user = local_user
+        user.refresh_from_db()
         account = BrokerAccount.objects.get(user=user, account_id="DOT90004580")
         self.assertEqual(account.status, "active")
         self.assertEqual(account.credentials.get("connection_health"), "verified")
@@ -97,7 +115,15 @@ class DerivOAuthTests(TestCase):
     @patch("core.views_deriv_oauth_safe.requests.get")
     @patch("core.views_deriv_oauth_safe.requests.post")
     def test_separate_oauth_sessions_for_same_provider_identity_reuse_algobot_user(self, post, get, fetch_identity):
-        # First OAuth session establishes the provider identity and its owner.
+        # Provider account authorization attaches only to an existing verified
+        # AlgoBot identity; a separate browser session must sign in as that user.
+        local_user = User.objects.create_user(
+            username="multi-account-owner",
+            email="deriv-user@example.com",
+            password="Local-password-123!secure",
+        )
+        UserProfile.objects.update_or_create(user=local_user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
+        self.client.force_login(local_user)
         self._oauth_session()
         self._mock_token_exchange(post)
         self._mock_account_response(get, [{
@@ -108,7 +134,8 @@ class DerivOAuthTests(TestCase):
             "user_id": 12345, "loginid": "DOT90004580",
             "email": "deriv-user@example.com", "fullname": "Deriv User",
         }
-        first = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock):
+            first = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(first.status_code, 302)
         first_account = BrokerAccount.objects.get(account_id="DOT90004580")
         original_user_id = first_account.user_id
@@ -116,6 +143,7 @@ class DerivOAuthTests(TestCase):
         # A separate anonymous browser session authorizing another login ID
         # for the same provider user must not create a duplicate AlgoBot user.
         self.client.logout()
+        self.client.force_login(local_user)
         self._oauth_session()
         self._mock_token_exchange(post)
         self._mock_account_response(get, [{
@@ -126,7 +154,8 @@ class DerivOAuthTests(TestCase):
             "user_id": 12345, "loginid": "CR123456",
             "email": "deriv-user@example.com", "fullname": "Deriv User",
         }
-        second = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock):
+            second = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(second.status_code, 302)
         second_account = BrokerAccount.objects.get(account_id="CR123456")
         self.assertEqual(second_account.user_id, original_user_id)
@@ -140,5 +169,5 @@ class DerivOAuthTests(TestCase):
         self._mock_account_response(get, [])
         result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(result.status_code, 302)
-        self.assertEqual(result.url, reverse("broker_connect_page"))
+        self.assertEqual(result.url, reverse("login_page"))
         self.assertFalse(User.objects.filter(username__startswith="deriv_").exists())

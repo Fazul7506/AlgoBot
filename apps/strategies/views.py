@@ -7,10 +7,11 @@ from .engine import StrategyEngine
 from .services import StrategyService
 from core.account_context import get_active_account
 from core.billing_entitlements import effective_plan
+from core.permissions import BrokerOnboardingRequired
 
 
 class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
     queryset = Strategy.objects.all()
     serializer_class = StrategySerializer
 

@@ -16,6 +16,9 @@
     .links{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;margin-top:22px;font-size:14px}.links a,.secondary{color:#c8d7ff;text-decoration:none}.links a:hover,.secondary:hover{text-decoration:underline}
     .notice{padding:11px 13px;margin:12px 0;border:1px solid var(--line);border-radius:10px;color:var(--muted);overflow-wrap:anywhere}.notice.error{color:var(--danger);border-color:#79434b}.notice.success{color:var(--ok);border-color:#315d4a}
     ul.errors{color:var(--danger);padding-left:20px}small{display:block;color:var(--muted);margin-top:8px}.divider{display:flex;align-items:center;gap:12px;margin:22px 0;color:var(--muted);font-size:12px}.divider:before,.divider:after{content:"";height:1px;flex:1;background:var(--line)}
+    .password-toggle{width:auto;min-width:82px;min-height:42px;margin:8px 0 0;padding:8px 10px;background:#1e3152;color:var(--text);border:1px solid var(--line);font-size:13px}
+    .password-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+    button:disabled{opacity:.7;cursor:wait}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
   </style>
 </head>
@@ -32,20 +35,23 @@
       <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required>
       <button type="submit">Sign in securely</button>
     </form>
-    <div class="links"><a href="{% url 'forgot_password_page' %}">Forgot password?</a><a href="{% url 'register_page' %}">Create an account</a></div>
+    <a class="link-button" href="{% url 'google_login_start' %}{% if next %}?next={{ next|urlencode }}{% endif %}" aria-label="Continue with Google">Continue with Google</a>
+    <div class="links"><a href="{% url 'forgot_password_page' %}">Forgot password?</a><a href="{% url 'register_page' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create an account</a></div>
     <div class="divider">OR CONNECT A BROKER</div><a class="link-button" href="/brokers/connect/?broker=deriv">Continue with Deriv</a>
   {% elif mode == "register" %}
     <h1>Create your account</h1><p class="sub">Your AlgoBot login remains separate from your broker identity.</p>
     {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
     {% if errors %}<ul class="errors">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
     <form method="post" action="{% url 'register_page' %}">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next|default:'' }}">
       <label for="username">Username</label><input id="username" name="username" autocomplete="username" value="{{ username|default:'' }}" minlength="1" maxlength="150" required>
       <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" value="{{ email|default:'' }}" required>
       <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="new-password" required>
       <label for="password_confirm">Confirm password</label><input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password" required>
       <button type="submit">Create account</button>
     </form>
-    <div class="links"><a href="{% url 'login_page' %}">Already registered? Sign in</a><a href="{% url 'verify_email_page' %}">Verify email</a></div>
+    <a class="link-button" href="{% url 'google_login_start' %}" aria-label="Continue with Google">Continue with Google</a>
+    <div class="links"><a href="{% url 'login_page' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Already registered? Sign in</a><a href="{% url 'verify_email_page' %}">Verify email</a></div>
   {% elif mode == "forgot_password" %}
     <h1>Reset your password</h1><p class="sub">Enter your account email. If it matches an active account, we’ll send reset instructions.</p>
     {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
@@ -70,13 +76,50 @@
     <h1>Verify your email</h1><p class="sub">We’ll send a fresh verification link if this email belongs to an unverified AlgoBot account.</p>
     {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
     {% if invalid %}<div class="notice error">That verification link is invalid or has already been used.</div>{% endif %}
-    <form method="post" action="{% url 'verify_email_page' %}">{% csrf_token %}
-      <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" required>
-      <button type="submit">Send verification link</button>
-    </form>
+    {% if confirm_token %}
+      <p class="notice">Confirm that you want to {% if confirm_purpose == "change_email" %}verify and save your new email address{% else %}verify your AlgoBot email address{% endif %}. This step protects the link from being consumed by automatic email scanners.</p>
+      <form method="post" action="{% url 'verify_email_page' %}">{% csrf_token %}
+        <input type="hidden" name="token" value="{{ confirm_token }}">
+        <button type="submit">Confirm email verification</button>
+      </form>
+    {% else %}
+      <form method="post" action="{% url 'verify_email_page' %}">{% csrf_token %}
+        <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" required>
+        <button type="submit">Send verification link</button>
+      </form>
+    {% endif %}
     <div class="links"><a href="{% url 'login_page' %}">Back to sign in</a><a href="{% url 'register_page' %}">Create an account</a></div>
   {% endif %}
   <small>Keep your AlgoBot password private. Broker credentials are managed separately and must never be shared.</small>
 </main>
+<script>
+  document.querySelectorAll('input[type="password"]').forEach((field, index) => {
+    if (!field.id) field.id = 'password-field-' + index;
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'password-toggle';
+    toggle.textContent = 'Show password';
+    toggle.setAttribute('aria-controls', field.id);
+    toggle.setAttribute('aria-label', 'Show password');
+    field.insertAdjacentElement('afterend', toggle);
+    toggle.addEventListener('click', () => {
+      const showing = field.type === 'text';
+      field.type = showing ? 'password' : 'text';
+      toggle.textContent = showing ? 'Show password' : 'Hide password';
+      toggle.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    });
+  });
+  document.querySelectorAll('form').forEach(form => {
+    form.addEventListener('submit', () => {
+      if (!form.checkValidity()) return;
+      const submit = form.querySelector('button[type="submit"]');
+      if (!submit || submit.disabled) return;
+      submit.disabled = true;
+      submit.setAttribute('aria-busy', 'true');
+      submit.dataset.originalLabel = submit.textContent;
+      submit.textContent = 'Please wait…';
+    });
+  });
+</script>
 </body>
 </html>

@@ -1,13 +1,14 @@
 from unittest.mock import AsyncMock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from apps.brokers.exceptions import BrokerConnectionError
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class BrokerConnectionActivationTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='broker-activation-test')

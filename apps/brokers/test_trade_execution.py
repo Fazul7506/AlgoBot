@@ -14,6 +14,7 @@ from apps.brokers.services import ExecutionEngine
 from apps.market_data.models import MarketSnapshot, MarketSymbol
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class CanonicalTradeExecutionTests(TransactionTestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="trade-test", password="test-pass")

@@ -1,4 +1,5 @@
 import re
+from urllib.parse import parse_qs, urlparse
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -16,6 +17,7 @@ from core.models import UserProfile
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     DEFAULT_FROM_EMAIL="noreply@example.com",
     BREVO_API_KEY="",
+    CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
 )
 class BrowserAccountAuthenticationTests(TestCase):
     def test_registration_normalizes_email_and_preserves_password_whitespace(self):
@@ -49,6 +51,10 @@ class BrowserAccountAuthenticationTests(TestCase):
         user = get_user_model().objects.create_user(
             username="mail-login-user", email="mail@example.com", password="A-Strong-Password-2026!"
         )
+        UserProfile.objects.update_or_create(
+            user=user,
+            defaults={"email_verified": True, "email_verified_at": timezone.now()},
+        )
         response = self.client.post("/api/auth/login/", {
             "identifier": "MAIL@EXAMPLE.COM",
             "password": "A-Strong-Password-2026!",
@@ -56,10 +62,29 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["user"]["id"], user.pk)
         self.assertIn("access", response.json())
+        self.assertTrue(response.json()["broker_setup_required"])
+        self.assertEqual(response.json()["next_url"], "/brokers/marketplace/")
+
+    def test_password_api_login_rejects_unverified_account(self):
+        get_user_model().objects.create_user(
+            username="unverified-api-user",
+            email="unverified@example.com",
+            password="A-Strong-Password-2026!",
+        )
+        response = self.client.post("/api/auth/login/", {
+            "identifier": "unverified@example.com",
+            "password": "A-Strong-Password-2026!",
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("access", response.json())
 
     def test_simplejwt_token_endpoint_accepts_email_identifier(self):
         user = get_user_model().objects.create_user(
             username="token-mail-user", email="token@example.com", password="A-Strong-Password-2026!"
+        )
+        UserProfile.objects.update_or_create(
+            user=user,
+            defaults={"email_verified": True, "email_verified_at": timezone.now()},
         )
         response = self.client.post("/api/auth/token/", {
             "email": "TOKEN@EXAMPLE.COM",
@@ -68,6 +93,44 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("access", response.json())
         self.assertIn("refresh", response.json())
+        self.assertTrue(response.json()["broker_setup_required"])
+        self.assertEqual(response.json()["next_url"], "/brokers/marketplace/")
+
+    def test_refresh_token_requires_verified_email_and_reports_broker_setup(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        user = get_user_model().objects.create_user(
+            username="verified-refresh-user",
+            email="verified-refresh@example.com",
+            password="A-Strong-Password-2026!",
+        )
+        UserProfile.objects.update_or_create(
+            user=user,
+            defaults={"email_verified": True, "email_verified_at": timezone.now()},
+        )
+        refresh = RefreshToken.for_user(user)
+        response = self.client.post(
+            "/api/auth/token/refresh/", {"refresh": str(refresh)}, format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.json())
+        self.assertTrue(response.json()["broker_setup_required"])
+        self.assertEqual(response.json()["next_url"], "/brokers/marketplace/")
+
+    def test_refresh_token_rejects_unverified_account(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        user = get_user_model().objects.create_user(
+            username="unverified-refresh-user",
+            email="unverified-refresh@example.com",
+            password="A-Strong-Password-2026!",
+        )
+        refresh = RefreshToken.for_user(user)
+        response = self.client.post(
+            "/api/auth/token/refresh/", {"refresh": str(refresh)}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn("access", response.json())
 
     def test_api_logout_revokes_only_the_authenticated_users_refresh_token(self):
         from rest_framework_simplejwt.exceptions import TokenError
@@ -122,12 +185,14 @@ class BrowserAccountAuthenticationTests(TestCase):
             username="reset-user", email="reset@example.com", password="Old-Password-2026!"
         )
         response = self.client.post("/forgot-password/", {"email": "RESET@example.com"})
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 302, (response.context[-1].get("errors") if response.context else response.content.decode("utf-8", errors="replace")[:1200]))
         self.assertEqual(len(mail.outbox), 1)
         match = re.search(r"/reset-password/([^/\s]+)", mail.outbox[0].body)
         self.assertIsNotNone(match)
         raw_token = match.group(1).strip()
-        self.assertEqual(self.client.get(f"/reset-password/{raw_token}/").status_code, 200)
+        self.assertTrue(raw_token, "password-reset email did not contain a token")
+        reset_get = self.client.get(f"/reset-password/{raw_token}/")
+        self.assertEqual(reset_get.status_code, 200, f"password-reset GET redirected to {reset_get.headers.get('Location')!r}")
 
         response = self.client.post(f"/reset-password/{raw_token}/", {
             "password": "New-Password-2026!$",
@@ -182,21 +247,35 @@ class BrowserAccountAuthenticationTests(TestCase):
         self.assertNotIn("telegram_username", serializer.validated_data)
         self.assertNotIn("brevo_sender_email", serializer.validated_data)
 
-    def test_registration_sends_verification_and_verification_is_single_use(self):
+    @patch("core.browser_auth.allow_auth_attempt", return_value=True)
+    def test_registration_sends_verification_and_verification_is_single_use(self, _allow_auth_attempt):
         response = self.client.post("/register/", {
             "username": "verify-user",
             "email": "verify@example.com",
             "password": "A-Strong-Password-2026!",
             "password_confirm": "A-Strong-Password-2026!",
         })
+        response_details = response.context[-1].get("errors") if response.status_code == 200 and response.context else response.content.decode("utf-8", errors="replace")[:1600] if response.status_code == 200 else None
+        if response.status_code != 302:
+            response_messages = list(response.context[-1].get("messages", [])) if response.context else []
+            user_created = get_user_model().objects.filter(username="verify-user").exists()
+            self.fail(
+                f"registration rejected: status={response.status_code}; errors={response_details!r}; "
+                f"messages={response_messages!r}; user_created={user_created}"
+            )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(mail.outbox), 1)
         match = re.search(r"/verify-email/\?token=([^\s]+)", mail.outbox[0].body)
         self.assertIsNotNone(match)
-        raw_token = match.group(1).strip()
+        raw_token = parse_qs(urlparse(match.group(0)).query).get("token", [""])[0].strip()
         response = self.client.get(f"/verify-email/?token={raw_token}")
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200, f"verification GET redirected to {response.headers.get('Location')!r}; token_present={bool(raw_token)}")
+        self.assertContains(response, "Confirm email verification")
         profile = UserProfile.objects.get(user__username="verify-user")
+        self.assertFalse(profile.email_verified)
+        response = self.client.post("/verify-email/", {"token": raw_token})
+        self.assertEqual(response.status_code, 302, f"email verification confirmation failed: status={response.status_code}; body={response.content.decode('utf-8', errors='replace')[:1800]!r}")
+        profile.refresh_from_db()
         self.assertTrue(profile.email_verified)
         self.assertIsNotNone(profile.email_verified_at)
         self.assertEqual(profile.email_verification_token, "")
@@ -231,6 +310,7 @@ class AnonymousBrokerOAuthFailClosedTests(TestCase):
         self.assertNotIn("_auth_user_id", self.client.session)
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class BrokerAccountEndpointSafetyTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
@@ -348,16 +428,31 @@ class AccountIdentityManagementTests(TestCase):
             "username": "identity-user",
             "email": "new-address@example.com",
         })
-        self.assertEqual(response.status_code, 302)
+        response_errors = None
+        if response.status_code == 200:
+            response_errors = response.context[-1].get("errors") if getattr(response, "context", None) else response.content.decode("utf-8", errors="replace")[:1600]
+        if response.status_code != 302:
+            current_password_valid = self.user.check_password("A-Strong-Password-2026!")
+            authenticated_user_id = self.client.session.get("_auth_user_id")
+            response_messages = list(response.context[-1].get("messages", [])) if response.context else []
+            self.fail(
+                f"email change rejected: status={response.status_code}; errors={response_errors!r}; "
+                f"current_password_valid={current_password_valid}; authenticated={authenticated_user_id}; "
+                f"messages={response_messages}"
+            )
+        self.assertEqual(response.status_code, 302, f"email change response details: {response_errors!r}; body={response.content.decode('utf-8', errors='replace')[:1600]!r}")
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "old-address@example.com")
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["new-address@example.com"])
         match = re.search(r"/verify-email/\?token=([^\s]+)", mail.outbox[0].body)
         self.assertIsNotNone(match)
-        raw_token = match.group(1).strip()
+        raw_token = parse_qs(urlparse(match.group(0)).query).get("token", [""])[0].strip()
 
         response = self.client.get(f"/verify-email/?token={raw_token}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.user.email, "old-address@example.com")
+        response = self.client.post("/verify-email/", {"token": raw_token})
         self.assertEqual(response.status_code, 302)
         self.user.refresh_from_db()
         self.profile.refresh_from_db()

@@ -20,7 +20,10 @@ jobs:
     timeout-minutes: 25
     env:
       DJANGO_ENV: development
+      DJANGO_TESTING: "true"
+      USE_REDIS: "false"
       SECRET_KEY: ci-test-secret-key
+      CREDENTIALS_ENCRYPTION_KEY: ci-test-credentials-encryption-key
       DEBUG: "True"
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
@@ -85,13 +88,37 @@ jobs:
           gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/migration-apply-comment.md
           exit 1
 
+      - name: Verify Django test cache is in-memory
+        run: |
+          python - <<'PY'
+          import os
+
+          os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deriv_platform.settings")
+
+          import django
+          django.setup()
+
+          from django.conf import settings
+
+          backend = settings.CACHES["default"]["BACKEND"]
+          channel_backend = settings.CHANNEL_LAYERS["default"]["BACKEND"]
+          print(f"DJANGO_TESTING={getattr(settings, 'DJANGO_TESTING', '<unset>')!r}")
+          print(f"USE_REDIS={settings.USE_REDIS!r}")
+          print(f"CACHE_BACKEND={backend!r}")
+          print(f"CHANNEL_BACKEND={channel_backend!r}")
+          assert settings.USE_REDIS is False, "Redis must be disabled in Django tests"
+          assert backend == "django.core.cache.backends.locmem.LocMemCache", "Django default cache must be LocMemCache"
+          assert channel_backend == "channels.layers.InMemoryChannelLayer", "Django channel layer must be in-memory"
+          print("Django tests use in-memory cache and channel layer; Redis is disabled.")
+          PY
+
       - name: Run Django test suite
         id: tests
         timeout-minutes: 5
         shell: bash
         run: |
           set -o pipefail
-          python manage.py test --noinput --parallel 1 2>&1 | tee /tmp/django-tests.txt
+          DJANGO_TESTING=true USE_REDIS=false python manage.py test --noinput --parallel 1 2>&1 | tee /tmp/django-tests.txt
 
       - name: Upload Django test failure log
         if: steps.tests.outcome == 'failure'

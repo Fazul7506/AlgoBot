@@ -328,6 +328,12 @@ def _authenticate(request):
     if getattr(request.user, "is_authenticated", False):
         return True
     for auth_class in AUTH_CLASSES:
+        # This is a Django view, so request is a WSGIRequest rather than a DRF
+        # Request. SessionAuthentication requires DRF's wrapper and would
+        # raise AttributeError here; Django AuthenticationMiddleware has
+        # already resolved valid browser sessions above.
+        if auth_class is SessionAuthentication:
+            continue
         try:
             result = auth_class().authenticate(request)
         except Exception:

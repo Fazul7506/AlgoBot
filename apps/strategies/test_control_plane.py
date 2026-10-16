@@ -3,6 +3,7 @@ import json
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
+from unittest.mock import patch
 from io import StringIO
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
@@ -12,6 +13,12 @@ from .models import Strategy, StrategyConfiguration
 from .views import StrategyViewSet
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class StrategyControlPlaneTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='strategy-test', password='test-password')

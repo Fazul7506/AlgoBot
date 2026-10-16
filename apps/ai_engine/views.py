@@ -13,6 +13,7 @@ from apps.brokers.models import BrokerAccount
 from apps.brokers.services import BrokerRegistry
 from apps.market_data.models import Candle, MarketSnapshot, MarketSymbol, Tick
 from core.account_context import get_active_account
+from core.permissions import BrokerOnboardingRequired
 from .models import AIModel, AIRecommendation, AnomalyEvent, FeatureVector, MarketRegime, ModelVersion, Prediction, PredictionOutcome, TrainingJob
 from .serializers import AIModelSerializer, AIRecommendationSerializer, AnomalyEventSerializer, FeatureVectorSerializer, MarketRegimeSerializer, ModelVersionSerializer, PredictionSerializer, TrainingJobSerializer
 from .services import AIEngine, ExplainabilityService, TrainingService
@@ -37,6 +38,8 @@ class StaffOnlyPermission(permissions.IsAdminUser):
 class AIModelViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AIModel.objects.all()
     serializer_class = AIModelSerializer
+    # Model catalog metadata is non-trading; keep it available to authenticated
+    # users while gating predictions, recommendations, and execution APIs.
     permission_classes = [JWTAuthenticatedPermission]
 
 
@@ -48,7 +51,7 @@ class ModelVersionViewSet(viewsets.ReadOnlyModelViewSet):
 
 class PredictionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PredictionSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [JWTAuthenticatedPermission, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return Prediction.objects.filter(user=self.request.user).select_related("user")
@@ -56,7 +59,7 @@ class PredictionViewSet(viewsets.ReadOnlyModelViewSet):
 
 class RecommendationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AIRecommendationSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [JWTAuthenticatedPermission, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return AIRecommendation.objects.filter(user=self.request.user).select_related("user")
@@ -64,7 +67,7 @@ class RecommendationViewSet(viewsets.ReadOnlyModelViewSet):
 
 class MarketRegimeViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = MarketRegimeSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [JWTAuthenticatedPermission, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return MarketRegime.objects.filter(user=self.request.user).select_related("user")
@@ -78,7 +81,7 @@ class FeatureVectorViewSet(viewsets.ReadOnlyModelViewSet):
 
 class AnomalyViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AnomalyEventSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [JWTAuthenticatedPermission, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return AnomalyEvent.objects.filter(user=self.request.user).select_related("user")
@@ -86,7 +89,7 @@ class AnomalyViewSet(viewsets.ReadOnlyModelViewSet):
 
 class TrainingJobViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TrainingJobSerializer
-    permission_classes = [JWTAuthenticatedPermission]
+    permission_classes = [JWTAuthenticatedPermission, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return TrainingJob.objects.filter(user=self.request.user).select_related("model", "user")
@@ -210,7 +213,7 @@ def _broker_market_context(account, symbol):
 
 
 @decorators.api_view(["POST"])
-@decorators.permission_classes([JWTAuthenticatedPermission])
+@decorators.permission_classes([JWTAuthenticatedPermission, BrokerOnboardingRequired])
 @decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
 def predict(request):
     if not isinstance(request.data, dict):
@@ -250,7 +253,7 @@ def predict(request):
 
 
 @decorators.api_view(["GET"])
-@decorators.permission_classes([JWTAuthenticatedPermission])
+@decorators.permission_classes([JWTAuthenticatedPermission, BrokerOnboardingRequired])
 @decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
 def explain(request):
     symbol = str(request.query_params.get("symbol") or "").strip()

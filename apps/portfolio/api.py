@@ -1,3 +1,4 @@
+from core.permissions import BrokerOnboardingRequired
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -11,7 +12,7 @@ from .serializers import CashFlowSerializer, PortfolioAllocationSerializer, Port
 
 class PortfolioViewSet(viewsets.ModelViewSet):
     serializer_class = PortfolioSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, BrokerOnboardingRequired]
 
     def get_queryset(self):
         return Portfolio.objects.filter(user=self.request.user)
@@ -44,17 +45,22 @@ class PortfolioViewSet(viewsets.ModelViewSet):
 
 
 class PortfolioPerformanceViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated, BrokerOnboardingRequired]
     serializer_class = PortfolioPerformanceSerializer
     def get_queryset(self): return PortfolioPerformance.objects.filter(portfolio__user=self.request.user)
 class PortfolioAllocationViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated, BrokerOnboardingRequired]
     serializer_class = PortfolioAllocationSerializer
     def get_queryset(self): return PortfolioAllocation.objects.filter(portfolio__user=self.request.user)
 class PortfolioExposureViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated, BrokerOnboardingRequired]
     serializer_class = PortfolioExposureSerializer
     def get_queryset(self): return PortfolioExposure.objects.filter(portfolio__user=self.request.user)
 class PortfolioForecastViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated, BrokerOnboardingRequired]
     serializer_class = PortfolioForecastSerializer
     def get_queryset(self): return PortfolioForecast.objects.filter(portfolio__user=self.request.user)
 class CashFlowViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated, BrokerOnboardingRequired]
     serializer_class = CashFlowSerializer
     def get_queryset(self): return CashFlow.objects.filter(portfolio__user=self.request.user)

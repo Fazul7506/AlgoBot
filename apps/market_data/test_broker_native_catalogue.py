@@ -8,6 +8,12 @@ from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from apps.market_data.models import MarketSymbol
 
 
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class BrokerNativeCatalogueFallbackTests(TestCase):
     def setUp(self):
         self.client = APIClient()
