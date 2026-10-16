@@ -34,20 +34,28 @@ CSRF_COOKIE_DOMAIN = env("CSRF_COOKIE_DOMAIN", ".algobot.dpdns.org")
 WHITENOISE_MANIFEST_STRICT = False
 USE_POSTGRES = True
 USE_REDIS = True
-EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
-
-# Never silently send authentication mail to a console backend or start production
-# without an actual outbound email transport.
-_EMAIL_PROVIDER_CONFIGURED = bool(BREVO_API_KEY) or bool(  # noqa: F405
-    EMAIL_HOST and EMAIL_PORT and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD
+EMAIL_BACKEND = env(
+    "EMAIL_BACKEND",
+    "anymail.backends.brevo.EmailBackend" if BREVO_API_KEY else "django.core.mail.backends.smtp.EmailBackend",  # noqa: F405
 )
-if not BREVO_API_KEY and EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend":  # noqa: F405
-    raise RuntimeError("Production email must use Brevo or a configured SMTP backend.")
-if not _EMAIL_PROVIDER_CONFIGURED:
+ANYMAIL = {"BREVO_API_KEY": BREVO_API_KEY}  # noqa: F405
+
+# The configured backend and credentials must describe the same real transport.
+# Brevo is routed through Anymail; SMTP is supported only as an explicit fallback.
+_BREVO_BACKEND = "anymail.backends.brevo.EmailBackend"
+_SMTP_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+if EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend":
+    raise RuntimeError("Console email backend is not permitted in production.")
+if EMAIL_BACKEND == _BREVO_BACKEND and not BREVO_API_KEY:  # noqa: F405
+    raise RuntimeError("Brevo Anymail backend requires BREVO_API_KEY.")
+if EMAIL_BACKEND == _SMTP_BACKEND and not (
+    EMAIL_HOST and EMAIL_PORT and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD
+):
     raise RuntimeError(
-        "Production email is not configured: set BREVO_API_KEY or "
-        "EMAIL_HOST, EMAIL_PORT, EMAIL_USER, and EMAIL_PASSWORD."
+        "SMTP email backend requires EMAIL_HOST, EMAIL_PORT, EMAIL_USER, and EMAIL_PASSWORD."
     )
+if EMAIL_BACKEND not in {_BREVO_BACKEND, _SMTP_BACKEND}:
+    raise RuntimeError("Unsupported production EMAIL_BACKEND; use Brevo Anymail or SMTP.")
 
 # DERIV_APP_ID is Deriv's numeric application ID; DERIV_OAUTH_CLIENT_ID
 # is the OAuth client identifier. They are separate credentials and must not
