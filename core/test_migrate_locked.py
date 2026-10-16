@@ -49,3 +49,23 @@ class MigrateLockedCommandTests(SimpleTestCase):
         call_command_mock.assert_called_once_with(
             "migrate", database="default", interactive=False, verbosity=0
         )
+
+    @patch("core.management.commands.migrate_locked.call_command")
+    @patch("core.management.commands.migrate_locked.connections")
+    def test_fake_initial_flag_is_forwarded(self, connections, call_command_mock):
+        connection = MagicMock()
+        connection.vendor = "postgresql"
+        connections.__getitem__.return_value = connection
+
+        Command().handle(noinput=True, fake_initial=True, verbosity=0, database="default")
+
+        self.assertEqual(
+            call_command_mock.call_args,
+            call(
+                "migrate",
+                database="default",
+                interactive=False,
+                verbosity=0,
+                fake_initial=True,
+            ),
+        )
