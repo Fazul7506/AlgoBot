@@ -43,6 +43,9 @@ class GoogleLoginSecurityTests(TestCase):
             "email": "google-user@example.test",
             "email_verified": True,
             "nonce": "expected-nonce",
+            "given_name": "Taylor",
+            "family_name": "Example",
+            "name": "Taylor Example",
         }
 
         response = self.client.get("/auth/google/callback/?code=auth-code&state=expected-state")
@@ -50,6 +53,8 @@ class GoogleLoginSecurityTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, "/brokers/marketplace/")
         user = User.objects.get(email="google-user@example.test")
+        self.assertEqual(user.first_name, "Taylor")
+        self.assertEqual(user.last_name, "Example")
         self.assertTrue(user.trading_profile.email_verified)
         self.assertEqual(self.client.session.get("_auth_user_id"), str(user.pk))
         verify_id_token.assert_called_once()
@@ -144,7 +149,7 @@ class GoogleLoginSecurityTests(TestCase):
         self.assertFalse(GoogleIdentity.objects.filter(user=user, provider="google").exists())
 
 
-    def test_google_login_defaults_to_deriv_onboarding(self):
+    def test_google_login_defaults_to_dashboard_without_starting_broker_oauth(self):
         from urllib.parse import parse_qs, urlparse
 
         response = self.client.get("/auth/google/")
@@ -153,7 +158,7 @@ class GoogleLoginSecurityTests(TestCase):
         self.assertTrue(response.url.startswith("https://accounts.google.com/o/oauth2/v2/auth?"))
         self.assertEqual(
             self.client.session.get("broker_onboarding_next"),
-            "/brokers/connect/?broker=deriv",
+            "/dashboard/",
         )
         params = parse_qs(urlparse(response.url).query)
         self.assertEqual(params.get("code_challenge_method"), ["S256"])
@@ -166,11 +171,11 @@ class GoogleLoginSecurityTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.client.session.get("broker_onboarding_next"), "/settings/")
 
-    def test_google_login_rejects_external_destination_and_uses_deriv_onboarding(self):
+    def test_google_login_rejects_external_destination_and_uses_dashboard(self):
         response = self.client.get("/auth/google/?next=https%3A%2F%2Fevil.example%2Fsteal")
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(
             self.client.session.get("broker_onboarding_next"),
-            "/brokers/connect/?broker=deriv",
+            "/dashboard/",
         )
