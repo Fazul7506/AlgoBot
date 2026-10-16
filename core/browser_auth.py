@@ -200,12 +200,14 @@ def register_page(request):
         if not identity_allowed or not ip_allowed:
             return _render(request, "register", errors=["Too many registration attempts. Please try again later."])
         username = str(request.POST.get("username") or "").strip()
+        first_name = str(request.POST.get("first_name") or "").strip()
+        last_name = str(request.POST.get("last_name") or "").strip()
         email = str(request.POST.get("email") or "").strip().lower()
         password = request.POST.get("password") or ""
         confirm = request.POST.get("password_confirm") or ""
         errors = []
-        if not username or not email or not password:
-            errors.append("Username, email, and password are required.")
+        if not username or not first_name or not last_name or not email or not password:
+            errors.append("Username, first name, last name, email, and password are required.")
         if password != confirm:
             errors.append("The passwords do not match.")
         try:
@@ -220,17 +222,17 @@ def register_page(request):
             or (email and User.objects.filter(email__iexact=email).exists())
         ):
             errors.append("An account could not be created with those details. If you already have an account, sign in or use account recovery.")
-        candidate = User(username=username, email=email)
+        candidate = User(username=username, email=email, first_name=first_name, last_name=last_name)
         if password:
             try:
                 validate_password(password, user=candidate)
             except ValidationError as exc:
                 errors.extend(exc.messages)
         if errors:
-            return _render(request, "register", errors=errors, username=username, email=email)
+            return _render(request, "register", errors=errors, username=username, first_name=first_name, last_name=last_name, email=email)
         try:
             with transaction.atomic():
-                user = User.objects.create_user(username=username, email=email, password=password)
+                user = User.objects.create_user(username=username, email=email, password=password, first_name=first_name, last_name=last_name)
                 profile, _ = UserProfile.objects.get_or_create(user=user)
                 Subscription.objects.get_or_create(user=user)
                 BotSettings.objects.get_or_create(user=user)
@@ -239,7 +241,7 @@ def register_page(request):
             return _render(
                 request, "register",
                 errors=["An account could not be created with those details. If you already have an account, sign in or use account recovery."],
-                username=username, email=email,
+                username=username, first_name=first_name, last_name=last_name, email=email,
             )
         if email_sent:
             messages.success(request, "Your account was created. Verify your email before signing in.")
