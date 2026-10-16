@@ -69,8 +69,14 @@ def _send_account_email(subject, body, email):
         # verification URL, or any token. Provider acceptance is not inbox proof.
         logger.info("account_email_provider_accepted provider=%s", provider)
         return True
-    except Exception:
-        logger.exception("account_email_delivery_failed")
+    except Exception as exc:
+        # Provider exceptions can include recipient addresses, request details,
+        # or response bodies. Keep auth-mail diagnostics useful but sanitized.
+        logger.error(
+            "account_email_delivery_failed error_type=%s",
+            exc.__class__.__name__,
+            extra={"error_type": exc.__class__.__name__},
+        )
         return False
 
 
