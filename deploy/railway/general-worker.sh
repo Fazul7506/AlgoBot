@@ -3,7 +3,7 @@ set -eu
 
 export DJANGO_ENV=production
 
-python manage.py migrate --fake-initial --noinput
+python manage.py migrate_locked --fake-initial --noinput
 
 exec celery -A deriv_platform.celery worker \
   --loglevel=INFO \
