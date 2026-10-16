@@ -1,4 +1,4 @@
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -128,38 +128,38 @@ class BrandedNotificationEmailTests(TestCase):
 
     @override_settings(
         BREVO_API_KEY="test-brevo-key",
+        EMAIL_BACKEND="anymail.backends.brevo.EmailBackend",
+        ANYMAIL={"BREVO_API_KEY": "test-brevo-key"},
         ALGOBOT_SECURITY_EMAIL="security@algobot.dpdns.org",
         ALGOBOT_SUPPORT_EMAIL="support@algobot.dpdns.org",
         ALGOBOT_NOREPLY_EMAIL="noreply@algobot.dpdns.org",
     )
-    @patch("apps.notifications.services.requests.post")
-    def test_brevo_payload_uses_category_sender_and_html(self, post):
-        post.return_value = Mock(status_code=201, raise_for_status=Mock())
+    def test_brevo_anymail_backend_receives_branded_html_message(self):
+        from anymail.backends.brevo import EmailBackend
 
-        provider = send_transactional_email(
-            recipient="user@gmail.com",
-            subject="Security alert",
-            message="A new sign-in was detected.\nReview your account.",
-            category="security",
-            metadata={"action_url": "https://algobot.dpdns.org/security", "action_label": "Review account"},
-        )
+        with patch.object(EmailBackend, "send_messages", autospec=True, return_value=1) as send_messages:
+            provider = send_transactional_email(
+                recipient="user@gmail.com",
+                subject="Security alert",
+                message="A new sign-in was detected.\nReview your account.",
+                category="security",
+                metadata={"action_url": "https://algobot.dpdns.org/security", "action_label": "Review account"},
+            )
 
         self.assertEqual(provider, "brevo")
-        post.assert_called_once()
-        request = post.call_args.kwargs
-        self.assertEqual(request["headers"]["api-key"], "test-brevo-key")
-        self.assertEqual(request["json"]["sender"], {
-            "name": "AlgoBot Security",
-            "email": "security@algobot.dpdns.org",
-        })
-        self.assertEqual(request["json"]["to"], [{"email": "user@gmail.com"}])
-        self.assertEqual(request["json"]["subject"], "Security alert")
-        self.assertIn("<h1", request["json"]["htmlContent"])
-        self.assertIn("Review account", request["json"]["htmlContent"])
-        self.assertIn("A new sign-in was detected.<br>Review your account.", request["json"]["htmlContent"])
+        send_messages.assert_called_once()
+        email = send_messages.call_args.args[1][0]
+        self.assertEqual(email.from_email, "AlgoBot Security <security@algobot.dpdns.org>")
+        self.assertEqual(email.to, ["user@gmail.com"])
+        self.assertEqual(email.subject, "Security alert")
+        self.assertIn("A new sign-in was detected.\nReview your account.", email.body)
+        self.assertIn("<h1", email.alternatives[0][0])
+        self.assertIn("Review account", email.alternatives[0][0])
+        self.assertEqual(email.alternatives[0][1], "text/html")
 
     @override_settings(
         BREVO_API_KEY="",
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
         ALGOBOT_SUPPORT_EMAIL="support@algobot.dpdns.org",
     )
     def test_django_fallback_still_uses_branded_html_sender(self):

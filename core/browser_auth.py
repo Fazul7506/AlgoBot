@@ -61,10 +61,13 @@ def _send_account_email(subject, body, email):
         # Reuse AlgoBot's configured transactional delivery path (Brevo when
         # configured, Django email backend otherwise) for auth/security mail.
         from apps.notifications.services import send_transactional_email
-        send_transactional_email(
+        provider = send_transactional_email(
             recipient=email, subject=subject, message=body,
             category="authentication",
         )
+        # Log provider acceptance only; never log the recipient, message body,
+        # verification URL, or any token. Provider acceptance is not inbox proof.
+        logger.info("account_email_provider_accepted provider=%s", provider)
         return True
     except Exception:
         logger.exception("account_email_delivery_failed")
@@ -159,6 +162,9 @@ def login_page(request):
         if not has_authorized_broker_connection(user):
             if safe_destination:
                 request.session["broker_onboarding_next"] = safe_destination
+                # Resume an explicitly initiated Deriv connection after login.
+                if safe_destination.startswith("/brokers/connect/"):
+                    return redirect(safe_destination)
             return redirect("broker_marketplace_page")
         if safe_destination:
             return redirect(safe_destination)
@@ -473,7 +479,15 @@ def verify_email_page(request):
             user = matches.first()
             profile, _ = UserProfile.objects.get_or_create(user=user)
             if not profile.email_verified:
-                _send_verification(request, user, profile)
+                sent = _send_verification(request, user, profile)
+                logger.info(
+                    "verification_resend_attempted outcome=%s",
+                    "provider_accepted" if sent else "provider_failed",
+                )
+            else:
+                logger.info("verification_resend_skipped reason=already_verified")
+        else:
+            logger.info("verification_resend_skipped reason=no_matching_active_account")
         messages.info(request, "If an unverified account matches that email, a verification link will be sent.")
         return redirect("verify_email_page")
     return _render(request, "verify_email")

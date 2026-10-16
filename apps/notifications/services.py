@@ -6,7 +6,6 @@ import html
 from dataclasses import dataclass
 from typing import Any
 
-import requests
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import EmailMultiAlternatives
@@ -61,13 +60,20 @@ def render_email_html(title: str, message: str, category: str, sender: SenderIde
 def send_transactional_email(*, recipient: str, subject: str, message: str, category: str = "general", metadata=None) -> str:
     sender = sender_for_category(category)
     html_body = render_email_html(subject, message, category, sender, metadata)
-    if settings.BREVO_API_KEY:
-        response = requests.post("https://api.brevo.com/v3/smtp/email", headers={"accept": "application/json", "api-key": settings.BREVO_API_KEY, "content-type": "application/json"}, json={"sender": {"name": sender.name, "email": sender.email}, "to": [{"email": recipient}], "subject": subject, "htmlContent": html_body, "textContent": message}, timeout=15)
-        response.raise_for_status()
-        return "brevo"
-    email = EmailMultiAlternatives(subject=subject, body=message, from_email=f"{sender.name} <{sender.email}>", to=[recipient])
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=message,
+        from_email=f"{sender.name} <{sender.email}>",
+        to=[recipient],
+    )
     email.attach_alternative(html_body, "text/html")
-    email.send(fail_silently=False)
+    # Use the configured Django backend so Brevo is handled by Anymail and
+    # transport exceptions propagate to the caller instead of being hidden.
+    sent_count = email.send(fail_silently=False)
+    if sent_count != 1:
+        raise RuntimeError("Configured email backend did not accept the transactional message.")
+    if settings.EMAIL_BACKEND == "anymail.backends.brevo.EmailBackend":
+        return "brevo"
     return "django"
 
 
