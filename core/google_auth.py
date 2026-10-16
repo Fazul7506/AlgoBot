@@ -17,7 +17,7 @@ from django.contrib.auth.models import User
 from django.db import IntegrityError, transaction
 from django.shortcuts import redirect
 from django.utils import timezone
-from django.utils.http import url_has_allowed_host_and_scheme
+from core.auth_redirects import first_safe_auth_destination, safe_auth_destination
 from django.views.decorators.http import require_GET
 
 from core.models import BotSettings, GoogleIdentity, Subscription, UserProfile
@@ -48,10 +48,8 @@ def _redirect_uri():
 
 @require_GET
 def google_login_start(request):
-    requested_next = str(request.GET.get("next") or "")
-    if requested_next and url_has_allowed_host_and_scheme(
-        requested_next, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
+    requested_next = safe_auth_destination(request, request.GET.get("next"))
+    if requested_next:
         request.session["broker_onboarding_next"] = requested_next
     if request.GET.get("intent") == "link":
         if not request.user.is_authenticated:
@@ -245,9 +243,9 @@ def google_login_callback(request):
     from core.broker_onboarding import has_authorized_broker_connection
     if not has_authorized_broker_connection(user):
         return redirect("broker_marketplace_page")
-    requested = request.session.pop("broker_onboarding_next", "")
-    if requested and url_has_allowed_host_and_scheme(
-        requested, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ) and not requested.startswith(("/brokers/", "/auth/google/", "/login/", "/register/")):
+    requested = first_safe_auth_destination(
+        request, request.session.pop("broker_onboarding_next", "")
+    )
+    if requested and not requested.startswith(("/brokers/", "/auth/google/", "/login/", "/register/")):
         return redirect(requested)
     return redirect("dashboard_page")
