@@ -49,6 +49,11 @@ def _redirect_uri():
 @require_GET
 def google_login_start(request):
     requested_next = safe_auth_destination(request, request.GET.get("next"))
+    # Google sign-up/sign-in must continue through Deriv authorization before
+    # the user can enter the dashboard. Keep the intended same-host path in
+    # the session so the OAuth callback can resume it safely.
+    if not requested_next:
+        requested_next = "/brokers/connect/?broker=deriv"
     if requested_next:
         request.session["broker_onboarding_next"] = requested_next
     if request.GET.get("intent") == "link":

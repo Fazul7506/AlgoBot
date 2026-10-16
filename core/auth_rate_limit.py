@@ -41,10 +41,13 @@ def allow_auth_attempt(request, action, identity="", *, limit=5, window=3600):
                 return True
             attempts = cache.incr(key)
         return attempts <= limit
-    except Exception:
+    except Exception as exc:
+        # Record the exception class without logging exception text: Redis URLs
+        # and backend errors can contain deployment details or credentials.
         logger.error(
-            "auth_rate_limit_backend_unavailable_using_process_fallback",
-            extra={"action": action},
+            "auth_rate_limit_backend_unavailable_using_process_fallback error_type=%s",
+            exc.__class__.__name__,
+            extra={"action": action, "error_type": exc.__class__.__name__},
         )
         # Lock the local counter operations to avoid races among requests handled
         # by this process. Shared-cache recovery automatically restores the
