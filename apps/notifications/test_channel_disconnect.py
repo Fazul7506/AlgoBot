@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase, override_settings
@@ -135,7 +137,7 @@ class BrandedNotificationEmailTests(TestCase):
     def test_brevo_anymail_backend_receives_branded_html_message(self):
         from anymail.backends.brevo import EmailBackend
 
-        with patch.object(EmailBackend, "send_messages", return_value=1) as send_messages:
+        with patch.object(EmailBackend, "send_messages", autospec=True, return_value=1) as send_messages:
             provider = send_transactional_email(
                 recipient="user@gmail.com",
                 subject="Security alert",
