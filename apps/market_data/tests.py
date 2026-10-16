@@ -203,3 +203,29 @@ class CandleBackfillStagingTests(TestCase):
         self.assertTrue(CandleBackfillStagedCandle.objects.filter(run=self.run).exists())
         self.run.refresh_from_db()
         self.assertEqual(self.run.status, "running")
+
+
+class CeleryQueueRoutingTests(TestCase):
+    """Protect the isolated market-data queue from duplicate general-worker delivery."""
+
+    def test_market_data_queue_uses_its_own_routing_key(self):
+        from config.settings.celery import CELERY_TASK_QUEUES
+
+        queues = {queue.name: queue for queue in CELERY_TASK_QUEUES}
+        self.assertIn("celery", queues)
+        self.assertIn("market_data", queues)
+        self.assertEqual(queues["celery"].routing_key, "celery")
+        self.assertEqual(queues["market_data"].routing_key, "market_data")
+        self.assertNotEqual(queues["celery"].routing_key, queues["market_data"].routing_key)
+
+    def test_backfill_tasks_are_routed_to_isolated_market_data_queue(self):
+        from config.settings.celery import CELERY_TASK_ROUTES
+
+        self.assertEqual(
+            CELERY_TASK_ROUTES["apps.market_data.tasks.run_initial_candle_backfill"]["queue"],
+            "market_data",
+        )
+        self.assertEqual(
+            CELERY_TASK_ROUTES["apps.market_data.tasks.backfill_research_candles"]["queue"],
+            "market_data",
+        )
