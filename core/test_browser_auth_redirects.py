@@ -8,7 +8,7 @@ from django.urls import reverse
 from core.browser_auth import login_page
 
 
-class AuthenticatedLoginRedirectTests(SimpleTestCase):
+class AuthenticatedLoginRedirectTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.user = SimpleNamespace(is_authenticated=True, pk=42)
