@@ -36,6 +36,19 @@ USE_POSTGRES = True
 USE_REDIS = True
 EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 
+# Never silently send authentication mail to a console backend or start production
+# without an actual outbound email transport.
+_EMAIL_PROVIDER_CONFIGURED = bool(BREVO_API_KEY) or bool(  # noqa: F405
+    EMAIL_HOST and EMAIL_PORT and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD
+)
+if EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend":
+    raise RuntimeError("Production email must use Brevo or a configured SMTP backend.")
+if not _EMAIL_PROVIDER_CONFIGURED:
+    raise RuntimeError(
+        "Production email is not configured: set BREVO_API_KEY or "
+        "EMAIL_HOST, EMAIL_PORT, EMAIL_USER, and EMAIL_PASSWORD."
+    )
+
 # DERIV_APP_ID is Deriv's numeric application ID; DERIV_OAUTH_CLIENT_ID
 # is the OAuth client identifier. They are separate credentials and must not
 # be compared for equality. Validate that each is configured independently below.
