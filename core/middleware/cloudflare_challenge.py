@@ -29,8 +29,14 @@ class CloudflareChallengeQueryMiddleware:
     def __call__(self, request):
         if request.method in {"GET", "HEAD"}:
             query = request.META.get("QUERY_STRING", "")
-            cleaned = self.clean_query(query)
-            if cleaned != query:
+            # Do not canonicalize arbitrary application query strings. Signed
+            # email-verification tokens may contain characters that urlencode
+            # escapes; redirecting those requests before the view runs breaks
+            # the scanner-safe confirmation page (and can alter token URLs).
+            pairs = parse_qsl(query or "", keep_blank_values=True)
+            has_challenge_parameter = any(name.startswith(self.PREFIX) for name, _ in pairs)
+            if has_challenge_parameter:
+                cleaned = self.clean_query(query)
                 parts = urlsplit(request.get_full_path())
                 canonical = urlunsplit(("", "", parts.path, cleaned, parts.fragment))
                 response = HttpResponseRedirect(canonical)
