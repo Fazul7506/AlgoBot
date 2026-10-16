@@ -44,3 +44,20 @@ class SensitiveQueryLogFilterTests(TestCase):
         self.assertNotIn("session-secret", message)
         self.assertIn("token=[REDACTED]", message)
         self.assertIn("sessionid=[REDACTED]", message)
+
+    def test_redacts_password_reset_tokens_in_path(self):
+        record = logging.LogRecord(
+            name="daphne.access",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=1,
+            msg='GET /reset-password/verylongsecretresettokenvalue1234567890/ HTTP/1.1',
+            args=(),
+            exc_info=None,
+        )
+
+        SensitiveQueryLogFilter().filter(record)
+        message = record.getMessage()
+
+        self.assertNotIn("verylongsecretresettokenvalue1234567890", message)
+        self.assertIn("/reset-password/[REDACTED]/", message)
