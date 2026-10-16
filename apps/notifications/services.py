@@ -69,7 +69,9 @@ def send_transactional_email(*, recipient: str, subject: str, message: str, cate
     email.attach_alternative(html_body, "text/html")
     # Use the configured Django backend so Brevo is handled by Anymail and
     # transport exceptions propagate to the caller instead of being hidden.
-    email.send(fail_silently=False)
+    sent_count = email.send(fail_silently=False)
+    if sent_count != 1:
+        raise RuntimeError("Configured email backend did not accept the transactional message.")
     if settings.EMAIL_BACKEND == "anymail.backends.brevo.EmailBackend":
         return "brevo"
     return "django"
