@@ -104,9 +104,12 @@ def callback(request):
             websocket_verification_error = "identity_mismatch"
     except Exception as exc:
         websocket_verification_error = exc.__class__.__name__
+        # Include only the exception class / fixed diagnostic code in the
+        # message because the structured formatter intentionally omits extras.
+        # Never include OAuth access tokens or provider response payloads.
         logger.warning(
-            "deriv_oauth_websocket_verification_unavailable",
-            extra={"error": websocket_verification_error},
+            "deriv_oauth_websocket_verification_unavailable error_type=%s",
+            websocket_verification_error,
         )
     identity_loginid = str(
         deriv_identity.get("loginid") or deriv_identity.get("account_id") or ""
