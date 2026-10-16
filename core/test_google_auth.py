@@ -142,3 +142,35 @@ class GoogleLoginSecurityTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, "/account/identity/")
         self.assertFalse(GoogleIdentity.objects.filter(user=user, provider="google").exists())
+
+
+    def test_google_login_defaults_to_deriv_onboarding(self):
+        from urllib.parse import parse_qs, urlparse
+
+        response = self.client.get("/auth/google/")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith("https://accounts.google.com/o/oauth2/v2/auth?"))
+        self.assertEqual(
+            self.client.session.get("broker_onboarding_next"),
+            "/brokers/connect/?broker=deriv",
+        )
+        params = parse_qs(urlparse(response.url).query)
+        self.assertEqual(params.get("code_challenge_method"), ["S256"])
+        self.assertTrue(params.get("state"))
+        self.assertTrue(params.get("nonce"))
+
+    def test_google_login_preserves_explicit_safe_destination(self):
+        response = self.client.get("/auth/google/?next=%2Fsettings%2F")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.client.session.get("broker_onboarding_next"), "/settings/")
+
+    def test_google_login_rejects_external_destination_and_uses_deriv_onboarding(self):
+        response = self.client.get("/auth/google/?next=https%3A%2F%2Fevil.example%2Fsteal")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            self.client.session.get("broker_onboarding_next"),
+            "/brokers/connect/?broker=deriv",
+        )
