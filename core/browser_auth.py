@@ -103,12 +103,22 @@ def _send_verification(request, user, profile, *, recipient=None, purpose="verif
 
 
 def login_page(request):
+    requested_next = str(request.POST.get("next") or request.GET.get("next") or "")
+    safe_destination = requested_next if requested_next and url_has_allowed_host_and_scheme(
+        requested_next, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ) else ""
     if request.user.is_authenticated:
         from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
         if not has_verified_account_email(request.user):
             messages.info(request, "Verify your AlgoBot email before continuing.")
             return redirect("verify_email_page")
-        return redirect("dashboard_page" if has_authorized_broker_connection(request.user) else "broker_marketplace_page")
+        if not has_authorized_broker_connection(request.user):
+            if safe_destination:
+                request.session["broker_onboarding_next"] = safe_destination
+            return redirect("broker_marketplace_page")
+        if safe_destination and not safe_destination.startswith(("/login/", "/register/", "/auth/google/")):
+            return redirect(safe_destination)
+        return redirect("dashboard_page")
     if request.method == "POST":
         identifier = str(request.POST.get("identifier") or request.POST.get("username") or "").strip()
         password = request.POST.get("password") or ""
@@ -142,7 +152,7 @@ def login_page(request):
         destination = request.POST.get("next") or request.GET.get("next") or ""
         safe_destination = destination if destination and url_has_allowed_host_and_scheme(
             destination, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-        ) else ""
+        ) and not destination.startswith(("/login/", "/register/", "/auth/google/")) else ""
         if not has_authorized_broker_connection(user):
             if safe_destination:
                 request.session["broker_onboarding_next"] = safe_destination
