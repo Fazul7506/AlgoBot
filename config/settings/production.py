@@ -34,10 +34,20 @@ CSRF_COOKIE_DOMAIN = env("CSRF_COOKIE_DOMAIN", ".algobot.dpdns.org")
 WHITENOISE_MANIFEST_STRICT = False
 USE_POSTGRES = True
 USE_REDIS = True
-EMAIL_BACKEND = env(
-    "EMAIL_BACKEND",
-    "anymail.backends.brevo.EmailBackend" if BREVO_API_KEY else "django.core.mail.backends.smtp.EmailBackend",  # noqa: F405
-)
+_requested_email_backend = env("EMAIL_BACKEND", "")
+# A legacy console-backend environment variable must not silently disable a
+# configured Brevo integration in production.
+if not _requested_email_backend or (
+    BREVO_API_KEY  # noqa: F405
+    and _requested_email_backend == "django.core.mail.backends.console.EmailBackend"
+):
+    EMAIL_BACKEND = (
+        "anymail.backends.brevo.EmailBackend"
+        if BREVO_API_KEY  # noqa: F405
+        else "django.core.mail.backends.smtp.EmailBackend"
+    )
+else:
+    EMAIL_BACKEND = _requested_email_backend
 ANYMAIL = {"BREVO_API_KEY": BREVO_API_KEY}  # noqa: F405
 
 # The configured backend and credentials must describe the same real transport.
