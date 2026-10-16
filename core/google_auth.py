@@ -197,9 +197,20 @@ def google_login_callback(request):
                 if not user.is_active:
                     messages.error(request, "This AlgoBot account is disabled. Contact support.")
                     return redirect("login_page")
-                # Provider identity proves the Google address, but never silently
-                # changes the local account email or links by email equality.
+                # This provider subject is already explicitly linked to this
+                # local account, and Google has asserted email_verified=true.
+                # Verify the local address only when it still matches the
+                # provider's verified address; never silently change the email.
                 profile, _ = UserProfile.objects.get_or_create(user=user)
+                if (
+                    not profile.email_verified
+                    and str(user.email or "").strip().lower() == email
+                ):
+                    profile.email_verified = True
+                    profile.email_verified_at = timezone.now()
+                    profile.save(update_fields=[
+                        "email_verified", "email_verified_at", "updated_at"
+                    ])
             else:
                 if User.objects.filter(email__iexact=email).exists():
                     messages.info(
@@ -241,11 +252,15 @@ def google_login_callback(request):
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     UserProfile.objects.filter(user=user).update(last_login_at=timezone.now())
     from core.broker_onboarding import has_authorized_broker_connection
-    if not has_authorized_broker_connection(user):
-        return redirect("broker_marketplace_page")
     requested = first_safe_auth_destination(
         request, request.session.pop("broker_onboarding_next", "")
     )
+    if not has_authorized_broker_connection(user):
+        # Continue a Deriv connection only when that same-host relative path
+        # was explicitly requested before Google authentication.
+        if requested.startswith("/brokers/connect/"):
+            return redirect(requested)
+        return redirect("broker_marketplace_page")
     if requested and not requested.startswith(("/brokers/", "/auth/google/", "/login/", "/register/")):
         return redirect(requested)
     return redirect("dashboard_page")
