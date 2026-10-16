@@ -159,6 +159,9 @@ def login_page(request):
         if not has_authorized_broker_connection(user):
             if safe_destination:
                 request.session["broker_onboarding_next"] = safe_destination
+                # Resume an explicitly initiated Deriv connection after login.
+                if safe_destination.startswith("/brokers/connect/"):
+                    return redirect(safe_destination)
             return redirect("broker_marketplace_page")
         if safe_destination:
             return redirect(safe_destination)
