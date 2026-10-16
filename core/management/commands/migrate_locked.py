@@ -18,6 +18,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--database", default="default")
         parser.add_argument("--noinput", action="store_true")
+        parser.add_argument("--fake-initial", action="store_true")
         parser.add_argument("--verbosity", type=int, default=1)
 
     def handle(self, *args, **options):
@@ -28,6 +29,8 @@ class Command(BaseCommand):
             "interactive": not options["noinput"],
             "verbosity": options["verbosity"],
         }
+        if options.get("fake_initial"):
+            migrate_options["fake_initial"] = True
 
         # SQLite and other non-PostgreSQL backends have no PostgreSQL advisory
         # lock. Keep local/test behavior identical to Django's normal command.
