@@ -41,7 +41,7 @@ EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBacken
 _EMAIL_PROVIDER_CONFIGURED = bool(BREVO_API_KEY) or bool(  # noqa: F405
     EMAIL_HOST and EMAIL_PORT and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD
 )
-if EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend":
+if not BREVO_API_KEY and EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend":  # noqa: F405
     raise RuntimeError("Production email must use Brevo or a configured SMTP backend.")
 if not _EMAIL_PROVIDER_CONFIGURED:
     raise RuntimeError(
