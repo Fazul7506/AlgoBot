@@ -25,6 +25,23 @@ from .views import OrderViewSet, PositionViewSet
 from .engine import ExecutionEngine
 
 
+class CanonicalCandleTimeframeTests(SimpleTestCase):
+    def test_legacy_model_timeframes_resolve_to_saved_candle_keys(self):
+        cases = {
+            "M1": "1m", "M2": "2m", "M5": "5m", "M10": "10m",
+            "M15": "15m", "M30": "30m", "H1": "1h", "H2": "2h",
+            "H4": "4h", "H8": "8h", "D1": "1d",
+        }
+        for legacy, canonical in cases.items():
+            with self.subTest(legacy=legacy):
+                self.assertEqual(ExecutionEngine._canonical_candle_timeframe(legacy), canonical)
+
+    def test_canonical_timeframes_and_empty_input_are_supported(self):
+        self.assertEqual(ExecutionEngine._canonical_candle_timeframe("1m"), "1m")
+        self.assertEqual(ExecutionEngine._canonical_candle_timeframe("5s"), "5s")
+        self.assertEqual(ExecutionEngine._canonical_candle_timeframe(""), "1m")
+
+
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
