@@ -11,14 +11,26 @@ from apps.brokers.models import BrokerAccount
 
 
 class ExecutionEngine:
+    @staticmethod
+    def _canonical_candle_timeframe(timeframe):
+        """Translate legacy broker/model labels to persisted market-data keys."""
+        value = str(timeframe or "1m").strip()
+        aliases = {
+            "M1": "1m", "M2": "2m", "M5": "5m", "M10": "10m",
+            "M15": "15m", "M30": "30m", "H1": "1h", "H2": "2h",
+            "H4": "4h", "H8": "8h", "D1": "1d",
+        }
+        return aliases.get(value.upper(), value.lower())
+
     def _ai_market_context(self, account, symbol, timeframe='M1'):
         from apps.market_data.models import Tick, Candle
+        candle_timeframe = self._canonical_candle_timeframe(timeframe)
         max_age = int(getattr(settings, 'BROKER_MARKET_DATA_MAX_AGE_SECONDS', 30)); now = timezone.now()
         tick = Tick.objects.filter(symbol__symbol=symbol).order_by('-epoch', '-received_at').first()
         if tick is not None:
             age = max(0, (now - tick.received_at).total_seconds())
             if age <= max_age:
-                candles = list(reversed(list(Candle.objects.filter(symbol__symbol=symbol, timeframe=timeframe).order_by('-epoch')[:60])))
+                candles = list(reversed(list(Candle.objects.filter(symbol__symbol=symbol, timeframe=candle_timeframe).order_by('-epoch')[:60])))
                 price = float(tick.quote)
                 return {'market_data': {'close': price, 'open': price, 'high': price, 'low': price, 'bid': float(tick.bid) if tick.bid is not None else None, 'ask': float(tick.ask) if tick.ask is not None else None, 'spread': float(tick.spread or 0), 'volume': float(tick.volume or 0), 'source': 'persisted_broker_tick', 'age_seconds': round(age, 3)}, 'candles': [{'open': float(x.open), 'high': float(x.high), 'low': float(x.low), 'close': float(x.close), 'volume': float(x.volume or 0), 'epoch': x.epoch} for x in candles]}
         async def fetch(): return await asyncio.wait_for(BrokerRegistry().adapter(account.broker, account).get_market_data(symbol), timeout=7.0)
