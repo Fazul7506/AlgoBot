@@ -23,7 +23,7 @@ LOGGING = {
     },
     "handlers": {
         "console": {"level": "INFO", "class": "logging.StreamHandler", "formatter": "verbose", "filters": ["wordpress_probe", "sensitive_query"]},
-        "django_file": {"level": "INFO", "class": "logging.handlers.RotatingFileHandler", "filters": ["wordpress_probe"], "filename": LOG_DIR / "django.log", "maxBytes": 10485760, "backupCount": 10, "formatter": "json"},
+        "django_file": {"level": "INFO", "class": "logging.handlers.RotatingFileHandler", "filters": ["wordpress_probe", "sensitive_query"], "filename": LOG_DIR / "django.log", "maxBytes": 10485760, "backupCount": 10, "formatter": "json"},
         "oauth_file": {"level": "INFO", "class": "logging.handlers.RotatingFileHandler", "filters": ["sensitive_query"], "filename": LOG_DIR / "oauth.log", "maxBytes": 10485760, "backupCount": 10, "formatter": "json"},
         "broker_file": {"level": "INFO", "class": "logging.handlers.RotatingFileHandler", "filters": ["sensitive_query"], "filename": LOG_DIR / "broker.log", "maxBytes": 10485760, "backupCount": 10, "formatter": "json"},
         "trading_file": {"level": "INFO", "class": "logging.handlers.RotatingFileHandler", "filters": ["sensitive_query"], "filename": LOG_DIR / "trading.log", "maxBytes": 10485760, "backupCount": 10, "formatter": "json"},
