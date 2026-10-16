@@ -35,17 +35,20 @@ WHITENOISE_MANIFEST_STRICT = False
 USE_POSTGRES = True
 USE_REDIS = True
 _requested_email_backend = env("EMAIL_BACKEND", "")
-# A legacy console-backend environment variable must not silently disable a
-# configured Brevo integration in production.
-if not _requested_email_backend or (
-    BREVO_API_KEY  # noqa: F405
-    and _requested_email_backend == "django.core.mail.backends.console.EmailBackend"
-):
-    EMAIL_BACKEND = (
-        "anymail.backends.brevo.EmailBackend"
-        if BREVO_API_KEY  # noqa: F405
-        else "django.core.mail.backends.smtp.EmailBackend"
+_smtp_is_configured = bool(EMAIL_HOST and EMAIL_PORT and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD)
+# Prefer Brevo when its API key is configured and the deployment still carries
+# a legacy console/SMTP selection without SMTP credentials.
+if BREVO_API_KEY and (  # noqa: F405
+    not _requested_email_backend
+    or _requested_email_backend == "django.core.mail.backends.console.EmailBackend"
+    or (
+        _requested_email_backend == "django.core.mail.backends.smtp.EmailBackend"
+        and not _smtp_is_configured
     )
+):
+    EMAIL_BACKEND = "anymail.backends.brevo.EmailBackend"
+elif not _requested_email_backend:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 else:
     EMAIL_BACKEND = _requested_email_backend
 ANYMAIL = {"BREVO_API_KEY": BREVO_API_KEY}  # noqa: F405
