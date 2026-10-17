@@ -48,17 +48,16 @@ class Command(BaseCommand):
                         epoch = tick.get("epoch")
                         if not symbol or quote is None or epoch is None:
                             continue
-                        # A valid provider tick proves the stream is alive; reset
-                        # reconnect backoff even if the tick is later rejected as stale.
-                        reconnect_delay = 2
                         try:
                             payload = await sync_to_async(self.ingest)(tick)
                         except MarketDataValidationError as exc:
-                            # A stale/out-of-order or malformed provider tick is
-                            # isolated to that message; it must not tear down all
-                            # subscriptions and create a market-wide data gap.
+                            # The stream is alive; a stale/out-of-order or malformed
+                            # tick is isolated to this message, not the whole socket.
+                            reconnect_delay = 2
                             self.stderr.write(f"market tick rejected: {exc}")
                             continue
+                        # Reset reconnect backoff only after ingestion succeeds.
+                        reconnect_delay = 2
                         if layer and payload:
                             await layer.group_send(
                                 f"algobot-market-{symbol}",
