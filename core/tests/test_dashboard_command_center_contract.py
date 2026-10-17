@@ -93,6 +93,14 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("request('/api/dashboard/trade_history/?days=30&limit=8'", source)
         self.assertNotIn("request('/api/orders/'", source)
 
+    def test_account_switch_does_not_wait_for_slow_startup_hydration_when_account_is_known(self):
+        source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
+        self.assertIn("let accounts=[],selected=null,busy=null,selectionRevision=0;", source)
+        self.assertIn("let target=accounts.find(a=>accountId(a)===String(id));", source)
+        self.assertIn("selectionRevision+=1;", source)
+        self.assertIn("if(revisionAtStart!==selectionRevision)return selected;", source)
+        self.assertNotIn("async function selectAccount(id){\\n    if(busy)await busy.catch(()=>{});", source)
+
     def test_dashboard_javascript_syntax_with_node_when_available(self):
         node = shutil.which("node")
         if not node:
