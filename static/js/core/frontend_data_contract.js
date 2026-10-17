@@ -77,11 +77,10 @@
     const target=resolveUrl(url);
     const targetOrigin=new URL(target,window.location.origin).origin;
     const sameOrigin=targetOrigin===window.location.origin;
-    const sessionAccountSelect=/^\/api\/brokers\/accounts\/[^/]+\/select\/$/.test(new URL(target,window.location.origin).pathname);
-    // Account selection mutates the authenticated Django session, but the browser
-    // already has a short-lived JWT issued by /api/auth/browser-token/. Use that
-    // bearer credential for API authentication while retaining the session cookie
-    // so the server can persist the selected account in the Django session.
+    const sessionAccountContext=isSessionAccountContextUrl(url);
+    // Account selection mutates the authenticated Django session, and account-context
+    // reads must resolve that same session. Use the short-lived bearer JWT for API
+    // authentication while retaining the same-site session cookie for account context.
     // Do not copy a csrftoken from the UI origin: with the split UI/API deployment
     // duplicate or rotated CSRF cookies can make that header disagree with the
     // cookie received by the API origin.
