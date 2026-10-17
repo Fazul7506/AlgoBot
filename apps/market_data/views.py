@@ -397,8 +397,11 @@ def candle_backfill_control(request):
             try:
                 from celery import current_app
                 current_app.control.revoke(task_id, terminate=False)
-            except Exception:
-                logger.exception("Unable to revoke stopped candle backfill task", extra={"run_id": run_id, "task_id": task_id})
+            except Exception as exc:
+                logger.error(
+                    "stopped_backfill_task_revoke_failed",
+                    extra={"run_id": run_id, "task_id": task_id, "error_type": type(exc).__name__},
+                )
         # The stop transition has committed and staged-write transactions lock
         # the run row, so no in-flight writer can pass its fence after this point.
         from .tasks import _discard_staged_backfill
