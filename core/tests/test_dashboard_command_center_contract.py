@@ -29,6 +29,19 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("renderAccount(stale.account, '', false, true)", source)
         self.assertIn("if (persistSnapshot && connected && freshness === 'fresh') writeLastAccountSnapshot(account)", source)
 
+    def test_dashboard_discards_in_flight_responses_when_account_identity_is_cleared_during_switch(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("requestedAccountId != null", source)
+        self.assertIn("String(currentId ?? '') === String(requestedAccountId)", source)
+        self.assertIn("Never let a no-account transition or an old response paint financial data", source)
+
+    def test_dashboard_waits_for_confirmed_account_before_refreshing_after_switch(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("requestedAccountId != null", source)
+        self.assertIn("Waiting for confirmed account selection", source)
+        self.assertIn("Switching account · waiting for server confirmation", source)
+        self.assertIn("window.AlgoBotAccountContext?.getSelectedId?.()", source)
+
     def test_account_overview_response_is_checked_against_requested_account(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("const accountPayload = value?.data?.account || value?.account || null", source)
@@ -94,9 +107,17 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("request('/api/dashboard/trade_history/?days=30&limit=8'", source)
         self.assertNotIn("request('/api/orders/'", source)
 
+    def test_background_account_hydration_cannot_restore_previous_account_mid_switch(self):
+        source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
+        self.assertIn("if(switching)return null;", source)
+        self.assertIn("switching=true;", source)
+        self.assertIn("function getSelected(){return switching?null:", source)
+        self.assertIn("isSwitching:()=>switching", source)
+        self.assertIn("if(switching)return;if(selected&&accounts.some", source)
+
     def test_account_switch_does_not_wait_for_slow_startup_hydration_when_account_is_known(self):
         source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
-        self.assertIn("let accounts=[],selected=null,busy=null,selectionRevision=0;", source)
+        self.assertIn("let accounts=[],selected=null,busy=null,selectionRevision=0,switching=false;", source)
         self.assertIn("let target=accounts.find(a=>accountId(a)===String(id));", source)
         self.assertIn("selectionRevision+=1;", source)
         self.assertIn("if(revisionAtStart!==selectionRevision)return selected;", source)
