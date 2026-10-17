@@ -457,9 +457,16 @@ class AccountIdentityManagementTests(TestCase):
         self.assertEqual(self.user.email, "old-address@example.com")
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["new-address@example.com"])
-        match = re.search(r"/verify-email/\?token=([^\s]+)", mail.outbox[0].body)
+        self.assertNotIn("https://", mail.outbox[0].body)
+        self.assertEqual(len(mail.outbox[0].alternatives), 1)
+        html_body, content_type = mail.outbox[0].alternatives[0]
+        self.assertEqual(content_type, "text/html")
+        self.assertIn(">Confirm new email address</a>", html_body)
+        match = re.search(r'href="([^"]+)"', html_body)
         self.assertIsNotNone(match)
-        raw_token = parse_qs(urlparse(match.group(0)).query).get("token", [""])[0].strip()
+        verification_url = urlparse(match.group(1).replace("&amp;", "&"))
+        self.assertEqual(verification_url.path, "/verify-email/")
+        raw_token = parse_qs(verification_url.query).get("token", [""])[0].strip()
 
         response = self.client.get(f"/verify-email/?token={raw_token}")
         self.assertEqual(response.status_code, 200)
