@@ -15,6 +15,7 @@ class ProductionApiContractTests(SimpleTestCase):
         self.assertIn("const sessionAccountContext=isSessionAccountContextUrl(url);", source)
         self.assertIn("credentials:sessionAccountContext?'include':'omit'", source)
         self.assertIn("const requestInit={credentials:sessionAccountContext?'include':'omit',...options,headers,cache:'no-store',signal:controller.signal};", source)
+        self.assertIn("credentials:sessionAccountContext?'include':'omit',...options,headers:retryHeaders", source)
         self.assertNotIn("CSRF_TOKEN_UNAVAILABLE", source)
         self.assertNotIn("headers.set('X-CSRFToken',csrfToken)", source)
         self.assertNotIn("is_preferred", source)
