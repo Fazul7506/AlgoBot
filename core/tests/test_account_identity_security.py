@@ -269,7 +269,7 @@ class BrowserAccountAuthenticationTests(TestCase):
             )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(mail.outbox), 1)
-        self.assertNotRegex(mail.outbox[0].body, r"https?://\\S+")
+        self.assertNotIn("https://", mail.outbox[0].body)
         self.assertIn("Verify Email", mail.outbox[0].body)
         self.assertEqual(len(mail.outbox[0].alternatives), 1)
         html_body, content_type = mail.outbox[0].alternatives[0]
