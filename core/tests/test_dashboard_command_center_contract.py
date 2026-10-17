@@ -113,6 +113,7 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("switching=true;", source)
         self.assertIn("function getSelected(){return switching?null:", source)
         self.assertIn("isSwitching:()=>switching", source)
+        self.assertIn("if(switching)return;if(selected&&accounts.some", source)
 
     def test_account_switch_does_not_wait_for_slow_startup_hydration_when_account_is_known(self):
         source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
