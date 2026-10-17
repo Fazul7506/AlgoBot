@@ -34,6 +34,13 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("String(currentId ?? '') === String(requestedAccountId ?? '')", source)
         self.assertIn("Account identity is part of the request generation", source)
 
+    def test_dashboard_waits_for_confirmed_account_before_refreshing_after_switch(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("requestedAccountId != null", source)
+        self.assertIn("Waiting for confirmed account selection", source)
+        self.assertIn("Switching account · waiting for server confirmation", source)
+        self.assertIn("window.AlgoBotAccountContext?.getSelectedId?.()", source)
+
     def test_account_overview_response_is_checked_against_requested_account(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("const accountPayload = value?.data?.account || value?.account || null", source)
