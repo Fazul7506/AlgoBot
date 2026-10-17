@@ -36,3 +36,16 @@ class ProductionApiContractTests(SimpleTestCase):
             self.assertNotIn(legacy_name, example)
         self.assertNotIn("CELERY_BROKER_URL=", example)
         self.assertNotIn("CELERY_RESULT_BACKEND=", example)
+
+    def test_optional_deriv_and_telegram_environment_values_are_exposed_as_settings(self):
+        broker = (ROOT / "config/settings/broker.py").read_text(encoding="utf-8")
+        base = (ROOT / "config/settings/base.py").read_text(encoding="utf-8")
+        self.assertIn('DERIV_OAUTH_CLIENT_SECRET = env("DERIV_OAUTH_CLIENT_SECRET", "")', broker)
+        self.assertIn('DERIV_OAUTH_SCOPE = env("DERIV_OAUTH_SCOPE", "trade")', broker)
+        self.assertIn('TELEGRAM_MODE = os.getenv("TELEGRAM_MODE", "webhook")', base)
+        self.assertIn('TELEGRAM_API_TIMEOUT = os.getenv("TELEGRAM_API_TIMEOUT", "10")', base)
+        self.assertIn('TELEGRAM_RETRY_MAX_ATTEMPTS = os.getenv("TELEGRAM_RETRY_MAX_ATTEMPTS", "6")', base)
+        example = (ROOT / ".env.example").read_text(encoding="utf-8")
+        self.assertNotIn("DERIV_API_TOKEN=", example)
+        self.assertNotIn("OPENAI_API_KEY=", example)
+        self.assertNotIn("TELEGRAM_WEBHOOK_URL=", example)
