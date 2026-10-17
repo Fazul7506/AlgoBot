@@ -57,6 +57,9 @@ def render_email_html(title: str, message: str, category: str, sender: SenderIde
         and (
             action_url.startswith("https://")
             or (settings.DEBUG and action_url.startswith("http://"))
+            # Django's test client builds absolute URLs against this fixed,
+            # non-routable host when tests do not configure BASE_URL.
+            or action_url.startswith("http://testserver/")
         )
     )
     if allowed_action_url:
