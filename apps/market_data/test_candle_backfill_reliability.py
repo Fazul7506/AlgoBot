@@ -142,6 +142,25 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertFalse(payload["live"])
         self.assertEqual(payload["worker_state"], "COMPLETED")
 
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+    def test_initial_backfill_delivery_for_missing_run_is_skipped(self):
+        missing_run_id = 987654321
+        result = run_initial_candle_backfill.apply(
+            args=(missing_run_id,),
+            kwargs={"count": 5000},
+            task_id="orphaned-initial-backfill-task",
+        )
+
+        self.assertEqual(result.state, "SUCCESS")
+        self.assertEqual(
+            result.result,
+            {
+                "status": "skipped",
+                "reason": "missing_run",
+                "run_id": missing_run_id,
+            },
+        )
+
     def test_status_choices_exclude_queued(self):
         self.assertEqual(
             [value for value, _ in CandleBackfillRun.STATUS_CHOICES],
