@@ -1059,7 +1059,13 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
     task_id = getattr(run_initial_candle_backfill.request, "id", "")
     try:
         with transaction.atomic():
-            run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
+            run = CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
+            if run is None:
+                logger.warning(
+                    "Ignoring candle backfill delivery for a missing run",
+                    extra={"run_id": run_id, "task_id": task_id},
+                )
+                return {"status": "skipped", "reason": "missing_run", "run_id": run_id}
             if run.status != "running":
                 return {"status": "skipped", "reason": f"terminal_{run.status}", "run_id": run_id}
             if not run.task_id or not task_id or run.task_id != task_id:
@@ -1105,7 +1111,14 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
         else:
             _discard_staged_backfill(run_id)
         with transaction.atomic():
-            run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
+            run = CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
+            if run is None:
+                _discard_staged_backfill(run_id)
+                logger.warning(
+                    "Candle backfill run was removed before completion could be recorded",
+                    extra={"run_id": run_id, "task_id": task_id},
+                )
+                return {"status": "skipped", "reason": "run_removed_during_execution", "run_id": run_id}
             already_promoted_by_this_run = (
                 run.status == "completed"
                 and run.completed_at
@@ -1131,7 +1144,13 @@ def run_initial_candle_backfill(run_id, count=5000, symbol=None):
     except Exception as exc:
         _discard_staged_backfill(run_id)
         with transaction.atomic():
-            run = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
+            run = CandleBackfillRun.objects.select_for_update().filter(pk=run_id).first()
+            if run is None:
+                logger.warning(
+                    "Candle backfill run disappeared while handling a task failure",
+                    extra={"run_id": run_id, "task_id": task_id, "error_type": exc.__class__.__name__},
+                )
+                return {"status": "skipped", "reason": "run_removed_during_execution", "run_id": run_id}
             # Preserve an operator stop or another already-recorded terminal
             # failure instead of replacing its reason with a late task exception.
             if run.status == "running":
