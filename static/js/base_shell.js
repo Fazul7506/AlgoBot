@@ -34,7 +34,11 @@
   window.alert=message=>showDjangoMessage(String(message??''),'info');
 
   function friendlyApiMessage(detail) { if(!detail)return'The requested operation could not be completed.'; const code=String(detail.code||'').toUpperCase(); if(code==='API_TIMEOUT')return'The server took too long to respond. Please try again.'; if(code==='NETWORK_ERROR')return'The data connection is temporarily unavailable. Please try again.'; if(code==='EDGE_CHALLENGE')return'The production connection is temporarily unavailable. Please try again.'; const message=String(detail.message||'').replace(/\s+/g,' ').trim(); if(!message||/^[[{]/.test(message)||message.length>500)return'The requested operation could not be completed.'; return message; }
-  function bindApiMessages() { window.addEventListener('algobot:api-error',event=>{const detail=event.detail||{}; const level=Number(detail.status)>=500||['API_TIMEOUT','NETWORK_ERROR'].includes(detail.code)?'error':'warning'; showDjangoMessage(friendlyApiMessage(detail),level);}); }
+  // Polling can legitimately repeat the same failing request. Keep the console/UI
+  // useful by coalescing identical transport errors across overlapping page widgets.
+  const recentApiErrors = new Map();
+  const API_ERROR_DEDUPE_MS = 10000;
+  function bindApiMessages() { window.addEventListener('algobot:api-error',event=>{const detail=event.detail||{}; const signature=[detail.code||'',detail.status||0,detail.method||'GET',detail.url||'',detail.message||''].join('|'); const now=Date.now(); const previous=recentApiErrors.get(signature)||0; if(now-previous<API_ERROR_DEDUPE_MS)return; recentApiErrors.set(signature,now); if(recentApiErrors.size>100){for(const [key,at] of recentApiErrors)if(now-at>API_ERROR_DEDUPE_MS)recentApiErrors.delete(key);if(recentApiErrors.size>100)recentApiErrors.clear();} const level=Number(detail.status)>=500||['API_TIMEOUT','NETWORK_ERROR'].includes(detail.code)?'error':'warning'; showDjangoMessage(friendlyApiMessage(detail),level);}); }
 
   function currentPath() { return window.location.pathname.replace(/\/+$/,'')||'/'; }
   function navigationLinks() { return [...document.querySelectorAll('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')]; }

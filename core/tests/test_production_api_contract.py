@@ -66,3 +66,16 @@ class ProductionApiContractTests(SimpleTestCase):
         self.assertNotIn('key: CELERY_RESULT_BACKEND', render)
         self.assertNotIn('CELERY_BROKER_URL="$REDIS_URL"', render)
         self.assertNotIn('CELERY_RESULT_BACKEND="$REDIS_URL"', render)
+
+    def test_repeated_api_errors_are_coalesced_during_polling(self):
+        source = (ROOT / "static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("const recentApiErrors = new Map()", source)
+        self.assertIn("const API_ERROR_DEDUPE_MS = 10000", source)
+        self.assertIn("if(now-previous<API_ERROR_DEDUPE_MS)return", source)
+
+    def test_deriv_tick_watchdog_uses_bounded_backoff_and_recovers_after_valid_tick(self):
+        source = (ROOT / "static/js/terminal_market_watchdog.js").read_text(encoding="utf-8")
+        self.assertIn("const MAX_RECONNECT_DELAY_MS = 30000", source)
+        self.assertIn("Math.min(1000 * (2 ** Math.min(reconnectAttempts, 5)), MAX_RECONNECT_DELAY_MS)", source)
+        self.assertIn("reconnectAttempts = 0;", source)
+        self.assertIn("closeSocket(); scheduleReconnect(); return;", source)
