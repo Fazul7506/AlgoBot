@@ -121,7 +121,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("headers.set('Authorization'", client)
         self.assertIn("credentials:sessionAccountContext?'include':'omit'", client)
         self.assertNotIn("ensureCsrfCookie", client)
-        self.assertIn("sessionAccountSelect", client)
+        self.assertIn("isSessionAccountSelectUrl", client)
         self.assertIn("isSessionAccountContextUrl", client)
         self.assertIn("path==='/api/brokers/accounts/'||path==='/api/brokers/accounts/active/'", client)
         self.assertIn("ensureApiAccessToken", client)
