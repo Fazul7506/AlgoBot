@@ -52,8 +52,17 @@ def render_email_html(title: str, message: str, category: str, sender: SenderIde
     action = ""
     action_url = metadata.get("action_url")
     action_label = metadata.get("action_label", "Open AlgoBot")
-    if isinstance(action_url, str) and action_url.startswith(("https://", "http://")):
-        action = f'<p><a href="{html.escape(action_url, quote=True)}">{html.escape(str(action_label))}</a></p>'
+    if isinstance(action_url, str) and action_url.startswith("https://"):
+        # Keep the visible email body free of long tokenized URLs. The HTTPS
+        # destination is carried by a clearly labelled, branded call-to-action.
+        action = (
+            '<p style="margin:28px 0;">'
+            f'<a href="{html.escape(action_url, quote=True)}" '
+            'style="display:inline-block;background:#315efb;color:#ffffff;'
+            'text-decoration:none;font-weight:700;padding:14px 22px;'
+            'border-radius:8px;">'
+            f'{html.escape(str(action_label))}</a></p>'
+        )
     return f"""<!doctype html><html lang=\"en\"><body style=\"font-family:Arial,sans-serif;background:#f3f4f6;padding:24px;color:#111827;\"><div style=\"max-width:640px;margin:auto;background:#fff;padding:28px;border-radius:14px;\"><strong>AlgoBot</strong><div style=\"color:#6b7280;font-size:12px;margin-top:5px;\">{html.escape(sender.name)} &lt;{html.escape(sender.email)}&gt;</div><div style=\"margin-top:24px;font-size:11px;text-transform:uppercase;\">{category_label}</div><h1>{safe_title}</h1><div style=\"line-height:1.7;\">{safe_message}</div>{action}</div></body></html>"""
 
 
