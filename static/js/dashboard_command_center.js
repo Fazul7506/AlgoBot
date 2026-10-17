@@ -156,6 +156,16 @@
     // Clear the previous account identity when no account is selected; otherwise
     // its cached snapshot could survive a disconnect and be shown on a timeout.
     selectedAccountId = requestedAccountId;
+    if (requestedAccountId == null) {
+      busy = false;
+      document.documentElement.dataset.dashboardLoading = 'false';
+      setText('[data-dashboard-sync]', 'Waiting for a confirmed broker account…');
+      renderAccount(null, 'No confirmed broker account selected');
+      const unavailable = {ok:false,pending:false,value:null,error:new Error('No confirmed broker account selected')};
+      renderCollections({positions:{...unavailable},orders:{...unavailable},markets:{...unavailable},signals:{...unavailable}});
+      ['positions','execution','markets','signals'].forEach(key => status(key,'warn','Waiting for confirmed account selection'));
+      return;
+    }
     busy = true;
     setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
     document.documentElement.dataset.dashboardLoading = 'true';
