@@ -1,7 +1,11 @@
 """Distributed dispatch locks for broker candle-backfill lifecycle operations."""
 
+import logging
+
 from django_redis import get_redis_connection
 from redis.exceptions import LockNotOwnedError
+
+logger = logging.getLogger(__name__)
 
 
 class BackfillDispatchLock:
@@ -33,6 +37,14 @@ class BackfillDispatchLock:
             # lifecycle row is authoritative; never mask the task's result
             # with a stale-lock cleanup exception.
             pass
+        except Exception as exc:
+            # Redis may disappear after dispatch. The 30-second TTL is the
+            # recovery mechanism; do not turn a successful publish into a 500
+            # or log a connection URL that may contain credentials.
+            logger.warning(
+                "backfill_dispatch_lock_release_failed",
+                extra={"scope": self.scope, "error_type": type(exc).__name__},
+            )
         finally:
             self._lock = None
 
