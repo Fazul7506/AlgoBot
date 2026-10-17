@@ -29,6 +29,11 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("renderAccount(stale.account, '', false, true)", source)
         self.assertIn("if (persistSnapshot && connected && freshness === 'fresh') writeLastAccountSnapshot(account)", source)
 
+    def test_dashboard_discards_in_flight_responses_when_account_identity_is_cleared_during_switch(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("String(currentId ?? '') === String(requestedAccountId ?? '')", source)
+        self.assertIn("Account identity is part of the request generation", source)
+
     def test_account_overview_response_is_checked_against_requested_account(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("const accountPayload = value?.data?.account || value?.account || null", source)
