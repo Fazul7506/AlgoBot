@@ -161,7 +161,10 @@
     document.documentElement.dataset.dashboardLoading = 'true';
     const isCurrent = () => {
       const currentId = window.AlgoBotBrokerState?.get?.()?.account?.id;
-      return seq === loadSeq && !(requestedAccountId != null && currentId != null && String(currentId) !== requestedAccountId);
+      // Account identity is part of the request generation. A null current ID
+      // during a switch is not permission for the previous account's response
+      // to render; only an exact identity match may update dashboard state.
+      return seq === loadSeq && String(currentId ?? '') === String(requestedAccountId ?? '');
     };
     const collections = {
       positions: {ok: false, pending: true, value: null, error: null},
