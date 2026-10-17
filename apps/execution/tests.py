@@ -225,11 +225,11 @@ class ExecutionQueueTaskTests(TestCase):
     def test_execution_queue_beat_tick_expires_stale_polling_tasks(self):
         from deriv_platform.celery import app
 
-        entry = app.conf.beat_schedule["execution-queue-every-2-seconds"]
+        entry = app.conf.beat_schedule["execution-queue-recovery-every-30-seconds"]
         self.assertEqual(entry["task"], "apps.execution.process_execution_queue")
-        self.assertEqual(entry["schedule"], 2.0)
+        self.assertEqual(entry["schedule"], 30.0)
         self.assertEqual(entry["options"]["queue"], "celery")
-        self.assertEqual(entry["options"]["expires"], 3)
+        self.assertEqual(entry["options"]["expires"], 25)
 
     @patch('apps.execution.tasks.get_redis_connection')
     def test_execution_queue_skips_when_singleton_lock_is_held(self, get_redis_connection):
