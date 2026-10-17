@@ -543,8 +543,12 @@ class CandleBackfillReliabilityTests(TestCase):
         run.refresh_from_db()
         self.assertEqual(result.get("recovered"), [])
         self.assertEqual(run.status, "failed")
+        self.assertIn("RuntimeError", run.error)
+        self.assertNotIn("Redis unavailable", run.error)
+        self.assertNotIn("rediss://", run.error)
         event = CandleBackfillEvent.objects.filter(run=run, event_type="error").latest("id")
         self.assertEqual(event.payload.get("queue"), "market_data")
+        self.assertEqual(event.payload.get("error_type"), "RuntimeError")
 
     def test_candle_backfill_task_limits_match_production_contract(self):
         from .tasks import backfill_research_candles, run_initial_candle_backfill
@@ -811,3 +815,43 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertFalse(Tick.objects.filter(symbol=self.symbol, epoch=100, quote="1").exists())
         self.assertTrue(Candle.objects.filter(symbol=self.symbol, source="deriv_candles").exists())
 
+
+    @patch("apps.market_data.tasks.logger.error")
+    @patch(
+        "apps.market_data.backfill_lock.acquire_backfill_dispatch_lock",
+        side_effect=ConnectionError("rediss://user:secret@redis.example:6379/0"),
+    )
+    @patch("apps.market_data.tasks.run_initial_candle_backfill.apply_async")
+    def test_recovery_lock_failure_is_sanitized_and_fails_closed(self, publish, acquire, error_log):
+        result = reconcile_candle_backfill_runs(max_age_seconds=300)
+
+        self.assertEqual(result, {"recovered": [], "status": "lock_unavailable"})
+        publish.assert_not_called()
+        error_log.assert_called_once_with(
+            "candle_backfill_recovery_lock_unavailable",
+            extra={"error_type": "ConnectionError"},
+        )
+        self.assertNotIn("secret", repr(error_log.call_args))
+
+    @patch("apps.market_data.tasks.logger.error")
+    @patch(
+        "apps.market_data.tasks.run_initial_candle_backfill.apply_async",
+        side_effect=RuntimeError("rediss://user:secret@redis.example:6379/0"),
+    )
+    def test_automatic_initial_dispatch_failure_returns_safe_error_and_keeps_run_recoverable(self, publish, error_log):
+        result = ensure_initial_candle_backfill(count=5000)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("RuntimeError", result["error"])
+        self.assertIn("Verify Redis connectivity", result["error"])
+        self.assertNotIn("secret", result["error"])
+        self.assertNotIn("rediss://", result["error"])
+        run = CandleBackfillRun.objects.get(scope="initial")
+        self.assertEqual(run.status, "running")
+        self.assertTrue(run.task_id)
+        self.assertIsNotNone(run.dispatch_at)
+        error_log.assert_called_once_with(
+            "automatic_initial_backfill_dispatch_failed",
+            extra={"run_id": run.pk, "error_type": "RuntimeError"},
+        )
+        self.assertNotIn("secret", repr(error_log.call_args))
