@@ -106,9 +106,15 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         node = shutil.which("node")
         if not node:
             self.skipTest("Node.js is not installed in this test environment")
-        script = ROOT / "static" / "js" / "dashboard_command_center.js"
-        result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True, check=False)
-        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        scripts = [
+            ROOT / "static" / "js" / "dashboard_command_center.js",
+            ROOT / "static" / "js" / "core" / "account_context.js",
+            ROOT / "static" / "js" / "base_shell.js",
+        ]
+        for script in scripts:
+            with self.subTest(script=script.name):
+                result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
     def test_dashboard_api_reads_preserve_server_session_account_context(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
