@@ -4,13 +4,16 @@
   if (window.AlgoBotAccountContext) return;
   const STORAGE_KEY='algobot:selected-account-id:v1';
   const list=value=>Array.isArray(value)?value:(Array.isArray(value?.results)?value.results:(Array.isArray(value?.accounts)?value.accounts:[]));
-  let accounts=[],selected=null,busy=null,selectionRevision=0;
+  let accounts=[],selected=null,busy=null,selectionRevision=0,switching=false;
   const storageSet=id=>{try{id==null?localStorage.removeItem(STORAGE_KEY):localStorage.setItem(STORAGE_KEY,String(id))}catch(_){}};
   const accountId=a=>a?.id==null?null:String(a.id);
   const canonical=()=>window.AlgoBotFrontendData?.request;
   function publish(reason){window.AlgoBotBrokerState?.setAccount(selected,reason);window.dispatchEvent(new CustomEvent('algobot:account-context-changed',{detail:{account:selected,reason}}));window.dispatchEvent(new CustomEvent('algobot:account-changed',{detail:selected}));window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}))}
   function setSelected(account,reason='account-selected',persist=true){if(!account?.id)return null;selected=account;if(persist)storageSet(account.id);publish(reason);return account}
   async function load(force=false){
+    // While the server is changing the session's active account, never let a
+    // background hydration restore the previous account into browser state.
+    if(switching)return null;
     if(busy&&!force)return busy;const request=canonical();if(!request)return selected;
     const revisionAtStart=selectionRevision;
     const pending=(async()=>{
@@ -51,6 +54,7 @@
   }
 
   async function selectAccount(id){
+    if(switching)throw new Error('An account switch is already in progress. Please wait for confirmation.');
     // Do not serialize a user-initiated switch behind a slow startup hydration.
     // Existing account rows are enough to submit the authoritative select request.
     let target=accounts.find(a=>accountId(a)===String(id));
@@ -65,6 +69,7 @@
     // Invalidate any in-flight startup hydration so its response cannot restore
     // the previous account after the server accepts this switch.
     selectionRevision+=1;
+    switching=true;
     clearTransientState('account-switch-started');
     try{
       const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
@@ -74,18 +79,20 @@
       if(!confirmed?.id||accountId(confirmed)!==accountId(target))throw new Error('Broker did not confirm the selected account.');
       accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_active:false});
       window.AlgoBotBrokerAccounts=accounts.slice();
+      switching=false;
       return setSelected(confirmed,'account-switch',true);
     }catch(error){
+      switching=false;
       selected=null;
       try{await load(true);}catch(_){window.AlgoBotBrokerState?.reset('account-switch-failed');}
       if(previous&&!selected)window.AlgoBotBrokerState?.reset('account-switch-failed');
       throw error;
     }
   }
-  function getSelected(){return selected||window.AlgoBotBrokerState?.get?.().account||null}
+  function getSelected(){return switching?null:(selected||window.AlgoBotBrokerState?.get?.().account||null)}
   function getSelectedId(){return accountId(getSelected())||null}
   function getAccounts(){return accounts.slice()}
-  window.AlgoBotAccountContext=Object.freeze({load,refresh:()=>load(true),selectAccount,getSelected,getSelectedId,getAccounts});
+  window.AlgoBotAccountContext=Object.freeze({load,refresh:()=>load(true),selectAccount,getSelected,getSelectedId,getAccounts,isSwitching:()=>switching});
   document.addEventListener('click',event=>{const b=event.target?.closest?.('[data-account-switch]');if(b){event.preventDefault();event.stopImmediatePropagation();const explicit=b.dataset.accountId||b.dataset.accountTarget,current=getSelectedId(),target=explicit?accounts.find(a=>accountId(a)===String(explicit)):accounts.find(a=>accountId(a)!==String(current));if(target)selectAccount(target.id).catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})));return}const g=event.target?.closest?.('[data-select]');if(g){event.preventDefault();event.stopImmediatePropagation();selectAccount(g.dataset.select).catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error}))) }},true);
   window.addEventListener('algobot:backend-accounts-loaded',event=>{const rows=list(event.detail).filter(a=>a?.id);if(rows.length)accounts=rows;if(selected&&accounts.some(a=>accountId(a)===accountId(selected)))return;if(!selected){const target=accounts.find(a=>a.is_active===true);if(target)setSelected(target,'backend-accounts-rehydrated',false)}});
   window.addEventListener('algobot:account-synced',event=>{if(!event.detail?.id)return;const id=accountId(event.detail);accounts=accounts.map(a=>accountId(a)===id?event.detail:a);if(getSelectedId()===id)setSelected(event.detail,'account-synced',true)});
