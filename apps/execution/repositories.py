@@ -1,5 +1,11 @@
+import logging
+
+from django.db import transaction
+
 from .models import Order, ExecutionLog, ExecutionQueue
 from asgiref.sync import sync_to_async
+
+logger = logging.getLogger(__name__)
 
 
 class OrderRepository:
@@ -29,8 +35,24 @@ class ExecutionLogRepository:
 
 
 class ExecutionQueueRepository:
+    @staticmethod
+    def _dispatch_execution_queue():
+        """Wake a worker after the queue row commits; Beat remains recovery only."""
+        try:
+            from .tasks import process_execution_queue
+
+            process_execution_queue.apply_async(
+                kwargs={"batch_size": 10},
+                queue="celery",
+                expires=25,
+            )
+        except Exception:
+            # The durable DB queue remains authoritative. The periodic recovery
+            # poll will pick up this row if Redis is temporarily unavailable.
+            logger.exception("execution.queue.dispatch_failed")
+
     def enqueue(self, order, priority=5, queue_type='priority'):
-        return ExecutionQueue.objects.update_or_create(
+        entry = ExecutionQueue.objects.update_or_create(
             order=order,
             defaults={
                 'priority': priority,
@@ -41,3 +63,5 @@ class ExecutionQueueRepository:
                 'next_retry': None,
             },
         )[0]
+        transaction.on_commit(self._dispatch_execution_queue)
+        return entry

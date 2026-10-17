@@ -35,15 +35,15 @@ app.conf.beat_schedule = {
         "kwargs": {"count": 5000},
         "options": {"queue": "celery", "expires": 1700},
     },
-    "execution-queue-every-2-seconds": {
+    "execution-queue-recovery-every-30-seconds": {
         "task": "apps.execution.process_execution_queue",
-        "schedule": 2.0,
+        "schedule": 30.0,
         "kwargs": {"batch_size": 10},
         # Do not let a slow execution cycle create an unbounded backlog of
         # database-heavy polling tasks. A fresh tick replaces an expired one.
         # The task also takes a distributed Redis lock, so execution remains
         # logically singleton even though the general worker handles other jobs.
-        "options": {"queue": "celery", "expires": 3},
+        "options": {"queue": "celery", "expires": 25},
     },
     "ai-data-health-every-15-minutes": {
         "task": "apps.ai_engine.tasks.check_ai_data_health",
