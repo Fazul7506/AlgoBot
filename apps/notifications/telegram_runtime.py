@@ -177,7 +177,8 @@ def telegram_health() -> dict:
             result["webhook_url"] = info.get("url", "")
             result["pending_updates"] = info.get("pending_update_count", 0)
             result["webhook_last_error"] = info.get("last_error_message", "")
-            expected = str(getattr(settings, "TELEGRAM_WEBHOOK_URL", "") or f"{settings.BASE_URL.rstrip(chr(47))}/api/notifications/telegram/webhook/")
+            base_url = str(getattr(settings, "BASE_URL", "") or "").rstrip("/")
+            expected = str(getattr(settings, "TELEGRAM_WEBHOOK_URL", "") or f"{base_url}/api/notifications/telegram/webhook/")
             if expected and info.get("url") != expected:
                 result["reason"] = "Configured webhook URL does not match Telegram"
                 result["runtime"] = "degraded"
