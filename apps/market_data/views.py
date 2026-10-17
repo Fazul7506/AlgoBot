@@ -303,17 +303,32 @@ def _dispatch_backfill(run, *, task, count, symbol, queue_name, task_id, trigger
         )
         return True
     except Exception as exc:
+        error_type = type(exc).__name__
+        # Exception strings can include the full Redis URL. Persist a safe,
+        # actionable summary and log only the exception class, never secrets.
         run.status = "failed"
-        run.error = f"Unable to dispatch Celery task: {exc}"
+        run.error = (
+            f"Unable to dispatch Celery task ({error_type}). "
+            "Verify Redis connectivity and the market_data worker."
+        )
         run.completed_at = timezone.now()
         run.save(update_fields=["status", "error", "completed_at"])
+        logger.error(
+            "candle_backfill_publish_failed",
+            extra={
+                "run_id": run.pk,
+                "task_id": task_id,
+                "queue": queue_name,
+                "error_type": error_type,
+            },
+        )
         CandleBackfillEvent.objects.create(
             run=run,
             level="error",
             event_type="error",
             message=run.error,
             task_id=task_id,
-            payload={"queue": queue_name, "terminal": True, "trigger": trigger},
+            payload={"queue": queue_name, "terminal": True, "trigger": trigger, "error_type": error_type},
         )
         return False
 
@@ -382,8 +397,11 @@ def candle_backfill_control(request):
             try:
                 from celery import current_app
                 current_app.control.revoke(task_id, terminate=False)
-            except Exception:
-                logger.exception("Unable to revoke stopped candle backfill task", extra={"run_id": run_id, "task_id": task_id})
+            except Exception as exc:
+                logger.error(
+                    "stopped_backfill_task_revoke_failed",
+                    extra={"run_id": run_id, "task_id": task_id, "error_type": type(exc).__name__},
+                )
         # The stop transition has committed and staged-write transactions lock
         # the run row, so no in-flight writer can pass its fence after this point.
         from .tasks import _discard_staged_backfill
@@ -422,8 +440,13 @@ def initial_candle_backfill(request):
         dispatch_lock = None
         try:
             dispatch_lock = acquire_backfill_dispatch_lock(scope)
-        except Exception:
-            logger.exception("backfill_dispatch_lock_unavailable", extra={"scope": scope})
+        except Exception as exc:
+            # Do not log exception text or a traceback from a Redis URL that
+            # may contain credentials. The dispatch remains fail-closed.
+            logger.error(
+                "backfill_dispatch_lock_unavailable",
+                extra={"scope": scope, "error_type": type(exc).__name__},
+            )
             if request.GET.get("format") == "json":
                 return JsonResponse({"error": "Backfill dispatch coordination is temporarily unavailable; no execution was started."}, status=503)
             return redirect(f"{reverse('initial_candle_backfill')}?error=dispatch-unavailable")
