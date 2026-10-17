@@ -37,6 +37,8 @@ class ProductionRecoveryContractTests(SimpleTestCase):
         self.assertIn("await asyncio.sleep(reconnect_delay)", stream)
         self.assertIn("reconnect_delay = min(reconnect_delay * 2, 30)", stream)
         self.assertIn("reconnect_delay = 2", stream[stream.index("if not symbol or quote is None or epoch is None:"):])
+        self.assertIn("except MarketDataValidationError as exc", stream)
+        self.assertIn("market tick rejected", stream)
 
     def test_billing_boot_waits_for_deferred_frontend_transport(self):
         billing = (ROOT / "templates" / "core" / "billing.html").read_text(encoding="utf-8")
