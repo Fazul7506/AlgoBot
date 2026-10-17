@@ -27,9 +27,10 @@
     return ['demo', 'real'].includes(value) ? value : 'unknown';
   };
   const current = () => {
+    // The canonical account context is authoritative. Never silently fall back
+    // to a preferred/default/first account while a switch is unresolved.
     const selected = window.AlgoBotAccountContext?.getSelected?.();
-    if (selected?.id) return selected;
-    return accounts.find(a => a.is_active || a.is_default || a.is_preferred) || accounts[0] || null;
+    return selected?.id ? selected : null;
   };
   const avatar = (a, small = false) => {
     const url = String(a?.avatar_url || a?.broker?.avatar_url || a?.credentials?.avatar_url || '').trim();

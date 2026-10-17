@@ -11,6 +11,7 @@ from channels.layers import get_channel_layer
 
 from apps.market_data.deriv_sync import DERIV_PUBLIC_WS, sync_active_symbols
 from apps.market_data.models import MarketSymbol
+from apps.market_data.exceptions import ValidationError as MarketDataValidationError
 from apps.market_data.services import MarketDataService
 
 
@@ -27,9 +28,10 @@ class Command(BaseCommand):
             raise RuntimeError("No active Deriv markets are available")
         url = getattr(settings, "DERIV_PUBLIC_WS_URL", DERIV_PUBLIC_WS)
         layer = get_channel_layer()
+        reconnect_delay = 2
         while True:
             try:
-                async with websockets.connect(url, open_timeout=10, close_timeout=5, ping_interval=20, ping_timeout=10, max_size=2**20) as ws:
+                async with websockets.connect(url, open_timeout=10, close_timeout=5, ping_interval=20, ping_timeout=30, max_size=2**20) as ws:
                     req_id = 1
                     for symbol in symbols:
                         await ws.send(json.dumps({"ticks": symbol, "subscribe": 1, "req_id": req_id}))
@@ -46,7 +48,16 @@ class Command(BaseCommand):
                         epoch = tick.get("epoch")
                         if not symbol or quote is None or epoch is None:
                             continue
-                        payload = await sync_to_async(self.ingest)(tick)
+                        try:
+                            payload = await sync_to_async(self.ingest)(tick)
+                        except MarketDataValidationError as exc:
+                            # The stream is alive; a stale/out-of-order or malformed
+                            # tick is isolated to this message, not the whole socket.
+                            reconnect_delay = 2
+                            self.stderr.write(f"market tick rejected: {exc}")
+                            continue
+                        # Reset reconnect backoff only after ingestion succeeds.
+                        reconnect_delay = 2
                         if layer and payload:
                             await layer.group_send(
                                 f"algobot-market-{symbol}",
@@ -56,7 +67,8 @@ class Command(BaseCommand):
                 raise
             except Exception as exc:
                 self.stderr.write(f"market stream reconnecting: {exc}")
-                await asyncio.sleep(2)
+                await asyncio.sleep(reconnect_delay)
+                reconnect_delay = min(reconnect_delay * 2, 30)
 
     @staticmethod
     def ingest(tick):
