@@ -107,9 +107,16 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("request('/api/dashboard/trade_history/?days=30&limit=8'", source)
         self.assertNotIn("request('/api/orders/'", source)
 
+    def test_background_account_hydration_cannot_restore_previous_account_mid_switch(self):
+        source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
+        self.assertIn("if(switching)return null;", source)
+        self.assertIn("switching=true;", source)
+        self.assertIn("function getSelected(){return switching?null:", source)
+        self.assertIn("isSwitching:()=>switching", source)
+
     def test_account_switch_does_not_wait_for_slow_startup_hydration_when_account_is_known(self):
         source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
-        self.assertIn("let accounts=[],selected=null,busy=null,selectionRevision=0;", source)
+        self.assertIn("let accounts=[],selected=null,busy=null,selectionRevision=0,switching=false;", source)
         self.assertIn("let target=accounts.find(a=>accountId(a)===String(id));", source)
         self.assertIn("selectionRevision+=1;", source)
         self.assertIn("if(revisionAtStart!==selectionRevision)return selected;", source)
