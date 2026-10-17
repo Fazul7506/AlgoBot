@@ -89,20 +89,21 @@ The workers need the same production infrastructure credentials as the current R
 
 ### Required core variables
 
-Set these on all four worker services:
+Keep the production variables in Railway's **shared environment variables** so all four workers inherit one consistent configuration. Avoid stale service-level copies of Redis variables: service-level values with the same name can shadow newer shared values.
 
 ```
 DJANGO_ENV=production
 SECRET_KEY=<same production secret used by AlgoBot>
 DATABASE_URL=<production PostgreSQL connection URL>
-REDIS_URL=<production Redis connection URL>
+CACHE_URL=<authenticated Redis URL, using TLS when the provider requires it>
+CHANNEL_LAYERS_REDIS_URL=<Redis URL for Django Channels; usually the same TLS URL>
 USE_REDIS=true
 USE_CELERY=true
-CELERY_BROKER_URL=<same Redis URL>
-CELERY_RESULT_BACKEND=<same Redis URL>
 ```
 
-The production settings explicitly require a real `SECRET_KEY`, Redis, and a database connection.
+The current settings resolve the shared `CACHE_URL` before legacy/service-level `REDIS_URL`, `CELERY_BROKER_URL`, and `CELERY_RESULT_BACKEND`. Celery's broker and result backend therefore use the canonical shared `CACHE_URL`. `REDIS_URL` and the two explicit Celery URL variables remain fallback-compatible for local/legacy deployments.
+
+The production settings explicitly require a real `SECRET_KEY`, Redis, and a database connection. Never paste Redis URLs or credentials into GitHub issues, PR comments, or logs.
 
 ### Celery reliability variables
 
@@ -197,15 +198,7 @@ Create a Railway Redis service in the same Railway project.
 
 Railway Redis is private by default. If the Render web service must connect to it, enable Railway Redis public networking/TCP access and use its generated public connection variable/URL. Treat that URL as a secret.
 
-Then set:
-
-```
-REDIS_URL=<Railway Redis connection URL>
-CELERY_BROKER_URL=<same Railway Redis URL>
-CELERY_RESULT_BACKEND=<same Railway Redis URL>
-```
-
-on both Render Web/API and all Railway worker services.
+For Railway workers, set the authenticated Redis URL as the shared `CACHE_URL` and set `CHANNEL_LAYERS_REDIS_URL` to the intended Channels endpoint. Do not keep outdated service-level overrides of `REDIS_URL`, `CELERY_BROKER_URL`, or `CELERY_RESULT_BACKEND`. Render is a separate platform and must have its own valid Redis URL configured in Render's environment; Railway shared variables do not propagate across platforms.
 
 **Do this only during the controlled migration window**, because changing the broker changes where queued Celery messages live.
 
