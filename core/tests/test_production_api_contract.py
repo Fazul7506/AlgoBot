@@ -59,3 +59,10 @@ class ProductionApiContractTests(SimpleTestCase):
         broker = (ROOT / "config/settings/broker.py").read_text(encoding="utf-8")
         self.assertNotIn('TELEGRAM_CHAT_ID = env("TELEGRAM_CHAT_ID"', broker)
         self.assertNotIn('DERIV_API_BASE = env("DERIV_API_BASE"', broker)
+
+    def test_render_blueprint_does_not_duplicate_celery_urls(self):
+        render = (ROOT / "render.yaml").read_text(encoding="utf-8")
+        self.assertNotIn('key: CELERY_BROKER_URL', render)
+        self.assertNotIn('key: CELERY_RESULT_BACKEND', render)
+        self.assertNotIn('CELERY_BROKER_URL="$REDIS_URL"', render)
+        self.assertNotIn('CELERY_RESULT_BACKEND="$REDIS_URL"', render)
