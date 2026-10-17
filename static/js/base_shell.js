@@ -100,9 +100,39 @@
     restorePosition();
   }
 
+  const prefetchedNavigation = new Set();
+  function bindNavigationPrefetch(links) {
+    // Warm only likely user-initiated same-origin page navigations. This is a
+    // low-priority hint (never a blocking fetch), capped to avoid spraying the
+    // free production service with requests and disabled for data-saver/2G.
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (connection?.saveData || /(^|-)2g$/i.test(connection?.effectiveType || '')) return;
+    links.forEach(link => {
+      const prefetch = () => {
+        if (prefetchedNavigation.size >= 5) return;
+        const href = link.getAttribute('href');
+        if (!href || href === '#' || link.target && link.target !== '_self' || link.hasAttribute('download')) return;
+        let url;
+        try { url = new URL(href, window.location.href); } catch (_) { return; }
+        if (url.origin !== window.location.origin || url.pathname === currentPath()) return;
+        if (/(?:logout|disconnect|delete|remove)(?:\/|$)/i.test(url.pathname)) return;
+        const key = url.pathname + url.search;
+        if (prefetchedNavigation.has(key)) return;
+        const hint = document.createElement('link');
+        hint.rel = 'prefetch';
+        hint.href = url.href;
+        hint.as = 'document';
+        document.head.appendChild(hint);
+        prefetchedNavigation.add(key);
+      };
+      link.addEventListener('pointerenter', prefetch, {once: true, passive: true});
+      link.addEventListener('focus', prefetch, {once: true});
+    });
+  }
+
   function bindNavigation() {
     const sidebar=$('#app-sidebar'); if(!sidebar||sidebar.dataset.navigationBound==='true')return; sidebar.dataset.navigationBound='true'; const nav=sidebar.querySelector('nav'); const backdrop=$('[data-sidebar-backdrop]');const mobile=$('[data-mobile-menu]');const toggle=$('[data-sidebar-toggle]');const shell=$('.app-shell');const storageKey='algobot.sidebar.collapsed';
-    syncActiveNavigation({anchor:false}); bindSidebarScrollState(sidebar, nav);
+    syncActiveNavigation({anchor:false}); bindNavigationPrefetch(navigationLinks()); bindSidebarScrollState(sidebar, nav);
     if(window.MutationObserver&&!sidebar.dataset.activeAnchorObserver){sidebar.dataset.activeAnchorObserver='true';const observer=new MutationObserver(()=>syncActiveNavigation({anchor:true}));observer.observe(sidebar,{childList:true,subtree:true});}
     let mobileScrollLocked=false;let mobileScrollY=0;let previousBodyPosition='';let previousBodyTop='';let previousBodyLeft='';let previousBodyRight='';let previousBodyWidth='';
     const lockMobilePage=()=>{if(window.innerWidth>900||mobileScrollLocked)return;mobileScrollY=window.scrollY||window.pageYOffset||document.documentElement.scrollTop||0;previousBodyPosition=document.body.style.position;previousBodyTop=document.body.style.top;previousBodyLeft=document.body.style.left;previousBodyRight=document.body.style.right;previousBodyWidth=document.body.style.width;document.documentElement.classList.add('mobile-drawer-locked');document.body.classList.add('mobile-drawer-locked');document.body.style.position='fixed';document.body.style.top=`-${mobileScrollY}px`;document.body.style.left='0';document.body.style.right='0';document.body.style.width='100%';mobileScrollLocked=true;};
