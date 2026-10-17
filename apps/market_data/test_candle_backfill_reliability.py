@@ -850,6 +850,11 @@ class CandleBackfillReliabilityTests(TestCase):
         self.assertEqual(run.status, "running")
         self.assertTrue(run.task_id)
         self.assertIsNotNone(run.dispatch_at)
+        event = CandleBackfillEvent.objects.get(run=run, event_type="warning")
+        self.assertEqual(event.level, "warning")
+        self.assertFalse(event.payload["terminal"])
+        self.assertEqual(event.payload["error_type"], "RuntimeError")
+        self.assertNotIn("secret", event.message)
         error_log.assert_called_once_with(
             "automatic_initial_backfill_dispatch_failed",
             extra={"run_id": run.pk, "error_type": "RuntimeError"},
