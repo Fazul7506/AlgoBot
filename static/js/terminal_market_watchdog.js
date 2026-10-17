@@ -13,6 +13,8 @@
   let stopped = false;
   let lastTickAt = 0;
   let socketStartedAt = 0;
+  let reconnectAttempts = 0;
+  const MAX_RECONNECT_DELAY_MS = 30000;
 
   const fmt = value => Number.isFinite(Number(value))
     ? Number(value).toLocaleString(undefined, {maximumFractionDigits: 8})
@@ -55,6 +57,7 @@
     const parsedEpoch = epoch == null || epoch === '' ? null : Number(epoch);
     if (parsedEpoch !== null && (!Number.isFinite(parsedEpoch) || parsedEpoch <= 0 || parsedEpoch > now / 1000 + 5)) return;
     lastTickAt = now;
+    reconnectAttempts = 0;
     const text = fmt(value);
     // A public tick is a last-traded quote, not a broker bid/ask order book.
     $('[data-q="bid"]')?.replaceChildren(document.createTextNode('Unavailable'));
@@ -74,7 +77,11 @@
   function scheduleReconnect() {
     if (stopped || !activeSymbol || document.visibilityState !== 'visible' || reconnectTimer) return;
     setState('stale', 'Deriv quote stream disconnected; reconnecting…');
-    reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(activeSymbol); }, 1000);
+    // Exponential backoff prevents a rejected/unavailable public stream from
+    // hammering Deriv and flooding the UI while preserving automatic recovery.
+    const delay = Math.min(1000 * (2 ** Math.min(reconnectAttempts, 5)), MAX_RECONNECT_DELAY_MS);
+    reconnectAttempts = Math.min(reconnectAttempts + 1, 6);
+    reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(activeSymbol); }, delay);
   }
 
   function connect(symbol) {
@@ -99,7 +106,7 @@
       if (ws !== connection) return;
       try {
         const data = JSON.parse(event.data);
-        if (data?.error) { setState('stale', data.error.message || 'Deriv rejected the tick subscription'); return; }
+        if (data?.error) { setState('stale', data.error.message || 'Deriv rejected the tick subscription'); closeSocket(); scheduleReconnect(); return; }
         if (data?.msg_type === 'tick' && data.tick?.quote != null) paintQuote(data.tick.quote, data.tick.epoch);
       } catch (_) {}
     };
