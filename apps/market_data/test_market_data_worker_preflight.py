@@ -3,10 +3,11 @@ from unittest.mock import patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 
 class MarketDataWorkerPreflightTests(SimpleTestCase):
+    @override_settings(REDIS_URL="redis://ci", CELERY_BROKER_URL="redis://ci", CELERY_RESULT_BACKEND="redis://ci")
     @patch("django.db.connection.introspection.table_names", return_value=["market_data_candlebackfillrun"])
     @patch("deriv_platform.celery.app")
     @patch.dict(os.environ, {
@@ -41,6 +42,7 @@ class MarketDataWorkerPreflightTests(SimpleTestCase):
         with self.assertRaises(CommandError):
             call_command("check_market_data_worker")
 
+    @override_settings(REDIS_URL="redis://ci", CELERY_BROKER_URL="redis://ci", CELERY_RESULT_BACKEND="redis://ci")
     @patch("django.db.connection.introspection.table_names", return_value=[])
     @patch("deriv_platform.celery.app")
     @patch.dict(os.environ, {
