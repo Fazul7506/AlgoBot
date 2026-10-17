@@ -986,6 +986,7 @@ def ensure_initial_candle_backfill(count=5000):
     close_old_connections()
     now = timezone.now()
     dispatch_lock = None
+    run = None
     try:
         from .backfill_lock import acquire_backfill_dispatch_lock
         dispatch_lock = acquire_backfill_dispatch_lock("initial")
