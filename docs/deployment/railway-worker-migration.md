@@ -194,11 +194,9 @@ Then set:
 
 ```
 REDIS_URL=<Railway Redis connection URL>
-CELERY_BROKER_URL=<same Railway Redis URL>
-CELERY_RESULT_BACKEND=<same Railway Redis URL>
 ```
 
-on both Render Web/API and all Railway worker services.
+on both Render Web/API and all Railway worker services. Celery broker and result-backend settings derive from this single URL.
 
 **Do this only during the controlled migration window**, because changing the broker changes where queued Celery messages live.
 
