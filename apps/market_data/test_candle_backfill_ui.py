@@ -454,3 +454,47 @@ class CandleBackfillUiTests(TestCase):
         self.assertEqual(payload["worker_state"], "PAUSED")
         self.assertEqual(payload["operator_command"], "pause")
         self.assertIn("will not issue another broker-history request", payload["notices"][0]["message"])
+
+    def test_redis_lock_failure_fails_closed_without_creating_or_publishing_a_run(self):
+        with patch(
+            "apps.market_data.views.acquire_backfill_dispatch_lock",
+            side_effect=ConnectionError("rediss://user:secret@redis.example:6379/0"),
+        ) as acquire, patch(
+            "apps.market_data.tasks.run_initial_candle_backfill.apply_async"
+        ) as publish, patch("apps.market_data.views.logger.error") as error_log:
+            response = self.client.post(
+                f"{reverse('initial_candle_backfill')}?format=json",
+                {"symbol": ""},
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("no execution was started", response.json()["error"])
+        self.assertEqual(CandleBackfillRun.objects.count(), 0)
+        publish.assert_not_called()
+        acquire.assert_called_once_with("initial")
+        self.assertEqual(error_log.call_args.args[0], "backfill_dispatch_lock_unavailable")
+        self.assertNotIn("secret", repr(error_log.call_args))
+
+    def test_publish_failure_is_terminal_and_never_persists_redis_credentials(self):
+        with patch(
+            "apps.market_data.tasks.run_initial_candle_backfill.apply_async",
+            side_effect=RuntimeError("rediss://user:secret@redis.example:6379/0"),
+        ) as publish, patch("apps.market_data.views.logger.error") as error_log:
+            response = self.client.post(
+                reverse("initial_candle_backfill"),
+                {"symbol": ""},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        run = CandleBackfillRun.objects.get(scope="initial")
+        self.assertEqual(run.status, "failed")
+        self.assertIn("RuntimeError", run.error)
+        self.assertIn("Verify Redis connectivity", run.error)
+        self.assertNotIn("secret", run.error)
+        self.assertNotIn("rediss://", run.error)
+        event = CandleBackfillEvent.objects.get(run=run, event_type="error")
+        self.assertEqual(event.payload["error_type"], "RuntimeError")
+        self.assertNotIn("secret", event.message)
+        publish.assert_called_once()
+        self.assertEqual(error_log.call_args.args[0], "candle_backfill_publish_failed")
+        self.assertNotIn("secret", repr(error_log.call_args))
