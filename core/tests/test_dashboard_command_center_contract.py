@@ -31,8 +31,9 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
 
     def test_dashboard_discards_in_flight_responses_when_account_identity_is_cleared_during_switch(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("String(currentId ?? '') === String(requestedAccountId ?? '')", source)
-        self.assertIn("Account identity is part of the request generation", source)
+        self.assertIn("requestedAccountId != null", source)
+        self.assertIn("String(currentId ?? '') === String(requestedAccountId)", source)
+        self.assertIn("Never let a no-account transition or an old response paint financial data", source)
 
     def test_dashboard_waits_for_confirmed_account_before_refreshing_after_switch(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
