@@ -855,3 +855,22 @@ class CandleBackfillReliabilityTests(TestCase):
             extra={"run_id": run.pk, "error_type": "RuntimeError"},
         )
         self.assertNotIn("secret", repr(error_log.call_args))
+
+    @patch("apps.market_data.tasks.logger.error")
+    @patch(
+        "apps.market_data.backfill_lock.acquire_backfill_dispatch_lock",
+        side_effect=ConnectionError("rediss://user:secret@redis.example:6379/0"),
+    )
+    def test_automatic_initial_lock_failure_returns_safe_error_without_creating_run(self, acquire, error_log):
+        result = ensure_initial_candle_backfill(count=5000)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("ConnectionError", result["error"])
+        self.assertNotIn("secret", result["error"])
+        self.assertNotIn("rediss://", result["error"])
+        self.assertEqual(CandleBackfillRun.objects.count(), 0)
+        error_log.assert_called_once_with(
+            "automatic_initial_backfill_dispatch_failed",
+            extra={"run_id": None, "error_type": "ConnectionError"},
+        )
+        self.assertNotIn("secret", repr(error_log.call_args))
