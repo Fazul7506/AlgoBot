@@ -39,4 +39,7 @@ class ProductionRecoveryContractTests(SimpleTestCase):
     def test_live_broker_ui_reads_canonical_selected_account(self):
         live = (ROOT / "static" / "js" / "live_broker_ui.js").read_text(encoding="utf-8")
         self.assertIn("window.AlgoBotAccountContext?.getSelected?.()", live)
-        self.assertIn("return accounts.find(a => a.is_active || a.is_default || a.is_preferred)", live)
+        self.assertIn("return selected?.id ? selected : null;", live)
+        self.assertNotIn("is_preferred", live)
+        self.assertNotIn("is_default", live)
+        self.assertNotIn("accounts[0]", live)
