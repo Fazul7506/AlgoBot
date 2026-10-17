@@ -99,7 +99,7 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("let target=accounts.find(a=>accountId(a)===String(id));", source)
         self.assertIn("selectionRevision+=1;", source)
         self.assertIn("if(revisionAtStart!==selectionRevision)return selected;", source)
-        self.assertNotIn("async function selectAccount(id){\\n    if(busy)await busy.catch(()=>{});", source)
+        self.assertNotIn("if(busy)await busy.catch(()=>{});", source)
 
     def test_dashboard_javascript_syntax_with_node_when_available(self):
         node = shutil.which("node")
