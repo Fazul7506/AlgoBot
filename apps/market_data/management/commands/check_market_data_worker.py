@@ -1,5 +1,6 @@
 import os
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 
@@ -39,13 +40,21 @@ class Command(BaseCommand):
         if os.getenv("USE_CELERY", "").strip().lower() not in {"1", "true", "yes", "on"}:
             raise CommandError("Celery workers require USE_CELERY=true")
 
-        redis_url = os.environ["REDIS_URL"]
-        broker_url = os.environ["CELERY_BROKER_URL"]
-        result_backend = os.environ["CELERY_RESULT_BACKEND"]
+        # Validate the effective Django/Celery settings, not raw process
+        # variables. On Railway, service-level REDIS_URL/CELERY_* variables
+        # can shadow newer shared values; cache.py deliberately resolves the
+        # canonical shared CACHE_URL first.
+        redis_url = settings.REDIS_URL
+        broker_url = settings.CELERY_BROKER_URL
+        result_backend = settings.CELERY_RESULT_BACKEND
         if broker_url != redis_url:
-            raise CommandError("CELERY_BROKER_URL must exactly match REDIS_URL on Render")
+            raise CommandError(
+                "Effective CELERY_BROKER_URL must match the configured shared Redis URL"
+            )
         if result_backend != redis_url:
-            raise CommandError("CELERY_RESULT_BACKEND must exactly match REDIS_URL on Render")
+            raise CommandError(
+                "Effective CELERY_RESULT_BACKEND must match the configured shared Redis URL"
+            )
 
         from deriv_platform.celery import app
 
