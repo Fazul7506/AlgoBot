@@ -54,7 +54,7 @@ class AuthRateLimitCacheFailureTests(SimpleTestCase):
                 )
             )
 
-        self.assertTrue(any("error_type=OutOfMemoryError" in entry for entry in captured.output))
+        self.assertEqual(captured.records[0].error_type, "OutOfMemoryError")
         self.assertFalse(any("secret" in entry or "rediss://" in entry for entry in captured.output))
         cache_add.assert_called_once()
 
@@ -68,7 +68,7 @@ class AuthRateLimitCacheFailureTests(SimpleTestCase):
                 )
             )
 
-        self.assertTrue(any("error_type=ConnectionError" in entry for entry in captured.output))
+        self.assertEqual(captured.records[0].error_type, "ConnectionError")
         self.assertFalse(any("secret" in entry or "rediss://" in entry for entry in captured.output))
         cache_add.assert_called_once()
         cache_incr.assert_called_once()
