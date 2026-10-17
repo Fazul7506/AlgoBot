@@ -1373,7 +1373,7 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                     current.completed_at = timezone.now()
                     current.save(update_fields=["status", "error", "completed_at"])
                     _discard_staged_backfill(current.pk)
-                    CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts), "recovery_attempts": recovery_attempts},)
+                    CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts), "recovery_attempts": recovery_attempts, "error_type": type(exc).__name__},)
             logger.error(
                 "abandoned_initial_backfill_recovery_failed",
                 extra={"run_id": run_id, "error_type": type(exc).__name__},
