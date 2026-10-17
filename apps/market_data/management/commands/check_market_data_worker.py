@@ -8,12 +8,9 @@ REQUIRED_TASK = "apps.market_data.tasks.run_initial_candle_backfill"
 REQUIRED_ENV = (
     "DJANGO_ENV",
     "DATABASE_URL",
-    "REDIS_URL",
     "SECRET_KEY",
     "USE_REDIS",
     "USE_CELERY",
-    "CELERY_BROKER_URL",
-    "CELERY_RESULT_BACKEND",
 )
 
 
@@ -44,9 +41,13 @@ class Command(BaseCommand):
         # variables. On Railway, service-level REDIS_URL/CELERY_* variables
         # can shadow newer shared values; cache.py deliberately resolves the
         # canonical shared CACHE_URL first.
-        redis_url = settings.REDIS_URL
-        broker_url = settings.CELERY_BROKER_URL
-        result_backend = settings.CELERY_RESULT_BACKEND
+        redis_url = str(settings.REDIS_URL or "").strip()
+        broker_url = str(settings.CELERY_BROKER_URL or "").strip()
+        result_backend = str(settings.CELERY_RESULT_BACKEND or "").strip()
+        if not redis_url or not broker_url or not result_backend:
+            raise CommandError(
+                "Effective Redis URL, Celery broker URL, and result backend must be configured"
+            )
         if broker_url != redis_url:
             raise CommandError(
                 "Effective CELERY_BROKER_URL must match the configured shared Redis URL"
