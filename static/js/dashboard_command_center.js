@@ -160,11 +160,13 @@
     setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
     document.documentElement.dataset.dashboardLoading = 'true';
     const isCurrent = () => {
-      const currentId = window.AlgoBotBrokerState?.get?.()?.account?.id;
-      // Account identity is part of the request generation. A null current ID
-      // during a switch is not permission for the previous account's response
-      // to render; only an exact identity match may update dashboard state.
-      return seq === loadSeq && String(currentId ?? '') === String(requestedAccountId ?? '');
+      const currentId = window.AlgoBotAccountContext?.getSelectedId?.()
+        ?? window.AlgoBotBrokerState?.get?.()?.account?.id
+        ?? null;
+      // A dashboard request is valid only for a real, confirmed account.
+      // Never let a no-account transition or an old response paint financial data.
+      return seq === loadSeq && requestedAccountId != null
+        && String(currentId ?? '') === String(requestedAccountId);
     };
     const collections = {
       positions: {ok: false, pending: true, value: null, error: null},
@@ -245,7 +247,28 @@
   function boot() {
     $('[data-dashboard-refresh]')?.addEventListener('click', load);
     document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(timer); else { clearTimeout(timer); timer = setTimeout(load, 250); } });
-    const accountChanged = (event) => { selectedAccountId = event.detail?.id != null ? String(event.detail.id) : null; loadSeq += 1; busy = false; clearTimeout(timer); timer = setTimeout(load, 250); };
+    const accountChanged = (event) => {
+      const nextId = event.detail?.id != null ? String(event.detail.id) : null;
+      selectedAccountId = nextId;
+      // Invalidate every in-flight response immediately. During the server-side
+      // selection POST there is intentionally no active browser account; do not
+      // fire five doomed requests against the old session or show its data.
+      loadSeq += 1;
+      busy = false;
+      clearTimeout(timer);
+      if (nextId == null) {
+        document.documentElement.dataset.dashboardLoading = 'false';
+        setText('[data-dashboard-sync]', 'Switching account · waiting for server confirmation…');
+        renderAccount(null, 'Account switch in progress');
+        const waiting = {ok:false,pending:false,value:null,error:null};
+        renderCollections({
+          positions:{...waiting},orders:{...waiting},markets:{...waiting},signals:{...waiting}
+        });
+        ['positions','execution','markets','signals'].forEach(key => status(key,'warn','Waiting for confirmed account selection'));
+        return;
+      }
+      timer = setTimeout(() => { if (currentAccountId() === nextId) load(); }, 0);
+    };
     window.addEventListener('algobot:account-changed', accountChanged);
     window.addEventListener('algobot:account-synced', accountChanged);
     load();
