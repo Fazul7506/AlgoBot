@@ -30,6 +30,14 @@ class ProductionRecoveryContractTests(SimpleTestCase):
         self.assertIn("class ResilientUserRateThrottle", throttling)
         self.assertIn("_fallback_cache", throttling)
 
+    def test_market_stream_uses_tolerant_ping_timeout_and_bounded_reconnect_backoff(self):
+        stream = (ROOT / "apps" / "market_data" / "management" / "commands" / "run_market_stream.py").read_text(encoding="utf-8")
+        self.assertIn("ping_interval=20, ping_timeout=30", stream)
+        self.assertIn("reconnect_delay = 2", stream)
+        self.assertIn("await asyncio.sleep(reconnect_delay)", stream)
+        self.assertIn("reconnect_delay = min(reconnect_delay * 2, 30)", stream)
+        self.assertIn("reconnect_delay = 2", stream[stream.index("if not symbol or quote is None or epoch is None:"):])
+
     def test_billing_boot_waits_for_deferred_frontend_transport(self):
         billing = (ROOT / "templates" / "core" / "billing.html").read_text(encoding="utf-8")
         self.assertIn("const boot = () => {", billing)
