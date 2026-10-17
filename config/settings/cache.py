@@ -37,7 +37,14 @@ def _dotenv_value(name: str, default: str = "") -> str:
     return default
 
 
-REDIS_URL = _dotenv_value("REDIS_URL", "redis://localhost:6379/0")
+# Railway shared variables are the canonical source for hosted Redis. A service-level
+# REDIS_URL/CELERY_* variable can shadow a newer shared variable with the same
+# name, so prefer the distinct shared CACHE_URL name when it is present.
+# Local development remains compatible with REDIS_URL and dotenv files.
+REDIS_URL = _dotenv_value(
+    "CACHE_URL",
+    _dotenv_value("REDIS_URL", "redis://localhost:6379/0"),
+)
 
 # Django test runs must never depend on a shared/external Redis instance.
 # This protects `manage.py test` and pytest even if a developer has
@@ -51,8 +58,16 @@ DJANGO_TESTING = (
 USE_REDIS = False if DJANGO_TESTING else _dotenv_value(
     "USE_REDIS", "false"
 ).strip().lower() in {"1", "true", "yes", "on"}
-CELERY_BROKER_URL = _dotenv_value("CELERY_BROKER_URL", REDIS_URL)
-CELERY_RESULT_BACKEND = _dotenv_value("CELERY_RESULT_BACKEND", REDIS_URL)
+# CACHE_URL is intentionally preferred to CELERY_BROKER_URL and
+# CELERY_RESULT_BACKEND because the latter can be stale service-level overrides
+# while Railway's shared variables have already been updated. Celery accepts a
+# Redis URL for both values; preserve the existing variables as local fallbacks.
+CELERY_BROKER_URL = _dotenv_value(
+    "CACHE_URL", _dotenv_value("CELERY_BROKER_URL", REDIS_URL)
+)
+CELERY_RESULT_BACKEND = _dotenv_value(
+    "CACHE_URL", _dotenv_value("CELERY_RESULT_BACKEND", REDIS_URL)
+)
 
 # Render Redis plans have finite client limits. Never let redis-py use its
 # effectively-unbounded default pool, because each web/worker process can then
