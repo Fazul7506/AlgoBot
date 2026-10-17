@@ -35,12 +35,10 @@ class DerivOnboardingRedirectTests(TestCase):
         self.assertEqual(response["Location"], "/brokers/connect/?broker=deriv")
         self.assertTrue(response.wsgi_request.user.is_authenticated)
 
-    def test_login_page_deriv_action_preserves_intent_through_local_login(self):
+    def test_login_page_has_no_deriv_connect_cta_and_google_defaults_to_dashboard(self):
         response = self.client.get("/login/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(
-            response,
-            "next=%2Fbrokers%2Fconnect%2F%3Fbroker%3Dderiv",
-        )
-        self.assertContains(response, "Sign in, then connect a Deriv trading account")
+        self.assertNotContains(response, "Sign in, then connect a Deriv trading account")
+        self.assertNotContains(response, "Connect Deriv")
+        self.assertContains(response, 'href="/auth/google/?next=/dashboard/"')

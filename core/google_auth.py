@@ -49,11 +49,10 @@ def _redirect_uri():
 @require_GET
 def google_login_start(request):
     requested_next = safe_auth_destination(request, request.GET.get("next"))
-    # Google sign-up/sign-in must continue through Deriv authorization before
-    # the user can enter the dashboard. Keep the intended same-host path in
-    # the session so the OAuth callback can resume it safely.
+    # Google authentication creates/signs into an AlgoBot identity only.
+    # Broker authorization is a separate, explicit user action from the marketplace.
     if not requested_next:
-        requested_next = "/brokers/connect/?broker=deriv"
+        requested_next = "/dashboard/"
     if requested_next:
         request.session["broker_onboarding_next"] = requested_next
     if request.GET.get("intent") == "link":
@@ -162,6 +161,13 @@ def google_login_callback(request):
 
     subject = str(identity.get("sub") or "").strip()
     email = str(identity.get("email") or "").strip().lower()
+    first_name = str(identity.get("given_name") or "").strip()
+    last_name = str(identity.get("family_name") or "").strip()
+    if not first_name or not last_name:
+        display_name = str(identity.get("name") or "").strip()
+        name_parts = display_name.split(None, 1)
+        first_name = first_name or (name_parts[0] if name_parts else "")
+        last_name = last_name or (name_parts[1] if len(name_parts) > 1 else "")
     if not subject or not email or identity.get("email_verified") is not True:
         messages.error(request, "Google did not provide a verified email identity.")
         return redirect("login_page")
@@ -199,6 +205,17 @@ def google_login_callback(request):
 
             if google_identity:
                 user = google_identity.user
+                # Fill missing profile names from Google's verified OpenID profile;
+                # do not overwrite names the user has already set locally.
+                changed_fields = []
+                if first_name and not user.first_name:
+                    user.first_name = first_name
+                    changed_fields.append("first_name")
+                if last_name and not user.last_name:
+                    user.last_name = last_name
+                    changed_fields.append("last_name")
+                if changed_fields:
+                    user.save(update_fields=changed_fields)
                 if not user.is_active:
                     messages.error(request, "This AlgoBot account is disabled. Contact support.")
                     return redirect("login_page")
@@ -230,7 +247,10 @@ def google_login_callback(request):
                     messages.error(request, "Google identity could not be linked safely. Please contact support.")
                     return redirect("login_page")
 
-                user = User.objects.create_user(username=username, email=email, password=None)
+                user = User.objects.create_user(
+                    username=username, email=email, password=None,
+                    first_name=first_name, last_name=last_name,
+                )
                 profile, _ = UserProfile.objects.get_or_create(user=user)
                 profile.email_verified = True
                 profile.email_verified_at = timezone.now()

@@ -251,13 +251,17 @@ class BrowserAccountAuthenticationTests(TestCase):
     def test_registration_sends_verification_and_verification_is_single_use(self, _allow_auth_attempt):
         response = self.client.post("/register/", {
             "username": "verify-user",
+            "first_name": "Verify",
+            "last_name": "User",
             "email": "verify@example.com",
             "password": "A-Strong-Password-2026!",
             "password_confirm": "A-Strong-Password-2026!",
         })
-        response_details = response.context[-1].get("errors") if response.status_code == 200 and response.context else response.content.decode("utf-8", errors="replace")[:1600] if response.status_code == 200 else None
+        context_data = response.context.flatten() if response.status_code == 200 and response.context and hasattr(response.context, "flatten") else {}
+        response_details = context_data.get("errors") or (response.content.decode("utf-8", errors="replace")[:1600] if response.status_code == 200 else None)
         if response.status_code != 302:
-            response_messages = list(response.context[-1].get("messages", [])) if response.context else []
+            response_context = response.context.flatten() if response.context and hasattr(response.context, "flatten") else {}
+            response_messages = list(response_context.get("messages", []))
             user_created = get_user_model().objects.filter(username="verify-user").exists()
             self.fail(
                 f"registration rejected: status={response.status_code}; errors={response_details!r}; "
