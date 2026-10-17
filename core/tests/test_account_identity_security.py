@@ -275,9 +275,11 @@ class BrowserAccountAuthenticationTests(TestCase):
         html_body, content_type = mail.outbox[0].alternatives[0]
         self.assertEqual(content_type, "text/html")
         self.assertIn(">Verify email address</a>", html_body)
-        match = re.search(r'href="([^"]+/verify-email/\\?token=[^"]+)"', html_body)
+        match = re.search(r'href="([^"]+)"', html_body)
         self.assertIsNotNone(match)
-        raw_token = parse_qs(urlparse(match.group(1).replace("&amp;", "&")).query).get("token", [""])[0].strip()
+        verification_url = urlparse(match.group(1).replace("&amp;", "&"))
+        self.assertEqual(verification_url.path, "/verify-email/")
+        raw_token = parse_qs(verification_url.query).get("token", [""])[0].strip()
         response = self.client.get(f"/verify-email/?token={raw_token}")
         self.assertEqual(response.status_code, 200, f"verification GET redirected to {response.headers.get('Location')!r}; token_present={bool(raw_token)}")
         self.assertContains(response, "Confirm email verification")
