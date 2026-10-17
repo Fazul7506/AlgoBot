@@ -26,3 +26,13 @@ class ProductionApiContractTests(SimpleTestCase):
         self.assertNotIn("DERIV_APP_ID != DERIV_OAUTH_CLIENT_ID", source)
         self.assertIn('"DERIV_OAUTH_CLIENT_ID": DERIV_OAUTH_CLIENT_ID', source)
         self.assertIn('"DERIV_APP_ID": DERIV_APP_ID', source)
+
+    def test_deriv_app_id_never_defaults_to_oauth_client_id(self):
+        source = (ROOT / "config/settings/broker.py").read_text(encoding="utf-8")
+        self.assertIn('DERIV_APP_ID = env("DERIV_APP_ID", env("BROKER_APP_ID", ""))', source)
+        self.assertNotIn('env("BROKER_APP_ID", DERIV_OAUTH_CLIENT_ID)', source)
+        example = (ROOT / ".env.example").read_text(encoding="utf-8")
+        for legacy_name in ("BROKER_APP_ID=", "BROKER_WS_URL=", "BROKER_OAUTH_CLIENT_ID=", "BROKER_REDIRECT_URI=", "DJANGO_SECRET_KEY=", "DJANGO_DEBUG="):
+            self.assertNotIn(legacy_name, example)
+        self.assertNotIn("CELERY_BROKER_URL=", example)
+        self.assertNotIn("CELERY_RESULT_BACKEND=", example)
