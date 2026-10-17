@@ -504,7 +504,7 @@ class CandleBackfillUiTests(TestCase):
             scope="initial", status="running", count=5000, task_id="stop-task"
         )
         with patch(
-            "apps.market_data.views.current_app.control.revoke",
+            "celery.current_app.control.revoke",
             side_effect=ConnectionError("rediss://user:secret@redis.example:6379/0"),
         ), patch("apps.market_data.views.logger.error") as error_log:
             response = self.client.post(
