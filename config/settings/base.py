@@ -124,7 +124,7 @@ CHANNEL_LAYERS = {
         **(
             {
                 "CONFIG": {
-                    "hosts": [{"address": REDIS_URL, "max_connections": REDIS_CHANNEL_MAX_CONNECTIONS}],
+                    "hosts": [{"address": os.getenv("CHANNEL_LAYERS_REDIS_URL") or REDIS_URL, "max_connections": REDIS_CHANNEL_MAX_CONNECTIONS}],
                 }
             }
             if USE_REDIS
