@@ -125,7 +125,6 @@ DERIV_OAUTH_CLIENT_ID
 DERIV_OAUTH_CLIENT_SECRET
 DERIV_OAUTH_SCOPE
 DERIV_APP_ID
-DERIV_API_TOKEN
 DERIV_API_BASE_URL
 DERIV_OPTIONS_ACCOUNTS_URL
 DERIV_PUBLIC_WS_URL
@@ -143,7 +142,6 @@ If Telegram notifications are used by the workers, copy the existing production 
 
 ```
 TELEGRAM_MODE=webhook
-TELEGRAM_WEBHOOK_URL=https://algobot.dpdns.org/api/notifications/telegram/webhook/
 TELEGRAM_BOT_TOKEN=<existing secret>
 TELEGRAM_BOT_USERNAME=<existing value>
 TELEGRAM_WEBHOOK_SECRET=<existing secret>
