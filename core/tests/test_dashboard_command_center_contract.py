@@ -12,7 +12,8 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
     def test_dashboard_refreshes_on_account_context_changes(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("let loadSeq = 0", source)
-        self.assertIn("if (seq !== loadSeq", source)
+        self.assertIn("const isCurrent = () =>", source)
+        self.assertIn("return seq === loadSeq", source)
         self.assertIn("window.addEventListener('algobot:account-changed', accountChanged)", source)
         self.assertIn("window.addEventListener('algobot:account-synced', accountChanged)", source)
 
@@ -30,7 +31,7 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
 
     def test_account_overview_response_is_checked_against_requested_account(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("const accountPayload = account.status === 'fulfilled'", source)
+        self.assertIn("const accountPayload = value?.data?.account || value?.account || null", source)
         self.assertIn("String(accountPayload.id) !== requestedAccountId", source)
         self.assertIn("Account changed during refresh · retrying", source)
 
@@ -125,5 +126,10 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("const updateCollection = (key, settled) =>", source)
         self.assertIn("renderCollections(collections);", source)
-        self.assertIn("a slow broker position sync must not hold back orders", source)
+        self.assertIn("must not hold back orders, signals, markets, or the account snapshot", source)
         self.assertIn("result.positions.pending ? 'Loading positions…'", source)
+
+    def test_forced_account_hydration_cannot_clear_a_newer_in_flight_request(self):
+        source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
+        self.assertIn("const tracked=pending.finally(()=>{if(busy===tracked)busy=null;});", source)
+        self.assertNotIn("})().finally(()=>{busy=null});return busy;", source)
