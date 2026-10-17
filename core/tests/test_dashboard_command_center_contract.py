@@ -12,7 +12,8 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
     def test_dashboard_refreshes_on_account_context_changes(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("let loadSeq = 0", source)
-        self.assertIn("if (seq !== loadSeq", source)
+        self.assertIn("const isCurrent = () =>", source)
+        self.assertIn("return seq === loadSeq", source)
         self.assertIn("window.addEventListener('algobot:account-changed', accountChanged)", source)
         self.assertIn("window.addEventListener('algobot:account-synced', accountChanged)", source)
 
@@ -30,7 +31,7 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
 
     def test_account_overview_response_is_checked_against_requested_account(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("const accountPayload = account.status === 'fulfilled'", source)
+        self.assertIn("const accountPayload = value?.data?.account || value?.account || null", source)
         self.assertIn("String(accountPayload.id) !== requestedAccountId", source)
         self.assertIn("Account changed during refresh · retrying", source)
 
@@ -69,7 +70,7 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertNotIn(".mini-row span{display:none}", css)
         self.assertNotIn(".signal-row span{display:none}", css)
         self.assertIn("css/dashboard.css' %}?v=20261009-dashboard-audit4", template)
-        self.assertIn("dashboard_command_center.js' %}?v=20261009-dashboard-audit4", template)
+        self.assertIn("dashboard_command_center.js' %}?v=20261017-progressive1", template)
 
     def test_cached_positions_and_orders_are_not_reported_as_live(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
@@ -93,13 +94,27 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("request('/api/dashboard/trade_history/?days=30&limit=8'", source)
         self.assertNotIn("request('/api/orders/'", source)
 
+    def test_account_switch_does_not_wait_for_slow_startup_hydration_when_account_is_known(self):
+        source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
+        self.assertIn("let accounts=[],selected=null,busy=null,selectionRevision=0;", source)
+        self.assertIn("let target=accounts.find(a=>accountId(a)===String(id));", source)
+        self.assertIn("selectionRevision+=1;", source)
+        self.assertIn("if(revisionAtStart!==selectionRevision)return selected;", source)
+        self.assertNotIn("if(busy)await busy.catch(()=>{});", source)
+
     def test_dashboard_javascript_syntax_with_node_when_available(self):
         node = shutil.which("node")
         if not node:
             self.skipTest("Node.js is not installed in this test environment")
-        script = ROOT / "static" / "js" / "dashboard_command_center.js"
-        result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True, check=False)
-        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        scripts = [
+            ROOT / "static" / "js" / "dashboard_command_center.js",
+            ROOT / "static" / "js" / "core" / "account_context.js",
+            ROOT / "static" / "js" / "base_shell.js",
+        ]
+        for script in scripts:
+            with self.subTest(script=script.name):
+                result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
     def test_dashboard_api_reads_preserve_server_session_account_context(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
@@ -112,3 +127,15 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("String(value.account.data_freshness || '').toLowerCase() !== 'fresh'", source)
         self.assertIn("CONNECTION LAST VERIFIED", source)
         self.assertIn("setText('[data-kpi-state=\"equity\"]', timeoutLabel)", source)
+
+    def test_dashboard_sections_render_progressively_without_waiting_for_slowest_endpoint(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("const updateCollection = (key, settled) =>", source)
+        self.assertIn("renderCollections(collections);", source)
+        self.assertIn("must not hold back orders, signals, markets, or the account snapshot", source)
+        self.assertIn("result.positions.pending ? 'Loading positions…'", source)
+
+    def test_forced_account_hydration_cannot_clear_a_newer_in_flight_request(self):
+        source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
+        self.assertIn("const tracked=pending.finally(()=>{if(busy===tracked)busy=null;});", source)
+        self.assertNotIn("})().finally(()=>{busy=null});return busy;", source)

@@ -98,11 +98,9 @@ DATABASE_URL=<production PostgreSQL connection URL>
 REDIS_URL=<production Redis connection URL>
 USE_REDIS=true
 USE_CELERY=true
-CELERY_BROKER_URL=<same Redis URL>
-CELERY_RESULT_BACKEND=<same Redis URL>
 ```
 
-The production settings explicitly require a real `SECRET_KEY`, Redis, and a database connection.
+The production settings require a real `SECRET_KEY`, `REDIS_URL`, and a database connection. Celery broker and result-backend URLs are derived from `REDIS_URL`; do not configure duplicate `CELERY_*` aliases.
 
 ### Celery reliability variables
 
@@ -117,14 +115,14 @@ CELERY_WORKER_RETRY_ON_STARTUP=true
 
 Copy the **existing production values** for the Deriv and broker integrations from the current deployment. Do not invent replacement values.
 
-At minimum, review:
+At minimum, review the canonical Deriv settings below. `DERIV_APP_ID` (the numeric application ID) and `DERIV_OAUTH_CLIENT_ID` (the OAuth client identifier) are different values; keep both configured, but do not duplicate them under legacy `BROKER_*` environment names.
+
 
 ```
 DERIV_OAUTH_CLIENT_ID
 DERIV_OAUTH_CLIENT_SECRET
 DERIV_OAUTH_SCOPE
 DERIV_APP_ID
-DERIV_API_TOKEN
 DERIV_API_BASE_URL
 DERIV_OPTIONS_ACCOUNTS_URL
 DERIV_PUBLIC_WS_URL
@@ -132,10 +130,6 @@ DERIV_AUTH_WS_BASE_URL
 DERIV_REDIRECT_URI
 ALLOW_LIVE_TRADING
 ENABLE_BROKER_ACCOUNT_SWITCH
-BROKER_APP_ID
-BROKER_WS_URL
-BROKER_OAUTH_CLIENT_ID
-BROKER_REDIRECT_URI
 ```
 
 For live trading, preserve the current production value of `ALLOW_LIVE_TRADING`. Do not enable live execution merely because the worker infrastructure has moved.
@@ -146,7 +140,6 @@ If Telegram notifications are used by the workers, copy the existing production 
 
 ```
 TELEGRAM_MODE=webhook
-TELEGRAM_WEBHOOK_URL=https://algobot.dpdns.org/api/notifications/telegram/webhook/
 TELEGRAM_BOT_TOKEN=<existing secret>
 TELEGRAM_BOT_USERNAME=<existing value>
 TELEGRAM_WEBHOOK_SECRET=<existing secret>
@@ -201,11 +194,9 @@ Then set:
 
 ```
 REDIS_URL=<Railway Redis connection URL>
-CELERY_BROKER_URL=<same Railway Redis URL>
-CELERY_RESULT_BACKEND=<same Railway Redis URL>
 ```
 
-on both Render Web/API and all Railway worker services.
+on both Render Web/API and all Railway worker services. Celery broker and result-backend settings derive from this single URL.
 
 **Do this only during the controlled migration window**, because changing the broker changes where queued Celery messages live.
 

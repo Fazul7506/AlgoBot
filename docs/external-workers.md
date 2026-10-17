@@ -25,7 +25,7 @@ Set:
 - `DJANGO_ENV=production`
 - `DJANGO_SETTINGS_MODULE=deriv_platform.settings`
 
-The launcher derives `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` from `REDIS_URL` when they are not explicitly set.
+The application derives both the Celery broker and result backend from `REDIS_URL`; do not duplicate the endpoint under separate `CELERY_*` environment variables.
 
 ## Run locally
 

@@ -128,25 +128,25 @@
     const positionsStale = result.positions.ok && (result.positions.value?.status === 'stale' || result.positions.value?.source === 'broker_cache');
     const ordersStale = result.orders.ok && (result.orders.value?.status === 'stale' || result.orders.value?.source === 'broker_cache');
 
-    renderRows('[data-dashboard-positions]', positions, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.profit ?? item.pnl ?? item.profit_loss ?? '—')}</b></div>`, result.positions.ok ? 'No open positions reported by the backend.' : 'Position service unavailable.');
-    renderRows('[data-dashboard-orders]', orders, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.status || 'Unknown')}</b></div>`, result.orders.ok ? 'No orders reported by the backend.' : 'Order service unavailable.');
-    renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol?.display_name || item.display_name || item.symbol || 'Market')}</strong><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid ?? 'Unavailable')} · Ask ${esc(item.ask_price ?? item.ask ?? 'Unavailable')}` : 'Broker market catalogue'} · ${esc(snapshotAge(item.timestamp))}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.ok ? 'No market snapshot is currently available.' : 'Market data service unavailable.');
-    renderRows('[data-dashboard-signals]', signals, item => `<div class="signal-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')} · ${esc(item.direction || item.signal || 'HOLD')}</strong><span>${esc(item.strategy?.name || item.strategy || item.market_regime || '')}</span><b>${item.confidence != null && Number.isFinite(Number(item.confidence)) ? `${Number(item.confidence).toFixed(0)}%` : '—'}</b></div>`, result.signals.ok ? 'No recent backend signals.' : 'Signal service unavailable.');
+    renderRows('[data-dashboard-positions]', positions, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.profit ?? item.pnl ?? item.profit_loss ?? '—')}</b></div>`, result.positions.pending ? 'Loading positions…' : result.positions.ok ? 'No open positions reported by the backend.' : 'Position service unavailable.');
+    renderRows('[data-dashboard-orders]', orders, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')}</strong><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.status || 'Unknown')}</b></div>`, result.orders.pending ? 'Loading orders…' : result.orders.ok ? 'No orders reported by the backend.' : 'Order service unavailable.');
+    renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><strong>${esc(item.symbol?.symbol || item.symbol?.display_name || item.display_name || item.symbol || 'Market')}</strong><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid ?? 'Unavailable')} · Ask ${esc(item.ask_price ?? item.ask ?? 'Unavailable')}` : 'Broker market catalogue'} · ${esc(snapshotAge(item.timestamp))}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.pending ? 'Loading market snapshots…' : result.markets.ok ? 'No market snapshot is currently available.' : 'Market data service unavailable.');
+    renderRows('[data-dashboard-signals]', signals, item => `<div class="signal-row"><strong>${esc(item.symbol?.symbol || item.symbol || 'Market')} · ${esc(item.direction || item.signal || 'HOLD')}</strong><span>${esc(item.strategy?.name || item.strategy || item.market_regime || '')}</span><b>${item.confidence != null && Number.isFinite(Number(item.confidence)) ? `${Number(item.confidence).toFixed(0)}%` : '—'}</b></div>`, result.signals.pending ? 'Loading recent signals…' : result.signals.ok ? 'No recent backend signals.' : 'Signal service unavailable.');
 
     const positionSync = result.positions.value?.meta?.last_synced_at || result.positions.value?.meta?.last_synced || null;
     const orderSync = result.orders.value?.meta?.last_synced_at || result.orders.value?.meta?.last_synced || null;
-    status('positions', !result.positions.ok ? 'error' : (positions.length && !positionsStale ? 'ok' : 'warn'),
-      !result.positions.ok ? 'Position service unavailable' : positionsStale ? `Cached exposure · ${snapshotAge(positionSync)}` : positions.length ? 'Exposure available' : 'No open positions');
-    status('execution', !result.orders.ok ? 'error' : (orders.length && !ordersStale ? 'ok' : 'warn'),
-      !result.orders.ok ? 'Order service unavailable' : ordersStale ? `Cached orders · ${snapshotAge(orderSync)}` : orders.length ? 'Execution feed available' : 'No recent orders');
-    status('markets', result.markets.ok ? (markets.length && marketsTimestamped ? 'ok' : 'warn') : 'error', result.markets.ok ? (markets.length && marketsTimestamped ? 'Market snapshot timestamps available' : markets.length ? 'Market data returned · freshness unknown' : 'No market snapshot') : 'Market data unavailable');
-    status('signals', result.signals.ok ? (signals.length ? 'ok' : 'warn') : 'error', result.signals.ok ? (signals.length ? 'AI signal feed available' : 'No recent signals') : 'Signal service unavailable');
+    status('positions', result.positions.pending ? 'warn' : !result.positions.ok ? 'error' : (positions.length && !positionsStale ? 'ok' : 'warn'),
+      result.positions.pending ? 'Loading positions' : !result.positions.ok ? 'Position service unavailable' : positionsStale ? `Cached exposure · ${snapshotAge(positionSync)}` : positions.length ? 'Exposure available' : 'No open positions');
+    status('execution', result.orders.pending ? 'warn' : !result.orders.ok ? 'error' : (orders.length && !ordersStale ? 'ok' : 'warn'),
+      result.orders.pending ? 'Loading orders' : !result.orders.ok ? 'Order service unavailable' : ordersStale ? `Cached orders · ${snapshotAge(orderSync)}` : orders.length ? 'Execution feed available' : 'No recent orders');
+    status('markets', result.markets.pending ? 'warn' : result.markets.ok ? (markets.length && marketsTimestamped ? 'ok' : 'warn') : 'error', result.markets.pending ? 'Loading market snapshots' : result.markets.ok ? (markets.length && marketsTimestamped ? 'Market snapshot timestamps available' : markets.length ? 'Market data returned · freshness unknown' : 'No market snapshot') : 'Market data unavailable');
+    status('signals', result.signals.pending ? 'warn' : result.signals.ok ? (signals.length ? 'ok' : 'warn') : 'error', result.signals.pending ? 'Loading recent signals' : result.signals.ok ? (signals.length ? 'AI signal feed available' : 'No recent signals') : 'Signal service unavailable');
 
     const activity = [
       ...orders.map(item => ({label: item.symbol?.symbol || item.symbol || 'Order', meta: item.status || 'Order', time: item.updated_at || item.created_at})),
       ...signals.map(item => ({label: item.symbol?.symbol || item.symbol || 'Signal', meta: item.direction || item.signal || 'Signal', time: item.created_at || item.timestamp}))
     ].filter(item => item.time && Number.isFinite(Date.parse(item.time))).sort((a,b) => Date.parse(b.time) - Date.parse(a.time)).slice(0, 8);
-    renderRows('[data-dashboard-activity]', activity, item => `<div class="mini-row"><strong>${esc(item.label)}</strong><span>${esc(item.meta)}</span><b>${esc(new Date(item.time).toLocaleString())}</b></div>`, 'No recent backend activity.');
+    renderRows('[data-dashboard-activity]', activity, item => `<div class="mini-row"><strong>${esc(item.label)}</strong><span>${esc(item.meta)}</span><b>${esc(new Date(item.time).toLocaleString())}</b></div>`, result.orders.pending || result.signals.pending ? 'Loading recent activity…' : 'No recent backend activity.');
   }
 
   async function load() {
@@ -159,53 +159,74 @@
     busy = true;
     setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
     document.documentElement.dataset.dashboardLoading = 'true';
-    try {
-      // Bound the whole refresh as well as individual requests. A transport or
-      // server that never settles must not leave the command center in "Checking…".
-      const responses = await Promise.allSettled([
-        withDeadline(request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS), ACCOUNT_TIMEOUT_MS, 'Account overview'),
-        withDeadline(request('/api/positions/open/', {}, 8000), 8500, 'Open positions'),
-        withDeadline(request('/api/dashboard/trade_history/?days=30&limit=8', {}, 8000), 8500, 'Trade history'),
-        withDeadline(request('/api/market/snapshots/all_snapshots/', {}, 8000), 8500, 'Market snapshots'),
-        withDeadline(request('/api/dashboard/signals/?limit=8', {}, 8000), 8500, 'Signals')
-      ]);
+    const isCurrent = () => {
       const currentId = window.AlgoBotBrokerState?.get?.()?.account?.id;
-      if (seq !== loadSeq || (requestedAccountId != null && currentId != null && String(currentId) !== requestedAccountId)) return;
-      const [account, positions, orders, markets, signals] = responses;
-      const accountPayload = account.status === 'fulfilled'
-        ? (account.value?.data?.account || account.value?.account || null)
-        : null;
-      // Never paint an account response that belongs to a different selection.
-      // Internal account IDs are compared only when both sides expose one.
-      if (requestedAccountId != null && accountPayload && (accountPayload.id == null || String(accountPayload.id) !== requestedAccountId)) {
-        renderAccount(null, 'Account changed during refresh · retrying');
-        setText('[data-dashboard-sync]', 'Account selection changed · refreshing');
-        loadSeq += 1; // Prevent this request's finally block from replacing the fast retry.
-        timer = setTimeout(load, 250);
-        return;
-      }
-      if (account.status === 'fulfilled') renderAccount(accountPayload);
-      else if (account.reason?.code === 'API_TIMEOUT') {
-        const stale = readLastAccountSnapshot();
-        if (stale?.account) {
-          renderAccount(stale.account, '', false, true);
-          const verifiedAt = stale.account.last_synced_at || stale.at;
-          const timeoutLabel = `Last verified broker snapshot · refresh timed out${verifiedAt ? ` · ${new Date(verifiedAt).toLocaleTimeString()}` : ''}`;
-          setText('[data-kpi-state="balance"]', timeoutLabel);
-          setText('[data-kpi-state="equity"]', timeoutLabel);
-        } else renderAccount(null, 'Broker snapshot timed out · refresh again');
-      } else renderAccount(null, 'Broker snapshot unavailable');
-      renderCollections({
-        positions: {ok: positions.status === 'fulfilled', value: positions.value, error: positions.reason},
-        orders: {ok: orders.status === 'fulfilled', value: orders.value, error: orders.reason},
-        markets: {ok: markets.status === 'fulfilled', value: markets.value, error: markets.reason},
-        signals: {ok: signals.status === 'fulfilled', value: signals.value, error: signals.reason}
-      });
+      return seq === loadSeq && !(requestedAccountId != null && currentId != null && String(currentId) !== requestedAccountId);
+    };
+    const collections = {
+      positions: {ok: false, pending: true, value: null, error: null},
+      orders: {ok: false, pending: true, value: null, error: null},
+      markets: {ok: false, pending: true, value: null, error: null},
+      signals: {ok: false, pending: true, value: null, error: null}
+    };
+    const updateCollection = (key, settled) => {
+      if (!isCurrent()) return;
+      collections[key] = {
+        ok: settled.status === 'fulfilled',
+        pending: false,
+        value: settled.status === 'fulfilled' ? settled.value : null,
+        error: settled.status === 'rejected' ? settled.reason : null
+      };
+      // Render each section as its own request settles; a slow broker position
+      // sync must not hold back orders, signals, markets, or the account snapshot.
+      renderCollections(collections);
+    };
+    try {
+      const jobs = [];
+      jobs.push(
+        withDeadline(request('/api/dashboard/account_overview/', {}, ACCOUNT_TIMEOUT_MS), ACCOUNT_TIMEOUT_MS, 'Account overview')
+          .then(value => {
+            if (!isCurrent()) return;
+            const accountPayload = value?.data?.account || value?.account || null;
+            // Never paint an account response that belongs to a different selection.
+            if (requestedAccountId != null && accountPayload && (accountPayload.id == null || String(accountPayload.id) !== requestedAccountId)) {
+              renderAccount(null, 'Account changed during refresh · retrying');
+              setText('[data-dashboard-sync]', 'Account selection changed · refreshing');
+              loadSeq += 1;
+              timer = setTimeout(load, 250);
+              return;
+            }
+            renderAccount(accountPayload);
+          })
+          .catch(error => {
+            if (!isCurrent()) return;
+            if (error?.code === 'API_TIMEOUT') {
+              const stale = readLastAccountSnapshot();
+              if (stale?.account) {
+                renderAccount(stale.account, '', false, true);
+                const verifiedAt = stale.account.last_synced_at || stale.at;
+                const timeoutLabel = `Last verified broker snapshot · refresh timed out${verifiedAt ? ` · ${new Date(verifiedAt).toLocaleTimeString()}` : ''}`;
+                setText('[data-kpi-state="balance"]', timeoutLabel);
+                setText('[data-kpi-state="equity"]', timeoutLabel);
+              } else renderAccount(null, 'Broker snapshot timed out · refresh again');
+            } else renderAccount(null, 'Broker snapshot unavailable');
+          })
+      );
+      jobs.push(withDeadline(request('/api/positions/open/', {}, 8000), 8500, 'Open positions')
+        .then(value => updateCollection('positions', {status: 'fulfilled', value}), error => updateCollection('positions', {status: 'rejected', reason: error})));
+      jobs.push(withDeadline(request('/api/dashboard/trade_history/?days=30&limit=8', {}, 8000), 8500, 'Trade history')
+        .then(value => updateCollection('orders', {status: 'fulfilled', value}), error => updateCollection('orders', {status: 'rejected', reason: error})));
+      jobs.push(withDeadline(request('/api/market/snapshots/all_snapshots/', {}, 8000), 8500, 'Market snapshots')
+        .then(value => updateCollection('markets', {status: 'fulfilled', value}), error => updateCollection('markets', {status: 'rejected', reason: error})));
+      jobs.push(withDeadline(request('/api/dashboard/signals/?limit=8', {}, 8000), 8500, 'Signals')
+        .then(value => updateCollection('signals', {status: 'fulfilled', value}), error => updateCollection('signals', {status: 'rejected', reason: error})));
+      await Promise.allSettled(jobs);
+      if (!isCurrent()) return;
       lastLoadedAt = new Date();
       setText('[data-dashboard-sync]', `Updated ${lastLoadedAt.toLocaleTimeString()} · snapshot only`);
       window.dispatchEvent(new CustomEvent('algobot:dashboard-updated', {detail: {timestamp: lastLoadedAt.toISOString()}}));
     } catch (error) {
-      if (seq !== loadSeq) return;
+      if (!isCurrent()) return;
       setText('[data-dashboard-sync]', 'Dashboard update failed · last known state retained');
       window.dispatchEvent(new CustomEvent('algobot:dashboard-error', {detail: error}));
     } finally {

@@ -51,8 +51,10 @@ DJANGO_TESTING = (
 USE_REDIS = False if DJANGO_TESTING else _dotenv_value(
     "USE_REDIS", "false"
 ).strip().lower() in {"1", "true", "yes", "on"}
-CELERY_BROKER_URL = _dotenv_value("CELERY_BROKER_URL", REDIS_URL)
-CELERY_RESULT_BACKEND = _dotenv_value("CELERY_RESULT_BACKEND", REDIS_URL)
+# One canonical Redis URL prevents service-level Celery aliases from shadowing
+# a corrected TLS endpoint. Broker and result backend intentionally share it.
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
 
 # Render Redis plans have finite client limits. Never let redis-py use its
 # effectively-unbounded default pool, because each web/worker process can then

@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 
 class MarketDataWorkerPreflightTests(SimpleTestCase):
@@ -66,3 +66,22 @@ class MarketDataWorkerPreflightTests(SimpleTestCase):
         app.conf.task_default_queue = "celery"
         with self.assertRaisesRegex(CommandError, "Required database table.*missing"):
             call_command("check_market_data_worker")
+
+    @patch("django.db.connection.introspection.table_names", return_value=["market_data_candlebackfillrun"])
+    @patch("deriv_platform.celery.app")
+    @patch.dict(os.environ, {
+        "DJANGO_ENV": "production",
+        "DATABASE_URL": "postgres://ci",
+        "REDIS_URL": "redis://ci",
+        "SECRET_KEY": "ci-secret",
+        "USE_REDIS": "true",
+        "USE_CELERY": "true",
+    }, clear=False)
+    @override_settings(REDIS_URL="redis://ci", CELERY_BROKER_URL="redis://ci", CELERY_RESULT_BACKEND="redis://ci")
+    def test_preflight_does_not_require_duplicate_celery_url_variables(self, app, table_names):
+        app.tasks = {"apps.market_data.tasks.run_initial_candle_backfill": object()}
+        app.conf.task_routes = {"apps.market_data.tasks.run_initial_candle_backfill": {"queue": "market_data"}}
+        app.conf.task_queues = [type("Queue", (), {"name": "celery"})(), type("Queue", (), {"name": "market_data"})()]
+        app.conf.task_default_queue = "celery"
+        call_command("check_market_data_worker")
+        app.connection_for_read.return_value.ensure_connection.assert_called_once_with(max_retries=1)

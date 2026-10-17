@@ -50,8 +50,6 @@ def validate_environment() -> None:
         )
     if os.environ.get("USE_REDIS", "").lower() != "true":
         raise SystemExit("USE_REDIS must be true for external Celery workers.")
-    os.environ.setdefault("CELERY_BROKER_URL", os.environ["REDIS_URL"])
-    os.environ.setdefault("CELERY_RESULT_BACKEND", os.environ["REDIS_URL"])
 
 def main() -> int:
     validate_environment()

@@ -11,8 +11,6 @@ REQUIRED_ENV = (
     "SECRET_KEY",
     "USE_REDIS",
     "USE_CELERY",
-    "CELERY_BROKER_URL",
-    "CELERY_RESULT_BACKEND",
 )
 
 
@@ -39,13 +37,15 @@ class Command(BaseCommand):
         if os.getenv("USE_CELERY", "").strip().lower() not in {"1", "true", "yes", "on"}:
             raise CommandError("Celery workers require USE_CELERY=true")
 
-        redis_url = os.environ["REDIS_URL"]
-        broker_url = os.environ["CELERY_BROKER_URL"]
-        result_backend = os.environ["CELERY_RESULT_BACKEND"]
+        from django.conf import settings
+
+        redis_url = settings.REDIS_URL
+        broker_url = settings.CELERY_BROKER_URL
+        result_backend = settings.CELERY_RESULT_BACKEND
         if broker_url != redis_url:
-            raise CommandError("CELERY_BROKER_URL must exactly match REDIS_URL on Render")
+            raise CommandError("Resolved Celery broker URL must match the canonical REDIS_URL")
         if result_backend != redis_url:
-            raise CommandError("CELERY_RESULT_BACKEND must exactly match REDIS_URL on Render")
+            raise CommandError("Resolved Celery result backend must match the canonical REDIS_URL")
 
         from deriv_platform.celery import app
 

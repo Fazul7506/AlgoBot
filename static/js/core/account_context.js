@@ -4,7 +4,7 @@
   if (window.AlgoBotAccountContext) return;
   const STORAGE_KEY='algobot:selected-account-id:v1';
   const list=value=>Array.isArray(value)?value:(Array.isArray(value?.results)?value.results:(Array.isArray(value?.accounts)?value.accounts:[]));
-  let accounts=[],selected=null,busy=null;
+  let accounts=[],selected=null,busy=null,selectionRevision=0;
   const storageSet=id=>{try{id==null?localStorage.removeItem(STORAGE_KEY):localStorage.setItem(STORAGE_KEY,String(id))}catch(_){}};
   const accountId=a=>a?.id==null?null:String(a.id);
   const canonical=()=>window.AlgoBotFrontendData?.request;
@@ -12,8 +12,10 @@
   function setSelected(account,reason='account-selected',persist=true){if(!account?.id)return null;selected=account;if(persist)storageSet(account.id);publish(reason);return account}
   async function load(force=false){
     if(busy&&!force)return busy;const request=canonical();if(!request)return selected;
-    busy=(async()=>{
+    const revisionAtStart=selectionRevision;
+    const pending=(async()=>{
       const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},7000)).filter(a=>a?.id);accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
+      if(revisionAtStart!==selectionRevision)return selected;
       // /api/brokers/accounts/ serializes is_active from the same server-side
       // session authority used by /active/. Prefer that single response so the
       // dashboard does not block on a second sequential account request.
@@ -26,6 +28,7 @@
           serverSelected=active?.active_account||active?.account||null;
         }catch(_){ }
       }
+      if(revisionAtStart!==selectionRevision)return selected;
       const serverId=accountId(serverSelected);
       // The original connected-account fallback remains intact for compatibility.
       let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
@@ -39,7 +42,7 @@
       const hydrated=serverSelected&&accountId(serverSelected)===accountId(target)?serverSelected:target;
       accounts=accounts.map(a=>accountId(a)===accountId(hydrated)?{...a,...hydrated,is_active:true}:{...a,is_active:false});
       if(!accounts.some(a=>accountId(a)===accountId(hydrated)))accounts=[hydrated,...accounts];window.AlgoBotBrokerAccounts=accounts.slice();return setSelected(hydrated,'account-context-hydrated',true);
-    })().finally(()=>{busy=null});return busy;
+    })();const tracked=pending.finally(()=>{if(busy===tracked)busy=null;});busy=tracked;return tracked;
   }
   function clearTransientState(reason='account-switching'){
     const state=window.AlgoBotBrokerState;
@@ -48,12 +51,20 @@
   }
 
   async function selectAccount(id){
-    if(busy)await busy.catch(()=>{});
-    const target=accounts.find(a=>accountId(a)===String(id));
+    // Do not serialize a user-initiated switch behind a slow startup hydration.
+    // Existing account rows are enough to submit the authoritative select request.
+    let target=accounts.find(a=>accountId(a)===String(id));
+    if(!target){
+      try{await (busy||load()).catch(()=>{});}catch(_){}
+      target=accounts.find(a=>accountId(a)===String(id));
+    }
     if(!target)throw new Error('The selected broker account is no longer available. Refresh the account list.');
     if(target.switch_enabled===false)throw new Error('Broker account switching is disabled by platform configuration.');
     const request=canonical();if(!request)throw new Error('The broker account service is not ready.');
     const previous=selected;
+    // Invalidate any in-flight startup hydration so its response cannot restore
+    // the previous account after the server accepts this switch.
+    selectionRevision+=1;
     clearTransientState('account-switch-started');
     try{
       const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
