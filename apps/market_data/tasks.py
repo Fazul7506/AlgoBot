@@ -987,6 +987,8 @@ def ensure_initial_candle_backfill(count=5000):
     now = timezone.now()
     dispatch_lock = None
     run = None
+    task_id = None
+    automatic_attempts = 0
     try:
         from .backfill_lock import acquire_backfill_dispatch_lock
         dispatch_lock = acquire_backfill_dispatch_lock("initial")
@@ -1053,6 +1055,27 @@ def ensure_initial_candle_backfill(count=5000):
             "automatic_initial_backfill_dispatch_failed",
             extra={"run_id": getattr(run, "pk", None), "error_type": error_type},
         )
+        if run is not None:
+            try:
+                CandleBackfillEvent.objects.create(
+                    run=run,
+                    level="warning",
+                    event_type="warning",
+                    message=safe_error,
+                    task_id=str(task_id or run.task_id or ""),
+                    payload={
+                        "queue": BACKFILL_QUEUE,
+                        "trigger": "automatic",
+                        "terminal": False,
+                        "error_type": error_type,
+                        "automatic_attempts": automatic_attempts,
+                    },
+                )
+            except Exception as event_exc:
+                logger.error(
+                    "automatic_initial_backfill_dispatch_event_failed",
+                    extra={"run_id": run.pk, "error_type": type(event_exc).__name__},
+                )
         # Keep the run non-terminal: reconciliation can safely re-publish the
         # same task ID after the dispatch window without creating a duplicate.
         return {"status": "failed", "error": safe_error}
