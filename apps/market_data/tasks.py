@@ -822,10 +822,10 @@ def backfill_research_candles(run_id=None, count=250, symbol=None):
                         countdown=1800,
                         queue="celery",
                     )
-            except Exception:
-                logger.exception(
-                    "Unable to schedule the next research backfill cooldown",
-                    extra={"run_id": terminal_run_id},
+            except Exception as exc:
+                logger.error(
+                    "research_backfill_cooldown_schedule_failed",
+                    extra={"run_id": terminal_run_id, "error_type": type(exc).__name__},
                 )
         close_old_connections()
 
@@ -948,9 +948,14 @@ def ensure_research_candle_backfill(count=250):
         )
         return {"status": "dispatched", "run_id": run.pk, "task_id": task.id, "queue": BACKFILL_QUEUE}
     except Exception as exc:
+        error_type = type(exc).__name__
+        safe_error = (
+            f"Automatic research backfill dispatch failed ({error_type}). "
+            "Verify Redis connectivity and the market_data worker."
+        )
         if run is not None:
             run.status = "failed"
-            run.error = f"Automatic research backfill dispatch failed: {exc}"
+            run.error = safe_error
             run.completed_at = timezone.now()
             run.save(update_fields=["status", "error", "completed_at"])
             CandleBackfillEvent.objects.create(
@@ -959,10 +964,13 @@ def ensure_research_candle_backfill(count=250):
                 event_type="error",
                 message=run.error,
                 task_id=task_id,
-                payload={"queue": BACKFILL_QUEUE, "trigger": "automatic"},
+                payload={"queue": BACKFILL_QUEUE, "trigger": "automatic", "error_type": error_type},
             )
-        logger.exception("Automatic research candle backfill dispatch failed")
-        return {"status": "failed", "error": str(exc)}
+        logger.error(
+            "automatic_research_backfill_dispatch_failed",
+            extra={"run_id": getattr(run, "pk", None), "error_type": error_type},
+        )
+        return {"status": "failed", "error": safe_error}
     finally:
         if dispatch_lock is not None:
             dispatch_lock.release()
@@ -1035,8 +1043,18 @@ def ensure_initial_candle_backfill(count=5000):
         )
         return {"status": "dispatched", "run_id": run.pk, "task_id": task.id, "queue": queue_name}
     except Exception as exc:
-        logger.exception("Automatic initial candle backfill dispatch failed")
-        return {"status": "failed", "error": str(exc)}
+        error_type = type(exc).__name__
+        safe_error = (
+            f"Automatic initial candle backfill dispatch failed ({error_type}). "
+            "Verify Redis connectivity and the market_data worker."
+        )
+        logger.error(
+            "automatic_initial_backfill_dispatch_failed",
+            extra={"run_id": getattr(run, "pk", None), "error_type": error_type},
+        )
+        # Keep the run non-terminal: reconciliation can safely re-publish the
+        # same task ID after the dispatch window without creating a duplicate.
+        return {"status": "failed", "error": safe_error}
     finally:
         if dispatch_lock is not None:
             dispatch_lock.release()
@@ -1186,8 +1204,11 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
         dispatch_lock = acquire_backfill_dispatch_lock("initial-recovery")
         if dispatch_lock is None:
             return {"recovered": [], "status": "busy"}
-    except Exception:
-        logger.exception("Unable to acquire candle backfill recovery lock")
+    except Exception as exc:
+        logger.error(
+            "candle_backfill_recovery_lock_unavailable",
+            extra={"error_type": type(exc).__name__},
+        )
         return {"recovered": [], "status": "lock_unavailable"}
     running_cutoff = now - BACKFILL_RUNNING_STALE_AFTER
     dispatch_cutoff = now - BACKFILL_DISPATCH_STALE_AFTER
@@ -1344,12 +1365,18 @@ def reconcile_candle_backfill_runs(max_age_seconds=300):
                 current = CandleBackfillRun.objects.select_for_update().get(pk=run_id)
                 if current.status == "running":
                     current.status = "failed"
-                    current.error = f"Automatic Celery retry failed: {exc}"
+                    current.error = (
+                        f"Automatic Celery retry failed ({type(exc).__name__}). "
+                        "Verify Redis connectivity and the market_data worker."
+                    )
                     current.completed_at = timezone.now()
                     current.save(update_fields=["status", "error", "completed_at"])
                     _discard_staged_backfill(current.pk)
                     CandleBackfillEvent.objects.create(run=current, level="error", event_type="error", message=current.error, payload={"queue": _recovery_backfill_queue(recovery_attempts), "recovery_attempts": recovery_attempts},)
-            logger.exception("Unable to recover abandoned initial candle backfill", extra={"run_id": run_id})
+            logger.error(
+                "abandoned_initial_backfill_recovery_failed",
+                extra={"run_id": run_id, "error_type": type(exc).__name__},
+            )
         return _recovery_result()
     finally:
         if dispatch_lock is not None:
