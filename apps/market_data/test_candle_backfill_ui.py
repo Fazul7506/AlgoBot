@@ -498,3 +498,23 @@ class CandleBackfillUiTests(TestCase):
         publish.assert_called_once()
         self.assertEqual(error_log.call_args.args[0], "candle_backfill_publish_failed")
         self.assertNotIn("secret", repr(error_log.call_args))
+
+    def test_stop_revoke_failure_logs_only_error_type(self):
+        run = CandleBackfillRun.objects.create(
+            scope="initial", status="running", count=5000, task_id="stop-task"
+        )
+        with patch(
+            "apps.market_data.views.current_app.control.revoke",
+            side_effect=ConnectionError("rediss://user:secret@redis.example:6379/0"),
+        ), patch("apps.market_data.views.logger.error") as error_log:
+            response = self.client.post(
+                reverse("candle_backfill_control"),
+                data=__import__("json").dumps({"action": "stop", "run_id": run.pk}),
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        run.refresh_from_db()
+        self.assertEqual(run.status, "stopped")
+        self.assertEqual(error_log.call_args.args[0], "stopped_backfill_task_revoke_failed")
+        self.assertNotIn("secret", repr(error_log.call_args))
