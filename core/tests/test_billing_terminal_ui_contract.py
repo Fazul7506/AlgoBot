@@ -80,6 +80,17 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("same-origin", terminal)
         self.assertNotIn("X-CSRFToken", terminal)
 
+    def test_terminal_mutations_do_not_force_session_cookies_without_csrf(self):
+        from pathlib import Path
+        terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
+        self.assertIn("const api=(u,o={},t=10000)=>{const options={...o};", terminal)
+        self.assertNotIn("const options={credentials:'include',...o}", terminal)
+        # The shared data contract scopes session cookies to account-context routes
+        # and uses bearer auth for preview/order/AI API mutations.
+        client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
+        self.assertIn("credentials:sessionAccountContext?'include':'omit'", client)
+        self.assertIn("headers.set('Authorization','Bearer '+accessToken)", client)
+
     def test_account_context_never_lets_stale_local_storage_override_server_state(self):
         from pathlib import Path
         context = Path("static/js/core/account_context.js").read_text(encoding="utf-8")
