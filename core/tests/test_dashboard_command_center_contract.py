@@ -120,3 +120,10 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("String(value.account.data_freshness || '').toLowerCase() !== 'fresh'", source)
         self.assertIn("CONNECTION LAST VERIFIED", source)
         self.assertIn("setText('[data-kpi-state=\"equity\"]', timeoutLabel)", source)
+
+    def test_dashboard_sections_render_progressively_without_waiting_for_slowest_endpoint(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("const updateCollection = (key, settled) =>", source)
+        self.assertIn("renderCollections(collections);", source)
+        self.assertIn("a slow broker position sync must not hold back orders", source)
+        self.assertIn("result.positions.pending ? 'Loading positions…'", source)
