@@ -6,6 +6,7 @@ Broker APIs are ingestion sources, never a training/research data source.
 from __future__ import annotations
 
 from datetime import timedelta
+import logging
 from typing import Any
 
 from django.utils import timezone
@@ -13,6 +14,9 @@ from django.utils import timezone
 from apps.market_data.models import MarketSymbol, Tick
 from apps.market_data.historical import normalize_timeframe
 from apps.market_data.research_data import ResearchDataService
+
+
+logger = logging.getLogger(__name__)
 
 
 class AIDataPipeline:
@@ -38,9 +42,14 @@ class AIDataPipeline:
 
         rows = []
         for market in MarketSymbol.objects.filter(is_active=True, is_tradable=True).iterator():
-            candles = self.research_data.candles(
-                market.symbol, timeframe, limit=10000, start_epoch=cutoff_epoch
-            )
+            try:
+                candles = self.research_data.candles(
+                    market.symbol, timeframe, limit=10000, start_epoch=cutoff_epoch
+                )
+            except ValueError as exc:
+                # Eligibility can change during a long scan; skip only this symbol.
+                logger.warning("ai_data_pipeline.symbol_skipped symbol=%s reason=%s", market.symbol, str(exc)[:200])
+                continue
             rows.extend(
                 {"broker": market.broker, "symbol": market.symbol, "timeframe": timeframe, **row}
                 for row in candles
@@ -52,11 +61,15 @@ class AIDataPipeline:
         cutoff_epoch = int((timezone.now() - timedelta(hours=1)).timestamp())
         result = []
         for item in MarketSymbol.objects.filter(is_active=True, is_tradable=True).iterator():
-            candles = self.research_data.candles(
-                item.symbol, timeframe, limit=10000, start_epoch=cutoff_epoch
-            )
+            try:
+                candles = self.research_data.candles(
+                    item.symbol, timeframe, limit=10000, start_epoch=cutoff_epoch
+                )
+                latest = self.research_data.latest(item.symbol, timeframe)
+            except ValueError as exc:
+                logger.warning("ai_data_health.symbol_skipped symbol=%s reason=%s", item.symbol, str(exc)[:200])
+                continue
             ticks = Tick.objects.filter(symbol=item, epoch__gte=cutoff_epoch).count()
-            latest = self.research_data.latest(item.symbol, timeframe)
             result.append({
                 "broker": item.broker,
                 "symbol": item.symbol,
