@@ -313,7 +313,8 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
         reconcile = Path("static/js/terminal_phase2.js").read_text(encoding="utf-8")
         self.assertIn("account_scope=active", terminal)
-        self.assertIn("credentials:'include'", terminal)
+        self.assertIn("const canonicalApi=(u,o={},t=10000)=>window.AlgoBotFrontendData.request(u,o,t);", terminal)
+        self.assertIn("const api=(u,o={},t=10000)=>{const options={...o};", terminal)
         self.assertIn("account_scope=active", reconcile)
         self.assertIn("credentials:'include'", reconcile)
         self.assertIn("executionUncertain", terminal)
@@ -331,7 +332,7 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertIn("String(currentAccount?.id||'')!==context.accountId", ai)
         self.assertIn("selectedTimeframe!==context.timeframe", ai)
         self.assertIn("function scheduleAnalyse(){clearTimeout(scheduled);resetForSymbol();", ai)
-        self.assertIn("v=20261009-ai-context-guard1", template)
+        self.assertIn("v=20261017-csrf-transport1", template)
 
     def test_terminal_preview_displays_broker_estimate_and_submits_duration(self):
         from pathlib import Path
