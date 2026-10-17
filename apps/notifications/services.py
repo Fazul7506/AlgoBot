@@ -52,9 +52,17 @@ def render_email_html(title: str, message: str, category: str, sender: SenderIde
     action = ""
     action_url = metadata.get("action_url")
     action_label = metadata.get("action_label", "Open AlgoBot")
-    if isinstance(action_url, str) and action_url.startswith("https://"):
-        # Keep the visible email body free of long tokenized URLs. The HTTPS
-        # destination is carried by a clearly labelled, branded call-to-action.
+    allowed_action_url = (
+        isinstance(action_url, str)
+        and (
+            action_url.startswith("https://")
+            or (settings.DEBUG and action_url.startswith("http://"))
+        )
+    )
+    if allowed_action_url:
+        # Production actions must use HTTPS. Allow local HTTP only in DEBUG
+        # so development/test emails still contain a working verification CTA.
+        # Keep the visible text body free of long tokenized URLs.
         action = (
             '<p style="margin:28px 0;">'
             f'<a href="{html.escape(action_url, quote=True)}" '
