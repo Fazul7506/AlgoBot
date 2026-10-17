@@ -98,11 +98,9 @@ DATABASE_URL=<production PostgreSQL connection URL>
 REDIS_URL=<production Redis connection URL>
 USE_REDIS=true
 USE_CELERY=true
-CELERY_BROKER_URL=<same Redis URL>
-CELERY_RESULT_BACKEND=<same Redis URL>
 ```
 
-The production settings explicitly require a real `SECRET_KEY`, Redis, and a database connection.
+The production settings require a real `SECRET_KEY`, `REDIS_URL`, and a database connection. Celery broker and result-backend URLs are derived from `REDIS_URL`; do not configure duplicate `CELERY_*` aliases.
 
 ### Celery reliability variables
 
