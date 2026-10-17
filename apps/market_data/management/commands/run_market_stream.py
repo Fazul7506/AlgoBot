@@ -11,6 +11,7 @@ from channels.layers import get_channel_layer
 
 from apps.market_data.deriv_sync import DERIV_PUBLIC_WS, sync_active_symbols
 from apps.market_data.models import MarketSymbol
+from apps.market_data.exceptions import ValidationError as MarketDataValidationError
 from apps.market_data.services import MarketDataService
 
 
@@ -50,7 +51,14 @@ class Command(BaseCommand):
                         # A valid provider tick proves the stream is alive; reset
                         # reconnect backoff even if the tick is later rejected as stale.
                         reconnect_delay = 2
-                        payload = await sync_to_async(self.ingest)(tick)
+                        try:
+                            payload = await sync_to_async(self.ingest)(tick)
+                        except MarketDataValidationError as exc:
+                            # A stale/out-of-order or malformed provider tick is
+                            # isolated to that message; it must not tear down all
+                            # subscriptions and create a market-wide data gap.
+                            self.stderr.write(f"market tick rejected: {exc}")
+                            continue
                         if layer and payload:
                             await layer.group_send(
                                 f"algobot-market-{symbol}",
