@@ -117,7 +117,8 @@ CELERY_WORKER_RETRY_ON_STARTUP=true
 
 Copy the **existing production values** for the Deriv and broker integrations from the current deployment. Do not invent replacement values.
 
-At minimum, review:
+At minimum, review the canonical Deriv settings below. `DERIV_APP_ID` (the numeric application ID) and `DERIV_OAUTH_CLIENT_ID` (the OAuth client identifier) are different values; keep both configured, but do not duplicate them under legacy `BROKER_*` environment names.
+
 
 ```
 DERIV_OAUTH_CLIENT_ID
@@ -132,10 +133,6 @@ DERIV_AUTH_WS_BASE_URL
 DERIV_REDIRECT_URI
 ALLOW_LIVE_TRADING
 ENABLE_BROKER_ACCOUNT_SWITCH
-BROKER_APP_ID
-BROKER_WS_URL
-BROKER_OAUTH_CLIENT_ID
-BROKER_REDIRECT_URI
 ```
 
 For live trading, preserve the current production value of `ALLOW_LIVE_TRADING`. Do not enable live execution merely because the worker infrastructure has moved.
