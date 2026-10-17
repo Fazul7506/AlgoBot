@@ -13,7 +13,7 @@
   async function load(force=false){
     if(busy&&!force)return busy;const request=canonical();if(!request)return selected;
     const revisionAtStart=selectionRevision;
-    busy=(async()=>{
+    const pending=(async()=>{
       const rows=list(await request('/api/brokers/accounts/',{notifyOnError:false},7000)).filter(a=>a?.id);accounts=rows;window.AlgoBotBrokerAccounts=rows.slice();
       if(revisionAtStart!==selectionRevision)return selected;
       // /api/brokers/accounts/ serializes is_active from the same server-side
@@ -42,7 +42,7 @@
       const hydrated=serverSelected&&accountId(serverSelected)===accountId(target)?serverSelected:target;
       accounts=accounts.map(a=>accountId(a)===accountId(hydrated)?{...a,...hydrated,is_active:true}:{...a,is_active:false});
       if(!accounts.some(a=>accountId(a)===accountId(hydrated)))accounts=[hydrated,...accounts];window.AlgoBotBrokerAccounts=accounts.slice();return setSelected(hydrated,'account-context-hydrated',true);
-    })().finally(()=>{busy=null});return busy;
+    })();const tracked=pending.finally(()=>{if(busy===tracked)busy=null;});busy=tracked;return tracked;
   }
   function clearTransientState(reason='account-switching'){
     const state=window.AlgoBotBrokerState;
