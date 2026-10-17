@@ -98,7 +98,6 @@
   const protectedPublicPaths = /^\/api\/(?:brokers\/|orders(?:\/|$)|positions(?:\/|$)|dashboard(?:\/|$)|ai(?:\/|$)|predictions(?:\/|$)|automation(?:\/|$)|portfolio(?:\/|$)|backtesting(?:\/|$)|settings(?:\/|$)|tenants(?:\/|$))/;
   async function request(rawUrl,options={},timeout=25000){
     const url=normalizeEndpoint(rawUrl),method=(options.method||'GET').toUpperCase();
-    const sessionAccountSelect=isSessionAccountSelectUrl(url);
     const sessionAccountContext=isSessionAccountContextUrl(url);
     if (document.body?.dataset.authenticated !== 'true' && protectedPublicPaths.test(url)) {
       const error=new Error('Sign in to access your workspace data.');
