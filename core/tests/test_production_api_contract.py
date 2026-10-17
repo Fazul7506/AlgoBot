@@ -49,3 +49,13 @@ class ProductionApiContractTests(SimpleTestCase):
         self.assertNotIn("DERIV_API_TOKEN=", example)
         self.assertNotIn("OPENAI_API_KEY=", example)
         self.assertNotIn("TELEGRAM_WEBHOOK_URL=", example)
+
+    def test_redis_url_is_the_only_celery_broker_and_backend_configuration(self):
+        source = (ROOT / "config/settings/cache.py").read_text(encoding="utf-8")
+        self.assertIn("CELERY_BROKER_URL = REDIS_URL", source)
+        self.assertIn("CELERY_RESULT_BACKEND = REDIS_URL", source)
+        self.assertNotIn('_dotenv_value("CELERY_BROKER_URL"', source)
+        self.assertNotIn('_dotenv_value("CELERY_RESULT_BACKEND"', source)
+        broker = (ROOT / "config/settings/broker.py").read_text(encoding="utf-8")
+        self.assertNotIn('TELEGRAM_CHAT_ID = env("TELEGRAM_CHAT_ID"', broker)
+        self.assertNotIn('DERIV_API_BASE = env("DERIV_API_BASE"', broker)
