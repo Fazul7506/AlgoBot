@@ -75,8 +75,6 @@ services:
         value: https://algobot.dpdns.org
       - key: TELEGRAM_MODE
         value: webhook
-      - key: TELEGRAM_WEBHOOK_URL
-        value: https://algobot.dpdns.org/api/notifications/telegram/webhook/
       - key: CORS_ALLOWED_ORIGINS
         value: https://algobot.dpdns.org
       - key: CSRF_TRUSTED_ORIGINS
@@ -112,8 +110,6 @@ services:
         value: production
       - key: TELEGRAM_MODE
         value: webhook
-      - key: TELEGRAM_WEBHOOK_URL
-        value: https://algobot.dpdns.org/api/notifications/telegram/webhook/
       - key: TELEGRAM_BOT_TOKEN
         fromService:
           name: AlgoBot
@@ -146,16 +142,6 @@ services:
           envVarKey: USE_REDIS
       - key: USE_CELERY
         value: "true"
-      - key: CELERY_BROKER_URL
-        fromService:
-          name: AlgoBot
-          type: web
-          envVarKey: REDIS_URL
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          name: AlgoBot
-          type: web
-          envVarKey: REDIS_URL
       - key: CELERY_WORKER_BROKER_RETRY
         value: "true"
       - key: CELERY_WORKER_RETRY_ON_STARTUP
@@ -180,8 +166,6 @@ services:
         value: production
       - key: TELEGRAM_MODE
         value: webhook
-      - key: TELEGRAM_WEBHOOK_URL
-        value: https://algobot.dpdns.org/api/notifications/telegram/webhook/
       - key: TELEGRAM_BOT_TOKEN
         fromService:
           name: AlgoBot
@@ -214,16 +198,6 @@ services:
           envVarKey: USE_REDIS
       - key: USE_CELERY
         value: "true"
-      - key: CELERY_BROKER_URL
-        fromService:
-          name: AlgoBot
-          type: web
-          envVarKey: REDIS_URL
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          name: AlgoBot
-          type: web
-          envVarKey: REDIS_URL
       - key: CELERY_WORKER_BROKER_RETRY
         value: "true"
       - key: CELERY_WORKER_RETRY_ON_STARTUP
@@ -247,8 +221,6 @@ services:
         value: production
       - key: TELEGRAM_MODE
         value: webhook
-      - key: TELEGRAM_WEBHOOK_URL
-        value: https://algobot.dpdns.org/api/notifications/telegram/webhook/
       - key: TELEGRAM_BOT_TOKEN
         fromService:
           name: AlgoBot
@@ -298,8 +270,6 @@ services:
         value: production
       - key: TELEGRAM_MODE
         value: webhook
-      - key: TELEGRAM_WEBHOOK_URL
-        value: https://algobot.dpdns.org/api/notifications/telegram/webhook/
       - key: TELEGRAM_BOT_TOKEN
         fromService:
           name: AlgoBot
@@ -332,16 +302,6 @@ services:
           envVarKey: USE_REDIS
       - key: USE_CELERY
         value: "true"
-      - key: CELERY_BROKER_URL
-        fromService:
-          name: AlgoBot
-          type: web
-          envVarKey: REDIS_URL
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          name: AlgoBot
-          type: web
-          envVarKey: REDIS_URL
       - key: CELERY_WORKER_BROKER_RETRY
         value: "true"
       - key: CELERY_WORKER_RETRY_ON_STARTUP
