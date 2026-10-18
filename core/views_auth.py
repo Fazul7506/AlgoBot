@@ -215,7 +215,7 @@ def browser_api_token(request):
         'access': str(refresh.access_token),
         'expires_in': int(settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME', timedelta(hours=1)).total_seconds()),
         'broker_setup_required': broker_setup_required,
-        'next_url': reverse('broker_marketplace_page' if broker_setup_required else 'dashboard_page'),
+        'next_url': reverse('broker_marketplace_page'),
     }, status=status.HTTP_200_OK)
 
 
@@ -330,7 +330,7 @@ def login_view(request):
         'refresh': str(refresh),
         'user': {'id': user.id, 'username': user.username, 'email': user.email},
         'broker_setup_required': broker_setup_required,
-        'next_url': reverse('broker_marketplace_page' if broker_setup_required else 'dashboard_page'),
+        'next_url': reverse('broker_marketplace_page'),
     }, status=status.HTTP_200_OK)
 
 
