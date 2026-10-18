@@ -56,14 +56,14 @@ def _public_url(request, path):
     return request.build_absolute_uri(path)
 
 
-def _send_account_email(subject, body, email):
+def _send_account_email(subject, body, email, *, metadata=None):
     try:
         # Reuse AlgoBot's configured transactional delivery path (Brevo when
         # configured, Django email backend otherwise) for auth/security mail.
         from apps.notifications.services import send_transactional_email
         provider = send_transactional_email(
             recipient=email, subject=subject, message=body,
-            category="authentication",
+            category="authentication", metadata=metadata,
         )
         # Log provider acceptance only; never log the recipient, message body,
         # verification URL, or any token. Provider acceptance is not inbox proof.
@@ -101,11 +101,25 @@ def _send_verification(request, user, profile, *, recipient=None, purpose="verif
     email = str(recipient or user.email or "").strip().lower()
     if purpose == "change_email":
         subject = "Confirm your new AlgoBot email address"
-        body = "To change your AlgoBot email address, confirm ownership of the new address here:\n\n" + link + "\n\nYour current email remains unchanged until you verify this link."
+        body = (
+            "We received a request to change the email address on your AlgoBot account. "
+            "Use the secure button in the HTML version of this message to confirm the new address. "
+            "Your current email remains unchanged until confirmation. If you did not request this, "
+            "you can ignore this message."
+        )
+        action_label = "Confirm new email address"
     else:
         subject = "Verify your AlgoBot email address"
-        body = "To verify your AlgoBot email address, open this link:\n\n" + link + "\n\nIf you did not create this account, you can ignore this message."
-    return _send_account_email(subject, body, email)
+        body = (
+            "Welcome to AlgoBot. Use the secure Verify Email button in the HTML version of this "
+            "message to verify your email address. If you did not create this account, you can "
+            "ignore this message."
+        )
+        action_label = "Verify email address"
+    return _send_account_email(
+        subject, body, email,
+        metadata={"action_url": link, "action_label": action_label},
+    )
 
 
 def login_page(request):
