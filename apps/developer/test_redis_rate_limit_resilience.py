@@ -21,7 +21,7 @@ class DeveloperRateLimitRedisRecoveryTests(SimpleTestCase):
 
         with patch.object(
             middleware.cache,
-            "add",
+            "incr",
             side_effect=OutOfMemoryError("maxmemory exceeded"),
         ):
             self.assertEqual(middleware._next_rate_limit_count(key, 60), 1)
@@ -41,6 +41,10 @@ class DeveloperRateLimitRedisRecoveryTests(SimpleTestCase):
         middleware._redis_unavailable_until = middleware.time.monotonic() + 30
 
         with patch.object(
+            middleware.cache,
+            "incr",
+            side_effect=AssertionError("Redis must be bypassed during cooldown"),
+        ), patch.object(
             middleware.cache,
             "add",
             side_effect=AssertionError("Redis must be bypassed during cooldown"),
