@@ -52,12 +52,14 @@ class DeveloperRateLimitRedisRecoveryTests(SimpleTestCase):
         class ExpiringBackend:
             def __init__(self):
                 self.add_calls = 0
+                self.incr_calls = 0
 
             def add(self, key, value, timeout):
                 self.add_calls += 1
                 return self.add_calls == 2
 
             def incr(self, key):
+                self.incr_calls += 1
                 raise ValueError("key expired")
 
         backend = ExpiringBackend()
