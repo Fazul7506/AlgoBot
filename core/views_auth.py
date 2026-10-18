@@ -63,7 +63,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         broker_setup_required = not has_authorized_broker_connection(self.user)
         data["broker_setup_required"] = broker_setup_required
         data["next_url"] = reverse(
-            "broker_marketplace_page" if broker_setup_required else "dashboard_page"
+            "broker_marketplace_page"
         )
         return data
 
@@ -215,7 +215,7 @@ def browser_api_token(request):
         'access': str(refresh.access_token),
         'expires_in': int(settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME', timedelta(hours=1)).total_seconds()),
         'broker_setup_required': broker_setup_required,
-        'next_url': reverse('broker_marketplace_page' if broker_setup_required else 'dashboard_page'),
+        'next_url': reverse('broker_marketplace_page'),
     }, status=status.HTTP_200_OK)
 
 
