@@ -124,7 +124,7 @@ def deriv_login(request):
     return redirect(authorization_url)
 def broker_connect_page(request): return deriv_login(request)
 @login_required
-def broker_marketplace_page(request): return render(request,'core/broker_marketplace.html',{'brokers':Broker.objects.filter(status='active').order_by('name')})
+def broker_marketplace_page(request): return render(request,'core/broker_marketplace.html',{'brokers':Broker.objects.all().order_by('name')})
 @login_required
 def strategy_builder_page(request): return render(request,'core/strategy_builder.html')
 @login_required
