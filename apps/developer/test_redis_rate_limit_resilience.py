@@ -52,6 +52,41 @@ class DeveloperRateLimitRedisRecoveryTests(SimpleTestCase):
             self.assertEqual(middleware._next_rate_limit_count(key, 60), 1)
             self.assertEqual(middleware._next_rate_limit_count(key, 60), 2)
 
+    def test_redis_existing_counter_uses_one_raw_increment(self):
+        from django.conf import settings
+
+        with patch.object(settings, "USE_REDIS", True), patch(
+            "django_redis.get_redis_connection"
+        ) as get_connection:
+            redis_client = get_connection.return_value
+            redis_client.incr.return_value = 7
+            count = middleware._increment_rate_counter(
+                middleware.cache, "counter", 60
+            )
+
+        self.assertEqual(count, 7)
+        redis_client.incr.assert_called_once_with(
+            middleware.cache.make_key("counter")
+        )
+        redis_client.expire.assert_not_called()
+
+    def test_redis_first_counter_increment_sets_expiry(self):
+        from django.conf import settings
+
+        with patch.object(settings, "USE_REDIS", True), patch(
+            "django_redis.get_redis_connection"
+        ) as get_connection:
+            redis_client = get_connection.return_value
+            redis_client.incr.return_value = 1
+            count = middleware._increment_rate_counter(
+                middleware.cache, "counter", 60
+            )
+
+        self.assertEqual(count, 1)
+        redis_client.expire.assert_called_once_with(
+            middleware.cache.make_key("counter"), 60
+        )
+
     def test_existing_counter_uses_one_increment_without_add(self):
         class ExistingCounterBackend:
             def __init__(self):
