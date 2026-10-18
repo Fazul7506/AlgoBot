@@ -2,12 +2,83 @@ import hashlib
 import logging
 import time
 import uuid
+
 from django.core.cache import cache
+from django.core.cache.backends.locmem import LocMemCache
 from django.http import JsonResponse
 from django.utils import timezone
+from django_redis.exceptions import ConnectionInterrupted
+from redis.exceptions import RedisError
+
 from .models import APIKey, APIUsageEvent, RateLimitEvent
 
 logger = logging.getLogger(__name__)
+
+# A Redis quota/availability incident must not turn every developer API request
+# into a 500. This emergency limiter is intentionally process-local: it is a
+# bounded degraded mode, not a replacement for shared Redis enforcement.
+_fallback_rate_limit_cache = LocMemCache("algobot-developer-rate-limit-fallback", {})
+_REDIS_FAILURE_COOLDOWN_SECONDS = 30.0
+_redis_unavailable_until = 0.0
+
+
+def _increment_rate_counter(backend, key, window):
+    """Increment an existing Redis counter directly; expire only a new key."""
+    # django-redis's cache.incr() checks key existence before issuing INCR.
+    # Calling the underlying client avoids that extra EXISTS command on every
+    # request. Keep the cache key transformation so prefixes/versions still
+    # match Django's cache API.
+    from django.conf import settings
+
+    if backend is cache and getattr(settings, "USE_REDIS", False):
+        from django_redis import get_redis_connection
+
+        redis_client = get_redis_connection("default")
+        redis_key = backend.make_key(key)
+        count = redis_client.incr(redis_key)
+        if count == 1:
+            redis_client.expire(redis_key, max(1, int(window)))
+        return count
+
+    # LocMemCache and test doubles use Django's backend API. A missing key
+    # raises ValueError; add() gives it a TTL and handles first-request races.
+    try:
+        return backend.incr(key)
+    except (ValueError, TypeError):
+        if backend.add(key, 1, timeout=window):
+            return 1
+        try:
+            return backend.incr(key)
+        except (ValueError, TypeError):
+            # The key may expire between the retry and increment. Re-create it
+            # with the requested TTL, retrying once if another request wins.
+            if backend.add(key, 1, timeout=window):
+                return 1
+            return backend.incr(key)
+
+
+def _next_rate_limit_count(key, window):
+    """Use shared Redis normally and a local counter during Redis failures."""
+    global _redis_unavailable_until
+
+    now = time.monotonic()
+    if now < _redis_unavailable_until:
+        return _increment_rate_counter(_fallback_rate_limit_cache, key, window)
+
+    try:
+        count = _increment_rate_counter(cache, key, window)
+    except (ConnectionInterrupted, RedisError, TimeoutError, OSError):
+        was_open = now >= _redis_unavailable_until
+        _redis_unavailable_until = now + _REDIS_FAILURE_COOLDOWN_SECONDS
+        if was_open:
+            logger.warning(
+                "developer_api_rate_limit_redis_unavailable",
+                extra={"fallback_cooldown_seconds": _REDIS_FAILURE_COOLDOWN_SECONDS},
+            )
+        return _increment_rate_counter(_fallback_rate_limit_cache, key, window)
+
+    _redis_unavailable_until = 0.0
+    return count
 
 
 class DeveloperAPIMiddleware:
@@ -38,15 +109,7 @@ class DeveloperAPIMiddleware:
         limit = int(getattr(settings, "DEVELOPER_API_RATE_LIMIT", 60))
         window = int(getattr(settings, "DEVELOPER_API_RATE_WINDOW", 60))
         cache_key = f"developer:rate:{identity}"
-        if cache.add(cache_key, 1, window):
-            count = 1
-        else:
-            try:
-                count = cache.incr(cache_key)
-            except (ValueError, TypeError):
-                # A cache restart must not make the endpoint fail closed.
-                cache.set(cache_key, 1, window)
-                count = 1
+        count = _next_rate_limit_count(cache_key, window)
         if count > limit:
             RateLimitEvent.objects.create(api_key=api_key, identity=identity, path=request.path)
             return JsonResponse({"detail": "Developer API rate limit exceeded", "retry_after": window}, status=429, headers={"Retry-After": str(window), "X-RateLimit-Limit": str(limit), "X-RateLimit-Remaining": "0", "X-Request-ID": request_id})

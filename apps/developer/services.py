@@ -18,6 +18,7 @@ from django.db.models import Count
 from django.utils import timezone as django_timezone
 
 from .contract import build_contract
+from .middleware import _next_rate_limit_count
 from .models import APIKey, APIUsageEvent, RateLimitEvent, Webhook, WebhookDelivery
 
 
@@ -71,11 +72,16 @@ class APIGatewayService:
         identity = getattr(getattr(request, "auth", None), "key", None) or getattr(request, "user", "anon")
         return f"api:{identity}:{getattr(request, 'path', '/') }"
     def check_rate_limit(self, identity, path):
-        limit = int(getattr(settings, "DEVELOPER_API_RATE_LIMIT", 60)); window = int(getattr(settings, "DEVELOPER_API_RATE_WINDOW", 60))
-        key = f"developer:rate:{identity}:{path}"; count = cache.get(key, 0)
-        if count >= limit:
-            RateLimitEvent.objects.create(identity=str(identity), path=path); return False, 0
-        cache.set(key, count + 1, window); return True, max(0, limit - count - 1)
+        limit = int(getattr(settings, "DEVELOPER_API_RATE_LIMIT", 60))
+        window = int(getattr(settings, "DEVELOPER_API_RATE_WINDOW", 60))
+        key = f"developer:rate:{identity}:{path}"
+        # Share the middleware's atomic increment and Redis-failure fallback so
+        # this secondary API-gateway entry point cannot bypass quota resilience.
+        count = _next_rate_limit_count(key, window)
+        if count > limit:
+            RateLimitEvent.objects.create(identity=str(identity), path=path)
+            return False, 0
+        return True, max(0, limit - count)
     def record_usage(self, request, status_code, started, api_key=None):
         elapsed = (time.monotonic() - started) * 1000; user = getattr(request, "user", None)
         APIUsageEvent.objects.create(user=user if getattr(user, "is_authenticated", False) else None, api_key=api_key, method=request.method, path=request.path, status_code=status_code, latency_ms=round(elapsed, 3))
