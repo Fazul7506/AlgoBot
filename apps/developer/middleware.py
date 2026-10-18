@@ -23,18 +23,22 @@ _redis_unavailable_until = 0.0
 
 
 def _increment_rate_counter(backend, key, window):
-    """Atomically increment a counter while setting its TTL only on creation."""
-    if backend.add(key, 1, timeout=window):
-        return 1
-
+    """Increment an existing counter with one command; create only on a miss."""
     try:
         return backend.incr(key)
     except (ValueError, TypeError):
-        # The key may have expired between add() and incr(). Re-create it with
-        # the requested TTL, then retry once if another request won the race.
+        # INCR on a missing key is the normal first-request path. Set its TTL
+        # when creating it; if another request wins the race, increment again.
         if backend.add(key, 1, timeout=window):
             return 1
-        return backend.incr(key)
+        try:
+            return backend.incr(key)
+        except (ValueError, TypeError):
+            # The key may expire between the retry and increment. Re-create it
+            # with the requested TTL, retrying once if another request wins.
+            if backend.add(key, 1, timeout=window):
+                return 1
+            return backend.incr(key)
 
 
 def _next_rate_limit_count(key, window):
