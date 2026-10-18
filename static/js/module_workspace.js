@@ -26,7 +26,11 @@
 
   async function request(url, options = {}) {
     if (!url) throw new Error("No API endpoint configured for this resource.");
-    return window.AlgoBotFrontendData.request(url, options, 10000);
+    const client = window.AlgoBotAPI?.apiClient;
+    if (!client || typeof client.request !== "function") {
+      throw new Error("The AlgoBot API client is not initialized. Reload the page and try again.");
+    }
+    return client.request(url, { ...options, __algoTimeoutMs: options.__algoTimeoutMs || 10000 });
   }
 
   const recordCount = value => {
