@@ -17,7 +17,7 @@ from django.contrib.auth.models import User
 from django.db import IntegrityError, transaction
 from django.shortcuts import redirect
 from django.utils import timezone
-from core.auth_redirects import first_safe_auth_destination, safe_auth_destination
+from core.auth_redirects import safe_auth_destination
 from django.views.decorators.http import require_GET
 
 from core.models import BotSettings, GoogleIdentity, Subscription, UserProfile
@@ -276,16 +276,7 @@ def google_login_callback(request):
 
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     UserProfile.objects.filter(user=user).update(last_login_at=timezone.now())
-    from core.broker_onboarding import has_authorized_broker_connection
-    requested = first_safe_auth_destination(
-        request, request.session.pop("broker_onboarding_next", "")
-    )
-    if not has_authorized_broker_connection(user):
-        # Continue a Deriv connection only when that same-host relative path
-        # was explicitly requested before Google authentication.
-        if requested.startswith("/brokers/connect/"):
-            return redirect(requested)
-        return redirect("broker_marketplace_page")
-    if requested and not requested.startswith(("/brokers/", "/auth/google/", "/login/", "/register/")):
-        return redirect(requested)
-    return redirect("dashboard_page")
+    # Both password and Google sign-in land on the same canonical onboarding
+    # route. Broker authorization remains an explicit user action there.
+    request.session.pop("broker_onboarding_next", None)
+    return redirect("broker_marketplace_page")
