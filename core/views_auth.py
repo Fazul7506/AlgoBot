@@ -330,7 +330,7 @@ def login_view(request):
         'refresh': str(refresh),
         'user': {'id': user.id, 'username': user.username, 'email': user.email},
         'broker_setup_required': broker_setup_required,
-        'next_url': reverse('broker_marketplace_page' if broker_setup_required else 'dashboard_page'),
+        'next_url': reverse('broker_marketplace_page'),
     }, status=status.HTTP_200_OK)
 
 
