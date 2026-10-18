@@ -48,6 +48,28 @@ class DeveloperRateLimitRedisRecoveryTests(SimpleTestCase):
             self.assertEqual(middleware._next_rate_limit_count(key, 60), 1)
             self.assertEqual(middleware._next_rate_limit_count(key, 60), 2)
 
+    def test_existing_counter_uses_one_increment_without_add(self):
+        class ExistingCounterBackend:
+            def __init__(self):
+                self.add_calls = 0
+                self.incr_calls = 0
+
+            def incr(self, key):
+                self.incr_calls += 1
+                return 7
+
+            def add(self, key, value, timeout):
+                self.add_calls += 1
+                return False
+
+        backend = ExistingCounterBackend()
+        self.assertEqual(
+            middleware._increment_rate_counter(backend, "counter", 60),
+            7,
+        )
+        self.assertEqual(backend.incr_calls, 1)
+        self.assertEqual(backend.add_calls, 0)
+
     def test_expired_counter_is_recreated_with_its_ttl(self):
         class ExpiringBackend:
             def __init__(self):
