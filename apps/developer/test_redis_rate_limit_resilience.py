@@ -36,6 +36,27 @@ class DeveloperRateLimitRedisRecoveryTests(SimpleTestCase):
             "Requests during the cooldown should stay on the local fallback.",
         )
 
+    def test_raw_redis_oom_enters_fallback_cooldown(self):
+        from django.conf import settings
+
+        with patch.object(settings, "USE_REDIS", True), patch(
+            "django_redis.get_redis_connection"
+        ) as get_connection:
+            get_connection.return_value.incr.side_effect = OutOfMemoryError(
+                "maxmemory exceeded"
+            )
+            self.assertEqual(
+                middleware._next_rate_limit_count("test:raw-redis", 60), 1
+            )
+
+        self.assertGreater(
+            middleware._redis_unavailable_until,
+            middleware.time.monotonic(),
+        )
+        self.assertEqual(
+            middleware._next_rate_limit_count("test:raw-redis", 60), 2
+        )
+
     def test_open_circuit_does_not_call_redis(self):
         key = "test:developer-rate-limit"
         middleware._redis_unavailable_until = middleware.time.monotonic() + 30
