@@ -23,12 +23,28 @@ _redis_unavailable_until = 0.0
 
 
 def _increment_rate_counter(backend, key, window):
-    """Increment an existing counter with one command; create only on a miss."""
+    """Increment an existing Redis counter directly; expire only a new key."""
+    # django-redis's cache.incr() checks key existence before issuing INCR.
+    # Calling the underlying client avoids that extra EXISTS command on every
+    # request. Keep the cache key transformation so prefixes/versions still
+    # match Django's cache API.
+    from django.conf import settings
+
+    if backend is cache and getattr(settings, "USE_REDIS", False):
+        from django_redis import get_redis_connection
+
+        redis_client = get_redis_connection("default")
+        redis_key = backend.make_key(key)
+        count = redis_client.incr(redis_key)
+        if count == 1:
+            redis_client.expire(redis_key, max(1, int(window)))
+        return count
+
+    # LocMemCache and test doubles use Django's backend API. A missing key
+    # raises ValueError; add() gives it a TTL and handles first-request races.
     try:
         return backend.incr(key)
     except (ValueError, TypeError):
-        # INCR on a missing key is the normal first-request path. Set its TTL
-        # when creating it; if another request wins the race, increment again.
         if backend.add(key, 1, timeout=window):
             return 1
         try:
