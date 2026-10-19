@@ -4,7 +4,7 @@
 <section class="workspace activity-history-page">
   <p class="eyebrow">SECURITY · OPERATIONS · TRADING</p>
   <h1>Audit Log</h1>
-  <p>Search your recorded AlgoBot activity across account actions, API writes and failures, trading operations and broker workflows. Sensitive request and response bodies are never displayed.</p>
+  <p>Search your recorded AlgoBot activity across account actions, API writes and failures, trading operations and broker workflows. The view combines the latest 1,000 matching records across the two audit streams. Sensitive request and response bodies are never displayed.</p>
   <div class="cards activity-cards">
     <article><span>Matching events</span><strong>{{ event_count }}</strong><small>For this account and filter</small></article>
     <article><span>Scope</span><strong>Private</strong><small>Only your account activity</small></article>
@@ -19,12 +19,12 @@
     </form>
     <div class="audit-table-wrap">
       <table class="audit-table">
-        <thead><tr><th>Action</th><th>Service</th><th>Resource / endpoint</th><th>Recorded at (UTC)</th></tr></thead>
+        <thead><tr><th>Action</th><th>Service</th><th>Resource / endpoint</th><th>Origin</th><th>Recorded at (UTC)</th></tr></thead>
         <tbody>
         {% for e in events %}
-          <tr><td><strong>{{ e.action|title }}</strong><small>{{ e.hash|default:"Recorded" }}</small></td><td>{{ e.module|title }}</td><td class="audit-resource">{{ e.resource|default:"Account action" }}</td><td><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'d M Y H:i:s' }}</time></td></tr>
+          <tr><td><strong>{{ e.action|title }}</strong><small>{{ e.hash|default:"Recorded" }}</small></td><td>{{ e.module|title }}</td><td class="audit-resource">{{ e.resource|default:"Account action" }}</td><td>{{ e.source }}</td><td><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'d M Y H:i:s' }}</time></td></tr>
         {% empty %}
-          <tr><td colspan="4"><div class="empty">No audit events match these filters. New mutating or failed requests will appear as they occur.</div></td></tr>
+          <tr><td colspan="5"><div class="empty">No audit events match these filters. New mutating or failed requests will appear as they occur.</div></td></tr>
         {% endfor %}
         </tbody>
       </table>
