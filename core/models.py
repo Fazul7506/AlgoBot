@@ -10,7 +10,7 @@ class UserProfile(models.Model):
     """Extended user profile with trading-specific settings"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='trading_profile')
     bio = models.TextField(blank=True)
-    phone = models.CharField(max_length=20, blank=True)
+    phone = models.CharField(max_length=32, blank=True)
     country = models.CharField(max_length=100, blank=True)
     timezone = models.CharField(max_length=100, default='UTC')
     email_verified = models.BooleanField(default=False)
