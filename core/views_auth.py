@@ -30,6 +30,7 @@ from core.auth_rate_limit import allow_auth_attempt
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     identifier = serializers.CharField(required=False, write_only=True)
     email = serializers.EmailField(required=False, write_only=True)
+    two_factor_code = serializers.CharField(required=False, write_only=True, allow_blank=True, max_length=32)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -37,6 +38,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         self.fields[self.username_field].required = False
 
     def validate(self, attrs):
+        two_factor_code = str(attrs.pop("two_factor_code", "") or "")
         identifier = str(
             attrs.pop('identifier', None)
             or attrs.pop('email', None)
@@ -58,6 +60,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         profile = UserProfile.objects.filter(user=self.user).first()
         if not profile or not profile.email_verified:
             raise serializers.ValidationError("Please verify your email before signing in.")
+        if profile.two_factor_enabled:
+            from core.services.two_factor_service import verify_user_code
+            if not two_factor_code:
+                raise serializers.ValidationError({"code": "two_factor_required", "detail": "A valid authenticator or recovery code is required."})
+            if not verify_user_code(profile, two_factor_code, consume_recovery=True):
+                raise serializers.ValidationError({"code": "two_factor_invalid", "detail": "The authenticator or recovery code is invalid."})
         from core.broker_onboarding import has_authorized_broker_connection
         from django.urls import reverse
         broker_setup_required = not has_authorized_broker_connection(self.user)
@@ -317,6 +325,21 @@ def login_view(request):
             {'status': 'error', 'message': 'Please verify your email before signing in.'},
             status=status.HTTP_403_FORBIDDEN,
         )
+    if profile.two_factor_enabled:
+        from core.services.two_factor_service import verify_user_code
+        two_factor_code = request.data.get("two_factor_code") or ""
+        if not two_factor_code:
+            return Response({
+                "status": "challenge_required",
+                "code": "two_factor_required",
+                "message": "A valid authenticator or recovery code is required to complete sign-in.",
+            }, status=status.HTTP_403_FORBIDDEN)
+        if not verify_user_code(profile, two_factor_code, consume_recovery=True):
+            return Response({
+                "status": "error",
+                "code": "two_factor_invalid",
+                "message": "The authenticator or recovery code is invalid.",
+            }, status=status.HTTP_401_UNAUTHORIZED)
 
     UserProfile.objects.update_or_create(user=user, defaults={'last_login_at': timezone.now()})
     refresh = RefreshToken.for_user(user)
