@@ -10,7 +10,7 @@ from .serializers import (
     ApprovalRequestSerializer, AutomationEventSerializer, AutomationRuleSerializer,
     ScheduledTaskSerializer, WorkflowExecutionSerializer, WorkflowSerializer,
 )
-from .services import ApprovalService, AutomationEngine, SchedulerService, WorkflowDesignerService, WorkflowValidationError
+from .services import ApprovalService, AutomationEngine, SchedulerService, WorkflowDesignerService, WorkflowExecutionService, WorkflowValidationError
 
 
 class WorkflowViewSet(viewsets.ModelViewSet):
@@ -200,4 +200,35 @@ def approve(request):
             {"detail": "Only pending approval requests can be approved.", "code": "APPROVAL_NOT_PENDING"},
             status=status.HTTP_409_CONFLICT,
         )
-    return response.Response(ApprovalRequestSerializer(ApprovalService().approve(approval, request.user)).data)
+    approved = ApprovalService().approve(approval, request.user)
+    resumed_execution = None
+    metadata = approved.metadata if isinstance(approved.metadata, dict) else {}
+    execution_id = metadata.get("execution_id")
+    if execution_id:
+        previous = WorkflowExecution.objects.filter(
+            pk=execution_id, workflow=approved.workflow, status="paused",
+        ).first()
+        if previous is not None:
+            resumed_execution = WorkflowExecutionService().run(
+                approved.workflow,
+                previous.trigger_payload if isinstance(previous.trigger_payload, dict) else {},
+                approved_approval_id=approved.pk,
+            )
+            previous.completed_at = timezone.now()
+            previous.duration = previous.completed_at - previous.started_at
+            previous.status = "cancelled"
+            previous.result = {
+                **(previous.result if isinstance(previous.result, dict) else {}),
+                "approval": "approved",
+                "superseded_by_execution_id": resumed_execution.pk,
+                "resumed_status": resumed_execution.status,
+            }
+            previous.save(update_fields=["status", "result", "completed_at", "duration"])
+    result = dict(ApprovalRequestSerializer(approved).data)
+    if resumed_execution is not None:
+        result["resumed_execution"] = {
+            "id": resumed_execution.pk,
+            "status": resumed_execution.status,
+            "result": resumed_execution.result,
+        }
+    return response.Response(result)
