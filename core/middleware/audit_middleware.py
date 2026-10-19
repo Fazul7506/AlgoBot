@@ -128,4 +128,4 @@ class AuditMiddleware(MiddlewareMixin):
     def _get_client_ip(request):
         # REMOTE_ADDR is the direct peer. X-Forwarded-For is client-controlled
         # unless a trusted-proxy chain is explicitly configured.
-        return request.META.get("REMOTE_ADDR") or None
+        return request.META.get("REMOTE_ADDR") or ""
