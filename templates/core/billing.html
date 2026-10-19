@@ -20,6 +20,24 @@
   <section class="panel billing-section"><p class="eyebrow">PAYMENT HISTORY</p><div data-payment-list class="empty-state">No payment history yet.</div></section>
 </section>
 {% endblock %}
+{% block extra_css %}<style>
+.billing-provider-choices{display:grid;grid-template-columns:1fr;gap:10px;width:100%;margin-top:8px}
+.billing-provider-button{display:flex;align-items:center;justify-content:center;gap:11px;min-height:52px;width:100%;padding:12px 15px;border:1px solid #33445d;border-radius:14px;background:linear-gradient(135deg,#1a2c45,#132238);color:#f6f8ff;font-weight:750;line-height:1.25;white-space:normal;text-align:center;transition:transform .16s ease,border-color .16s ease,filter .16s ease}
+.billing-provider-button:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.12);border-color:#8daeff}
+.billing-provider-button:focus-visible{outline:3px solid #b9ceff;outline-offset:3px}
+.billing-provider-logo{display:inline-flex;flex:0 0 28px;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;font-size:18px;font-weight:900;line-height:1}
+.pesapal-logo{background:#fff;color:#0c6f9d;font-style:italic;border:1px solid #d9e7f2}
+.intasend-logo{background:#e5f9f5;color:#078c80;font-style:italic;transform:skew(-7deg);border:1px solid #b4eee2}
+.billing-provider-button[data-provider="intasend"]{background:linear-gradient(135deg,#142c3c,#102234);border-color:#1b6d77}
+.billing-provider-button[data-provider="pesapal"]{background:linear-gradient(135deg,#17304b,#122238);border-color:#315e8b}
+.billing-plan-actions{min-width:0}
+.billing-plan-card{min-width:0}
+.billing-plan-price{overflow-wrap:anywhere}
+.billing-section [data-subscription-meta]{line-height:1.6}
+@media(min-width:560px){.billing-provider-choices{grid-template-columns:1fr 1fr}.billing-provider-button{min-height:58px}}
+@media(max-width:380px){.billing-provider-button{justify-content:flex-start;font-size:14px;padding:11px 12px}.billing-provider-logo{flex-basis:26px;width:26px;height:26px}}
+@media(prefers-reduced-motion:reduce){.billing-provider-button{transition:none}}
+</style>{% endblock %}
 {% block extra_js %}<script>
 (()=> {
   const boot = () => {
@@ -49,7 +67,10 @@
       } else if(!configured) {
         action='<button class="btn ghost" type="button" disabled>Checkout unavailable</button>';
       } else {
-        action=`<button class="btn primary provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="${esc(provider)}">Upgrade</button>`;
+        action=`<div class="billing-provider-choices" role="group" aria-label="Choose payment provider for ${esc(name)}">
+          <button class="btn primary provider-button billing-provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="pesapal" aria-label="Continue with Pesapal for ${esc(name)}"><span class="billing-provider-logo pesapal-logo" aria-hidden="true">P</span><span>Continue with Pesapal</span></button>
+          <button class="btn primary provider-button billing-provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="intasend" aria-label="Continue with IntaSend for ${esc(name)}"><span class="billing-provider-logo intasend-logo" aria-hidden="true">S</span><span>Continue with IntaSend</span></button>
+        </div>`;
       }
       return `<article class="panel billing-plan-card" data-plan="${esc(name)}"><p class="eyebrow">${esc(name)}</p><h2 class="billing-plan-price money-value">${price}</h2><p>${p.recurring?'30-day billing period':'No recurring charge'}</p>${!configured&&name!=='FREE'?'<span class="provider-label">This plan is not configured for checkout.</span>':''}<div class="billing-plan-actions">${action}</div></article>`;
     }).join('')||'<div class="panel">No billing plans are configured.</div>';
@@ -72,7 +93,8 @@
       renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase());
       $('[data-subscription-plan]').textContent=plan;
       const s=status.subscription||{},expiry=s.expires_at?new Date(s.expires_at).toLocaleString():'';
-      $('[data-subscription-meta]').textContent=plan==='ENTERPRISE'?'Enterprise access · unlimited entitlements · no monthly renewal':s.is_active?(s.recurring?`Active · ${money(s.price_cents,s.currency)} · renews ${expiry}`:`Active · ${money(s.price_cents,s.currency)} · ends ${expiry}`):'Inactive · Free entitlements apply';
+      const cycleLabel=s.is_active?(s.recurring?'Auto-renewal enabled':'One-time payment · no automatic renewal'):'No active paid cycle';
+      $('[data-subscription-meta]').textContent=plan==='ENTERPRISE'?'Enterprise access · unlimited entitlements · contact support for billing changes':s.is_active?(s.recurring?`Active · ${money(s.price_cents,s.currency)} per 30 days · ${cycleLabel} · next cycle/expiry ${expiry||'not supplied'}`:`Active · ${money(s.price_cents,s.currency)} · ${cycleLabel} · access ends ${expiry||'not supplied'}`):'Inactive · Free entitlements apply. Choose a paid plan to start a billing cycle.';
       $('[data-cancel-subscription]').disabled=plan==='ENTERPRISE'||!s.is_active||!s.recurring;
       const u=current.usage||{},labels={api_calls:'Execution API calls / day',strategies:'Active strategies',backtests:'Backtests / day',predictions:'AI predictions / day',orders:'Orders / day',broker_accounts:'Broker accounts',automations:'Automation runs / day',live_orders:'Live orders / day'};
       $('[data-usage-grid]').innerHTML=Object.keys(labels).map(k=>{
@@ -84,6 +106,7 @@
     }catch(e){console.error(e);showError(`Billing data could not be loaded: ${e?.message||'Please refresh and try again.'}`);}
   }
   $('[data-billing-refresh]').onclick=load;
+  $('[data-cancel-subscription]').textContent='Cancel renewal';
   $('[data-cancel-subscription]').onclick=async()=>{
     if(!confirm('Stop renewal at the end of your current paid cycle?'))return;
     try{await api('/billing/cancel-subscription/',{method:'POST',body:'{}'});await load();}catch(e){showError(e?.message||'Unable to cancel renewal. Please try again.');}
