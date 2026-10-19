@@ -50,3 +50,27 @@ class BrowserRegistrationProfileTests(TestCase):
         self.assertNotContains(response, "Connect Deriv (broker account)")
         self.assertNotContains(response, "BROKER CONNECTION")
         self.assertContains(response, "Continue with Google")
+
+    def test_registration_page_has_live_password_strength_and_match_feedback(self):
+        response = self.client.get("/register/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="password-strength-panel"')
+        self.assertContains(response, 'id="password-strength-label"')
+        self.assertContains(response, 'id="rule-length"')
+        self.assertContains(response, 'id="rule-upper"')
+        self.assertContains(response, 'id="rule-lower"')
+        self.assertContains(response, 'id="rule-number"')
+        self.assertContains(response, 'id="rule-symbol"')
+        self.assertContains(response, 'id="rule-not-common"')
+        self.assertContains(response, 'id="password-match-note"')
+        self.assertContains(response, "password.addEventListener('input', updateStrength)")
+        self.assertContains(response, "confirm.setCustomValidity(matches ? '' : 'Passwords must match.')")
+
+    def test_login_page_keeps_username_or_email_and_secure_account_copy(self):
+        response = self.client.get("/login/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Username or email")
+        self.assertContains(response, "Your trading workspace, secured")
+        self.assertContains(response, "Continue with Google")
