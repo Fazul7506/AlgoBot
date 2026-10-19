@@ -21,6 +21,7 @@ WORKFLOW_NODE_TYPES = {
     "notification", "delay", "branch", "martingale",
 }
 CONDITION_OPERATORS = {"eq", "ne", "gt", "gte", "lt", "lte", "contains", "and", "or", "not"}
+MAX_AUTOMATION_CHAIN_DEPTH = 5
 
 
 @dataclass(frozen=True)
@@ -203,6 +204,11 @@ class ActionService:
             raise WorkflowValidationError("routing_context must be an object.")
         execution_id = context.get("execution_id")
         node_id = str(context.get("node_id", "action"))
+        payload = context.get("payload") if isinstance(context.get("payload"), dict) else {}
+        try:
+            parent_depth = max(0, min(int(payload.get("_automation_depth", 0) or 0), MAX_AUTOMATION_CHAIN_DEPTH))
+        except (TypeError, ValueError, OverflowError):
+            parent_depth = 0
         martingale = action.get("martingale")
         martingale_state = None
         if "martingale" in action:
@@ -228,9 +234,9 @@ class ActionService:
                 "execution_id": execution_id,
                 "node_id": node_id,
                 "martingale": bool(martingale),
+                "depth": parent_depth + 1,
             },
         }
-        payload = context.get("payload") if isinstance(context.get("payload"), dict) else {}
         stable_event_id = payload.get("_automation_event_id") or payload.get("scheduled_task_id") or execution_id
         client_order_id = str(action.get("client_order_id") or f"automation-{workflow.pk}-{node_id}-{stable_event_id}")[:100]
         # ExecutionEngine enforces account ownership, connection eligibility,
@@ -491,7 +497,11 @@ class WorkflowExecutionService:
 class AutomationEventService:
     def publish(self, event_name: str, source: str, payload: dict[str, Any] | None = None, user=None):
         event = AutomationEvent.objects.create(event_name=event_name, source=source, payload=payload or {}, user=user)
-        event_payload = {**(payload or {}), "_automation_event_id": event.pk}
+        event_payload = {
+            **(payload or {}),
+            "_automation_event_id": event.pk,
+            "_automation_depth": (payload or {}).get("automation_depth", 0) if isinstance(payload, dict) else 0,
+        }
         AutomationEngine().handle_event(event_name, event_payload, source, actor=user)
         return event
 
@@ -525,7 +535,13 @@ class AutomationEngine:
             # it is a reconciled outcome and must be allowed to drive Martingale
             # progression or other explicitly configured close-event workflows.
             origin_workflow_id = payload.get("origin_workflow_id")
-            if event_name == "TradeExecuted" and origin_workflow_id is not None and str(origin_workflow_id) == str(workflow.pk):
+            try:
+                automation_depth = max(0, int(payload.get("automation_depth", 0) or 0))
+            except (TypeError, ValueError, OverflowError):
+                automation_depth = 0
+            if event_name == "TradeExecuted" and origin_workflow_id is not None:
+                continue
+            if event_name == "TradeClosed" and automation_depth >= MAX_AUTOMATION_CHAIN_DEPTH:
                 continue
             definition = workflow.definition if isinstance(workflow.definition, dict) else {}
             workflow_trigger = definition.get("trigger", {})
