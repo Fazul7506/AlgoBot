@@ -274,6 +274,11 @@ def callback(request):
             "Refresh the dashboard to load the latest broker snapshot.",
         )
     if selected_broker_account.is_connection_eligible:
+        # Do not send a newly onboarded user straight into the workspace until
+        # the minimum AlgoBot profile identity fields have been completed.
+        request.user.refresh_from_db(fields=["first_name", "last_name"])
+        if not request.user.first_name.strip() or not request.user.last_name.strip():
+            return redirect("profile_completion_page")
         requested = first_safe_auth_destination(
             request, request.session.pop("broker_onboarding_next", "")
         )
