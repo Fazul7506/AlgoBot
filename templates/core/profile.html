@@ -6,7 +6,7 @@
 <main class="account-page" data-profile-page>
   <header class="account-hero">
     <div class="account-hero__identity">
-      <div class="account-profile-avatar" data-avatar-preview aria-hidden="true">{% if profile.profile_picture %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U' }}" alt="">{% else %}{{ profile_initials }}{% endif %}</div>
+      <div class="account-profile-avatar" data-avatar-preview aria-hidden="true">{% if profile.profile_picture_data %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U' }}" alt="">{% else %}{{ profile_initials }}{% endif %}</div>
       <div><p class="account-kicker">Your account</p><h1>Profile</h1><p class="account-subtitle">Manage the personal details AlgoBot uses across your workspace. Broker credentials and login identity remain separate.</p></div>
     </div>
     <span class="account-state {% if profile.email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if profile.email_verified %}Email verified{% else %}Email verification pending{% endif %}</span>
