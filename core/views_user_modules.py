@@ -50,6 +50,71 @@ def audit_workspace(request):
 
 @login_required
 def security_workspace(request):
+    from django.contrib import messages
+    from django.contrib.auth import update_session_auth_hash
+    from django.db import transaction
+    from core.models import UserProfile
+    from core.services.two_factor_service import (
+        TwoFactorService, generate_recovery_codes, verify_user_code,
+    )
+
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    setup_uri = ""
+    recovery_codes = request.session.pop("algobot_2fa_recovery_codes_once", [])
+    if request.method == "POST":
+        action = str(request.POST.get("security_action") or "").strip()
+        if action == "setup_2fa":
+            if profile.two_factor_enabled:
+                messages.info(request, "Two-factor authentication is already enabled.")
+            else:
+                try:
+                    pending_secret = TwoFactorService.generate_secret()
+                    profile.two_factor_pending_secret_encrypted = TwoFactorService.encrypt_secret(pending_secret)
+                    profile.save(update_fields=["two_factor_pending_secret_encrypted", "updated_at"])
+                    setup_uri = TwoFactorService(pending_secret).get_uri(request.user.email or request.user.username, issuer="AlgoBot")
+                    request.session["algobot_2fa_setup_uri"] = setup_uri
+                    messages.info(request, "Add this account to your authenticator app, then enter its current six-digit code to finish setup.")
+                except (RuntimeError, ValueError):
+                    messages.error(request, "Two-factor setup is unavailable until the server encryption key is configured correctly.")
+        elif action == "verify_2fa":
+            try:
+                pending_secret = TwoFactorService.decrypt_secret(profile.two_factor_pending_secret_encrypted)
+                if pending_secret and TwoFactorService(pending_secret).validate_token(request.POST.get("two_factor_code")):
+                    recovery_codes, recovery_hashes = generate_recovery_codes()
+                    profile.two_factor_secret_encrypted = profile.two_factor_pending_secret_encrypted
+                    profile.two_factor_pending_secret_encrypted = ""
+                    profile.two_factor_recovery_codes = recovery_hashes
+                    profile.two_factor_enabled = True
+                    profile.save(update_fields=[
+                        "two_factor_secret_encrypted", "two_factor_pending_secret_encrypted",
+                        "two_factor_recovery_codes", "two_factor_enabled", "updated_at",
+                    ])
+                    request.session["algobot_2fa_recovery_codes_once"] = recovery_codes
+                    messages.success(request, "Two-factor authentication is enabled. Save these recovery codes now; they are shown only once.")
+                    return redirect("security_center")
+                messages.error(request, "That code could not be verified. Check your authenticator's current code and try again.")
+            except RuntimeError:
+                messages.error(request, "Two-factor setup is unavailable until the server encryption key is configured correctly.")
+        elif action == "disable_2fa":
+            current_password = request.POST.get("current_password") or ""
+            code = request.POST.get("two_factor_code") or ""
+            if not request.user.check_password(current_password):
+                messages.error(request, "Enter your current password to disable two-factor authentication.")
+            elif not profile.two_factor_enabled or not verify_user_code(profile, code, consume_recovery=True):
+                messages.error(request, "A valid authenticator or unused recovery code is required.")
+            else:
+                profile.two_factor_enabled = False
+                profile.two_factor_secret_encrypted = ""
+                profile.two_factor_pending_secret_encrypted = ""
+                profile.two_factor_recovery_codes = []
+                profile.save(update_fields=[
+                    "two_factor_enabled", "two_factor_secret_encrypted",
+                    "two_factor_pending_secret_encrypted", "two_factor_recovery_codes", "updated_at",
+                ])
+                messages.success(request, "Two-factor authentication has been disabled.")
+        return redirect("security_center")
+
+    setup_uri = request.session.pop("algobot_2fa_setup_uri", "")
     account = _account(request)
     keys = APIKey.objects.filter(user=request.user)
     now = timezone.now()
@@ -65,6 +130,7 @@ def security_workspace(request):
         ("Secure session cookies", secure_session),
         ("Account sign-in", bool(request.user.is_active and request.user.has_usable_password())),
         ("Developer key expiry", not expired_active_keys),
+        ("Two-factor authentication", profile.two_factor_enabled),
     ]
     return render(
         request,
@@ -75,5 +141,10 @@ def security_workspace(request):
             "keys_count": usable_keys.count(),
             "checks": checks,
             "checks_ok": all(ok for _, ok in checks),
+            "two_factor_enabled": profile.two_factor_enabled,
+            "two_factor_setup_pending": bool(profile.two_factor_pending_secret_encrypted),
+            "two_factor_setup_uri": setup_uri,
+            "two_factor_recovery_codes": recovery_codes,
+            "two_factor_recovery_codes_remaining": len(profile.two_factor_recovery_codes or []),
         },
     )
