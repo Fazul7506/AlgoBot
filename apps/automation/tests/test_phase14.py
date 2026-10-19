@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from apps.automation.exceptions import WorkflowValidationError
 from apps.automation.models import AutomationRule, ScheduledTask, Workflow, WorkflowNode
+from apps.automation.tasks import process_due_scheduled_tasks
 from apps.automation.services import (
     ActionService, AutomationEngine, RuleEngine, SchedulerService,
     WorkflowDesignerService, WorkflowExecutionService,
@@ -117,6 +118,20 @@ class AutomationEngineTests(TestCase):
                 user=user, workflow=workflow, account=account, node_id="action-1",
                 base_stake=Decimal("1"), multiplier=Decimal("2"), max_steps=5, max_stake=Decimal("16"),
             )
+
+    def test_due_schedule_consumer_records_pending_action_without_false_success(self):
+        user = get_user_model().objects.create_user(username="scheduler-consumer", password="x")
+        workflow = Workflow.objects.create(user=user, name="Due workflow", status="pending", enabled=True)
+        WorkflowNode.objects.create(workflow=workflow, node_type="action", configuration={"type": "pause_strategy"})
+        scheduled = ScheduledTask.objects.create(
+            workflow=workflow, schedule_type="one_time", next_execution=timezone.now() - timedelta(seconds=1), status="pending",
+        )
+        result = process_due_scheduled_tasks()
+        scheduled.refresh_from_db()
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(scheduled.status, "paused")
+        self.assertIn("execution_id", scheduled.metadata)
+        self.assertEqual(scheduled.metadata["execution_status"], "pending")
 
     def test_schedule_requires_future_timezone_aware_time(self):
         user = get_user_model().objects.create_user(username="scheduler", password="x")
