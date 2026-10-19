@@ -15,7 +15,7 @@
       <label>Search activity<input type="search" name="q" value="{{ audit_filters.q }}" placeholder="Route, resource, action…"></label>
       <label>Action<input type="search" name="action" value="{{ audit_filters.action }}" placeholder="e.g. post_completed"></label>
       <label>Service / module<input type="search" name="module" value="{{ audit_filters.module }}" placeholder="e.g. brokers, execution"></label>
-      <div class="audit-filter-actions"><button type="submit">Apply filters</button><a href="{% url 'audit_workspace' %}">Clear</a></div>
+      <div class="audit-filter-actions"><button type="submit">Apply filters</button><a href="{% url 'audit_center' %}">Clear</a></div>
     </form>
     <div class="audit-table-wrap">
       <table class="audit-table">
