@@ -140,7 +140,7 @@ def execute(request):
         return response.Response({"detail": "Event name must contain 1 to 120 characters."}, status=status.HTTP_400_BAD_REQUEST)
     payload = _safe_payload({key: value for key, value in request.data.items() if key not in {"event", "user_id", "owner_id"}})
     event = AutomationEvent.objects.create(user=request.user, event_name=event_name, source="api", payload=payload)
-    result = AutomationEngine().handle_event(event_name, payload, "api", actor=request.user)
+    result = AutomationEngine().handle_event(event_name, {**payload, "_automation_event_id": event.pk}, "api", actor=request.user)
     return response.Response({"event_id": event.pk, "status": result.status, **result.result})
 
 
