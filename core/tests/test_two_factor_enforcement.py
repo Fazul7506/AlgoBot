@@ -45,6 +45,14 @@ class TwoFactorEnforcementTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(self.user.pk))
 
+    def test_existing_session_is_challenged_after_mfa_is_enabled(self):
+        self.client.force_login(self.user)
+        response = self.client.get("/profile/")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/login/two-factor/")
+        self.assertEqual(str(self.client.session["algobot_pending_2fa_user_id"]), str(self.user.pk))
+        self.assertNotIn("_auth_user_id", self.client.session)
+
     def test_api_login_does_not_issue_tokens_without_second_factor(self):
         response = self.client.post("/api/auth/login/", {
             "identifier": self.user.username,
@@ -66,6 +74,7 @@ class TwoFactorEnforcementTests(TestCase):
         self.assertIn("refresh", response.json())
 
     def test_security_center_requires_verified_enrollment_before_enabling_mfa(self):
+        self.client.force_login(self.user)
         self.profile.two_factor_enabled = False
         self.profile.two_factor_secret_encrypted = ""
         self.profile.save(update_fields=["two_factor_enabled", "two_factor_secret_encrypted"])
