@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
+from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core import signing
@@ -390,6 +390,7 @@ def account_identity_page(request):
         else:
             user.set_password(new_password)
             user.save(update_fields=["password"])
+            update_session_auth_hash(request, user)
             messages.success(request, "Your password has been changed.")
         return redirect("account_identity_page")
     if request.method == "POST":
