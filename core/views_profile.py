@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
+from urllib.parse import urlparse
 
 from core.models import UserProfile
 
@@ -21,6 +22,7 @@ def profile_page(request):
         timezone_name = str(request.POST.get("timezone") or "UTC").strip() or "UTC"
         phone = str(request.POST.get("phone") or "").strip()
         bio = str(request.POST.get("bio") or "").strip()
+        avatar_url = str(request.POST.get("avatar_url") or "").strip()
 
         errors = []
         if not first_name:
@@ -35,6 +37,8 @@ def profile_page(request):
             errors.append("Timezone must be 100 characters or fewer.")
         if len(phone) > 32:
             errors.append("Phone number must be 32 characters or fewer.")
+        if avatar_url and (len(avatar_url) > 500 or urlparse(avatar_url).scheme != "https" or not urlparse(avatar_url).netloc):
+            errors.append("Profile picture must be a valid HTTPS image URL of 500 characters or fewer.")
         if len(bio) > 5000:
             errors.append("Bio must be 5,000 characters or fewer.")
 
@@ -50,7 +54,8 @@ def profile_page(request):
             profile.timezone = timezone_name
             profile.phone = phone
             profile.bio = bio
-            profile.save(update_fields=["country", "timezone", "phone", "bio", "updated_at"])
+            profile.avatar_url = avatar_url
+            profile.save(update_fields=["country", "timezone", "phone", "bio", "avatar_url", "updated_at"])
             messages.success(request, "Your profile has been saved.")
             return redirect("profile_page")
 
