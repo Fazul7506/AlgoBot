@@ -266,7 +266,7 @@ def register_page(request):
         if email_sent:
             messages.success(request, "Your account was created. We sent a verification email. Use the resend control below if it does not arrive.")
         else:
-            messages.warning(request, "Your account was created, but the verification email could not be sent. Use Verify email to request another.")
+            messages.warning(request, "Your account was created, but the verification email could not be sent. Use the resend option on the verification page when it becomes available.")
         return redirect("verify_email_page")
     return _render(request, "register")
 
