@@ -237,12 +237,14 @@ class BrowserAccountAuthenticationTests(TestCase):
         from core.serializers import UserProfileSerializer
         serializer = UserProfileSerializer(data={
             "two_factor_enabled": True,
+            "avatar_url": "https://example.test/avatar.png",
             "telegram_chat_id": "attacker-controlled",
             "telegram_username": "attacker-controlled",
             "brevo_sender_email": "attacker@example.com",
         })
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertNotIn("two_factor_enabled", serializer.validated_data)
+        self.assertNotIn("avatar_url", serializer.validated_data)
         self.assertNotIn("telegram_chat_id", serializer.validated_data)
         self.assertNotIn("telegram_username", serializer.validated_data)
         self.assertNotIn("brevo_sender_email", serializer.validated_data)
