@@ -1,9 +1,10 @@
-import base64
+import io
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
 from core.models import UserProfile
 
@@ -55,10 +56,9 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(other_profile.bio, "")
 
     def test_profile_page_accepts_device_uploaded_image_and_persists_it(self):
-        image_bytes = base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII="
-        )
-        upload = SimpleUploadedFile("avatar.png", image_bytes, content_type="image/png")
+        buffer = io.BytesIO()
+        Image.new("RGB", (2, 2), color=(30, 90, 160)).save(buffer, format="PNG")
+        upload = SimpleUploadedFile("avatar.png", buffer.getvalue(), content_type="image/png")
         response = self.client.post(reverse("profile_page"), {
             "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
             "timezone": "Africa/Nairobi", "phone": "+254700000000", "bio": "Quant researcher",
