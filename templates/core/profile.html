@@ -101,7 +101,15 @@
       const form = phone.closest('form');
       if (form) form.addEventListener('submit', () => {
         const internationalNumber = iti.getNumber();
-        if (internationalNumber) phone.value = internationalNumber;
+        if (internationalNumber) {
+          phone.value = internationalNumber;
+        } else if (phone.value.trim()) {
+          const selected = iti.getSelectedCountryData();
+          const digits = phone.value.replace(/\\D/g, '');
+          phone.value = phone.value.trim().startsWith('+')
+            ? '+' + digits
+            : '+' + (selected.dialCode || '254') + digits.replace(/^0+/, '');
+        }
       });
     }
   };
