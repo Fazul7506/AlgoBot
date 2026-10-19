@@ -95,6 +95,43 @@ def normalize_broker_position(record: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _publish_trade_closed_event(account_id: int, contract_id: str) -> None:
+    """Publish only broker-reconciled terminal outcomes, after the DB commit."""
+    try:
+        from .models import BrokerAccount, Order as BrokerOrder, Position
+        from apps.automation.tasks import process_event
+
+        account = BrokerAccount.objects.select_related("broker").get(pk=account_id)
+        position = Position.objects.filter(account=account, contract_id=str(contract_id)).first()
+        if position is None or position.profit is None:
+            return
+        order = BrokerOrder.objects.filter(
+            account=account, broker_order_id=str(contract_id)
+        ).order_by("-id").first()
+        routing = order.routing_context if order and isinstance(order.routing_context, dict) else {}
+        automation = routing.get("automation") if isinstance(routing.get("automation"), dict) else {}
+        process_event.delay(
+            "TradeClosed", "broker",
+            {
+                "broker_type": account.broker.broker_type,
+                "broker_account_pk": account.pk,
+                "broker_account_id": account.account_id,
+                "contract_id": str(position.contract_id),
+                "symbol": position.symbol,
+                "status": str(position.status or "").lower(),
+                "profit": str(position.profit),
+                "payout": str(position.payout) if position.payout is not None else None,
+                "origin_workflow_id": automation.get("workflow_id"),
+            },
+            account.user_id,
+        )
+    except Exception:
+        logger.exception(
+            "automation_trade_closed_event_dispatch_failed",
+            extra={"broker_account_id": account_id, "contract_id": str(contract_id)},
+        )
+
+
 @transaction.atomic
 def _persist_snapshot_sync(account_id: int, normalized: list[dict[str, Any]], *, full_snapshot: bool = True) -> dict[str, Any]:
     from .models import BrokerAccount, Position
@@ -108,11 +145,17 @@ def _persist_snapshot_sync(account_id: int, normalized: list[dict[str, Any]], *,
         broker_ids.add(contract_id)
         defaults = dict(data)
         defaults["last_synced_at"] = synced_at
-        Position.objects.update_or_create(
+        existing = Position.objects.filter(account=account, contract_id=contract_id).first()
+        previous_status = str(existing.status or "").lower() if existing else ""
+        position, _ = Position.objects.update_or_create(
             account=account,
             contract_id=contract_id,
             defaults={"broker": account.broker, **defaults},
         )
+        terminal_statuses = {"closed", "expired", "sold", "settled", "won", "lost"}
+        current_status = str(position.status or "").lower()
+        if existing and previous_status not in terminal_statuses and current_status in terminal_statuses and position.profit is not None:
+            transaction.on_commit(lambda account_id=account.pk, cid=contract_id: _publish_trade_closed_event(account_id, cid))
 
     if full_snapshot:
         # A complete broker portfolio snapshot is authoritative for which
