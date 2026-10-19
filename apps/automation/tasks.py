@@ -6,15 +6,20 @@ from .models import ScheduledTask
 from .services import AutomationEventService, WorkflowExecutionService
 
 
+@shared_task(name="apps.automation.tasks.execute_workflow")
 def execute_workflow(workflow_id, payload=None):
     from .models import Workflow
     return WorkflowExecutionService().run(Workflow.objects.get(id=workflow_id), payload or {}).id
 
 
-def process_event(event_name, source="celery", payload=None):
-    return AutomationEventService().publish(event_name, source, payload or {}).id
+@shared_task(name="apps.automation.tasks.process_event")
+def process_event(event_name, source="celery", payload=None, user_id=None):
+    from django.contrib.auth import get_user_model
+    user = get_user_model().objects.filter(pk=user_id).first() if user_id is not None else None
+    return AutomationEventService().publish(event_name, source, payload or {}, user=user).id
 
 
+@shared_task(name="apps.automation.tasks.run_recovery")
 def run_recovery(target, metadata=None):
     from .services import RecoveryService
     return RecoveryService().recover(target, metadata)
