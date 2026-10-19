@@ -1,21 +1,24 @@
-"""Authentication helpers for browser-facing APIs.
-
-Authentication establishes identity; endpoint permissions enforce the
-mandatory broker-onboarding policy only for protected workspace/trading APIs.
-This separation keeps login, broker setup, billing, and developer-management
-flows reachable before a user has connected a broker.
-"""
+"""Authentication helpers for browser-facing APIs."""
 from rest_framework.authentication import SessionAuthentication
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.authentication import JWTAuthentication
+
+from core.models import UserProfile
 
 
 class BrowserSessionAuthentication(SessionAuthentication):
     """Authenticate browser sessions with Django/DRF CSRF protection."""
 
-    pass
-
 
 class BrokerGateJWTAuthentication(JWTAuthentication):
-    """Compatibility alias; authorization is enforced by DRF permissions."""
+    """Reject JWTs that predate or bypass an enabled second-factor challenge."""
 
-    pass
+    def authenticate(self, request):
+        result = super().authenticate(request)
+        if result is None:
+            return None
+        user, token = result
+        profile = UserProfile.objects.filter(user=user).only("two_factor_enabled").first()
+        if profile and profile.two_factor_enabled and token.get("mfa_verified") is not True:
+            raise AuthenticationFailed("Second-factor verification is required. Sign in again.")
+        return user, token
