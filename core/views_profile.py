@@ -2,9 +2,9 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
-from django.http import FileResponse, Http404
+from django.http import HttpResponse, Http404
 from django.views.decorators.http import require_GET
-import mimetypes
+import io
 from django.views.decorators.http import require_http_methods
 from zoneinfo import available_timezones
 from PIL import Image, UnidentifiedImageError
@@ -27,6 +27,8 @@ def profile_page(request):
         phone = str(request.POST.get("phone") or "").strip()
         bio = str(request.POST.get("bio") or "").strip()
         avatar_file = request.FILES.get("profile_picture")
+        picture_data = None
+        picture_content_type = ""
 
         errors = []
         if not first_name:
@@ -49,14 +51,22 @@ def profile_page(request):
             else:
                 try:
                     image = Image.open(avatar_file)
-                    if image.format not in {"JPEG", "PNG", "WEBP", "GIF"}:
-                        errors.append("Profile picture must be a JPEG, PNG, WEBP, or GIF image.")
                     image_format = image.format
-                    image.verify()
+                    if image_format not in {"JPEG", "PNG", "WEBP", "GIF"}:
+                        errors.append("Profile picture must be a JPEG, PNG, WEBP, or GIF image.")
+                    else:
+                        image.verify()
+                        avatar_file.seek(0)
+                        image = Image.open(avatar_file)
+                        image.load()
+                        has_alpha = image.mode in {"RGBA", "LA"} or "transparency" in image.info
+                        normalized = image.convert("RGBA" if has_alpha else "RGB")
+                        normalized.thumbnail((512, 512), Image.Resampling.LANCZOS)
+                        buffer = io.BytesIO()
+                        normalized.save(buffer, format="WEBP", quality=85, method=6)
+                        picture_data = buffer.getvalue()
+                        picture_content_type = "image/webp"
                     avatar_file.seek(0)
-                    extension = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp", "GIF": "gif"}.get(image_format)
-                    if extension:
-                        avatar_file.name = "profile." + extension
                 except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
                     errors.append("Upload a valid image file (JPEG, PNG, WEBP, or GIF).")
                     avatar_file.seek(0)
@@ -75,9 +85,13 @@ def profile_page(request):
             profile.timezone = timezone_name
             profile.phone = phone
             profile.bio = bio
-            if avatar_file:
-                profile.profile_picture = avatar_file
-            profile.save(update_fields=["country", "timezone", "phone", "bio", "profile_picture", "updated_at"])
+            if picture_data is not None:
+                profile.profile_picture_data = picture_data
+                profile.profile_picture_content_type = picture_content_type
+            profile.save(update_fields=[
+                "country", "timezone", "phone", "bio",
+                "profile_picture_data", "profile_picture_content_type", "updated_at",
+            ])
             messages.success(request, "Your profile has been saved.")
             return redirect("profile_page")
 
@@ -100,19 +114,16 @@ def profile_page(request):
 @login_required
 @require_GET
 def profile_picture(request):
-    """Serve only the signed-in user's profile picture from the configured storage backend."""
-    profile = UserProfile.objects.filter(user=request.user).first()
-    if not profile or not profile.profile_picture:
+    """Serve only the signed-in user's validated database-backed profile picture."""
+    profile = UserProfile.objects.filter(user=request.user).only(
+        "profile_picture_data", "profile_picture_content_type"
+    ).first()
+    if not profile or not profile.profile_picture_data:
         raise Http404("Profile picture not found.")
-    try:
-        image_file = profile.profile_picture.open("rb")
-    except (OSError, ValueError):
+    content_type = profile.profile_picture_content_type
+    if content_type not in {"image/webp", "image/jpeg", "image/png", "image/gif"}:
         raise Http404("Profile picture not found.")
-    content_type = mimetypes.guess_type(profile.profile_picture.name)[0] or "application/octet-stream"
-    if content_type not in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
-        image_file.close()
-        raise Http404("Profile picture not found.")
-    response = FileResponse(image_file, content_type=content_type)
+    response = HttpResponse(bytes(profile.profile_picture_data), content_type=content_type)
     response["X-Content-Type-Options"] = "nosniff"
     response["Cache-Control"] = "private, max-age=300"
     return response
