@@ -54,6 +54,8 @@ def profile_page(request):
                     image_format = image.format
                     if image_format not in {"JPEG", "PNG", "WEBP", "GIF"}:
                         errors.append("Profile picture must be a JPEG, PNG, WEBP, or GIF image.")
+                    elif image.width * image.height > 25_000_000:
+                        errors.append("Profile picture dimensions must not exceed 25 megapixels.")
                     else:
                         image.verify()
                         avatar_file.seek(0)
