@@ -119,6 +119,8 @@ urlpatterns = [
     path("brokers/connect/", broker_connect_page, name="broker_connect_page"),
     path("brokers/marketplace/", broker_marketplace_page, name="broker_marketplace_page"),
     path("developer/", login_required(developer_views.dashboard), name="developer_page"),
+    path("developer/api/explorer/", login_required(developer_views.api_explorer), name="developer_api_explorer"),
+    path("developer/api/status/", login_required(developer_views.api_status), name="developer_api_status"),
     path("developer/keys/", login_required(lambda request: redirect("developer_page")), name="developer_keys_page"),
     path("smart-money/", include("apps.smart_money.page_urls")),
     path("callback/", callback, name="callback"),
