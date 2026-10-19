@@ -147,6 +147,7 @@ def _persist_snapshot_sync(account_id: int, normalized: list[dict[str, Any]], *,
         defaults["last_synced_at"] = synced_at
         existing = Position.objects.select_for_update().filter(account=account, contract_id=contract_id).first()
         previous_status = str(existing.status or "").lower() if existing else ""
+        previous_profit = existing.profit if existing else None
         position, _ = Position.objects.update_or_create(
             account=account,
             contract_id=contract_id,
@@ -154,7 +155,9 @@ def _persist_snapshot_sync(account_id: int, normalized: list[dict[str, Any]], *,
         )
         terminal_statuses = {"closed", "expired", "sold", "settled", "won", "lost"}
         current_status = str(position.status or "").lower()
-        if existing and previous_status not in terminal_statuses and current_status in terminal_statuses and position.profit is not None:
+        if existing and current_status in terminal_statuses and position.profit is not None and (
+            previous_status not in terminal_statuses or previous_profit is None
+        ):
             transaction.on_commit(lambda account_id=account.pk, cid=contract_id: _publish_trade_closed_event(account_id, cid))
 
     if full_snapshot:
