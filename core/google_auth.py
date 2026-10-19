@@ -274,6 +274,14 @@ def google_login_callback(request):
             messages.error(request, "The Google identity could not be linked safely. Please try again.")
             return redirect("account_identity_page" if request.user.is_authenticated else "login_page")
 
+    profile = UserProfile.objects.filter(user=user).first()
+    if profile and profile.two_factor_enabled:
+        # Do not establish an authenticated Django session until the second
+        # factor succeeds, including for users signing in through Google.
+        request.session["algobot_pending_2fa_user_id"] = user.pk
+        request.session.pop("broker_onboarding_next", None)
+        return redirect("two_factor_challenge_page")
+
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     UserProfile.objects.filter(user=user).update(last_login_at=timezone.now())
     # Both password and Google sign-in land on the same canonical onboarding
