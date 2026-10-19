@@ -58,7 +58,6 @@ Upgrade AlgoBot into an advanced professional trading platform while preserving 
 - [ ] Upgrade Monitoring/Mission Control.
 - [ ] Upgrade Notifications into Alert Center.
 - [ ] Add Automation.
-- [ ] Add Bot Runtime/Deployments.
 - [ ] Add Audit Log.
 - [ ] Add Security Center.
 
