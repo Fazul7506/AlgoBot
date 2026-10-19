@@ -1,3 +1,49 @@
 {% extends "base.html" %}
-{% block title %}Activity History | AlgoBot{% endblock %}
-{% block content %}<section class="workspace activity-history-page"><p class="eyebrow">ACCOUNT HISTORY</p><h1>Activity History</h1><p>A private record of important actions on your AlgoBot account and trading workspace.</p><div class="cards activity-cards"><article><span>Total recorded</span><strong>{{ event_count }}</strong><small>Account events</small></article><article><span>Privacy</span><strong>Private</strong><small>Only your activity is shown</small></article></div><section class="panel activity-panel"><h2>Recent activity</h2>{% for e in events %}<div class="row activity-row"><div><b>{{ e.action|title }}</b><small>{{ e.resource|default:'Account action' }}</small></div><span>{{ e.module|title }}</span><time>{{ e.timestamp|date:'d M Y H:i' }}</time></div>{% empty %}<div class="empty">No account activity has been recorded yet.</div>{% endfor %}</section></section>{% endblock %}
+{% block title %}Audit Log | AlgoBot{% endblock %}
+{% block content %}
+<section class="workspace activity-history-page">
+  <p class="eyebrow">SECURITY · OPERATIONS · TRADING</p>
+  <h1>Audit Log</h1>
+  <p>Search your recorded AlgoBot activity across account actions, API requests, trading operations and broker workflows. Sensitive request and response bodies are never displayed.</p>
+  <div class="cards activity-cards">
+    <article><span>Matching events</span><strong>{{ event_count }}</strong><small>For this account and filter</small></article>
+    <article><span>Scope</span><strong>Private</strong><small>Only your account activity</small></article>
+    <article><span>Traceability</span><strong>Request IDs</strong><small>Available for failed or mutating API requests</small></article>
+  </div>
+  <section class="panel activity-panel">
+    <form method="get" class="audit-filters" role="search">
+      <label>Search activity<input type="search" name="q" value="{{ audit_filters.q }}" placeholder="Route, resource, action…"></label>
+      <label>Action<input type="search" name="action" value="{{ audit_filters.action }}" placeholder="e.g. post_completed"></label>
+      <label>Service / module<input type="search" name="module" value="{{ audit_filters.module }}" placeholder="e.g. brokers, execution"></label>
+      <div class="audit-filter-actions"><button type="submit">Apply filters</button><a href="{% url 'audit_workspace' %}">Clear</a></div>
+    </form>
+    <div class="audit-table-wrap">
+      <table class="audit-table">
+        <thead><tr><th>Action</th><th>Service</th><th>Resource / endpoint</th><th>Recorded at (UTC)</th></tr></thead>
+        <tbody>
+        {% for e in events %}
+          <tr><td><strong>{{ e.action|title }}</strong><small>{{ e.hash|default:"Recorded" }}</small></td><td>{{ e.module|title }}</td><td class="audit-resource">{{ e.resource|default:"Account action" }}</td><td><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'d M Y H:i:s' }}</time></td></tr>
+        {% empty %}
+          <tr><td colspan="4"><div class="empty">No audit events match these filters. New mutating or failed requests will appear as they occur.</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="audit-pagination" aria-label="Audit log pages">
+      {% if page_obj.has_previous %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+      <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+    </nav>
+    {% endif %}
+  </section>
+</section>
+<style>
+.audit-filters{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:14px;align-items:end;padding:16px 0;border-bottom:1px solid var(--border-color,rgba(128,128,128,.25))}
+.audit-filters label{display:grid;gap:6px;font-size:.82rem;font-weight:600}
+.audit-filters input{width:100%;min-width:0;padding:10px 12px;border:1px solid var(--border-color,#bbb);border-radius:10px;background:var(--surface,#fff);color:inherit}
+.audit-filter-actions{display:flex;gap:12px;align-items:center}.audit-filter-actions button{padding:10px 14px;border:0;border-radius:9px;cursor:pointer;font-weight:700}.audit-table-wrap{overflow-x:auto}
+.audit-table{width:100%;border-collapse:collapse;min-width:650px}.audit-table th,.audit-table td{text-align:left;padding:13px 10px;border-bottom:1px solid var(--border-color,rgba(128,128,128,.2));vertical-align:top}.audit-table th{font-size:.76rem;text-transform:uppercase;letter-spacing:.04em;opacity:.72}.audit-table td small{display:block;font-size:.72rem;opacity:.58;margin-top:4px}.audit-resource{overflow-wrap:anywhere;max-width:420px}.audit-pagination{display:flex;justify-content:space-between;align-items:center;padding:16px 0}.audit-pagination a{font-weight:700}
+@media(max-width:760px){.audit-filters{grid-template-columns:1fr}.audit-filter-actions{padding-top:4px}.activity-history-page{padding-inline:12px}}
+</style>
+{% endblock %}
