@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Broker Marketplace | AlgoBot{% endblock %}
+{% block title %}Broker Marketplace | AlgoBot
+{% endblock %}
 {% block mobile_title %}Broker Marketplace{% endblock %}
 {% block content %}
 <style>
@@ -14,31 +15,28 @@
 @media(max-width:620px){.broker-market{padding:14px}.broker-summary{grid-template-columns:1fr}.broker-hero{border-radius:18px}.broker-card{padding:17px}}
 </style>
 <div class="broker-market">
-<header class="broker-hero"><div><p class="broker-kicker">Broker integrations · Marketplace</p><h1>Choose your trading broker</h1><p>Connect and manage broker integrations from one workspace. AlgoBot keeps broker authorization, account selection, eligibility checks and order routing account-scoped. Only connection flows that are actually supported are enabled.</p><div class="broker-actions"><a class="broker-btn primary" href="#broker-catalogue">Explore brokers</a><a class="broker-btn" href="/operations/brokers/">Manage connections</a></div></div><div class="broker-logo" style="width:68px;height:68px;font-size:1.7rem" aria-hidden="true">AB</div></header>
-<div class="broker-summary">
-<div class="broker-stat"><small>Registered integrations</small><strong>{{ brokers|length }}</strong></div>
-<div class="broker-stat"><small>Execution safety</small><strong>Account-scoped</strong></div>
-<div class="broker-stat"><small>Connection mode</small><strong>OAuth / secure adapter</strong></div>
-</div>
-<section id="broker-catalogue" aria-labelledby="broker-catalogue-title"><div class="broker-section-head"><div><h2 id="broker-catalogue-title">Broker catalogue</h2><p>Availability and capabilities come from the platform's broker registry.</p></div></div>
+<header class="broker-hero"><div><p class="broker-kicker">Broker integrations · Marketplace</p><h1>Choose your trading broker</h1><p>Registered broker integrations and their current connection status.</p></div><div class="broker-logo" style="width:68px;height:68px;font-size:1.7rem" aria-hidden="true">AB</div></header>
+
+<section id="broker-catalogue" aria-labelledby="broker-catalogue-title"><div class="broker-section-head"><div><h2 id="broker-catalogue-title">Registered brokers</h2></div></div>
 <div class="broker-grid">
 {% for broker in brokers %}
 <article class="broker-card">
-<div class="broker-card-top"><div><div class="broker-logo" aria-hidden="true">{{ broker.name|first|upper }}</div><h3>{{ broker.name }}</h3><p>{{ broker.broker_type|title }} integration</p></div><span class="broker-pill {% if broker.status != 'active' %}muted{% endif %}">{{ broker.status }}</span></div>
-<div class="broker-capabilities"><span class="broker-pill {% if broker.supports_demo %}{% else %}muted{% endif %}">{% if broker.supports_demo %}Demo supported{% else %}Demo not declared{% endif %}</span><span class="broker-pill {% if broker.supports_live %}{% else %}muted{% endif %}">{% if broker.supports_live %}Live capability declared{% else %}Live not declared{% endif %}</span></div>
-<p>Adapter version: {{ broker.version|default:"Not declared" }}. Execution and data features depend on verified adapter capabilities.</p>
-<div class="broker-actions">{% if broker.broker_type == 'deriv' and broker.status == 'active' %}<a class="broker-btn primary" href="/brokers/connect/">Connect Deriv</a>{% elif broker.status != 'active' %}<span class="broker-btn" aria-disabled="true">Temporarily unavailable</span>{% else %}<span class="broker-btn" aria-disabled="true">Connection flow not enabled</span>{% endif %}</div>
+<div class="broker-card-top"><div><div class="broker-logo" aria-hidden="true">{{ broker.name|first|upper }}</div><h3>{{ broker.name }}</h3><p>{{ broker.broker_type|title }} integration</p></div><span class="broker-pill {% if broker.user_connected %}{% else %}muted{% endif %}">{% if broker.user_connected %}Connected{% else %}{{ broker.status }}{% endif %}</span></div>
+
+
+<div class="broker-actions">{% if broker.user_connected %}{% if broker.broker_type == 'deriv' %}<form method="post" action="/api/deriv/disconnect/" data-broker-disconnect>{% csrf_token %}<button class="broker-btn" type="submit">Disconnect</button></form>{% else %}<a class="broker-btn" href="/operations/brokers/">Manage connection</a>{% endif %}{% elif broker.broker_type == 'deriv' and broker.status == 'active' %}<a class="broker-btn primary" href="/brokers/connect/">Connect Deriv</a>{% elif broker.status != 'active' %}<span class="broker-btn" aria-disabled="true">Unavailable</span>{% else %}<span class="broker-btn" aria-disabled="true">Not supported</span>{% endif %}</div>
 </article>
 {% empty %}
 <div class="broker-panel"><h3>No brokers are configured yet</h3><p>The marketplace is ready, but no broker adapters are registered. An administrator must configure a broker and its supported connection flow before users can connect it.</p></div>
 {% endfor %}
 </div></section>
-<div class="broker-section-head"><div><h2>Multi-broker safeguards</h2><p>One workspace, explicit account boundaries.</p></div></div>
-<div class="broker-grid">
-<article class="broker-panel"><h3>Independent connections</h3><p>Each broker account keeps its own authorization and connection status. Connecting one broker must not silently authorize another.</p></article>
-<article class="broker-panel"><h3>Explicit active account</h3><p>Choose a preferred account before execution. Account selection is kept separate from marketplace discovery and connection setup.</p></article>
-<article class="broker-panel"><h3>Risk-gated execution</h3><p>Live trading remains blocked unless the selected account is eligible and its broker adapter supports the requested operation. Use demo mode to validate strategies.</p></article>
 </div>
-<p class="broker-note">Security note: a broker appearing in the catalogue does not mean its live trading integration is operational. AlgoBot enables connection actions only where a supported flow exists; unsupported adapters are clearly marked rather than presented as working.</p>
-</div>
+<script>
+document.addEventListener("submit", async function(event) {
+ const form=event.target.closest("[data-broker-disconnect]"); if(!form)return;
+ event.preventDefault(); const button=form.querySelector("button[type=submit]"); if(button){button.disabled=true;button.textContent="Disconnecting…";}
+ try { const token=form.querySelector("[name=csrfmiddlewaretoken]")?.value||""; const response=await fetch(form.action,{method:"POST",credentials:"same-origin",headers:{"X-CSRFToken":token,"Accept":"application/json"}}); const data=await response.json().catch(()=>({})); if(!response.ok||data.status==="error")throw new Error(data.message||"Disconnect failed"); window.location.reload(); }
+ catch(error){if(button){button.disabled=false;button.textContent="Disconnect";}window.alert(error.message||"Could not disconnect broker.");}
+});
+</script>
 {% endblock %}

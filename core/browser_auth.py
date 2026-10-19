@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
+from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core import signing
@@ -369,6 +369,30 @@ def reset_password_page(request, token=None):
 def account_identity_page(request):
     user = request.user
     profile, _ = UserProfile.objects.get_or_create(user=user)
+    if request.method == "POST" and request.POST.get("identity_action") == "change_password":
+        current_password = request.POST.get("current_password") or ""
+        new_password = request.POST.get("new_password") or ""
+        confirm_password = request.POST.get("confirm_password") or ""
+        errors = []
+        if user.has_usable_password() and not user.check_password(current_password):
+            errors.append("Your current password is incorrect.")
+        if len(new_password) < 12:
+            errors.append("Use at least 12 characters for your new password.")
+        if new_password != confirm_password:
+            errors.append("The new password and confirmation do not match.")
+        try:
+            validate_password(new_password, user=user)
+        except ValidationError as exc:
+            errors.extend(exc.messages)
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            user.set_password(new_password)
+            user.save(update_fields=["password"])
+            update_session_auth_hash(request, user)
+            messages.success(request, "Your password has been changed.")
+        return redirect("account_identity_page")
     if request.method == "POST":
         current_password = request.POST.get("current_password") or ""
         username = str(request.POST.get("username") or "").strip()
