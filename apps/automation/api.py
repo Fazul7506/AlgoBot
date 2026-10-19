@@ -62,6 +62,12 @@ class WorkflowViewSet(viewsets.ModelViewSet):
     def resume(self, request, pk=None):
         workflow = self.get_object()
         definition = workflow.definition if isinstance(workflow.definition, dict) else {}
+        validation = WorkflowDesignerService().validate(definition)
+        if not validation["valid"]:
+            return response.Response(
+                {"detail": "Workflow definition failed validation.", "code": "WORKFLOW_DEFINITION_INVALID", "errors": validation["errors"]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         trigger = definition.get("trigger", {})
         if not isinstance(trigger, dict) or not str(trigger.get("event") or "").strip():
             return response.Response(
