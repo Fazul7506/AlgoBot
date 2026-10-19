@@ -169,6 +169,10 @@ def broker_marketplace_page(request): return render(request,'core/broker_marketp
 def strategy_builder_page(request): return render(request,'core/strategy_builder.html')
 @login_required
 def operations_module_page(request,module):
+    if module == 'brokers':
+        # The canonical broker experience is the marketplace; do not render the
+        # legacy operations workspace with an uninitialized browser API client.
+        return broker_marketplace_page(request)
     if module=='notifications':
         from apps.notifications.channel_service import connection_status
         return render(request,'notifications/channels.html',{'channels':connection_status(request.user)})

@@ -1,61 +1,119 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Profile | AlgoBot{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account1">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account3"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">{% endblock %}
 {% block content %}
 <main class="account-page" data-profile-page>
   <header class="account-hero">
     <div class="account-hero__identity">
-      <div class="account-profile-avatar" aria-hidden="true">{{ profile_initials }}</div>
-      <div>
-        <p class="account-kicker">Your account</p>
-        <h1>Profile</h1>
-        <p class="account-subtitle">Manage the personal details AlgoBot uses across your workspace. Your broker credentials and login identity remain managed separately.</p>
-      </div>
+      <div class="account-profile-avatar" data-avatar-preview aria-hidden="true">{% if profile.profile_picture_data %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U' }}" alt="">{% else %}{{ profile_initials }}{% endif %}</div>
+      <div><p class="account-kicker">Your account</p><h1>Profile</h1><p class="account-subtitle">Manage the personal details AlgoBot uses across your workspace. Broker credentials and login identity remain separate.</p></div>
     </div>
     <span class="account-state {% if profile.email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if profile.email_verified %}Email verified{% else %}Email verification pending{% endif %}</span>
   </header>
-
   <div class="account-layout">
     <nav class="account-nav" aria-label="Account settings">
-      <a href="{% url 'profile_page' %}" aria-current="page">Profile</a>
-      <a href="{% url 'settings_page' %}">Settings</a>
-      <a href="{% url 'account_identity_page' %}">Login & identity</a>
-      <a href="{% url 'security_center' %}">Security</a>
+      <a href="{% url 'profile_page' %}" aria-current="page">Profile</a><a href="{% url 'settings_page' %}">Preferences</a><a href="{% url 'account_identity_page' %}">Login &amp; identity</a><a href="{% url 'security_center' %}">Security</a>
     </nav>
-
-    <form class="account-content" method="post" action="{% url 'profile_page' %}">
+    <form class="account-content" method="post" enctype="multipart/form-data" action="{% url 'profile_page' %}">
       {% csrf_token %}
+      {% for message in messages %}<p class="account-alert {% if message.tags == 'error' %}account-alert--error{% elif message.tags == 'success' %}account-alert--success{% endif %}" role="status">{{ message }}</p>{% endfor %}
       <section class="account-card">
-        <div class="account-card__header">
-          <div><h2>Personal information</h2><p class="account-card__hint">These details belong to your AlgoBot profile, not your Deriv account.</p></div>
-          <span class="account-state">Private</span>
-        </div>
+        <div class="account-card__header"><div><h2>Personal information</h2><p class="account-card__hint">These details belong to your AlgoBot profile, not your broker account.</p></div><span class="account-state">Private</span></div>
         <div class="account-fields">
           <div class="account-field"><label for="profile-first-name">First name</label><input id="profile-first-name" name="first_name" value="{{ first_name }}" maxlength="150" autocomplete="given-name" required></div>
           <div class="account-field"><label for="profile-last-name">Last name</label><input id="profile-last-name" name="last_name" value="{{ last_name }}" maxlength="150" autocomplete="family-name" required></div>
-          <div class="account-field"><label for="profile-username">Username</label><input id="profile-username" value="{{ request.user.username }}" readonly aria-readonly="true"><span class="account-help">Change username from Login & identity.</span></div>
+          <div class="account-field"><label for="profile-username">Username</label><input id="profile-username" value="{{ request.user.username }}" readonly aria-readonly="true"><span class="account-help">Change username from Login &amp; identity.</span></div>
           <div class="account-field"><label for="profile-email">Login email</label><input id="profile-email" value="{{ request.user.email }}" readonly aria-readonly="true"><span class="account-help">Email changes require verification.</span></div>
-          <div class="account-field"><label for="profile-country">Country</label><input id="profile-country" name="country" value="{{ country }}" maxlength="100" autocomplete="country-name" placeholder="Your country"></div>
-          <div class="account-field"><label for="profile-timezone">Time zone</label><input id="profile-timezone" name="timezone" value="{{ timezone_value }}" maxlength="100" autocomplete="off" placeholder="Africa/Nairobi"></div>
-          <div class="account-field account-field--full"><label for="profile-phone">Phone (optional)</label><input id="profile-phone" name="phone" type="tel" value="{{ phone }}" maxlength="20" autocomplete="tel" placeholder="+254…"></div>
+          <div class="account-field account-field--full"><label for="profile-picture">Profile picture</label><input id="profile-picture" name="profile_picture" type="file" accept="image/jpeg,image/png,image/webp,image/gif" autocomplete="off" aria-describedby="profile-picture-help"><span id="profile-picture-help" class="account-help">Choose an image from this device (JPEG, PNG, WEBP or GIF; up to 5 MB). The preview updates before saving.</span></div>
+          <div class="account-field"><label for="profile-country">Country</label><select id="profile-country" name="country" autocomplete="country-name" data-country-select data-current-country="{{ country|escape }}" required><option value="">Choose your country</option></select><span class="account-help">Select a country; flags and names are generated from standard region codes.</span></div>
+          <div class="account-field"><label for="profile-timezone">Time zone</label><select id="profile-timezone" name="timezone" autocomplete="off" required>{% for zone in timezone_choices %}<option value="{{ zone }}" {% if timezone_value == zone %}selected{% endif %}>{{ zone }}</option>{% endfor %}</select><span class="account-help">Choose the time zone used for timestamps and scheduling displays.</span></div>
+          <div class="account-field account-field--full"><label for="profile-phone">Phone (optional)</label><input id="profile-phone" name="phone" type="tel" value="{{ phone }}" maxlength="32" autocomplete="tel" placeholder="+254 7xx xxx xxx" inputmode="tel" aria-describedby="profile-phone-help"><span id="profile-phone-help" class="account-help">Use the international format. The phone number is saved to your AlgoBot profile.</span></div>
           <div class="account-field account-field--full"><label for="profile-bio">About you (optional)</label><textarea id="profile-bio" name="bio" maxlength="5000" rows="4" placeholder="A short introduction (optional)">{{ bio }}</textarea><span class="account-help">Maximum 5,000 characters.</span></div>
         </div>
-        <div class="account-actions">
-          <button class="account-btn account-btn--primary" type="submit">Save profile</button>
-          <a class="account-btn" href="{% url 'account_identity_page' %}">Manage login identity</a>
-        </div>
+        <div class="account-actions"><button class="account-btn account-btn--primary" type="submit">Save profile</button><a class="account-btn" href="{% url 'account_identity_page' %}">Manage login identity</a></div>
       </section>
-
-      <section class="account-card">
-        <div class="account-card__header"><div><h2>Connected services</h2><p class="account-card__hint">Each service has its own security and authorization boundary.</p></div></div>
+      <section class="account-card"><div class="account-card__header"><div><h2>Connected services</h2><p class="account-card__hint">Each service has its own security and authorization boundary.</p></div></div>
         <div class="account-toggle-list">
           <div class="account-toggle"><div><strong>AlgoBot login</strong><p>{{ request.user.email|default:request.user.username }} · {% if profile.email_verified %}verified{% else %}verification required{% endif %}</p></div><a class="account-btn" href="{% url 'account_identity_page' %}">Manage</a></div>
-          <div class="account-toggle"><div><strong>Deriv broker</strong><p>Broker authorization, account eligibility and connection status are managed separately from your profile.</p></div><a class="account-btn" href="{% url 'broker_marketplace_page' %}">Manage broker</a></div>
+          <div class="account-toggle"><div><strong>Deriv broker</strong><p>Broker authorization, account eligibility and connection status are managed separately.</p></div><a class="account-btn" href="{% url 'broker_marketplace_page' %}">Manage broker</a></div>
           <div class="account-toggle"><div><strong>Notifications</strong><p>Configure delivery channels and notification preferences.</p></div><a class="account-btn" href="/notifications/">Manage</a></div>
         </div>
       </section>
     </form>
   </div>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js" defer></script>
+<script>
+(() => {
+  const initialize = () => {
+    const avatarInput = document.querySelector('#profile-picture');
+    const avatar = document.querySelector('[data-avatar-preview]');
+    if (avatarInput && avatar) avatarInput.addEventListener('change', () => {
+      const file = avatarInput.files && avatarInput.files[0];
+      if (!file) return;
+      if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+        avatarInput.value = '';
+        return;
+      }
+      const previewUrl = URL.createObjectURL(file);
+      let image = avatar.querySelector('img');
+      if (!image) { image = document.createElement('img'); image.alt = ''; avatar.replaceChildren(image); }
+      const oldUrl = image.dataset.previewUrl;
+      image.src = previewUrl;
+      image.dataset.previewUrl = previewUrl;
+      if (oldUrl) URL.revokeObjectURL(oldUrl);
+    });
+    const select = document.querySelector('[data-country-select]');
+    if (!select) return;
+    const current = select.dataset.currentCountry || '';
+    const names = typeof Intl !== 'undefined' && Intl.DisplayNames ? new Intl.DisplayNames(['en'], {type:'region'}) : null;
+    const codes = 'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW'.split(' ');
+    codes.sort((a,b) => (names?.of(a) || a).localeCompare(names?.of(b) || b));
+    codes.forEach(code => {
+      const name = names?.of(code) || code;
+      if (name === code) return;
+      const option = document.createElement('option');
+      option.value = name;
+      option.dataset.iso2 = code.toLowerCase();
+      option.textContent = String.fromCodePoint(...code.split('').map(ch => 127397 + ch.charCodeAt(0))) + '  ' + name;
+      select.appendChild(option);
+    });
+    if (current && !Array.from(select.options).some(option => option.value === current)) {
+      const option = document.createElement('option'); option.value = current; option.textContent = current; select.add(option, 1);
+    }
+    select.value = current;
+    const phone = document.querySelector('#profile-phone');
+    if (phone && window.intlTelInput) {
+      const iti = window.intlTelInput(phone, {initialCountry:'ke', separateDialCode:true, nationalMode:false, formatOnDisplay:true, countrySearch:true, loadUtils:() => import('https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js')});
+      const syncPhoneCountry = () => {
+        const selectedOption = select.options[select.selectedIndex];
+        let iso2 = selectedOption?.dataset.iso2 || '';
+        if (!iso2) {
+          const countryName = selectedOption?.textContent?.replace(/^\\S+\\s+/, '').trim().toLocaleLowerCase();
+          const match = window.intlTelInput.getCountryData().find(item => item.name.toLocaleLowerCase() === countryName);
+          iso2 = match?.iso2 || '';
+        }
+        if (iso2) iti.setCountry(iso2);
+      };
+      select.addEventListener('change', syncPhoneCountry);
+      syncPhoneCountry();
+      const form = phone.closest('form');
+      if (form) form.addEventListener('submit', () => {
+        const internationalNumber = iti.getNumber();
+        if (internationalNumber) {
+          phone.value = internationalNumber;
+        } else if (phone.value.trim()) {
+          const selected = iti.getSelectedCountryData();
+          const digits = phone.value.replace(/\D/g, '');
+          phone.value = phone.value.trim().startsWith('+')
+            ? '+' + digits
+            : '+' + (selected.dialCode || '254') + digits.replace(/^0+/, '');
+        }
+      });
+    }
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, {once:true}); else initialize();
+})();
+</script>
 {% endblock %}

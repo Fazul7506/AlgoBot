@@ -41,6 +41,35 @@
 
     button:disabled{opacity:.7;cursor:not-allowed}
     .email-readonly{background:#111d30;border-color:#465878;color:#dce6ff}
+    .auth-eyebrow{display:inline-flex;align-items:center;gap:8px;margin:0 0 12px;color:#a9c0ff;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+    .auth-eyebrow:before{content:"";width:7px;height:7px;border-radius:50%;background:#7ce5bd;box-shadow:0 0 0 4px #7ce5bd20}
+    .auth-benefits{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 22px}
+    .auth-benefit{padding:10px 8px;border:1px solid #263a54;border-radius:12px;background:linear-gradient(145deg,#14243a,#0d1726);font-size:11px;line-height:1.35;color:#c4d1e5;text-align:center}
+    .auth-benefit strong{display:block;color:#f4f7fb;font-size:12px;margin-bottom:3px}
+    .field-hint{font-size:12px;color:var(--muted);margin:6px 2px 0}
+    .strength-panel{margin:12px 0 4px;padding:14px;border:1px solid #2b3b53;border-radius:14px;background:#0b1422}
+    .strength-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;font-weight:700}
+    .strength-label{color:var(--muted)}
+    .strength-track{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:10px 0 12px}
+    .strength-segment{height:5px;border-radius:999px;background:#29364b;transition:background-color .18s ease}
+    .strength-panel[data-level="1"] .strength-segment:nth-child(-n+1){background:#ff777e}
+    .strength-panel[data-level="2"] .strength-segment:nth-child(-n+2){background:#ffbd69}
+    .strength-panel[data-level="3"] .strength-segment:nth-child(-n+3){background:#a9d67b}
+    .strength-panel[data-level="4"] .strength-segment{background:#68dfb0}
+    .strength-rules{display:grid;grid-template-columns:1fr 1fr;gap:7px 12px;margin:0;padding:0;list-style:none}
+    .strength-rules li{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px}
+    .strength-rules li:before{content:"○";color:#7789a4;font-size:14px}
+    .strength-rules li[data-met="true"]{color:#a9e7c4}
+    .strength-rules li[data-met="true"]:before{content:"✓";color:#68dfb0;font-weight:800}
+    .match-note{min-height:18px;margin:7px 2px 0;font-size:12px;color:var(--muted)}
+    .match-note[data-state="match"]{color:#a9e7c4}.match-note[data-state="mismatch"]{color:#ffb6b6}
+    .auth-footer-note{margin-top:18px;padding-top:14px;border-top:1px solid #26344a;font-size:12px;color:#93a4bc;display:flex;gap:9px;align-items:flex-start}
+    .auth-footer-note span{color:#c7d6ff}
+    .form-submit{position:relative;overflow:hidden;transition:transform .16s ease,filter .16s ease}
+    .form-submit:hover:not(:disabled){filter:brightness(1.08);transform:translateY(-1px)}
+    .form-submit:focus-visible{outline:3px solid #c8d7ff;outline-offset:3px}
+    @media(max-width:380px){.auth-benefits{grid-template-columns:1fr}.auth-benefit{text-align:left}.strength-rules{grid-template-columns:1fr}}
+    @media(prefers-reduced-motion:reduce){.strength-segment,.form-submit{transition:none}}
     .timer-note{min-height:1.5em;color:var(--muted);font-size:14px;margin-top:10px}
     .resend-button[disabled]{background:#34445f;color:#b9c5d8;cursor:not-allowed;opacity:1}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
@@ -50,20 +79,21 @@
 <main>
   <div class="brand"><span class="mark" aria-hidden="true">A</span><span>AlgoBot</span></div>
   {% if mode == "login" %}
-    <h1>Welcome back</h1><p class="sub">Sign in to your AlgoBot account to manage your workspace and broker connections.</p>
+    <p class="auth-eyebrow">Your trading workspace, secured</p><h1>{% if mfa_required %}Verify it’s you{% else %}Welcome back{% endif %}</h1><p class="sub">{% if mfa_required %}Enter your authenticator code or one of your unused recovery codes. Confirm your password again to complete sign-in.{% else %}Sign in to AlgoBot to pick up where your analysis left off. Your broker credentials stay separate.{% endif %}</p><div class="auth-benefits" aria-label="AlgoBot account features"><div class="auth-benefit"><strong>Private</strong>Account-first access</div><div class="auth-benefit"><strong>Connected</strong>Broker stays separate</div><div class="auth-benefit"><strong>In control</strong>Secure sign-in</div></div>
     {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
     {% if errors %}<ul class="errors">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
     <form method="post" action="{% url 'login_page' %}">{% csrf_token %}
       <input type="hidden" name="next" value="{{ next|default:'' }}">
       <label for="identifier">Username or email</label><input id="identifier" name="identifier" autocomplete="username" value="{{ identifier|default:'' }}" required>
       <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required>
-      <button type="submit">Sign in securely</button>
+      {% if mfa_required %}<label for="two_factor_code">Authenticator or recovery code</label><input id="two_factor_code" name="two_factor_code" inputmode="text" autocomplete="one-time-code" maxlength="32" aria-describedby="two-factor-help" required><small id="two-factor-help">Use the current six-digit code from your authenticator, or an unused recovery code.</small>{% endif %}
+      <button type="submit">{% if mfa_required %}Verify and sign in{% else %}Sign in securely{% endif %}</button>
     </form>
     <a class="link-button provider-button google-button" href="{% url 'google_login_start' %}?next={{ next|default:'/dashboard/'|urlencode }}" aria-label="Continue with Google"><svg class="provider-logo google-logo" viewBox="0 0 48 48" role="img" aria-label="Google logo" focusable="false"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 3.06 13.22l7.98 6.19C12.93 13.72 18.02 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.25 5.48-4.73 7.18l7.65 5.93c4.47-4.13 7.12-10.2 7.12-17.58z"/><path fill="#FBBC05" d="M10.04 28.59A14.4 14.4 0 0 1 9.25 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.53 2.58 10.78l7.46-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.87l-7.65-5.93c-2.12 1.42-4.84 2.26-8.25 2.26-5.98 0-11.07-4.22-12.96-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Continue with Google</span></a>
     <div class="links"><a href="{% url 'forgot_password_page' %}">Forgot password?</a><a href="{% url 'register_page' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create an account</a></div>
 
   {% elif mode == "register" %}
-    <h1>Create your account</h1><p class="sub">Your AlgoBot login remains separate from your broker identity.</p>
+    <p class="auth-eyebrow">Build your trading command center</p><h1>Create your account</h1><p class="sub">Set up your AlgoBot identity. Use a unique password and keep broker credentials separate.</p><div class="auth-benefits" aria-label="Account setup principles"><div class="auth-benefit"><strong>Your identity</strong>One AlgoBot login</div><div class="auth-benefit"><strong>Your security</strong>Strong password</div><div class="auth-benefit"><strong>Your broker</strong>Separate connection</div></div>
     {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
     {% if errors %}<ul class="errors">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
     <form method="post" action="{% url 'register_page' %}">{% csrf_token %}
@@ -72,9 +102,20 @@
       <label for="first_name">First name</label><input id="first_name" name="first_name" autocomplete="given-name" value="{{ first_name|default:'' }}" maxlength="150" required>
       <label for="last_name">Last name</label><input id="last_name" name="last_name" autocomplete="family-name" value="{{ last_name|default:'' }}" maxlength="150" required>
       <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" value="{{ email|default:'' }}" required>
-      <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="new-password" required>
-      <label for="password_confirm">Confirm password</label><input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password" required>
-      <button type="submit">Create account</button>
+      <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="new-password" aria-describedby="password-strength-hint password-strength-rules" required>
+      <div class="strength-panel" id="password-strength-panel" data-level="0" aria-live="polite">
+        <div class="strength-heading"><span>Password strength</span><span class="strength-label" id="password-strength-label">Not entered</span></div>
+        <div class="strength-track" role="img" aria-label="Password strength meter"><span class="strength-segment"></span><span class="strength-segment"></span><span class="strength-segment"></span><span class="strength-segment"></span></div>
+        <ul class="strength-rules" id="password-strength-rules">
+          <li id="rule-length">At least 12 characters</li><li id="rule-upper">One uppercase letter</li>
+          <li id="rule-lower">One lowercase letter</li><li id="rule-number">One number</li>
+          <li id="rule-symbol">One symbol</li><li id="rule-not-common">Avoid common passwords</li>
+        </ul>
+        <p class="field-hint" id="password-strength-hint">Use a long, unique passphrase. Never reuse your broker password.</p>
+      </div>
+      <label for="password_confirm">Confirm password</label><input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password" aria-describedby="password-match-note" required>
+      <p class="match-note" id="password-match-note" aria-live="polite"></p>
+      <button class="form-submit" type="submit">Create secure account</button>
     </form>
     <a class="link-button provider-button google-button" href="{% url 'google_login_start' %}?next={{ next|default:'/dashboard/'|urlencode }}" aria-label="Continue with Google"><svg class="provider-logo google-logo" viewBox="0 0 48 48" role="img" aria-label="Google logo" focusable="false"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 3.06 13.22l7.98 6.19C12.93 13.72 18.02 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.25 5.48-4.73 7.18l7.65 5.93c4.47-4.13 7.12-10.2 7.12-17.58z"/><path fill="#FBBC05" d="M10.04 28.59A14.4 14.4 0 0 1 9.25 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.53 2.58 10.78l7.46-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.87l-7.65-5.93c-2.12 1.42-4.84 2.26-8.25 2.26-5.98 0-11.07-4.22-12.96-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Continue with Google</span></a>
     <div class="links"><a href="{% url 'login_page' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Already registered? Sign in</a></div>
@@ -149,9 +190,52 @@
     {% endif %}
     <div class="links"><a href="{% url 'login_page' %}">Back to sign in</a><a href="{% url 'register_page' %}">Create an account</a></div>
   {% endif %}
-  <small>Keep your AlgoBot password private. Broker credentials are managed separately and must never be shared.</small>
+  <div class="auth-footer-note"><span aria-hidden="true">◆</span><span>Security note: AlgoBot sign-in credentials are separate from your broker account. Never share passwords or API tokens.</span></div>{% if mode == "register" %}<small>Use a unique password and verify your email to protect account access.</small>{% endif %}
 </main>
 <script>
+  (() => {
+    const password = document.getElementById('password');
+    const confirm = document.getElementById('password_confirm');
+    const panel = document.getElementById('password-strength-panel');
+    if (!password || !panel || !document.getElementById('rule-length')) return;
+    const label = document.getElementById('password-strength-label');
+    const rules = {
+      length: value => value.length >= 12,
+      upper: value => /[A-Z]/.test(value),
+      lower: value => /[a-z]/.test(value),
+      number: value => /[0-9]/.test(value),
+      symbol: value => /[^A-Za-z0-9]/.test(value),
+      notCommon: value => !/^(password|password123|qwerty123|letmein|admin123|welcome123|12345678|iloveyou)$/i.test(value.trim())
+    };
+    const ruleIds = {length:'rule-length',upper:'rule-upper',lower:'rule-lower',number:'rule-number',symbol:'rule-symbol',notCommon:'rule-not-common'};
+    const updateStrength = () => {
+      const value = password.value;
+      const met = Object.entries(rules).filter(([key, test]) => {
+        const ok = value.length > 0 && test(value);
+        const node = document.getElementById(ruleIds[key]);
+        if (node) node.dataset.met = String(ok);
+        return ok;
+      }).length;
+      const level = !value ? 0 : met <= 2 ? 1 : met <= 4 ? 2 : met === 5 ? 3 : 4;
+      panel.dataset.level = String(level);
+      label.textContent = !value ? 'Not entered' : level === 1 ? 'Weak' : level === 2 ? 'Fair' : level === 3 ? 'Strong' : 'Excellent';
+      password.setAttribute('aria-invalid', String(Boolean(value) && met < 6));
+      updateMatch();
+    };
+    const updateMatch = () => {
+      if (!confirm) return;
+      const note = document.getElementById('password-match-note');
+      if (!note) return;
+      if (!confirm.value) { note.textContent = ''; note.dataset.state = ''; confirm.setCustomValidity(''); return; }
+      const matches = password.value === confirm.value;
+      note.textContent = matches ? 'Passwords match.' : 'Passwords do not match yet.';
+      note.dataset.state = matches ? 'match' : 'mismatch';
+      confirm.setCustomValidity(matches ? '' : 'Passwords must match.');
+    };
+    password.addEventListener('input', updateStrength);
+    if (confirm) confirm.addEventListener('input', updateMatch);
+    updateStrength();
+  })();
   document.querySelectorAll('input[type="password"]').forEach((field, index) => {
     if (!field.id) field.id = 'password-field-' + index;
     const wrapper = document.createElement('div');

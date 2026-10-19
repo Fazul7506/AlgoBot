@@ -44,7 +44,7 @@ def portfolio_center(request):
     exposures = PortfolioExposure.objects.filter(portfolio__user=request.user).order_by("-risk")[:30]
     allocations = PortfolioAllocation.objects.filter(portfolio__user=request.user).order_by("-allocated_capital")[:30]
     cashflows = CashFlow.objects.filter(portfolio__user=request.user).order_by("-timestamp")[:20]
-    return render(request, "core/portfolio_center.html", {
+    return render(request, "portfolio/dashboard.html", {
         "portfolios": portfolios,
         "snapshots": [],
         "latest_snapshot": None,

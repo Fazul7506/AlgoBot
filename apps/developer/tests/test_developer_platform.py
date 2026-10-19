@@ -220,3 +220,16 @@ class DeveloperPlatformTests(TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["detail"], "The developer service could not complete the request.")
         self.assertEqual(response.json()["code"], "DEVELOPER_API_ERROR")
+
+    def test_developer_page_assets_are_cache_busted_for_mobile_layout_fixes(self):
+        session = Client()
+        self.assertTrue(session.login(username="dev", password="pass12345"))
+        response = session.get("/developer/")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn("20261019-devapi2", html)
+        self.assertIn("developer_api_hardening.css", html)
+
+        explorer = session.get("/developer/api/explorer/")
+        self.assertEqual(explorer.status_code, 200)
+        self.assertIn("20261019-api3", explorer.content.decode())

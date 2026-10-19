@@ -165,6 +165,12 @@ def login_page(request):
                     if matches.count() == 1:
                         user = authenticate(request, username=matches.first().get_username(), password=password)
         if user is None:
+            request.session.pop("algobot_pending_2fa_user_id", None)
+            messages.error(request, "The username/email or password is incorrect.")
+            return _render(request, "login", identifier=identifier)
+        pending_2fa_user_id = request.session.get("algobot_pending_2fa_user_id")
+        if pending_2fa_user_id and str(pending_2fa_user_id) != str(user.pk):
+            request.session.pop("algobot_pending_2fa_user_id", None)
             messages.error(request, "The username/email or password is incorrect.")
             return _render(request, "login", identifier=identifier)
         profile, _ = UserProfile.objects.get_or_create(user=user)
@@ -172,7 +178,22 @@ def login_page(request):
             request.session[PENDING_VERIFICATION_EMAIL_SESSION_KEY] = user.email
             messages.info(request, "Please verify your email before signing in. Your account email is ready below.")
             return redirect("verify_email_page")
+        if profile.two_factor_enabled:
+            from core.services.two_factor_service import verify_user_code
+            code = request.POST.get("two_factor_code") or ""
+            if not code:
+                request.session["algobot_pending_2fa_user_id"] = user.pk
+                return _render(request, "login", identifier=identifier, mfa_required=True)
+            if not verify_user_code(profile, code, consume_recovery=True):
+                request.session["algobot_pending_2fa_user_id"] = user.pk
+                return _render(
+                    request, "login", identifier=identifier, mfa_required=True,
+                    errors=["The authenticator or recovery code is invalid. Try again."],
+                )
+        request.session.pop("algobot_pending_2fa_user_id", None)
         auth_login(request, user)
+        if profile.two_factor_enabled:
+            request.session["algobot_mfa_verified_user_id"] = user.pk
         UserProfile.objects.update_or_create(user=user, defaults={"last_login_at": timezone.now()})
         from core.broker_onboarding import has_authorized_broker_connection
         safe_destination = first_safe_auth_destination(
@@ -266,7 +287,7 @@ def register_page(request):
         if email_sent:
             messages.success(request, "Your account was created. We sent a verification email. Use the resend control below if it does not arrive.")
         else:
-            messages.warning(request, "Your account was created, but the verification email could not be sent. Use Verify email to request another.")
+            messages.warning(request, "Your account was created, but the verification email could not be sent. Use the resend option on the verification page when it becomes available.")
         return redirect("verify_email_page")
     return _render(request, "register")
 
@@ -554,3 +575,38 @@ def unlink_google_identity(request):
     identity.delete()
     messages.success(request, "Google sign-in has been unlinked from your AlgoBot account.")
     return redirect("account_identity_page")
+
+
+
+def two_factor_challenge_page(request):
+    """Complete the second factor after a provider-authenticated sign-in."""
+    pending_user_id = request.session.get("algobot_pending_2fa_user_id")
+    if not pending_user_id:
+        messages.error(request, "Start sign-in again to verify your account.")
+        return redirect("login_page")
+    user = User.objects.filter(pk=pending_user_id, is_active=True).first()
+    profile = UserProfile.objects.filter(user=user).first() if user else None
+    if not user or not profile or not profile.two_factor_enabled:
+        request.session.pop("algobot_pending_2fa_user_id", None)
+        messages.error(request, "That sign-in challenge is no longer valid. Please sign in again.")
+        return redirect("login_page")
+    if request.method == "POST":
+        from core.services.two_factor_service import verify_user_code
+        code = request.POST.get("two_factor_code") or ""
+        allowed = allow_auth_attempt(request, "two-factor-challenge", str(user.pk), limit=10, window=900)
+        ip_allowed = allow_auth_attempt(request, "two-factor-challenge-ip", "", limit=30, window=900)
+        if not allowed or not ip_allowed:
+            return render(request, "core/two_factor_challenge.html", {
+                "error": "Too many verification attempts. Wait before trying again."
+            }, status=429)
+        if not verify_user_code(profile, code, consume_recovery=True):
+            return render(request, "core/two_factor_challenge.html", {
+                "error": "The authenticator or recovery code is invalid."
+            }, status=400)
+        request.session.pop("algobot_pending_2fa_user_id", None)
+        auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        request.session["algobot_mfa_verified_user_id"] = user.pk
+        UserProfile.objects.filter(user=user).update(last_login_at=timezone.now())
+        request.session.pop("broker_onboarding_next", None)
+        return redirect("broker_marketplace_page")
+    return render(request, "core/two_factor_challenge.html")

@@ -11,6 +11,7 @@ from core.views_auth import (
     UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet,
 )
 from core.browser_views import browser_logout
+from core.browser_auth import two_factor_challenge_page
 from rest_framework_simplejwt.views import TokenRefreshView
 from core.google_auth import google_login_start, google_login_callback
 from core.dashboard_api import DashboardViewSet
@@ -43,7 +44,7 @@ from core.views_oauth import disconnect_deriv, refresh_deriv_token, deriv_accoun
 from apps.developer import views as developer_views
 from apps.notifications.channel_views import notification_channels_page
 
-from core.views_profile import profile_page
+from core.views_profile import profile_page, profile_picture
 
 
 def billing_success_dispatch(request):
@@ -78,6 +79,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("", home, name="home"),
     path("login/", login_page, name="login_page"),
+    path("login/two-factor/", two_factor_challenge_page, name="two_factor_challenge_page"),
     path("auth/google/", google_login_start, name="google_login_start"),
     path("auth/google/callback/", google_login_callback, name="google_login_callback"),
     path("register/", register_page, name="register_page"),
@@ -98,6 +100,7 @@ urlpatterns = [
     path("performance/", login_required(performance_center), name="performance_page"),
     path("settings/", login_required(settings_page), name="settings_page"),
     path("profile/", login_required(profile_page), name="profile_page"),
+    path("profile/picture/", login_required(profile_picture), name="profile_picture"),
     path("profile/complete/", login_required(profile_completion_page), name="profile_completion_page"),
     path("orders/", login_required(orders_page), name="orders_page"),
     path("positions/", login_required(positions_page), name="positions_page"),
@@ -119,6 +122,8 @@ urlpatterns = [
     path("brokers/connect/", broker_connect_page, name="broker_connect_page"),
     path("brokers/marketplace/", broker_marketplace_page, name="broker_marketplace_page"),
     path("developer/", login_required(developer_views.dashboard), name="developer_page"),
+    path("developer/api/explorer/", login_required(developer_views.api_explorer), name="developer_api_explorer"),
+    path("developer/api/status/", login_required(developer_views.api_status), name="developer_api_status"),
     path("developer/keys/", login_required(lambda request: redirect("developer_page")), name="developer_keys_page"),
     path("smart-money/", include("apps.smart_money.page_urls")),
     path("callback/", callback, name="callback"),

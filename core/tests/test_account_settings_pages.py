@@ -1,6 +1,10 @@
+import io
+
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
 from core.models import UserProfile
 
@@ -25,7 +29,7 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Personal information")
         self.assertContains(response, 'name="first_name"')
-        self.assertContains(response, "Login & identity")
+        self.assertContains(response, "Login &amp; identity")
 
     def test_profile_page_persists_only_signed_in_users_details(self):
         response = self.client.post(reverse("profile_page"), {
@@ -50,6 +54,34 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(other_profile.country, "")
         self.assertEqual(other_profile.phone, "")
         self.assertEqual(other_profile.bio, "")
+
+    def test_profile_page_accepts_device_uploaded_image_and_persists_it(self):
+        buffer = io.BytesIO()
+        Image.new("RGB", (2, 2), color=(30, 90, 160)).save(buffer, format="PNG")
+        upload = SimpleUploadedFile("avatar.png", buffer.getvalue(), content_type="image/png")
+        response = self.client.post(reverse("profile_page"), {
+            "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
+            "timezone": "Africa/Nairobi", "phone": "+254700000000", "bio": "Quant researcher",
+            "profile_picture": upload,
+        })
+        self.assertRedirects(response, reverse("profile_page"), fetch_redirect_response=False)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertTrue(profile.profile_picture_data)
+        self.assertEqual(profile.profile_picture_content_type, "image/webp")
+        picture_response = self.client.get(reverse("profile_picture"))
+        self.assertEqual(picture_response.status_code, 200)
+        self.assertEqual(picture_response["Content-Type"], "image/webp")
+        self.assertEqual(picture_response["X-Content-Type-Options"], "nosniff")
+
+    def test_profile_page_rejects_invalid_timezone_without_persisting(self):
+        response = self.client.post(reverse("profile_page"), {
+            "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
+            "timezone": "Not/A_Real_Timezone", "phone": "", "bio": "",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Choose a valid time zone")
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.timezone, "UTC")
 
     def test_profile_page_rejects_missing_required_names_without_persisting(self):
         response = self.client.post(reverse("profile_page"), {

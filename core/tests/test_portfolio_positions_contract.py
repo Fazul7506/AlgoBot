@@ -28,5 +28,5 @@ class PortfolioPositionsTemplateContractTests(TestCase):
         response = self.client.get(reverse("portfolio_page"))
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn("Portfolio command", content)
+        self.assertIn("Portfolio overview", content)
         self.assertIn("Connect a broker", content)
