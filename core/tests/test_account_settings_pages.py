@@ -130,3 +130,28 @@ class AccountSettingsPagesTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 400)
+
+
+    def test_account_identity_changes_password_and_keeps_session_authenticated(self):
+        response = self.client.post(reverse("account_identity_page"), {
+            "identity_action": "change_password",
+            "current_password": "A-strong-test-password-123!",
+            "new_password": "Xq9!Narrow-Blue-Tree-492",
+            "confirm_password": "Xq9!Narrow-Blue-Tree-492",
+        })
+        self.assertRedirects(response, reverse("account_identity_page"))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("Xq9!Narrow-Blue-Tree-492"))
+        identity_response = self.client.get(reverse("account_identity_page"))
+        self.assertEqual(identity_response.status_code, 200)
+
+    def test_account_identity_rejects_mismatched_password_confirmation(self):
+        response = self.client.post(reverse("account_identity_page"), {
+            "identity_action": "change_password",
+            "current_password": "A-strong-test-password-123!",
+            "new_password": "Xq9!Narrow-Blue-Tree-492",
+            "confirm_password": "different-password-value",
+        })
+        self.assertRedirects(response, reverse("account_identity_page"))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("A-strong-test-password-123!"))
