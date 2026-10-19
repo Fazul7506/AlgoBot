@@ -393,7 +393,7 @@ class WorkflowDesignerService:
 
     @staticmethod
     def features():
-        return ["event_triggers", "conditions", "broker_scoped_actions", "risk_gates", "approvals", "one_time_scheduling", "bounded_martingale", "versioning", "execution_audit"]
+        return ["event_triggers", "condition_gates", "explicit_broker_account_actions", "risk_gates", "approval_resumption", "one_time_scheduling", "bounded_martingale", "user_scoped_broker_events", "execution_audit"]
 
 
 class WorkflowExecutionService:
