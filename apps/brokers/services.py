@@ -246,6 +246,7 @@ class ExecutionManagementSystem:
                 "direction": order.direction, "contract_type": order.contract_type,
                 "stake": str(order.stake), "execution_price": str(executed),
                 "profit": result.get("profit"), "origin_workflow_id": automation.get("workflow_id"),
+                "automation_depth": automation.get("depth", 0),
             }
             await sync_to_async(_queue_automation_event, thread_sensitive=False)("TradeExecuted", order.account, event_payload)
         return report
