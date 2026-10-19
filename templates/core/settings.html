@@ -98,7 +98,12 @@
       if (['notifications_enabled','email_notifications_enabled','telegram_notifications_enabled'].includes(key)) check(key,value);
     });
     const trading = data.trading || {};
-    set('default_strategy', trading.default_strategy || 'trend');
+    const strategy = String(trading.default_strategy || 'trend');
+    const strategyField = field('default_strategy');
+    if (strategyField && !Array.from(strategyField.options).some(option => option.value === strategy)) {
+      const saved = document.createElement('option'); saved.value = strategy; saved.textContent = strategy + ' (saved; not in current registry)'; strategyField.add(saved);
+    }
+    set('default_strategy', strategy);
     set('max_concurrent_trades', trading.max_concurrent_trades ?? 5);
     set('max_daily_loss_pct', percent(trading.max_daily_loss_pct));
     set('risk_per_trade_pct', percent(trading.risk_per_trade_pct));
