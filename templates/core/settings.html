@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Settings | AlgoBot{% endblock %}
+{% block title %}Preferences | AlgoBot{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account1">{% endblock %}
 {% block content %}
 <main class="account-page" data-settings-page>
   <header class="account-hero">
     <div>
       <p class="account-kicker">Personalize your workspace</p>
-      <h1>Settings</h1>
+      <h1>Preferences</h1>
       <p class="account-subtitle">Control your AlgoBot preferences, notifications and trading risk defaults. Changes are saved to your signed-in account.</p>
     </div>
     <span class="account-state" data-settings-status role="status" aria-live="polite">Loading settings…</span>
@@ -103,7 +103,7 @@
     set('max_daily_loss_pct', percent(trading.max_daily_loss_pct));
     set('risk_per_trade_pct', percent(trading.risk_per_trade_pct));
     set('min_win_rate', percent(trading.min_win_rate));
-    status.textContent = 'Settings loaded';
+    status.textContent = 'Preferences loaded';
     status.classList.remove('account-state--warn','account-state--bad');
     status.classList.add('account-state--good');
   }
@@ -128,7 +128,7 @@
       };
       const data = await request('PATCH', {profile,trading});
       message.textContent = data.message || 'Preferences saved.';
-      status.textContent = 'All changes saved';
+      status.textContent = 'All preferences saved';
       status.classList.remove('account-state--warn','account-state--bad');
       status.classList.add('account-state--good');
     } catch (error) {
