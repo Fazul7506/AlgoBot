@@ -1,5 +1,8 @@
 from django.contrib.auth import get_user_model
+from datetime import timedelta
+
 from django.test import TestCase
+from django.utils import timezone
 from unittest.mock import patch
 
 from apps.automation.models import AutomationEvent, AutomationRule, ScheduledTask, Workflow, WorkflowExecution
@@ -67,17 +70,35 @@ class AutomationSafetyTests(TestCase):
         events = payload.get("results", []) if isinstance(payload, dict) else payload
         self.assertEqual(events, [])
 
-    def test_schedule_endpoint_does_not_create_unconsumed_scheduled_task(self):
+    def test_schedule_endpoint_requires_active_workflow_and_creates_consumable_one_time_schedule(self):
         workflow = Workflow.objects.create(user=self.user, name="Scheduled workflow")
         self.client.force_login(self.user)
-        response = self.client.post(
+        inactive = self.client.post(
             "/api/automation/schedule/",
             data={"workflow": workflow.pk, "schedule_type": "one_time"},
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 501)
-        self.assertEqual(response.json()["status"], "not_configured")
+        self.assertEqual(inactive.status_code, 409)
+        self.assertEqual(inactive.json()["code"], "WORKFLOW_NOT_ACTIVE")
         self.assertFalse(ScheduledTask.objects.filter(workflow=workflow).exists())
+
+        workflow.enabled = True
+        workflow.status = "pending"
+        workflow.definition = {
+            "trigger": {"type": "manual", "event": "manual"},
+            "nodes": [{"id": "action-1", "type": "action", "configuration": {"type": "pause_strategy"}}],
+        }
+        workflow.save(update_fields=["enabled", "status", "definition"])
+        scheduled = self.client.post(
+            "/api/automation/schedule/",
+            data={
+                "workflow": workflow.pk, "schedule_type": "one_time",
+                "next_execution": (timezone.now() + timedelta(minutes=5)).isoformat(),
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(scheduled.status_code, 201)
+        self.assertEqual(ScheduledTask.objects.filter(workflow=workflow, status="pending").count(), 1)
 
 
     def test_system_rule_api_does_not_expose_action_configuration(self):
