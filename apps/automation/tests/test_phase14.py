@@ -9,7 +9,7 @@ from apps.automation.exceptions import WorkflowValidationError
 from apps.automation.models import AutomationRule, ScheduledTask, Workflow, WorkflowNode
 from apps.automation.tasks import process_due_scheduled_tasks
 from apps.automation.services import (
-    ActionService, AutomationEngine, RuleEngine, SchedulerService,
+    ActionService, ApprovalService, AutomationEngine, RuleEngine, SchedulerService,
     WorkflowDesignerService, WorkflowExecutionService,
 )
 from apps.brokers.models import Broker, BrokerAccount, Order, Position
@@ -39,6 +39,26 @@ class AutomationEngineTests(TestCase):
         self.assertEqual(execution.result["nodes_executed"], 1)
         self.assertEqual(execution.result["status"], "dispatch_not_configured")
         self.assertEqual(execution.result["audit"][0]["status"], "not_dispatched")
+
+    def test_approved_workflow_can_resume_without_creating_another_approval(self):
+        user = get_user_model().objects.create_user(username="approval-resume", password="x")
+        workflow = Workflow.objects.create(
+            user=user, name="Approval workflow", status="pending", enabled=True,
+            approval_policy={"required": True},
+            definition={
+                "trigger": {"type": "manual", "event": "manual"},
+                "nodes": [{"id": "action-1", "type": "action", "configuration": {"type": "pause_strategy"}}],
+            },
+        )
+        first = WorkflowExecutionService().run(workflow, {"event": "manual"})
+        self.assertEqual(first.status, "paused")
+        approval = workflow.approval_requests.get()
+        ApprovalService().approve(approval, user)
+        resumed = WorkflowExecutionService().run(
+            workflow, first.trigger_payload, approved_approval_id=approval.pk,
+        )
+        self.assertEqual(resumed.status, "pending")
+        self.assertEqual(workflow.approval_requests.count(), 1)
 
     def test_own_trade_executed_event_is_suppressed_but_trade_closed_is_allowed(self):
         user = get_user_model().objects.create_user(username="automation-event-loop", password="x")
