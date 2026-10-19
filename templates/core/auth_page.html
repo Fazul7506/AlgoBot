@@ -189,7 +189,7 @@
     {% endif %}
     <div class="links"><a href="{% url 'login_page' %}">Back to sign in</a><a href="{% url 'register_page' %}">Create an account</a></div>
   {% endif %}
-  <div class="auth-footer-note"><span aria-hidden="true">◆</span><span>Security note: AlgoBot sign-in credentials are separate from your broker account. Never share passwords or API tokens.</span></div><small>By creating an account, use a unique password and verify your email to protect account access.</small>
+  <div class="auth-footer-note"><span aria-hidden="true">◆</span><span>Security note: AlgoBot sign-in credentials are separate from your broker account. Never share passwords or API tokens.</span></div>{% if mode == "register" %}<small>Use a unique password and verify your email to protect account access.</small>{% endif %}
 </main>
 <script>
   (() => {
