@@ -70,7 +70,7 @@
             <div data-trade-fields>
               <label>Broker account<select name="account_id">${accountOptions()}</select></label>
               <label>Market symbol<input name="symbol" maxlength="80" value="R_100" placeholder="Broker-supported symbol"></label>
-              <label>Direction<select name="direction"><option value="BUY">BUY (CALL contract)</option><option value="SELL">SELL (PUT contract)</option><option value="RISE">RISE</option><option value="FALL">FALL</option></select></label>
+              <label>Direction<select name="direction"><option value="BUY">BUY / Up contract (CALL, RISE, MULTUP, ACCU)</option><option value="SELL">SELL / Down contract (PUT, FALL, MULTDOWN)</option></select></label>
               <label>Stake<input name="stake" type="number" min="0.01" step="0.01" value="1"></label>
               <label>Contract type<select name="contract_type"><option value="CALL">CALL</option><option value="PUT">PUT</option><option value="RISE">RISE</option><option value="FALL">FALL</option><option value="ACCU">Accumulator</option><option value="MULTUP">Multiplier up</option><option value="MULTDOWN">Multiplier down</option></select></label>
               <label><input name="use_martingale" type="checkbox"> Enable bounded Martingale progression</label>
