@@ -22,8 +22,6 @@ class TwoFactorEnforcementMiddleware:
         "/verify-email/",
         "/forgot-password/",
         "/reset-password/",
-        "/auth/google/",
-        "/auth/google/callback/",
         "/health/",
         "/static/",
     )
