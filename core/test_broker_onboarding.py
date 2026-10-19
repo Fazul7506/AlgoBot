@@ -30,12 +30,14 @@ class BrokerOnboardingGateTests(TestCase):
     def test_user_without_broker_connection_is_not_onboarded(self):
         self.assertFalse(has_authorized_broker_connection(self.user))
 
-    def test_non_broker_workspace_pages_redirect_until_connection_is_accepted(self):
+    def test_account_and_operational_pages_remain_available_during_onboarding(self):
         self.client.force_login(self.user)
-        for path in ("/settings/", "/profile/", "/operations/deployments/", "/monitoring/"):
+        # Account management and observability must work before a broker is
+        # connected; only trading-workspace routes are gated by this middleware.
+        for path in ("/settings/", "/profile/", "/operations/deployments/", "/operations/audit/", "/monitoring/"):
             with self.subTest(path=path):
                 response = self.client.get(path)
-                self.assertRedirects(response, reverse("broker_marketplace_page"), fetch_redirect_response=False)
+                self.assertNotEqual(response.status_code, 302)
 
     def test_broker_marketplace_remains_accessible_during_onboarding(self):
         self.client.force_login(self.user)
