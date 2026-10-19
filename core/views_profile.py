@@ -11,7 +11,9 @@ from core.models import UserProfile
 @require_http_methods(["GET", "POST"])
 def profile_page(request):
     """Render and persist non-secret personal profile fields for the current user."""
-    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    profile = UserProfile.objects.filter(user=request.user).first()
+    if profile is None:
+        profile = UserProfile(user=request.user)
     if request.method == "POST":
         first_name = str(request.POST.get("first_name") or "").strip()
         last_name = str(request.POST.get("last_name") or "").strip()
@@ -40,6 +42,7 @@ def profile_page(request):
             for error in errors:
                 messages.error(request, error)
         else:
+            profile, _ = UserProfile.objects.get_or_create(user=request.user)
             request.user.first_name = first_name
             request.user.last_name = last_name
             request.user.save(update_fields=["first_name", "last_name"])
