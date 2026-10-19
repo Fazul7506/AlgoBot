@@ -62,7 +62,9 @@ class WorkflowViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=True, methods=["post"])
     def resume(self, request, pk=None):
         workflow = self.get_object()
-        if not isinstance(workflow.definition, dict) or not str((workflow.definition.get("trigger") or {}).get("event") or "").strip():
+        definition = workflow.definition if isinstance(workflow.definition, dict) else {}
+        trigger = definition.get("trigger", {})
+        if not isinstance(trigger, dict) or not str(trigger.get("event") or "").strip():
             return response.Response(
                 {"detail": "A valid trigger event is required before resuming.", "code": "WORKFLOW_TRIGGER_REQUIRED"},
                 status=status.HTTP_400_BAD_REQUEST,
