@@ -1,33 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Security Center | AlgoBot<script>
-document.addEventListener('DOMContentLoaded', function () {
-  var qr = document.getElementById('two-factor-qr');
-  function renderQr() {
-    if (qr && qr.dataset.otpauthUri && window.QRCode && !qr.querySelector('canvas,img')) {
-      new QRCode(qr, {text: qr.dataset.otpauthUri, width: 220, height: 220, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M});
-    }
-  }
-  renderQr();
-  setTimeout(renderQr, 500);
-  document.addEventListener('click', async function (event) {
-    var button = event.target.closest('[data-copy-setup-key]');
-    if (!button) return;
-    var field = document.getElementById('two-factor-setup-key');
-    var feedback = document.querySelector('[data-copy-feedback]');
-    if (!field) return;
-    try {
-      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(field.value);
-      else { field.focus(); field.select(); if (!document.execCommand('copy')) throw new Error('copy unavailable'); }
-      if (feedback) feedback.textContent = 'Setup key copied. Keep it private.';
-      button.textContent = '✓ Copied';
-    } catch (error) {
-      field.focus(); field.select();
-      if (feedback) feedback.textContent = 'Select the setup key and copy it manually.';
-    }
-  });
-});
-</script>
+{% block title %}Security Center | AlgoBot
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account3">{% endblock %}
 {% block content %}
@@ -111,4 +84,33 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
   </div>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var qr = document.getElementById('two-factor-qr');
+  function renderQr() {
+    if (qr && qr.dataset.otpauthUri && window.QRCode && !qr.querySelector('canvas,img')) {
+      new QRCode(qr, {text: qr.dataset.otpauthUri, width: 220, height: 220, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M});
+    }
+  }
+  renderQr();
+  setTimeout(renderQr, 500);
+  document.addEventListener('click', async function (event) {
+    var button = event.target.closest('[data-copy-setup-key]');
+    if (!button) return;
+    var field = document.getElementById('two-factor-setup-key');
+    var feedback = document.querySelector('[data-copy-feedback]');
+    if (!field) return;
+    try {
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(field.value);
+      else { field.focus(); field.select(); if (!document.execCommand('copy')) throw new Error('copy unavailable'); }
+      if (feedback) feedback.textContent = 'Setup key copied. Keep it private.';
+      button.textContent = '✓ Copied';
+    } catch (error) {
+      field.focus(); field.select();
+      if (feedback) feedback.textContent = 'Select the setup key and copy it manually.';
+    }
+  });
+});
+</script>
 {% endblock %}
