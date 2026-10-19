@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -10,7 +11,7 @@ from apps.automation.services import (
     ActionService, AutomationEngine, RuleEngine, SchedulerService,
     WorkflowDesignerService, WorkflowExecutionService,
 )
-from apps.brokers.models import Broker, BrokerAccount
+from apps.brokers.models import Broker, BrokerAccount, Order, Position
 
 
 class AutomationEngineTests(TestCase):
@@ -78,6 +79,44 @@ class AutomationEngineTests(TestCase):
         result = WorkflowDesignerService().validate(invalid)
         self.assertFalse(result["valid"])
         self.assertGreaterEqual(len(result["errors"]), 3)
+
+    def test_martingale_increases_stake_after_reconciled_loss(self):
+        user = get_user_model().objects.create_user(username="martingale-owner", password="x")
+        broker = Broker.objects.create(name="Martingale test Deriv", broker_type="deriv", status="active", metadata={"auth": "oauth"})
+        account = BrokerAccount.objects.create(user=user, broker=broker, account_id="martingale-account")
+        workflow = Workflow.objects.create(user=user, name="Martingale workflow")
+        Order.objects.create(
+            user=user, broker=broker, account=account, symbol="R_100", direction="CALL",
+            stake="1", broker_order_id="contract-loss-1", status="filled",
+            routing_context={"automation": {"workflow_id": workflow.pk, "node_id": "action-1"}},
+        )
+        Position.objects.create(
+            broker=broker, account=account, contract_id="contract-loss-1",
+            status="closed", profit="-1",
+        )
+        stake, state = ActionService()._martingale_stake(
+            user=user, workflow=workflow, account=account, node_id="action-1",
+            base_stake=Decimal("1"), multiplier=Decimal("2"), max_steps=5, max_stake=Decimal("16"),
+        )
+        self.assertEqual(stake, Decimal("2"))
+        self.assertEqual(state["loss_streak"], 1)
+        self.assertEqual(state["next_stake"], "2")
+
+    def test_martingale_waits_for_reconciled_outcome(self):
+        user = get_user_model().objects.create_user(username="martingale-pending", password="x")
+        broker = Broker.objects.create(name="Martingale pending Deriv", broker_type="deriv", status="active", metadata={"auth": "oauth"})
+        account = BrokerAccount.objects.create(user=user, broker=broker, account_id="martingale-pending-account")
+        workflow = Workflow.objects.create(user=user, name="Martingale pending workflow")
+        Order.objects.create(
+            user=user, broker=broker, account=account, symbol="R_100", direction="CALL",
+            stake="1", broker_order_id="contract-open-1", status="filled",
+            routing_context={"automation": {"workflow_id": workflow.pk, "node_id": "action-1"}},
+        )
+        with self.assertRaises(WorkflowValidationError):
+            ActionService()._martingale_stake(
+                user=user, workflow=workflow, account=account, node_id="action-1",
+                base_stake=Decimal("1"), multiplier=Decimal("2"), max_steps=5, max_stake=Decimal("16"),
+            )
 
     def test_schedule_requires_future_timezone_aware_time(self):
         user = get_user_model().objects.create_user(username="scheduler", password="x")
