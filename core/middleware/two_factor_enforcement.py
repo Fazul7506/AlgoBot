@@ -12,7 +12,6 @@ class TwoFactorEnforcementMiddleware:
 
     AUTH_EXEMPT_PATHS = (
         "/login/two-factor/",
-        "/login/",
         "/logout/",
         "/api/auth/login/",
         "/api/auth/token/",
