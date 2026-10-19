@@ -1,5 +1,6 @@
 """Independent trader-facing workspaces for operational features."""
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.utils import timezone
@@ -8,6 +9,11 @@ from django.shortcuts import redirect, render
 from apps.automation.models import ScheduledTask, Workflow, WorkflowExecution
 from apps.developer.models import APIKey
 from apps.monitoring.models import AuditLog
+from core.account_context import get_active_account
+
+
+def _account(request):
+    return get_active_account(request.user, request=request)
 
 
 @login_required
