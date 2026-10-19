@@ -68,3 +68,7 @@
 [data-account-identity] .account-card .form-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 [data-account-identity] .account-card .notice,[data-account-identity] .account-card .error-list{padding:12px;border-radius:10px;background:var(--ds-surface-0,var(--bg,#0b1018));line-height:1.5}
 @media(max-width:780px){[data-account-identity] .settings-grid{grid-template-columns:minmax(0,1fr)}[data-account-identity] .page-header{display:grid}}
+
+
+/* Device-uploaded profile image and native searchable selectors. */
+.account-profile-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}.account-field input[type=file]{width:100%;padding:12px;border:1px dashed var(--account-border,#cbd5e1);border-radius:12px;background:var(--account-surface,#fff)}.account-field select{width:100%;min-height:44px;border:1px solid var(--account-border,#cbd5e1);border-radius:10px;padding:10px 12px;background:var(--account-surface,#fff);color:inherit;font:inherit}.account-field input[type=tel]{width:100%}.iti{width:100%}.iti__dropdown-content{z-index:1000}
