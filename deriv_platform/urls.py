@@ -11,6 +11,7 @@ from core.views_auth import (
     UserProfileViewSet, BotSettingsViewSet, SubscriptionViewSet,
 )
 from core.browser_views import browser_logout
+from core.browser_auth import two_factor_challenge_page
 from rest_framework_simplejwt.views import TokenRefreshView
 from core.google_auth import google_login_start, google_login_callback
 from core.dashboard_api import DashboardViewSet
@@ -78,6 +79,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("", home, name="home"),
     path("login/", login_page, name="login_page"),
+    path("login/two-factor/", two_factor_challenge_page, name="two_factor_challenge_page"),
     path("auth/google/", google_login_start, name="google_login_start"),
     path("auth/google/callback/", google_login_callback, name="google_login_callback"),
     path("register/", register_page, name="register_page"),
