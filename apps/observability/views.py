@@ -8,7 +8,7 @@ from .services import MonitoringService, HealthService, MetricsService, EventSer
 @login_required
 @require_http_methods(["GET"])
 def dashboard(request):
-    data = MonitoringService().dashboard(actor_id=request.user.pk if not request.user.is_staff else None)
+    data = MonitoringService().dashboard(actor_id=request.user.pk if not request.user.is_staff else None, include_global=request.user.is_staff)
     data["timestamp"] = timezone.now().isoformat()
     data["summary"] = {
         "healthy": sum(x["status"] == "healthy" for x in data["health"]),
