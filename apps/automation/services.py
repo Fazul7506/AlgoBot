@@ -420,12 +420,28 @@ class WorkflowExecutionService:
                 raise WorkflowValidationError("; ".join(validation["errors"]))
             if not nodes:
                 raise WorkflowValidationError("Workflow has no executable nodes.")
+            condition_not_met = False
             for node in nodes:
                 node_type = node.node_type
-                if node_type in {"trigger", "condition", "delay", "branch", "martingale"}:
-                    audit.append({"node_id": getattr(node, "pk", None), "node_type": node_type, "status": "validated", "detail": "Control node validated; no external action dispatched."})
-                    continue
                 config = node.configuration if isinstance(node.configuration, dict) else {}
+                if node_type == "trigger":
+                    audit.append({"node_id": getattr(node, "pk", None), "node_type": node_type, "status": "validated", "detail": "Trigger was validated before execution."})
+                    continue
+                if node_type == "condition":
+                    matched = RuleEngine().evaluate(config, payload)
+                    audit.append({"node_id": getattr(node, "pk", None), "node_type": node_type, "status": "matched" if matched else "condition_not_met"})
+                    if not matched:
+                        condition_not_met = True
+                        break
+                    continue
+                if node_type in {"delay", "branch", "martingale"}:
+                    codes = {"delay": "DELAY_ADAPTER_NOT_CONFIGURED", "branch": "BRANCH_ROUTER_NOT_CONFIGURED", "martingale": "MARTINGALE_NODE_NOT_CONFIGURED"}
+                    audit.append({
+                        "node_id": getattr(node, "pk", None), "node_type": node_type,
+                        "status": "not_dispatched", "code": codes[node_type],
+                        "detail": "This standalone control node has no resumable graph executor; subsequent nodes were not run.",
+                    })
+                    break
                 if node_type in {"action", "trade", "risk", "ai", "broker", "notification"}:
                     action_result = ActionService().execute(
                         config,
@@ -439,10 +455,11 @@ class WorkflowExecutionService:
             dispatch_pending = any(item.get("status") == "not_dispatched" for item in audit)
             action_pending = any(item.get("status") == "pending" for item in audit)
             execution.status = "pending" if dispatch_pending or action_pending else "failed" if any(item.get("status") == "failed" for item in audit) else "completed"
+            result_status = "condition_not_met" if condition_not_met else "dispatch_not_configured" if dispatch_pending else "awaiting_broker_confirmation" if action_pending else "failed" if execution.status == "failed" else "completed"
             execution.result = {
                 "nodes_executed": len(audit),
                 "audit": audit,
-                "status": "dispatch_not_configured" if dispatch_pending else "awaiting_broker_confirmation" if action_pending else "failed" if execution.status == "failed" else "completed",
+                "status": result_status,
             }
         except ApprovalRequired as exc:
             execution.status = "paused"
