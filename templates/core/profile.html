@@ -75,6 +75,7 @@
       if (name === code) return;
       const option = document.createElement('option');
       option.value = name;
+      option.dataset.iso2 = code.toLowerCase();
       option.textContent = String.fromCodePoint(...code.split('').map(ch => 127397 + ch.charCodeAt(0))) + '  ' + name;
       select.appendChild(option);
     });
@@ -86,9 +87,14 @@
     if (phone && window.intlTelInput) {
       const iti = window.intlTelInput(phone, {initialCountry:'ke', separateDialCode:true, nationalMode:false, formatOnDisplay:true, countrySearch:true, loadUtils:() => import('https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js')});
       const syncPhoneCountry = () => {
-        const countryName = select.options[select.selectedIndex]?.textContent?.replace(/^\\S+\\s+/, '').trim().toLocaleLowerCase();
-        const match = iti.getCountryData().find(item => item.name.toLocaleLowerCase() === countryName);
-        if (match) iti.setCountry(match.iso2);
+        const selectedOption = select.options[select.selectedIndex];
+        let iso2 = selectedOption?.dataset.iso2 || '';
+        if (!iso2) {
+          const countryName = selectedOption?.textContent?.replace(/^\\S+\\s+/, '').trim().toLocaleLowerCase();
+          const match = window.intlTelInput.getCountryData().find(item => item.name.toLocaleLowerCase() === countryName);
+          iso2 = match?.iso2 || '';
+        }
+        if (iso2) iti.setCountry(iso2);
       };
       select.addEventListener('change', syncPhoneCountry);
       syncPhoneCountry();
