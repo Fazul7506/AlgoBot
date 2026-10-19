@@ -1,4 +1,7 @@
+import base64
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
@@ -50,6 +53,31 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(other_profile.country, "")
         self.assertEqual(other_profile.phone, "")
         self.assertEqual(other_profile.bio, "")
+
+    def test_profile_page_accepts_device_uploaded_image_and_persists_it(self):
+        image_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII="
+        )
+        upload = SimpleUploadedFile("avatar.png", image_bytes, content_type="image/png")
+        response = self.client.post(reverse("profile_page"), {
+            "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
+            "timezone": "Africa/Nairobi", "phone": "+254700000000", "bio": "Quant researcher",
+            "profile_picture": upload,
+        })
+        self.assertRedirects(response, reverse("profile_page"), fetch_redirect_response=False)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertTrue(profile.profile_picture.name.startswith("profile_pictures/"))
+        self.assertTrue(profile.profile_picture.name.endswith(".png"))
+
+    def test_profile_page_rejects_invalid_timezone_without_persisting(self):
+        response = self.client.post(reverse("profile_page"), {
+            "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
+            "timezone": "Not/A_Real_Timezone", "phone": "", "bio": "",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Choose a valid time zone")
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.timezone, "UTC")
 
     def test_profile_page_rejects_missing_required_names_without_persisting(self):
         response = self.client.post(reverse("profile_page"), {
