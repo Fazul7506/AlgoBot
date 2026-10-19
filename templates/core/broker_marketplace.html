@@ -1,12 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Broker Marketplace | AlgoBot<script>
-document.addEventListener("submit", async function(event) {
- const form=event.target.closest("[data-broker-disconnect]"); if(!form)return;
- event.preventDefault(); const button=form.querySelector("button[type=submit]"); if(button){button.disabled=true;button.textContent="Disconnecting…";}
- try { const token=form.querySelector("[name=csrfmiddlewaretoken]")?.value||""; const response=await fetch(form.action,{method:"POST",credentials:"same-origin",headers:{"X-CSRFToken":token,"Accept":"application/json"}}); const data=await response.json().catch(()=>({})); if(!response.ok||data.status==="error")throw new Error(data.message||"Disconnect failed"); window.location.reload(); }
- catch(error){if(button){button.disabled=false;button.textContent="Disconnect";}window.alert(error.message||"Could not disconnect broker.");}
-});
-</script>
+{% block title %}Broker Marketplace | AlgoBot
 {% endblock %}
 {% block mobile_title %}Broker Marketplace{% endblock %}
 {% block content %}
@@ -37,4 +30,12 @@ document.addEventListener("submit", async function(event) {
 <div class="broker-panel"><h3>No brokers are configured yet</h3><p>The marketplace is ready, but no broker adapters are registered. An administrator must configure a broker and its supported connection flow before users can connect it.</p></div>
 {% endfor %}
 </div></section>
+<script>
+document.addEventListener("submit", async function(event) {
+ const form=event.target.closest("[data-broker-disconnect]"); if(!form)return;
+ event.preventDefault(); const button=form.querySelector("button[type=submit]"); if(button){button.disabled=true;button.textContent="Disconnecting…";}
+ try { const token=form.querySelector("[name=csrfmiddlewaretoken]")?.value||""; const response=await fetch(form.action,{method:"POST",credentials:"same-origin",headers:{"X-CSRFToken":token,"Accept":"application/json"}}); const data=await response.json().catch(()=>({})); if(!response.ok||data.status==="error")throw new Error(data.message||"Disconnect failed"); window.location.reload(); }
+ catch(error){if(button){button.disabled=false;button.textContent="Disconnect";}window.alert(error.message||"Could not disconnect broker.");}
+});
+</script>
 {% endblock %}
