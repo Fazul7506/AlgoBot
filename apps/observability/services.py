@@ -39,7 +39,7 @@ class AuditService:
         )
 
 class MonitoringService:
-    def dashboard(self):
+    def dashboard(self, actor_id=None):
         health = HealthService().snapshot()
         return {
             "health": [{
@@ -60,5 +60,5 @@ class MonitoringService:
                 "id": a.id, "action": a.action, "resource_type": a.resource_type,
                 "resource_id": a.resource_id, "outcome": a.outcome,
                 "created_at": a.created_at.isoformat()
-            } for a in AuditEvent.objects.all()[:100]],
+            } for a in AuditEvent.objects.filter(actor_id=actor_id)[:100]] if actor_id is not None else [],
         }
