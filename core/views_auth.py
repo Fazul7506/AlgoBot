@@ -208,6 +208,14 @@ def browser_api_token(request):
     so browser-session API mutations do not depend on Django CSRF cookies.
     """
     from core.broker_onboarding import has_verified_account_email
+    profile = UserProfile.objects.filter(user=request.user).first()
+    if profile and profile.two_factor_enabled and str(request.session.get("algobot_mfa_verified_user_id", "")) != str(request.user.pk):
+        return Response({
+            "status": "challenge_required",
+            "code": "two_factor_required",
+            "message": "Complete a fresh sign-in with your authenticator before requesting browser API credentials.",
+            "next_url": "/login/",
+        }, status=status.HTTP_403_FORBIDDEN)
     if not has_verified_account_email(request.user):
         return Response({
             'status': 'error',
