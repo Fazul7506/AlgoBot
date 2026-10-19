@@ -122,6 +122,7 @@ def _publish_trade_closed_event(account_id: int, contract_id: str) -> None:
                 "profit": str(position.profit),
                 "payout": str(position.payout) if position.payout is not None else None,
                 "origin_workflow_id": automation.get("workflow_id"),
+                "automation_depth": automation.get("depth", 0),
             },
             account.user_id,
         )
