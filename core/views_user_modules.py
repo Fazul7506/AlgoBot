@@ -4,7 +4,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.utils import timezone
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 
 from apps.automation.models import ScheduledTask, Workflow, WorkflowExecution
 from apps.deployment.models import BackupRecord, DeploymentRecord
