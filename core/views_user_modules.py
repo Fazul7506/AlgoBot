@@ -190,7 +190,7 @@ def security_workspace(request):
         ("Developer key expiry", not expired_active_keys),
         ("Two-factor authentication", profile.two_factor_enabled),
     ]
-    return render(
+    response = render(
         request,
         "core/security_center.html",
         {
@@ -207,3 +207,7 @@ def security_workspace(request):
             "password_required": request.user.has_usable_password(),
         },
     )
+    # Enrollment URIs and one-time recovery codes must not be cached by browsers.
+    response["Cache-Control"] = "no-store, private"
+    response["Pragma"] = "no-cache"
+    return response
