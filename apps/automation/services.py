@@ -391,7 +391,7 @@ class WorkflowDesignerService:
 
 
 class WorkflowExecutionService:
-    def run(self, workflow: Workflow, payload: dict[str, Any] | None = None) -> WorkflowExecution:
+    def run(self, workflow: Workflow, payload: dict[str, Any] | None = None, *, approved_approval_id=None) -> WorkflowExecution:
         if not workflow.enabled or workflow.status != "pending":
             raise WorkflowValidationError("Only enabled, pending workflows can be executed.")
         payload = payload if isinstance(payload, dict) else {}
@@ -399,9 +399,19 @@ class WorkflowExecutionService:
         started = time.perf_counter()
         audit = []
         try:
-            if workflow.approval_policy.get("required"):
-                ApprovalService().request(workflow, workflow.user, {"reason": "Workflow execution approval required", "execution_id": execution.pk})
-                raise ApprovalRequired("approval_required")
+            approval_policy = workflow.approval_policy if isinstance(workflow.approval_policy, dict) else {}
+            approved = bool(
+                approved_approval_id
+                and ApprovalRequest.objects.filter(
+                    pk=approved_approval_id, workflow=workflow, status="approved",
+                ).exists()
+            )
+            if approval_policy.get("required") and not approved:
+                approval = ApprovalService().request(
+                    workflow, workflow.user,
+                    {"reason": "Workflow execution approval required", "execution_id": execution.pk},
+                )
+                raise ApprovalRequired(f"approval_required:{approval.pk}")
             nodes = list(workflow.nodes.order_by("id"))
             if not nodes:
                 definition = workflow.definition if isinstance(workflow.definition, dict) else {}
