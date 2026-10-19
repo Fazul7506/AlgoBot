@@ -26,8 +26,8 @@ class BrokerOnboardingMiddleware:
         "/dashboard/", "/markets/", "/market-scanner/", "/strategies/",
         "/trading/", "/backtesting/", "/predictions/", "/model-lab/",
         "/performance/", "/orders/", "/positions/", "/signals/",
-        "/portfolio/", "/risk/", "/trade-history/", "/automation/",
-        "/analysis/", "/workflow-templates/", "/workspace/automation/", "/smart-money/",
+        "/portfolio/", "/risk/", "/trade-history/",
+        "/analysis/", "/smart-money/",
     )
 
     def __init__(self, get_response):
