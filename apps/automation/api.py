@@ -85,7 +85,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
 
 class EventViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AutomationEventSerializer
-    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         return AutomationEvent.objects.filter(user=self.request.user).order_by("-created_at")
@@ -94,7 +94,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
 class RuleViewSet(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get", "head", "options"]
     serializer_class = AutomationRuleSerializer
-    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         return AutomationRule.objects.filter(enabled=True).order_by("priority")
@@ -102,7 +102,7 @@ class RuleViewSet(viewsets.ReadOnlyModelViewSet):
 
 class HistoryViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = WorkflowExecutionSerializer
-    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         return WorkflowExecution.objects.filter(workflow__user=self.request.user).select_related("workflow")
@@ -145,7 +145,7 @@ def execute(request):
 
 
 @decorators.api_view(["POST"])
-@decorators.permission_classes([permissions.IsAuthenticated, BrokerOnboardingRequired])
+@decorators.permission_classes([permissions.IsAuthenticated])
 def schedule(request):
     data = request.data if isinstance(request.data, dict) else {}
     workflow_id = data.get("workflow")
@@ -183,7 +183,7 @@ def schedule(request):
 
 
 @decorators.api_view(["POST"])
-@decorators.permission_classes([permissions.IsAuthenticated, BrokerOnboardingRequired])
+@decorators.permission_classes([permissions.IsAuthenticated])
 def approve(request):
     if not isinstance(request.data, dict) or not request.data.get("approval"):
         return response.Response(
