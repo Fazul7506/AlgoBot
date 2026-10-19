@@ -77,7 +77,10 @@ def billing_success_page(request): return render(request,'core/billing_success.h
 @login_required
 def billing_cancel_page(request): return render(request,'core/billing_cancel.html')
 @login_required
-def settings_page(request): return render(request,'core/settings.html')
+def settings_page(request):
+    from apps.strategies.models import Strategy
+    strategies = Strategy.objects.filter(enabled=True).exclude(lifecycle_state='archived').order_by('name')
+    return render(request, 'core/settings.html', {'available_strategies': strategies})
 @login_required
 def profile_page(request):
     """Delegate legacy imports to the canonical persistent profile editor."""
@@ -164,7 +167,22 @@ def deriv_login(request):
     return redirect(authorization_url)
 def broker_connect_page(request): return deriv_login(request)
 @login_required
-def broker_marketplace_page(request): return render(request,'core/broker_marketplace.html',{'brokers':Broker.objects.all().order_by('name')})
+def broker_marketplace_page(request):
+    from apps.brokers.models import BrokerConnection
+    brokers = list(Broker.objects.all().order_by('name'))
+    active_accounts = BrokerAccount.objects.filter(user=request.user, status='active', token_status='active').select_related('broker').prefetch_related('connections')
+    connected_types = set()
+    connected_accounts = {}
+    for account in active_accounts:
+        connection_ok = account.connections.filter(status__in=('connected', 'ready', 'syncing', 'degraded')).exists()
+        # Deriv OAuth accounts are connected when credentials are active even if a heartbeat is stale.
+        if connection_ok or account.broker.broker_type == 'deriv':
+            connected_types.add(account.broker.broker_type)
+            connected_accounts.setdefault(account.broker.broker_type, []).append(account)
+    for broker in brokers:
+        broker.user_connected = broker.broker_type in connected_types
+        broker.user_accounts = connected_accounts.get(broker.broker_type, [])
+    return render(request, 'core/broker_marketplace.html', {'brokers': brokers})
 @login_required
 def strategy_builder_page(request): return render(request,'core/strategy_builder.html')
 @login_required
