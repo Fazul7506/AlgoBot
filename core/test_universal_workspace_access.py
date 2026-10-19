@@ -41,7 +41,6 @@ class UniversalWorkspaceAccessTests(TestCase):
         routes = (
             "/analysis/",
             "/notifications/",
-            "/operations/deployments/",
             "/operations/audit/",
             "/operations/security/",
             "/developer/",
@@ -51,6 +50,15 @@ class UniversalWorkspaceAccessTests(TestCase):
                 response = self.client.get(path)
                 self.assertNotEqual(response.status_code, 302, path)
                 self.assertEqual(response.status_code, 200, path)
+
+    def test_removed_bot_runtime_page_has_no_route_or_sidebar_entry(self):
+        response = self.client.get("/operations/deployments/")
+        self.assertEqual(response.status_code, 404)
+        dashboard = self.client.get("/dashboard/")
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertNotContains(dashboard, "Bot Runtime")
+        self.assertNotContains(dashboard, 'href="/operations/deployments/"')
+        self.assertFalse((Path(settings.BASE_DIR) / "templates/core/bot_runtime.html").exists())
 
     def test_authenticated_sidebar_contains_workspace_navigation_and_desktop_toggle(self):
         response = self.client.get("/dashboard/")
@@ -63,7 +71,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             "/dashboard/", "/trading/", "/markets/", "/orders/", "/trade-history/",
             "/positions/", "/signals/", "/strategies/", "/backtesting/", "/performance/",
             "/predictions/", "/analysis/", "/risk/", "/monitoring/", "/notifications/",
-            "/automation/", "/operations/deployments/", "/operations/audit/",
+            "/automation/", "/operations/audit/",
             "/operations/security/", "/portfolio/", "/operations/brokers/", "/billing/",
             "/developer/",
         ):
@@ -76,7 +84,6 @@ class UniversalWorkspaceAccessTests(TestCase):
         for label, href in (
             ("Analysis", "/analysis/"),
             ("Notifications", "/notifications/"),
-            ("Bot Runtime", "/operations/deployments/"),
             ("Audit Log", "/operations/audit/"),
             ("Security Center", "/operations/security/"),
             ("Developer & API", "/developer/"),
@@ -233,7 +240,6 @@ class UniversalWorkspaceAccessTests(TestCase):
         for relative in (
             "templates/components/enterprise_page.html",
             "templates/core/audit_log.html",
-            "templates/core/bot_runtime.html",
         ):
             content = (Path(settings.BASE_DIR) / relative).read_text(encoding="utf-8")
             self.assertNotIn("<style", content.lower(), relative)
