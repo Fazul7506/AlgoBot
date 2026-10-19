@@ -6,7 +6,7 @@
 <main class="account-page" data-profile-page>
   <header class="account-hero">
     <div class="account-hero__identity">
-      <div class="account-profile-avatar" data-avatar-preview aria-hidden="true">{% if profile.avatar_url %}<img src="{{ profile.avatar_url }}" alt="" referrerpolicy="no-referrer">{% else %}{{ profile_initials }}{% endif %}</div>
+      <div class="account-profile-avatar" data-avatar-preview aria-hidden="true">{% if profile.profile_picture %}<img src="{{ profile.profile_picture.url }}" alt="">{% else %}{{ profile_initials }}{% endif %}</div>
       <div><p class="account-kicker">Your account</p><h1>Profile</h1><p class="account-subtitle">Manage the personal details AlgoBot uses across your workspace. Broker credentials and login identity remain separate.</p></div>
     </div>
     <span class="account-state {% if profile.email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if profile.email_verified %}Email verified{% else %}Email verification pending{% endif %}</span>
@@ -15,7 +15,7 @@
     <nav class="account-nav" aria-label="Account settings">
       <a href="{% url 'profile_page' %}" aria-current="page">Profile</a><a href="{% url 'settings_page' %}">Preferences</a><a href="{% url 'account_identity_page' %}">Login &amp; identity</a><a href="{% url 'security_center' %}">Security</a>
     </nav>
-    <form class="account-content" method="post" action="{% url 'profile_page' %}">
+    <form class="account-content" method="post" enctype="multipart/form-data" action="{% url 'profile_page' %}">
       {% csrf_token %}
       {% for message in messages %}<p class="account-alert {% if message.tags == 'error' %}account-alert--error{% elif message.tags == 'success' %}account-alert--success{% endif %}" role="status">{{ message }}</p>{% endfor %}
       <section class="account-card">
@@ -25,9 +25,9 @@
           <div class="account-field"><label for="profile-last-name">Last name</label><input id="profile-last-name" name="last_name" value="{{ last_name }}" maxlength="150" autocomplete="family-name" required></div>
           <div class="account-field"><label for="profile-username">Username</label><input id="profile-username" value="{{ request.user.username }}" readonly aria-readonly="true"><span class="account-help">Change username from Login &amp; identity.</span></div>
           <div class="account-field"><label for="profile-email">Login email</label><input id="profile-email" value="{{ request.user.email }}" readonly aria-readonly="true"><span class="account-help">Email changes require verification.</span></div>
-          <div class="account-field account-field--full"><label for="profile-avatar-url">Profile picture URL</label><input id="profile-avatar-url" name="avatar_url" type="url" value="{{ profile.avatar_url }}" maxlength="500" autocomplete="url" placeholder="https://…"><span class="account-help">Use a trusted HTTPS image URL. Your preview updates before you save.</span></div>
+          <div class="account-field account-field--full"><label for="profile-picture">Profile picture</label><input id="profile-picture" name="profile_picture" type="file" accept="image/jpeg,image/png,image/webp,image/gif" autocomplete="off" aria-describedby="profile-picture-help"><span id="profile-picture-help" class="account-help">Choose an image from this device (JPEG, PNG, WEBP or GIF; up to 5 MB). The preview updates before saving.</span></div>
           <div class="account-field"><label for="profile-country">Country</label><select id="profile-country" name="country" autocomplete="country-name" data-country-select data-current-country="{{ country|escape }}" required><option value="">Choose your country</option></select><span class="account-help">Select a country; flags and names are generated from standard region codes.</span></div>
-          <div class="account-field"><label for="profile-timezone">Time zone</label><input id="profile-timezone" name="timezone" value="{{ timezone_value }}" maxlength="100" autocomplete="off" placeholder="Africa/Nairobi"></div>
+          <div class="account-field"><label for="profile-timezone">Time zone</label><select id="profile-timezone" name="timezone" autocomplete="off" required>{% for zone in timezone_choices %}<option value="{{ zone }}" {% if timezone_value == zone %}selected{% endif %}>{{ zone }}</option>{% endfor %}</select><span class="account-help">Choose the time zone used for timestamps and scheduling displays.</span></div>
           <div class="account-field account-field--full"><label for="profile-phone">Phone (optional)</label><input id="profile-phone" name="phone" type="tel" value="{{ phone }}" maxlength="32" autocomplete="tel" placeholder="+254 7xx xxx xxx" inputmode="tel" aria-describedby="profile-phone-help"><span id="profile-phone-help" class="account-help">Use the international format. The phone number is saved to your AlgoBot profile.</span></div>
           <div class="account-field account-field--full"><label for="profile-bio">About you (optional)</label><textarea id="profile-bio" name="bio" maxlength="5000" rows="4" placeholder="A short introduction (optional)">{{ bio }}</textarea><span class="account-help">Maximum 5,000 characters.</span></div>
         </div>
@@ -47,14 +47,22 @@
 <script>
 (() => {
   const initialize = () => {
-    const avatarInput = document.querySelector('#profile-avatar-url');
+    const avatarInput = document.querySelector('#profile-picture');
     const avatar = document.querySelector('[data-avatar-preview]');
-    if (avatarInput && avatar) avatarInput.addEventListener('input', () => {
-      const value = avatarInput.value.trim();
-      if (!value.startsWith('https://')) return;
+    if (avatarInput && avatar) avatarInput.addEventListener('change', () => {
+      const file = avatarInput.files && avatarInput.files[0];
+      if (!file) return;
+      if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+        avatarInput.value = '';
+        return;
+      }
+      const previewUrl = URL.createObjectURL(file);
       let image = avatar.querySelector('img');
-      if (!image) { image = document.createElement('img'); image.alt = ''; image.referrerPolicy = 'no-referrer'; avatar.replaceChildren(image); }
-      image.src = value;
+      if (!image) { image = document.createElement('img'); image.alt = ''; avatar.replaceChildren(image); }
+      const oldUrl = image.dataset.previewUrl;
+      image.src = previewUrl;
+      image.dataset.previewUrl = previewUrl;
+      if (oldUrl) URL.revokeObjectURL(oldUrl);
     });
     const select = document.querySelector('[data-country-select]');
     if (!select) return;
@@ -76,7 +84,7 @@
     select.value = current;
     const phone = document.querySelector('#profile-phone');
     if (phone && window.intlTelInput) {
-      window.intlTelInput(phone, {initialCountry:'auto', nationalMode:false, formatOnDisplay:true, loadUtils:() => import('https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js')});
+      window.intlTelInput(phone, {initialCountry:'ke', separateDialCode:true, nationalMode:false, formatOnDisplay:true, countrySearch:true, loadUtils:() => import('https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js')});
     }
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, {once:true}); else initialize();
