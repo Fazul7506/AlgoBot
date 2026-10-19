@@ -66,11 +66,11 @@ class AccountSettingsPagesTests(TestCase):
         })
         self.assertRedirects(response, reverse("profile_page"), fetch_redirect_response=False)
         profile = UserProfile.objects.get(user=self.user)
-        self.assertTrue(profile.profile_picture.name.startswith("profile_pictures/"))
-        self.assertTrue(profile.profile_picture.name.endswith(".png"))
+        self.assertTrue(profile.profile_picture_data)
+        self.assertEqual(profile.profile_picture_content_type, "image/webp")
         picture_response = self.client.get(reverse("profile_picture"))
         self.assertEqual(picture_response.status_code, 200)
-        self.assertEqual(picture_response["Content-Type"], "image/png")
+        self.assertEqual(picture_response["Content-Type"], "image/webp")
         self.assertEqual(picture_response["X-Content-Type-Options"], "nosniff")
 
     def test_profile_page_rejects_invalid_timezone_without_persisting(self):
