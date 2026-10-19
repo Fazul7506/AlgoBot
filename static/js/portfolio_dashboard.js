@@ -24,8 +24,24 @@
   async function load() {
     const generation = ++loadGeneration;
     if (!connected()) {
-      stateView('Portfolio values are derived only from the currently connected broker account and its positions.');
-      return;
+      // Bootstrap canonical broker state from the authenticated backend. Some
+      // pages load before the global account selector has hydrated its state.
+      try {
+        const response = await window.AlgoBotFrontendData.request('/api/brokers/accounts/');
+        if (generation !== loadGeneration) return;
+        const accounts = list(response);
+        const active = accounts.find(account => account && (
+          account.is_connected === true ||
+          ['connected','ready','syncing','degraded','online'].includes(String(account.connection_status || account.connection_state || '').toLowerCase())
+        ));
+        if (active && window.AlgoBotBrokerState?.setAccount) window.AlgoBotBrokerState.setAccount(active, 'portfolio-backend-bootstrap');
+      } catch (_) {
+        // Keep the normal empty-state below; do not fabricate broker state.
+      }
+      if (!connected()) {
+        stateView('No connected broker account is available. Connect or select an authorized account in Broker Management.');
+        return;
+      }
     }
     const root = $('[data-portfolio-workspace]');
     if (!root) return;
