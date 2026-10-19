@@ -39,7 +39,10 @@
     main{width:min(100%,460px)}
     @media(max-width:480px){body{padding:14px}main{padding:24px 20px;border-radius:20px}.provider-button{min-height:52px}}
 
-    button:disabled{opacity:.7;cursor:wait}
+    button:disabled{opacity:.7;cursor:not-allowed}
+    .email-readonly{background:#111d30;border-color:#465878;color:#dce6ff}
+    .timer-note{min-height:1.5em;color:var(--muted);font-size:14px;margin-top:10px}
+    .resend-button[disabled]{background:#34445f;color:#b9c5d8;cursor:not-allowed;opacity:1}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
   </style>
 </head>
@@ -74,7 +77,7 @@
       <button type="submit">Create account</button>
     </form>
     <a class="link-button provider-button google-button" href="{% url 'google_login_start' %}?next={{ next|default:'/dashboard/'|urlencode }}" aria-label="Continue with Google"><svg class="provider-logo google-logo" viewBox="0 0 48 48" role="img" aria-label="Google logo" focusable="false"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 3.06 13.22l7.98 6.19C12.93 13.72 18.02 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.25 5.48-4.73 7.18l7.65 5.93c4.47-4.13 7.12-10.2 7.12-17.58z"/><path fill="#FBBC05" d="M10.04 28.59A14.4 14.4 0 0 1 9.25 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.53 2.58 10.78l7.46-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.87l-7.65-5.93c-2.12 1.42-4.84 2.26-8.25 2.26-5.98 0-11.07-4.22-12.96-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Continue with Google</span></a>
-    <div class="links"><a href="{% url 'login_page' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Already registered? Sign in</a><a href="{% url 'verify_email_page' %}">Verify email</a></div>
+    <div class="links"><a href="{% url 'login_page' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Already registered? Sign in</a></div>
   {% elif mode == "forgot_password" %}
     <h1>Reset your password</h1><p class="sub">Enter your account email. If it matches an active account, we’ll send reset instructions.</p>
     {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
@@ -96,7 +99,7 @@
     {% endif %}
     <div class="links"><a href="{% url 'login_page' %}">Back to sign in</a></div>
   {% else %}
-    <h1>Verify your email</h1><p class="sub">We’ll send a fresh verification link if this email belongs to an unverified AlgoBot account.</p>
+    <h1>Verify your email</h1><p class="sub">Your AlgoBot account email is linked to this request. We’ll send a fresh verification link when the resend timer allows it.</p>
     {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
     {% if invalid %}<div class="notice error">That verification link is invalid or has already been used.</div>{% endif %}
     {% if confirm_token %}
@@ -106,10 +109,43 @@
         <button type="submit">Confirm email verification</button>
       </form>
     {% else %}
-      <form method="post" action="{% url 'verify_email_page' %}">{% csrf_token %}
-        <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" required>
-        <button type="submit">Send verification link</button>
-      </form>
+      {% if verification_email %}
+        <label for="email">Account email</label><input class="email-readonly" id="email" type="email" value="{{ verification_email }}" autocomplete="email" readonly aria-readonly="true">
+        <form method="post" action="{% url 'verify_email_page' %}" id="resend-verification-form">{% csrf_token %}
+          <button class="resend-button" id="resend-verification-button" type="submit" {% if cooldown_seconds > 0 %}disabled{% endif %}>Resend verification email</button>
+          <p class="timer-note" id="resend-timer" role="status" aria-live="polite"></p>
+        </form>
+        <script>
+          (() => {
+            const button = document.getElementById("resend-verification-button");
+            const timer = document.getElementById("resend-timer");
+            if (!button || !timer) return;
+            let remaining = Math.max(0, Number("{{ cooldown_seconds|default:0 }}") || 0);
+            const render = () => {
+              button.disabled = remaining > 0;
+              if (remaining > 0) {
+                const minutes = Math.floor(remaining / 60);
+                const seconds = remaining % 60;
+                timer.textContent = "Resend available in " + minutes + ":" + String(seconds).padStart(2, "0");
+              } else {
+                timer.textContent = "You can request another verification email now.";
+                button.textContent = "Resend verification email";
+              }
+            };
+            render();
+            if (remaining > 0) {
+              button.textContent = "Please wait…";
+              const interval = window.setInterval(() => {
+                remaining = Math.max(0, remaining - 1);
+                render();
+                if (remaining === 0) window.clearInterval(interval);
+              }, 1000);
+            }
+          })();
+        </script>
+      {% else %}
+        <p class="notice">Open this page after registering or signing in with your username/email. We’ll identify the account automatically.</p>
+      {% endif %}
     {% endif %}
     <div class="links"><a href="{% url 'login_page' %}">Back to sign in</a><a href="{% url 'register_page' %}">Create an account</a></div>
   {% endif %}
