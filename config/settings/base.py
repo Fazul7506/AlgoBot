@@ -48,7 +48,7 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware", "django.middleware.common.CommonMiddleware", "core.middleware.cloudflare_challenge.CloudflareChallengeQueryMiddleware",
     "core.middleware.wordpress_probe.WordPressProbeMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware", "core.middleware.csrf.APIAwareCsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware", "core.middleware.broker_onboarding.BrokerOnboardingMiddleware", "apps.developer.middleware.DeveloperAPIMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware", "core.middleware.two_factor_enforcement.TwoFactorEnforcementMiddleware", "core.middleware.broker_onboarding.BrokerOnboardingMiddleware", "apps.developer.middleware.DeveloperAPIMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware", "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.audit_middleware.AuditMiddleware", "core.middleware.plan_entitlement_middleware.PlanEntitlementMiddleware",
 ]
