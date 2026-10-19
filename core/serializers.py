@@ -28,7 +28,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'email_verified', 'two_factor_enabled', 'notifications_enabled',
             'email_notifications_enabled', 'telegram_notifications_enabled',
             'telegram_chat_id', 'telegram_username', 'brevo_sender_email',
-            'avatar_url', 'referral_code', 'referral_credits',
+            'referral_code', 'referral_credits',
             'last_login_at', 'created_at', 'updated_at', 'deriv_account_id'
         ]
         read_only_fields = [
