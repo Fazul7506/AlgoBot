@@ -61,7 +61,7 @@ def process_due_scheduled_tasks(limit=100):
             }
             # A completed workflow is complete. Any paused, failed, or undispatched
             # run is surfaced as failed for the one-shot schedule, not silently retried.
-            task.status = "completed" if execution.status == "completed" else "failed"
+            task.status = "completed" if execution.status == "completed" else "paused" if execution.status in {"paused", "pending"} else "failed"
         except Exception as exc:
             task.metadata = {
                 **(task.metadata if isinstance(task.metadata, dict) else {}),
