@@ -52,8 +52,8 @@ document.addEventListener("click", event => { const button = event.target.closes
         {% if password_required %}
           <form method="post" action="{% url 'google_unlink' %}">
             {% csrf_token %}
-            <label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>
-            <button type="submit" class="button">Unlink Google</button>
+            <label>Current password<span class="account-password-control"><input type="password" name="current_password" autocomplete="current-password" data-password-field required><button type="button" class="account-password-toggle" data-password-toggle aria-label="Show password">Show</button></span></label>
+            <button type="submit" class="account-btn account-btn--danger">Unlink Google</button>
           </form>
         {% else %}
           <p>Set a local password before unlinking Google so you retain a sign-in method.</p>
