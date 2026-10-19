@@ -145,7 +145,7 @@ def _persist_snapshot_sync(account_id: int, normalized: list[dict[str, Any]], *,
         broker_ids.add(contract_id)
         defaults = dict(data)
         defaults["last_synced_at"] = synced_at
-        existing = Position.objects.filter(account=account, contract_id=contract_id).first()
+        existing = Position.objects.select_for_update().filter(account=account, contract_id=contract_id).first()
         previous_status = str(existing.status or "").lower() if existing else ""
         position, _ = Position.objects.update_or_create(
             account=account,
