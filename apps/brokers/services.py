@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import logging
 import time
 from decimal import Decimal
 
@@ -12,6 +13,20 @@ from . import constants as c
 from .exceptions import BrokerRoutingError, BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
 from core.billing_entitlements import check
+
+logger = logging.getLogger(__name__)
+
+
+def _queue_automation_event(event_name, account, payload):
+    """Publish account-scoped broker lifecycle events without blocking broker I/O."""
+    try:
+        from apps.automation.tasks import process_event
+        process_event.delay(event_name, "broker", payload, account.user_id)
+    except Exception:
+        logger.exception(
+            "broker_automation_event_dispatch_failed",
+            extra={"event_name": event_name, "broker_account_id": account.pk, "user_id": account.user_id},
+        )
 
 
 class BrokerRegistry:
@@ -55,12 +70,22 @@ class BrokerConnectionService:
         account.credentials = credentials; account.status = 'active'; account.last_synced_at = timezone.now()
         await sync_to_async(account.save)(update_fields=['account_id', 'balance', 'currency', 'credentials', 'status', 'last_synced_at'])
         connection, _ = await sync_to_async(BrokerConnection.objects.update_or_create)(broker_account=account, defaults={'broker': broker, 'status': 'connected', 'latency': latency, 'last_ping': timezone.now(), 'connected_at': timezone.now()})
+        await sync_to_async(_queue_automation_event, thread_sensitive=False)(
+            "BrokerConnected", account,
+            {"broker_type": broker.broker_type, "broker_name": broker.name, "broker_account_pk": account.pk,
+             "broker_account_id": account.account_id, "account_type": account.account_type},
+        )
         return connection
     async def disconnect(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
         await BrokerRegistry().adapter(broker, account).disconnect(); account.status = 'disabled'
         await sync_to_async(account.save)(update_fields=['status'])
         connection, _ = await sync_to_async(BrokerConnection.objects.update_or_create)(broker_account=account, defaults={'broker': broker, 'status': 'disconnected'})
+        await sync_to_async(_queue_automation_event, thread_sensitive=False)(
+            "BrokerDisconnected", account,
+            {"broker_type": broker.broker_type, "broker_name": broker.name, "broker_account_pk": account.pk,
+             "broker_account_id": account.account_id, "account_type": account.account_type},
+        )
         return connection
     async def heartbeat(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
