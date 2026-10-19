@@ -113,7 +113,6 @@ urlpatterns = [
     path("trade-history/", login_required(trade_history_page), name="trade_history_page"),
     path("trade-history/postmortems/", login_required(trade_postmortems), name="trade_postmortems"),
     path("automation/", login_required(lambda request: operations_center(request, "automation")), name="automation_page"),
-    path("operations/deployments/", login_required(lambda request: operations_center(request, "deployments")), name="deployment_center"),
     path("operations/audit/", login_required(lambda request: operations_center(request, "audit")), name="audit_center"),
     path("operations/security/", login_required(lambda request: operations_center(request, "security")), name="security_center"),
     path("operations/candle-backfill/", market_data_views.initial_candle_backfill, name="initial_candle_backfill"),
