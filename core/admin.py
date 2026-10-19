@@ -12,8 +12,8 @@ class UserProfileAdmin(admin.ModelAdmin):
     list_display = ["user", "email_verified", "timezone", "created_at"]
     list_filter = ["email_verified", "two_factor_enabled", "created_at"]
     search_fields = ["user__username", "user__email"]
-    readonly_fields = ["created_at", "updated_at"]
-    exclude = ["email_verification_token", "telegram_chat_id", "telegram_username", "brevo_api_key"]
+    readonly_fields = ["created_at", "updated_at", "two_factor_enabled"]
+    exclude = ["email_verification_token", "telegram_chat_id", "telegram_username", "brevo_api_key", "two_factor_secret_encrypted", "two_factor_pending_secret_encrypted", "two_factor_recovery_codes"]
 
 
 @admin.register(Subscription)
