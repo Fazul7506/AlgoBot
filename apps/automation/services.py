@@ -284,7 +284,7 @@ class WorkflowDesignerService:
         if not isinstance(trigger, dict):
             errors.append("trigger must be an object.")
         elif trigger and not trigger.get("type"):
-            errors.append("trigger.type is required when a trigger is configured.")
+            warnings.append("Legacy trigger has no type; event matching remains supported, but new workflows should set trigger.type.")
         elif trigger and trigger.get("type") not in TRIGGER_TYPES:
             errors.append(f"Unsupported trigger type: {trigger['type']}.")
         elif trigger and not str(trigger.get("event") or "").strip():
