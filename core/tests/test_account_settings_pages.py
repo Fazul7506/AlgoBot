@@ -29,7 +29,7 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Personal information")
         self.assertContains(response, 'name="first_name"')
-        self.assertContains(response, "Login & identity")
+        self.assertContains(response, "Login &amp; identity")
 
     def test_profile_page_persists_only_signed_in_users_details(self):
         response = self.client.post(reverse("profile_page"), {
