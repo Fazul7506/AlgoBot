@@ -165,6 +165,12 @@ def login_page(request):
                     if matches.count() == 1:
                         user = authenticate(request, username=matches.first().get_username(), password=password)
         if user is None:
+            request.session.pop("algobot_pending_2fa_user_id", None)
+            messages.error(request, "The username/email or password is incorrect.")
+            return _render(request, "login", identifier=identifier)
+        pending_2fa_user_id = request.session.get("algobot_pending_2fa_user_id")
+        if pending_2fa_user_id and str(pending_2fa_user_id) != str(user.pk):
+            request.session.pop("algobot_pending_2fa_user_id", None)
             messages.error(request, "The username/email or password is incorrect.")
             return _render(request, "login", identifier=identifier)
         profile, _ = UserProfile.objects.get_or_create(user=user)
@@ -172,6 +178,19 @@ def login_page(request):
             request.session[PENDING_VERIFICATION_EMAIL_SESSION_KEY] = user.email
             messages.info(request, "Please verify your email before signing in. Your account email is ready below.")
             return redirect("verify_email_page")
+        if profile.two_factor_enabled:
+            from core.services.two_factor_service import verify_user_code
+            code = request.POST.get("two_factor_code") or ""
+            if not code:
+                request.session["algobot_pending_2fa_user_id"] = user.pk
+                return _render(request, "login", identifier=identifier, mfa_required=True)
+            if not verify_user_code(profile, code, consume_recovery=True):
+                request.session["algobot_pending_2fa_user_id"] = user.pk
+                return _render(
+                    request, "login", identifier=identifier, mfa_required=True,
+                    errors=["The authenticator or recovery code is invalid. Try again."],
+                )
+        request.session.pop("algobot_pending_2fa_user_id", None)
         auth_login(request, user)
         UserProfile.objects.update_or_create(user=user, defaults={"last_login_at": timezone.now()})
         from core.broker_onboarding import has_authorized_broker_connection
