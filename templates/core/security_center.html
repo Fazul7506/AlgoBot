@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', function () {
   if (keyField && qr && qr.dataset.otpauthUri) {
     try {
       var secret = new URL(qr.dataset.otpauthUri).searchParams.get('secret') || '';
-      keyField.value = secret.replace(/\\s+/g, '').toUpperCase();
+      keyField.value = secret.toUpperCase();
       if (!secret) {
         var feedback = document.querySelector('[data-copy-feedback]');
         if (feedback) feedback.textContent = 'The setup key is unavailable. Restart two-factor setup to generate a fresh key.';
