@@ -58,7 +58,7 @@
       }
       const previewUrl = URL.createObjectURL(file);
       let image = avatar.querySelector('img');
-      if (!image) { image = document.createElement('img'); image.alt = ''; avatar.replaceChildren(image); }
+      if (!image) { image = document.createElement('img'); image.alt = ''; const initials = avatar.querySelector(':scope > span:not(.account-avatar-edit)'); if (initials) initials.remove(); avatar.insertBefore(image, avatar.querySelector('.account-avatar-edit')); }
       const oldUrl = image.dataset.previewUrl;
       image.src = previewUrl;
       image.dataset.previewUrl = previewUrl;
