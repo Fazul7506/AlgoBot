@@ -108,7 +108,11 @@ def security_workspace(request):
         elif action == "disable_2fa":
             current_password = request.POST.get("current_password") or ""
             code = request.POST.get("two_factor_code") or ""
-            if not request.user.check_password(current_password):
+            password_valid = (
+                not request.user.has_usable_password()
+                or request.user.check_password(current_password)
+            )
+            if not password_valid:
                 messages.error(request, "Enter your current password to disable two-factor authentication.")
             elif not profile.two_factor_enabled or not verify_user_code(profile, code, consume_recovery=True):
                 messages.error(request, "A valid authenticator or unused recovery code is required.")
