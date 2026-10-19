@@ -204,20 +204,21 @@ class ActionService:
         execution_id = context.get("execution_id")
         node_id = str(context.get("node_id", "action"))
         martingale = action.get("martingale")
+        martingale_state = None
         if martingale:
             if not isinstance(martingale, dict):
                 raise WorkflowValidationError("martingale configuration must be an object.")
             validation = WorkflowDesignerService.validate_martingale(martingale)
             if validation:
                 raise WorkflowValidationError("; ".join(validation))
-            stake, state = self._martingale_stake(
+            stake, martingale_state = self._martingale_stake(
                 user=user, workflow=workflow, account=account, node_id=node_id,
                 base_stake=Decimal(str(martingale.get("base_stake", stake))),
                 multiplier=Decimal(str(martingale.get("multiplier", 2))),
                 max_steps=int(martingale.get("max_steps", 5)),
                 max_stake=Decimal(str(martingale.get("max_stake"))),
             )
-            routing_context = {**routing_context, "martingale_state": state}
+            routing_context = {**routing_context, "martingale_state": martingale_state}
         if action.get("contract_type"):
             routing_context = {**routing_context, "contract_type": str(action["contract_type"]).upper()}
         routing_context = {
@@ -229,7 +230,9 @@ class ActionService:
                 "martingale": bool(martingale),
             },
         }
-        client_order_id = str(action.get("client_order_id") or f"automation-{workflow.pk}-{node_id}-{execution_id}")[:100]
+        payload = context.get("payload") if isinstance(context.get("payload"), dict) else {}
+        stable_event_id = payload.get("_automation_event_id") or payload.get("scheduled_task_id") or execution_id
+        client_order_id = str(action.get("client_order_id") or f"automation-{workflow.pk}-{node_id}-{stable_event_id}")[:100]
         # ExecutionEngine enforces account ownership, connection eligibility,
         # market-data freshness, risk approval, idempotency, and broker adapter rules.
         report = ExecutionEngine().submit(
@@ -251,6 +254,7 @@ class ActionService:
             "order_id": getattr(order, "pk", None),
             "broker_order_id": getattr(order, "broker_order_id", None),
             "execution_status": getattr(order, "status", None),
+            "martingale": martingale_state,
         }
 
 
@@ -417,7 +421,8 @@ class WorkflowExecutionService:
 class AutomationEventService:
     def publish(self, event_name: str, source: str, payload: dict[str, Any] | None = None, user=None):
         event = AutomationEvent.objects.create(event_name=event_name, source=source, payload=payload or {}, user=user)
-        AutomationEngine().handle_event(event_name, payload or {}, source, actor=user)
+        event_payload = {**(payload or {}), "_automation_event_id": event.pk}
+        AutomationEngine().handle_event(event_name, event_payload, source, actor=user)
         return event
 
 
