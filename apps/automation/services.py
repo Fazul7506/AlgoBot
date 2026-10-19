@@ -549,11 +549,12 @@ class AutomationEngine:
                 execution = WorkflowExecutionService().run(workflow, payload)
                 results.append({"workflow_execution": execution.pk, "status": execution.status})
         not_dispatched = any(
-            item.get("status") in {"not_dispatched", "pending"} for item in results if isinstance(item, dict)
+            item.get("status") in {"not_dispatched", "pending", "paused"} for item in results if isinstance(item, dict)
         )
+        approval_required = any(item.get("status") == "paused" for item in results if isinstance(item, dict))
         failed = any(item.get("status") == "failed" for item in results if isinstance(item, dict))
         return AutomationResult(
-            "failed" if failed else "not_configured" if not_dispatched else "completed",
+            "failed" if failed else "approval_required" if approval_required else "not_configured" if not_dispatched else "completed",
             {"results": results},
             (time.perf_counter() - started) * 1000,
         )
