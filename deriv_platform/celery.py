@@ -26,7 +26,13 @@ def _close_task_connections(*args, **kwargs):
     close_old_connections()
 
 
-app.conf.beat_schedule = {\n    "automation-due-schedules-every-30-seconds": {\n        "task": "apps.automation.tasks.process_due_scheduled_tasks",\n        "schedule": 30.0,\n        "kwargs": {"limit": 100},\n        "options": {"queue": "celery", "expires": 25},\n    },
+app.conf.beat_schedule = {
+    "automation-due-schedules-every-30-seconds": {
+        "task": "apps.automation.tasks.process_due_scheduled_tasks",
+        "schedule": 30.0,
+        "kwargs": {"limit": 100},
+        "options": {"queue": "celery", "expires": 25},
+    },
     # Initial broker-history backfill is scheduled every 30 minutes, not every
     # five minutes. The task's own persisted run/lock checks prevent overlap.
     "initial-candle-backfill-automatic-every-30-minutes": {
