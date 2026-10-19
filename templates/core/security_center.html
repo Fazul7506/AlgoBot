@@ -28,7 +28,7 @@
           {% for name,ok in checks %}
           <div class="account-toggle">
             <div><strong>{{ name }}</strong><p>{% if ok %}The current check passed based on available account and platform state.{% else %}Review the related account or platform configuration below.{% endif %}</p></div>
-            <span class="account-state {% if ok %}account-state--good{% else %}account-state--warn{% endif %}">{% if ok %}Protected{% else %}Review{% endif %}</span>
+            <span class="account-state {% if ok %}account-state--good{% else %}account-state--warn{% endif %}">{% if ok %}Protected{% else %}Needs attention{% endif %}</span>
           </div>
           {% empty %}
           <div class="account-alert">Security checks are not currently available. Refresh this page later.</div>
@@ -48,7 +48,7 @@
           <div class="account-metric"><span>Usable developer keys</span><strong>{{ keys_count }}</strong></div>
           <div class="account-metric"><span>Access policy</span><strong>Authenticated</strong></div>
         </div>
-        <p class="account-help" style="margin-top:12px">Never share API secrets or put them in support messages. Revoke unused keys and rotate any key that may have been exposed.</p>
+        <p class="account-help" style="margin-top:12px">{{ keys_count }} active developer key{{ keys_count|pluralize }} currently meet the usable-key criteria. Never share API secrets or put them in support messages. Revoke unused keys and rotate any key that may have been exposed.</p>
         <div class="account-actions"><a class="account-btn" href="/developer/">Manage Developer & API</a></div>
       </section>
 
