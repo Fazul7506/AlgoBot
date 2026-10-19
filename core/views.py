@@ -79,7 +79,10 @@ def billing_cancel_page(request): return render(request,'core/billing_cancel.htm
 @login_required
 def settings_page(request): return render(request,'core/settings.html')
 @login_required
-def profile_page(request): return render(request,'core/profile.html')
+def profile_page(request):
+    """Delegate legacy imports to the canonical persistent profile editor."""
+    from core.views_profile import profile_page as editable_profile_page
+    return editable_profile_page(request)
 
 @login_required
 def profile_completion_page(request):
