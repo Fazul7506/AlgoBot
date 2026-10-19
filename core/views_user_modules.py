@@ -139,6 +139,29 @@ def security_workspace(request):
                     "two_factor_pending_secret_encrypted", "two_factor_recovery_codes", "updated_at",
                 ])
                 messages.success(request, "Two-factor authentication has been disabled.")
+        elif action == "regenerate_recovery_codes":
+            if not (
+                allow_auth_attempt(request, "two-factor-recovery-regenerate", str(request.user.pk), limit=5, window=900)
+                and allow_auth_attempt(request, "two-factor-recovery-regenerate-ip", "", limit=20, window=900)
+            ):
+                messages.error(request, "Too many recovery-code requests. Wait before trying again.")
+                return redirect("security_center")
+            current_password = request.POST.get("current_password") or ""
+            code = request.POST.get("two_factor_code") or ""
+            password_valid = (
+                not request.user.has_usable_password()
+                or request.user.check_password(current_password)
+            )
+            if not password_valid:
+                messages.error(request, "Enter your current password to regenerate recovery codes.")
+            elif not profile.two_factor_enabled or not verify_user_code(profile, code, consume_recovery=True):
+                messages.error(request, "A valid authenticator or unused recovery code is required.")
+            else:
+                recovery_codes, recovery_hashes = generate_recovery_codes()
+                profile.two_factor_recovery_codes = recovery_hashes
+                profile.save(update_fields=["two_factor_recovery_codes", "updated_at"])
+                request.session["algobot_2fa_recovery_codes_once"] = recovery_codes
+                messages.success(request, "Recovery codes were regenerated. Save this new set; previous codes no longer work.")
         return redirect("security_center")
 
     setup_uri = request.session.pop("algobot_2fa_setup_uri", "")
