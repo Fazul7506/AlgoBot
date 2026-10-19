@@ -68,6 +68,10 @@ class AccountSettingsPagesTests(TestCase):
         profile = UserProfile.objects.get(user=self.user)
         self.assertTrue(profile.profile_picture.name.startswith("profile_pictures/"))
         self.assertTrue(profile.profile_picture.name.endswith(".png"))
+        picture_response = self.client.get(reverse("profile_picture"))
+        self.assertEqual(picture_response.status_code, 200)
+        self.assertEqual(picture_response["Content-Type"], "image/png")
+        self.assertEqual(picture_response["X-Content-Type-Options"], "nosniff")
 
     def test_profile_page_rejects_invalid_timezone_without_persisting(self):
         response = self.client.post(reverse("profile_page"), {
