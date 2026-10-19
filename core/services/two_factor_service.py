@@ -5,6 +5,7 @@ import logging
 import secrets
 
 from django.conf import settings
+from django.db import transaction
 
 from core.services.encryption_service import CredentialEncryptionService
 
@@ -75,19 +76,24 @@ def verify_user_code(profile, token, *, consume_recovery=False):
         return False
     if secret and TwoFactorService(secret).validate_token(token):
         return True
-    if not token or not profile.two_factor_recovery_codes:
+    if not token:
         return False
+
     digest = hashlib.sha256(token.upper().encode("utf-8")).hexdigest()
-    matches = [
-        hmac.compare_digest(str(saved), digest)
-        for saved in profile.two_factor_recovery_codes
-    ]
-    if not any(matches):
-        return False
-    if consume_recovery:
-        profile.two_factor_recovery_codes = [
-            saved for saved, matched in zip(profile.two_factor_recovery_codes, matches)
-            if not matched
-        ]
-        profile.save(update_fields=["two_factor_recovery_codes", "updated_at"])
+    # Lock the row while consuming a recovery code so two concurrent requests
+    # cannot successfully redeem the same one-time code.
+    with transaction.atomic():
+        locked = profile.__class__.objects.select_for_update().filter(pk=profile.pk).first()
+        if locked is None or not locked.two_factor_enabled:
+            return False
+        saved_codes = list(locked.two_factor_recovery_codes or [])
+        matches = [hmac.compare_digest(str(saved), digest) for saved in saved_codes]
+        if not any(matches):
+            return False
+        if consume_recovery:
+            locked.two_factor_recovery_codes = [
+                saved for saved, matched in zip(saved_codes, matches) if not matched
+            ]
+            locked.save(update_fields=["two_factor_recovery_codes", "updated_at"])
+            profile.two_factor_recovery_codes = locked.two_factor_recovery_codes
     return True
