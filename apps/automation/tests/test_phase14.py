@@ -12,6 +12,7 @@ from apps.automation.services import (
     ActionService, AutomationEngine, RuleEngine, SchedulerService,
     WorkflowDesignerService, WorkflowExecutionService,
 )
+from apps.brokers.models import Broker, BrokerAccount
 
 
 class AutomationEngineTests(TestCase):
@@ -50,15 +51,16 @@ class AutomationEngineTests(TestCase):
         self.assertEqual(result["code"], "BROKER_ACCOUNT_REQUIRED")
 
     def test_execute_trade_rejects_account_owned_by_another_user(self):
-        user = get_user_model().objects.create_user(username="auto-owner", password="x")
-        with patch("apps.brokers.models.BrokerAccount.objects.filter") as account_filter:
-            account_filter.return_value.select_related.return_value.first.return_value = None
-            workflow = Workflow(user=user, name="Owner check")
-            with self.assertRaises(WorkflowValidationError):
-                ActionService().execute(
-                    {"type": "execute_trade", "account_id": 123, "symbol": "R_100", "direction": "CALL", "stake": "1"},
-                    {"workflow": workflow, "execution_id": 7},
-                )
+        owner = get_user_model().objects.create_user(username="auto-owner", password="x")
+        other = get_user_model().objects.create_user(username="auto-other", password="x")
+        broker = Broker.objects.create(name="Automation test Deriv", broker_type="deriv", status="active", metadata={"auth": "oauth"})
+        account = BrokerAccount.objects.create(user=other, broker=broker, account_id="test-account")
+        workflow = Workflow(user=owner, name="Owner check")
+        with self.assertRaises(WorkflowValidationError):
+            ActionService().execute(
+                {"type": "execute_trade", "account_id": account.pk, "symbol": "R_100", "direction": "CALL", "stake": "1"},
+                {"workflow": workflow, "execution_id": 7},
+            )
 
     def test_workflow_designer_validates_graph_and_martingale_bounds(self):
         valid = {
