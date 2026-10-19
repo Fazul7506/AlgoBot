@@ -13,6 +13,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -97,6 +98,8 @@ def normalize_broker_position(record: dict[str, Any]) -> dict[str, Any] | None:
 
 def _publish_trade_closed_event(account_id: int, contract_id: str) -> None:
     """Publish only broker-reconciled terminal outcomes, after the DB commit."""
+    if getattr(settings, "DJANGO_TESTING", False):
+        return
     try:
         from .models import BrokerAccount, Order as BrokerOrder, Position
         from apps.automation.tasks import process_event
