@@ -52,7 +52,7 @@
           <form method="post" class="account-security-form">{% csrf_token %}<input type="hidden" name="security_action" value="verify_2fa"><div class="account-field"><label for="mfa-verify-code">Six-digit authenticator code</label><input id="mfa-verify-code" name="two_factor_code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></div><div class="account-actions"><button class="account-btn account-btn--primary" type="submit">Verify and enable</button></div></form>
         {% else %}
           <p class="account-subtitle">Set up an authenticator app to protect password sign-ins. The seed is encrypted using the server's configured credential-encryption key.</p>
-          <form method="post" class="account-security-form">{% csrf_token %}<input type="hidden" name="security_action" value="setup_2fa"><div class="account-actions"><button class="account-btn account-btn--primary" type="submit">Set up two-factor authentication</button></div></form>
+          <form method="post" class="account-security-form">{% csrf_token %}<input type="hidden" name="security_action" value="setup_2fa">{% if password_required %}<div class="account-field"><label for="mfa-setup-password">Current password</label><input id="mfa-setup-password" type="password" name="current_password" autocomplete="current-password" required></div>{% endif %}<div class="account-actions"><button class="account-btn account-btn--primary" type="submit">Set up two-factor authentication</button></div></form>
         {% endif %}
       </section>
 
