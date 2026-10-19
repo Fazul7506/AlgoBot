@@ -57,6 +57,7 @@ def security_workspace(request):
     from core.services.two_factor_service import (
         TwoFactorService, generate_recovery_codes, verify_user_code,
     )
+    from core.auth_rate_limit import allow_auth_attempt
 
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     setup_uri = ""
@@ -79,6 +80,12 @@ def security_workspace(request):
                 except (RuntimeError, ValueError):
                     messages.error(request, "Two-factor setup is unavailable until the server encryption key is configured correctly.")
         elif action == "verify_2fa":
+            if not (
+                allow_auth_attempt(request, "two-factor-enrollment", str(request.user.pk), limit=10, window=900)
+                and allow_auth_attempt(request, "two-factor-enrollment-ip", "", limit=30, window=900)
+            ):
+                messages.error(request, "Too many authenticator verification attempts. Wait before trying again.")
+                return redirect("security_center")
             try:
                 pending_secret = TwoFactorService.decrypt_secret(profile.two_factor_pending_secret_encrypted)
                 if pending_secret and TwoFactorService(pending_secret).validate_token(request.POST.get("two_factor_code")):
@@ -106,6 +113,12 @@ def security_workspace(request):
             except RuntimeError:
                 messages.error(request, "Two-factor setup is unavailable until the server encryption key is configured correctly.")
         elif action == "disable_2fa":
+            if not (
+                allow_auth_attempt(request, "two-factor-disable", str(request.user.pk), limit=10, window=900)
+                and allow_auth_attempt(request, "two-factor-disable-ip", "", limit=30, window=900)
+            ):
+                messages.error(request, "Too many authenticator verification attempts. Wait before trying again.")
+                return redirect("security_center")
             current_password = request.POST.get("current_password") or ""
             code = request.POST.get("two_factor_code") or ""
             password_valid = (
