@@ -90,3 +90,21 @@
 .account-password-control input{flex:1;min-width:0}
 .account-password-toggle{border:1px solid var(--ds-border,var(--line,#26364b));border-radius:10px;background:var(--ds-surface-2,#172337);color:var(--ds-text,#edf2f7);padding:10px 12px;cursor:pointer}
 @media(max-width:640px){.account-identity-provider{gap:9px}.account-btn--google{min-height:48px}}
+
+/* Dark-mode select contrast and accessible account controls. */
+.account-field select,.account-content select,.account-card select{color-scheme:dark!important;background-color:#0b1423!important;color:#edf4ff!important;border:1px solid #30435c!important;appearance:auto}
+.account-field select option,.account-content select option{background:#0b1423!important;color:#edf4ff!important}
+.account-profile-avatar--editable{position:relative;cursor:pointer;border-radius:50%;padding:0;border:2px solid #263e59;overflow:hidden}
+.account-profile-avatar--editable:focus-visible{outline:3px solid #28c7f7;outline-offset:4px}
+.account-profile-avatar--editable input[type=file]{display:none!important}
+.account-profile-avatar--editable>span:not(.account-avatar-edit){display:grid;place-items:center;width:100%;height:100%}
+.account-avatar-edit{position:absolute;right:-1px;bottom:-1px;z-index:2;display:grid;place-items:center;width:27px;height:27px;border-radius:50%;background:#28c7f7;color:#07111f;border:2px solid #0b1423;font-size:16px}
+.account-qr{display:flex;align-items:center;justify-content:center;min-height:232px;width:min(100%,280px);margin:16px auto;padding:12px;border-radius:16px;background:#fff;border:1px solid #d5deeb}
+.account-qr img,.account-qr canvas{max-width:100%;height:auto!important}
+.account-copy-control{display:flex;align-items:stretch;gap:8px;margin:10px 0 16px}
+.account-copy-control textarea{flex:1;min-width:0;resize:vertical;color:#edf4ff;background:#081120;border:1px solid #30435c;border-radius:10px;padding:12px}
+.account-copy-control button{flex:0 0 auto;align-self:center}
+.account-password-control input{width:100%;min-width:0}
+.account-identity-provider{background:rgba(255,255,255,.025);border:1px solid var(--ds-border,var(--line,#304057));border-radius:14px;padding:14px}
+.account-btn--google{background:#fff!important;color:#202124!important;border-color:#dadce0!important}
+.account-password-toggle{min-width:62px}
