@@ -205,7 +205,7 @@ class ActionService:
         node_id = str(context.get("node_id", "action"))
         martingale = action.get("martingale")
         martingale_state = None
-        if martingale:
+        if "martingale" in action:
             if not isinstance(martingale, dict):
                 raise WorkflowValidationError("martingale configuration must be an object.")
             validation = WorkflowDesignerService.validate_martingale(martingale)
@@ -277,7 +277,9 @@ class WorkflowDesignerService:
         trigger = definition.get("trigger", {})
         if not isinstance(trigger, dict):
             errors.append("trigger must be an object.")
-        elif trigger and trigger.get("type") and trigger["type"] not in TRIGGER_TYPES:
+        elif trigger and not trigger.get("type"):
+            errors.append("trigger.type is required when a trigger is configured.")
+        elif trigger and trigger.get("type") not in TRIGGER_TYPES:
             errors.append(f"Unsupported trigger type: {trigger['type']}.")
         elif trigger and not str(trigger.get("event") or "").strip():
             errors.append("trigger.event is required when a trigger is configured.")
@@ -287,6 +289,8 @@ class WorkflowDesignerService:
             nodes = []
         if len(nodes) > 100:
             errors.append("A workflow may contain at most 100 nodes.")
+        if trigger and not nodes:
+            errors.append("A triggered workflow must contain at least one node.")
         node_ids = set()
         for index, node in enumerate(nodes):
             if not isinstance(node, dict):
@@ -306,14 +310,16 @@ class WorkflowDesignerService:
                 continue
             if node_type in {"action", "trade", "broker", "notification", "risk", "ai"}:
                 action_type = str(config.get("type") or "").strip()
-                if action_type and action_type not in ACTION_TYPES:
+                if not action_type:
+                    errors.append(f"nodes[{index}] requires an explicit action type.")
+                elif action_type not in ACTION_TYPES:
                     errors.append(f"nodes[{index}] has unsupported action: {action_type}.")
-                if node_type == "trade" and not action_type:
-                    warnings.append(f"nodes[{index}] trade node needs an explicit action type before execution.")
+            if node_type == "condition":
+                errors.extend(f"nodes[{index}] {message}" for message in self.validate_condition(config))
             if node_type == "martingale":
                 errors.extend(f"nodes[{index}] {message}" for message in self.validate_martingale(config))
             nested_martingale = config.get("martingale")
-            if nested_martingale:
+            if "martingale" in config:
                 if not isinstance(nested_martingale, dict):
                     errors.append(f"nodes[{index}].configuration.martingale must be an object.")
                 else:
@@ -331,6 +337,37 @@ class WorkflowDesignerService:
                 if source not in node_ids or target not in node_ids:
                     errors.append(f"edges[{index}] references a missing node.")
         return {"valid": not errors, "errors": errors, "warnings": warnings, "features": self.features()}
+
+    @staticmethod
+    def validate_condition(condition, depth=0):
+        if depth > 8:
+            return ["condition nesting may not exceed 8 levels."]
+        if not isinstance(condition, dict):
+            return ["condition must be an object."]
+        op = str(condition.get("op") or "eq")
+        if op not in CONDITION_OPERATORS:
+            return [f"unsupported condition operator: {op}."]
+        if op in {"and", "or"}:
+            children = condition.get("conditions")
+            if not isinstance(children, list) or not children or len(children) > 20:
+                return [f"{op} requires between 1 and 20 nested conditions."]
+            errors = []
+            for child in children:
+                errors.extend(WorkflowDesignerService.validate_condition(child, depth + 1))
+            return errors
+        if op == "not":
+            return WorkflowDesignerService.validate_condition(condition.get("condition"), depth + 1)
+        errors = []
+        if not str(condition.get("field") or "").strip():
+            errors.append("condition field is required.")
+        if op in {"gt", "gte", "lt", "lte"}:
+            try:
+                target = float(condition.get("value"))
+                if not math.isfinite(target):
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError):
+                errors.append(f"{op} condition value must be a finite number.")
+        return errors
 
     @staticmethod
     def validate_martingale(config):
@@ -438,17 +475,17 @@ class AutomationEngine:
         rules = RuleEngine()
         if actor is None:
             for rule in AutomationRule.objects.filter(enabled=True).order_by("priority"):
-                if trigger.match(rule.trigger, event_name, payload) and rules.evaluate(rule.condition, payload):
-                    try:
+                try:
+                    if trigger.match(rule.trigger, event_name, payload) and rules.evaluate(rule.condition, payload):
                         results.append(ActionService().execute(rule.action, {"event": event_name, "source": source, "payload": payload}))
-                    except Exception as exc:
-                        logger.exception("Automation system rule action failed")
-                        results.append({
-                            "action": (rule.action or {}).get("type", "unknown") if isinstance(rule.action, dict) else "unknown",
-                            "status": "failed",
-                            "code": "RULE_ACTION_FAILED",
-                            "detail": str(exc)[:500],
-                        })
+                except Exception as exc:
+                    logger.exception("Automation system rule evaluation or action failed")
+                    results.append({
+                        "action": (rule.action or {}).get("type", "unknown") if isinstance(rule.action, dict) else "unknown",
+                        "status": "failed",
+                        "code": "RULE_ACTION_FAILED",
+                        "detail": str(exc)[:500],
+                    })
         workflows = Workflow.objects.filter(enabled=True, status="pending")
         if actor is not None:
             workflows = workflows.filter(user=actor)
