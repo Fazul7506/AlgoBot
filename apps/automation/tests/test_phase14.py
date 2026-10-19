@@ -40,6 +40,17 @@ class AutomationEngineTests(TestCase):
         self.assertEqual(execution.result["status"], "dispatch_not_configured")
         self.assertEqual(execution.result["audit"][0]["status"], "not_dispatched")
 
+    def test_condition_gate_skips_following_trade_action_when_false(self):
+        user = get_user_model().objects.create_user(username="condition-gate", password="x")
+        workflow = Workflow.objects.create(user=user, name="Condition-gated workflow", status="pending")
+        WorkflowNode.objects.create(workflow=workflow, node_type="condition", configuration={"field": "risk_ok", "op": "eq", "value": True})
+        WorkflowNode.objects.create(workflow=workflow, node_type="action", configuration={"type": "pause_strategy"})
+        execution = WorkflowExecutionService().run(workflow, {"risk_ok": False})
+        self.assertEqual(execution.status, "completed")
+        self.assertEqual(execution.result["status"], "condition_not_met")
+        self.assertEqual(len(execution.audit_log), 1)
+        self.assertEqual(execution.audit_log[0]["status"], "condition_not_met")
+
     def test_execute_trade_requires_explicit_account(self):
         user = get_user_model().objects.create_user(username="auto-account", password="x")
         workflow = Workflow.objects.create(user=user, name="Explicit account")
