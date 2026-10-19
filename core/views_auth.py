@@ -80,6 +80,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token['username'] = user.username
         token['email'] = user.email
+        profile = UserProfile.objects.filter(user=user).only("two_factor_enabled").first()
+        if profile and profile.two_factor_enabled:
+            # validate() only returns this token after the TOTP/recovery code
+            # check succeeds; rejected challenges never expose the token.
+            token["mfa_verified"] = True
         return token
 
 
@@ -99,6 +104,12 @@ class CustomTokenRefreshSerializer(TokenRefreshSerializer):
             user = None
         if user is None:
             raise serializers.ValidationError("The refresh token is invalid or the account is inactive.")
+        profile = UserProfile.objects.filter(user=user).only("two_factor_enabled").first()
+        if profile and profile.two_factor_enabled and refresh.get("mfa_verified") is not True:
+            raise serializers.ValidationError({
+                "code": "two_factor_required",
+                "detail": "This refresh token predates second-factor verification. Sign in again.",
+            })
 
         from core.broker_onboarding import has_verified_account_email
         if not has_verified_account_email(user):
@@ -224,6 +235,8 @@ def browser_api_token(request):
             'next_url': '/verify-email/',
         }, status=status.HTTP_403_FORBIDDEN)
     refresh = RefreshToken.for_user(request.user)
+    if profile and profile.two_factor_enabled:
+        refresh["mfa_verified"] = True
     from core.broker_onboarding import has_authorized_broker_connection
     from django.urls import reverse
     broker_setup_required = not has_authorized_broker_connection(request.user)
@@ -351,6 +364,8 @@ def login_view(request):
 
     UserProfile.objects.update_or_create(user=user, defaults={'last_login_at': timezone.now()})
     refresh = RefreshToken.for_user(user)
+    if profile.two_factor_enabled:
+        refresh["mfa_verified"] = True
     from core.broker_onboarding import has_authorized_broker_connection
     from django.urls import reverse
     broker_setup_required = not has_authorized_broker_connection(user)
