@@ -44,7 +44,12 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(profile.timezone, "Africa/Nairobi")
         self.assertEqual(profile.phone, "+254700000000")
         self.assertEqual(profile.bio, "Quant researcher")
-        self.assertFalse(UserProfile.objects.filter(user=self.other_user).exists())
+        # User-creation signals provision a separate default profile for every
+        # account; verify that this request did not alter the other account.
+        other_profile = UserProfile.objects.get(user=self.other_user)
+        self.assertEqual(other_profile.country, "")
+        self.assertEqual(other_profile.phone, "")
+        self.assertEqual(other_profile.bio, "")
 
     def test_profile_page_rejects_missing_required_names_without_persisting(self):
         response = self.client.post(reverse("profile_page"), {
