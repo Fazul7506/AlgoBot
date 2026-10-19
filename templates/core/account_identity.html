@@ -45,6 +45,17 @@ document.addEventListener("click", event => { const button = event.target.closes
       </div>
     </form>
 
+    <form class="account-card" method="post" action="{% url 'account_identity_page' %}" data-password-change>
+      {% csrf_token %}
+      <input type="hidden" name="identity_action" value="change_password">
+      <h2>{% if password_required %}Change password{% else %}Set a password{% endif %}</h2>
+      {% if password_required %}<label>Current password<span class="account-password-control"><input name="current_password" type="password" autocomplete="current-password" data-password-field required><button type="button" class="account-password-toggle" data-password-toggle aria-label="Show password">Show</button></span></label>{% endif %}
+      <label>New password<span class="account-password-control"><input id="new-password" name="new_password" type="password" autocomplete="new-password" minlength="12" data-password-field required><button type="button" class="account-password-toggle" data-password-toggle aria-label="Show password">Show</button></span></label>
+      <div class="account-password-strength" aria-live="polite"><div class="account-password-strength__track"><span data-strength-bar></span></div><span data-strength-label>Use 12 or more characters</span></div>
+      <label>Confirm new password<span class="account-password-control"><input name="confirm_password" type="password" autocomplete="new-password" data-password-field required><button type="button" class="account-password-toggle" data-password-toggle aria-label="Show password">Show</button></span></label>
+      <div class="account-actions"><button type="submit" class="account-btn account-btn--primary">Save password</button></div>
+    </form>
+
     <aside class="panel">
       <h2>Connected identities</h2>
       {% if google_identity_linked %}
@@ -70,4 +81,15 @@ document.addEventListener("click", event => { const button = event.target.closes
     </aside>
   </div></div>
 </main>
+<script>
+document.addEventListener('input',function(event){
+ const input=event.target.closest('#new-password'); if(!input)return;
+ const value=input.value; let score=0;
+ if(value.length>=12)score++; if(value.length>=16)score++; if(/[a-z]/.test(value)&&/[A-Z]/.test(value))score++;
+ if(/[0-9]/.test(value))score++; if(/[^A-Za-z0-9]/.test(value))score++;
+ const bar=document.querySelector('[data-strength-bar]'); const label=document.querySelector('[data-strength-label]');
+ if(bar)bar.style.width=(score*20)+'%';
+ if(label)label.textContent=!value?'Use 12 or more characters':score<=2?'Weak — add length and character variety':score<=3?'Fair — improve character variety':score===4?'Strong':'Very strong';
+});
+</script>
 {% endblock %}
