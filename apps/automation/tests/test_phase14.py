@@ -40,6 +40,23 @@ class AutomationEngineTests(TestCase):
         self.assertEqual(execution.result["status"], "dispatch_not_configured")
         self.assertEqual(execution.result["audit"][0]["status"], "not_dispatched")
 
+    def test_ownerless_and_other_user_events_never_execute_private_workflows(self):
+        owner = get_user_model().objects.create_user(username="workflow-owner", password="x")
+        other = get_user_model().objects.create_user(username="workflow-other", password="x")
+        Workflow.objects.create(
+            user=owner, name="Private event workflow", status="pending", enabled=True,
+            definition={
+                "trigger": {"type": "manual", "event": "PrivateEvent"},
+                "nodes": [{"id": "action-1", "type": "action", "configuration": {"type": "pause_strategy"}}],
+            },
+        )
+        ownerless = AutomationEngine().handle_event("PrivateEvent", {})
+        other_user = AutomationEngine().handle_event("PrivateEvent", {}, actor=other)
+        owner_event = AutomationEngine().handle_event("PrivateEvent", {}, actor=owner)
+        self.assertEqual(ownerless.result["results"], [])
+        self.assertEqual(other_user.result["results"], [])
+        self.assertEqual(len(owner_event.result["results"]), 1)
+
     def test_approved_workflow_can_resume_without_creating_another_approval(self):
         user = get_user_model().objects.create_user(username="approval-resume", password="x")
         workflow = Workflow.objects.create(
