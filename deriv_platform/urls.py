@@ -44,7 +44,7 @@ from core.views_oauth import disconnect_deriv, refresh_deriv_token, deriv_accoun
 from apps.developer import views as developer_views
 from apps.notifications.channel_views import notification_channels_page
 
-from core.views_profile import profile_page
+from core.views_profile import profile_page, profile_picture
 
 
 def billing_success_dispatch(request):
@@ -100,6 +100,7 @@ urlpatterns = [
     path("performance/", login_required(performance_center), name="performance_page"),
     path("settings/", login_required(settings_page), name="settings_page"),
     path("profile/", login_required(profile_page), name="profile_page"),
+    path("profile/picture/", login_required(profile_picture), name="profile_picture"),
     path("profile/complete/", login_required(profile_completion_page), name="profile_completion_page"),
     path("orders/", login_required(orders_page), name="orders_page"),
     path("positions/", login_required(positions_page), name="positions_page"),
