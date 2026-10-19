@@ -28,6 +28,8 @@ from core.auth_rate_limit import allow_auth_attempt
 
 logger = logging.getLogger("account_auth")
 RESET_TTL = timedelta(hours=1)
+VERIFICATION_RESEND_COOLDOWN = timedelta(seconds=60)
+PENDING_VERIFICATION_EMAIL_SESSION_KEY = "algobot_pending_verification_email"
 
 
 def _digest(token):
@@ -166,7 +168,8 @@ def login_page(request):
             return _render(request, "login", identifier=identifier)
         profile, _ = UserProfile.objects.get_or_create(user=user)
         if not profile.email_verified:
-            messages.info(request, "Please verify your email before signing in. You can request a fresh verification link below.")
+            request.session[PENDING_VERIFICATION_EMAIL_SESSION_KEY] = user.email
+            messages.info(request, "Please verify your email before signing in. Your account email is ready below.")
             return redirect("verify_email_page")
         auth_login(request, user)
         UserProfile.objects.update_or_create(user=user, defaults={"last_login_at": timezone.now()})
@@ -257,8 +260,9 @@ def register_page(request):
                 errors=["An account could not be created with those details. If you already have an account, sign in or use account recovery."],
                 username=username, first_name=first_name, last_name=last_name, email=email,
             )
+        request.session[PENDING_VERIFICATION_EMAIL_SESSION_KEY] = user.email
         if email_sent:
-            messages.success(request, "Your account was created. Verify your email before signing in.")
+            messages.success(request, "Your account was created. We sent a verification email. Use the resend control below if it does not arrive.")
         else:
             messages.warning(request, "Your account was created, but the verification email could not be sent. Use Verify email to request another.")
         return redirect("verify_email_page")
@@ -492,7 +496,7 @@ def verify_email_page(request):
         return _render(request, "verify_email", invalid=True)
 
     if request.method == "POST":
-        email = str(request.POST.get("email") or "").strip().lower()
+        email = str(request.session.get(PENDING_VERIFICATION_EMAIL_SESSION_KEY) or request.POST.get("email") or "").strip().lower()
         email_allowed = allow_auth_attempt(request, "verification-resend", email, limit=3, window=3600)
         ip_allowed = allow_auth_attempt(request, "verification-resend-ip", "", limit=10, window=3600)
         rate_allowed = email_allowed and ip_allowed
@@ -501,18 +505,30 @@ def verify_email_page(request):
             user = matches.first()
             profile, _ = UserProfile.objects.get_or_create(user=user)
             if not profile.email_verified:
-                sent = _send_verification(request, user, profile)
-                logger.info(
-                    "verification_resend_attempted outcome=%s",
-                    "provider_accepted" if sent else "provider_failed",
-                )
+                created_at = profile.email_verification_token_created_at
+                remaining = max(0, int((created_at + VERIFICATION_RESEND_COOLDOWN - timezone.now()).total_seconds())) if created_at else 0
+                if remaining:
+                    request.session["verification_resend_wait_seconds"] = remaining
+                    messages.info(request, "Please wait for the resend timer to finish before requesting another verification email.")
+                else:
+                    sent = _send_verification(request, user, profile)
+                    request.session["verification_resend_wait_seconds"] = VERIFICATION_RESEND_COOLDOWN.seconds if sent else 0
+                    logger.info("verification_resend_attempted outcome=%s", "provider_accepted" if sent else "provider_failed")
             else:
                 logger.info("verification_resend_skipped reason=already_verified")
         else:
             logger.info("verification_resend_skipped reason=no_matching_active_account")
+        request.session[PENDING_VERIFICATION_EMAIL_SESSION_KEY] = email
         messages.info(request, "If an unverified account matches that email, a verification link will be sent.")
         return redirect("verify_email_page")
-    return _render(request, "verify_email")
+    pending_email = str(request.session.get(PENDING_VERIFICATION_EMAIL_SESSION_KEY) or "").strip().lower()
+    cooldown_seconds = int(request.session.pop("verification_resend_wait_seconds", 0) or 0)
+    if pending_email:
+        pending_user = User.objects.filter(email__iexact=pending_email, is_active=True).first()
+        profile = UserProfile.objects.filter(user=pending_user).first() if pending_user else None
+        if profile and profile.email_verification_token_created_at and not profile.email_verified:
+            cooldown_seconds = max(cooldown_seconds, max(0, int((profile.email_verification_token_created_at + VERIFICATION_RESEND_COOLDOWN - timezone.now()).total_seconds())))
+    return _render(request, "verify_email", verification_email=pending_email, cooldown_seconds=cooldown_seconds)
 
 
 
