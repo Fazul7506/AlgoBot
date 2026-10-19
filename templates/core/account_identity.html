@@ -1,18 +1,22 @@
 {% extends "base.html" %}
+{% load static %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account2">{% endblock %}
 {% block title %}Account Identity | AlgoBot{% endblock %}
 {% block content %}
-<section class="page-shell" data-account-identity>
-  <header class="page-header">
+<main class="account-page" data-account-identity>
+  <header class="account-hero">
     <div>
-      <p class="eyebrow">ACCOUNT SECURITY</p>
+      <p class="account-kicker">ACCOUNT SECURITY</p>
       <h1>Account identity</h1>
       <p>Manage your AlgoBot username and login email. Broker identity and Gmail notification delivery remain separate.</p>
     </div>
-    <div class="status-badge">{% if email_verified %}Email verified{% else %}Email not verified{% endif %}</div>
+    <span class="account-state {% if email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if email_verified %}Email verified{% else %}Email not verified{% endif %}</span>
   </header>
 
-  <div class="settings-grid">
-    <form class="panel" method="post" action="{% url 'account_identity_page' %}">
+  <div class="account-layout">
+    <nav class="account-nav" aria-label="Account settings"><a href="{% url 'profile_page' %}">Profile</a><a href="{% url 'settings_page' %}">Preferences</a><a href="{% url 'account_identity_page' %}" aria-current="page">Login &amp; identity</a><a href="{% url 'security_center' %}">Security</a></nav>
+    <div class="account-content">
+    <form class="account-card" method="post" action="{% url 'account_identity_page' %}">
       {% csrf_token %}
       <h2>Login identity</h2>
       {% for message in messages %}<p class="notice {{ message.tags }}" role="status">{{ message }}</p>{% endfor %}
@@ -21,7 +25,7 @@
         <label>Current password
           <input name="current_password" type="password" autocomplete="current-password" required>
         </label>
-        <p class="muted">Confirm your current password before changing your login identity.</p>
+        <p class="account-help">Confirm your current password before changing your login identity.</p>
       {% else %}
         <p class="muted">This account uses broker sign-in and has no local password. Verify any new email address before it becomes your login email.</p>
       {% endif %}
@@ -32,9 +36,9 @@
         <input name="email" type="email" value="{{ email }}" maxlength="254" autocomplete="email">
       </label>
       <p class="muted">Changing the email sends a verification link to the new address. Your current email remains active until the new address is verified.</p>
-      <div class="form-actions">
-        <button type="submit" class="button button-primary">Save identity</button>
-        <a class="button" href="{% url 'settings_page' %}">Back to settings</a>
+      <div class="account-actions">
+        <button type="submit" class="account-btn account-btn--primary">Save identity</button>
+        <a class="account-btn" href="{% url 'settings_page' %}">Back to settings</a>
       </div>
     </form>
 
@@ -63,6 +67,6 @@
         <a class="button" href="/notifications/">Manage Gmail notifications</a>
       </div>
     </aside>
-  </div>
-</section>
+  </div></div>
+</main>
 {% endblock %}
