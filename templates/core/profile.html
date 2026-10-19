@@ -105,7 +105,7 @@
           phone.value = internationalNumber;
         } else if (phone.value.trim()) {
           const selected = iti.getSelectedCountryData();
-          const digits = phone.value.replace(/\\D/g, '');
+          const digits = phone.value.replace(/\D/g, '');
           phone.value = phone.value.trim().startsWith('+')
             ? '+' + digits
             : '+' + (selected.dialCode || '254') + digits.replace(/^0+/, '');
