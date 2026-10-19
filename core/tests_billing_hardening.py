@@ -553,3 +553,21 @@ class BillingCheckoutSecretPersistenceTests(TestCase):
         self.assertEqual(safe["token"], "[REDACTED]")
         self.assertEqual(safe["nested"]["checkout_url"], "[REDACTED]")
         self.assertEqual(safe["subscription_id"], "SUB-1")
+
+    def test_billing_page_offers_both_payment_providers_with_accessible_labels(self):
+        response = self.client.get(reverse("billing_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Continue with Pesapal")
+        self.assertContains(response, "Continue with IntaSend")
+        self.assertContains(response, 'data-provider="pesapal"')
+        self.assertContains(response, 'data-provider="intasend"')
+        self.assertContains(response, "billing-provider-logo")
+        self.assertContains(response, "data-cancel-subscription")
+
+    @override_settings(ALGOBOT_BASIC_PRICE_CENTS="50000", ALGOBOT_BILLING_CURRENCY="KES")
+    def test_checkout_form_accepts_explicit_pesapal_provider_selection(self):
+        response = self.client.get(reverse("billing_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="provider" data-checkout-form-provider')
+        self.assertContains(response, 'data-provider="pesapal"')
+        self.assertContains(response, 'data-provider="intasend"')
