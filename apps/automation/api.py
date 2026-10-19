@@ -11,12 +11,11 @@ from .serializers import (
     ScheduledTaskSerializer, WorkflowExecutionSerializer, WorkflowSerializer,
 )
 from .services import ApprovalService, AutomationEngine, SchedulerService, WorkflowDesignerService, WorkflowValidationError
-from core.permissions import BrokerOnboardingRequired
 
 
 class WorkflowViewSet(viewsets.ModelViewSet):
     serializer_class = WorkflowSerializer
-    permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         return Workflow.objects.filter(user=self.request.user)
@@ -132,7 +131,7 @@ def _safe_payload(value, depth=0):
 
 
 @decorators.api_view(["POST"])
-@decorators.permission_classes([permissions.IsAuthenticated, BrokerOnboardingRequired])
+@decorators.permission_classes([permissions.IsAuthenticated])
 def execute(request):
     if not isinstance(request.data, dict):
         return response.Response({"detail": "An event object is required."}, status=status.HTTP_400_BAD_REQUEST)
