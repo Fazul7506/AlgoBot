@@ -246,14 +246,16 @@ class ActionService:
             routing_context=routing_context,
         )
         order = getattr(report, "order", None)
+        execution_status = str(getattr(order, "status", getattr(report, "status", "unknown")) or "unknown").lower()
+        action_status = "completed" if execution_status in {"filled", "executed", "partially_filled", "reconciled", "closed"} else "pending" if execution_status in {"pending", "submitted", "queued", "open", "approved", "created", "validated"} else "failed"
         return {
             "action": "execute_trade",
-            "status": "completed",
+            "status": action_status,
             "broker_type": account.broker.broker_type,
             "account_id": account.pk,
             "order_id": getattr(order, "pk", None),
             "broker_order_id": getattr(order, "broker_order_id", None),
-            "execution_status": getattr(order, "status", None),
+            "execution_status": execution_status,
             "martingale": martingale_state,
         }
 
@@ -398,11 +400,12 @@ class WorkflowExecutionService:
                 else:
                     raise WorkflowValidationError(f"Unsupported workflow node type: {node_type}")
             dispatch_pending = any(item.get("status") == "not_dispatched" for item in audit)
-            execution.status = "pending" if dispatch_pending else "completed"
+            action_pending = any(item.get("status") == "pending" for item in audit)
+            execution.status = "pending" if dispatch_pending or action_pending else "failed" if any(item.get("status") == "failed" for item in audit) else "completed"
             execution.result = {
                 "nodes_executed": len(audit),
                 "audit": audit,
-                "status": "dispatch_not_configured" if dispatch_pending else "completed",
+                "status": "dispatch_not_configured" if dispatch_pending else "awaiting_broker_confirmation" if action_pending else "failed" if execution.status == "failed" else "completed",
             }
         except ApprovalRequired as exc:
             execution.status = "paused"
