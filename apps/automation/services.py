@@ -92,6 +92,49 @@ class ActionService:
             "detail": "This action has no connected execution adapter; no external action was performed.",
         }
 
+    def _martingale_stake(self, *, user, workflow, account, node_id, base_stake, multiplier, max_steps, max_stake):
+        from apps.brokers.models import Order, Position
+
+        previous_orders = list(
+            Order.objects.filter(
+                user=user, account=account,
+                routing_context__automation__workflow_id=workflow.pk,
+                routing_context__automation__node_id=str(node_id),
+            ).order_by("-created_at", "-id")[:max_steps + 1]
+        )
+        loss_streak = 0
+        for previous in previous_orders:
+            if previous.status in {"pending", "submitted", "queued", "approved", "created", "validated"}:
+                raise WorkflowValidationError("Martingale is paused because the previous broker order has unresolved execution state.")
+            if previous.status in {"rejected", "failed", "cancelled", "expired"}:
+                continue
+            position = Position.objects.filter(
+                account=account, contract_id=str(previous.broker_order_id)
+            ).order_by("-id").first()
+            if position is None or str(position.status or "").lower() not in {"closed", "expired", "sold", "settled", "won", "lost"}:
+                raise WorkflowValidationError("Martingale is waiting for the previous broker position to close and reconcile; no new order was submitted.")
+            if position.profit is None:
+                raise WorkflowValidationError("Martingale is waiting for a reconciled position profit/loss; no new order was submitted.")
+            if position.profit < 0:
+                loss_streak += 1
+                if loss_streak >= max_steps:
+                    raise WorkflowValidationError("Martingale maximum consecutive-loss steps reached; automation stopped.")
+                continue
+            # A break-even or profitable result resets the progression.
+            break
+        next_stake = base_stake * (multiplier ** loss_streak)
+        if next_stake > max_stake:
+            raise WorkflowValidationError("Martingale stake would exceed max_stake; automation stopped.")
+        return next_stake, {
+            "enabled": True,
+            "loss_streak": loss_streak,
+            "base_stake": str(base_stake),
+            "multiplier": str(multiplier),
+            "next_stake": str(next_stake),
+            "max_stake": str(max_stake),
+            "max_steps": max_steps,
+        }
+
     def _execute_trade(self, action: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         workflow = context.get("workflow")
         user = getattr(workflow, "user", None)
@@ -158,11 +201,35 @@ class ActionService:
         routing_context = action.get("routing_context") or {}
         if not isinstance(routing_context, dict):
             raise WorkflowValidationError("routing_context must be an object.")
+        execution_id = context.get("execution_id")
+        node_id = str(context.get("node_id", "action"))
+        martingale = action.get("martingale")
+        if martingale:
+            if not isinstance(martingale, dict):
+                raise WorkflowValidationError("martingale configuration must be an object.")
+            validation = WorkflowDesignerService.validate_martingale(martingale)
+            if validation:
+                raise WorkflowValidationError("; ".join(validation))
+            stake, state = self._martingale_stake(
+                user=user, workflow=workflow, account=account, node_id=node_id,
+                base_stake=Decimal(str(martingale.get("base_stake", stake))),
+                multiplier=Decimal(str(martingale.get("multiplier", 2))),
+                max_steps=int(martingale.get("max_steps", 5)),
+                max_stake=Decimal(str(martingale.get("max_stake"))),
+            )
+            routing_context = {**routing_context, "martingale_state": state}
         if action.get("contract_type"):
             routing_context = {**routing_context, "contract_type": str(action["contract_type"]).upper()}
-        execution_id = context.get("execution_id")
-        node_id = context.get("node_id", "action")
-        client_order_id = f"automation-{execution_id}-{node_id}"[:100]
+        routing_context = {
+            **routing_context,
+            "automation": {
+                "workflow_id": workflow.pk,
+                "execution_id": execution_id,
+                "node_id": node_id,
+                "martingale": bool(martingale),
+            },
+        }
+        client_order_id = str(action.get("client_order_id") or f"automation-{workflow.pk}-{node_id}-{execution_id}")[:100]
         # ExecutionEngine enforces account ownership, connection eligibility,
         # market-data freshness, risk approval, idempotency, and broker adapter rules.
         report = ExecutionEngine().submit(
@@ -238,17 +305,13 @@ class WorkflowDesignerService:
                 if node_type == "trade" and not action_type:
                     warnings.append(f"nodes[{index}] trade node needs an explicit action type before execution.")
             if node_type == "martingale":
-                try:
-                    base_stake = float(config.get("base_stake"))
-                    multiplier = float(config.get("multiplier", 2))
-                    max_steps = int(config.get("max_steps", 5))
-                    max_stake = float(config.get("max_stake"))
-                    if not all(math.isfinite(v) for v in (base_stake, multiplier, max_stake)):
-                        raise ValueError
-                    if base_stake <= 0 or multiplier <= 1 or max_steps < 1 or max_steps > 20 or max_stake < base_stake:
-                        raise ValueError
-                except (TypeError, ValueError, OverflowError):
-                    errors.append(f"nodes[{index}] martingale requires positive base_stake, multiplier > 1, max_steps 1–20, and max_stake >= base_stake.")
+                errors.extend(f"nodes[{index}] {message}" for message in self.validate_martingale(config))
+            nested_martingale = config.get("martingale")
+            if nested_martingale:
+                if not isinstance(nested_martingale, dict):
+                    errors.append(f"nodes[{index}].configuration.martingale must be an object.")
+                else:
+                    errors.extend(f"nodes[{index}] {message}" for message in self.validate_martingale(nested_martingale))
         edges = definition.get("edges", definition.get("connections", []))
         if not isinstance(edges, list):
             errors.append("edges/connections must be a list.")
@@ -264,8 +327,24 @@ class WorkflowDesignerService:
         return {"valid": not errors, "errors": errors, "warnings": warnings, "features": self.features()}
 
     @staticmethod
+    def validate_martingale(config):
+        errors = []
+        try:
+            base_stake = float(config.get("base_stake"))
+            multiplier = float(config.get("multiplier", 2))
+            max_steps = int(config.get("max_steps", 5))
+            max_stake = float(config.get("max_stake"))
+            if not all(math.isfinite(v) for v in (base_stake, multiplier, max_stake)):
+                raise ValueError
+            if base_stake <= 0 or multiplier <= 1 or max_steps < 1 or max_steps > 20 or max_stake < base_stake:
+                raise ValueError
+        except (TypeError, ValueError, OverflowError):
+            errors.append("Martingale requires positive base_stake, multiplier > 1, max_steps 1–20, and max_stake >= base_stake.")
+        return errors
+
+    @staticmethod
     def features():
-        return ["event_triggers", "conditions", "broker_scoped_actions", "risk_gates", "approvals", "scheduling", "martingale_configuration", "versioning", "execution_audit"]
+        return ["event_triggers", "conditions", "broker_scoped_actions", "risk_gates", "approvals", "one_time_scheduling", "bounded_martingale", "versioning", "execution_audit"]
 
 
 class WorkflowExecutionService:
