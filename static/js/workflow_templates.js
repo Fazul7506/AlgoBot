@@ -73,6 +73,14 @@
               <label>Direction<select name="direction"><option value="CALL">CALL / BUY</option><option value="PUT">PUT / SELL</option><option value="RISE">RISE</option><option value="FALL">FALL</option></select></label>
               <label>Stake<input name="stake" type="number" min="0.01" step="0.01" value="1"></label>
               <label>Contract type<select name="contract_type"><option value="CALL">CALL</option><option value="PUT">PUT</option><option value="RISE">RISE</option><option value="FALL">FALL</option><option value="ACCU">Accumulator</option><option value="MULTUP">Multiplier up</option><option value="MULTDOWN">Multiplier down</option></select></label>
+              <label><input name="use_martingale" type="checkbox"> Enable bounded Martingale progression</label>
+              <div data-martingale-fields hidden>
+                <label>Martingale base stake<input name="martingale_base_stake" type="number" min="0.01" step="0.01" value="1"></label>
+                <label>Loss multiplier<input name="martingale_multiplier" type="number" min="1.01" step="0.1" value="2"></label>
+                <label>Maximum consecutive losses<input name="martingale_max_steps" type="number" min="1" max="20" step="1" value="5"></label>
+                <label>Maximum stake cap<input name="martingale_max_stake" type="number" min="0.01" step="0.01" value="16"></label>
+                <p class="ds-field__help">After a loss, the next stake increases by the configured multiplier. It waits for the previous position to close and its profit/loss to reconcile. It stops at the loss-step limit or stake cap.</p>
+              </div>
               <p class="ds-field__help">Trade parameters are sent to the backend for validation. A saved workflow is not proof that a broker order was executed.</p>
             </div>
             <label>Optional one-time run at <input name="schedule_at" type="datetime-local"></label>
@@ -86,8 +94,14 @@
       <section class="panel"><div class="panel-head"><div><p class="eyebrow">Existing</p><h2>Your workflows</h2></div></div>${workflowRows()}</section>`;
     const form = root.querySelector('[data-workflow-form]');
     const tradeFields = root.querySelector('[data-trade-fields]');
-    const refreshTradeFields = () => { tradeFields.hidden = form.elements.action_type.value !== 'execute_trade'; };
+    const martingaleFields = root.querySelector('[data-martingale-fields]');
+    const refreshTradeFields = () => {
+      const trade = form.elements.action_type.value === 'execute_trade';
+      tradeFields.hidden = !trade;
+      martingaleFields.hidden = !trade || !form.elements.use_martingale.checked;
+    };
     form.elements.action_type.addEventListener('change', refreshTradeFields);
+    form.elements.use_martingale.addEventListener('change', refreshTradeFields);
     refreshTradeFields();
 
     root.querySelectorAll('[data-use-template]').forEach(button => button.addEventListener('click', () => {
@@ -144,6 +158,17 @@
       configuration.contract_type = form.elements.contract_type.value;
       if (!configuration.symbol) throw new Error('Market symbol is required for trade execution.');
       configuration.routing_context = { source: 'automation_workflow' };
+      if (form.elements.use_martingale.checked) {
+        const baseStake = Number(form.elements.martingale_base_stake.value);
+        const multiplier = Number(form.elements.martingale_multiplier.value);
+        const maxSteps = Number(form.elements.martingale_max_steps.value);
+        const maxStake = Number(form.elements.martingale_max_stake.value);
+        if (![baseStake, multiplier, maxStake].every(Number.isFinite) || baseStake <= 0 || multiplier <= 1 || maxSteps < 1 || maxSteps > 20 || maxStake < baseStake) {
+          throw new Error('Martingale requires a positive base stake, multiplier above 1, 1–20 loss steps, and max stake at least the base stake.');
+        }
+        configuration.stake = baseStake;
+        configuration.martingale = { base_stake: baseStake, multiplier, max_steps: maxSteps, max_stake: maxStake };
+      }
     }
     return {
       trigger: { type: triggerType, event: triggerEvent },
