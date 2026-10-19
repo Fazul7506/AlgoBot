@@ -84,7 +84,19 @@
     select.value = current;
     const phone = document.querySelector('#profile-phone');
     if (phone && window.intlTelInput) {
-      window.intlTelInput(phone, {initialCountry:'ke', separateDialCode:true, nationalMode:false, formatOnDisplay:true, countrySearch:true, loadUtils:() => import('https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js')});
+      const iti = window.intlTelInput(phone, {initialCountry:'ke', separateDialCode:true, nationalMode:false, formatOnDisplay:true, countrySearch:true, loadUtils:() => import('https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js')});
+      const syncPhoneCountry = () => {
+        const countryName = select.options[select.selectedIndex]?.textContent?.replace(/^\\S+\\s+/, '').trim().toLocaleLowerCase();
+        const match = iti.getCountryData().find(item => item.name.toLocaleLowerCase() === countryName);
+        if (match) iti.setCountry(match.iso2);
+      };
+      select.addEventListener('change', syncPhoneCountry);
+      syncPhoneCountry();
+      const form = phone.closest('form');
+      if (form) form.addEventListener('submit', () => {
+        const internationalNumber = iti.getNumber();
+        if (internationalNumber) phone.value = internationalNumber;
+      });
     }
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, {once:true}); else initialize();
