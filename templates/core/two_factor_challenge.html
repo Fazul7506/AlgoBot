@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Verify sign-in | AlgoBot{% endblock %}
+{% block content %}
+<main class="account-page">
+  <section class="account-card">
+    <h1>Verify sign-in</h1>
+    <p class="account-subtitle">Enter the current code from your authenticator app or an unused recovery code to finish signing in.</p>
+    {% if error %}<p class="account-alert account-alert--error" role="alert">{{ error }}</p>{% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <div class="account-field">
+        <label for="two-factor-code">Authenticator or recovery code</label>
+        <input id="two-factor-code" name="two_factor_code" autocomplete="one-time-code" inputmode="text" maxlength="32" required autofocus>
+      </div>
+      <div class="account-actions"><button class="account-btn account-btn--primary" type="submit">Verify and continue</button><a class="account-btn" href="{% url 'login_page' %}">Cancel</a></div>
+    </form>
+  </section>
+</main>
+{% endblock %}
