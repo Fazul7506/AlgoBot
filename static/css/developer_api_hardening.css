@@ -83,3 +83,89 @@
   .dev-page .dev-actions{grid-template-columns:1fr}
   .dev-page .dev-form fieldset{grid-template-columns:1fr}
 }
+
+
+/* Mobile-first developer console repair: keep controls legible and prevent checkbox-label word wrapping. */
+.dev-page .dev-form fieldset{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px 18px;
+  width:100%;
+  max-width:100%;
+}
+.dev-page .dev-form fieldset legend{padding:0 6px;font-weight:700;color:#dbe7f8}
+.dev-page .dev-form fieldset label{
+  display:inline-flex;
+  flex:0 1 auto;
+  align-items:center;
+  justify-content:flex-start;
+  gap:9px;
+  width:auto;
+  max-width:100%;
+  white-space:normal;
+  overflow-wrap:normal;
+  word-break:normal;
+  line-height:1.35;
+  cursor:pointer;
+}
+.dev-page .dev-form fieldset label input[type="checkbox"]{
+  display:inline-block;
+  flex:0 0 18px;
+  width:18px;
+  min-width:18px;
+  max-width:18px;
+  height:18px;
+  margin:0;
+  accent-color:#8bb6ff;
+}
+.dev-page .dev-form>label{display:block;width:100%;min-width:0}
+.dev-page .dev-form input:not([type="checkbox"]),
+.dev-page .dev-form select,
+.dev-page .dev-form textarea{
+  display:block;
+  min-height:48px;
+  margin-top:8px;
+  padding:12px 14px;
+  border-radius:12px;
+  line-height:1.4;
+}
+.dev-page .dev-form button[type="submit"]{
+  min-height:48px;
+  width:100%;
+  border-radius:13px;
+  font-weight:750;
+}
+.dev-page .dev-hero{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:18px}
+.dev-page .dev-hero h1{line-height:1.12;letter-spacing:-.035em}
+.dev-page .dev-health{display:inline-flex;align-items:center;gap:8px}
+.dev-page .dev-card{min-width:0}
+.dev-page .dev-row{gap:14px;flex-wrap:wrap}
+.dev-page .dev-actions{display:flex;flex-wrap:wrap;gap:8px}
+.dev-page .dev-actions form{display:inline-flex;flex:0 1 auto}
+.dev-page .dev-actions button{min-height:40px;padding:8px 12px;border-radius:10px;white-space:normal}
+.dev-page .dev-empty{padding:18px;border:1px dashed #3a4a62;border-radius:14px;color:#a8b6ca;line-height:1.55}
+.dev-page .secret-panel{padding:14px;border:1px solid #45608a;border-radius:14px;background:linear-gradient(145deg,#142640,#101a2b)}
+.dev-page .secret-panel>div{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}
+.dev-page .secret-panel button{min-height:40px;padding:8px 14px;border-radius:10px}
+.dev-page .dev-docs{max-height:420px;white-space:pre;overflow:auto;overscroll-behavior:contain}
+.api-explorer .api-endpoint{display:grid;grid-template-columns:54px minmax(0,1fr);align-items:start;gap:9px;width:100%;text-align:left}
+.api-explorer .api-endpoint code{white-space:normal;overflow-wrap:anywhere;word-break:normal;line-height:1.45}
+.api-explorer .api-search input{width:100%;min-height:44px}
+.api-explorer [hidden]{display:none!important}
+@media(max-width:600px){
+  .dev-page .dev-form fieldset{display:flex;flex-direction:column;align-items:stretch;gap:12px;padding:14px}
+  .dev-page .dev-form fieldset label{width:100%;min-height:28px;flex:0 0 auto}
+  .dev-page .dev-row{display:flex;flex-direction:column}
+  .dev-page .dev-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+  .dev-page .dev-actions form,.dev-page .dev-actions button{width:100%;min-width:0}
+  .dev-page .dev-hero-actions{display:flex;flex-wrap:wrap;align-items:center}
+  .dev-page .dev-hero-actions .btn{flex:1 1 135px;min-height:42px}
+  .dev-page .dev-hero-actions .dev-health{flex:1 0 100%}
+  .dev-page .secret-panel>div{grid-template-columns:minmax(0,1fr) auto}
+  .dev-page .secret-panel code{font-size:12px}
+}
+@media(max-width:360px){
+  .dev-page .dev-actions{grid-template-columns:minmax(0,1fr)}
+  .dev-page .secret-panel>div{grid-template-columns:minmax(0,1fr)}
+}
