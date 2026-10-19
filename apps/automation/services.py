@@ -526,9 +526,12 @@ class AutomationEngine:
                         "code": "RULE_ACTION_FAILED",
                         "detail": str(exc)[:500],
                     })
-        workflows = Workflow.objects.filter(enabled=True, status="pending")
+        # User workflows must always be tenant-scoped. System events without an
+        # authenticated owner may evaluate global rules, but never every user's
+        # private workflow.
+        workflows = Workflow.objects.none()
         if actor is not None:
-            workflows = workflows.filter(user=actor)
+            workflows = Workflow.objects.filter(user=actor, enabled=True, status="pending")
         for workflow in workflows:
             # A TradeExecuted event emitted by this workflow's own order must
             # not immediately submit another order. TradeClosed is different:
