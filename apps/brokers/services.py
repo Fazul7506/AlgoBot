@@ -231,7 +231,24 @@ class ExecutionManagementSystem:
         order.status = status_value; order.broker_order_id = broker_order_id; update_fields = ['status', 'broker_order_id', 'updated_at']
         if status_value in {'filled', 'executed', 'partially_filled'}: order.executed_at = timezone.now(); update_fields.append('executed_at')
         await sync_to_async(order.save)(update_fields=update_fields)
-        return await sync_to_async(ExecutionReport.objects.create)(order=order, execution_price=executed, requested_price=requested, slippage=slippage, latency=result.get('latency', latency), fees=Decimal(str(result.get('fees', 0))), status=status_value, raw_report=result)
+        report = await sync_to_async(ExecutionReport.objects.create)(
+            order=order, execution_price=executed, requested_price=requested, slippage=slippage,
+            latency=result.get('latency', latency), fees=Decimal(str(result.get('fees', 0))),
+            status=status_value, raw_report=result,
+        )
+        if status_value == "filled":
+            routing = order.routing_context if isinstance(order.routing_context, dict) else {}
+            automation = routing.get("automation") if isinstance(routing.get("automation"), dict) else {}
+            event_payload = {
+                "order_id": order.pk, "broker_order_id": order.broker_order_id,
+                "broker_type": order.broker.broker_type, "broker_account_pk": order.account_id,
+                "broker_account_id": order.account.account_id, "symbol": order.symbol,
+                "direction": order.direction, "contract_type": order.contract_type,
+                "stake": str(order.stake), "execution_price": str(executed),
+                "profit": result.get("profit"), "origin_workflow_id": automation.get("workflow_id"),
+            }
+            await sync_to_async(_queue_automation_event, thread_sensitive=False)("TradeExecuted", order.account, event_payload)
+        return report
 
 
 class ExecutionEngine:
