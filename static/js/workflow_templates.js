@@ -214,7 +214,7 @@
       form.elements.stake.value = '1';
       await load();
     } catch (error) {
-      feedback.innerHTML = `<div class="ds-state ds-state--error"><strong>Workflow was not fully configured</strong><p>${esc(error.message || 'Request failed')}</p></div>`;
+      feedback.innerHTML = `<div class="ds-state ds-state--error"><strong>Workflow was not fully configured</strong><p>${esc(error.message || String(error))}</p></div>`;
     }
   }
 
