@@ -175,8 +175,7 @@ def broker_marketplace_page(request):
     connected_accounts = {}
     for account in active_accounts:
         connection_ok = account.connections.filter(status__in=('connected', 'ready', 'syncing', 'degraded')).exists()
-        # Deriv OAuth accounts are connected when credentials are active even if a heartbeat is stale.
-        if connection_ok or account.broker.broker_type == 'deriv':
+        if connection_ok:
             connected_types.add(account.broker.broker_type)
             connected_accounts.setdefault(account.broker.broker_type, []).append(account)
     for broker in brokers:
