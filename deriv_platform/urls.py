@@ -43,6 +43,8 @@ from core.views_oauth import disconnect_deriv, refresh_deriv_token, deriv_accoun
 from apps.developer import views as developer_views
 from apps.notifications.channel_views import notification_channels_page
 
+from core.views_profile import profile_page
+
 
 def billing_success_dispatch(request):
     has_provider_return = bool(
