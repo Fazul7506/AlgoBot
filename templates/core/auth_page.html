@@ -39,7 +39,10 @@
     main{width:min(100%,460px)}
     @media(max-width:480px){body{padding:14px}main{padding:24px 20px;border-radius:20px}.provider-button{min-height:52px}}
 
-    button:disabled{opacity:.7;cursor:wait}
+    button:disabled{opacity:.7;cursor:not-allowed}
+    .email-readonly{background:#111d30;border-color:#465878;color:#dce6ff}
+    .timer-note{min-height:1.5em;color:var(--muted);font-size:14px;margin-top:10px}
+    .resend-button[disabled]{background:#34445f;color:#b9c5d8;cursor:not-allowed;opacity:1}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
   </style>
 </head>
@@ -96,7 +99,7 @@
     {% endif %}
     <div class="links"><a href="{% url 'login_page' %}">Back to sign in</a></div>
   {% else %}
-    <h1>Verify your email</h1><p class="sub">We’ll send a fresh verification link if this email belongs to an unverified AlgoBot account.</p>
+    <h1>Verify your email</h1><p class="sub">Your AlgoBot account email is linked to this request. We’ll send a fresh verification link when the resend timer allows it.</p>
     {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
     {% if invalid %}<div class="notice error">That verification link is invalid or has already been used.</div>{% endif %}
     {% if confirm_token %}
@@ -106,10 +109,43 @@
         <button type="submit">Confirm email verification</button>
       </form>
     {% else %}
-      <form method="post" action="{% url 'verify_email_page' %}">{% csrf_token %}
-        <label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" required>
-        <button type="submit">Send verification link</button>
-      </form>
+      {% if verification_email %}
+        <label for="email">Account email</label><input class="email-readonly" id="email" type="email" value="{{ verification_email }}" autocomplete="email" readonly aria-readonly="true">
+        <form method="post" action="{% url 'verify_email_page' %}" id="resend-verification-form">{% csrf_token %}
+          <button class="resend-button" id="resend-verification-button" type="submit" {% if cooldown_seconds > 0 %}disabled{% endif %}>Resend verification email</button>
+          <p class="timer-note" id="resend-timer" role="status" aria-live="polite"></p>
+        </form>
+        <script>
+          (() => {
+            const button = document.getElementById("resend-verification-button");
+            const timer = document.getElementById("resend-timer");
+            if (!button || !timer) return;
+            let remaining = Math.max(0, Number("{{ cooldown_seconds|default:0 }}") || 0);
+            const render = () => {
+              button.disabled = remaining > 0;
+              if (remaining > 0) {
+                const minutes = Math.floor(remaining / 60);
+                const seconds = remaining % 60;
+                timer.textContent = "Resend available in " + minutes + ":" + String(seconds).padStart(2, "0");
+              } else {
+                timer.textContent = "You can request another verification email now.";
+                button.textContent = "Resend verification email";
+              }
+            };
+            render();
+            if (remaining > 0) {
+              button.textContent = "Please wait…";
+              const interval = window.setInterval(() => {
+                remaining = Math.max(0, remaining - 1);
+                render();
+                if (remaining === 0) window.clearInterval(interval);
+              }, 1000);
+            }
+          })();
+        </script>
+      {% else %}
+        <p class="notice">Open this page after registering or signing in with your username/email. We’ll identify the account automatically.</p>
+      {% endif %}
     {% endif %}
     <div class="links"><a href="{% url 'login_page' %}">Back to sign in</a><a href="{% url 'register_page' %}">Create an account</a></div>
   {% endif %}
