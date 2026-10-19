@@ -134,6 +134,7 @@ def login_page(request):
     if request.user.is_authenticated:
         from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
         if not has_verified_account_email(request.user):
+            request.session[PENDING_VERIFICATION_EMAIL_SESSION_KEY] = request.user.email
             messages.info(request, "Verify your AlgoBot email before continuing.")
             return redirect("verify_email_page")
         if not has_authorized_broker_connection(request.user):
@@ -207,6 +208,7 @@ def register_page(request):
     if request.user.is_authenticated:
         from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
         if not has_verified_account_email(request.user):
+            request.session[PENDING_VERIFICATION_EMAIL_SESSION_KEY] = request.user.email
             messages.info(request, "Verify your AlgoBot email before continuing.")
             return redirect("verify_email_page")
         return redirect("dashboard_page" if has_authorized_broker_connection(request.user) else "broker_marketplace_page")
