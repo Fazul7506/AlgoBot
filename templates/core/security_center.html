@@ -10,7 +10,7 @@
       <h1>Security</h1>
       <p class="account-subtitle">Review the security signals AlgoBot can verify and jump directly to the settings that need attention. Status reflects current application records and configuration, not a guarantee of account safety.</p>
     </div>
-    <span class="account-state {% if checks|length %}account-state--good{% else %}account-state--warn{% endif %}">Security overview</span>
+    <span class="account-state {% if checks_ok %}account-state--good{% else %}account-state--warn{% endif %}">{% if checks_ok %}Checks passed{% else %}Needs attention{% endif %}</span>
   </header>
 
   <div class="account-layout">
@@ -28,7 +28,7 @@
           {% for name,ok in checks %}
           <div class="account-toggle">
             <div><strong>{{ name }}</strong><p>{% if ok %}The current check passed based on available account and platform state.{% else %}Review the related account or platform configuration below.{% endif %}</p></div>
-            <span class="account-state {% if ok %}account-state--good{% else %}account-state--warn{% endif %}">{% if ok %}Protected{% else %}Needs attention{% endif %}</span>
+            <span class="account-state {% if ok %}account-state--good{% else %}account-state--warn{% endif %}">{% if ok %}Check passed{% else %}Needs attention{% endif %}</span>
           </div>
           {% empty %}
           <div class="account-alert">Security checks are not currently available. Refresh this page later.</div>
