@@ -46,7 +46,7 @@
       <section class="account-card" id="trading-defaults">
         <div class="account-card__header"><div><h2>Trading defaults</h2><p class="account-card__hint">Defaults for your strategy and risk configuration. Execution is still subject to broker eligibility and server-side risk gates.</p></div><span class="account-state account-state--warn">Not an execution override</span></div>
         <div class="account-fields">
-          <div class="account-field"><label for="pref-strategy">Default strategy</label><input id="pref-strategy" name="default_strategy" maxlength="100" placeholder="trend"></div>
+          <div class="account-field"><label for="pref-strategy">Default strategy</label><select id="pref-strategy" name="default_strategy" required><option value="">Choose a registered strategy</option>{% for strategy in available_strategies %}<option value="{{ strategy.slug }}">{{ strategy.name }}</option>{% endfor %}</select></div>
           <div class="account-field"><label for="pref-concurrent">Maximum concurrent trades</label><input id="pref-concurrent" name="max_concurrent_trades" type="number" min="1" max="1000" step="1" required></div>
           <div class="account-field"><label for="pref-daily-loss">Maximum daily loss (%)</label><input id="pref-daily-loss" name="max_daily_loss_pct" type="number" min="0" max="100" step="0.1" required><span class="account-help">Enter a percentage, for example 5 for 5%.</span></div>
           <div class="account-field"><label for="pref-risk-trade">Risk per trade (%)</label><input id="pref-risk-trade" name="risk_per_trade_pct" type="number" min="0" max="100" step="0.1" required><span class="account-help">Enter a percentage, for example 1 for 1%.</span></div>
