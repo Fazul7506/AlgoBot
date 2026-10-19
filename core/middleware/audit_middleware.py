@@ -9,7 +9,6 @@ import logging
 import uuid
 
 from django.contrib import messages
-from django.db import DatabaseError
 from django.utils.deprecation import MiddlewareMixin
 
 from core.models import AuditLog as RequestAuditLog
@@ -24,7 +23,7 @@ class AuditMiddleware(MiddlewareMixin):
         return not any(request.path.startswith(path) for path in self.EXCLUDED_PATHS)
 
     def process_request(self, request):
-        request.algobot_request_id = request.headers.get("X-Request-ID", "")[:64] or uuid.uuid4().hex
+        request.algobot_request_id = uuid.uuid4().hex
 
     def process_response(self, request, response):
         if not self.should_audit(request):
