@@ -1,15 +1,15 @@
-"""Enforce broker onboarding on protected browser workspace routes.
+"""Enforce broker onboarding only for trading-workspace browser routes.
 
-Authentication, account recovery, billing, developer tooling, operations,
-broker management, health checks, webhooks, static assets, and Django admin
-remain reachable. API authorization is handled by DRF permissions after the
-request has been authenticated; this middleware must not pre-empt API views.
+Account management and operational observability remain available to a signed-in
+AlgoBot user before Deriv is connected. Actual trading/API actions must still
+enforce their own broker and risk permissions; browser middleware is not an API
+authorization boundary.
 """
 from django.shortcuts import redirect
 
 
 class BrokerOnboardingMiddleware:
-    """Require a usable broker connection before protected trading pages."""
+    """Require an eligible Deriv connection before entering trading pages."""
 
     EXEMPT_PREFIXES = (
         "/admin/", "/static/", "/media/", "/health/",
@@ -20,13 +20,14 @@ class BrokerOnboardingMiddleware:
         "/billing/", "/saas/", "/developer/", "/api/",
     )
 
+    # These pages depend on a live broker connection to perform trading.
+    # Settings/profile and monitoring pages remain usable during onboarding.
     PROTECTED_BROWSER_PREFIXES = (
         "/dashboard/", "/markets/", "/market-scanner/", "/strategies/",
         "/trading/", "/backtesting/", "/predictions/", "/model-lab/",
         "/performance/", "/orders/", "/positions/", "/signals/",
         "/portfolio/", "/risk/", "/trade-history/", "/automation/",
-        "/analysis/", "/workflow-templates/", "/operations/", "/monitoring/", "/notifications/",
-        "/settings/", "/profile/",
+        "/analysis/", "/workflow-templates/",
     )
 
     def __init__(self, get_response):
