@@ -192,6 +192,8 @@ def login_page(request):
                 )
         request.session.pop("algobot_pending_2fa_user_id", None)
         auth_login(request, user)
+        if profile.two_factor_enabled:
+            request.session["algobot_mfa_verified_user_id"] = user.pk
         UserProfile.objects.update_or_create(user=user, defaults={"last_login_at": timezone.now()})
         from core.broker_onboarding import has_authorized_broker_connection
         safe_destination = first_safe_auth_destination(
@@ -603,6 +605,7 @@ def two_factor_challenge_page(request):
             }, status=400)
         request.session.pop("algobot_pending_2fa_user_id", None)
         auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        request.session["algobot_mfa_verified_user_id"] = user.pk
         UserProfile.objects.filter(user=user).update(last_login_at=timezone.now())
         request.session.pop("broker_onboarding_next", None)
         return redirect("broker_marketplace_page")
