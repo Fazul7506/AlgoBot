@@ -44,8 +44,23 @@ def bot_runtime_workspace(request):
 
 @login_required
 def audit_workspace(request):
-    events = AuditLog.objects.filter(user=request.user).order_by("-timestamp")[:80]
-    return render(request, "core/audit_log.html", {"events": events, "event_count": AuditLog.objects.filter(user=request.user).count()})
+    queryset = AuditLog.objects.filter(user=request.user)
+    action = request.GET.get("action", "").strip()[:120]
+    module = request.GET.get("module", "").strip()[:120]
+    search = request.GET.get("q", "").strip()[:160]
+    if action:
+        queryset = queryset.filter(action__icontains=action)
+    if module:
+        queryset = queryset.filter(module__icontains=module)
+    if search:
+        queryset = queryset.filter(Q(action__icontains=search) | Q(module__icontains=search) | Q(resource__icontains=search))
+    total = queryset.count()
+    from django.core.paginator import Paginator
+    page = Paginator(queryset.order_by("-timestamp", "-id"), 50).get_page(request.GET.get("page", 1))
+    return render(request, "core/audit_log.html", {
+        "events": page.object_list, "event_count": total, "page_obj": page,
+        "audit_filters": {"action": action, "module": module, "q": search},
+    })
 
 
 @login_required
