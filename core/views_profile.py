@@ -33,8 +33,8 @@ def profile_page(request):
             errors.append("Country must be 100 characters or fewer.")
         if len(timezone_name) > 100:
             errors.append("Timezone must be 100 characters or fewer.")
-        if len(phone) > 20:
-            errors.append("Phone number must be 20 characters or fewer.")
+        if len(phone) > 32:
+            errors.append("Phone number must be 32 characters or fewer.")
         if len(bio) > 5000:
             errors.append("Bio must be 5,000 characters or fewer.")
 
