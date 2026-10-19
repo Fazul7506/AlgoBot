@@ -96,7 +96,11 @@ class ActionService:
         workflow = context.get("workflow")
         user = getattr(workflow, "user", None)
         if workflow is None or user is None:
-            raise WorkflowValidationError("A user-owned workflow is required to dispatch a trade.")
+            return {
+                "action": "execute_trade", "status": "not_dispatched",
+                "code": "WORKFLOW_CONTEXT_REQUIRED",
+                "detail": "Trade actions require a user-owned workflow context; no order was submitted.",
+            }
         # Do not infer a broker account from the user's preferred/default account.
         # Every automation trade must name the exact account it intends to use.
         account_id = action.get("account_id")
@@ -292,6 +296,8 @@ class WorkflowExecutionService:
             validation = WorkflowDesignerService().validate(workflow.definition or {})
             if not validation["valid"]:
                 raise WorkflowValidationError("; ".join(validation["errors"]))
+            if not nodes:
+                raise WorkflowValidationError("Workflow has no executable nodes.")
             for node in nodes:
                 node_type = node.node_type
                 if node_type in {"trigger", "condition", "delay", "branch", "martingale"}:
@@ -346,7 +352,16 @@ class AutomationEngine:
         if actor is None:
             for rule in AutomationRule.objects.filter(enabled=True).order_by("priority"):
                 if trigger.match(rule.trigger, event_name, payload) and rules.evaluate(rule.condition, payload):
-                    results.append(ActionService().execute(rule.action, {"event": event_name, "source": source, "payload": payload}))
+                    try:
+                        results.append(ActionService().execute(rule.action, {"event": event_name, "source": source, "payload": payload}))
+                    except Exception as exc:
+                        logger.exception("Automation system rule action failed")
+                        results.append({
+                            "action": (rule.action or {}).get("type", "unknown") if isinstance(rule.action, dict) else "unknown",
+                            "status": "failed",
+                            "code": "RULE_ACTION_FAILED",
+                            "detail": str(exc)[:500],
+                        })
         workflows = Workflow.objects.filter(enabled=True, status="pending")
         if actor is not None:
             workflows = workflows.filter(user=actor)
