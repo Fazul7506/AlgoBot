@@ -66,6 +66,8 @@ def security_workspace(request):
         if action == "setup_2fa":
             if profile.two_factor_enabled:
                 messages.info(request, "Two-factor authentication is already enabled.")
+            elif request.user.has_usable_password() and not request.user.check_password(request.POST.get("current_password") or ""):
+                messages.error(request, "Enter your current password before starting two-factor setup.")
             else:
                 try:
                     pending_secret = TwoFactorService.generate_secret()
@@ -89,6 +91,14 @@ def security_workspace(request):
                         "two_factor_secret_encrypted", "two_factor_pending_secret_encrypted",
                         "two_factor_recovery_codes", "two_factor_enabled", "updated_at",
                     ])
+                    # Enrollment itself just verified the authenticator, so this
+                    # browser session may request its browser-scoped API token.
+                    request.session["algobot_mfa_verified_user_id"] = request.user.pk
+                    # Refresh credentials minted before MFA enrollment must not
+                    # remain a way to bypass the newly enabled second factor.
+                    from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+                    for outstanding in OutstandingToken.objects.filter(user=request.user):
+                        BlacklistedToken.objects.get_or_create(token=outstanding)
                     request.session["algobot_2fa_recovery_codes_once"] = recovery_codes
                     messages.success(request, "Two-factor authentication is enabled. Save these recovery codes now; they are shown only once.")
                     return redirect("security_center")
@@ -115,6 +125,14 @@ def security_workspace(request):
         return redirect("security_center")
 
     setup_uri = request.session.pop("algobot_2fa_setup_uri", "")
+    if not setup_uri and profile.two_factor_pending_secret_encrypted:
+        try:
+            pending_secret = TwoFactorService.decrypt_secret(profile.two_factor_pending_secret_encrypted)
+            setup_uri = TwoFactorService(pending_secret).get_uri(
+                request.user.email or request.user.username, issuer="AlgoBot"
+            )
+        except RuntimeError:
+            setup_uri = ""
     account = _account(request)
     keys = APIKey.objects.filter(user=request.user)
     now = timezone.now()
@@ -146,5 +164,6 @@ def security_workspace(request):
             "two_factor_setup_uri": setup_uri,
             "two_factor_recovery_codes": recovery_codes,
             "two_factor_recovery_codes_remaining": len(profile.two_factor_recovery_codes or []),
+            "password_required": request.user.has_usable_password(),
         },
     )
