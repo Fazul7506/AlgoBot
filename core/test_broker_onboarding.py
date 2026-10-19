@@ -34,7 +34,7 @@ class BrokerOnboardingGateTests(TestCase):
         self.client.force_login(self.user)
         # Account management and observability must work before a broker is
         # connected; only trading-workspace routes are gated by this middleware.
-        for path in ("/settings/", "/profile/", "/operations/deployments/", "/operations/audit/", "/monitoring/"):
+        for path in ("/settings/", "/profile/", "/operations/audit/", "/monitoring/"):
             with self.subTest(path=path):
                 response = self.client.get(path)
                 self.assertNotEqual(response.status_code, 302)

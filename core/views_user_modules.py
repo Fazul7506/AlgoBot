@@ -7,7 +7,6 @@ from django.utils import timezone
 from django.shortcuts import redirect, render
 
 from apps.automation.models import ScheduledTask, Workflow, WorkflowExecution
-from apps.deployment.models import BackupRecord, DeploymentRecord
 from apps.developer.models import APIKey
 from apps.monitoring.models import AuditLog
 from core.account_context import get_active_account
@@ -23,23 +22,6 @@ def automation_workspace(request):
     executions = WorkflowExecution.objects.filter(workflow__user=request.user)
     schedules = ScheduledTask.objects.filter(workflow__user=request.user, status__in=["pending", "running"])
     return render(request, "core/automation_workspace.html", {"workflows": workflows[:20], "running": executions.filter(status="running").count(), "failed": executions.filter(status="failed").count(), "scheduled": schedules.count()})
-
-
-@login_required
-def bot_runtime_workspace(request):
-    account = _account(request)
-    account_connected = bool(account and account.is_connection_eligible)
-    return render(
-        request,
-        "core/bot_runtime.html",
-        {
-            "deployments": DeploymentRecord.objects.filter(user=request.user).order_by("-created_at")[:15],
-            "backups": BackupRecord.objects.filter(user=request.user).order_by("-created_at")[:10],
-            "account": account,
-            "account_connected": account_connected,
-            "live_enabled": bool(getattr(settings, "ALLOW_LIVE_TRADING", False)),
-        },
-    )
 
 
 @login_required
