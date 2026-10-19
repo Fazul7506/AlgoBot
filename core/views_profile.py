@@ -2,6 +2,9 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
+from django.http import FileResponse, Http404
+from django.views.decorators.http import require_GET
+import mimetypes
 from django.views.decorators.http import require_http_methods
 from zoneinfo import available_timezones
 from PIL import Image, UnidentifiedImageError
@@ -48,9 +51,13 @@ def profile_page(request):
                     image = Image.open(avatar_file)
                     if image.format not in {"JPEG", "PNG", "WEBP", "GIF"}:
                         errors.append("Profile picture must be a JPEG, PNG, WEBP, or GIF image.")
+                    image_format = image.format
                     image.verify()
                     avatar_file.seek(0)
-                except (UnidentifiedImageError, OSError, ValueError):
+                    extension = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp", "GIF": "gif"}.get(image_format)
+                    if extension:
+                        avatar_file.name = "profile." + extension
+                except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
                     errors.append("Upload a valid image file (JPEG, PNG, WEBP, or GIF).")
                     avatar_file.seek(0)
         if len(bio) > 5000:
@@ -87,3 +94,25 @@ def profile_page(request):
             if request.user.first_name and request.user.last_name
             else request.user.username[:2].upper(),
     })
+
+
+
+@login_required
+@require_GET
+def profile_picture(request):
+    """Serve only the signed-in user's profile picture from the configured storage backend."""
+    profile = UserProfile.objects.filter(user=request.user).first()
+    if not profile or not profile.profile_picture:
+        raise Http404("Profile picture not found.")
+    try:
+        image_file = profile.profile_picture.open("rb")
+    except (OSError, ValueError):
+        raise Http404("Profile picture not found.")
+    content_type = mimetypes.guess_type(profile.profile_picture.name)[0] or "application/octet-stream"
+    if content_type not in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
+        image_file.close()
+        raise Http404("Profile picture not found.")
+    response = FileResponse(image_file, content_type=content_type)
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, max-age=300"
+    return response
