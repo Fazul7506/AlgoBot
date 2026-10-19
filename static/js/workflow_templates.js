@@ -182,6 +182,11 @@
     const feedback = $('[data-workflow-feedback]');
     try {
       const definition = buildDefinition(form);
+      const scheduleValue = form.elements.schedule_at.value;
+      if (scheduleValue) {
+        const when = new Date(scheduleValue);
+        if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) throw new Error('Choose a one-time schedule in the future.');
+      }
       feedback.innerHTML = '<p class="ds-field__help">Validating workflow definition…</p>';
       await window.AlgoBotFrontendData.request('/api/automation/workflows/validate/', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ definition })
@@ -195,10 +200,8 @@
         })
       });
       await window.AlgoBotFrontendData.request(`/api/automation/workflows/${encodeURIComponent(created.id)}/activate/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      const scheduleValue = form.elements.schedule_at.value;
       if (scheduleValue) {
         const when = new Date(scheduleValue);
-        if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) throw new Error('Choose a one-time schedule in the future.');
         await window.AlgoBotFrontendData.request('/api/automation/schedule/', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ workflow: created.id, schedule_type: 'one_time', next_execution: when.toISOString() })
@@ -229,7 +232,10 @@
   }
 
   function boot() {
-    window.AlgoBotBrokerState?.subscribe(() => load());
+    window.AlgoBotBrokerState?.subscribe(() => {
+      const form = $('[data-workflow-form]');
+      if (!form || !form.elements.name.value.trim()) load();
+    });
     load();
   }
 
