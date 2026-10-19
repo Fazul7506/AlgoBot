@@ -26,6 +26,7 @@ class BrokerOnboardingMiddleware:
         "/performance/", "/orders/", "/positions/", "/signals/",
         "/portfolio/", "/risk/", "/trade-history/", "/automation/",
         "/analysis/", "/workflow-templates/", "/operations/", "/monitoring/", "/notifications/",
+        "/settings/", "/profile/",
     )
 
     def __init__(self, get_response):
