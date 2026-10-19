@@ -53,6 +53,20 @@ class TwoFactorEnforcementTests(TestCase):
         self.assertEqual(str(self.client.session["algobot_pending_2fa_user_id"]), str(self.user.pk))
         self.assertNotIn("_auth_user_id", self.client.session)
 
+    def test_jwt_without_mfa_claim_is_rejected_after_enrollment(self):
+        from rest_framework.exceptions import AuthenticationFailed
+        from rest_framework.test import APIRequestFactory
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from core.api_authentication import BrokerGateJWTAuthentication
+
+        refresh = RefreshToken.for_user(self.user)
+        request = APIRequestFactory().get(
+            "/api/profile/",
+            HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}",
+        )
+        with self.assertRaises(AuthenticationFailed):
+            BrokerGateJWTAuthentication().authenticate(request)
+
     def test_api_login_does_not_issue_tokens_without_second_factor(self):
         response = self.client.post("/api/auth/login/", {
             "identifier": self.user.username,
