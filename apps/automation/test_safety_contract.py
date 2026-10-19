@@ -1,7 +1,8 @@
 from django.contrib.auth import get_user_model
 from datetime import timedelta
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from django.conf import settings
 from django.utils import timezone
 from unittest.mock import patch
 
@@ -70,6 +71,7 @@ class AutomationSafetyTests(TestCase):
         events = payload.get("results", []) if isinstance(payload, dict) else payload
         self.assertEqual(events, [])
 
+    @override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "DEFAULT_THROTTLE_CLASSES": []})
     def test_schedule_endpoint_requires_active_workflow_and_creates_consumable_one_time_schedule(self):
         workflow = Workflow.objects.create(user=self.user, name="Scheduled workflow")
         self.client.force_login(self.user)
