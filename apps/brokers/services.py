@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 def _queue_automation_event(event_name, account, payload):
     """Publish account-scoped broker lifecycle events without blocking broker I/O."""
+    if getattr(settings, "DJANGO_TESTING", False):
+        return
     try:
         from apps.automation.tasks import process_event
         process_event.delay(event_name, "broker", payload, account.user_id)
