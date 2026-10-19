@@ -1,4 +1,5 @@
 import hashlib
+from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -63,6 +64,34 @@ class TwoFactorEnforcementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("access", response.json())
         self.assertIn("refresh", response.json())
+
+    def test_security_center_requires_verified_enrollment_before_enabling_mfa(self):
+        self.profile.two_factor_enabled = False
+        self.profile.two_factor_secret_encrypted = ""
+        self.profile.save(update_fields=["two_factor_enabled", "two_factor_secret_encrypted"])
+        response = self.client.post("/operations/security/", {
+            "security_action": "setup_2fa",
+            "current_password": "A-strong-test-password-123!",
+        })
+        self.assertEqual(response.status_code, 302)
+        response = self.client.get("/operations/security/")
+        self.assertEqual(response.status_code, 200)
+        uri = response.context["two_factor_setup_uri"]
+        self.assertTrue(uri.startswith("otpauth://totp/"))
+        secret = parse_qs(urlparse(uri).query)["secret"][0]
+        code = TwoFactorService(secret).get_totp().now()
+        response = self.client.post("/operations/security/", {
+            "security_action": "verify_2fa",
+            "two_factor_code": code,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.two_factor_enabled)
+        self.assertTrue(self.profile.two_factor_secret_encrypted)
+        self.assertEqual(self.profile.two_factor_pending_secret_encrypted, "")
+        response = self.client.get("/operations/security/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["two_factor_recovery_codes"]), 10)
 
     def test_recovery_codes_are_hashed_and_single_use(self):
         codes, hashes = generate_recovery_codes()
