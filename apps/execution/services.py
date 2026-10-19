@@ -1,4 +1,4 @@
-import asyncio, time
+import asyncio, logging, time
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.db.models import Avg
@@ -10,6 +10,8 @@ from .exceptions import OrderValidationError, NonRetryableExecutionError
 from . import constants as c
 from .models import Order, ExecutionQueue, ExecutionLog
 from .repositories import OrderRepository, ExecutionLogRepository, ExecutionQueueRepository
+
+logger = logging.getLogger(__name__)
 
 
 def _broker_decimal(value):
@@ -143,18 +145,52 @@ class PositionService:
         contract = dict(broker_contract or {})
         if not contract or str(contract.get("contract_id") or "") != str(position.contract_id):
             raise ValueError("A matching broker contract is required to update a position.")
+        previous_status = str(position.status or "").lower()
         current_price = contract.get("bid_price")
         if current_price is None:
             current_price = contract.get("current_spot")
-        if current_price is None:
-            return position
-        position.current_price = _broker_decimal(current_price)
+        if current_price is not None:
+            position.current_price = _broker_decimal(current_price)
         position.profit = _broker_decimal(contract.get("profit"))
         position.payout = _broker_decimal(contract.get("payout"))
         position.status = str(contract.get("status") or ("closed" if contract.get("is_sold") else position.status))
         position.last_synced_at = timezone.now()
         position.raw_data = contract
-        position.save(update_fields=["current_price", "profit", "payout", "status", "last_synced_at", "raw_data"])
+        update_fields = ["profit", "payout", "status", "last_synced_at", "raw_data"]
+        if current_price is not None:
+            update_fields.append("current_price")
+        position.save(update_fields=update_fields)
+        terminal_statuses = {"closed", "expired", "sold", "settled", "won", "lost"}
+        current_status = str(position.status or "").lower()
+        if previous_status not in terminal_statuses and current_status in terminal_statuses and position.profit is not None:
+            try:
+                from apps.brokers.models import Order as BrokerOrder
+                from apps.automation.tasks import process_event
+                source_order = BrokerOrder.objects.filter(
+                    account=position.account, broker_order_id=str(position.contract_id)
+                ).order_by("-id").first()
+                routing = source_order.routing_context if source_order and isinstance(source_order.routing_context, dict) else {}
+                automation = routing.get("automation") if isinstance(routing.get("automation"), dict) else {}
+                process_event.delay(
+                    "TradeClosed", "broker",
+                    {
+                        "broker_type": position.broker.broker_type,
+                        "broker_account_pk": position.account_id,
+                        "broker_account_id": position.account.account_id,
+                        "contract_id": str(position.contract_id),
+                        "symbol": position.symbol,
+                        "status": current_status,
+                        "profit": str(position.profit),
+                        "payout": str(position.payout) if position.payout is not None else None,
+                        "origin_workflow_id": automation.get("workflow_id"),
+                    },
+                    position.account.user_id,
+                )
+            except Exception:
+                logger.exception(
+                    "automation_trade_closed_event_dispatch_failed",
+                    extra={"position_id": position.pk, "broker_account_id": position.account_id},
+                )
         return position
 
     def close_position(self, position, broker_contract=None):
