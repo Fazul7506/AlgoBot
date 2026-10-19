@@ -63,7 +63,7 @@ def security_workspace(request):
     checks = [
         ("Broker connection", account_connected),
         ("Secure session cookies", secure_session),
-        ("Account protection", bool(request.user.is_active and request.user.has_usable_password())),
+        ("Account sign-in", bool(request.user.is_active and request.user.has_usable_password())),
         ("Developer key expiry", not expired_active_keys),
     ]
     return render(
@@ -74,5 +74,6 @@ def security_workspace(request):
             "account_connected": account_connected,
             "keys_count": usable_keys.count(),
             "checks": checks,
+            "checks_ok": all(ok for _, ok in checks),
         },
     )

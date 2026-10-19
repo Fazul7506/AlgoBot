@@ -20,7 +20,7 @@ from apps.market_data import views as market_data_views
 from core.views import (
     broker_connect_page, broker_marketplace_page, home, login_page,
     register_page, dashboard_page, markets_page, strategies_page, trading_page,
-    backtesting_page, predictions_page, settings_page, profile_page,
+    backtesting_page, predictions_page, settings_page, profile_page, profile_completion_page,
     terms_page, privacy_page, forgot_password_page, reset_password_page,
     verify_email_page, account_identity_page, unlink_google_identity, cookie_policy_page, licensing_page, contact_page,
     about_page, public_status_page, risk_page, orders_page, positions_page,
@@ -42,6 +42,8 @@ from core.settings_api import account_settings_api
 from core.views_oauth import disconnect_deriv, refresh_deriv_token, deriv_account_status, reconnect_deriv
 from apps.developer import views as developer_views
 from apps.notifications.channel_views import notification_channels_page
+
+from core.views_profile import profile_page
 
 
 def billing_success_dispatch(request):
@@ -96,6 +98,7 @@ urlpatterns = [
     path("performance/", login_required(performance_center), name="performance_page"),
     path("settings/", login_required(settings_page), name="settings_page"),
     path("profile/", login_required(profile_page), name="profile_page"),
+    path("profile/complete/", login_required(profile_completion_page), name="profile_completion_page"),
     path("orders/", login_required(orders_page), name="orders_page"),
     path("positions/", login_required(positions_page), name="positions_page"),
     path("signals/", login_required(signals_page), name="signals_page"),

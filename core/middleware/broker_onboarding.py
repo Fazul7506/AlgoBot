@@ -1,31 +1,33 @@
-"""Enforce broker onboarding on protected browser workspace routes.
+"""Enforce broker onboarding only for trading-workspace browser routes.
 
-Authentication, account recovery, billing, developer tooling, operations,
-broker management, health checks, webhooks, static assets, and Django admin
-remain reachable. API authorization is handled by DRF permissions after the
-request has been authenticated; this middleware must not pre-empt API views.
+Account management and operational observability remain available to a signed-in
+AlgoBot user before Deriv is connected. Actual trading/API actions must still
+enforce their own broker and risk permissions; browser middleware is not an API
+authorization boundary.
 """
 from django.shortcuts import redirect
 
 
 class BrokerOnboardingMiddleware:
-    """Require a usable broker connection before protected trading pages."""
+    """Require an eligible Deriv connection before entering trading pages."""
 
     EXEMPT_PREFIXES = (
         "/admin/", "/static/", "/media/", "/health/",
         "/login/", "/register/", "/logout/", "/accounts/login/",
         "/verify-email/", "/forgot-password/", "/reset-password/",
         "/account/identity/", "/account/google/unlink/", "/auth/google/",
-        "/brokers/", "/callback/", "/webhooks/", "/payments/",
+        "/brokers/marketplace/", "/brokers/connect/", "/callback/", "/webhooks/", "/payments/",
         "/billing/", "/saas/", "/developer/", "/api/",
     )
 
+    # These pages depend on a live broker connection to perform trading.
+    # Settings/profile and monitoring pages remain usable during onboarding.
     PROTECTED_BROWSER_PREFIXES = (
         "/dashboard/", "/markets/", "/market-scanner/", "/strategies/",
         "/trading/", "/backtesting/", "/predictions/", "/model-lab/",
         "/performance/", "/orders/", "/positions/", "/signals/",
-        "/portfolio/", "/risk/", "/trade-history/", "/automation/",
-        "/analysis/", "/workflow-templates/",
+        "/portfolio/", "/risk/", "/trade-history/",
+        "/analysis/", "/smart-money/",
     )
 
     def __init__(self, get_response):
@@ -35,11 +37,10 @@ class BrokerOnboardingMiddleware:
         path = request.path_info or "/"
         if path == "/" or any(path.startswith(prefix) for prefix in self.EXEMPT_PREFIXES):
             return self.get_response(request)
-        if not any(path.startswith(prefix) for prefix in self.PROTECTED_BROWSER_PREFIXES):
-            return self.get_response(request)
-
         user = getattr(request, "user", None)
         if not user or not user.is_authenticated:
+            return self.get_response(request)
+        if not any(path.startswith(prefix) for prefix in self.PROTECTED_BROWSER_PREFIXES):
             return self.get_response(request)
 
         # Import lazily to avoid app-loading and middleware import cycles.

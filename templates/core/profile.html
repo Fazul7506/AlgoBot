@@ -1,5 +1,61 @@
 {% extends "base.html" %}
-{% block title %}User profile | AlgoBot Enterprise{% endblock %}
+{% load static %}
+{% block title %}Profile | AlgoBot{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account1">{% endblock %}
 {% block content %}
-{% include "components/enterprise_page.html" with title="User profile" module="Account" page_id="core-profile" %}
+<main class="account-page" data-profile-page>
+  <header class="account-hero">
+    <div class="account-hero__identity">
+      <div class="account-profile-avatar" aria-hidden="true">{{ profile_initials }}</div>
+      <div>
+        <p class="account-kicker">Your account</p>
+        <h1>Profile</h1>
+        <p class="account-subtitle">Manage the personal details AlgoBot uses across your workspace. Your broker credentials and login identity remain managed separately.</p>
+      </div>
+    </div>
+    <span class="account-state {% if profile.email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if profile.email_verified %}Email verified{% else %}Email verification pending{% endif %}</span>
+  </header>
+
+  <div class="account-layout">
+    <nav class="account-nav" aria-label="Account settings">
+      <a href="{% url 'profile_page' %}" aria-current="page">Profile</a>
+      <a href="{% url 'settings_page' %}">Settings</a>
+      <a href="{% url 'account_identity_page' %}">Login & identity</a>
+      <a href="{% url 'security_center' %}">Security</a>
+    </nav>
+
+    <form class="account-content" method="post" action="{% url 'profile_page' %}">
+      {% csrf_token %}
+      <section class="account-card">
+        <div class="account-card__header">
+          <div><h2>Personal information</h2><p class="account-card__hint">These details belong to your AlgoBot profile, not your Deriv account.</p></div>
+          <span class="account-state">Private</span>
+        </div>
+        <div class="account-fields">
+          <div class="account-field"><label for="profile-first-name">First name</label><input id="profile-first-name" name="first_name" value="{{ first_name }}" maxlength="150" autocomplete="given-name" required></div>
+          <div class="account-field"><label for="profile-last-name">Last name</label><input id="profile-last-name" name="last_name" value="{{ last_name }}" maxlength="150" autocomplete="family-name" required></div>
+          <div class="account-field"><label for="profile-username">Username</label><input id="profile-username" value="{{ request.user.username }}" readonly aria-readonly="true"><span class="account-help">Change username from Login & identity.</span></div>
+          <div class="account-field"><label for="profile-email">Login email</label><input id="profile-email" value="{{ request.user.email }}" readonly aria-readonly="true"><span class="account-help">Email changes require verification.</span></div>
+          <div class="account-field"><label for="profile-country">Country</label><input id="profile-country" name="country" value="{{ country }}" maxlength="100" autocomplete="country-name" placeholder="Your country"></div>
+          <div class="account-field"><label for="profile-timezone">Time zone</label><input id="profile-timezone" name="timezone" value="{{ timezone_value }}" maxlength="100" autocomplete="off" placeholder="Africa/Nairobi"></div>
+          <div class="account-field account-field--full"><label for="profile-phone">Phone (optional)</label><input id="profile-phone" name="phone" type="tel" value="{{ phone }}" maxlength="20" autocomplete="tel" placeholder="+254…"></div>
+          <div class="account-field account-field--full"><label for="profile-bio">About you (optional)</label><textarea id="profile-bio" name="bio" maxlength="5000" rows="4" placeholder="A short introduction (optional)">{{ bio }}</textarea><span class="account-help">Maximum 5,000 characters.</span></div>
+        </div>
+        <div class="account-actions">
+          <button class="account-btn account-btn--primary" type="submit">Save profile</button>
+          <a class="account-btn" href="{% url 'account_identity_page' %}">Manage login identity</a>
+        </div>
+      </section>
+
+      <section class="account-card">
+        <div class="account-card__header"><div><h2>Connected services</h2><p class="account-card__hint">Each service has its own security and authorization boundary.</p></div></div>
+        <div class="account-toggle-list">
+          <div class="account-toggle"><div><strong>AlgoBot login</strong><p>{{ request.user.email|default:request.user.username }} · {% if profile.email_verified %}verified{% else %}verification required{% endif %}</p></div><a class="account-btn" href="{% url 'account_identity_page' %}">Manage</a></div>
+          <div class="account-toggle"><div><strong>Deriv broker</strong><p>Broker authorization, account eligibility and connection status are managed separately from your profile.</p></div><a class="account-btn" href="{% url 'broker_marketplace_page' %}">Manage broker</a></div>
+          <div class="account-toggle"><div><strong>Notifications</strong><p>Configure delivery channels and notification preferences.</p></div><a class="account-btn" href="/notifications/">Manage</a></div>
+        </div>
+      </section>
+    </form>
+  </div>
+</main>
 {% endblock %}

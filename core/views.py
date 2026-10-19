@@ -13,7 +13,8 @@ from core.services.oauth_service import DerivOAuthService
 logger=logging.getLogger(__name__)
 def _preferred_deriv_account(user):
     accounts = list(BrokerAccount.objects.filter(user=user, broker__broker_type='deriv').select_related('broker').prefetch_related('connections').order_by('-last_synced_at', '-id'))
-    return next((account for account in accounts if _deriv_connected(account)), None) or (accounts[0] if accounts else None)
+    # Only show accounts whose broker connection has been accepted and verified.
+    return next((account for account in accounts if _deriv_connected(account)), None)
 def _deriv_connected(account): return bool(account and account.status == "active" and account.broker.status == "active" and account.token_status == "active" and not account.is_token_expired and account.is_connection_eligible)
 def home(request):
     if request.method=='HEAD': return HttpResponse(status=200)
@@ -78,7 +79,46 @@ def billing_cancel_page(request): return render(request,'core/billing_cancel.htm
 @login_required
 def settings_page(request): return render(request,'core/settings.html')
 @login_required
-def profile_page(request): return render(request,'core/profile.html')
+def profile_page(request):
+    """Delegate legacy imports to the canonical persistent profile editor."""
+    from core.views_profile import profile_page as editable_profile_page
+    return editable_profile_page(request)
+
+@login_required
+def profile_completion_page(request):
+    """Collect the minimum identity details needed to finish workspace onboarding."""
+    from django.contrib import messages
+    from core.broker_onboarding import has_authorized_broker_connection
+    from core.models import UserProfile
+
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    if request.method == "POST":
+        first_name = str(request.POST.get("first_name") or "").strip()
+        last_name = str(request.POST.get("last_name") or "").strip()
+        if not first_name or not last_name:
+            messages.error(request, "Enter your first and last name to complete your profile.")
+        else:
+            request.user.first_name = first_name[:150]
+            request.user.last_name = last_name[:150]
+            request.user.save(update_fields=["first_name", "last_name"])
+            profile.phone = str(request.POST.get("phone") or "").strip()[:20]
+            profile.country = str(request.POST.get("country") or "").strip()[:100]
+            profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
+            profile.bio = str(request.POST.get("bio") or "").strip()
+            profile.save(update_fields=["phone", "country", "timezone", "bio", "updated_at"])
+            messages.success(request, "Your AlgoBot profile is complete.")
+            if has_authorized_broker_connection(request.user):
+                return redirect("dashboard_page")
+            return redirect("broker_marketplace_page")
+
+    return render(request, "core/profile_completion.html", {
+        "first_name": request.POST.get("first_name", request.user.first_name),
+        "last_name": request.POST.get("last_name", request.user.last_name),
+        "phone": request.POST.get("phone", profile.phone),
+        "country": request.POST.get("country", profile.country),
+        "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
+        "bio": request.POST.get("bio", profile.bio),
+    })
 def terms_page(request): return render(request,'core/terms.html')
 def privacy_page(request): return render(request,'core/privacy.html')
 def forgot_password_page(request):
@@ -124,7 +164,7 @@ def deriv_login(request):
     return redirect(authorization_url)
 def broker_connect_page(request): return deriv_login(request)
 @login_required
-def broker_marketplace_page(request): return render(request,'core/broker_marketplace.html',{'brokers':Broker.objects.filter(status='active').order_by('name')})
+def broker_marketplace_page(request): return render(request,'core/broker_marketplace.html',{'brokers':Broker.objects.all().order_by('name')})
 @login_required
 def strategy_builder_page(request): return render(request,'core/strategy_builder.html')
 @login_required

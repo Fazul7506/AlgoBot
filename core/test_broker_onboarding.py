@@ -30,6 +30,42 @@ class BrokerOnboardingGateTests(TestCase):
     def test_user_without_broker_connection_is_not_onboarded(self):
         self.assertFalse(has_authorized_broker_connection(self.user))
 
+    def test_account_and_operational_pages_remain_available_during_onboarding(self):
+        self.client.force_login(self.user)
+        # Account management and observability must work before a broker is
+        # connected; only trading-workspace routes are gated by this middleware.
+        for path in ("/settings/", "/profile/", "/operations/deployments/", "/operations/audit/", "/monitoring/"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertNotEqual(response.status_code, 302)
+
+    def test_broker_marketplace_remains_accessible_during_onboarding(self):
+        self.client.force_login(self.user)
+        response = self.client.get("/brokers/marketplace/")
+        self.assertNotEqual(response.status_code, 302)
+
+    def test_automation_workspaces_are_available_but_wait_for_broker_before_execution(self):
+        self.client.force_login(self.user)
+        # The automation UI may be inspected before broker onboarding, but its
+        # own state must remain non-executable until a verified connection exists.
+        for path, expected_text in (
+            ("/workspace/automation/", "Waiting for broker connection"),
+            ("/workspace/automation/workflow-templates/", "Connect a broker"),
+        ):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, expected_text)
+
+    def test_smart_money_trading_workspace_remains_gated_during_onboarding(self):
+        self.client.force_login(self.user)
+        response = self.client.get("/smart-money/")
+        self.assertRedirects(
+            response,
+            reverse("broker_marketplace_page"),
+            fetch_redirect_response=False,
+        )
+
     def test_dashboard_redirects_to_broker_management_without_authorization(self):
         self.client.force_login(self.user)
         response = self.client.get(reverse("dashboard_page"))
