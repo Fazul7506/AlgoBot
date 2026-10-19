@@ -2,14 +2,26 @@
 {% load static %}
 {% block title %}Portfolio | AlgoBot{% endblock %}
 {% block mobile_title %}Portfolio{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}">{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}">
+<style>
+.portfolio-app{max-width:1320px;margin:auto;padding:clamp(14px,3vw,32px);color:var(--ds-text,#edf3ff)}
+.portfolio-hero{display:flex;justify-content:space-between;align-items:center;gap:22px;flex-wrap:wrap;padding:clamp(22px,4vw,38px);border:1px solid #2b4260;border-radius:24px;background:radial-gradient(ellipse at 90% 0%,#224d78 0,transparent 42%),linear-gradient(135deg,#13263d,#0a1424)}
+.portfolio-eyebrow{font-size:.76rem;letter-spacing:.15em;text-transform:uppercase;color:#4ce0b5;font-weight:800;margin:0 0 10px}.portfolio-hero h1{font-size:clamp(2rem,5vw,3.1rem);margin:0 0 12px;line-height:1.08}.portfolio-hero p{max-width:760px;color:#c0cde0;line-height:1.65}.portfolio-actions{display:flex;gap:9px;flex-wrap:wrap}.portfolio-btn{display:inline-flex;align-items:center;justify-content:center;min-height:43px;padding:10px 15px;border-radius:11px;border:1px solid #3b5271;background:#172b44;color:#eff5ff;text-decoration:none;font-weight:750}.portfolio-btn.primary{background:#31d4a4;border-color:#31d4a4;color:#072018}
+.portfolio-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:24px 0 14px}.portfolio-toolbar h2{margin:0;font-size:1.4rem}.portfolio-muted{color:#9eb0c8}.portfolio-tabs{display:flex;gap:7px;flex-wrap:wrap}.portfolio-tabs a{padding:8px 12px;border:1px solid #2b3e58;border-radius:999px;text-decoration:none;color:#cbd8ea;font-size:.88rem}.portfolio-tabs a[aria-current=page]{background:#1b3e39;border-color:#2c9e7c;color:#80f0cb}
+.portfolio-workspace{margin-top:12px}.portfolio-workspace .ds-state{border:1px solid #2b3e58;border-radius:16px;background:#0e1c2e;padding:24px}.portfolio-workspace .ds-state strong{font-size:1.1rem}.portfolio-workspace .ds-state p{color:#aebed3;line-height:1.6}.portfolio-workspace .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:15px}.portfolio-workspace .kpi-card,.portfolio-workspace .panel{background:#0e1c2e;border:1px solid #263a55;border-radius:17px;padding:18px;min-width:0}.portfolio-workspace .kpi-card span{display:block;color:#a9bad0;font-size:.88rem;margin-bottom:8px}.portfolio-workspace .kpi-card strong{font-size:clamp(1.15rem,2.4vw,1.65rem);overflow-wrap:anywhere}.portfolio-workspace .command-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}.portfolio-workspace .panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}.portfolio-workspace .panel-head h2{margin:0;font-size:1.15rem}.portfolio-workspace .panel-head a{color:#65dfba}.portfolio-workspace .table-wrap{overflow:auto;max-width:100%}.portfolio-workspace table{width:100%;border-collapse:collapse;white-space:nowrap}.portfolio-workspace th,.portfolio-workspace td{text-align:left;padding:11px;border-bottom:1px solid #23354e}.portfolio-workspace th{font-size:.78rem;text-transform:uppercase;color:#9eb0c8}.portfolio-workspace .health-stack{display:grid;gap:13px}.portfolio-workspace .health-stack span{display:flex;align-items:center;gap:9px;flex-wrap:wrap;color:#d2dcec}.portfolio-workspace .health-stack b{width:8px;height:8px;border-radius:50%;background:#43d5ac}.portfolio-workspace .health-stack strong{margin-left:auto}.portfolio-workspace .ds-state--error{border-color:#8c4350}
+@media(max-width:850px){.portfolio-workspace .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.portfolio-workspace .command-grid{grid-template-columns:1fr}}@media(max-width:440px){.portfolio-app{padding:12px}.portfolio-hero{padding:19px}.portfolio-workspace .kpi-card{padding:13px}.portfolio-workspace .kpi-grid{gap:8px}}
+</style>
+{% endblock %}
 {% block content %}
-<main id="main-content" class="algobot-shared-page">
-  <section class="enterprise-hero">
-    <div><p class="eyebrow">Broker portfolio</p><h1>Portfolio command</h1><p class="hero-copy">Portfolio exposure is derived from the connected broker account and its current positions. No synthetic portfolio values are shown.</p></div>
-    <div class="hero-actions"><a class="btn" href="/positions/">Positions</a><a class="btn primary" href="/trading/">Trade</a></div>
-  </section>
-  <section data-portfolio-workspace aria-live="polite"><div class="ds-state"><strong>Waiting for broker connection</strong><p>Connect a broker to load portfolio state.</p><a class="ds-btn ds-btn--primary" href="/brokers/connect/">Connect broker</a></div></section>
+<main id="main-content" class="portfolio-app">
+<header class="portfolio-hero"><div><p class="portfolio-eyebrow">Capital · Performance · Exposure</p><h1>Portfolio overview</h1><p>Track broker-confirmed balance, equity, open positions and exposure in one place. Figures are sourced from the selected connected account; unavailable data is never replaced with invented values.</p><div class="portfolio-actions"><a class="portfolio-btn primary" href="/brokers/">Manage brokers</a><a class="portfolio-btn" href="/positions/">Open positions</a><a class="portfolio-btn" href="/trading/">Trading terminal</a></div></div></header>
+<nav class="portfolio-toolbar portfolio-tabs" aria-label="Portfolio sections"><a href="/portfolio/" aria-current="page">Overview</a><a href="/performance/">Performance</a><a href="/positions/">Positions</a><a href="/orders/">Orders</a><a href="/risk/">Risk</a></nav>
+<div class="portfolio-toolbar"><div><h2>Account snapshot</h2><p class="portfolio-muted">Live data from the currently selected broker account</p></div><span class="portfolio-muted" data-portfolio-updated>Values load after account verification</span></div>
+<section class="portfolio-workspace" data-portfolio-workspace aria-live="polite"><div class="ds-state"><strong>Waiting for broker connection</strong><p>Connect an account to load portfolio state and verified market exposure.</p><a class="portfolio-btn primary" href="/brokers/connect/">Connect broker</a></div></section>
+<p class="portfolio-muted" style="margin-top:18px;line-height:1.6">Trading involves risk. Portfolio analytics are informational and do not guarantee future results. Live execution remains subject to broker authorization, account eligibility and risk controls.</p>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/portfolio_dashboard.js' %}" defer></script>{% endblock %}
+{% block extra_js %}
+<script src="{% static 'js/portfolio_dashboard.js' %}" defer></script>
+{% endblock %}
