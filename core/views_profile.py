@@ -3,7 +3,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
-from urllib.parse import urlparse
+from zoneinfo import available_timezones
+from PIL import Image, UnidentifiedImageError
 
 from core.models import UserProfile
 
@@ -22,7 +23,7 @@ def profile_page(request):
         timezone_name = str(request.POST.get("timezone") or "UTC").strip() or "UTC"
         phone = str(request.POST.get("phone") or "").strip()
         bio = str(request.POST.get("bio") or "").strip()
-        avatar_url = str(request.POST.get("avatar_url") or "").strip()
+        avatar_file = request.FILES.get("profile_picture")
 
         errors = []
         if not first_name:
@@ -37,8 +38,21 @@ def profile_page(request):
             errors.append("Timezone must be 100 characters or fewer.")
         if len(phone) > 32:
             errors.append("Phone number must be 32 characters or fewer.")
-        if avatar_url and (len(avatar_url) > 500 or urlparse(avatar_url).scheme != "https" or not urlparse(avatar_url).netloc):
-            errors.append("Profile picture must be a valid HTTPS image URL of 500 characters or fewer.")
+        if timezone_name not in available_timezones():
+            errors.append("Choose a valid time zone.")
+        if avatar_file:
+            if avatar_file.size > 5 * 1024 * 1024:
+                errors.append("Profile picture must be 5 MB or smaller.")
+            else:
+                try:
+                    image = Image.open(avatar_file)
+                    if image.format not in {"JPEG", "PNG", "WEBP", "GIF"}:
+                        errors.append("Profile picture must be a JPEG, PNG, WEBP, or GIF image.")
+                    image.verify()
+                    avatar_file.seek(0)
+                except (UnidentifiedImageError, OSError, ValueError):
+                    errors.append("Upload a valid image file (JPEG, PNG, WEBP, or GIF).")
+                    avatar_file.seek(0)
         if len(bio) > 5000:
             errors.append("Bio must be 5,000 characters or fewer.")
 
@@ -54,8 +68,9 @@ def profile_page(request):
             profile.timezone = timezone_name
             profile.phone = phone
             profile.bio = bio
-            profile.avatar_url = avatar_url
-            profile.save(update_fields=["country", "timezone", "phone", "bio", "avatar_url", "updated_at"])
+            if avatar_file:
+                profile.profile_picture = avatar_file
+            profile.save(update_fields=["country", "timezone", "phone", "bio", "profile_picture", "updated_at"])
             messages.success(request, "Your profile has been saved.")
             return redirect("profile_page")
 
@@ -67,6 +82,7 @@ def profile_page(request):
         "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
         "phone": request.POST.get("phone", profile.phone),
         "bio": request.POST.get("bio", profile.bio),
+        "timezone_choices": sorted(available_timezones()),
         "profile_initials": (request.user.first_name[:1] + request.user.last_name[:1]).upper()
             if request.user.first_name and request.user.last_name
             else request.user.username[:2].upper(),
