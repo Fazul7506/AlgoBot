@@ -412,19 +412,22 @@ class WorkflowExecutionService:
                     {"reason": "Workflow execution approval required", "execution_id": execution.pk},
                 )
                 raise ApprovalRequired(f"approval_required:{approval.pk}")
-            nodes = list(workflow.nodes.order_by("id"))
-            if not nodes:
-                definition = workflow.definition if isinstance(workflow.definition, dict) else {}
-                definition_nodes = definition.get("nodes", [])
-                if isinstance(definition_nodes, list):
-                    nodes = [
-                        type("WorkflowDefinitionNode", (), {
-                            "pk": node.get("id", index),
-                            "node_type": str(node.get("type") or node.get("node_type") or ""),
-                            "configuration": node.get("configuration") if isinstance(node.get("configuration"), dict) else node,
-                        })()
-                        for index, node in enumerate(definition_nodes) if isinstance(node, dict)
-                    ]
+            definition = workflow.definition if isinstance(workflow.definition, dict) else {}
+            definition_nodes = definition.get("nodes", [])
+            if isinstance(definition_nodes, list) and definition_nodes:
+                # The persisted definition is the editor's canonical workflow.
+                # Do not silently execute stale legacy WorkflowNode rows when a
+                # newer definition has been saved.
+                nodes = [
+                    type("WorkflowDefinitionNode", (), {
+                        "pk": node.get("id", index),
+                        "node_type": str(node.get("type") or node.get("node_type") or ""),
+                        "configuration": node.get("configuration") if isinstance(node.get("configuration"), dict) else node,
+                    })()
+                    for index, node in enumerate(definition_nodes) if isinstance(node, dict)
+                ]
+            else:
+                nodes = list(workflow.nodes.order_by("id"))
             validation = WorkflowDesignerService().validate(workflow.definition or {})
             if not validation["valid"]:
                 raise WorkflowValidationError("; ".join(validation["errors"]))
