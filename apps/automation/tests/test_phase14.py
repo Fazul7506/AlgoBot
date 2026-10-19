@@ -40,6 +40,25 @@ class AutomationEngineTests(TestCase):
         self.assertEqual(execution.result["status"], "dispatch_not_configured")
         self.assertEqual(execution.result["audit"][0]["status"], "not_dispatched")
 
+    def test_own_trade_executed_event_is_suppressed_but_trade_closed_is_allowed(self):
+        user = get_user_model().objects.create_user(username="automation-event-loop", password="x")
+        workflow = Workflow.objects.create(
+            user=user, name="Trade lifecycle workflow", status="pending", enabled=True,
+            definition={
+                "trigger": {"type": "trade_closed", "event": "TradeClosed"},
+                "nodes": [{"id": "action-1", "type": "action", "configuration": {"type": "pause_strategy"}}],
+            },
+        )
+        executed = AutomationEngine().handle_event(
+            "TradeExecuted", {"origin_workflow_id": workflow.pk}, actor=user,
+        )
+        self.assertEqual(executed.result["results"], [])
+        closed = AutomationEngine().handle_event(
+            "TradeClosed", {"origin_workflow_id": workflow.pk}, actor=user,
+        )
+        self.assertEqual(len(closed.result["results"]), 1)
+        self.assertEqual(closed.result["results"][0]["status"], "pending")
+
     def test_condition_gate_skips_following_trade_action_when_false(self):
         user = get_user_model().objects.create_user(username="condition-gate", password="x")
         workflow = Workflow.objects.create(user=user, name="Condition-gated workflow", status="pending")
