@@ -44,6 +44,17 @@ class BrokerOnboardingGateTests(TestCase):
         response = self.client.get("/brokers/marketplace/")
         self.assertNotEqual(response.status_code, 302)
 
+    def test_alternate_trading_workspaces_are_gated_during_onboarding(self):
+        self.client.force_login(self.user)
+        for path in ("/workspace/automation/", "/workspace/automation/workflow-templates/", "/smart-money/"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertRedirects(
+                    response,
+                    reverse("broker_marketplace_page"),
+                    fetch_redirect_response=False,
+                )
+
     def test_dashboard_redirects_to_broker_management_without_authorization(self):
         self.client.force_login(self.user)
         response = self.client.get(reverse("dashboard_page"))
