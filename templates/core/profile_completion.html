@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Complete your profile | AlgoBot{% endblock %}
+{% block content %}
+<main class="container" id="main-content">
+  <section class="page-header">
+    <p class="eyebrow">ACCOUNT SETUP</p>
+    <h1>Complete your profile</h1>
+    <p>Finish setting up your AlgoBot account before entering your trading workspace.</p>
+  </section>
+
+  <form method="post" class="card profile-completion-form">
+    {% csrf_token %}
+    <div class="form-grid">
+      <label for="first_name">First name <span aria-hidden="true">*</span>
+        <input id="first_name" name="first_name" type="text" maxlength="150" autocomplete="given-name" value="{{ first_name }}" required>
+      </label>
+      <label for="last_name">Last name <span aria-hidden="true">*</span>
+        <input id="last_name" name="last_name" type="text" maxlength="150" autocomplete="family-name" value="{{ last_name }}" required>
+      </label>
+      <label for="phone">Phone (optional)
+        <input id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel" value="{{ phone }}">
+      </label>
+      <label for="country">Country (optional)
+        <input id="country" name="country" type="text" maxlength="100" autocomplete="country-name" value="{{ country }}">
+      </label>
+      <label for="timezone">Timezone
+        <input id="timezone" name="timezone" type="text" maxlength="100" value="{{ timezone_value|default:'UTC' }}">
+      </label>
+      <label for="bio">About you (optional)
+        <textarea id="bio" name="bio" rows="3">{{ bio }}</textarea>
+      </label>
+    </div>
+    <button type="submit" class="btn btn-primary">Save profile and continue</button>
+  </form>
+</main>
+{% endblock %}
