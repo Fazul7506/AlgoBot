@@ -147,12 +147,22 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         ip_allowed = allow_auth_attempt(
             request, "jwt-token-login-ip", "", limit=30, window=900
         )
+        from core.auth_audit import record_auth_event
         if not identity_allowed or not ip_allowed:
+            record_auth_event(request, action="API login throttled", outcome="blocked", identifier=identifier, method="api")
             return Response(
                 {"detail": "Too many sign-in attempts. Please wait and try again."},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
-        return super().post(request, *args, **kwargs)
+        result = super().post(request, *args, **kwargs)
+        record_auth_event(
+            request,
+            action="API login successful" if result.status_code < 400 else "API login failed",
+            outcome="success" if result.status_code < 400 else "failed",
+            identifier=identifier,
+            method="api",
+        )
+        return result
 
 
 class UserProfileViewSet(viewsets.ModelViewSet):
