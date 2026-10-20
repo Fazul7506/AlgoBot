@@ -1,4 +1,7 @@
 import io
+import sys
+from types import ModuleType
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -48,8 +51,6 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(profile.timezone, "Africa/Nairobi")
         self.assertEqual(profile.phone, "+254700000000")
         self.assertEqual(profile.bio, "Quant researcher")
-        # User-creation signals provision a separate default profile for every
-        # account; verify that this request did not alter the other account.
         other_profile = UserProfile.objects.get(user=self.other_user)
         self.assertEqual(other_profile.country, "")
         self.assertEqual(other_profile.phone, "")
@@ -57,15 +58,24 @@ class AccountSettingsPagesTests(TestCase):
 
     @override_settings(CLOUDINARY_URL="cloudinary://test:test@demo")
     def test_profile_page_accepts_device_uploaded_image_and_persists_it(self):
-        from unittest.mock import patch
-
         buffer = io.BytesIO()
         Image.new("RGB", (2, 2), color=(30, 90, 160)).save(buffer, format="PNG")
         upload = SimpleUploadedFile("avatar.png", buffer.getvalue(), content_type="image/png")
         avatar_url = f"https://res.cloudinary.com/demo/image/upload/algobot/profile-pictures/user-{self.user.pk}.webp"
-        with patch("cloudinary.config") as cloudinary_config, patch(
-            "cloudinary.uploader.upload", return_value={"secure_url": avatar_url}
-        ) as cloudinary_upload:
+
+        # Cloudinary is an optional deployment integration and is not installed
+        # in the minimal CI test environment. Stub its modules at the import
+        # boundary so this test verifies our contract without network access.
+        cloudinary_module = ModuleType("cloudinary")
+        cloudinary_module.config = MagicMock()
+        uploader_module = ModuleType("cloudinary.uploader")
+        uploader_module.upload = MagicMock(return_value={"secure_url": avatar_url})
+        cloudinary_module.uploader = uploader_module
+
+        with patch.dict(sys.modules, {
+            "cloudinary": cloudinary_module,
+            "cloudinary.uploader": uploader_module,
+        }):
             response = self.client.post(reverse("profile_page"), {
                 "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
                 "timezone": "Africa/Nairobi", "phone": "+254700000000", "bio": "Quant researcher",
@@ -73,10 +83,12 @@ class AccountSettingsPagesTests(TestCase):
             })
 
         self.assertRedirects(response, reverse("profile_page"), fetch_redirect_response=False)
-        cloudinary_config.assert_called_once_with(cloudinary_url="cloudinary://test:test@demo", secure=True)
-        cloudinary_upload.assert_called_once()
-        self.assertEqual(cloudinary_upload.call_args.kwargs["resource_type"], "image")
-        self.assertEqual(cloudinary_upload.call_args.kwargs["format"], "webp")
+        cloudinary_module.config.assert_called_once_with(
+            cloudinary_url="cloudinary://test:test@demo", secure=True
+        )
+        uploader_module.upload.assert_called_once()
+        self.assertEqual(uploader_module.upload.call_args.kwargs["resource_type"], "image")
+        self.assertEqual(uploader_module.upload.call_args.kwargs["format"], "webp")
         profile = UserProfile.objects.get(user=self.user)
         self.assertEqual(profile.avatar_url, avatar_url)
         self.assertEqual(profile.country, "Kenya")
@@ -98,9 +110,7 @@ class AccountSettingsPagesTests(TestCase):
 
     def test_profile_page_rejects_missing_required_names_without_persisting(self):
         response = self.client.post(reverse("profile_page"), {
-            "first_name": "",
-            "last_name": "Example",
-            "country": "Kenya",
+            "first_name": "", "last_name": "Example", "country": "Kenya",
         })
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "First name is required")
