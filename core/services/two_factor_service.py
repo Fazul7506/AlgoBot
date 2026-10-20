@@ -91,22 +91,39 @@ def verify_user_code(profile, token, *, consume_recovery=False):
         if locked is None or not locked.two_factor_enabled:
             return False
         saved_codes = list(locked.two_factor_recovery_codes or [])
-        matches = [
-            hmac.compare_digest(
-                str(saved.get("digest", "")) if isinstance(saved, dict) else str(saved),
-                digest,
-            ) and not (isinstance(saved, dict) and saved.get("used", False))
-            for saved in saved_codes
-        ]
+        matches = []
+        normalized_records = []
+        for saved in saved_codes:
+            if isinstance(saved, dict):
+                stored_digest = str(saved.get("digest", ""))
+                used = bool(saved.get("used", False))
+                matched = bool(stored_digest) and hmac.compare_digest(stored_digest, digest) and not used
+                normalized_records.append({"digest": stored_digest, "used": used})
+            else:
+                # Upgrade legacy plaintext codes safely on the next verification.
+                legacy_code = str(saved or "").strip().replace(" ", "").upper()
+                matched = bool(legacy_code) and hmac.compare_digest(legacy_code, token.upper())
+                normalized_records.append({
+                    "digest": hashlib.sha256(legacy_code.encode("utf-8")).hexdigest() if legacy_code else "",
+                    "used": bool(matched and consume_recovery),
+                })
+            matches.append(matched)
         if not any(matches):
+            # Persist migration of any legacy plaintext codes even when a different
+            # code was supplied; never keep newly encountered legacy values in DB.
+            if any(not isinstance(item, dict) for item in saved_codes):
+                locked.two_factor_recovery_codes = normalized_records
+                locked.save(update_fields=["two_factor_recovery_codes", "updated_at"])
+                profile.two_factor_recovery_codes = normalized_records
             return False
+        # Persist only digests. A successfully redeemed legacy code is marked used
+        # in the same row lock as the verification to prevent replay.
         if consume_recovery:
-            # Keep digest-only tombstones so used codes remain marked consumed.
-            locked.two_factor_recovery_codes = [
-                ({**saved, "used": True} if isinstance(saved, dict) and matched
-                 else ({"digest": str(saved), "used": True} if matched else saved))
-                for saved, matched in zip(saved_codes, matches)
-            ]
+            for index, matched in enumerate(matches):
+                if matched:
+                    normalized_records[index]["used"] = True
+        if any(not isinstance(item, dict) for item in saved_codes) or consume_recovery:
+            locked.two_factor_recovery_codes = normalized_records
             locked.save(update_fields=["two_factor_recovery_codes", "updated_at"])
-            profile.two_factor_recovery_codes = locked.two_factor_recovery_codes
+            profile.two_factor_recovery_codes = normalized_records
     return True
