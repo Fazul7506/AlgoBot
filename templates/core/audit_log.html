@@ -1,41 +1,112 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Audit Log | AlgoBot{% endblock %}
 {% block content %}
-<section class="workspace activity-history-page">
-  <p class="eyebrow">SECURITY · OPERATIONS · TRADING</p>
-  <h1>Audit Log</h1>
-  <p>Search your recorded AlgoBot activity across account actions, API writes and failures, trading operations and broker workflows. The view combines the latest 1,000 matching records across the two audit streams. Sensitive request and response bodies are never displayed.</p>
-  <div class="cards activity-cards">
-    <article><span>Matching events</span><strong>{{ event_count }}</strong><small>For this account and filter</small></article>
-    <article><span>Scope</span><strong>Private</strong><small>Only your account activity</small></article>
-    <article><span>Traceability</span><strong>Request IDs</strong><small>Available for failed or mutating API requests</small></article>
-  </div>
-  <section class="panel activity-panel">
-    <form method="get" class="audit-filters" role="search">
-      <label>Search activity<input type="search" name="q" value="{{ audit_filters.q }}" placeholder="Route, resource, action…"></label>
-      <label>Action<input type="search" name="action" value="{{ audit_filters.action }}" placeholder="e.g. post_completed"></label>
-      <label>Service / module<input type="search" name="module" value="{{ audit_filters.module }}" placeholder="e.g. brokers, execution"></label>
-      <div class="audit-filter-actions"><button type="submit">Apply filters</button><a href="{% url 'audit_center' %}">Clear</a></div>
-    </form>
-    <div class="audit-table-wrap">
-      <table class="audit-table">
-        <thead><tr><th>Action</th><th>Service</th><th>Resource / endpoint</th><th>Origin</th><th>Recorded at (UTC)</th></tr></thead>
-        <tbody>
-        {% for e in events %}
-          <tr><td><strong>{{ e.action|title }}</strong><small>{{ e.hash|default:"Recorded" }}</small></td><td>{{ e.module|title }}</td><td class="audit-resource">{{ e.resource|default:"Account action" }}</td><td>{{ e.source }}</td><td><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'d M Y H:i:s' }}</time></td></tr>
-        {% empty %}
-          <tr><td colspan="5"><div class="empty">No audit events match these filters. New mutating or failed requests will appear as they occur.</div></td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
+<section class="workspace audit-dashboard">
+  <link rel="stylesheet" href="{% static 'core/css/audit-log.css' %}">
+  <header class="audit-hero">
+    <div class="audit-hero-main">
+      <div class="audit-hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H5V3h2z"/><path d="M14 3v6h5M8 13h8M8 17h8M8 9h2"/></svg></div>
+      <div><h1>Audit Log</h1><p class="audit-intro">Track recorded system events, account actions and security activity across AlgoBot.<br>Review a private, searchable audit trail for transparency and security.</p></div>
     </div>
-    {% if page_obj.paginator.num_pages > 1 %}
-    <nav class="audit-pagination" aria-label="Audit log pages">
-      {% if page_obj.has_previous %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
-      <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-      {% if page_obj.has_next %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&page={{ page_obj.next_page_number }}">Next</a>{% endif %}
-    </nav>
-    {% endif %}
-  </section>
+    <div class="audit-status"><span class="audit-status-mark"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 4 4L19 6"/></svg></span><div><strong>Audit monitoring</strong><small>Persisted account-scoped records</small></div></div>
+  </header>
+
+  <div class="audit-layout">
+    <main class="audit-main">
+      <form method="get" class="audit-filters" role="search">
+        <label><span>◷ Date range</span><select name="range"><option value="24h" {% if audit_filters.range == "24h" %}selected{% endif %}>Last 24 hours</option><option value="7d" {% if audit_filters.range == "7d" or not audit_filters.range %}selected{% endif %}>Last 7 days</option><option value="30d" {% if audit_filters.range == "30d" %}selected{% endif %}>Last 30 days</option><option value="all" {% if audit_filters.range == "all" %}selected{% endif %}>All available</option></select></label>
+        <label><span>◈ Event type</span><input name="action" value="{{ audit_filters.action }}" placeholder="All events / action"></label>
+        <label><span>♙ User scope</span><select aria-label="User scope" disabled><option>Current account only</option></select></label>
+        <label><span>⚠ Severity</span><select name="severity"><option value="">All levels</option><option value="info" {% if audit_filters.severity == "info" %}selected{% endif %}>Info</option><option value="low" {% if audit_filters.severity == "low" %}selected{% endif %}>Low</option><option value="medium" {% if audit_filters.severity == "medium" %}selected{% endif %}>Medium</option><option value="high" {% if audit_filters.severity == "high" %}selected{% endif %}>High</option></select></label>
+        <button type="submit">⌕ Filter</button>
+        <div class="audit-filter-extra">
+          <label><span>⌕ Search activity</span><input type="search" name="q" value="{{ audit_filters.q }}" placeholder="Action, resource, outcome…"></label>
+          <label><span>▤ Service / module</span><input name="module" value="{{ audit_filters.module }}" placeholder="Brokers, execution…"></label>
+          <label><span>From date</span><input type="date" name="start" value="{{ audit_filters.start }}"></label>
+          <label><span>To date</span><input type="date" name="end" value="{{ audit_filters.end }}"></label>
+          <a class="audit-btn secondary" href="{% url 'audit_center' %}">Clear filters</a>
+        </div>
+      </form>
+
+      <section class="audit-section">
+        <div class="audit-section-head"><div><h2>Recorded Events</h2><span class="audit-sub">Latest matching records · private to your account</span></div><div class="audit-event-actions"><button class="audit-btn secondary" type="button" id="audit-copy">Copy visible rows</button><button class="audit-btn" type="button" id="audit-export">↓ Export CSV</button></div></div>
+        <div class="audit-table-wrap"><table class="audit-table" id="audit-events-table">
+          <thead><tr><th>Timestamp</th><th>Event</th><th>User / Source</th><th>Details / Resource</th><th>Origin</th><th>Severity</th></tr></thead>
+          <tbody>
+          {% for e in events %}
+            <tr><td><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'Y-m-d H:i:s' }}</time><small>{{ e.timestamp|timesince }} ago</small></td>
+              <td><div class="audit-event"><span class="audit-event-icon {{ e.severity }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v5c0 5 4 8 8 9 4-1 8-4 8-9V7l-8-4z"/><path d="m8 12 2.5 2.5L16 9"/></svg></span><div><strong>{{ e.action|title }}</strong><small>{{ e.module|title }}</small></div></div></td>
+              <td><strong>{{ request.user.get_username }}</strong><small>{{ e.source }}</small></td><td>{{ e.resource|default:"Account action" }}<small>{% if e.hash %}Integrity reference: {{ e.hash|truncatechars:20 }}{% else %}Recorded application event{% endif %}</small></td><td>{{ e.source }}<small>IP address not recorded in this view</small></td><td><span class="audit-severity sev-{{ e.severity }}">● {{ e.severity|title }}</span></td></tr>
+          {% empty %}<tr><td colspan="6"><div class="audit-empty"><strong>No recorded events match these filters.</strong><br><small>Try a wider date range or clear the filters. No sample events are fabricated.</small></div></td></tr>{% endfor %}
+          </tbody>
+        </table></div>
+        <div class="audit-pagination"><span>Showing {{ page_obj.start_index|default:0 }}–{{ page_obj.end_index|default:0 }} of {{ event_count }} matching records</span>
+          <div class="audit-pages">
+            {% if page_obj.has_previous %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&range={{ audit_filters.range|urlencode }}&severity={{ audit_filters.severity|urlencode }}&start={{ audit_filters.start|urlencode }}&end={{ audit_filters.end|urlencode }}&page={{ page_obj.previous_page_number }}" aria-label="Previous page">‹</a>{% endif %}
+            {% for n in page_obj.paginator.page_range %}{% if n == page_obj.number %}<span class="current" aria-current="page">{{ n }}</span>{% elif n <= 3 or n > page_obj.paginator.num_pages|add:"-2" or n >= page_obj.number|add:"-1" and n <= page_obj.number|add:"1" %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&range={{ audit_filters.range|urlencode }}&severity={{ audit_filters.severity|urlencode }}&start={{ audit_filters.start|urlencode }}&end={{ audit_filters.end|urlencode }}&page={{ n }}">{{ n }}</a>{% endif %}{% endfor %}
+            {% if page_obj.has_next %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&range={{ audit_filters.range|urlencode }}&severity={{ audit_filters.severity|urlencode }}&start={{ audit_filters.start|urlencode }}&end={{ audit_filters.end|urlencode }}&page={{ page_obj.next_page_number }}" aria-label="Next page">›</a>{% endif %}
+          </div>
+        </div>
+      </section>
+      <p class="audit-footnote">Audit records are restricted to your account and sourced from persisted platform audit streams. Severity is a display classification derived from recorded action text, not a separate security verdict. IP addresses and request bodies are not invented or exposed when unavailable.</p>
+    </main>
+    <aside class="audit-side">
+      <section class="audit-side-card"><h2>Event Summary</h2>
+        <div class="summary-row"><span class="summary-dot">●</span><span>Info<small class="audit-summary-note">Informational records</small></span><strong>{{ event_summary.info }}</strong></div>
+        <div class="summary-row"><span class="summary-dot low">●</span><span>Low<small class="audit-summary-note">Routine actions</small></span><strong>{{ event_summary.low }}</strong></div>
+        <div class="summary-row"><span class="summary-dot medium">●</span><span>Medium<small class="audit-summary-note">Sensitive changes</small></span><strong>{{ event_summary.medium }}</strong></div>
+        <div class="summary-row"><span class="summary-dot high">●</span><span>High<small class="audit-summary-note">Failures / alerts</small></span><strong>{{ event_summary.high }}</strong></div>
+        <div class="summary-total"><span>Total events in view</span><strong>{{ event_count }}</strong></div>
+      </section>
+      <section class="audit-side-card"><h2>Recent Activity</h2>
+        {% for e in recent_events %}<div class="recent-item"><span class="audit-event-icon {{ e.severity }}">✓</span><div><strong>{{ e.action|title }}</strong><small>{{ e.timestamp|timesince }} ago · {{ e.module|title }}</small></div></div>{% empty %}<p class="audit-sub">No recent recorded activity.</p>{% endfor %}
+        <a class="audit-btn secondary audit-view-all" href="{% url 'audit_center' %}">View all events</a>
+      </section>
+      <section class="audit-side-card"><h2>Quick Actions</h2><div class="audit-quick"><button class="audit-btn" type="button" id="audit-export-side">↓ Export visible logs</button><a class="audit-btn secondary" href="{% url 'security_center' %}">♢ View Security Center</a><a class="audit-btn secondary" href="/notifications/">♧ Manage Notifications</a></div></section>
+    </aside>
+  </div>
 </section>
+<script>
+(function () {
+  const table = document.getElementById("audit-events-table");
+  function csv() {
+    if (!table) return "";
+    const rows = [...table.querySelectorAll("thead tr, tbody tr")]
+      .filter((row) => row.querySelectorAll("th, td").length === 6);
+    return rows.map((row) => [...row.querySelectorAll("th, td")]
+      .map((cell) => '"' + cell.innerText.trim().replace(/\\s+/g, " ").replace(/"/g, '""') + '"')
+      .join(",")).join("\\r\\n");
+  }
+  function download() {
+    const data = csv();
+    if (!data) return;
+    const blob = new Blob(["\\ufeff" + data], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "algobot-audit-visible-records.csv";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+  document.getElementById("audit-export")?.addEventListener("click", download);
+  document.getElementById("audit-export-side")?.addEventListener("click", download);
+  document.getElementById("audit-copy")?.addEventListener("click", async () => {
+    if (!table) return;
+    const visibleText = [...table.querySelectorAll("tbody tr")]
+      .map((row) => [...row.querySelectorAll("td")]
+        .map((cell) => cell.innerText.trim().replace(/\\s+/g, " ")).join("\\t"))
+      .join("\\n");
+    const button = document.getElementById("audit-copy");
+    try {
+      await navigator.clipboard.writeText(visibleText);
+      button.textContent = "Copied";
+    } catch (_) {
+      button.textContent = "Clipboard unavailable";
+    }
+  });
+})();
+</script>
 {% endblock %}
