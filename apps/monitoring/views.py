@@ -86,7 +86,7 @@ def dashboard(request):
     except Exception:
         dashboard["overall_system_health"] = "down"
 
-        # Keep operational events and connected-channel details private to this account.
+    # Keep operational events and connected-channel details private to this account.
     visible_alerts = Alert.objects.filter(user=request.user)
     if request.user.is_staff:
         visible_alerts = Alert.objects.filter(Q(user=request.user) | Q(user__isnull=True))
