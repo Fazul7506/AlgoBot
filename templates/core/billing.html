@@ -195,7 +195,7 @@
           <button class="btn primary provider-button billing-provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="intasend" aria-label="Continue with IntaSend for ${esc(name)}"><img class="billing-provider-logo intasend-logo" src="https://framerusercontent.com/images/EW5SO1YUyLv7luuQQdXwh1wLKa4.svg?height=810&amp;width=810" alt="" loading="lazy" decoding="async"><span>Continue with IntaSend</span></button>
         </div>`;
       }
-      return `<article class="panel billing-plan-card" data-plan="${esc(name)}"><p class="eyebrow">${esc(name)}</p><h2 class="billing-plan-price money-value">${price}</h2><p>${p.recurring?'30-day billing period':'No recurring charge'}</p>${!configured&&name!=='FREE'?'<span class="provider-label">This plan is not configured for checkout.</span>':''}<div class="billing-plan-actions">${action}</div></article>`;
+      return `<article class="panel billing-plan-card" data-plan="${esc(name)}" data-current="${active?'true':'false'}"><p class="eyebrow">${esc(name)}${active?' · CURRENT':''}</p><h2 class="billing-plan-price money-value">${price}</h2><p>${p.recurring?'30-day billing period':'No recurring charge'}</p><div class="billing-plan-detail"><span class="material-symbols-rounded" aria-hidden="true">check_circle</span><span>Usage limits enforced from your active entitlements</span></div><div class="billing-plan-detail"><span class="material-symbols-rounded" aria-hidden="true">check_circle</span><span>${configured?'Checkout status: available':'Checkout status: not configured'}</span></div>${!configured&&name!=='FREE'?'<span class="provider-label">This plan is not configured for checkout.</span>':''}<div class="billing-plan-actions">${action}</div></article>`;
     }).join('')||'<div class="panel">No billing plans are configured.</div>';
     const checkoutForm=$('#billing-checkout-form');
     const checkoutPlan=checkoutForm?.querySelector('[data-checkout-form-plan]');
@@ -213,9 +213,20 @@
     try{
       const [status,ent,plansData]=await Promise.all([api('/billing/status/'),api('/billing/entitlements/'),api('/billing/plans/')]);
       const current=ent.current||{},plan=String(current.plan||status.subscription?.plan||'FREE').toUpperCase();
-      renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase());
-      $('[data-subscription-plan]').textContent=plan;
+      const plans=plansData.plans||status.plans||[];
+      renderPlans(plans,plan,String(plansData.provider||'intasend').toLowerCase());
       const s=status.subscription||{},expiry=s.expires_at?new Date(s.expires_at).toLocaleString():'';
+      const currentPlanData=plans.find(p=>String(p.plan||'').toUpperCase()===plan)||{};
+      const currentPrice=currentPlanData.price_cents==null?null:money(currentPlanData.price_cents,currentPlanData.currency);
+      $('[data-current-plan-name]').textContent=plan;
+      $('[data-current-plan-state]').textContent=(s.is_active||plan==='FREE'||plan==='ENTERPRISE')?'Active':'Inactive';
+      $('[data-current-plan-description]').textContent=plan==='FREE'?'Essential features with usage limits enforced by your current entitlements.':plan==='ENTERPRISE'?'Enterprise access; contact support for account-specific billing changes.':'Your current subscription and its configured entitlements.';
+      $('[data-current-plan-price]').innerHTML=currentPrice?esc(currentPrice)+(currentPlanData.recurring?' <small>/ 30 days</small>':''):'See plan catalog';
+      $('[data-next-billing-date]').textContent=expiry||'Not supplied';
+      $('[data-next-billing-copy]').textContent=s.is_active?(s.recurring?'Subscription expiry/next-cycle date supplied by billing records.':'One-time payment · no automatic renewal.'):'No active paid billing cycle is recorded.';
+      const activeStatus=(s.is_active||plan==='FREE'||plan==='ENTERPRISE')?'Active · billing data available':'Review subscription status';
+      $('[data-billing-account-status]').textContent=activeStatus;
+      $('[data-subscription-plan]').textContent=plan;
       const cycleLabel=s.is_active?(s.recurring?'Auto-renewal enabled':'One-time payment · no automatic renewal'):'No active paid cycle';
       const cancelButton=$('[data-cancel-subscription]');
       const freePlan=plan==='FREE';
@@ -225,12 +236,16 @@
       const u=current.usage||{},labels={api_calls:'Execution API calls / day',strategies:'Active strategies',backtests:'Backtests / day',predictions:'AI predictions / day',orders:'Orders / day',broker_accounts:'Connected broker integrations',automations:'Automation runs / day',live_orders:'Live orders / day'};
       $('[data-usage-grid]').innerHTML=Object.keys(labels).map(k=>{
         const x=u[k]||{},source=x.source==='database'?'database':'audit log',exhausted=!x.unlimited&&x.limit!=null&&Number(x.used||0)>=Number(x.limit),resetBadge=exhausted&&x.reset_at?`<span class="usage-reset-badge" role="status">Resets ${new Date(x.reset_at).toLocaleString()}</span>`:'';
-        return `<article class="usage-card"><small>${labels[k]}</small><strong>${x.unlimited?'Unlimited':`${x.used||0} / ${x.limit??'—'}`}</strong><small>${x.unlimited?'No restriction':`${x.remaining??0} remaining`}</small>${resetBadge}<small class="usage-source">Source: ${source}</small></article>`;
+        const iconMap={api_calls:'api',strategies:'psychology',backtests:'query_stats',predictions:'insights',orders:'receipt_long',broker_accounts:'hub',automations:'auto_mode',live_orders:'monitoring'};
+        return `<article class="usage-card"><div class="billing-usage-card-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">${iconMap[k]||'analytics'}</span><small>${labels[k]}</small></div><strong>${x.unlimited?'Unlimited':`${x.used||0} / ${x.limit??'—'}`}</strong><small>${x.unlimited?'No restriction':`${x.remaining??0} remaining`}</small><div class="billing-usage-track" aria-hidden="true"><span style="width:${x.unlimited?'100%':x.limit&&Number(x.limit)>0?Math.min(100,Math.max(0,Number(x.used||0)/Number(x.limit)*100))+'%':'0%'}"></span></div>${resetBadge}<small class="usage-source">Source: ${source}</small></article>`;
       }).join('');
       const payments=status.payments||[];
-      $('[data-payment-list]').innerHTML=payments.length?payments.map(x=>{const raw=String(x.status||'PENDING').toUpperCase(),cls=raw==='COMPLETED'?'billing-status-completed':raw==='FAILED'?'billing-status-failed':'billing-status-pending';return `<div class="billing-row"><span>${esc(x.metadata?.plan||'Subscription')}</span><span class="money-value">${money(x.amount_cents,x.currency)}</span><span class="${cls}">${raw}</span><span>${x.created_at?new Date(x.created_at).toLocaleString():''}</span></div>`;}).join(''):'No payment history yet. Complete a provider checkout and return here to record the result.';
+      $('[data-payment-list]').innerHTML=payments.length?payments.map(x=>{const raw=String(x.status||'PENDING').toUpperCase(),cls=raw==='COMPLETED'?'billing-status-completed':raw==='FAILED'?'billing-status-failed':'billing-status-pending';return `<div class="billing-row"><span>${x.created_at?esc(new Date(x.created_at).toLocaleDateString()):'—'}</span><span>${esc(x.metadata?.plan||'Subscription')}</span><span class="money-value">${money(x.amount_cents,x.currency)}</span><span><span class="${cls}">${esc(raw)}</span></span></div>`;}).join(''):'No payment history yet. Complete a provider checkout and return here to record the result.';
     }catch(e){console.error(e);showError(`Billing data could not be loaded: ${e?.message||'Please refresh and try again.'}`);}
   }
+  document.querySelectorAll('.billing-tabs a').forEach(link=>link.addEventListener('click',()=>{document.querySelectorAll('.billing-tabs a').forEach(item=>{item.classList.remove('is-active');item.removeAttribute('aria-current');});link.classList.add('is-active');link.setAttribute('aria-current','location');}));
+  const syncBillingTab=()=>{const hash=window.location.hash||'#billing-overview';document.querySelectorAll('.billing-tabs a').forEach(link=>{const active=link.getAttribute('href')===hash;link.classList.toggle('is-active',active);if(active)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');});};
+  window.addEventListener('hashchange',syncBillingTab);syncBillingTab();
   $('[data-billing-refresh]').onclick=load;
   $('[data-cancel-subscription]').textContent='Cancel renewal';
   $('[data-cancel-subscription]').onclick=async()=>{
