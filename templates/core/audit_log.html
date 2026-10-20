@@ -30,7 +30,7 @@
       </form>
 
       <section class="audit-section">
-        <div class="audit-section-head"><div><h2>Recorded Events</h2><span class="audit-sub">Latest matching records · private to your account</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="audit-btn secondary" type="button" id="audit-copy">Copy visible rows</button><button class="audit-btn" type="button" id="audit-export">↓ Export CSV</button></div></div>
+        <div class="audit-section-head"><div><h2>Recorded Events</h2><span class="audit-sub">Latest matching records · private to your account</span></div><div class="audit-event-actions"><button class="audit-btn secondary" type="button" id="audit-copy">Copy visible rows</button><button class="audit-btn" type="button" id="audit-export">↓ Export CSV</button></div></div>
         <div class="audit-table-wrap"><table class="audit-table" id="audit-events-table">
           <thead><tr><th>Timestamp</th><th>Event</th><th>User / Source</th><th>Details / Resource</th><th>Origin</th><th>Severity</th></tr></thead>
           <tbody>
@@ -53,15 +53,15 @@
     </main>
     <aside class="audit-side">
       <section class="audit-side-card"><h2>Event Summary</h2>
-        <div class="summary-row"><span class="summary-dot">●</span><span>Info<small style="display:block">Informational records</small></span><strong>{{ event_summary.info }}</strong></div>
-        <div class="summary-row"><span class="summary-dot low">●</span><span>Low<small style="display:block">Routine actions</small></span><strong>{{ event_summary.low }}</strong></div>
-        <div class="summary-row"><span class="summary-dot medium">●</span><span>Medium<small style="display:block">Sensitive changes</small></span><strong>{{ event_summary.medium }}</strong></div>
-        <div class="summary-row"><span class="summary-dot high">●</span><span>High<small style="display:block">Failures / alerts</small></span><strong>{{ event_summary.high }}</strong></div>
+        <div class="summary-row"><span class="summary-dot">●</span><span>Info<small class="audit-summary-note">Informational records</small></span><strong>{{ event_summary.info }}</strong></div>
+        <div class="summary-row"><span class="summary-dot low">●</span><span>Low<small class="audit-summary-note">Routine actions</small></span><strong>{{ event_summary.low }}</strong></div>
+        <div class="summary-row"><span class="summary-dot medium">●</span><span>Medium<small class="audit-summary-note">Sensitive changes</small></span><strong>{{ event_summary.medium }}</strong></div>
+        <div class="summary-row"><span class="summary-dot high">●</span><span>High<small class="audit-summary-note">Failures / alerts</small></span><strong>{{ event_summary.high }}</strong></div>
         <div class="summary-total"><span>Total events in view</span><strong>{{ event_count }}</strong></div>
       </section>
       <section class="audit-side-card"><h2>Recent Activity</h2>
         {% for e in recent_events %}<div class="recent-item"><span class="audit-event-icon {{ e.severity }}">✓</span><div><strong>{{ e.action|title }}</strong><small>{{ e.timestamp|timesince }} ago · {{ e.module|title }}</small></div></div>{% empty %}<p class="audit-sub">No recent recorded activity.</p>{% endfor %}
-        <a class="audit-btn secondary" style="width:100%;margin-top:6px" href="{% url 'audit_center' %}">View all events</a>
+        <a class="audit-btn secondary audit-view-all" href="{% url 'audit_center' %}">View all events</a>
       </section>
       <section class="audit-side-card"><h2>Quick Actions</h2><div class="audit-quick"><button class="audit-btn" type="button" id="audit-export-side">↓ Export visible logs</button><a class="audit-btn secondary" href="{% url 'security_center' %}">♢ View Security Center</a><a class="audit-btn secondary" href="/notifications/">♧ Manage Notifications</a></div></section>
     </aside>
