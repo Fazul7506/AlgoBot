@@ -21,5 +21,5 @@ class TopbarSecurityControlsContractTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "/profile/")
         self.assertContains(response, "/notifications/")
-        self.assertContains(response, "data-topbar-select-account")
+        self.assertContains(response, "data-topbar-account-trigger")
         self.assertContains(response, "data-notification-read-all")
