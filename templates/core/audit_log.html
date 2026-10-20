@@ -68,12 +68,45 @@
   </div>
 </section>
 <script>
-(function(){
- const table=document.getElementById('audit-events-table');
- function csv(){if(!table)return '';const rows=[...table.querySelectorAll('thead tr,tbody tr')].filter(r=>r.querySelectorAll('th,td').length===6);return rows.map(r=>[...r.querySelectorAll('th,td')].map(c=>'"'+c.innerText.trim().replace(/\s+/g,' ').replace(/"/g,'""')+'"').join(',')).join('\r\n');}
- function download(){const data=csv();if(!data)return;const blob=new Blob(['\ufeff'+data],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='algobot-audit-visible-records.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);}
- document.getElementById('audit-export')?.addEventListener('click',download);document.getElementById('audit-export-side')?.addEventListener('click',download);
- document.getElementById('audit-copy')?.addEventListener('click',async()=>{const text=[...table.querySelectorAll('tbody tr')].map(r=>[...r.querySelectorAll('td')].map(c=>c.innerText.trim().replace(/\s+/g,' ')).join('\t')).join('\n');try{await navigator.clipboard.writeText(text);const b=document.getElementById('audit-copy');b.textContent='Copied';setTimeout(()=>b.textContent='Copy visible rows',1600);}catch(_){const b=document.getElementById('audit-copy');b.textContent='Clipboard unavailable';}});
+(function () {
+  const table = document.getElementById("audit-events-table");
+  function csv() {
+    if (!table) return "";
+    const rows = [...table.querySelectorAll("thead tr, tbody tr")]
+      .filter((row) => row.querySelectorAll("th, td").length === 6);
+    return rows.map((row) => [...row.querySelectorAll("th, td")]
+      .map((cell) => '"' + cell.innerText.trim().replace(/\\s+/g, " ").replace(/"/g, '""') + '"')
+      .join(",")).join("\\r\\n");
+  }
+  function download() {
+    const data = csv();
+    if (!data) return;
+    const blob = new Blob(["\\ufeff" + data], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "algobot-audit-visible-records.csv";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+  document.getElementById("audit-export")?.addEventListener("click", download);
+  document.getElementById("audit-export-side")?.addEventListener("click", download);
+  document.getElementById("audit-copy")?.addEventListener("click", async () => {
+    if (!table) return;
+    const visibleText = [...table.querySelectorAll("tbody tr")]
+      .map((row) => [...row.querySelectorAll("td")]
+        .map((cell) => cell.innerText.trim().replace(/\\s+/g, " ")).join("\\t"))
+      .join("\\n");
+    const button = document.getElementById("audit-copy");
+    try {
+      await navigator.clipboard.writeText(visibleText);
+      button.textContent = "Copied";
+    } catch (_) {
+      button.textContent = "Clipboard unavailable";
+    }
+  });
 })();
 </script>
 {% endblock %}
