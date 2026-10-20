@@ -6,6 +6,29 @@ from core.models import UserProfile
 
 
 class BillingTerminalUiContractTests(SimpleTestCase):
+    def test_billing_dashboard_reference_is_responsive_and_keeps_live_data_contracts(self):
+        from pathlib import Path
+        template = Path("templates/core/billing.html").read_text(encoding="utf-8")
+        for marker in (
+            "Billing &amp; Payments", "billing-summary-grid", "billing-plan-grid",
+            "billing-payment-table", "billing-usage-grid", "billing-account-status",
+            'id="billing-checkout-form"', "{% csrf_token %}",
+            'data-provider="pesapal"', 'data-provider="intasend"',
+            "data-cancel-subscription", "data-billing-refresh",
+            "billing-security-list", "billing-tabs",
+            "@media(max-width:1200px)", "@media(max-width:850px)",
+            "@media(max-width:580px)", "@media(max-width:360px)",
+            "Usage is measured from persisted platform audit/database records",
+            "renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase())",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, template)
+        self.assertIn("billing-summary-grid{display:grid;grid-template-columns:repeat(4", template)
+        self.assertIn("billing-usage-track", template)
+        self.assertIn("billing-tabs a", template)
+        self.assertNotIn("Visa •••• 4242", template)
+        self.assertNotIn("$49.00", template)
+
     def test_billing_template_keeps_enterprise_visible_and_quota_source_transparent(self):
         from pathlib import Path
         template = Path("templates/core/billing.html").read_text(encoding="utf-8")
