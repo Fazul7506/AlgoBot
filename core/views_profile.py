@@ -83,7 +83,6 @@ def profile_page(request):
             profile, _ = UserProfile.objects.get_or_create(user=request.user)
             request.user.first_name = first_name
             request.user.last_name = last_name
-            request.user.save(update_fields=["first_name", "last_name"])
             profile.country = country
             profile.timezone = timezone_name
             profile.phone = phone
@@ -110,6 +109,7 @@ def profile_page(request):
                 except Exception:
                     messages.error(request, "The profile picture could not be saved to Cloudinary. Other profile details were not changed.")
                     return redirect("profile_page")
+            request.user.save(update_fields=["first_name", "last_name"])
             profile.save(update_fields=[
                 "country", "timezone", "phone", "bio",
                 "avatar_url", "updated_at",
