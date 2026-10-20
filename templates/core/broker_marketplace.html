@@ -47,7 +47,7 @@
               </div>
               <div class="broker-brand-copy"><h2>{{ broker.name }}</h2><small>{{ broker.broker_type|title }}</small></div>
             </div>
-            <span class="broker-pill {% if broker.user_connected %}is-connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}is-available{% else %}is-unavailable{% endif %}">{% if broker.user_connected %}Connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}Available{% elif broker.status != 'active' %}Unavailable{% elif broker.status != 'active' %}Unavailable{% else %}Not supported{% endif %}</span>
+            <span class="broker-pill {% if broker.user_connected %}is-connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}is-available{% else %}is-unavailable{% endif %}">{% if broker.user_connected %}Connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}Available{% elif broker.status != 'active' %}Unavailable{% else %}Not supported{% endif %}</span>
           </div>
           <p class="broker-card-description">{% if broker.broker_type == 'deriv' %}Forex, CFDs, multipliers and options{% elif broker.broker_type == 'binance' or broker.broker_type == 'bybit' %}Crypto spot and derivatives{% elif broker.broker_type == 'alpaca' or broker.broker_type == 'interactive_brokers' %}Stocks and multi-market trading{% elif broker.broker_type == 'oanda' or broker.broker_type == 'forex_com' or broker.broker_type == 'pepperstone' or broker.broker_type == 'ic_markets' or broker.broker_type == 'exness' %}Forex, indices and CFDs{% else %}Broker integration registered in the AlgoBot directory{% endif %}</p>
           <div class="broker-metadata">
@@ -124,7 +124,8 @@
  let activeCategory="all",activeStatus="all";
  const connected=cards.filter(card=>card.dataset.brokerStatus==="connected").length;
  const available=cards.filter(card=>card.dataset.brokerStatus==="available").length;
- root.querySelector("[data-broker-connected-count]").textContent=String(connected);\n const emptyConnected=root.querySelector("[data-broker-no-connected]");if(emptyConnected)emptyConnected.hidden=connected>0;
+ root.querySelector("[data-broker-connected-count]").textContent=String(connected);
+ const emptyConnected=root.querySelector("[data-broker-no-connected]");if(emptyConnected)emptyConnected.hidden=connected>0;
  const results=root.querySelector("[data-broker-results]"),noResults=root.querySelector("[data-broker-no-results]");
  function applyFilter(){
    const query=(search.value||"").trim().toLowerCase();let visible=0;
