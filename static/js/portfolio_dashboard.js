@@ -1,99 +1,24 @@
 (() => {
-  'use strict';
-  if (window.__algoBotPortfolioDashboard) return;
-  window.__algoBotPortfolioDashboard = true;
-
-  const $ = selector => document.querySelector(selector);
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' })[c]);
-  const list = value => window.AlgoBotFrontendData?.list(value) || [];
-  const money = (value, currency = 'USD') => { if (value == null || value === '' || !Number.isFinite(Number(value))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
-
-  let loadGeneration = 0;
-
-  function connected() {
-    const state = window.AlgoBotBrokerState?.get();
-    return !!state?.account && ['CONNECTED', 'SYNCING', 'READY', 'DEGRADED'].includes(state.status);
-  }
-
-  function stateView(message) {
-    const root = $('[data-portfolio-workspace]');
-    if (!root) return;
-    root.innerHTML = `<div class="ds-state"><strong>Broker connection required</strong><p>${esc(message)}</p><a class="ds-btn ds-btn--primary" href="/brokers/connect/">Connect broker</a></div>`;
-  }
-
-  async function load() {
-    const generation = ++loadGeneration;
-    if (!connected()) {
-      // Bootstrap canonical broker state from the authenticated backend. Some
-      // pages load before the global account selector has hydrated its state.
-      try {
-        const response = await window.AlgoBotFrontendData.request('/api/brokers/accounts/');
-        if (generation !== loadGeneration) return;
-        const accounts = list(response);
-        const active = accounts.find(account => account && (
-          account.is_connected === true ||
-          ['connected','ready','syncing','degraded','online'].includes(String(account.connection_status || account.connection_state || '').toLowerCase())
-        ));
-        if (active && window.AlgoBotBrokerState?.setAccount) window.AlgoBotBrokerState.setAccount(active, 'portfolio-backend-bootstrap');
-      } catch (_) {
-        // Keep the normal empty-state below; do not fabricate broker state.
-      }
-      if (!connected()) {
-        stateView('No connected broker account is available. Connect or select an authorized account in Broker Management.');
-        return;
-      }
-    }
-    const root = $('[data-portfolio-workspace]');
-    if (!root) return;
-    const accountAtStart = window.AlgoBotBrokerState.get().account;
-    const accountIdAtStart = accountAtStart?.id;
-    root.innerHTML = '<div class="ds-state"><strong>Synchronizing broker portfolio…</strong><p>Waiting for broker-backed position data.</p></div>';
-    try {
-      const positionsResponse = await window.AlgoBotFrontendData.request('/api/positions/open/');
-      if (generation !== loadGeneration) return;
-      const stateNow = window.AlgoBotBrokerState.get();
-      if (!['CONNECTED', 'SYNCING', 'READY', 'DEGRADED'].includes(stateNow.status) || String(stateNow.account?.id ?? '') !== String(accountIdAtStart ?? '')) return;
-      const positions = list(positionsResponse);
-      const account = stateNow.account;
-      const currency = account?.currency || '';
-      const hasValue = value => value != null && value !== '' && Number.isFinite(Number(value));
-      const pnlComplete = positions.every(position => hasValue(position.profit));
-      const pnl = pnlComplete ? positions.reduce((sum, position) => sum + Number(position.profit), 0) : null;
-      const exposureComplete = positions.every(position => hasValue(position.size) && hasValue(position.current_price));
-      const exposure = exposureComplete ? positions.reduce((sum, position) => sum + Math.abs(Number(position.size) * Number(position.current_price)), 0) : null;
-      const bySymbol = positions.reduce((map, position) => {
-        const symbol = position.symbol || 'Unknown';
-        if (!hasValue(position.size) || !hasValue(position.current_price)) return map;
-        const value = Math.abs(Number(position.size) * Number(position.current_price));
-        map[symbol] = (map[symbol] || 0) + value;
-        return map;
-      }, {});
-      const allocation = Object.entries(bySymbol).sort((a, b) => b[1] - a[1]);
-      root.innerHTML = `
-        <section class="kpi-grid compact" aria-label="Broker portfolio overview">
-          <article class="kpi-card"><span>Account balance</span><strong>${money(account?.balance, currency)}</strong></article>
-          <article class="kpi-card"><span>Broker equity</span><strong>${money(account?.equity, currency)}</strong></article>
-          <article class="kpi-card"><span>Open P/L</span><strong>${money(pnl, currency)}</strong></article>
-          <article class="kpi-card"><span>Gross exposure</span><strong>${money(exposure, currency)}</strong></article>
-        </section>
-        <section class="command-grid">
-          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Broker positions</p><h2>Current exposure</h2></div><a href="/positions/">Open positions</a></div>${positions.length ? `<div class="table-wrap"><table class="enterprise-table"><thead><tr><th>Symbol</th><th>Side</th><th>Size</th><th>Current</th><th>P/L</th></tr></thead><tbody>${positions.slice(0, 20).map(p => `<tr><td>${esc(p.symbol)}</td><td>${esc(p.direction || '—')}</td><td>${esc(p.size ?? '—')}</td><td>${esc(p.current_price ?? '—')}</td><td>${esc(p.profit ?? '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="ds-state"><strong>No open positions</strong><p>The connected broker currently reports no open positions.</p></div>'}</article>
-          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Allocation</p><h2>Exposure by symbol</h2></div></div>${allocation.length ? `<div class="health-stack">${allocation.map(([symbol, value]) => `<span><b></b>${esc(symbol)} <strong>${esc(currency)} ${money(value)}</strong></span>`).join('')}</div>` : '<div class="ds-state"><strong>No allocation data</strong><p>Allocation appears after the broker reports open positions.</p></div>'}</article>
-        </section>`;
-    } catch (error) {
-      if (generation !== loadGeneration) return;
-      root.innerHTML = `<div class="ds-state ds-state--error"><strong>Portfolio unavailable</strong><p>${esc(error.message)}</p><a class="ds-btn" href="/brokers/connect/">Review broker connection</a></div>`;
-    }
-  }
-
-  function boot() {
-    window.AlgoBotBrokerState?.subscribe(event => {
-      if (['NO_BROKER', 'DISCONNECTED'].includes(event.detail.state.status)) stateView('Broker disconnected. Portfolio values are withheld until the connection is restored.');
-      else if (['READY', 'CONNECTED'].includes(event.detail.state.status)) load();
-    });
-    load();
-  }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
-  else boot();
+'use strict';
+if(window.__algoBotPortfolioDashboard)return;window.__algoBotPortfolioDashboard=true;
+const $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const list=v=>window.AlgoBotFrontendData?.list(v)||[], valid=v=>v!=null&&v!==''&&Number.isFinite(Number(v));
+const money=(v,c='USD')=>{if(!valid(v))return'Unavailable';if(window.AlgoBotMoney?.format)return window.AlgoBotMoney.format(v,c);try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c||'USD',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(v))}catch(_){return String(c)+' '+Number(v).toFixed(2)}};
+const set=(s,v)=>{const n=$(s);if(n)n.textContent=v}, empty=(s,t,d)=>{const n=$(s);if(n)n.innerHTML='<div class="portfolio-state"><strong>'+esc(t)+'</strong>'+esc(d)+'</div>'};
+const type=s=>{s=String(s||'').toUpperCase();if(/BTC|ETH|SOL|XRP|DOGE|ADA/.test(s))return'Crypto';if(/XAU|XAG|OIL|WTI|BRENT|GOLD|SILVER/.test(s))return'Commodities';if(/US30|NAS100|SPX|SP500|GER40|UK100|JP225/.test(s))return'Indices';if(/^[A-Z]{6}$/.test(s))return'Forex';return'Stocks'};
+const colors={Forex:'#087cff',Indices:'#00c9a7',Commodities:'#ffb13b',Crypto:'#ec4f91',Stocks:'#9449ed',Other:'#6f91b8'};let generation=0;
+function connection(title,detail){const n=$('[data-portfolio-connection]');if(n)n.innerHTML='<span class="shield" aria-hidden="true">⬡</span><div><strong>'+esc(title)+'</strong><small>'+esc(detail)+'</small></div>'}
+function holdings(ps,c){if(!ps.length){empty('[data-pf-holdings]','No open positions','The connected broker currently reports no open positions.');return}const n=$('[data-pf-holdings]');if(!n)return;n.innerHTML='<table class="portfolio-table"><thead><tr><th>Asset</th><th>Quantity</th><th>Avg. Price</th><th>Current Price</th><th>P&amp;L</th><th>P&amp;L %</th><th>Value</th><th>Actions</th></tr></thead><tbody>'+ps.slice(0,50).map(p=>{const sym=p.symbol||'Unknown',profit=valid(p.profit)?Number(p.profit):null,val=valid(p.size)&&valid(p.current_price)?Math.abs(Number(p.size)*Number(p.current_price)):null,basis=valid(p.size)&&valid(p.average_price)?Math.abs(Number(p.size)*Number(p.average_price)):null,pct=profit!==null&&basis?profit/basis*100:null;return'<tr><td><div class="asset-name">'+esc(sym)+'</div><div class="asset-type">'+esc(type(sym))+'</div></td><td>'+esc(p.size??'—')+'</td><td>'+esc(valid(p.average_price)?money(p.average_price,c):'—')+'</td><td>'+esc(valid(p.current_price)?money(p.current_price,c):'—')+'</td><td class="'+(profit!==null&&profit>=0?'portfolio-positive':'')+'">'+esc(profit===null?'Unavailable':money(profit,c))+'</td><td>'+esc(pct===null?'—':pct.toFixed(2)+'%')+'</td><td>'+esc(val===null?'Unavailable':money(val,c))+'</td><td><a class="portfolio-trade-link" href="/trading/">Trade</a></td></tr>'}).join('')+'</tbody></table>'}
+function allocation(ps,c){const sums={};ps.forEach(p=>{if(valid(p.size)&&valid(p.current_price)){const k=type(p.symbol);sums[k]=(sums[k]||0)+Math.abs(Number(p.size)*Number(p.current_price))}});const entries=Object.entries(sums).sort((a,b)=>b[1]-a[1]),total=entries.reduce((a,x)=>a+x[1],0),n=$('[data-pf-allocation]');if(!n)return;if(!total){empty('[data-pf-allocation]','Allocation unavailable','Verified position values are required to calculate allocation.');return}let off=0;const seg=entries.map(([k,v])=>{const start=off;off+=v/total*100;return colors[k]+' '+start.toFixed(2)+'% '+off.toFixed(2)+'%'});n.innerHTML='<div class="portfolio-donut" style="background:conic-gradient('+seg.join(',')+')"><div class="portfolio-donut-label">'+esc(money(total,c))+'<small>Position value</small></div></div><div class="portfolio-legend">'+entries.map(([k,v])=>'<span><i class="portfolio-dot" style="background:'+colors[k]+'"></i><span>'+esc(k)+'</span><b>'+(v/total*100).toFixed(1)+'%</b></span>').join('')+'</div>'}
+function rows(v){if(Array.isArray(v))return v;if(Array.isArray(v?.data))return v.data;if(Array.isArray(v?.results))return v.results;return []}
+function renderPerformance(records,range,currency,currentEquity){const n=$('[data-pf-chart]');if(!n)return;const now=Date.now(),days=({'1D':1,'1W':7,'1M':30,'3M':90,'1Y':365}[range]||Infinity),filtered=records.filter(x=>{const t=Date.parse(x.timestamp||x.created_at||x.date||'');return Number.isFinite(t)&&(days===Infinity||now-t<=days*86400000)}).sort((a,b)=>Date.parse(a.timestamp||a.created_at||a.date)-Date.parse(b.timestamp||b.created_at||b.date));const val=x=>{const m=x.metrics&&typeof x.metrics==='object'?x.metrics:{};for(const k of ['equity','equity_value','net_asset_value','portfolio_value','balance'])if(valid(m[k]))return Number(m[k]);for(const k of ['equity','equity_value','net_asset_value','portfolio_value','balance'])if(valid(x[k]))return Number(x[k]);return null};let points=filtered.map(x=>({t:Date.parse(x.timestamp||x.created_at||x.date),v:val(x)})).filter(x=>x.v!==null);if(points.length<2){empty('[data-pf-chart]','Performance history unavailable',records.length?'Historical records exist, but do not include verified portfolio equity values for a chart.':'No saved portfolio performance snapshots exist yet. Historical records will populate this chart automatically.');return}const w=640,h=180,pad=10,min=Math.min(...points.map(x=>x.v)),max=Math.max(...points.map(x=>x.v)),span=max-min||1,xy=points.map((p,i)=>[(i/(points.length-1))*(w-2*pad)+pad,h-pad-((p.v-min)/span)*(h-2*pad)]),path=xy.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' '),labels=points.length?points:[ ];n.innerHTML='<svg class="portfolio-chart" viewBox="0 0 '+w+' '+h+'" role="img" aria-label="Historical portfolio equity from saved performance snapshots" preserveAspectRatio="none"><defs><linearGradient id="pf-chart-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#08d5aa" stop-opacity=".28"/><stop offset="100%" stop-color="#08d5aa" stop-opacity="0"/></linearGradient></defs>'+[.25,.5,.75,1].map(y=>'<line x1="'+pad+'" y1="'+(h*y)+'" x2="'+(w-pad)+'" y2="'+(h*y)+'" stroke="#143456" stroke-width="1"/>').join('')+'<path d="'+path+' L'+(w-pad)+','+(h-pad)+' L'+pad+','+(h-pad)+' Z" fill="url(#pf-chart-fill)"/><path d="'+path+'" fill="none" stroke="#08d5aa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><text x="'+pad+'" y="12" fill="#a9c4e9" font-size="10">'+esc(money(max,currency))+'</text><text x="'+pad+'" y="'+(h-2)+'" fill="#a9c4e9" font-size="10">'+esc(money(min,currency))+'</text></svg>';set('[data-pf-chart-value]',money(points[points.length-1].v,currency))}
+function renderMetrics(summary,metrics,records){const d=summary?.data||summary?.stats||summary||{},m=metrics?.data||metrics||{};set('[data-pf-winrate]',valid(d.win_rate??m.win_rate)?Number(d.win_rate??m.win_rate).toFixed(1)+'%':'Unavailable');set('[data-pf-trades]',valid(d.total_trades??m.total_trades)?String(d.total_trades??m.total_trades):'Unavailable');const factors=[m.profit_factor,m.profitFactor,...records.map(x=>x.metrics?.profit_factor??x.metrics?.profitFactor??x.profit_factor)].filter(valid);set('[data-pf-factor]',factors.length?Number(factors[0]).toFixed(2):'Unavailable');const dd=[m.max_drawdown,m.max_drawdown_percent,...records.map(x=>x.metrics?.max_drawdown_percent??x.metrics?.max_drawdown??x.drawdown)].filter(valid);set('[data-pf-drawdown]',dd.length?Math.abs(Number(dd[0]))+'%':'Unavailable')}
+function renderActivity(history,cashflows,currency){const node=$('[data-pf-activity]');if(!node)return;const events=[];rows(history).forEach(x=>events.push({kind:'trade',title:(String(x.direction||'Trade').toLowerCase()==='buy'?'Buy':String(x.direction||'Trade').toLowerCase()==='sell'?'Sell':String(x.direction||'Trade'))+' '+(x.symbol||'asset'),detail:[x.stake!=null?String(x.stake)+' lots':null,x.status].filter(Boolean).join(' · '),time:x.created_at||x.timestamp,amount:null}));rows(cashflows).forEach(x=>{const dep=Number(x.deposit||0),wd=Number(x.withdrawal||0);if(dep||wd)events.push({kind:'cash',title:dep?'Deposit':'Withdrawal',detail:dep?'Funds added to portfolio':'Funds withdrawn from portfolio',time:x.timestamp,amount:dep||-wd})});events.sort((a,b)=>(Date.parse(b.time)||0)-(Date.parse(a.time)||0));if(!events.length){empty('[data-pf-activity]','No recent activity','No orders or portfolio cash-flow records were returned for this account.');return}node.innerHTML=events.slice(0,8).map(e=>'<div class="portfolio-activity-item"><span class="portfolio-activity-icon" aria-hidden="true">'+(e.kind==='cash'?'＋':'↗')+'</span><div><strong>'+esc(e.title)+'</strong><small>'+esc(e.detail||'Recorded activity')+(e.time?' · '+esc(new Date(e.time).toLocaleString()):'')+'</small></div><span class="amount">'+(e.amount===null?'':esc(money(e.amount,currency)))+'</span></div>').join('')}
+let performanceRows=[],activeCurrency='USD',currentEquity=null;function bootRanges(){document.querySelectorAll('[data-pf-range]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-pf-range]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderPerformance(performanceRows,b.dataset.pfRange,activeCurrency,currentEquity)}))}
+async function load(){const g=++generation;let state=window.AlgoBotBrokerState?.get();if(!state?.account||!['CONNECTED','SYNCING','READY','DEGRADED'].includes(state.status)){try{const r=await window.AlgoBotFrontendData.request('/api/brokers/accounts/');if(g!==generation)return;const a=list(r).find(x=>x&&(x.is_connected===true||['connected','ready','syncing','degraded','online'].includes(String(x.connection_status||x.connection_state||'').toLowerCase())));if(a&&window.AlgoBotBrokerState?.setAccount)window.AlgoBotBrokerState.setAccount(a,'portfolio-backend-bootstrap')}catch(_){}state=window.AlgoBotBrokerState?.get()}
+if(!state?.account||!['CONNECTED','SYNCING','READY','DEGRADED'].includes(state.status)){connection('Account not connected','Connect an authorized broker account');['[data-pf-total]','[data-pf-pnl]','[data-pf-balance]','[data-pf-invested]'].forEach(s=>set(s,'Unavailable'));empty('[data-pf-holdings]','Broker connection required','Connect or select an authorized account in Broker Management.');empty('[data-pf-allocation]','No allocation data','Allocation requires verified open positions.');empty('[data-pf-chart]','Performance history unavailable','Historical account snapshots are not available yet.');empty('[data-pf-activity]','Activity history unavailable','No verified activity feed is available.');return}
+const account=state.account,id=account.id;connection('Account connected',(account.name||account.broker_name||'Broker')+(account.account_number?' · '+account.account_number:''));try{const r=await window.AlgoBotFrontendData.request('/api/positions/open/');if(g!==generation)return;const now=window.AlgoBotBrokerState?.get();if(!now||!['CONNECTED','SYNCING','READY','DEGRADED'].includes(now.status)||String(now.account?.id??'')!==String(id??''))return;const ps=list(r),c=account.currency||'USD',pnlOk=ps.every(p=>valid(p.profit)),pnl=pnlOk?ps.reduce((a,p)=>a+Number(p.profit),0):null,expOk=ps.every(p=>valid(p.size)&&valid(p.current_price)),exp=expOk?ps.reduce((a,p)=>a+Math.abs(Number(p.size)*Number(p.current_price)),0):null;
+set('[data-pf-total]',money(account.equity,c));set('[data-pf-pnl]',pnl===null?'Unavailable':money(pnl,c));set('[data-pf-balance]',money(account.balance,c));set('[data-pf-invested]',exp===null?'Unavailable':money(exp,c));set('[data-pf-chart-value]',money(account.equity,c));if(pnl!==null&&pnl>=0)$('[data-pf-pnl]')?.classList.add('portfolio-positive');holdings(ps,c);allocation(ps,c);const extras=await Promise.allSettled([window.AlgoBotFrontendData.request('/api/portfolio/performance/'),window.AlgoBotFrontendData.request('/api/dashboard/performance_summary/'),window.AlgoBotFrontendData.request('/api/dashboard/performance_metrics/'),window.AlgoBotFrontendData.request('/api/dashboard/trade_history/?days=30&limit=8'),window.AlgoBotFrontendData.request('/api/portfolio/cashflow/')]);if(g!==generation)return;performanceRows=extras[0].status==='fulfilled'?rows(extras[0].value):[];renderPerformance(performanceRows,document.querySelector('[data-pf-range][aria-pressed=true]')?.dataset.pfRange||'1D',c,account.equity);renderMetrics(extras[1].status==='fulfilled'?extras[1].value:null,extras[2].status==='fulfilled'?extras[2].value:null,performanceRows);renderActivity(extras[3].status==='fulfilled'?extras[3].value:null,extras[4].status==='fulfilled'?extras[4].value:null,c);set('[data-portfolio-updated]','Connected account · refreshed live')}catch(e){if(g!==generation)return;connection('Account data unavailable','Check broker connection');empty('[data-pf-holdings]','Portfolio unavailable',e?.message||'Broker position data could not be loaded.')}}
+function boot(){bootRanges();window.AlgoBotBrokerState?.subscribe(e=>{if(['NO_BROKER','DISCONNECTED'].includes(e.detail.state.status)){connection('Account disconnected','Values withheld until connection is restored');load()}else if(['READY','CONNECTED','DEGRADED'].includes(e.detail.state.status))load()});load()}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
