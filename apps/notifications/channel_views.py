@@ -83,10 +83,10 @@ def notification_channels_page(request):
 
     category_counts = {
         "all": total,
-        "trading": all_notifications.filter(category__icontains="trad").count() + all_notifications.filter(category__icontains="trade").exclude(category__icontains="trad").count(),
-        "account": all_notifications.filter(category__icontains="account").count(),
-        "security": all_notifications.filter(category__icontains="security").count() + all_notifications.filter(category__icontains="risk").exclude(category__icontains="security").count(),
-        "monitoring": all_notifications.filter(category__icontains="monitor").count() + all_notifications.filter(category__icontains="system").exclude(category__icontains="monitor").count(),
+        "trading": all_notifications.filter(Q(category__icontains="trad") | Q(category__icontains="trade") | Q(category__icontains="broker")).count(),
+        "account": all_notifications.filter(Q(category__icontains="account") | Q(category__icontains="profile")).count(),
+        "security": all_notifications.filter(Q(category__icontains="security") | Q(category__icontains="risk") | Q(category__icontains="auth")).count(),
+        "monitoring": all_notifications.filter(Q(category__icontains="monitor") | Q(category__icontains="system") | Q(category__icontains="health")).count(),
         "gmail": all_notifications.filter(channel="gmail").count(),
         "telegram": all_notifications.filter(channel="telegram").count(),
     }
