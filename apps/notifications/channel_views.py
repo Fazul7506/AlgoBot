@@ -22,6 +22,33 @@ BROWSER_NOTIFICATIONS_URL = "/notifications/"
 
 @login_required
 def notification_channels_page(request):
+    channels = connection_status(request.user)
+    if request.method == "POST" and "toggle_channel" in request.POST:
+        channel = request.POST.get("toggle_channel", "")
+        allowed_channels = {"in_app", "gmail", "telegram"}
+        enabled = request.POST.get("enabled") == "1"
+        if channel not in allowed_channels:
+            messages.error(request, "Unsupported notification preference.")
+        elif channel in {"gmail", "telegram"} and enabled and not channels[channel].get("connected"):
+            messages.warning(request, f"Connect and verify {channel.title()} before enabling delivery.")
+        else:
+            NotificationPreference.objects.update_or_create(
+                user=request.user, channel=channel, defaults={"enabled": enabled}
+            )
+            messages.success(request, f"{channel.replace('_', ' ').title()} notification preference updated.")
+        return redirect(BROWSER_NOTIFICATIONS_URL)
+
+    saved_preferences = {
+        item.channel: item.enabled
+        for item in NotificationPreference.objects.filter(
+            user=request.user, channel__in=("in_app", "gmail", "telegram")
+        )
+    }
+    preference_values = {
+        "in_app": saved_preferences.get("in_app", True),
+        "gmail": saved_preferences.get("gmail", bool(channels["gmail"].get("connected"))),
+        "telegram": saved_preferences.get("telegram", bool(channels["telegram"].get("connected"))),
+    }
     # All notification rows and summary values are scoped to the authenticated user.
     all_notifications = Notification.objects.filter(user=request.user).order_by("-created_at", "-id")
     total = all_notifications.count()
@@ -93,7 +120,8 @@ def notification_channels_page(request):
     paginator = Paginator(notices, 10)
     page_obj = paginator.get_page(request.GET.get("page"))
     return render(request, "notifications/channels.html", {
-        "channels": connection_status(request.user),
+        "channels": channels,
+        "preference_values": preference_values,
         "notifications": page_obj.object_list,
         "page_obj": page_obj,
         "total_notifications": total,
