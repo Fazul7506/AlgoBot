@@ -109,6 +109,7 @@ urlpatterns = [
     path("notifications/", notification_channels_page, name="notifications_page"),
     path("monitoring/", include("apps.monitoring.urls")),
     path("api/monitoring/", include("apps.monitoring.urls")),
+    path("api/security/sessions/", include("core.security_sessions_urls")),
     path("observability/", login_required(lambda request: render(request, "observability/control_center.html")), name="observability_control_center"),
     path("api/observability/", include("apps.observability.urls")),
     path("risk/", login_required(risk_page), name="risk_page"),
