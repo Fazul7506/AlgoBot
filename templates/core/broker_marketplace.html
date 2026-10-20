@@ -38,7 +38,7 @@
 
       <div class="broker-grid" data-broker-grid>
         {% for broker in brokers %}
-        <article class="broker-card" data-broker-card data-broker-name="{{ broker.name|lower }}" data-broker-type="{{ broker.broker_type|lower }}" data-broker-status="{% if broker.user_connected %}connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}available{% else %}unavailable{% endif %}" data-broker-category="{% if broker.broker_type == 'deriv' %}binary popular{% elif broker.broker_type in 'binance bybit' %}crypto popular{% elif broker.broker_type in 'alpaca interactive_brokers' %}stocks{% elif broker.broker_type in 'oanda forex_com pepperstone ic_markets exness' %}forex popular{% else %}forex{% endif %}">
+        <article class="broker-card" data-broker-card data-broker-name="{{ broker.name|lower }}" data-broker-type="{{ broker.broker_type|lower }}" data-broker-status="{% if broker.user_connected %}connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}available{% else %}unavailable{% endif %}" data-broker-category="{% if broker.broker_type == 'deriv' %}binary popular{% elif broker.broker_type == 'binance' or broker.broker_type == 'bybit' %}crypto popular{% elif broker.broker_type == 'alpaca' or broker.broker_type == 'interactive_brokers' %}stocks{% elif broker.broker_type == 'oanda' or broker.broker_type == 'forex_com' or broker.broker_type == 'pepperstone' or broker.broker_type == 'ic_markets' or broker.broker_type == 'exness' %}forex popular{% else %}forex{% endif %}">
           <div class="broker-card-top">
             <div class="broker-brand">
               <div class="broker-logo broker-logo--{{ broker.broker_type|slugify }}">
@@ -49,7 +49,7 @@
             </div>
             <span class="broker-pill {% if broker.user_connected %}is-connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}is-available{% else %}is-unavailable{% endif %}">{% if broker.user_connected %}Connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}Available{% elif broker.status != 'active' %}Unavailable{% else %}Not connected{% endif %}</span>
           </div>
-          <p class="broker-card-description">{% if broker.broker_type == 'deriv' %}Forex, CFDs, multipliers and options{% elif broker.broker_type in 'binance bybit' %}Crypto spot and derivatives{% elif broker.broker_type in 'alpaca interactive_brokers' %}Stocks and multi-market trading{% elif broker.broker_type in 'oanda forex_com pepperstone ic_markets exness' %}Forex, indices and CFDs{% else %}Broker integration registered in the AlgoBot directory{% endif %}</p>
+          <p class="broker-card-description">{% if broker.broker_type == 'deriv' %}Forex, CFDs, multipliers and options{% elif broker.broker_type == 'binance' or broker.broker_type == 'bybit' %}Crypto spot and derivatives{% elif broker.broker_type == 'alpaca' or broker.broker_type == 'interactive_brokers' %}Stocks and multi-market trading{% elif broker.broker_type == 'oanda' or broker.broker_type == 'forex_com' or broker.broker_type == 'pepperstone' or broker.broker_type == 'ic_markets' or broker.broker_type == 'exness' %}Forex, indices and CFDs{% else %}Broker integration registered in the AlgoBot directory{% endif %}</p>
           <div class="broker-metadata">
             <div><span class="material-symbols-rounded" aria-hidden="true">person</span><span>Account: <strong>{% if broker.user_connected %}{% for account in broker.user_accounts %}{{ account.account_id }}{% if not forloop.last %}, {% endif %}{% empty %}Connected{% endfor %}{% else %}Not connected{% endif %}</strong></span></div>
             <div><span class="material-symbols-rounded" aria-hidden="true">monitoring</span><span>Type: <strong>{% if broker.supports_demo %}Demo / {% endif %}{% if broker.supports_live %}Real{% else %}Connection flow not configured{% endif %}</strong></span></div>
@@ -95,7 +95,7 @@
             <span class="broker-pill is-connected">Active</span><span class="material-symbols-rounded broker-connected-arrow" aria-hidden="true">chevron_right</span>
           </a>
           {% endif %}{% endfor %}
-          <p class="broker-side-empty" data-broker-no-connected {% if brokers %}{% for broker in brokers %}{% if broker.user_connected %}hidden{% endif %}{% endfor %}{% endif %}>No connected broker account yet. Connect Deriv to get started.</p>
+          <p class="broker-side-empty" data-broker-no-connected>No connected broker account yet. Connect Deriv to get started.</p>
         </div>
       </section>
       <section class="broker-side-card">
@@ -124,7 +124,7 @@
  let activeCategory="all",activeStatus="all";
  const connected=cards.filter(card=>card.dataset.brokerStatus==="connected").length;
  const available=cards.filter(card=>card.dataset.brokerStatus==="available").length;
- root.querySelector("[data-broker-connected-count]").textContent=String(connected);
+ root.querySelector("[data-broker-connected-count]").textContent=String(connected);\n const emptyConnected=root.querySelector("[data-broker-no-connected]");if(emptyConnected)emptyConnected.hidden=connected>0;
  const results=root.querySelector("[data-broker-results]"),noResults=root.querySelector("[data-broker-no-results]");
  function applyFilter(){
    const query=(search.value||"").trim().toLowerCase();let visible=0;
