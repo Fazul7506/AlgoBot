@@ -2,6 +2,7 @@
 {% load static %}
 {% block title %}Security Center | AlgoBot{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account3">{% endblock %}
+{% block content %}
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
@@ -11,7 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 </script>
-{% block content %}
+
 <main class="account-page" data-security-page>
   <header class="account-hero">
     <div>
