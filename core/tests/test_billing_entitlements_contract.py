@@ -5,6 +5,8 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
 from core.billing_entitlements import PLAN_ENTITLEMENTS, entitlement_payload, effective_plan, usage
+from django.utils import timezone
+from datetime import timedelta
 
 
 class BillingEntitlementsContractTests(TestCase):
@@ -58,4 +60,21 @@ class BillingEntitlementsContractTests(TestCase):
         self.assertEqual(usage(user, "broker_accounts"), 2)
         second.status = "disabled"
         second.save(update_fields=["status"])
+        self.assertEqual(usage(user, "broker_accounts"), 1)
+
+    def test_broker_account_usage_ignores_stale_or_revoked_connections(self):
+        from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+
+        user = get_user_model().objects.create_user(username="broker-stale-capacity-user", password="test-password")
+        broker = Broker.objects.create(name="Stale Capacity Broker", broker_type="deriv", status="active")
+        valid = BrokerAccount.objects.create(user=user, broker=broker, account_id="VALID-1", status="active", token_status="active")
+        BrokerConnection.objects.create(broker=broker, broker_account=valid, status="connected")
+        stale_token = BrokerAccount.objects.create(user=user, broker=broker, account_id="STALE-1", status="active", token_status="revoked")
+        BrokerConnection.objects.create(broker=broker, broker_account=stale_token, status="connected")
+        expired = BrokerAccount.objects.create(user=user, broker=broker, account_id="EXPIRED-1", status="active", token_status="active", expires_at=timezone.now() - timedelta(minutes=1))
+        BrokerConnection.objects.create(broker=broker, broker_account=expired, status="connected")
+        disabled_broker = Broker.objects.create(name="Disabled Capacity Broker", broker_type="deriv", status="inactive")
+        inactive_provider = BrokerAccount.objects.create(user=user, broker=disabled_broker, account_id="INACTIVE-PROVIDER-1", status="active", token_status="active")
+        BrokerConnection.objects.create(broker=disabled_broker, broker_account=inactive_provider, status="connected")
+
         self.assertEqual(usage(user, "broker_accounts"), 1)
