@@ -213,8 +213,8 @@
     try{
       const [status,ent,plansData]=await Promise.all([api('/billing/status/'),api('/billing/entitlements/'),api('/billing/plans/')]);
       const current=ent.current||{},plan=String(current.plan||status.subscription?.plan||'FREE').toUpperCase();
+      renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase());
       const plans=plansData.plans||status.plans||[];
-      renderPlans(plans,plan,String(plansData.provider||'intasend').toLowerCase());
       const s=status.subscription||{},expiry=s.expires_at?new Date(s.expires_at).toLocaleString():'';
       const currentPlanData=plans.find(p=>String(p.plan||'').toUpperCase()===plan)||{};
       const currentPrice=currentPlanData.price_cents==null?null:money(currentPlanData.price_cents,currentPlanData.currency);
