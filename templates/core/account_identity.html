@@ -1,7 +1,17 @@
 {% extends "base.html" %}
 {% load static %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account4"><script>
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261020-google-identity1"><script>
 document.addEventListener("click", event => { const button = event.target.closest("[data-password-toggle]"); if (!button) return; const input = button.closest(".account-password-control")?.querySelector("[data-password-field]"); if (!input) return; const show = input.type === "password"; input.type = show ? "text" : "password"; button.textContent = show ? "Hide" : "Show"; button.setAttribute("aria-label", show ? "Hide password" : "Show password"); });
+
+document.addEventListener("submit", event => {
+ const form = event.target.closest("[data-unlink-form]");
+ if (!form) return;
+ const password = form.querySelector('input[name="current_password"]');
+ if (!password || !password.value.trim()) { event.preventDefault(); password?.focus(); return; }
+ if (!window.confirm("Unlink Google sign-in from your AlgoBot account? You will need your AlgoBot password to sign in with this account.")) { event.preventDefault(); return; }
+ const button = form.querySelector("[data-unlink-submit]");
+ if (button) { button.disabled = true; button.textContent = "Unlinking…"; }
+});
 </script>
 {% endblock %}
 {% block title %}Account Identity | AlgoBot{% endblock %}
@@ -59,18 +69,18 @@ document.addEventListener("click", event => { const button = event.target.closes
     <aside class="panel">
       <h2>Connected identities</h2>
       {% if google_identity_linked %}
-        <div class="account-identity-provider"><span class="account-provider-mark" aria-hidden="true">G</span><div><strong>Google</strong><p>Connected</p></div><span class="account-state account-state--good">Linked</span></div>
+        <div class="account-identity-provider"><svg class="account-google-logo" aria-hidden="true" viewBox="0 0 48 48" width="38" height="38" focusable="false"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 3.06 13.22l7.98 6.19C12.93 13.72 18.02 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.25 5.48-4.73 7.18l7.65 5.93c4.47-4.13 7.12-10.2 7.12-17.58z"/><path fill="#FBBC05" d="M10.04 28.59A14.4 14.4 0 0 1 9.25 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.53 2.58 10.78l7.46-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.87l-7.65-5.93c-2.12 1.42-4.84 2.26-8.25 2.26-5.98 0-11.07-4.22-12.96-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><div><strong>Google</strong><p>Connected</p></div><span class="account-state account-state--good">Linked</span></div>
         {% if password_required %}
-          <form method="post" action="{% url 'google_unlink' %}">
+          <form class="account-unlink-form" method="post" action="{% url 'google_unlink' %}" data-unlink-form>
             {% csrf_token %}
             <label>Current password<span class="account-password-control"><input type="password" name="current_password" autocomplete="current-password" data-password-field required><button type="button" class="account-password-toggle" data-password-toggle aria-label="Show password">Show</button></span></label>
-            <button type="submit" class="account-btn account-btn--danger">Unlink Google</button>
+            <button type="submit" class="account-btn account-btn--danger" data-unlink-submit>Unlink Google</button><p class="account-unlink-hint">You can still sign in with your AlgoBot password after unlinking.</p>
           </form>
         {% else %}
           <p>Set a local password before unlinking Google so you retain a sign-in method.</p>
         {% endif %}
       {% else %}
-        <div class="account-identity-provider"><span class="account-provider-mark" aria-hidden="true">G</span><div><strong>Google</strong><p>Not connected</p></div></div>
+        <div class="account-identity-provider"><svg class="account-google-logo" aria-hidden="true" viewBox="0 0 48 48" width="38" height="38" focusable="false"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 3.06 13.22l7.98 6.19C12.93 13.72 18.02 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.25 5.48-4.73 7.18l7.65 5.93c4.47-4.13 7.12-10.2 7.12-17.58z"/><path fill="#FBBC05" d="M10.04 28.59A14.4 14.4 0 0 1 9.25 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.53 2.58 10.78l7.46-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.87l-7.65-5.93c-2.12 1.42-4.84 2.26-8.25 2.26-5.98 0-11.07-4.22-12.96-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><div><strong>Google</strong><p>Not connected</p></div></div>
         <a class="account-btn account-btn--google" href="/auth/google/?intent=link"><svg aria-hidden="true" viewBox="0 0 48 48" width="20" height="20"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 3.03 13.22l7.98 6.19C12.9 13.72 18.01 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.72 7.18l7.62 5.91c4.45-4.11 7.14-10.16 7.14-17.56z"/><path fill="#FBBC05" d="M11.01 28.59A14.5 14.5 0 0 1 10.25 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.52 3.03 10.78l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.89l-7.62-5.91c-2.12 1.42-4.83 2.27-8.28 2.27-5.99 0-11.1-4.22-12.99-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Continue with Google</span></a>
       {% endif %}
       
