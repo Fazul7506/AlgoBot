@@ -1,85 +1,149 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Developer API | AlgoBot{% endblock %}
+{% block title %}Developer & API | AlgoBot{% endblock %}
 {% block content %}
-<section class="dev-page" data-developer-page>
+<section class="dev-page dev-dashboard" data-developer-page>
   <header class="dev-hero panel">
-    <div><p class="eyebrow">DEVELOPER</p><h1>Developer API</h1></div>
-    <div class="dev-hero-actions"><span class="dev-health"><i></i>{{ api_health|default:"operational"|title }}</span><a class="btn ghost" href="/developer/api/explorer/">API Explorer</a><a class="btn ghost" href="/developer/api/status/">API Status</a><button class="btn ghost" type="button" data-refresh-developer>Refresh</button></div>
+    <div class="dev-hero-mark" aria-hidden="true"><span class="material-symbols-rounded">code</span></div>
+    <div class="dev-hero-copy"><p class="eyebrow">DEVELOPER PLATFORM</p><h1>Developer &amp; API</h1><p>Build, integrate and automate with AlgoBot's developer tools.</p><small>Secure. Reliable. Designed for traders and developers.</small></div>
+    <div class="dev-hero-status"><span class="dev-health"><i></i>{{ api_health|default:"operational"|title }}</span><strong>API Status</strong><small>Developer services overview</small><a href="/developer/api/status/">View service status <span aria-hidden="true">›</span></a></div>
   </header>
-  <section class="dev-metrics">
-    <article class="panel"><span>Calls today</span><strong>{{ analytics.api_calls_today|default:0 }}</strong></article>
-    <article class="panel"><span>Latency p95</span><strong>{{ analytics.latency_p95_ms|default:0 }} ms</strong></article>
-    <article class="panel"><span>Rate limits</span><strong>{{ analytics.rate_limit_events|default:0 }}</strong></article>
-    <article class="panel"><span>API version</span><strong>v1</strong><small>{{ documentation_endpoint_count }} endpoints</small></article>
+
+  <nav class="dev-tabs" aria-label="Developer sections">
+    <a class="is-active" href="#dev-overview">Overview</a><a href="#dev-api-keys">API Keys</a><a href="#dev-documentation">Documentation</a><a href="#dev-webhooks">Webhooks</a><a href="#dev-code-examples">Code Examples</a>
+  </nav>
+
+  <section class="dev-metrics" aria-label="API metrics">
+    <article class="panel dev-metric"><span><span class="material-symbols-rounded" aria-hidden="true">monitoring</span>API calls today</span><strong>{{ analytics.api_calls_today|default:0 }}</strong><small>Current day · your account</small></article>
+    <article class="panel dev-metric"><span><span class="material-symbols-rounded" aria-hidden="true">speed</span>Latency p95</span><strong>{{ analytics.latency_p95_ms|default:0 }} <small>ms</small></strong><small>Recorded API usage</small></article>
+    <article class="panel dev-metric"><span><span class="material-symbols-rounded" aria-hidden="true">shield</span>Rate-limit events</span><strong>{{ analytics.rate_limit_events|default:0 }}</strong><small>Current day · your account</small></article>
+    <article class="panel dev-metric"><span><span class="material-symbols-rounded" aria-hidden="true">route</span>API reference</span><strong>{{ documentation_endpoint_count|default:0 }}</strong><small>Registered endpoints · {{ documentation.info.version|default:"v1" }}</small></article>
   </section>
-  <section class="dev-grid">
-    <article class="panel dev-card dev-wide">
-      <div class="panel-head"><div><p class="eyebrow">CREDENTIALS</p><h2>API keys</h2></div></div>
-      <form action="/api/developer/browser/keys/create/" method="post" class="dev-form">
-        {% csrf_token %}
-        <label>Key name<input name="name" maxlength="120" placeholder="Production app" required></label>
-        <fieldset><legend>Permissions</legend>
-          <label><input type="checkbox" name="permissions" value="read" checked> Read</label>
-          <label><input type="checkbox" name="permissions" value="market_data"> Market data</label>
-          <label><input type="checkbox" name="permissions" value="trading"> Trading</label>
-          <label><input type="checkbox" name="permissions" value="analytics"> Analytics</label>
-          <label><input type="checkbox" name="permissions" value="webhooks"> Webhooks</label>
-        </fieldset>
-        <button class="btn primary" type="submit">Create API key</button>
-      </form>
-      {% if one_time_secret.kind == "api_key" %}
-      <div class="secret-panel"><strong>Save this secret now</strong><small>{{ one_time_secret.warning }}</small>
-        <div><span>Key</span><code data-secret-key>{{ one_time_secret.key }}</code><button type="button" data-copy="[data-secret-key]">Copy</button></div>
-        <div><span>Secret</span><code data-secret>{{ one_time_secret.secret }}</code><button type="button" data-copy="[data-secret]">Copy</button></div>
-      </div>
-      {% endif %}
-      <div class="dev-list">
-        {% for key in api_keys %}
-        <div class="dev-row"><div><strong>{{ key.name }}</strong><small>{{ key.key }}</small><span class="dev-meta">{{ key.permissions|join:", " }} · {{ key.status }}{% if key.last_used %} · used {{ key.last_used|date:"Y-m-d H:i" }}{% endif %}</span></div>
-          <div class="dev-actions">
-            {% if key.status == "active" %}<form action="/api/developer/browser/keys/{{ key.id }}/rotate/" method="post" data-confirm="Rotate this key? The previous secret remains valid for the configured grace period.">{% csrf_token %}<button type="submit">Rotate</button></form>{% endif %}
-            {% if key.status == "active" %}<form action="/api/developer/browser/keys/{{ key.id }}/deactivate/" method="post" data-confirm="Deactivate this API key? Existing clients using it will stop authenticating until you activate it again.">{% csrf_token %}<button type="submit">Deactivate</button></form>{% elif key.status == "inactive" %}<form action="/api/developer/browser/keys/{{ key.id }}/activate/" method="post" data-confirm="Activate this API key and allow clients to authenticate again?">{% csrf_token %}<button type="submit">Activate</button></form>{% endif %}
-            {% if key.status == "active" or key.status == "inactive" %}<form action="/api/developer/browser/keys/{{ key.id }}/revoke/" method="post" data-confirm="Revoke this API key permanently? Existing clients using it will stop authenticating and it cannot be reactivated.">{% csrf_token %}<button type="submit">Revoke</button></form>{% endif %}
-            <form action="/api/developer/browser/keys/{{ key.id }}/delete/" method="post" data-confirm="Delete this API key? This permanently removes the credential and cannot be undone.">{% csrf_token %}<button type="submit">Delete</button></form>
+
+  <div class="dev-dashboard-layout" id="dev-overview">
+    <div class="dev-main-column">
+      <section class="panel dev-quickstart">
+        <div class="dev-section-heading"><div><p class="eyebrow">GET STARTED</p><h2>Quick Start</h2><p>Get up and running with the AlgoBot API in minutes.</p></div><span class="dev-icon-tile" aria-hidden="true"><span class="material-symbols-rounded">rocket_launch</span></span></div>
+        <ol class="dev-steps">
+          <li><span>1</span><div><strong>Create an API key</strong><p>Generate a key with only the permissions your integration needs.</p></div></li>
+          <li><span>2</span><div><strong>Read the API reference</strong><p>Review registered routes, authentication and request/response contracts.</p></div></li>
+          <li><span>3</span><div><strong>Make your first request</strong><p>Send credentials in headers. Never place secrets in URLs or source control.</p></div></li>
+        </ol>
+        <div class="dev-quick-actions"><a class="btn primary" href="#dev-documentation">View API Documentation <span aria-hidden="true">↗</span></a><a class="btn ghost" href="#dev-api-keys">Generate API Key</a></div>
+      </section>
+
+      <div class="dev-two-column">
+        <section class="panel dev-endpoints" aria-labelledby="dev-endpoints-title">
+          <div class="dev-section-heading"><div><h2 id="dev-endpoints-title">API Endpoints</h2><p>Routes generated from the registered API contract.</p></div><a href="/developer/api/explorer/">Explore ↗</a></div>
+          <div class="dev-endpoint-list">
+            {% for path, operations in documentation.paths.items %}
+              {% for method, operation in operations.items %}
+              <a class="dev-endpoint-row" href="/developer/api/explorer/" title="Open API Explorer">
+                <span class="dev-method dev-method-{{ method }}">{{ method|upper }}</span><span class="dev-endpoint-detail"><code>{{ path }}</code><small>{{ operation.summary|default:operation.operationId }}</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span>
+              </a>
+              {% endfor %}
+            {% empty %}
+              <div class="dev-empty">The API reference is temporarily unavailable. Use API Explorer to retry loading the registered contract.</div>
+            {% endfor %}
           </div>
-        </div>
-        {% empty %}<div class="dev-empty">No API keys yet. Create one to start integrating AlgoBot.</div>{% endfor %}
+        </section>
+
+        <section class="panel dev-sample" id="dev-code-examples" aria-labelledby="dev-sample-title">
+          <div class="dev-section-heading"><div><h2 id="dev-sample-title">Sample Request</h2><p>Illustrative cURL request using the registered API key endpoint.</p></div><span class="dev-code-language">BASH</span></div>
+          <div class="dev-code-window"><div class="dev-code-toolbar"><span>Terminal</span><button type="button" data-copy="[data-sample-request]"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span> Copy</button></div><pre><code data-sample-request>curl -X GET "{{ request.scheme }}://{{ request.get_host }}/api/developer/keys/" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "X-API-Secret: YOUR_API_SECRET" \
+  -H "Accept: application/json"</code></pre></div>
+          <div class="dev-response-example"><div class="dev-code-toolbar"><strong>Response shape</strong><span>JSON · illustrative</span></div><pre><code>{
+  "status": "success",
+  "data": []
+}</code></pre><small>Actual response fields depend on the endpoint and your permissions.</small></div>
+        </section>
       </div>
-    </article>
-    <article class="panel dev-card"><div class="panel-head"><div><p class="eyebrow">SANDBOX</p><h2>Sandbox</h2></div></div>
-      <form action="/api/developer/browser/sandbox/provision/" method="post">{% csrf_token %}<button class="btn" type="submit">Provision sandbox</button></form>
-      <p class="dev-help">Provisioning is handled server-side. AlgoBot reports the result through Django messages.</p>
-    </article>
-    <article class="panel dev-card dev-wide">
-      <div class="panel-head"><div><p class="eyebrow">EVENTS</p><h2>Webhooks</h2></div></div>
-      <form action="/api/developer/browser/webhooks/create/" method="post" class="dev-form">
-        {% csrf_token %}
-        <label>Endpoint URL<input name="url" type="url" placeholder="https://example.com/webhook" required></label>
-        <fieldset><legend>Events</legend>
-          <label><input type="checkbox" name="events" value="order.created" checked> Orders</label>
-          <label><input type="checkbox" name="events" value="position.updated"> Positions</label>
-          <label><input type="checkbox" name="events" value="trade.closed"> Trades</label>
-          <label><input type="checkbox" name="events" value="signal.created"> Signals</label>
-          <label><input type="checkbox" name="events" value="account.updated"> Account</label>
-        </fieldset>
-        <button class="btn primary" type="submit">Add webhook</button>
-      </form>
-      {% if one_time_secret.kind == "webhook" %}<div class="secret-panel"><strong>Signing secret</strong><small>{{ one_time_secret.warning }}</small><div><span>Secret</span><code data-webhook-secret>{{ one_time_secret.secret }}</code><button type="button" data-copy="[data-webhook-secret]">Copy</button></div></div>{% endif %}
-      <div class="dev-list">
-        {% for webhook in webhooks %}
-        <div class="dev-row"><div><strong>{{ webhook.url }}</strong><small>{{ webhook.events|join:", " }}</small><span class="dev-meta">{{ webhook.status }} · created {{ webhook.created_at|date:"Y-m-d H:i" }}</span></div>
-          <div class="dev-actions">
-            {% if webhook.status == "active" %}<form action="/api/developer/browser/webhooks/{{ webhook.id }}/test/" method="post">{% csrf_token %}<button type="submit">Send test</button></form><form action="/api/developer/browser/webhooks/{{ webhook.id }}/rotate/" method="post" data-confirm="Rotate this webhook secret? The old signing secret will stop being valid immediately.">{% csrf_token %}<button type="submit">Rotate secret</button></form><form action="/api/developer/browser/webhooks/{{ webhook.id }}/deactivate/" method="post" data-confirm="Deactivate this webhook? No new deliveries will be sent until it is activated again.">{% csrf_token %}<button type="submit">Deactivate</button></form>{% elif webhook.status == "inactive" %}<form action="/api/developer/browser/webhooks/{{ webhook.id }}/activate/" method="post" data-confirm="Activate this webhook and allow deliveries again?">{% csrf_token %}<button type="submit">Activate</button></form>{% endif %}
-            <form action="/api/developer/browser/webhooks/{{ webhook.id }}/delete/" method="post" data-confirm="Delete this webhook and its delivery history? This cannot be undone.">{% csrf_token %}<button type="submit">Delete</button></form>
-          </div>
+
+      <section class="panel dev-resources" id="dev-documentation">
+        <div class="dev-section-heading"><div><p class="eyebrow">REFERENCE</p><h2>Documentation &amp; Resources</h2><p>Use the live contract and examples to build against the supported API.</p></div></div>
+        <div class="dev-resource-grid">
+          <a href="/developer/api/explorer/" class="dev-resource-card"><span class="dev-icon-tile"><span class="material-symbols-rounded" aria-hidden="true">menu_book</span></span><span><strong>API Documentation</strong><small>Routes, authentication and schemas</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
+          <a href="/developer/api/status/" class="dev-resource-card"><span class="dev-icon-tile"><span class="material-symbols-rounded" aria-hidden="true">health_and_safety</span></span><span><strong>API Status</strong><small>Current developer service status</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
+          <a href="#dev-webhooks" class="dev-resource-card"><span class="dev-icon-tile"><span class="material-symbols-rounded" aria-hidden="true">webhook</span></span><span><strong>Webhook setup</strong><small>Configure event delivery endpoints</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
         </div>
-        {% empty %}<div class="dev-empty">No webhooks configured.</div>{% endfor %}
-      </div>
-    </article>
-    <article class="panel dev-card dev-wide"><div class="panel-head"><div><p class="eyebrow">REFERENCE</p><h2>API documentation</h2></div><span class="badge live">v1</span></div><pre class="dev-code dev-docs">{{ documentation|pprint }}</pre></article>
+      </section>
+    </div>
+
+    <aside class="dev-side-column" aria-label="Developer account overview">
+      <section class="panel dev-side-card">
+        <div class="dev-side-title"><span class="dev-icon-tile"><span class="material-symbols-rounded" aria-hidden="true">key</span></span><div><h2>Your API Keys</h2><p>Manage keys and permissions.</p></div></div>
+        <a class="btn primary dev-full-button" href="#dev-api-keys"><span class="material-symbols-rounded" aria-hidden="true">add</span> Generate New Key</a>
+        {% for key in api_keys|slice:":3" %}
+        <div class="dev-mini-key"><span class="material-symbols-rounded" aria-hidden="true">vpn_key</span><div><strong>{{ key.name }}</strong><small>{{ key.key|truncatechars:22 }}</small></div><span class="dev-status-pill {% if key.status == 'active' %}is-active{% endif %}">{{ key.status|title }}</span></div>
+        {% empty %}<p class="dev-side-empty">No API keys yet. Create one to connect your application.</p>{% endfor %}
+        <a class="dev-text-link" href="#dev-api-keys">Manage all API keys <span aria-hidden="true">→</span></a>
+      </section>
+      <section class="panel dev-side-card">
+        <div class="dev-side-title"><span class="dev-icon-tile"><span class="material-symbols-rounded" aria-hidden="true">query_stats</span></span><div><h2>API Usage</h2><p>Usage recorded for your account today.</p></div></div>
+        <div class="dev-usage-row"><div><span>API calls</span><strong>{{ analytics.api_calls_today|default:0 }}</strong></div><div class="dev-usage-track"><span style="width:0%"></span></div></div>
+        <div class="dev-usage-row"><div><span>Rate-limit events</span><strong>{{ analytics.rate_limit_events|default:0 }}</strong></div><div class="dev-usage-track"><span style="width:0%"></span></div></div>
+        <div class="dev-usage-row"><div><span>Configured webhooks</span><strong>{{ webhooks|length }}</strong></div><div class="dev-usage-track"><span style="width:0%"></span></div></div>
+        <small class="dev-usage-note">No quota percentages are shown because plan-specific API-call limits are not supplied by the current usage service.</small>
+      </section>
+      <section class="panel dev-side-card dev-security-note">
+        <span class="dev-icon-tile"><span class="material-symbols-rounded" aria-hidden="true">verified_user</span></span><h2>Protect your credentials</h2><p>API secrets are shown only at creation or rotation. Store them in a secret manager and rotate them if exposed.</p><a href="#dev-api-keys">Review key controls <span aria-hidden="true">→</span></a>
+      </section>
+    </aside>
+  </div>
+
+  <section class="panel dev-management-section" id="dev-api-keys">
+    <div class="dev-section-heading"><div><p class="eyebrow">CREDENTIALS</p><h2>API Key Management</h2><p>Create, rotate, deactivate, reactivate, revoke or delete your API credentials.</p></div></div>
+    <form action="/api/developer/browser/keys/create/" method="post" class="dev-form">
+      {% csrf_token %}
+      <label>Key name<input name="name" maxlength="120" placeholder="Production app" required></label>
+      <fieldset><legend>Permissions</legend><label><input type="checkbox" name="permissions" value="read" checked> Read</label><label><input type="checkbox" name="permissions" value="market_data"> Market data</label><label><input type="checkbox" name="permissions" value="trading"> Trading</label><label><input type="checkbox" name="permissions" value="analytics"> Analytics</label><label><input type="checkbox" name="permissions" value="webhooks"> Webhooks</label></fieldset>
+      <button class="btn primary" type="submit"><span class="material-symbols-rounded" aria-hidden="true">add</span> Create API key</button>
+    </form>
+    {% if one_time_secret.kind == "api_key" %}
+    <div class="secret-panel"><strong>Save this secret now</strong><small>{{ one_time_secret.warning }}</small><div><span>Key</span><code data-secret-key>{{ one_time_secret.key }}</code><button type="button" data-copy="[data-secret-key]">Copy</button></div><div><span>Secret</span><code data-secret>{{ one_time_secret.secret }}</code><button type="button" data-copy="[data-secret]">Copy</button></div></div>
+    {% endif %}
+    <div class="dev-list">
+      {% for key in api_keys %}
+      <div class="dev-row"><div><strong>{{ key.name }}</strong><small>{{ key.key }}</small><span class="dev-meta">{{ key.permissions|join:", " }} · {{ key.status }}{% if key.last_used %} · used {{ key.last_used|date:"Y-m-d H:i" }}{% endif %}</span></div><div class="dev-actions">
+        {% if key.status == "active" %}<form action="/api/developer/browser/keys/{{ key.id }}/rotate/" method="post" data-confirm="Rotate this key? The previous secret remains valid for the configured grace period.">{% csrf_token %}<button type="submit">Rotate</button></form>{% endif %}
+        {% if key.status == "active" %}<form action="/api/developer/browser/keys/{{ key.id }}/deactivate/" method="post" data-confirm="Deactivate this API key? Existing clients using it will stop authenticating until you activate it again.">{% csrf_token %}<button type="submit">Deactivate</button></form>{% elif key.status == "inactive" %}<form action="/api/developer/browser/keys/{{ key.id }}/activate/" method="post" data-confirm="Activate this API key and allow clients to authenticate again?">{% csrf_token %}<button type="submit">Activate</button></form>{% endif %}
+        {% if key.status == "active" or key.status == "inactive" %}<form action="/api/developer/browser/keys/{{ key.id }}/revoke/" method="post" data-confirm="Revoke this API key permanently? It cannot be reactivated.">{% csrf_token %}<button type="submit">Revoke</button></form>{% endif %}
+        <form action="/api/developer/browser/keys/{{ key.id }}/delete/" method="post" data-confirm="Delete this API key and permanently remove the credential?">{% csrf_token %}<button type="submit">Delete</button></form>
+      </div></div>
+      {% empty %}<div class="dev-empty">No API keys yet. Create a key above to start integrating AlgoBot.</div>{% endfor %}
+    </div>
+  </section>
+
+  <section class="panel dev-management-section" id="dev-webhooks">
+    <div class="dev-section-heading"><div><p class="eyebrow">EVENT DELIVERY</p><h2>Webhooks</h2><p>Send supported AlgoBot events to an endpoint you control.</p></div></div>
+    <form action="/api/developer/browser/webhooks/create/" method="post" class="dev-form">
+      {% csrf_token %}
+      <label>Endpoint URL<input name="url" type="url" placeholder="https://example.com/webhook" required></label>
+      <fieldset><legend>Events</legend><label><input type="checkbox" name="events" value="order.created" checked> Orders</label><label><input type="checkbox" name="events" value="position.updated"> Positions</label><label><input type="checkbox" name="events" value="trade.closed"> Trades</label><label><input type="checkbox" name="events" value="signal.created"> Signals</label><label><input type="checkbox" name="events" value="account.updated"> Account</label></fieldset>
+      <button class="btn primary" type="submit">Add webhook</button>
+    </form>
+    {% if one_time_secret.kind == "webhook" %}<div class="secret-panel"><strong>Webhook signing secret</strong><small>{{ one_time_secret.warning }}</small><div><span>Secret</span><code data-webhook-secret>{{ one_time_secret.secret }}</code><button type="button" data-copy="[data-webhook-secret]">Copy</button></div></div>{% endif %}
+    <div class="dev-list">{% for webhook in webhooks %}
+      <div class="dev-row"><div><strong>{{ webhook.url }}</strong><small>{{ webhook.events|join:", " }}</small><span class="dev-meta">{{ webhook.status }} · created {{ webhook.created_at|date:"Y-m-d H:i" }}</span></div><div class="dev-actions">
+        {% if webhook.status == "active" %}<form action="/api/developer/browser/webhooks/{{ webhook.id }}/test/" method="post">{% csrf_token %}<button type="submit">Send test</button></form><form action="/api/developer/browser/webhooks/{{ webhook.id }}/rotate/" method="post" data-confirm="Rotate this webhook secret? The old signing secret will stop being valid immediately.">{% csrf_token %}<button type="submit">Rotate secret</button></form><form action="/api/developer/browser/webhooks/{{ webhook.id }}/deactivate/" method="post" data-confirm="Deactivate this webhook? No new deliveries will be sent until activated again.">{% csrf_token %}<button type="submit">Deactivate</button></form>{% elif webhook.status == "inactive" %}<form action="/api/developer/browser/webhooks/{{ webhook.id }}/activate/" method="post" data-confirm="Activate this webhook and allow deliveries again?">{% csrf_token %}<button type="submit">Activate</button></form>{% endif %}
+        <form action="/api/developer/browser/webhooks/{{ webhook.id }}/delete/" method="post" data-confirm="Delete this webhook and its delivery history? This cannot be undone.">{% csrf_token %}<button type="submit">Delete</button></form>
+      </div></div>
+    {% empty %}<div class="dev-empty">No webhooks configured. Add an endpoint above to start receiving events.</div>{% endfor %}</div>
+  </section>
+
+  <section class="panel dev-management-section" aria-labelledby="dev-sandbox-title">
+    <div class="dev-section-heading"><div><p class="eyebrow">TESTING</p><h2 id="dev-sandbox-title">Sandbox</h2><p>Provision a temporary sandbox environment for safe integration checks.</p></div></div>
+    <form action="/api/developer/browser/sandbox/provision/" method="post">{% csrf_token %}<button class="btn ghost" type="submit">Provision sandbox</button></form>
+    <p class="dev-form-help">Provisioning runs server-side and reports its result through Django messages.</p>
+  </section>
+
+  <section class="panel dev-management-section" aria-labelledby="dev-full-docs-title">
+    <div class="dev-section-heading"><div><p class="eyebrow">OPENAPI CONTRACT</p><h2 id="dev-full-docs-title">Registered API Contract</h2><p>Generated from registered Django routes; unavailable services are reported through normal page messages.</p></div><a class="btn ghost" href="/developer/api/explorer/">Open API Explorer ↗</a></div>
+    <pre class="dev-code dev-docs">{{ documentation|pprint }}</pre>
   </section>
 </section>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/developer_api_hardening.css' %}?v=20261019-devapi2">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/developer_portal.js' %}?v=20261008-devapi1" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/developer_api_hardening.css' %}?v=20261020-devapi3">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/developer_portal.js' %}?v=20261020-devapi3" defer></script>{% endblock %}
