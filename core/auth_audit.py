@@ -16,8 +16,9 @@ def record_auth_event(request, *, action, outcome, user=None, identifier="", met
             matches = User.objects.filter(email__iexact=value) if "@" in value else User.objects.filter(username__iexact=value)
             if matches.count() == 1:
                 actor = matches.first()
-        forwarded = str(request.META.get("HTTP_X_FORWARDED_FOR") or "").split(",", 1)[0].strip()
-        ip = forwarded or request.META.get("REMOTE_ADDR")
+        # Use the transport peer address only; an untrusted X-Forwarded-For
+        # header can be supplied by a client unless a trusted proxy normalizes it.
+        ip = request.META.get("REMOTE_ADDR")
         if ip:
             import ipaddress
             try:
