@@ -1,8 +1,16 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Security Center | AlgoBot<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script><script>document.addEventListener("DOMContentLoaded",()=>{const node=document.getElementById("two-factor-qr");if(node&&window.QRCode&&node.dataset.otpauthUri){new QRCode(node,{text:node.dataset.otpauthUri,width:180,height:180,correctLevel:QRCode.CorrectLevel.M});}});</script>
-{% endblock %}
+{% block title %}Security Center | AlgoBot{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account3">{% endblock %}
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const node = document.getElementById("two-factor-qr");
+  if (node && window.QRCode && node.dataset.otpauthUri) {
+    new QRCode(node, { text: node.dataset.otpauthUri, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+  }
+});
+</script>
 {% block content %}
 <main class="account-page" data-security-page>
   <header class="account-hero">
