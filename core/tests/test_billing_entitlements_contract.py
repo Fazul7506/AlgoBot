@@ -47,20 +47,28 @@ class BillingEntitlementsContractTests(TestCase):
         self.assertIn("no synthetic usage is generated", payload["reset_policy"]["measurement"].lower())
 
 
-    def test_broker_account_usage_counts_connected_accounts_not_broker_types(self):
+    def test_broker_account_usage_counts_connected_integrations_not_duplicate_account_rows(self):
         from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 
         user = get_user_model().objects.create_user(username="broker-capacity-user", password="test-password")
-        broker = Broker.objects.create(name="Capacity Broker", broker_type="deriv", status="active")
-        first = BrokerAccount.objects.create(user=user, broker=broker, account_id="CAPACITY-1", status="active")
-        second = BrokerAccount.objects.create(user=user, broker=broker, account_id="CAPACITY-2", status="active")
-        BrokerConnection.objects.create(broker=broker, broker_account=first, status="connected")
+        deriv = Broker.objects.create(name="Capacity Deriv", broker_type="deriv", status="active")
+        first = BrokerAccount.objects.create(user=user, broker=deriv, account_id="CAPACITY-1", status="active")
+        second = BrokerAccount.objects.create(user=user, broker=deriv, account_id="CAPACITY-2", status="active")
+        BrokerConnection.objects.create(broker=deriv, broker_account=first, status="connected")
         self.assertEqual(usage(user, "broker_accounts"), 1)
-        BrokerConnection.objects.create(broker=broker, broker_account=second, status="connected")
+
+        # A second connected account row for the same integration must not
+        # consume another slot, while a genuinely different broker does.
+        BrokerConnection.objects.create(broker=deriv, broker_account=second, status="connected")
+        self.assertEqual(usage(user, "broker_accounts"), 1)
+        other = Broker.objects.create(name="Capacity Other Broker", broker_type="other", status="active")
+        other_account = BrokerAccount.objects.create(user=user, broker=other, account_id="OTHER-1", status="active")
+        BrokerConnection.objects.create(broker=other, broker_account=other_account, status="connected")
         self.assertEqual(usage(user, "broker_accounts"), 2)
+
         second.status = "disabled"
         second.save(update_fields=["status"])
-        self.assertEqual(usage(user, "broker_accounts"), 1)
+        self.assertEqual(usage(user, "broker_accounts"), 2)
 
     def test_broker_account_usage_ignores_stale_or_revoked_connections(self):
         from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
