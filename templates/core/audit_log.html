@@ -1,3 +1,41 @@
 {% extends "base.html" %}
-{% block title %}Activity History | AlgoBot{% endblock %}
-{% block content %}<section class="workspace activity-history-page"><p class="eyebrow">ACCOUNT HISTORY</p><h1>Activity History</h1><p>A private record of important actions on your AlgoBot account and trading workspace.</p><div class="cards activity-cards"><article><span>Total recorded</span><strong>{{ event_count }}</strong><small>Account events</small></article><article><span>Privacy</span><strong>Private</strong><small>Only your activity is shown</small></article></div><section class="panel activity-panel"><h2>Recent activity</h2>{% for e in events %}<div class="row activity-row"><div><b>{{ e.action|title }}</b><small>{{ e.resource|default:'Account action' }}</small></div><span>{{ e.module|title }}</span><time>{{ e.timestamp|date:'d M Y H:i' }}</time></div>{% empty %}<div class="empty">No account activity has been recorded yet.</div>{% endfor %}</section></section>{% endblock %}
+{% block title %}Audit Log | AlgoBot{% endblock %}
+{% block content %}
+<section class="workspace activity-history-page">
+  <p class="eyebrow">SECURITY · OPERATIONS · TRADING</p>
+  <h1>Audit Log</h1>
+  <p>Search your recorded AlgoBot activity across account actions, API writes and failures, trading operations and broker workflows. The view combines the latest 1,000 matching records across the two audit streams. Sensitive request and response bodies are never displayed.</p>
+  <div class="cards activity-cards">
+    <article><span>Matching events</span><strong>{{ event_count }}</strong><small>For this account and filter</small></article>
+    <article><span>Scope</span><strong>Private</strong><small>Only your account activity</small></article>
+    <article><span>Traceability</span><strong>Request IDs</strong><small>Available for failed or mutating API requests</small></article>
+  </div>
+  <section class="panel activity-panel">
+    <form method="get" class="audit-filters" role="search">
+      <label>Search activity<input type="search" name="q" value="{{ audit_filters.q }}" placeholder="Route, resource, action…"></label>
+      <label>Action<input type="search" name="action" value="{{ audit_filters.action }}" placeholder="e.g. post_completed"></label>
+      <label>Service / module<input type="search" name="module" value="{{ audit_filters.module }}" placeholder="e.g. brokers, execution"></label>
+      <div class="audit-filter-actions"><button type="submit">Apply filters</button><a href="{% url 'audit_center' %}">Clear</a></div>
+    </form>
+    <div class="audit-table-wrap">
+      <table class="audit-table">
+        <thead><tr><th>Action</th><th>Service</th><th>Resource / endpoint</th><th>Origin</th><th>Recorded at (UTC)</th></tr></thead>
+        <tbody>
+        {% for e in events %}
+          <tr><td><strong>{{ e.action|title }}</strong><small>{{ e.hash|default:"Recorded" }}</small></td><td>{{ e.module|title }}</td><td class="audit-resource">{{ e.resource|default:"Account action" }}</td><td>{{ e.source }}</td><td><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'d M Y H:i:s' }}</time></td></tr>
+        {% empty %}
+          <tr><td colspan="5"><div class="empty">No audit events match these filters. New mutating or failed requests will appear as they occur.</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="audit-pagination" aria-label="Audit log pages">
+      {% if page_obj.has_previous %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+      <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+    </nav>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

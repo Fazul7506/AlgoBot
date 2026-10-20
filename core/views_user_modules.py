@@ -5,10 +5,12 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import redirect, render
+from types import SimpleNamespace
 
 from apps.automation.models import ScheduledTask, Workflow, WorkflowExecution
 from apps.developer.models import APIKey
 from apps.monitoring.models import AuditLog
+from apps.observability.models import AuditEvent
 from core.account_context import get_active_account
 
 
@@ -26,9 +28,49 @@ def automation_workspace(request):
 
 @login_required
 def audit_workspace(request):
-    events = AuditLog.objects.filter(user=request.user).order_by("-timestamp")[:80]
-    return render(request, "core/audit_log.html", {"events": events, "event_count": AuditLog.objects.filter(user=request.user).count()})
-
+    """Render a merged, private feed from structured and application audit streams."""
+    structured = AuditLog.objects.filter(user=request.user)
+    application = AuditEvent.objects.filter(actor_id=request.user.pk)
+    action = request.GET.get("action", "").strip()[:120]
+    module = request.GET.get("module", "").strip()[:120]
+    search = request.GET.get("q", "").strip()[:160]
+    if action:
+        structured = structured.filter(action__icontains=action)
+        application = application.filter(action__icontains=action)
+    if module:
+        structured = structured.filter(module__icontains=module)
+        application = application.filter(resource_type__icontains=module)
+    if search:
+        structured = structured.filter(
+            Q(action__icontains=search) | Q(module__icontains=search) | Q(resource__icontains=search)
+        )
+        application = application.filter(
+            Q(action__icontains=search) | Q(resource_type__icontains=search) |
+            Q(resource_id__icontains=search) | Q(outcome__icontains=search)
+        )
+    # Bound cross-model merging to the most recent 1,000 matching records.
+    merged = [
+        SimpleNamespace(
+            pk=event.pk, action=event.action, module=event.module, resource=event.resource,
+            timestamp=event.timestamp, hash=event.hash, source="Structured audit",
+        )
+        for event in structured.order_by("-timestamp", "-id")[:500]
+    ]
+    merged.extend(
+        SimpleNamespace(
+            pk=event.pk, action=event.action, module=event.resource_type or "application",
+            resource=f"{event.resource_id or '—'} · outcome={event.outcome}",
+            timestamp=event.created_at, hash="", source="Application event",
+        )
+        for event in application.order_by("-created_at", "-id")[:500]
+    )
+    merged.sort(key=lambda event: (event.timestamp, str(event.pk)), reverse=True)
+    from django.core.paginator import Paginator
+    page = Paginator(merged, 50).get_page(request.GET.get("page", 1))
+    return render(request, "core/audit_log.html", {
+        "events": page.object_list, "event_count": len(merged), "page_obj": page,
+        "audit_filters": {"action": action, "module": module, "q": search},
+    })
 
 @login_required
 def security_workspace(request):

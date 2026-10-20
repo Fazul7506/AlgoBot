@@ -17,16 +17,16 @@
 </div>
 </div>
 <script>
-(()=>{const $=id=>document.getElementById(id);
+(()=>{const $=id=>document.getElementById(id);const esc=v=>String(v??'').replace(/[&<>\"']/g,ch=>{switch(ch){case '&':return '&amp;';case '<':return '&lt;';case '>':return '&gt;';case '\"':return '&quot;';default:return '&#39;';}});
 const get=async u=>window.AlgoBotFrontendData.request(u,{},10000);
 function render(d){const s=d.summary;$('healthy').textContent=s.healthy;$('degraded').textContent=s.degraded;$('down').textContent=s.down;$('critical').textContent=s.critical_events;$('errors').textContent=s.errors;$('updated').textContent=new Date(d.timestamp).toLocaleTimeString();
 const good=s.down===0;$('overall').textContent=good?(s.degraded?'Operational · degraded':'All systems operational'):'Incident detected';$('overall').className='overall '+(good?'ok':'bad');
 $('health-count').textContent=`${d.health.length} components`;const critical=['Trading Engine','Broker Connectivity','Database','Task Worker','WebSocket','Risk Engine'];
-$('health').innerHTML=d.health.map(h=>`<div class="health-card ${h.status}"><b>${h.service}${h.component?' · '+h.component:''}</b><small>${h.status} · ${h.latency_ms} ms</small><small>${h.message||'No message'}</small></div>`).join('')||'<small>No health checks have been recorded yet.</small>';
+$('health').innerHTML=d.health.map(h=>`<div class="health-card ${esc(h.status)}"><b>${esc(h.service)}${h.component?' · '+h.component:''}</b><small>${esc(h.status)} · ${esc(h.latency_ms)} ms</small><small>${esc(h.message||'No message')}</small></div>`).join('')||'<small>No health checks have been recorded yet.</small>';
 $('checks').innerHTML=critical.map(name=>{const h=d.health.find(x=>(x.service+' '+x.component).toLowerCase().includes(name.toLowerCase().split(' ')[0]));return `<div class="check"><span>${name}</span><i class="${h?.status==='healthy'?'ok':'bad'}"></i></div>`}).join('');
-$('events').innerHTML=d.events.map(e=>`<div class="event"><div class="line"><b>${e.title}</b><span class="badge ${e.severity}">${e.severity}</span></div><small>${e.service||e.category} · ${new Date(e.created_at).toLocaleString()}</small><div>${e.message||''}</div>${e.trace_id?`<small>trace ${e.trace_id}</small>`:''}</div>`).join('')||'<small>No operational events recorded.</small>';
-const grouped={};d.metrics.forEach(m=>{if(!grouped[m.name])grouped[m.name]=m});$('metrics').innerHTML=Object.values(grouped).slice(0,12).map(m=>`<div class="metric"><b>${m.value} ${m.unit}</b><small>${m.name} · ${m.source||'system'}</small></div>`).join('')||'<small>No metrics recorded.</small>';
-$('audit').innerHTML=d.audit.map(a=>`<div class="audit"><b>${a.action}</b><small>${a.resource_type||'system'} ${a.resource_id||''} · ${a.outcome} · ${new Date(a.created_at).toLocaleString()}</small></div>`).join('')||'<small>No audit events recorded.</small>'}
+$('events').innerHTML=d.events.map(e=>`<div class="event"><div class="line"><b>${esc(e.title)}</b><span class="badge ${esc(e.severity)}">${esc(e.severity)}</span></div><small>${esc(e.service||e.category)} · ${new Date(e.created_at).toLocaleString()}</small><div>${esc(e.message||'')}</div>${e.trace_id?`<small>trace ${esc(e.trace_id)}</small>`:''}</div>`).join('')||'<small>No operational events recorded.</small>';
+const grouped={};d.metrics.forEach(m=>{if(!grouped[m.name])grouped[m.name]=m});$('metrics').innerHTML=Object.values(grouped).slice(0,12).map(m=>`<div class="metric"><b>${esc(m.value)} ${esc(m.unit)}</b><small>${esc(m.name)} · ${esc(m.source||'system')}</small></div>`).join('')||'<small>No metrics recorded.</small>';
+$('audit').innerHTML=d.audit.map(a=>`<div class="audit"><b>${esc(a.action)}</b><small>${esc(a.resource_type||'system')} ${esc(a.resource_id||'')} · ${esc(a.outcome)} · ${new Date(a.created_at).toLocaleString()}</small></div>`).join('')||'<small>No audit events recorded.</small>'}
 async function refresh(){try{render(await get('/api/observability/dashboard/'))}catch(e){$('overall').textContent='Monitoring API unavailable';$('overall').className='overall bad'}}refresh();setInterval(refresh,8000)})();
 </script>
 {% endblock %}

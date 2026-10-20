@@ -1,5 +1,6 @@
 import time
 from django.utils import timezone
+from apps.monitoring.models import AuditLog as StructuredAuditLog
 from .models import HealthCheck, SystemMetric, OperationalEvent, AuditEvent
 
 class HealthService:
@@ -39,7 +40,44 @@ class AuditService:
         )
 
 class MonitoringService:
-    def dashboard(self):
+    @staticmethod
+    def _audit_feed(actor_id=None, include_global=False):
+        """Normalize structured operational records and application audit events."""
+        if actor_id is not None:
+            request_logs = StructuredAuditLog.objects.filter(user_id=actor_id)
+            app_events = AuditEvent.objects.filter(actor_id=actor_id)
+        elif include_global:
+            request_logs = StructuredAuditLog.objects.all()
+            app_events = AuditEvent.objects.all()
+        else:
+            return []
+        items = []
+        for record in request_logs.order_by("-timestamp", "-id")[:100]:
+            items.append({
+                "_sort": record.timestamp,
+                "id": f"request-{record.pk}",
+                "action": record.action,
+                "resource_type": record.module,
+                "resource_id": record.resource,
+                "outcome": "recorded",
+                "created_at": record.timestamp.isoformat(),
+                "source": "request",
+            })
+        for event in app_events.order_by("-created_at", "-id")[:100]:
+            items.append({
+                "_sort": event.created_at,
+                "id": f"event-{event.pk}",
+                "action": event.action,
+                "resource_type": event.resource_type,
+                "resource_id": event.resource_id,
+                "outcome": event.outcome,
+                "created_at": event.created_at.isoformat(),
+                "source": "application",
+            })
+        items.sort(key=lambda item: item["_sort"], reverse=True)
+        return [{key: value for key, value in item.items() if key != "_sort"} for item in items[:100]]
+
+    def dashboard(self, actor_id=None, include_global=False):
         health = HealthService().snapshot()
         return {
             "health": [{
@@ -56,9 +94,5 @@ class MonitoringService:
                 "title": e.title, "message": e.message, "service": e.service,
                 "trace_id": e.trace_id, "created_at": e.created_at.isoformat()
             } for e in OperationalEvent.objects.all()[:100]],
-            "audit": [{
-                "id": a.id, "action": a.action, "resource_type": a.resource_type,
-                "resource_id": a.resource_id, "outcome": a.outcome,
-                "created_at": a.created_at.isoformat()
-            } for a in AuditEvent.objects.all()[:100]],
+            "audit": self._audit_feed(actor_id=actor_id, include_global=include_global),
         }

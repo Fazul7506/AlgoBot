@@ -1,85 +1,131 @@
-"""Audit middleware plus the centralized Django-message bridge for API outcomes."""
+"""Request audit capture and safe browser messaging for API outcomes.
+
+Never persist request/response bodies: they can contain passwords, API keys,
+broker tokens, MFA codes, or personal data. Mutations and failed requests are
+also copied into the structured monitoring audit stream for the Audit Log UI.
+"""
 import json
 import logging
-from django.utils.deprecation import MiddlewareMixin
-from django.contrib import messages
-from django.db import connection
-from core.models import AuditLog
+import uuid
 
-audit_logger = logging.getLogger('audit')
+from django.contrib import messages
+from django.utils.deprecation import MiddlewareMixin
+
+from core.models import AuditLog as RequestAuditLog
+
+audit_logger = logging.getLogger("audit")
 
 
 class AuditMiddleware(MiddlewareMixin):
-    """Log requests and turn browser-facing API outcomes into Django messages."""
-
-    EXCLUDED_PATHS = ['/static/', '/media/', '/health/', '/favicon.ico']
+    EXCLUDED_PATHS = ("/static/", "/media/", "/health/", "/favicon.ico")
 
     def should_audit(self, request):
         return not any(request.path.startswith(path) for path in self.EXCLUDED_PATHS)
 
+    def process_request(self, request):
+        request.algobot_request_id = uuid.uuid4().hex
+
     def process_response(self, request, response):
         if not self.should_audit(request):
             return response
+        request_id = getattr(request, "algobot_request_id", uuid.uuid4().hex)
+        response["X-Request-ID"] = request_id
         try:
             self._bridge_message(request, response)
-            if not connection.connection or not connection.is_usable():
-                return response
-            user = getattr(request, 'user', None)
+            user = getattr(request, "user", None)
             if user and user.is_authenticated:
+                # Keep the existing request-level ledger used by billing and
+                # operational analytics. Bodies are intentionally never stored.
                 try:
-                    AuditLog.objects.create(
+                    RequestAuditLog.objects.create(
                         user=user,
-                        path=request.path,
-                        method=request.method,
+                        path=request.path[:500],
+                        method=request.method[:10],
                         status_code=response.status_code,
                         ip_address=self._get_client_ip(request),
-                        user_agent=request.META.get('HTTP_USER_AGENT', '')[:255],
-                        error='',
+                        user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
+                        error="",
                     )
-                except Exception as e:
-                    audit_logger.warning(f"Failed to create audit log: {e}")
-        except Exception as e:
-            audit_logger.error(f"AuditMiddleware error: {e}")
+                except Exception:
+                    audit_logger.exception("Could not persist request audit record")
+                # Keep the richer, hash-chained audit stream useful: record
+                # writes and failures, not every successful page poll.
+                if request.method not in {"GET", "HEAD", "OPTIONS"} or response.status_code >= 400:
+                    try:
+                        from apps.monitoring.services import AuditService
+                        module = self._module_for_path(request.path)
+                        action = f"{request.method.lower()}_{'failed' if response.status_code >= 400 else 'completed'}"
+                        resource = f"{request.path[:150]} | status={response.status_code} | request_id={request_id[:32]}"
+                        AuditService().record(
+                            action=action,
+                            module=module,
+                            user=user,
+                            resource=resource,
+                            ip_address=self._get_client_ip(request),
+                        )
+                    except Exception:
+                        # Audit logging must not break the user's trading/API
+                        # request; the failure is still visible in server logs.
+                        audit_logger.exception("Could not persist structured audit event")
+        except Exception:
+            audit_logger.exception("AuditMiddleware failed")
         return response
 
     @staticmethod
+    def _module_for_path(path):
+        parts = [part for part in path.strip("/").split("/") if part]
+        if parts and parts[0] == "api":
+            parts = parts[1:]
+        if not parts:
+            return "platform"
+        aliases = {
+            "brokers": "brokers", "deriv": "brokers", "orders": "execution",
+            "trades": "execution", "positions": "execution", "execution": "execution",
+            "auth": "authentication", "login": "authentication", "logout": "authentication",
+            "risk": "risk", "strategies": "strategies", "signals": "market_data",
+            "market": "market_data", "market-data": "market_data", "backtesting": "backtesting",
+            "billing": "billing", "settings": "account", "profile": "account",
+            "observability": "observability", "monitoring": "monitoring",
+            "notifications": "notifications", "automation": "automation",
+        }
+        return aliases.get(parts[0].lower(), parts[0][:120].lower())
+
+    @staticmethod
     def _bridge_message(request, response):
-        """Use Django's message framework; never render an API JSON body as UI text."""
-        if getattr(response, 'streaming', False):
+        """Bridge concise JSON status messages without rendering raw API payloads."""
+        if getattr(response, "streaming", False):
             return
-        path = request.path
-        if not (path.startswith('/api/') or path.startswith('/data/')):
+        if not (request.path.startswith("/api/") or request.path.startswith("/data/")):
             return
-        if 'application/json' not in str(response.headers.get('Content-Type', '')).lower():
+        if "application/json" not in str(response.headers.get("Content-Type", "")).lower():
             return
         try:
-            payload = json.loads(response.content.decode('utf-8'))
+            payload = json.loads(response.content.decode("utf-8"))
         except (ValueError, UnicodeDecodeError, AttributeError):
             return
         if not isinstance(payload, dict):
             return
-        text = payload.get('message') or payload.get('detail') or payload.get('error')
+        text = payload.get("message") or payload.get("detail") or payload.get("error")
         if isinstance(text, dict):
-            text = text.get('message') or text.get('detail')
+            text = text.get("message") or text.get("detail")
         if not isinstance(text, str):
             return
-        text = ' '.join(text.split()).strip()[:500]
-        if not text or text.startswith('{') or text.startswith('['):
+        text = " ".join(text.split()).strip()[:500]
+        if not text or text.startswith(("{", "[")):
             return
-        status = int(getattr(response, 'status_code', 200))
+        status = int(getattr(response, "status_code", 200))
         if status >= 500:
             level = messages.ERROR
         elif status >= 400:
             level = messages.WARNING
-        elif payload.get('success') is True or payload.get('status') in {'success', 'ok', 'created', 'updated'}:
+        elif payload.get("success") is True or payload.get("status") in {"success", "ok", "created", "updated"}:
             level = messages.SUCCESS
         else:
             level = messages.INFO
-        messages.add_message(request, level, text, extra_tags='django-api-message')
+        messages.add_message(request, level, text, extra_tags="django-api-message")
 
     @staticmethod
     def _get_client_ip(request):
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            return x_forwarded_for.split(',')[0]
-        return request.META.get('REMOTE_ADDR')
+        # REMOTE_ADDR is the direct peer. X-Forwarded-For is client-controlled
+        # unless a trusted-proxy chain is explicitly configured.
+        return request.META.get("REMOTE_ADDR") or ""
