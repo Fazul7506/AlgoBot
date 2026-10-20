@@ -30,12 +30,20 @@ def automation_workspace(request):
 
 @login_required
 def audit_workspace(request):
-    """Render a merged, private feed from structured and application audit streams."""
+    """Render a private, searchable audit feed with real filters and CSV export."""
+    import csv
+    from datetime import datetime, time
+    from django.http import HttpResponse
+    from django.utils.dateparse import parse_date
+
     structured = AuditLog.objects.filter(user=request.user)
     application = AuditEvent.objects.filter(actor_id=request.user.pk)
     action = request.GET.get("action", "").strip()[:120]
     module = request.GET.get("module", "").strip()[:120]
     search = request.GET.get("q", "").strip()[:160]
+    date_from = request.GET.get("date_from", "").strip()[:10]
+    date_to = request.GET.get("date_to", "").strip()[:10]
+    severity = request.GET.get("severity", "").strip().lower()[:20]
     if action:
         structured = structured.filter(action__icontains=action)
         application = application.filter(action__icontains=action)
@@ -43,35 +51,51 @@ def audit_workspace(request):
         structured = structured.filter(module__icontains=module)
         application = application.filter(resource_type__icontains=module)
     if search:
-        structured = structured.filter(
-            Q(action__icontains=search) | Q(module__icontains=search) | Q(resource__icontains=search)
-        )
-        application = application.filter(
-            Q(action__icontains=search) | Q(resource_type__icontains=search) |
-            Q(resource_id__icontains=search) | Q(outcome__icontains=search)
-        )
-    # Bound cross-model merging to the most recent 1,000 matching records.
+        structured = structured.filter(Q(action__icontains=search) | Q(module__icontains=search) | Q(resource__icontains=search))
+        application = application.filter(Q(action__icontains=search) | Q(resource_type__icontains=search) | Q(resource_id__icontains=search) | Q(outcome__icontains=search))
+    start_date, end_date = parse_date(date_from), parse_date(date_to)
+    if start_date:
+        boundary = timezone.make_aware(datetime.combine(start_date, time.min)) if timezone.is_naive(timezone.now()) is False else datetime.combine(start_date, time.min)
+        structured = structured.filter(timestamp__gte=boundary)
+        application = application.filter(created_at__gte=boundary)
+    if end_date:
+        boundary = timezone.make_aware(datetime.combine(end_date, time.max)) if timezone.is_naive(timezone.now()) is False else datetime.combine(end_date, time.max)
+        structured = structured.filter(timestamp__lte=boundary)
+        application = application.filter(created_at__lte=boundary)
+
     merged = [
-        SimpleNamespace(
-            pk=event.pk, action=event.action, module=event.module, resource=event.resource,
-            timestamp=event.timestamp, hash=event.hash, source="Structured audit",
-        )
-        for event in structured.order_by("-timestamp", "-id")[:500]
+        SimpleNamespace(pk=e.pk, action=e.action, module=e.module, resource=e.resource,
+            timestamp=e.timestamp, hash=e.hash, source="Structured audit",
+            username=request.user.username, ip_address=e.ip_address,
+            outcome="recorded", severity=("high" if any(x in e.action.lower() for x in ("failed", "denied", "security", "error")) else "info"))
+        for e in structured.order_by("-timestamp", "-id")[:500]
     ]
     merged.extend(
-        SimpleNamespace(
-            pk=event.pk, action=event.action, module=event.resource_type or "application",
-            resource=f"{event.resource_id or '—'} · outcome={event.outcome}",
-            timestamp=event.created_at, hash="", source="Application event",
-        )
-        for event in application.order_by("-created_at", "-id")[:500]
+        SimpleNamespace(pk=e.pk, action=e.action, module=e.resource_type or "application",
+            resource=f"{e.resource_id or '—'} · outcome={e.outcome}", timestamp=e.created_at,
+            hash="", source="Application event", username=request.user.username,
+            ip_address=e.ip_address, outcome=e.outcome,
+            severity=("high" if str(e.outcome).lower() in {"failure","failed","denied","error"} or any(x in e.action.lower() for x in ("failed","denied","security","error")) else ("medium" if str(e.outcome).lower() in {"warning","pending"} else "info")))
+        for e in application.order_by("-created_at", "-id")[:500]
     )
-    merged.sort(key=lambda event: (event.timestamp, str(event.pk)), reverse=True)
+    if severity in {"info", "low", "medium", "high"}:
+        merged = [e for e in merged if e.severity == severity]
+    merged.sort(key=lambda e: (e.timestamp, str(e.pk)), reverse=True)
+    if request.GET.get("export") == "csv":
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="algobot-audit-log.csv"'
+        writer = csv.writer(response)
+        writer.writerow(["Timestamp (UTC)", "Event", "User", "Details", "IP Address", "Severity", "Source"])
+        for e in merged:
+            writer.writerow([e.timestamp.isoformat(), e.action, e.username, e.resource, e.ip_address or "Unavailable", e.severity.title(), e.source])
+        return response
     from django.core.paginator import Paginator
-    page = Paginator(merged, 50).get_page(request.GET.get("page", 1))
+    page = Paginator(merged, 10).get_page(request.GET.get("page", 1))
     return render(request, "core/audit_log.html", {
         "events": page.object_list, "event_count": len(merged), "page_obj": page,
-        "audit_filters": {"action": action, "module": module, "q": search},
+        "audit_filters": {"action": action, "module": module, "q": search, "date_from": date_from, "date_to": date_to, "severity": severity},
+        "event_summary": {level: sum(1 for e in merged if e.severity == level) for level in ("info", "low", "medium", "high")},
+        "recent_events": merged[:5], "audit_username": request.user.username,
     })
 
 @login_required
