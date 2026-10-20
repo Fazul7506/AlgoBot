@@ -61,8 +61,9 @@
           {% if login_events %}<div class="security-activity-list">{% for event in login_events %}<article class="security-activity-row"><span class="material-symbols-rounded security-activity-icon" aria-hidden="true">location_on</span><div class="security-activity-main"><strong>{{ event.action|default:"Authentication event" }}</strong><small>{{ event.module }} · {{ event.source }}</small></div><time datetime="{{ event.timestamp|date:'c' }}">{{ event.timestamp|date:"M j, Y H:i" }}</time><span class="security-pill {% if event.outcome|lower == 'success' %}is-good{% elif event.outcome|lower == 'recorded' %}is-neutral{% else %}is-warn{% endif %}">{{ event.outcome|title }}</span></article>{% endfor %}</div>{% else %}<p class="security-empty">No authentication-related audit events are currently available. This does not mean there have been no sign-ins; login attempts are shown only when the application records them in the audit stream.</p>{% endif %}
         </section>
         <section class="security-panel" id="security-sessions">
-          <div class="security-panel-heading"><div><h2>Active session</h2><p>Information available for this signed-in browser.</p></div><span class="security-pill is-good">Current</span></div>
-          <div class="security-session-row"><span class="material-symbols-rounded security-icon" aria-hidden="true">devices</span><div><strong>{{ current_device }}</strong><p>Authenticated AlgoBot browser session</p><small>Session controls for other devices are not available in the current backend.</small></div></div>
+          <div class="security-panel-heading"><div><h2>Active sessions</h2><p>Review signed-in browser sessions and revoke any session you no longer recognize.</p></div><button class="account-btn" type="button" data-security-sessions-refresh>Refresh</button></div>
+          <div class="security-session-row"><span class="material-symbols-rounded security-icon" aria-hidden="true">devices</span><div><strong>{{ current_device }}</strong><p>Current authenticated AlgoBot browser</p><small>Use the sign-out button below to end this session.</small></div><span class="security-pill is-good">Current</span></div>
+          <div class="security-session-list" data-security-session-list aria-live="polite"><p class="security-empty">Loading signed-in sessions…</p></div>
           <form method="post" action="/logout/" class="security-signout-form">{% csrf_token %}<button class="account-btn account-btn--danger" type="submit"><span class="material-symbols-rounded" aria-hidden="true">logout</span>Sign out this session</button></form>
         </section>
       </div>
@@ -162,4 +163,5 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 </script>
+<script src="{% static 'js/security_session_controls.js' %}?v=20261020-sessions1" defer></script>
 {% endblock %}
