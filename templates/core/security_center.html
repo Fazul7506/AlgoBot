@@ -53,8 +53,17 @@ document.addEventListener("DOMContentLoaded", () => {
         {% endif %}
         {% if two_factor_enabled %}
           <p class="account-subtitle">Authenticator challenges are required at password sign-in. {{ two_factor_recovery_codes_remaining }} recovery code{{ two_factor_recovery_codes_remaining|pluralize }} remain.</p>
-          <form method="post" class="account-security-form">{% csrf_token %}<input type="hidden" name="security_action" value="regenerate_recovery_codes"><div class="account-fields">{% if password_required %}<div class="account-field"><label for="mfa-regen-password">Current password</label><input id="mfa-regen-password" type="password" name="current_password" autocomplete="current-password" required></div>{% endif %}<div class="account-field"><label for="mfa-regen-code">Authenticator or unused recovery code</label><input id="mfa-regen-code" name="two_factor_code" inputmode="text" autocomplete="one-time-code" maxlength="32" required></div></div><div class="account-actions"><button class="account-btn" type="submit">Regenerate recovery codes</button></div></form>
-          <form method="post" class="account-security-form">{% csrf_token %}<input type="hidden" name="security_action" value="disable_2fa"><div class="account-fields">{% if password_required %}<div class="account-field"><label for="mfa-current-password">Current password</label><input id="mfa-current-password" type="password" name="current_password" autocomplete="current-password" required></div>{% endif %}<div class="account-field"><label for="mfa-disable-code">Authenticator or recovery code</label><input id="mfa-disable-code" name="two_factor_code" inputmode="text" autocomplete="one-time-code" maxlength="32" required></div></div><div class="account-actions"><button class="account-btn" type="submit">Disable two-factor authentication</button></div></form>
+          <form method="post" class="account-security-form">
+            {% csrf_token %}
+            <div class="account-fields">
+              {% if password_required %}<div class="account-field"><label for="mfa-current-password">Current password</label><input id="mfa-current-password" type="password" name="current_password" autocomplete="current-password" required></div>{% endif %}
+              <div class="account-field"><label for="mfa-action-code">Authenticator or unused recovery code</label><input id="mfa-action-code" name="two_factor_code" inputmode="text" autocomplete="one-time-code" maxlength="32" required></div>
+            </div>
+            <div class="account-actions">
+              <button class="account-btn" type="submit" name="security_action" value="regenerate_recovery_codes">Regenerate recovery codes</button>
+              <button class="account-btn" type="submit" name="security_action" value="disable_2fa">Disable two-factor authentication</button>
+            </div>
+          </form>
         {% elif two_factor_setup_pending %}
           <p class="account-subtitle">Add this key to your authenticator app, then verify a current six-digit code to enable protection.</p>
           {% if two_factor_setup_uri %}<div id="two-factor-qr" class="account-qr" data-otpauth-uri="{{ two_factor_setup_uri }}"></div><p class="account-help">If the QR code does not appear, use the authenticator app's manual setup and paste the provisioning URI below.</p><textarea readonly rows="3" aria-label="Authenticator provisioning URI">{{ two_factor_setup_uri }}</textarea>{% else %}<p class="account-help">Continue setup by scanning the QR code or using the provisioning URI provided when you began enrollment.</p>{% endif %}
