@@ -41,36 +41,12 @@
         <div class="account-card__header"><div><h2>Two-factor authentication</h2><p class="account-card__hint">Use an authenticator app as a second sign-in factor. Recovery codes are single-use.</p></div><span class="account-state {% if two_factor_enabled %}account-state--good{% else %}account-state--warn{% endif %}">{% if two_factor_enabled %}Enabled{% else %}Not enabled{% endif %}</span></div>
         {% if two_factor_recovery_codes %}
           <div class="account-alert account-alert--success" role="status"><strong>Save these recovery codes now.</strong> Each code can be used once. They will not be shown again after leaving this page.</div>
-          <div class="account-actions account-recovery-tools"><button class="account-btn account-btn--primary" type="button" data-download-recovery-pdf>Download recovery codes as PDF</button><span class="account-help">Download or save these codes before leaving. This one-time list is not stored in plain text.</span></div>
-          <ul class="account-recovery-codes">{% for code in two_factor_recovery_codes %}<li><code data-recovery-code>{{ code }}</code><button type="button" class="account-btn account-recovery-copy" data-copy-recovery-code aria-label="Copy recovery code {{ forloop.counter }}">Copy</button></li>{% endfor %}</ul>
+          <ul class="account-recovery-codes">{% for code in two_factor_recovery_codes %}<li><code>{{ code }}</code></li>{% endfor %}</ul>
         {% endif %}
         {% if two_factor_enabled %}
-          {% if two_factor_recovery_code_statuses %}
-            <section class="account-recovery-status" aria-label="Recovery code usage status">
-              <h3>Recovery code status</h3>
-              <ul class="account-recovery-codes">
-                {% for item in two_factor_recovery_code_statuses %}
-                  <li>
-                    <span><strong>Recovery code {{ item.number }}</strong><br><code>{% if item.used %}••••••••••{% else %}Unused — code hidden{% endif %}</code></span>
-                    <span class="account-state {% if item.used %}account-state--warn{% else %}account-state--good{% endif %}">{% if item.used %}Used{% else %}Unused{% endif %}</span>
-                  </li>
-                {% endfor %}
-              </ul>
-              <p class="account-help">Used codes stay marked as used. Code values are never re-displayed after the one-time reveal.</p>
-            </section>
-          {% endif %}
           <p class="account-subtitle">Authenticator challenges are required at password sign-in. {{ two_factor_recovery_codes_remaining }} recovery code{{ two_factor_recovery_codes_remaining|pluralize }} remain.</p>
-          <form method="post" class="account-security-form">
-            {% csrf_token %}
-            <div class="account-fields">
-              {% if password_required %}<div class="account-field"><label for="mfa-current-password">Current password</label><input id="mfa-current-password" type="password" name="current_password" autocomplete="current-password" required></div>{% endif %}
-              <div class="account-field"><label for="mfa-action-code">Authenticator or unused recovery code</label><input id="mfa-action-code" name="two_factor_code" inputmode="text" autocomplete="one-time-code" maxlength="32" required></div>
-            </div>
-            <div class="account-actions">
-              <button class="account-btn" type="submit" name="security_action" value="regenerate_recovery_codes">Regenerate recovery codes</button>
-              <button class="account-btn" type="submit" name="security_action" value="disable_2fa">Disable two-factor authentication</button>
-            </div>
-          </form>
+          <form method="post" class="account-security-form">{% csrf_token %}<input type="hidden" name="security_action" value="regenerate_recovery_codes"><div class="account-fields">{% if password_required %}<div class="account-field"><label for="mfa-regen-password">Current password</label><input id="mfa-regen-password" type="password" name="current_password" autocomplete="current-password" required></div>{% endif %}<div class="account-field"><label for="mfa-regen-code">Authenticator or unused recovery code</label><input id="mfa-regen-code" name="two_factor_code" inputmode="text" autocomplete="one-time-code" maxlength="32" required></div></div><div class="account-actions"><button class="account-btn" type="submit">Regenerate recovery codes</button></div></form>
+          <form method="post" class="account-security-form">{% csrf_token %}<input type="hidden" name="security_action" value="disable_2fa"><div class="account-fields">{% if password_required %}<div class="account-field"><label for="mfa-current-password">Current password</label><input id="mfa-current-password" type="password" name="current_password" autocomplete="current-password" required></div>{% endif %}<div class="account-field"><label for="mfa-disable-code">Authenticator or recovery code</label><input id="mfa-disable-code" name="two_factor_code" inputmode="text" autocomplete="one-time-code" maxlength="32" required></div></div><div class="account-actions"><button class="account-btn" type="submit">Disable two-factor authentication</button></div></form>
         {% elif two_factor_setup_pending %}
           <p class="account-subtitle">Add this key to your authenticator app, then verify a current six-digit code to enable protection.</p>
           {% if two_factor_setup_uri %}<div id="two-factor-qr" class="account-qr" data-otpauth-uri="{{ two_factor_setup_uri }}"></div><p class="account-help">If the QR code does not appear, use the authenticator app's manual setup and paste the provisioning URI below.</p><div class="account-copy-control"><textarea id="two-factor-setup-key" readonly rows="3" aria-label="Authenticator setup key"></textarea><button class="account-btn" type="button" data-copy-setup-key title="Copy setup key" aria-label="Copy setup key">▢ Copy</button></div><p class="account-help" data-copy-feedback role="status" aria-live="polite">Scan the QR code, or copy the secret key into Google Authenticator manual setup.</p>{% else %}<p class="account-help">Continue setup by scanning the QR code or using the provisioning URI provided when you began enrollment.</p>{% endif %}
@@ -108,9 +84,6 @@
     </div>
   </div>
 </main>
-<style>
-.account-recovery-codes{list-style:none;padding:0;display:grid;gap:10px}.account-recovery-codes li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--line,#304158);border-radius:12px}.account-recovery-codes code{font-weight:700;letter-spacing:.06em;overflow-wrap:anywhere}.account-recovery-copy{flex:0 0 auto}.account-recovery-tools{margin:12px 0}.account-recovery-tools .account-help{align-self:center}@media print{body *{visibility:hidden!important}#recovery-print-sheet,#recovery-print-sheet *{visibility:visible!important}#recovery-print-sheet{position:absolute;inset:0;padding:24px;background:#fff;color:#111;width:100%}#recovery-print-sheet h1{font-size:22px}#recovery-print-sheet li{font:16px monospace;padding:8px;border-bottom:1px solid #ddd}.account-recovery-codes,.account-recovery-tools{display:none!important}}
-</style>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -151,13 +124,6 @@ document.addEventListener('DOMContentLoaded', function () {
       if (feedback) feedback.textContent = 'Select the setup key and copy it manually.';
     }
   });
-});
-</script>
-<script>
-document.addEventListener('click', async function(event){
- const copy=event.target.closest('[data-copy-recovery-code]');
- if(copy){const li=copy.closest('li');const code=li&&li.querySelector('[data-recovery-code]');if(!code)return;try{if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(code.textContent.trim());else{const field=document.createElement('textarea');field.value=code.textContent.trim();document.body.appendChild(field);field.select();if(!document.execCommand('copy'))throw new Error('copy failed');field.remove();}copy.textContent='Copied';setTimeout(()=>{copy.textContent='Copy'},1400)}catch(_){copy.textContent='Select code'}return;}
- const download=event.target.closest('[data-download-recovery-pdf]');if(download){const list=document.querySelector('.account-recovery-codes');if(!list)return;const sheet=document.createElement('section');sheet.id='recovery-print-sheet';sheet.innerHTML='<h1>AlgoBot recovery codes</h1><p>Each code can be used once. Store this document securely.</p><ol></ol>';list.querySelectorAll('[data-recovery-code]').forEach(node=>{const li=document.createElement('li');li.textContent=node.textContent.trim();sheet.querySelector('ol').appendChild(li)});document.body.appendChild(sheet);const cleanup=()=>{sheet.remove();window.removeEventListener('afterprint',cleanup)};window.addEventListener('afterprint',cleanup);window.print();setTimeout(cleanup,60000);}
 });
 </script>
 {% endblock %}
