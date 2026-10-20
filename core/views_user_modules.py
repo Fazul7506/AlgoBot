@@ -217,6 +217,33 @@ def security_workspace(request):
     usable_keys = keys.filter(status="active").filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
     expired_active_keys = keys.filter(status="active", expires_at__lte=now).exists()
     account_connected = bool(account and account.is_connection_eligible)
+
+    # Security Center activity is drawn only from persisted, user-scoped audit
+    # records. Do not synthesize login attempts or expose another user's events.
+    security_audit_logs = list(AuditLog.objects.filter(user=request.user).order_by("-timestamp", "-id")[:30])
+    security_audit_events = list(AuditEvent.objects.filter(actor_id=request.user.pk).order_by("-created_at", "-id")[:30])
+    security_events = [
+        SimpleNamespace(
+            timestamp=item.timestamp, action=item.action, module=item.module,
+            details=item.resource or "—", outcome="recorded", source="Audit log",
+        ) for item in security_audit_logs
+    ]
+    security_events.extend(
+        SimpleNamespace(
+            timestamp=item.created_at, action=item.action,
+            module=item.resource_type or "application",
+            details=item.resource_id or "—", outcome=item.outcome or "unknown",
+            source="Application event",
+        ) for item in security_audit_events
+    )
+    security_events.sort(key=lambda item: item.timestamp, reverse=True)
+    security_events = security_events[:12]
+    login_events = [item for item in security_events if any(
+        term in (str(item.action) + " " + str(item.module)).lower()
+        for term in ("login", "sign-in", "signin", "auth", "session", "password")
+    )][:6]
+    user_agent = (request.META.get("HTTP_USER_AGENT") or "Current browser")[:180]
+    current_device = "Mobile browser" if any(term in user_agent.lower() for term in ("android", "iphone", "mobile")) else "Desktop or tablet browser"
     secure_session = bool(
         getattr(settings, "SESSION_COOKIE_SECURE", False)
         and getattr(settings, "CSRF_COOKIE_SECURE", False)
@@ -244,6 +271,9 @@ def security_workspace(request):
             "two_factor_recovery_codes_remaining": sum(1 for item in (profile.two_factor_recovery_codes or []) if not (isinstance(item, dict) and item.get("used", False))),
             "two_factor_recovery_code_statuses": [{"used": bool(item.get("used", False)) if isinstance(item, dict) else False, "number": index + 1} for index, item in enumerate(profile.two_factor_recovery_codes or [])],
             "password_required": request.user.has_usable_password(),
+            "security_events": security_events,
+            "login_events": login_events,
+            "current_device": current_device,
         },
     )
     # Enrollment URIs and one-time recovery codes must not be cached by browsers.

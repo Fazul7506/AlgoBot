@@ -18,7 +18,7 @@ PLAN_ENTITLEMENTS: Dict[str, PlanEntitlement] = {
     "PRO": PlanEntitlement("PRO", "Pro", 25000, 300, 25, 500, 2000, 1000, 5, 25, 250, True, True, "highest", "priority"),
     "ENTERPRISE": PlanEntitlement("ENTERPRISE", "Enterprise", -1, -1, -1, -1, -1, -1, -1, -1, -1, True, True, "dedicated", "dedicated"),
 }
-FEATURE_LABELS = {"api_calls":"Execution API calls", "strategies":"active strategy configurations", "backtests":"backtests", "predictions":"AI predictions", "orders":"orders", "broker_accounts":"connected brokers", "automations":"automation runs", "live_orders":"live-money orders"}
+FEATURE_LABELS = {"api_calls":"Execution API calls", "strategies":"active strategy configurations", "backtests":"backtests", "predictions":"AI predictions", "orders":"orders", "broker_accounts":"connected broker integrations", "automations":"automation runs", "live_orders":"live-money orders"}
 EXECUTION_PATH_PREFIXES = ("/api/orders/", "/api/trading/execute/", "/api/trades/execute/", "/api/execution/")
 EXECUTION_METHODS = ("POST", "PUT", "PATCH")
 RESETTABLE_METRICS = {"api_calls", "backtests", "predictions", "orders", "automations", "live_orders"}
@@ -67,7 +67,10 @@ def usage(user, metric, window="day"):
         try:
             from apps.brokers.models import BrokerAccount
             now = timezone.now()
-            return BrokerAccount.objects.filter(
+            # The quota is per connected broker integration, not per database
+            # account row. A broker can have multiple account records (for example,
+            # demo/live or legacy rows) but must consume only one integration slot.
+            eligible_accounts = BrokerAccount.objects.filter(
                 user=user,
                 status="active",
                 token_status="active",
@@ -75,7 +78,8 @@ def usage(user, metric, window="day"):
                 connections__status="connected",
             ).filter(
                 Q(expires_at__isnull=True) | Q(expires_at__gt=now)
-            ).distinct().count()
+            )
+            return eligible_accounts.values("broker__broker_type").distinct().count()
         except DatabaseError: return 0
     if metric == "strategies":
         try:
@@ -107,4 +111,4 @@ def entitlement_payload(user):
         if metric in RESETTABLE_METRICS: item.update({"reset_at":None if limit < 0 else reset_at("day").isoformat(),"reset_window":None if limit < 0 else "day"})
         else: item.update({"reset_at":None,"reset_window":None,"limit_type":"capacity"})
         items[metric] = item
-    return {"plan":plan.key,"name":plan.name,"active":True if admin else bool(subscription.is_active and (not subscription.expires_at or subscription.expires_at > timezone.now())),"expires_at":None if admin else (subscription.expires_at.isoformat() if subscription.expires_at else None),"recurring":False if admin else bool(subscription.recurring),"priority":plan.priority,"support":plan.support,"features":{"live_trading":plan.live_trading,"advanced_ai":plan.advanced_ai},"usage":items,"reset_at":None if admin else reset_at("day").isoformat(),"reset_policy":{"daily":"Every day at 00:00 UTC","minute":"Every minute; applies to the execution API burst limit","subscription":"Administrators have permanent Enterprise entitlements with no monthly renewal; paid user subscriptions fall back to FREE when expired","capacity":"Connected broker-account and active-strategy limits are capacity limits","measurement":"Usage counters are derived from persisted audit events or database records; no synthetic usage is generated."}}
+    return {"plan":plan.key,"name":plan.name,"active":True if admin else bool(subscription.is_active and (not subscription.expires_at or subscription.expires_at > timezone.now())),"expires_at":None if admin else (subscription.expires_at.isoformat() if subscription.expires_at else None),"recurring":False if admin else bool(subscription.recurring),"priority":plan.priority,"support":plan.support,"features":{"live_trading":plan.live_trading,"advanced_ai":plan.advanced_ai},"usage":items,"reset_at":None if admin else reset_at("day").isoformat(),"reset_policy":{"daily":"Every day at 00:00 UTC","minute":"Every minute; applies to the execution API burst limit","subscription":"Administrators have permanent Enterprise entitlements with no monthly renewal; paid user subscriptions fall back to FREE when expired","capacity":"Connected broker-integration and active-strategy limits are capacity limits","measurement":"Usage counters are derived from persisted audit events or database records; no synthetic usage is generated."}}

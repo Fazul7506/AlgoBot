@@ -1,4 +1,5 @@
 from rest_framework import decorators, permissions, response, viewsets
+from django.utils import timezone
 
 from .models import Broadcast, DeliveryLog, Notification, NotificationPreference, NotificationTemplate
 from .serializers import DeliveryLogSerializer, NotificationPreferenceSerializer, NotificationSerializer, NotificationTemplateSerializer
@@ -10,7 +11,28 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Notification.objects.filter(user=self.request.user)
+        return Notification.objects.filter(user=self.request.user).order_by("-created_at", "-id")
+
+    @decorators.action(detail=False, methods=["get"], url_path="unread-count")
+    def unread_count(self, request):
+        count = Notification.objects.filter(user=request.user, read_at__isnull=True).count()
+        return response.Response({"unread_count": count})
+
+    @decorators.action(detail=True, methods=["post"], url_path="read")
+    def mark_read(self, request, pk=None):
+        # Object lookup uses the user-scoped queryset: guessed IDs cannot expose
+        # or modify another account's notifications.
+        notification = self.get_object()
+        if notification.read_at is None:
+            notification.read_at = timezone.now()
+            notification.save(update_fields=["read_at", "updated_at"])
+        return response.Response({"id": notification.pk, "read_at": notification.read_at})
+
+    @decorators.action(detail=False, methods=["post"], url_path="mark-all-read")
+    def mark_all_read(self, request):
+        now = timezone.now()
+        updated = Notification.objects.filter(user=request.user, read_at__isnull=True).update(read_at=now, updated_at=now)
+        return response.Response({"marked_read": updated, "read_at": now})
 
 
 class PreferenceViewSet(viewsets.ModelViewSet):
