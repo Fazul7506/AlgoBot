@@ -164,6 +164,7 @@
     window.addEventListener('algobot:account-changed', renderAccount);
     document.addEventListener('visibilitychange', () => { if (!document.hidden && !($('[data-notification-menu]')?.hidden)) loadNotifications(); });
     renderAccount();
+    loadNotifications(); // Populate the unread badge on first render, not only after opening the menu.
     if (accountContext()?.load) accountContext().load().then(renderAccount).catch(renderAccount);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind, {once:true}); else bind();
