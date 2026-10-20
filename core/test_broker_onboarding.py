@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import PropertyMock, patch
 
 from django.contrib.auth import get_user_model
@@ -137,15 +138,27 @@ class BrokerMarketplaceDirectoryUiTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.get("/brokers/marketplace/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Connect your trading broker")
+        self.assertContains(response, "Broker Integrations")
         self.assertContains(response, 'data-broker-search')
-        self.assertContains(response, 'data-broker-filter="connected"')
-        self.assertContains(response, 'data-broker-filter="available"')
-        self.assertContains(response, 'data-broker-filter="unavailable"')
+        self.assertContains(response, 'data-broker-status-filter="connected"')
+        self.assertContains(response, 'data-broker-status-filter="available"')
+        self.assertContains(response, 'data-broker-status-filter="unavailable"')
         self.assertContains(response, "https://deriv.com/favicon.ico")
-        self.assertContains(response, 'alt="Deriv official site icon"')
+        self.assertContains(response, 'alt="Deriv icon"')
         self.assertContains(response, "Example Broker")
         self.assertContains(response, "Not supported yet")
+        self.assertContains(response, "Connected Accounts")
+        self.assertContains(response, "Broker Benefits")
+        self.assertContains(response, "Quick Actions")
+        self.assertContains(response, "Request a Broker")
+        self.assertContains(response, 'data-broker-category=')
+        self.assertContains(response, 'data-broker-no-connected')
+        self.assertContains(response, 'broker_marketplace.css?v=20261020-marketplace2')
+        css = (Path(__file__).resolve().parents[1] / "static" / "css" / "broker_marketplace.css").read_text(encoding="utf-8")
+        self.assertIn("@media(max-width:1100px)", css)
+        self.assertIn("@media(max-width:760px)", css)
+        self.assertIn("@media(max-width:520px)", css)
+        self.assertIn("prefers-reduced-motion", css)
 
     def test_marketplace_preserves_deriv_connect_route(self):
         self.client.force_login(self.user)
