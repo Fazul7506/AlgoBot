@@ -86,10 +86,11 @@
     }
   }
   let notifications = [];
+  let unreadCount = null;
   function notificationUnread(item) { return !item?.read_at; }
   function renderNotifications(payload) {
     notifications = list(payload);
-    const count = notifications.filter(notificationUnread).length;
+    const count = unreadCount == null ? notifications.filter(notificationUnread).length : unreadCount;
     const badge = $('[data-notification-count]');
     const trigger = $('[data-notification-trigger]');
     if (badge) { badge.textContent = count > 99 ? '99+' : String(count); badge.hidden = count < 1; }
@@ -108,7 +109,14 @@
     }).join('');
   }
   async function loadNotifications() {
-    try { renderNotifications(await request('/api/notifications/?page_size=8', {notifyOnError:false}, 6500)); }
+    try {
+      const results = await Promise.all([
+        request('/api/notifications/?page_size=8', {notifyOnError:false}, 6500),
+        request('/api/notifications/unread-count/', {notifyOnError:false}, 6500)
+      ]);
+      unreadCount = Math.max(0, Number(results[1]?.unread_count) || 0);
+      renderNotifications(results[0]);
+    }
     catch (_) {
       const target = $('[data-notification-list]');
       if (target) target.innerHTML = '<p class="topbar-menu-empty">Notifications could not be loaded right now. Open the notification center to retry.</p><a class="topbar-menu-retry" href="/notifications/">Retry in notification center</a>';
@@ -118,9 +126,13 @@
     const url = all ? '/api/notifications/mark-all-read/' : '/api/notifications/' + encodeURIComponent(id) + '/read/';
     try {
       const payload = await request(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}', notifyOnError:false}, 6500);
-      if (all) notifications = notifications.map(n => ({...n, read_at: n.read_at || new Date().toISOString()}));
-      else notifications = notifications.map(n => String(n.id) === String(id) ? {...n, read_at: payload?.read_at || new Date().toISOString()} : n);
-      renderNotifications(notifications);
+      if (all) {
+        notifications = notifications.map(n => ({...n, read_at: n.read_at || new Date().toISOString()}));
+        unreadCount = 0;
+        renderNotifications(notifications);
+      } else {
+        await loadNotifications();
+      }
     } catch (error) {
       window.AlgoBotMessage?.(error?.message || 'Could not update notification status.', 'error');
     }
