@@ -3,6 +3,10 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account3">{% endblock %}
 {% block title %}Account Identity | AlgoBot{% endblock %}
 {% block content %}
+<style>
+.connected-identity{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--ds-border,var(--line,#26364b));border-radius:14px;background:var(--ds-surface-1,var(--panel,#101722));margin:12px 0 16px}.connected-identity>span:nth-child(2){flex:1;min-width:0}.google-logo{display:grid;place-items:center;flex:0 0 48px;width:48px;height:48px;border-radius:50%;background:#fff;box-shadow:0 1px 4px #0002}.google-logo svg{display:block;width:28px;height:28px}.identity-muted{color:var(--ds-muted,var(--muted,#94a3b8));font-size:13px;line-height:1.5}
+</style>
+
 <main class="account-page" data-account-identity>
   <header class="account-hero">
     <div>
@@ -45,7 +49,7 @@
     <aside class="panel">
       <h2>Connected identities</h2>
       {% if google_identity_linked %}
-        <p><strong>Google sign-in</strong><br>Linked to this AlgoBot account.</p>
+        <div class="connected-identity connected-identity--google"><span class="google-logo" aria-hidden="true"><svg viewBox="0 0 48 48" role="img" focusable="false" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.8 6.1-15Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5.1c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.6a12 12 0 0 1 0-7.2v-5.3H5.8a20 20 0 0 0 0 17.8l6.8-5.3Z"/><path fill="#EA4335" d="M24 12c3 0 5.6 1 7.7 3l5.8-5.8C34 5.8 29.5 4 24 4A20 20 0 0 0 5.8 15.1l6.8 5.3C14.2 15.6 18.7 12 24 12Z"/></svg></span><span><strong>Google</strong><br><span class="identity-muted">Connected</span></span><span class="account-state account-state--good">Linked</span></div>
         {% if password_required %}
           <form method="post" action="{% url 'google_unlink' %}">
             {% csrf_token %}
@@ -56,7 +60,7 @@
           <p>Set a local password before unlinking Google so you retain a sign-in method.</p>
         {% endif %}
       {% else %}
-        <p><strong>Google sign-in</strong><br>Not linked. Linking requires an authenticated AlgoBot session and verified Google identity.</p>
+        <div class="connected-identity connected-identity--google"><span class="google-logo" aria-hidden="true"><svg viewBox="0 0 48 48" role="img" focusable="false" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.8 6.1-15Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5.1c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.6a12 12 0 0 1 0-7.2v-5.3H5.8a20 20 0 0 0 0 17.8l6.8-5.3Z"/><path fill="#EA4335" d="M24 12c3 0 5.6 1 7.7 3l5.8-5.8C34 5.8 29.5 4 24 4A20 20 0 0 0 5.8 15.1l6.8 5.3C14.2 15.6 18.7 12 24 12Z"/></svg></span><span><strong>Google</strong><br><span class="identity-muted">Not linked. Link a verified Google identity to this authenticated AlgoBot session.</span></span></div>
         <a class="button" href="/auth/google/?intent=link">Link Google sign-in</a>
       {% endif %}
       <p><strong>AlgoBot login</strong><br>Username and login email are controlled here.</p>
