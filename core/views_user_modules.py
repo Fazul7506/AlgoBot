@@ -70,22 +70,36 @@ def audit_workspace(request):
         application = application.filter(created_at__date__lte=end_date)
 
     # Bound cross-model merging to the most recent 1,000 matching records.
+    structured_events = list(structured.order_by("-timestamp", "-id")[:500])
+    application_events = list(application.order_by("-created_at", "-id")[:500])
+    actor_ids = {event.actor_id for event in application_events if event.actor_id}
+    if actor_ids:
+        from django.contrib.auth import get_user_model
+        actor_names = {
+            user.pk: user.get_username()
+            for user in get_user_model().objects.filter(pk__in=actor_ids)
+        }
+    else:
+        actor_names = {}
     merged = [
         SimpleNamespace(
             pk=event.pk, action=event.action, module=event.module, resource=event.resource,
             timestamp=event.timestamp, hash=event.hash, source="Structured audit",
-            outcome="", severity="info",
+            username=event.user.get_username() if event.user_id else "System",
+            ip_address=event.ip_address, outcome="", severity="info",
         )
-        for event in structured.order_by("-timestamp", "-id")[:500]
+        for event in structured_events
     ]
     merged.extend(
         SimpleNamespace(
             pk=event.pk, action=event.action, module=event.resource_type or "application",
             resource=f"{event.resource_id or '—'} · outcome={event.outcome}",
             timestamp=event.created_at, hash="", source="Application event",
+            username=actor_names.get(event.actor_id, "System" if not event.actor_id else "Unknown user"),
+            ip_address=event.ip_address,
             outcome=str(event.outcome or ""), severity="info",
         )
-        for event in application.order_by("-created_at", "-id")[:500]
+        for event in application_events
     )
     for event in merged:
         label = f"{event.action} {event.module} {event.outcome}".lower()
