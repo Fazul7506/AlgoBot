@@ -78,9 +78,7 @@ def billing_success_page(request): return render(request,'core/billing_success.h
 def billing_cancel_page(request): return render(request,'core/billing_cancel.html')
 @login_required
 def settings_page(request):
-    from apps.strategies.models import Strategy
-    strategies = Strategy.objects.filter(enabled=True).exclude(lifecycle_state='archived').order_by('name')
-    return render(request, 'core/settings.html', {'available_strategies': strategies})
+    return render(request, 'core/settings.html')
 @login_required
 def profile_page(request):
     """Delegate legacy imports to the canonical persistent profile editor."""
