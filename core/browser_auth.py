@@ -150,6 +150,8 @@ def login_page(request):
         identifier_allowed = allow_auth_attempt(request, "password-login", identifier, limit=10, window=900)
         ip_allowed = allow_auth_attempt(request, "password-login-ip", "", limit=30, window=900)
         if not identifier_allowed or not ip_allowed:
+            from core.auth_audit import record_auth_event
+            record_auth_event(request, action="Login throttled", outcome="blocked", identifier=identifier)
             messages.error(request, "Too many sign-in attempts. Please wait and try again.")
             return _render(request, "login", identifier=identifier)
         user = None
@@ -165,11 +167,15 @@ def login_page(request):
                     if matches.count() == 1:
                         user = authenticate(request, username=matches.first().get_username(), password=password)
         if user is None:
+            from core.auth_audit import record_auth_event
+            record_auth_event(request, action="Login failed", outcome="failed", identifier=identifier)
             request.session.pop("algobot_pending_2fa_user_id", None)
             messages.error(request, "The username/email or password is incorrect.")
             return _render(request, "login", identifier=identifier)
         pending_2fa_user_id = request.session.get("algobot_pending_2fa_user_id")
         if pending_2fa_user_id and str(pending_2fa_user_id) != str(user.pk):
+            from core.auth_audit import record_auth_event
+            record_auth_event(request, action="Login failed", outcome="failed", user=user)
             request.session.pop("algobot_pending_2fa_user_id", None)
             messages.error(request, "The username/email or password is incorrect.")
             return _render(request, "login", identifier=identifier)
@@ -185,6 +191,8 @@ def login_page(request):
                 request.session["algobot_pending_2fa_user_id"] = user.pk
                 return _render(request, "login", identifier=identifier, mfa_required=True)
             if not verify_user_code(profile, code, consume_recovery=True):
+                from core.auth_audit import record_auth_event
+                record_auth_event(request, action="Two-factor verification failed", outcome="failed", user=user)
                 request.session["algobot_pending_2fa_user_id"] = user.pk
                 return _render(
                     request, "login", identifier=identifier, mfa_required=True,
@@ -192,6 +200,8 @@ def login_page(request):
                 )
         request.session.pop("algobot_pending_2fa_user_id", None)
         auth_login(request, user)
+        from core.auth_audit import record_auth_event
+        record_auth_event(request, action="Login successful", outcome="success", user=user)
         if profile.two_factor_enabled:
             request.session["algobot_mfa_verified_user_id"] = user.pk
         UserProfile.objects.update_or_create(user=user, defaults={"last_login_at": timezone.now()})
