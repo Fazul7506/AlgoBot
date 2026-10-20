@@ -1,42 +1,97 @@
 {% extends "base.html" %}
-{% block title %}Broker Marketplace | AlgoBot
-{% endblock %}
-{% block mobile_title %}Broker Marketplace{% endblock %}
+{% block title %}Broker Integrations | AlgoBot{% endblock %}
+{% block mobile_title %}Broker Integrations{% endblock %}
 {% block content %}
 <style>
 .broker-market{max-width:1240px;margin:0 auto;padding:clamp(16px,3vw,34px);color:var(--text,#e8eefb)}
 .broker-hero{display:flex;gap:24px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:clamp(22px,4vw,40px);border:1px solid #263b59;border-radius:24px;background:radial-gradient(ellipse at 85% 0%,#173d65 0,transparent 45%),linear-gradient(135deg,#101d31,#0b1424);margin-bottom:22px}
 .broker-kicker{color:#46d7ad;font-size:.76rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;margin:0 0 10px}
 .broker-hero h1{font-size:clamp(2rem,5vw,3.25rem);line-height:1.05;margin:0 0 14px}.broker-hero p{max-width:720px;color:#c4d0e2;line-height:1.65}
-.broker-actions{display:flex;gap:10px;flex-wrap:wrap}.broker-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:11px 16px;border-radius:12px;text-decoration:none;font-weight:750;border:1px solid #344968;color:#e7eefb;background:#15253b}.broker-btn.primary{background:#27c99b;color:#071b19;border-color:#27c99b}
-.broker-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0 26px}.broker-stat,.broker-panel{border:1px solid #233650;border-radius:18px;padding:20px;background:#0e1b2d}.broker-stat small{display:block;color:#9eb0c9;margin-bottom:8px}.broker-stat strong{font-size:1.35rem}
+.broker-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0 28px}.broker-stat{border:1px solid #233650;border-radius:18px;padding:18px 20px;background:#0e1b2d}.broker-stat small{display:block;color:#9eb0c9;margin-bottom:8px}.broker-stat strong{font-size:1.45rem;display:block}
 .broker-section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:28px 0 14px}.broker-section-head h2{margin:0;font-size:1.45rem}.broker-section-head p{margin:5px 0 0;color:#aabbd1}
-.broker-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:16px}.broker-card{border:1px solid #263b59;border-radius:20px;padding:21px;background:linear-gradient(160deg,#122239,#0c1728);display:flex;flex-direction:column;gap:14px;min-width:0}.broker-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.broker-logo{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:#1b3654;color:#58e0ba;font-weight:900;font-size:1.2rem}.broker-card h3{font-size:1.2rem;margin:13px 0 5px}.broker-card p{color:#afbed2;line-height:1.55;margin:0}.broker-pill{display:inline-flex;border-radius:999px;padding:5px 9px;font-size:.72rem;font-weight:800;text-transform:uppercase;background:#173b34;color:#68e0b7}.broker-pill.muted{background:#293448;color:#c0ccdc}.broker-capabilities{display:flex;flex-wrap:wrap;gap:7px}.broker-card .broker-actions{margin-top:auto}.broker-note{border-left:3px solid #45d8ad;padding:12px 15px;color:#c1cee0;background:#102239;border-radius:0 10px 10px 0;margin-top:20px;line-height:1.6}
-@media(max-width:620px){.broker-market{padding:14px}.broker-summary{grid-template-columns:1fr}.broker-hero{border-radius:18px}.broker-card{padding:17px}}
+.broker-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0 20px}.broker-search-wrap{position:relative;flex:1 1 280px}.broker-search{width:100%;min-height:48px;border:1px solid #344968;border-radius:14px;padding:12px 16px 12px 44px;background:#0e1b2d;color:#edf4ff;font:inherit;box-sizing:border-box}.broker-search:focus{outline:2px solid #46d7ad;outline-offset:2px}.broker-search-icon{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:#9eb0c9;pointer-events:none}
+.broker-filters{display:flex;gap:8px;flex-wrap:wrap}.broker-filter{border:1px solid #344968;border-radius:999px;padding:9px 14px;background:#13243a;color:#c7d5e8;font:inherit;font-weight:750;cursor:pointer}.broker-filter[aria-pressed="true"]{background:#27c99b;color:#071b19;border-color:#27c99b}
+.broker-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:16px}.broker-card{border:1px solid #263b59;border-radius:20px;padding:21px;background:linear-gradient(160deg,#122239,#0c1728);display:flex;flex-direction:column;gap:14px;min-width:0;transition:border-color .18s,transform .18s}.broker-card:hover{border-color:#3b658d;transform:translateY(-2px)}.broker-card[hidden]{display:none}
+.broker-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.broker-brand{display:flex;align-items:center;gap:13px;min-width:0}.broker-logo{display:grid;place-items:center;flex:0 0 58px;width:58px;height:58px;overflow:hidden;border-radius:17px;background:#fff;border:1px solid #344968;color:#18324f;font-weight:900;font-size:1.2rem}.broker-logo img{width:100%;height:100%;padding:10px;box-sizing:border-box;object-fit:contain}.broker-brand-copy{min-width:0}.broker-card h3{font-size:1.2rem;margin:0 0 5px}.broker-card p{color:#afbed2;line-height:1.55;margin:0}.broker-type{font-size:.85rem}.broker-pill{display:inline-flex;align-items:center;white-space:nowrap;border-radius:999px;padding:6px 10px;font-size:.7rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;background:#173b34;color:#68e0b7}.broker-pill.muted{background:#293448;color:#c0ccdc}.broker-pill.warning{background:#3d3020;color:#f5cc82}
+.broker-card-description{margin-top:3px}.broker-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.broker-card .broker-actions{margin-top:auto;padding-top:4px}.broker-actions form{margin:0}.broker-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 15px;border-radius:12px;text-decoration:none;font-weight:750;border:1px solid #344968;color:#e7eefb;background:#15253b;font:inherit;font-weight:750;cursor:pointer}.broker-btn.primary{background:#27c99b;color:#071b19;border-color:#27c99b}.broker-btn[aria-disabled="true"]{opacity:.7;cursor:not-allowed}.broker-panel{border:1px solid #233650;border-radius:18px;padding:24px;background:#0e1b2d;color:#c1cee0;line-height:1.6}.broker-panel h3{margin-top:0;color:#e8eefb}.broker-note{border-left:3px solid #45d8ad;padding:12px 15px;color:#c1cee0;background:#102239;border-radius:0 10px 10px 0;margin-top:22px;line-height:1.6}.broker-results{color:#9eb0c9;font-size:.9rem;margin:0 0 12px}
+@media(max-width:620px){.broker-market{padding:14px}.broker-summary{grid-template-columns:1fr}.broker-hero{border-radius:18px}.broker-card{padding:17px}.broker-card-top{gap:8px}.broker-logo{flex-basis:52px;width:52px;height:52px}.broker-pill{font-size:.64rem;padding:5px 8px}}
+@media(prefers-reduced-motion:reduce){.broker-card{transition:none}.broker-card:hover{transform:none}}
 </style>
-<div class="broker-market">
-<header class="broker-hero"><div><p class="broker-kicker">Broker integrations · Marketplace</p><h1>Choose your trading broker</h1><p>Registered broker integrations and their current connection status.</p></div><div class="broker-logo" style="width:68px;height:68px;font-size:1.7rem" aria-hidden="true">AB</div></header>
+<div class="broker-market" data-broker-marketplace>
+  <header class="broker-hero">
+    <div>
+      <p class="broker-kicker">Broker integrations · Marketplace</p>
+      <h1>Connect your trading broker</h1>
+      <p>Discover the broker integrations registered with AlgoBot, check connection status, and manage your existing authorization. Only configured and supported connection flows can be connected.</p>
+      <div class="broker-actions"><a class="broker-btn primary" href="#broker-catalogue">Browse integrations</a><a class="broker-btn" href="/operations/brokers/">Manage broker accounts</a></div>
+    </div>
+  </header>
 
-<section id="broker-catalogue" aria-labelledby="broker-catalogue-title"><div class="broker-section-head"><div><h2 id="broker-catalogue-title">Registered brokers</h2></div></div>
-<div class="broker-grid">
-{% for broker in brokers %}
-<article class="broker-card">
-<div class="broker-card-top"><div><div class="broker-logo" aria-hidden="true">{{ broker.name|first|upper }}</div><h3>{{ broker.name }}</h3><p>{{ broker.broker_type|title }} integration</p></div><span class="broker-pill {% if broker.user_connected %}{% else %}muted{% endif %}">{% if broker.user_connected %}Connected{% else %}{{ broker.status }}{% endif %}</span></div>
+  <section class="broker-summary" aria-label="Broker integration overview">
+    <div class="broker-stat"><small>Registered integrations</small><strong data-broker-total>{{ brokers|length }}</strong></div>
+    <div class="broker-stat"><small>Connected integrations</small><strong data-broker-connected>0</strong></div>
+    <div class="broker-stat"><small>Available to connect</small><strong data-broker-available>0</strong></div>
+  </section>
 
-
-<div class="broker-actions">{% if broker.user_connected %}{% if broker.broker_type == 'deriv' %}<form method="post" action="/api/deriv/disconnect/" data-broker-disconnect>{% csrf_token %}<button class="broker-btn" type="submit">Disconnect</button></form>{% else %}<a class="broker-btn" href="/operations/brokers/">Manage connection</a>{% endif %}{% elif broker.broker_type == 'deriv' and broker.status == 'active' %}<a class="broker-btn primary" href="/brokers/connect/">Connect Deriv</a>{% elif broker.status != 'active' %}<span class="broker-btn" aria-disabled="true">Unavailable</span>{% else %}<span class="broker-btn" aria-disabled="true">Not supported</span>{% endif %}</div>
-</article>
-{% empty %}
-<div class="broker-panel"><h3>No brokers are configured yet</h3><p>The marketplace is ready, but no broker adapters are registered. An administrator must configure a broker and its supported connection flow before users can connect it.</p></div>
-{% endfor %}
-</div></section>
+  <section id="broker-catalogue" aria-labelledby="broker-catalogue-title">
+    <div class="broker-section-head"><div><h2 id="broker-catalogue-title">All integrations</h2><p>Choose an integration to view its current status and available actions.</p></div></div>
+    <div class="broker-tools">
+      <div class="broker-search-wrap"><span class="broker-search-icon" aria-hidden="true">⌕</span><input class="broker-search" type="search" data-broker-search placeholder="Search brokers" aria-label="Search broker integrations" autocomplete="off"></div>
+      <div class="broker-filters" role="group" aria-label="Filter broker integrations">
+        <button type="button" class="broker-filter" data-broker-filter="all" aria-pressed="true">All</button>
+        <button type="button" class="broker-filter" data-broker-filter="connected" aria-pressed="false">Connected</button>
+        <button type="button" class="broker-filter" data-broker-filter="available" aria-pressed="false">Available</button>
+        <button type="button" class="broker-filter" data-broker-filter="unavailable" aria-pressed="false">Unavailable</button>
+      </div>
+    </div>
+    <p class="broker-results" data-broker-results aria-live="polite"></p>
+    <div class="broker-grid" data-broker-grid>
+      {% for broker in brokers %}
+      <article class="broker-card" data-broker-card data-broker-name="{{ broker.name|lower }}" data-broker-type="{{ broker.broker_type|lower }}" data-broker-status="{% if broker.user_connected %}connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}available{% else %}unavailable{% endif %}">
+        <div class="broker-card-top">
+          <div class="broker-brand">
+            <div class="broker-logo">
+              {% if broker.broker_type == 'deriv' %}
+                <img src="https://deriv.com/favicon.ico" alt="Deriv official site icon" loading="lazy" referrerpolicy="no-referrer">
+              {% else %}
+                <span aria-label="{{ broker.name }} logo unavailable">{{ broker.name|first|upper }}</span>
+              {% endif %}
+            </div>
+            <div class="broker-brand-copy"><h3>{{ broker.name }}</h3><p class="broker-type">{{ broker.broker_type|title }} integration</p></div>
+          </div>
+          <span class="broker-pill {% if broker.user_connected %}{% else %}muted{% endif %}">{% if broker.user_connected %}Connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}Available{% elif broker.status != 'active' %}Unavailable{% else %}Not supported{% endif %}</span>
+        </div>
+        <p class="broker-card-description">{% if broker.broker_type == 'deriv' %}Connect securely through Deriv authorization. AlgoBot verifies the account connection before enabling trading workflows.{% elif broker.status != 'active' %}This integration is registered but currently inactive. Connection actions are unavailable until it is enabled by an administrator.{% else %}This broker is registered in AlgoBot, but an end-user connection flow is not currently available for this integration.{% endif %}</p>
+        <div class="broker-actions">
+          {% if broker.user_connected %}
+            {% if broker.broker_type == 'deriv' %}<form method="post" action="/api/deriv/disconnect/" data-broker-disconnect>{% csrf_token %}<button class="broker-btn" type="submit">Disconnect</button></form>{% else %}<a class="broker-btn" href="/operations/brokers/">Manage connection</a>{% endif %}
+          {% elif broker.broker_type == 'deriv' and broker.status == 'active' %}
+            <a class="broker-btn primary" href="/brokers/connect/">Connect Deriv</a>
+          {% elif broker.status != 'active' %}
+            <span class="broker-btn" aria-disabled="true">Unavailable</span>
+          {% else %}
+            <span class="broker-btn" aria-disabled="true">Not supported yet</span>
+          {% endif %}
+        </div>
+      </article>
+      {% empty %}
+      <div class="broker-panel" data-broker-empty><h3>No broker integrations are registered</h3><p>The marketplace is ready, but no broker adapters are registered. An administrator must configure a broker and its supported connection flow before users can connect it.</p></div>
+      {% endfor %}
+    </div>
+    <div class="broker-panel" data-broker-no-results hidden><h3>No matching integrations</h3><p>Try another search term or select a different filter.</p></div>
+  </section>
+  <p class="broker-note">Security first: this directory only displays registered integrations and their supported actions. Broker authorization, account eligibility, and trading risk checks remain enforced by the existing connection and execution services.</p>
 </div>
 <script>
-document.addEventListener("submit", async function(event) {
- const form=event.target.closest("[data-broker-disconnect]"); if(!form)return;
- event.preventDefault(); const button=form.querySelector("button[type=submit]"); if(button){button.disabled=true;button.textContent="Disconnecting…";}
- try { const token=form.querySelector("[name=csrfmiddlewaretoken]")?.value||""; const response=await fetch(form.action,{method:"POST",credentials:"same-origin",headers:{"X-CSRFToken":token,"Accept":"application/json"}}); const data=await response.json().catch(()=>({})); if(!response.ok||data.status==="error")throw new Error(data.message||"Disconnect failed"); window.location.reload(); }
- catch(error){if(button){button.disabled=false;button.textContent="Disconnect";}window.alert(error.message||"Could not disconnect broker.");}
-});
+(function(){
+ const root=document.querySelector("[data-broker-marketplace]");if(!root||root.dataset.initialized==="true")return;root.dataset.initialized="true";
+ const cards=Array.from(root.querySelectorAll("[data-broker-card]"));const search=root.querySelector("[data-broker-search]");const filters=Array.from(root.querySelectorAll("[data-broker-filter]"));let activeFilter="all";
+ const connected=cards.filter(card=>card.dataset.brokerStatus==="connected").length;const available=cards.filter(card=>card.dataset.brokerStatus==="available").length;
+ root.querySelector("[data-broker-connected]").textContent=String(connected);root.querySelector("[data-broker-available]").textContent=String(available);
+ const results=root.querySelector("[data-broker-results]");const noResults=root.querySelector("[data-broker-no-results]");
+ function applyFilter(){const query=(search.value||"").trim().toLowerCase();let visible=0;cards.forEach(card=>{const matchesQuery=(card.dataset.brokerName+" "+card.dataset.brokerType).includes(query);const matchesFilter=activeFilter==="all"||card.dataset.brokerStatus===activeFilter;const show=matchesQuery&&matchesFilter;card.hidden=!show;if(show)visible++;});results.textContent=visible+" integration"+(visible===1?"":"s")+" shown";noResults.hidden=cards.length===0||visible!==0;filters.forEach(button=>button.setAttribute("aria-pressed",String(button.dataset.brokerFilter===activeFilter)));}
+ search.addEventListener("input",applyFilter);filters.forEach(button=>button.addEventListener("click",()=>{activeFilter=button.dataset.brokerFilter;applyFilter();}));applyFilter();
+ document.addEventListener("submit",async function(event){const form=event.target.closest("[data-broker-disconnect]");if(!form||!root.contains(form))return;event.preventDefault();const button=form.querySelector("button[type=submit]");if(button){button.disabled=true;button.textContent="Disconnecting…";}try{const token=form.querySelector("[name=csrfmiddlewaretoken]")?.value||"";const response=await fetch(form.action,{method:"POST",credentials:"same-origin",headers:{"X-CSRFToken":token,"Accept":"application/json"}});const data=await response.json().catch(()=>({}));if(!response.ok||data.status==="error")throw new Error(data.message||"Disconnect failed");window.location.reload();}catch(error){if(button){button.disabled=false;button.textContent="Disconnect";}window.alert(error.message||"Could not disconnect broker.");}});
+})();
 </script>
 {% endblock %}
