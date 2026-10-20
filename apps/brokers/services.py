@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import logging
 import time
 from decimal import Decimal
 
@@ -12,6 +13,22 @@ from . import constants as c
 from .exceptions import BrokerRoutingError, BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
 from core.billing_entitlements import check
+
+logger = logging.getLogger(__name__)
+
+
+def _queue_automation_event(event_name, account, payload):
+    """Publish account-scoped broker lifecycle events without blocking broker I/O."""
+    if getattr(settings, "DJANGO_TESTING", False):
+        return
+    try:
+        from apps.automation.tasks import process_event
+        process_event.delay(event_name, "broker", payload, account.user_id)
+    except Exception:
+        logger.exception(
+            "broker_automation_event_dispatch_failed",
+            extra={"event_name": event_name, "broker_account_id": account.pk, "user_id": account.user_id},
+        )
 
 
 class BrokerRegistry:
@@ -55,12 +72,22 @@ class BrokerConnectionService:
         account.credentials = credentials; account.status = 'active'; account.last_synced_at = timezone.now()
         await sync_to_async(account.save)(update_fields=['account_id', 'balance', 'currency', 'credentials', 'status', 'last_synced_at'])
         connection, _ = await sync_to_async(BrokerConnection.objects.update_or_create)(broker_account=account, defaults={'broker': broker, 'status': 'connected', 'latency': latency, 'last_ping': timezone.now(), 'connected_at': timezone.now()})
+        await sync_to_async(_queue_automation_event, thread_sensitive=False)(
+            "BrokerConnected", account,
+            {"broker_type": broker.broker_type, "broker_name": broker.name, "broker_account_pk": account.pk,
+             "broker_account_id": account.account_id, "account_type": account.account_type},
+        )
         return connection
     async def disconnect(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
         await BrokerRegistry().adapter(broker, account).disconnect(); account.status = 'disabled'
         await sync_to_async(account.save)(update_fields=['status'])
         connection, _ = await sync_to_async(BrokerConnection.objects.update_or_create)(broker_account=account, defaults={'broker': broker, 'status': 'disconnected'})
+        await sync_to_async(_queue_automation_event, thread_sensitive=False)(
+            "BrokerDisconnected", account,
+            {"broker_type": broker.broker_type, "broker_name": broker.name, "broker_account_pk": account.pk,
+             "broker_account_id": account.account_id, "account_type": account.account_type},
+        )
         return connection
     async def heartbeat(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
@@ -206,7 +233,25 @@ class ExecutionManagementSystem:
         order.status = status_value; order.broker_order_id = broker_order_id; update_fields = ['status', 'broker_order_id', 'updated_at']
         if status_value in {'filled', 'executed', 'partially_filled'}: order.executed_at = timezone.now(); update_fields.append('executed_at')
         await sync_to_async(order.save)(update_fields=update_fields)
-        return await sync_to_async(ExecutionReport.objects.create)(order=order, execution_price=executed, requested_price=requested, slippage=slippage, latency=result.get('latency', latency), fees=Decimal(str(result.get('fees', 0))), status=status_value, raw_report=result)
+        report = await sync_to_async(ExecutionReport.objects.create)(
+            order=order, execution_price=executed, requested_price=requested, slippage=slippage,
+            latency=result.get('latency', latency), fees=Decimal(str(result.get('fees', 0))),
+            status=status_value, raw_report=result,
+        )
+        if status_value == "filled":
+            routing = order.routing_context if isinstance(order.routing_context, dict) else {}
+            automation = routing.get("automation") if isinstance(routing.get("automation"), dict) else {}
+            event_payload = {
+                "order_id": order.pk, "broker_order_id": order.broker_order_id,
+                "broker_type": order.broker.broker_type, "broker_account_pk": order.account_id,
+                "broker_account_id": order.account.account_id, "symbol": order.symbol,
+                "direction": order.direction, "contract_type": order.contract_type,
+                "stake": str(order.stake), "execution_price": str(executed),
+                "profit": result.get("profit"), "origin_workflow_id": automation.get("workflow_id"),
+                "automation_depth": automation.get("depth", 0),
+            }
+            await sync_to_async(_queue_automation_event, thread_sensitive=False)("TradeExecuted", order.account, event_payload)
+        return report
 
 
 class ExecutionEngine:

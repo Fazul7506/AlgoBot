@@ -1,5 +1,7 @@
 """Independent trader-facing workspaces for operational features."""
 
+import hashlib
+
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -128,8 +130,20 @@ def security_workspace(request):
                     # Refresh credentials minted before MFA enrollment must not
                     # remain a way to bypass the newly enabled second factor.
                     from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-                    for outstanding in OutstandingToken.objects.filter(user=request.user):
-                        BlacklistedToken.objects.get_or_create(token=outstanding)
+                    # Revoke pre-enrollment refresh tokens in a bounded number of
+                    # database queries; per-token get_or_create made enrollment
+                    # latency grow linearly with the account's token history.
+                    outstanding_ids = OutstandingToken.objects.filter(
+                        user=request.user,
+                    ).exclude(
+                        id__in=BlacklistedToken.objects.filter(
+                            token__user=request.user,
+                        ).values("token_id"),
+                    ).values_list("id", flat=True)
+                    BlacklistedToken.objects.bulk_create(
+                        [BlacklistedToken(token_id=token_id) for token_id in outstanding_ids],
+                        ignore_conflicts=True,
+                    )
                     request.session["algobot_2fa_recovery_codes_once"] = recovery_codes
                     messages.success(request, "Two-factor authentication is enabled. Save these recovery codes now; they are shown only once.")
                     return redirect("security_center")
@@ -227,7 +241,8 @@ def security_workspace(request):
             "two_factor_setup_pending": bool(profile.two_factor_pending_secret_encrypted),
             "two_factor_setup_uri": setup_uri,
             "two_factor_recovery_codes": recovery_codes,
-            "two_factor_recovery_codes_remaining": len(profile.two_factor_recovery_codes or []),
+            "two_factor_recovery_codes_remaining": sum(1 for item in (profile.two_factor_recovery_codes or []) if not (isinstance(item, dict) and item.get("used", False))),
+            "two_factor_recovery_code_statuses": [{"used": bool(item.get("used", False)) if isinstance(item, dict) else False, "number": index + 1} for index, item in enumerate(profile.two_factor_recovery_codes or [])],
             "password_required": request.user.has_usable_password(),
         },
     )

@@ -61,9 +61,13 @@ class TwoFactorService:
 
 
 def generate_recovery_codes(count=10):
-    """Return one-time display values and only their SHA-256 digests for storage."""
+    """Return one-time display values and persist only digests plus usage state."""
     codes = [secrets.token_hex(5).upper() for _ in range(count)]
-    return codes, [hashlib.sha256(code.encode("ascii")).hexdigest() for code in codes]
+    records = [
+        {"digest": hashlib.sha256(code.encode("ascii")).hexdigest(), "used": False}
+        for code in codes
+    ]
+    return codes, records
 
 
 def verify_user_code(profile, token, *, consume_recovery=False):
@@ -87,13 +91,39 @@ def verify_user_code(profile, token, *, consume_recovery=False):
         if locked is None or not locked.two_factor_enabled:
             return False
         saved_codes = list(locked.two_factor_recovery_codes or [])
-        matches = [hmac.compare_digest(str(saved), digest) for saved in saved_codes]
+        matches = []
+        normalized_records = []
+        for saved in saved_codes:
+            if isinstance(saved, dict):
+                stored_digest = str(saved.get("digest", ""))
+                used = bool(saved.get("used", False))
+                matched = bool(stored_digest) and hmac.compare_digest(stored_digest, digest) and not used
+                normalized_records.append({"digest": stored_digest, "used": used})
+            else:
+                # Upgrade legacy plaintext codes safely on the next verification.
+                legacy_code = str(saved or "").strip().replace(" ", "").upper()
+                matched = bool(legacy_code) and hmac.compare_digest(legacy_code, token.upper())
+                normalized_records.append({
+                    "digest": hashlib.sha256(legacy_code.encode("utf-8")).hexdigest() if legacy_code else "",
+                    "used": bool(matched and consume_recovery),
+                })
+            matches.append(matched)
         if not any(matches):
+            # Persist migration of any legacy plaintext codes even when a different
+            # code was supplied; never keep newly encountered legacy values in DB.
+            if any(not isinstance(item, dict) for item in saved_codes):
+                locked.two_factor_recovery_codes = normalized_records
+                locked.save(update_fields=["two_factor_recovery_codes", "updated_at"])
+                profile.two_factor_recovery_codes = normalized_records
             return False
+        # Persist only digests. A successfully redeemed legacy code is marked used
+        # in the same row lock as the verification to prevent replay.
         if consume_recovery:
-            locked.two_factor_recovery_codes = [
-                saved for saved, matched in zip(saved_codes, matches) if not matched
-            ]
+            for index, matched in enumerate(matches):
+                if matched:
+                    normalized_records[index]["used"] = True
+        if any(not isinstance(item, dict) for item in saved_codes) or consume_recovery:
+            locked.two_factor_recovery_codes = normalized_records
             locked.save(update_fields=["two_factor_recovery_codes", "updated_at"])
-            profile.two_factor_recovery_codes = locked.two_factor_recovery_codes
+            profile.two_factor_recovery_codes = normalized_records
     return True

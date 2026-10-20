@@ -97,6 +97,12 @@ STORAGES = {"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Cloudinary credentials are supplied by the deployment environment.
+CLOUDINARY_URL = os.getenv("CLOUDINARY_URL", "").strip()
+if CLOUDINARY_URL:
+    import cloudinary
+    cloudinary.config(cloudinary_url=CLOUDINARY_URL, secure=True)
+
 from config.settings.database import *  # noqa: E402,F403
 from config.settings.cache import *  # noqa: E402,F403
 from config.settings.email import *  # noqa: E402,F403
