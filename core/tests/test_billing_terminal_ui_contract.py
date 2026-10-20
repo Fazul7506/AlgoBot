@@ -360,3 +360,19 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         quote_loader = terminal.split("async function loadQuote()", 1)[1].split("async function loadRecords()", 1)[0]
         self.assertIn("if(!symbol)return", quote_loader)
         self.assertNotIn("brokerReady()", quote_loader)
+
+    def test_free_plan_is_system_managed_and_does_not_offer_cancellation(self):
+        from pathlib import Path
+        template = Path("templates/core/billing.html").read_text(encoding="utf-8")
+        self.assertIn("Free plan · managed by AlgoBot", template)
+        self.assertIn("cancelButton.hidden=freePlan", template)
+        self.assertIn("Included usage limits are enforced automatically", template)
+        self.assertIn("data-cancel-subscription hidden", template)
+
+    def test_payment_provider_buttons_use_image_logos_not_letter_placeholders(self):
+        from pathlib import Path
+        template = Path("templates/core/billing.html").read_text(encoding="utf-8")
+        self.assertIn('src="https://shop.jbs.co.ke/assets/img/pesapal.jpg"', template)
+        self.assertIn('src="https://framerusercontent.com/images/EW5SO1YUyLv7luuQQdXwh1wLKa4.svg', template)
+        self.assertNotIn('aria-hidden="true">P</span>', template)
+        self.assertNotIn('aria-hidden="true">S</span>', template)
