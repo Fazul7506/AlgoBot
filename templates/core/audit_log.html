@@ -1,41 +1,72 @@
 {% extends "base.html" %}
 {% block title %}Audit Log | AlgoBot{% endblock %}
+{% block mobile_title %}Audit Log{% endblock %}
+{% block extra_css %}
+<style>
+.audit-dashboard{--audit-bg:#031735;--audit-panel:#061f43;--audit-border:#123b70;--audit-text:#dceaff;--audit-muted:#91acd5;color:var(--audit-text);max-width:1800px;margin:0 auto;padding:18px 12px 28px}
+.audit-dashboard *{box-sizing:border-box}.audit-hero{display:flex;align-items:center;gap:20px;padding:22px;border:1px solid var(--audit-border);border-radius:13px;background:linear-gradient(110deg,#05224b,#041a38);margin-bottom:18px;min-width:0}
+.audit-hero-mark{width:76px;height:76px;flex:0 0 76px;border-radius:20px;background:linear-gradient(145deg,#00b9ff,#0754dc);display:grid;place-items:center;color:white;box-shadow:0 10px 28px #0077ff30}.audit-hero-mark .material-symbols-rounded{font-size:43px}
+.audit-hero h1{font-size:clamp(24px,2.2vw,34px);margin:0 0 7px;color:#f1f7ff}.audit-hero p{margin:5px 0;color:#b8cdec;max-width:760px;font-size:13px;line-height:1.55}
+.audit-system-status{margin-left:auto;min-width:210px;padding:15px;border:1px solid var(--audit-border);border-radius:10px;display:flex;gap:12px;align-items:center;background:#061b3b}.audit-system-status .material-symbols-rounded{font-size:32px;color:#10e2bd}.audit-system-status strong{display:block;color:#19e0be;font-size:13px}.audit-system-status small{display:block;color:#b4c8e8;margin-top:5px}
+.audit-layout{display:grid;grid-template-columns:minmax(0,1fr) 215px;gap:16px;align-items:start}.audit-main{min-width:0}.audit-filters-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:10px;margin-bottom:16px}
+.audit-control{min-width:0;border:1px solid var(--audit-border);border-radius:10px;padding:12px;background:linear-gradient(145deg,#061f43,#041a38)}.audit-control label{display:block;font-size:12px;color:#bed3f4;margin-bottom:8px}.audit-control input,.audit-control select{width:100%;min-width:0;background:#082650;border:1px solid #123b70;color:#eff6ff;border-radius:7px;padding:10px;font:inherit;font-size:12px}.audit-filter-buttons{display:flex;flex-direction:column;gap:8px;justify-content:center}.audit-btn{border:1px solid #1768d8;border-radius:8px;background:#0864e9;color:white;padding:11px 14px;font-weight:700;text-decoration:none;text-align:center;cursor:pointer;white-space:nowrap;font-size:12px}.audit-btn.secondary{background:#09254b;border-color:#174477;color:#d5e7ff}
+.audit-table-card,.audit-side-card{border:1px solid var(--audit-border);border-radius:12px;background:linear-gradient(145deg,#051e41,#031833);overflow:hidden}.audit-table-scroll{overflow-x:auto;max-width:100%}.audit-table{border-collapse:collapse;width:100%;min-width:850px;font-size:12px}.audit-table thead{background:#082a58}.audit-table th{text-align:left;font-weight:600;color:#c4dafb;padding:13px 12px;white-space:nowrap}.audit-table td{padding:12px;border-top:1px solid #10345f;color:#e0ecff;vertical-align:middle}.audit-table tbody tr:hover{background:#0b2b54}.audit-event{display:flex;align-items:center;gap:10px;min-width:150px}.audit-event-icon{width:32px;height:32px;flex:0 0 32px;border-radius:50%;display:grid;place-items:center;background:#087e9b;color:#7df7eb}.audit-event-icon .material-symbols-rounded{font-size:18px}.audit-event strong,.audit-event small,.audit-user strong,.audit-user small,.audit-ip strong,.audit-ip small{display:block}.audit-event small,.audit-user small,.audit-ip small{color:#93afd9;margin-top:4px;font-size:11px}.audit-user{display:flex;align-items:center;gap:8px}.audit-user-icon{width:30px;height:30px;border-radius:50%;background:#0d3c78;color:#d7eaff;display:grid;place-items:center;flex:0 0 30px}.audit-resource{max-width:260px;overflow-wrap:anywhere}.audit-severity{display:inline-flex;align-items:center;gap:5px;border-radius:99px;padding:5px 9px;font-size:11px;font-weight:700;white-space:nowrap}.severity-info{background:#064f5a;color:#23e3ca}.severity-low{background:#083d78;color:#6db8ff}.severity-medium{background:#624314;color:#ffd36c}.severity-high{background:#681b39;color:#ff87a8}
+.audit-table-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px;border-top:1px solid var(--audit-border);color:#b5cbed;font-size:12px;flex-wrap:wrap}.audit-pagination{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.audit-pagination a,.audit-pagination span{padding:8px 11px;border:1px solid #153d6e;border-radius:7px;text-decoration:none;color:#d6e8ff}.audit-pagination .current{background:#0864e9;border-color:#0864e9;color:white}
+.audit-side{display:grid;gap:14px}.audit-side-card{padding:15px}.audit-side-card h2{font-size:15px;margin:0 0 15px;color:#cfe2ff}.audit-summary-row{display:grid;grid-template-columns:27px 1fr auto;gap:7px;align-items:center;margin:13px 0;font-size:12px}.audit-summary-dot{width:25px;height:25px;border-radius:50%;display:grid;place-items:center}.audit-summary-row small{color:#9eb8df}.audit-total{border-top:1px solid var(--audit-border);padding-top:12px;display:flex;justify-content:space-between;font-size:12px}.audit-recent{display:flex;gap:9px;margin:13px 0;align-items:flex-start;font-size:12px}.audit-recent .material-symbols-rounded{font-size:22px;color:#26d9cb}.audit-recent strong{display:block;font-weight:600}.audit-recent small{display:block;color:#9db8df;margin-top:4px}.audit-quick-action{display:flex;gap:10px;align-items:center;width:100%;padding:11px 9px;border-radius:8px;background:#08264e;color:#d9eaff;text-decoration:none;font-size:12px;margin-top:7px;border:1px solid #0b2f5d}.audit-quick-action:hover{background:#0b3568}
+@media(max-width:1200px){.audit-layout{grid-template-columns:minmax(0,1fr)}.audit-side{grid-template-columns:repeat(3,minmax(0,1fr))}.audit-filters-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.audit-filter-buttons{flex-direction:row;align-items:center}.audit-system-status{min-width:175px}}
+@media(max-width:700px){.audit-dashboard{padding:10px 4px 22px}.audit-hero{padding:15px;gap:12px;align-items:flex-start}.audit-hero-mark{width:48px;height:48px;flex-basis:48px;border-radius:13px}.audit-hero-mark .material-symbols-rounded{font-size:28px}.audit-hero p{font-size:12px}.audit-system-status{display:none}.audit-filters-grid{grid-template-columns:minmax(0,1fr);gap:8px}.audit-control{padding:10px}.audit-filter-buttons{display:grid;grid-template-columns:1fr 1fr}.audit-side{grid-template-columns:minmax(0,1fr)}.audit-table{min-width:790px}.audit-table-footer{align-items:flex-start;flex-direction:column}.audit-pagination a,.audit-pagination span{padding:7px 9px}.audit-dashboard h1{font-size:25px}}
+@media(min-width:701px) and (max-width:950px){.audit-side{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+{% endblock %}
 {% block content %}
-<section class="workspace activity-history-page">
-  <p class="eyebrow">SECURITY · OPERATIONS · TRADING</p>
-  <h1>Audit Log</h1>
-  <p>Search your recorded AlgoBot activity across account actions, API writes and failures, trading operations and broker workflows. The view combines the latest 1,000 matching records across the two audit streams. Sensitive request and response bodies are never displayed.</p>
-  <div class="cards activity-cards">
-    <article><span>Matching events</span><strong>{{ event_count }}</strong><small>For this account and filter</small></article>
-    <article><span>Scope</span><strong>Private</strong><small>Only your account activity</small></article>
-    <article><span>Traceability</span><strong>Request IDs</strong><small>Available for failed or mutating API requests</small></article>
-  </div>
-  <section class="panel activity-panel">
-    <form method="get" class="audit-filters" role="search">
-      <label>Search activity<input type="search" name="q" value="{{ audit_filters.q }}" placeholder="Route, resource, action…"></label>
-      <label>Action<input type="search" name="action" value="{{ audit_filters.action }}" placeholder="e.g. post_completed"></label>
-      <label>Service / module<input type="search" name="module" value="{{ audit_filters.module }}" placeholder="e.g. brokers, execution"></label>
-      <div class="audit-filter-actions"><button type="submit">Apply filters</button><a href="{% url 'audit_center' %}">Clear</a></div>
-    </form>
-    <div class="audit-table-wrap">
-      <table class="audit-table">
-        <thead><tr><th>Action</th><th>Service</th><th>Resource / endpoint</th><th>Origin</th><th>Recorded at (UTC)</th></tr></thead>
-        <tbody>
+<section class="audit-dashboard">
+  <header class="audit-hero">
+    <div class="audit-hero-mark" aria-hidden="true"><span class="material-symbols-rounded">receipt_long</span></div>
+    <div><h1>Audit Log</h1><p>Track system events, user actions and security activity across your AlgoBot account.</p><p>Review your recorded audit trail for greater transparency and security. Sensitive request and response bodies are never displayed.</p></div>
+    <div class="audit-system-status"><span class="material-symbols-rounded" aria-hidden="true">verified_user</span><div><strong>Account audit feed</strong><small>Private account scope · live records</small></div></div>
+  </header>
+  <div class="audit-layout">
+    <div class="audit-main">
+      <form method="get" class="audit-filters-grid" role="search" aria-label="Filter audit events">
+        <div class="audit-control"><label for="audit-date-from"><span class="material-symbols-rounded" style="font-size:14px;vertical-align:middle">calendar_month</span> Date from</label><input id="audit-date-from" type="date" name="date_from" value="{{ audit_filters.date_from }}"></div>
+        <div class="audit-control"><label for="audit-date-to"><span class="material-symbols-rounded" style="font-size:14px;vertical-align:middle">event</span> Date to</label><input id="audit-date-to" type="date" name="date_to" value="{{ audit_filters.date_to }}"></div>
+        <div class="audit-control"><label for="audit-action">Event type / action</label><input id="audit-action" type="search" name="action" value="{{ audit_filters.action }}" placeholder="All events"></div>
+        <div class="audit-control"><label for="audit-severity">Severity</label><select id="audit-severity" name="severity"><option value="">All levels</option><option value="info" {% if audit_filters.severity == "info" %}selected{% endif %}>Info</option><option value="low" {% if audit_filters.severity == "low" %}selected{% endif %}>Low</option><option value="medium" {% if audit_filters.severity == "medium" %}selected{% endif %}>Medium</option><option value="high" {% if audit_filters.severity == "high" %}selected{% endif %}>High</option></select></div>
+        <div class="audit-filter-buttons"><button class="audit-btn" type="submit"><span class="material-symbols-rounded" style="font-size:15px;vertical-align:middle">filter_alt</span> Apply</button><a class="audit-btn secondary" href="{% url 'audit_center' %}">Clear</a></div>
+        <div class="audit-control" style="grid-column:1/-1"><label for="audit-search">Search activity, resource, route or module</label><input id="audit-search" type="search" name="q" value="{{ audit_filters.q }}" placeholder="Search recorded activity…"></div>
+        <input type="hidden" name="module" value="{{ audit_filters.module }}">
+      </form>
+      <section class="audit-table-card" aria-label="Audit event records">
+        <div class="audit-table-scroll"><table class="audit-table"><thead><tr><th>Timestamp</th><th>Event</th><th>User</th><th>Details</th><th>IP Address</th><th>Severity</th></tr></thead><tbody>
         {% for e in events %}
-          <tr><td><strong>{{ e.action|title }}</strong><small>{{ e.hash|default:"Recorded" }}</small></td><td>{{ e.module|title }}</td><td class="audit-resource">{{ e.resource|default:"Account action" }}</td><td>{{ e.source }}</td><td><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'d M Y H:i:s' }}</time></td></tr>
-        {% empty %}
-          <tr><td colspan="5"><div class="empty">No audit events match these filters. New mutating or failed requests will appear as they occur.</div></td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
+          <tr><td><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'Y-m-d H:i:s' }}</time><small style="display:block;color:#8eacd8;margin-top:4px">{{ e.timestamp|timesince }} ago</small></td>
+          <td><div class="audit-event"><span class="audit-event-icon"><span class="material-symbols-rounded" aria-hidden="true">{% if "login" in e.action|lower %}login{% elif "trade" in e.action|lower or "order" in e.action|lower %}candlestick_chart{% elif "security" in e.action|lower or "failed" in e.action|lower %}shield_alert{% elif "setting" in e.action|lower %}settings{% elif "api" in e.action|lower %}api{% else %}receipt_long{% endif %}</span></span><div><strong>{{ e.action|title }}</strong><small>{{ e.source }}</small></div></div></td>
+          <td><div class="audit-user"><span class="audit-user-icon material-symbols-rounded" aria-hidden="true">person</span><div><strong>{{ e.username }}</strong><small>Account user</small></div></div></td>
+          <td class="audit-resource">{{ e.resource|default:"Account action" }}</td><td><div class="audit-ip"><strong>{{ e.ip_address|default:"Unavailable" }}</strong><small>{{ e.module|title }}</small></div></td>
+          <td><span class="audit-severity severity-{{ e.severity }}"><span class="material-symbols-rounded" style="font-size:13px" aria-hidden="true">{% if e.severity == "high" %}warning{% elif e.severity == "medium" %}star{% elif e.severity == "low" %}arrow_downward{% else %}check_circle{% endif %}</span>{{ e.severity|title }}</span></td></tr>
+        {% empty %}<tr><td colspan="6"><div style="padding:30px 12px;text-align:center;color:#a9c3e7">No audit events match these filters. Try clearing a filter or check back after activity is recorded.</div></td></tr>{% endfor %}
+        </tbody></table></div>
+        <footer class="audit-table-footer"><span>Showing {{ page_obj.start_index|default:0 }}–{{ page_obj.end_index|default:0 }} of {{ event_count }} matching events</span><nav class="audit-pagination" aria-label="Audit log pages">
+          {% if page_obj.has_previous %}<a aria-label="Previous page" href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&date_from={{ audit_filters.date_from|urlencode }}&date_to={{ audit_filters.date_to|urlencode }}&severity={{ audit_filters.severity|urlencode }}&page={{ page_obj.previous_page_number }}">‹</a>{% endif %}
+          {% for n in page_obj.paginator.page_range %}{% if n == page_obj.number %}<span class="current" aria-current="page">{{ n }}</span>{% elif n <= 3 or n == page_obj.paginator.num_pages or n >= page_obj.number|add:"-1" and n <= page_obj.number|add:"1" %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&date_from={{ audit_filters.date_from|urlencode }}&date_to={{ audit_filters.date_to|urlencode }}&severity={{ audit_filters.severity|urlencode }}&page={{ n }}">{{ n }}</a>{% endif %}{% endfor %}
+          {% if page_obj.has_next %}<a aria-label="Next page" href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&date_from={{ audit_filters.date_from|urlencode }}&date_to={{ audit_filters.date_to|urlencode }}&severity={{ audit_filters.severity|urlencode }}&page={{ page_obj.next_page_number }}">›</a>{% endif %}
+        </nav></footer>
+      </section>
     </div>
-    {% if page_obj.paginator.num_pages > 1 %}
-    <nav class="audit-pagination" aria-label="Audit log pages">
-      {% if page_obj.has_previous %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
-      <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-      {% if page_obj.has_next %}<a href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&page={{ page_obj.next_page_number }}">Next</a>{% endif %}
-    </nav>
-    {% endif %}
-  </section>
+    <aside class="audit-side">
+      <section class="audit-side-card"><h2><span class="material-symbols-rounded" style="font-size:17px;vertical-align:middle">donut_small</span> Event Summary</h2>
+        {% for level, label, color in summary_rows %}{% endfor %}
+        <div class="audit-summary-row"><span class="audit-summary-dot severity-info"><span class="material-symbols-rounded" style="font-size:15px">info</span></span><span>Info <small>recorded</small></span><strong>{{ event_summary.info|default:0 }}</strong></div>
+        <div class="audit-summary-row"><span class="audit-summary-dot severity-low"><span class="material-symbols-rounded" style="font-size:15px">arrow_downward</span></span><span>Low</span><strong>{{ event_summary.low|default:0 }}</strong></div>
+        <div class="audit-summary-row"><span class="audit-summary-dot severity-medium"><span class="material-symbols-rounded" style="font-size:15px">star</span></span><span>Medium</span><strong>{{ event_summary.medium|default:0 }}</strong></div>
+        <div class="audit-summary-row"><span class="audit-summary-dot severity-high"><span class="material-symbols-rounded" style="font-size:15px">warning</span></span><span>High</span><strong>{{ event_summary.high|default:0 }}</strong></div>
+        <div class="audit-total"><span>Total matching</span><strong>{{ event_count }}</strong></div>
+      </section>
+      <section class="audit-side-card"><h2><span class="material-symbols-rounded" style="font-size:17px;vertical-align:middle">history</span> Recent Activity</h2>
+        {% for e in recent_events %}<div class="audit-recent"><span class="material-symbols-rounded" aria-hidden="true">{% if e.severity == "high" %}gpp_maybe{% elif "trade" in e.action|lower %}candlestick_chart{% elif "login" in e.action|lower %}verified_user{% else %}receipt_long{% endif %}</span><div><strong>{{ e.action|title }}</strong><small>{{ e.timestamp|timesince }} ago</small></div></div>{% empty %}<p style="font-size:12px;color:#9db8df">No recent activity recorded.</p>{% endfor %}
+      </section>
+      <section class="audit-side-card"><h2>Quick Actions</h2><a class="audit-quick-action" href="?q={{ audit_filters.q|urlencode }}&action={{ audit_filters.action|urlencode }}&module={{ audit_filters.module|urlencode }}&date_from={{ audit_filters.date_from|urlencode }}&date_to={{ audit_filters.date_to|urlencode }}&severity={{ audit_filters.severity|urlencode }}&export=csv"><span class="material-symbols-rounded">download</span> Export filtered logs (CSV)</a><a class="audit-quick-action" href="{% url 'security_center' %}"><span class="material-symbols-rounded">shield</span> View Security Center</a><a class="audit-quick-action" href="/notifications/"><span class="material-symbols-rounded">notifications</span> Manage Notifications</a></section>
+    </aside>
+  </div>
 </section>
 {% endblock %}
