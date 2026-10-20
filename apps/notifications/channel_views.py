@@ -6,6 +6,10 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.utils import timezone
+from datetime import timedelta
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 
@@ -18,7 +22,89 @@ BROWSER_NOTIFICATIONS_URL = "/notifications/"
 
 @login_required
 def notification_channels_page(request):
-    return render(request, "notifications/channels.html", {"channels": connection_status(request.user)})
+    # All notification rows and summary values are scoped to the authenticated user.
+    all_notifications = Notification.objects.filter(user=request.user).order_by("-created_at", "-id")
+    total = all_notifications.count()
+    unread_count = all_notifications.filter(read_at__isnull=True).count()
+    priorities = {
+        "info": all_notifications.filter(priority__in=("info", "normal", "success")).count(),
+        "low": all_notifications.filter(priority="low").count(),
+        "medium": all_notifications.filter(priority="warning").count(),
+        "high": all_notifications.filter(priority__in=("error", "critical")).count(),
+    }
+    summary = {
+        key: {"count": count, "percent": round((count * 100 / total), 1) if total else 0}
+        for key, count in priorities.items()
+    }
+
+    notices = all_notifications
+    selected_category = request.GET.get("category", "all").strip().lower()
+    category_filters = {
+        "trading": Q(category__icontains="trad") | Q(category__icontains="trade") | Q(category__icontains="broker"),
+        "account": Q(category__icontains="account") | Q(category__icontains="profile"),
+        "security": Q(category__icontains="security") | Q(category__icontains="risk") | Q(category__icontains="auth"),
+        "monitoring": Q(category__icontains="monitor") | Q(category__icontains="system") | Q(category__icontains="health"),
+    }
+    if selected_category in category_filters:
+        notices = notices.filter(category_filters[selected_category])
+    elif selected_category in ("gmail", "telegram"):
+        notices = notices.filter(channel=selected_category)
+    else:
+        selected_category = "all"
+
+    range_key = request.GET.get("range", "7d").strip().lower()
+    now = timezone.now()
+    range_delta = {"24h": timedelta(hours=24), "7d": timedelta(days=7), "30d": timedelta(days=30)}
+    if range_key in range_delta:
+        notices = notices.filter(created_at__gte=now - range_delta[range_key])
+    else:
+        range_key = "all"
+
+    priority_filter = request.GET.get("priority", "all").strip().lower()
+    priority_groups = {
+        "info": ("info", "normal", "success"),
+        "low": ("low",),
+        "medium": ("warning",),
+        "high": ("error", "critical"),
+    }
+    if priority_filter in priority_groups:
+        notices = notices.filter(priority__in=priority_groups[priority_filter])
+    else:
+        priority_filter = "all"
+
+    search_query = request.GET.get("q", "").strip()[:120]
+    if search_query:
+        notices = notices.filter(
+            Q(title__icontains=search_query) |
+            Q(message__icontains=search_query) |
+            Q(category__icontains=search_query) |
+            Q(channel__icontains=search_query)
+        )
+
+    category_counts = {
+        "all": total,
+        "trading": all_notifications.filter(category__icontains="trad").count() + all_notifications.filter(category__icontains="trade").exclude(category__icontains="trad").count(),
+        "account": all_notifications.filter(category__icontains="account").count(),
+        "security": all_notifications.filter(category__icontains="security").count() + all_notifications.filter(category__icontains="risk").exclude(category__icontains="security").count(),
+        "monitoring": all_notifications.filter(category__icontains="monitor").count() + all_notifications.filter(category__icontains="system").exclude(category__icontains="monitor").count(),
+        "gmail": all_notifications.filter(channel="gmail").count(),
+        "telegram": all_notifications.filter(channel="telegram").count(),
+    }
+    paginator = Paginator(notices, 10)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(request, "notifications/channels.html", {
+        "channels": connection_status(request.user),
+        "notifications": page_obj.object_list,
+        "page_obj": page_obj,
+        "total_notifications": total,
+        "unread_count": unread_count,
+        "summary": summary,
+        "category_counts": category_counts,
+        "selected_category": selected_category,
+        "selected_range": range_key,
+        "selected_priority": priority_filter,
+        "search_query": search_query,
+    })
 
 
 @login_required
