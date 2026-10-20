@@ -53,10 +53,10 @@
     </main>
     <aside class="audit-side">
       <section class="audit-side-card"><h2>Event Summary</h2>
-        <div class="summary-row"><span class="summary-dot">●</span><span>Info<small class="audit-summary-note">Informational records</small></span><strong>{{ event_summary.info }}</strong></div>
-        <div class="summary-row"><span class="summary-dot low">●</span><span>Low<small class="audit-summary-note">Routine actions</small></span><strong>{{ event_summary.low }}</strong></div>
-        <div class="summary-row"><span class="summary-dot medium">●</span><span>Medium<small class="audit-summary-note">Sensitive changes</small></span><strong>{{ event_summary.medium }}</strong></div>
-        <div class="summary-row"><span class="summary-dot high">●</span><span>High<small class="audit-summary-note">Failures / alerts</small></span><strong>{{ event_summary.high }}</strong></div>
+        <div class="summary-row"><span class="summary-dot">●</span><span>Info<small class="audit-summary-note">Informational records</small></span><strong>{{ event_summary.info }}<small class="summary-percent">{{ event_summary_percent.info}%</small></strong></div>
+        <div class="summary-row"><span class="summary-dot low">●</span><span>Low<small class="audit-summary-note">Routine actions</small></span><strong>{{ event_summary.low }}<small class="summary-percent">{{ event_summary_percent.low}%</small></strong></div>
+        <div class="summary-row"><span class="summary-dot medium">●</span><span>Medium<small class="audit-summary-note">Sensitive changes</small></span><strong>{{ event_summary.medium }}<small class="summary-percent">{{ event_summary_percent.medium}%</small></strong></div>
+        <div class="summary-row"><span class="summary-dot high">●</span><span>High<small class="audit-summary-note">Failures / alerts</small></span><strong>{{ event_summary.high }}<small class="summary-percent">{{ event_summary_percent.high}%</small></strong></div>
         <div class="summary-total"><span>Total events in view</span><strong>{{ event_count }}</strong></div>
       </section>
       <section class="audit-side-card"><h2>Recent Activity</h2>
