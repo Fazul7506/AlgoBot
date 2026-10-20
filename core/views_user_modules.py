@@ -134,6 +134,10 @@ def audit_workspace(request):
         level: sum(1 for event in merged if event.severity == level)
         for level in ("info", "low", "medium", "high")
     }
+    summary_percent = {
+        level: round((count / len(merged)) * 100, 1) if merged else 0
+        for level, count in summary.items()
+    }
     recent_events = [
         SimpleNamespace(action=event.action, module=event.module, timestamp=event.timestamp, severity=event.severity)
         for event in merged[:5]
@@ -145,7 +149,7 @@ def audit_workspace(request):
         "audit_filters": {"action": action, "module": module, "q": search, "range": date_range,
                           "severity": severity_filter, "start": request.GET.get("start", ""),
                           "end": request.GET.get("end", "")},
-        "event_summary": summary, "recent_events": recent_events,
+        "event_summary": summary, "event_summary_percent": summary_percent, "recent_events": recent_events,
     })
 
 @login_required
