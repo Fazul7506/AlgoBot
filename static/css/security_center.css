@@ -105,3 +105,8 @@
 /* The authenticator controls live beside activity in the primary two-column grid. */
 .security-two-column>.security-two-factor{grid-column:auto!important}
 @media(max-width:700px){.security-two-column>.security-two-factor{grid-column:1/-1!important}}
+
+.security-session-list{display:grid;gap:8px;margin-top:12px}
+.security-other-session{align-items:center}
+.security-other-session .account-btn{flex:0 0 auto;min-height:34px;padding:7px 10px;font-size:10px}
+@media(max-width:700px){.security-other-session{align-items:flex-start;flex-wrap:wrap}.security-other-session>div{flex:1;min-width:calc(100% - 60px)}.security-other-session .account-btn{margin-left:46px}}
