@@ -9,3 +9,23 @@
 @media(min-width:761px) and (max-width:1020px){.audit-side{grid-template-columns:repeat(2,minmax(0,1fr))}.audit-hero{align-items:flex-start}.audit-status{min-width:165px}.audit-table{min-width:820px}}
 
 .audit-dashboard .summary-percent{display:inline-block!important;color:#8faed7!important;font-size:10px!important;font-weight:500;margin-left:7px!important;white-space:nowrap}
+
+
+/* Scoped safeguards against global workspace/table styles overriding this page. */
+.audit-dashboard .audit-section{display:block!important;min-width:0!important;width:100%!important}
+.audit-dashboard .audit-table-wrap{display:block!important;width:100%!important;max-width:100%!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch}
+.audit-dashboard .audit-section table.audit-table{display:table!important;width:100%!important;min-width:850px!important;table-layout:auto!important;border-collapse:collapse!important;border-spacing:0!important;background:transparent!important;color:var(--audit-text)!important;font-size:12px!important;line-height:1.45!important}
+.audit-dashboard .audit-section table.audit-table thead{display:table-header-group!important;background:#082a58!important}
+.audit-dashboard .audit-section table.audit-table tbody{display:table-row-group!important}
+.audit-dashboard .audit-section table.audit-table tr{display:table-row!important;background:transparent}
+.audit-dashboard .audit-section table.audit-table th,.audit-dashboard .audit-section table.audit-table td{display:table-cell!important;vertical-align:middle!important;text-align:left!important;padding:11px 12px!important;border:0!important;border-bottom:1px solid #10345f!important;color:#e0ecff!important;font-size:12px!important;line-height:1.45!important}
+.audit-dashboard .audit-section table.audit-table th{background:#082a58!important;color:#c5dbfc!important;font-weight:650!important;white-space:nowrap!important}
+.audit-dashboard .audit-section table.audit-table tbody tr:hover{background:#0a2a53!important}
+.audit-dashboard .audit-section table.audit-table td time{display:block!important;white-space:nowrap!important;font-variant-numeric:tabular-nums!important;color:#e0ecff!important}
+.audit-dashboard .audit-section table.audit-table td>small{display:block!important;white-space:normal!important;font-size:11px!important;line-height:1.4!important;color:#92afd9!important;margin-top:4px!important}
+.audit-dashboard .audit-section table.audit-table td .audit-event{display:flex!important;align-items:center!important;gap:9px!important;min-width:145px!important}
+.audit-dashboard .audit-section table.audit-table td .audit-event-icon{display:grid!important;place-items:center!important;flex:0 0 32px!important;width:32px!important;height:32px!important;border-radius:50%!important}
+.audit-dashboard .audit-section table.audit-table td .audit-severity{display:inline-flex!important;align-items:center!important;white-space:nowrap!important}
+.audit-dashboard .audit-section table.audit-table td .audit-empty{white-space:normal!important;padding:24px 12px!important}
+.audit-dashboard .summary-row>strong .summary-percent{display:inline-block!important;font-weight:500!important;white-space:nowrap!important;margin-left:6px!important}
+@media(max-width:760px){.audit-dashboard .audit-section table.audit-table{min-width:820px!important}.audit-dashboard .audit-section .audit-section-head{display:flex!important;align-items:flex-start!important;flex-direction:column!important}.audit-dashboard .audit-section .audit-event-actions{display:flex!important;flex-wrap:wrap!important;width:100%!important}.audit-dashboard .audit-section .audit-event-actions .audit-btn{white-space:normal!important;flex:1 1 130px!important}}
