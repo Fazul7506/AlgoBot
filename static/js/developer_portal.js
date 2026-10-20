@@ -33,10 +33,32 @@
     });
   }
 
+  function bindSectionNavigation() {
+    const links = [...document.querySelectorAll('.dev-dashboard .dev-tabs a')];
+    if (!links.length) return;
+    const updateActive = () => {
+      const hash = window.location.hash || '#dev-overview';
+      links.forEach(link => {
+        const active = link.getAttribute('href') === hash;
+        link.classList.toggle('is-active', active);
+        if (active) link.setAttribute('aria-current', 'location');
+        else link.removeAttribute('aria-current');
+      });
+    };
+    links.forEach(link => link.addEventListener('click', () => {
+      links.forEach(item => { item.classList.remove('is-active'); item.removeAttribute('aria-current'); });
+      link.classList.add('is-active');
+      link.setAttribute('aria-current', 'location');
+    }));
+    window.addEventListener('hashchange', updateActive);
+    updateActive();
+  }
+
   function boot() {
     if (!$('[data-developer-page]')) return;
     bindConfirmations();
     bindCopyButtons();
+    bindSectionNavigation();
     $('[data-refresh-developer]')?.addEventListener('click', () => window.location.reload());
   }
 
