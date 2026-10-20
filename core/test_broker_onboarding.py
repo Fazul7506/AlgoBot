@@ -107,3 +107,49 @@ class BrokerOnboardingGateTests(TestCase):
             reverse("broker_marketplace_page"),
             fetch_redirect_response=False,
         )
+
+
+class BrokerMarketplaceDirectoryUiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="marketplace-directory-user",
+            email="marketplace-directory@example.test",
+            password="A-secure-test-password-123!",
+        )
+        UserProfile.objects.update_or_create(
+            user=self.user,
+            defaults={"email_verified": True, "email_verified_at": timezone.now()},
+        )
+        self.deriv = Broker.objects.create(
+            name="Deriv",
+            broker_type="deriv",
+            status="active",
+            supports_live=True,
+        )
+        self.other = Broker.objects.create(
+            name="Example Broker",
+            broker_type="example",
+            status="active",
+            supports_live=True,
+        )
+
+    def test_marketplace_renders_directory_search_filters_and_broker_branding(self):
+        self.client.force_login(self.user)
+        response = self.client.get("/brokers/marketplace/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Connect your trading broker")
+        self.assertContains(response, 'data-broker-search')
+        self.assertContains(response, 'data-broker-filter="connected"')
+        self.assertContains(response, 'data-broker-filter="available"')
+        self.assertContains(response, 'data-broker-filter="unavailable"')
+        self.assertContains(response, "https://deriv.com/favicon.ico")
+        self.assertContains(response, 'alt="Deriv official site icon"')
+        self.assertContains(response, "Example Broker")
+        self.assertContains(response, "Not supported yet")
+
+    def test_marketplace_preserves_deriv_connect_and_disconnect_routes(self):
+        self.client.force_login(self.user)
+        response = self.client.get("/brokers/marketplace/")
+        self.assertContains(response, 'href="/brokers/connect/"')
+        self.assertContains(response, 'action="/api/deriv/disconnect/"')
+        self.assertContains(response, "csrfmiddlewaretoken")
