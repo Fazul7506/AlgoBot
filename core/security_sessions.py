@@ -5,6 +5,7 @@ import logging
 from django.contrib.auth.decorators import login_required
 from django.contrib.sessions.models import Session
 from django.utils import timezone
+from apps.observability.models import AuditEvent
 from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -59,6 +60,18 @@ def revoke_session(request, fingerprint):
         if current_key and session.session_key == current_key:
             return Response({"detail": "Use Sign out to end the current session."}, status=400)
         session.delete()
+        try:
+            AuditEvent.objects.create(
+                actor_id=request.user.pk,
+                action="Session revoked",
+                resource_type="Security session",
+                resource_id="Other browser session",
+                outcome="success",
+                ip_address=request.META.get("REMOTE_ADDR") or None,
+                metadata={"operation": "revoke_other_session"},
+            )
+        except Exception as exc:
+            logger.warning("session_revocation_audit_failed error_type=%s", exc.__class__.__name__)
         logger.info("user_session_revoked user_id=%s", request.user.pk)
         return Response({"revoked": True, "session": fingerprint})
     return Response({"detail": "Session not found or already expired."}, status=404)
