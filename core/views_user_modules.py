@@ -98,6 +98,24 @@ def audit_workspace(request):
     merged.sort(key=lambda event: (event.timestamp, str(event.pk)), reverse=True)
     if severity_filter in ("info", "low", "medium", "high"):
         merged = [event for event in merged if event.severity == severity_filter]
+    if request.GET.get("export") == "csv":
+        import csv
+        from django.http import HttpResponse
+
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="algobot-audit-log.csv"'
+        writer = csv.writer(response)
+        writer.writerow(["Timestamp", "Event", "User", "Source", "Details", "Severity"])
+        for event in merged:
+            writer.writerow([
+                event.timestamp.isoformat() if event.timestamp else "",
+                event.action,
+                request.user.get_username(),
+                event.source,
+                event.resource,
+                event.severity.title(),
+            ])
+        return response
     summary = {
         level: sum(1 for event in merged if event.severity == level)
         for level in ("info", "low", "medium", "high")
