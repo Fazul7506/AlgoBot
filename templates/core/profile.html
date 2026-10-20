@@ -42,6 +42,20 @@
       </section>
     </form>
   </div>
+
+<div class="avatar-editor" data-avatar-editor hidden role="dialog" aria-modal="true" aria-labelledby="avatar-editor-title">
+  <div class="avatar-editor__panel">
+    <h2 id="avatar-editor-title">Edit profile photo</h2>
+    <p class="account-help">Move the photo to position it, then adjust the zoom.</p>
+    <div class="avatar-editor__stage" data-avatar-stage><img data-avatar-crop-image alt="Photo crop preview" draggable="false></div>
+    <label class="avatar-editor__zoom" for="avatar-zoom">Zoom <input id="avatar-zoom" type="range" min="1" max="3" step="0.01" value="1" data-avatar-zoom></label>
+    <p class="account-help" data-avatar-editor-error role="status"></p>
+    <div class="account-actions avatar-editor__actions"><button type="button" class="account-btn" data-avatar-cancel>Cancel</button><button type="button" class="account-btn account-btn--primary" data-avatar-save>Save photo</button></div>
+  </div>
+</div>
+<style>
+.avatar-editor[hidden]{display:none}.avatar-editor{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(2,8,20,.82);backdrop-filter:blur(8px)}.avatar-editor__panel{width:min(100%,440px);padding:24px;border:1px solid #263a55;border-radius:22px;background:#0d1b2e;color:#e8effa;box-shadow:0 24px 80px #0008}.avatar-editor__panel h2{margin:0 0 8px}.avatar-editor__stage{position:relative;width:min(100%,320px);aspect-ratio:1;margin:22px auto;overflow:hidden;border-radius:50%;background:#07111f;touch-action:none;cursor:grab}.avatar-editor__stage:active{cursor:grabbing}.avatar-editor__stage img{position:absolute;max-width:none;user-select:none;pointer-events:none}.avatar-editor__zoom{display:flex;align-items:center;gap:14px}.avatar-editor__zoom input{flex:1;accent-color:#22b8e6}.avatar-editor__actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.avatar-editor__actions .account-btn{min-width:100px}.avatar-editor__actions [data-avatar-save]:disabled{opacity:.55}@media(max-width:420px){.avatar-editor__panel{padding:18px}.avatar-editor__stage{width:min(100%,280px)}}
+</style>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js" defer></script>
 <script>
@@ -49,21 +63,60 @@
   const initialize = () => {
     const avatarInput = document.querySelector('#profile-picture');
     const avatar = document.querySelector('[data-avatar-preview]');
-    if (avatarInput && avatar) avatarInput.addEventListener('change', () => {
-      const file = avatarInput.files && avatarInput.files[0];
-      if (!file) return;
-      if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 5 * 1024 * 1024) {
-        avatarInput.value = '';
-        return;
-      }
-      const previewUrl = URL.createObjectURL(file);
-      let image = avatar.querySelector('img');
-      if (!image) { image = document.createElement('img'); image.alt = ''; const initials = avatar.querySelector(':scope > span:not(.account-avatar-edit)'); if (initials) initials.remove(); avatar.insertBefore(image, avatar.querySelector('.account-avatar-edit')); }
-      const oldUrl = image.dataset.previewUrl;
-      image.src = previewUrl;
-      image.dataset.previewUrl = previewUrl;
-      if (oldUrl) URL.revokeObjectURL(oldUrl);
-    });
+    if (avatarInput && avatar) {
+      const editor = document.querySelector('[data-avatar-editor]');
+      const stage = document.querySelector('[data-avatar-stage]');
+      const cropImage = document.querySelector('[data-avatar-crop-image]');
+      const zoom = document.querySelector('[data-avatar-zoom]');
+      const cancel = document.querySelector('[data-avatar-cancel]');
+      const save = document.querySelector('[data-avatar-save]');
+      const error = document.querySelector('[data-avatar-editor-error]');
+      const profileForm = avatarInput.closest('form');
+      let sourceUrl = '', imageWidth = 0, imageHeight = 0, scale = 1, offsetX = 0, offsetY = 0, drag = null;
+      const stageSize = () => stage.getBoundingClientRect().width;
+      const drawPreview = () => {
+        const size = stageSize(); if (!size || !imageWidth || !imageHeight) return;
+        const base = Math.max(size / imageWidth, size / imageHeight) * scale;
+        const width = imageWidth * base, height = imageHeight * base;
+        offsetX = Math.min(0, Math.max(size-width, offsetX)); offsetY = Math.min(0, Math.max(size-height, offsetY));
+        cropImage.style.width = width + 'px'; cropImage.style.height = height + 'px';
+        cropImage.style.left = offsetX + 'px'; cropImage.style.top = offsetY + 'px';
+      };
+      const closeEditor = () => { editor.hidden = true; avatarInput.value = ''; if (sourceUrl) URL.revokeObjectURL(sourceUrl); sourceUrl = ''; cropImage.removeAttribute('src'); error.textContent=''; };
+      avatarInput.addEventListener('change', () => {
+        const file = avatarInput.files && avatarInput.files[0]; if (!file) return;
+        if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 5*1024*1024) { avatarInput.value=''; error.textContent='Choose a JPEG, PNG, WEBP or GIF image up to 5 MB.'; return; }
+        if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+        sourceUrl = URL.createObjectURL(file); cropImage.onload = () => { imageWidth=cropImage.naturalWidth; imageHeight=cropImage.naturalHeight; scale=1; zoom.value='1'; const size=stageSize(); const base=Math.max(size/imageWidth,size/imageHeight); offsetX=(size-imageWidth*base)/2; offsetY=(size-imageHeight*base)/2; drawPreview(); editor.hidden=false; save.disabled=false; save.focus(); };
+        cropImage.onerror = () => { error.textContent='This image could not be opened. Choose another photo.'; closeEditor(); };
+        cropImage.src=sourceUrl;
+      });
+      zoom.addEventListener('input', () => { const size=stageSize(), oldBase=Math.max(size/imageWidth,size/imageHeight)*scale, centerX=(size/2-offsetX)/oldBase, centerY=(size/2-offsetY)/oldBase; scale=Number(zoom.value); const newBase=Math.max(size/imageWidth,size/imageHeight)*scale; offsetX=size/2-centerX*newBase; offsetY=size/2-centerY*newBase; drawPreview(); });
+      stage.addEventListener('pointerdown', event => { if(editor.hidden)return; drag={x:event.clientX,y:event.clientY,left:offsetX,top:offsetY}; stage.setPointerCapture(event.pointerId); });
+      stage.addEventListener('pointermove', event => { if(!drag)return; offsetX=drag.left+event.clientX-drag.x; offsetY=drag.top+event.clientY-drag.y; drawPreview(); });
+      stage.addEventListener('pointerup', () => { drag=null; }); stage.addEventListener('pointercancel', () => { drag=null; });
+      cancel.addEventListener('click', closeEditor);
+      editor.addEventListener('click', event => { if(event.target===editor)closeEditor(); });
+      document.addEventListener('keydown', event => { if(event.key==='Escape' && !editor.hidden)closeEditor(); });
+      save.addEventListener('click', () => {
+        if(!imageWidth||!imageHeight)return; save.disabled=true; error.textContent='Preparing photo…';
+        const size=stageSize(), base=Math.max(size/imageWidth,size/imageHeight)*scale;
+        const sx=Math.max(0,Math.min(imageWidth-size/base,-offsetX/base)), sy=Math.max(0,Math.min(imageHeight-size/base,-offsetY/base)), sw=Math.min(imageWidth,size/base), sh=Math.min(imageHeight,size/base);
+        const canvas=document.createElement('canvas'); canvas.width=512; canvas.height=512;
+        const context=canvas.getContext('2d'); if(!context){save.disabled=false;error.textContent='Photo editing is not supported by this browser.';return;}
+        context.drawImage(cropImage,sx,sy,sw,sh,0,0,512,512);
+        canvas.toBlob(blob => {
+          if(!blob){save.disabled=false;error.textContent='Could not prepare this photo. Please try again.';return;}
+          const cropped=new File([blob],'profile-photo.webp',{type:'image/webp',lastModified:Date.now()});
+          const transfer=new DataTransfer(); transfer.items.add(cropped); avatarInput.files=transfer.files;
+          let preview=avatar.querySelector('img'); if(!preview){preview=document.createElement('img');preview.alt='';const initials=avatar.querySelector(':scope > span:not(.account-avatar-edit)');if(initials)initials.remove();avatar.insertBefore(preview,avatar.querySelector('.account-avatar-edit'));}
+          const previewUrl=URL.createObjectURL(blob); const oldUrl=preview.dataset.previewUrl; preview.src=previewUrl;preview.dataset.previewUrl=previewUrl;if(oldUrl)URL.revokeObjectURL(oldUrl);
+          editor.hidden=true; if(sourceUrl)URL.revokeObjectURL(sourceUrl);sourceUrl='';error.textContent='';
+          if(profileForm){ profileForm.requestSubmit(); }
+        },'image/webp',0.9);
+      });
+      window.addEventListener('resize', () => { if(!editor.hidden)drawPreview(); });
+    }
     const select = document.querySelector('[data-country-select]');
     if (!select) return;
     const current = select.dataset.currentCountry || '';
