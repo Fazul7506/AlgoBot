@@ -16,6 +16,7 @@ requests>=2.32,<3
 websockets>=15,<16
 whitenoise>=6.8,<7
 Pillow>=11,<12
+cloudinary>=1.44,<2
 cryptography>=44,<47
 pyotp>=2.9,<3
 numpy>=2,<3
