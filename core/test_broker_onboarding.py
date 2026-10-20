@@ -147,9 +147,25 @@ class BrokerMarketplaceDirectoryUiTests(TestCase):
         self.assertContains(response, "Example Broker")
         self.assertContains(response, "Not supported yet")
 
-    def test_marketplace_preserves_deriv_connect_and_disconnect_routes(self):
+    def test_marketplace_preserves_deriv_connect_route(self):
         self.client.force_login(self.user)
         response = self.client.get("/brokers/marketplace/")
         self.assertContains(response, 'href="/brokers/connect/"')
+
+    def test_marketplace_preserves_deriv_disconnect_route_for_connected_account(self):
+        account = BrokerAccount.objects.create(
+            user=self.user,
+            broker=self.deriv,
+            account_id="V987654",
+            status="active",
+            token_status="active",
+        )
+        BrokerConnection.objects.create(
+            broker=self.deriv,
+            broker_account=account,
+            status="connected",
+        )
+        self.client.force_login(self.user)
+        response = self.client.get("/brokers/marketplace/")
         self.assertContains(response, 'action="/api/deriv/disconnect/"')
         self.assertContains(response, "csrfmiddlewaretoken")
