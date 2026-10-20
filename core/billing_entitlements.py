@@ -79,7 +79,7 @@ def usage(user, metric, window="day"):
             ).filter(
                 Q(expires_at__isnull=True) | Q(expires_at__gt=now)
             )
-            return eligible_accounts.values("broker_id").distinct().count()
+            return eligible_accounts.values("broker__broker_type").distinct().count()
         except DatabaseError: return 0
     if metric == "strategies":
         try:
