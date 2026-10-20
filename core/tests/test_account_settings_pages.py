@@ -122,7 +122,8 @@ class AccountSettingsPagesTests(TestCase):
         security_response = self.client.get(reverse("security_center"))
         self.assertEqual(settings_response.status_code, 200)
         self.assertEqual(security_response.status_code, 200)
-        self.assertContains(settings_response, "Trading defaults")
+        self.assertContains(settings_response, "Workspace preferences")
+        self.assertContains(settings_response, "Notifications")
         self.assertContains(security_response, "Protection checks")
 
     def test_settings_api_rejects_non_object_payload(self):
