@@ -31,11 +31,20 @@ def automation_workspace(request):
 @login_required
 def audit_workspace(request):
     """Render a merged, private feed from structured and application audit streams."""
+    from datetime import timedelta
+    from django.utils.dateparse import parse_date
+    from django.utils.timezone import make_aware, get_current_timezone
+
     structured = AuditLog.objects.filter(user=request.user)
     application = AuditEvent.objects.filter(actor_id=request.user.pk)
     action = request.GET.get("action", "").strip()[:120]
     module = request.GET.get("module", "").strip()[:120]
     search = request.GET.get("q", "").strip()[:160]
+    date_range = request.GET.get("range", "7d").strip()[:12]
+    severity_filter = request.GET.get("severity", "").strip().lower()[:16]
+    start_date = parse_date(request.GET.get("start", ""))
+    end_date = parse_date(request.GET.get("end", ""))
+
     if action:
         structured = structured.filter(action__icontains=action)
         application = application.filter(action__icontains=action)
@@ -50,11 +59,23 @@ def audit_workspace(request):
             Q(action__icontains=search) | Q(resource_type__icontains=search) |
             Q(resource_id__icontains=search) | Q(outcome__icontains=search)
         )
+    if start_date:
+        structured = structured.filter(timestamp__date__gte=start_date)
+        application = application.filter(created_at__date__gte=start_date)
+    elif date_range in ("24h", "7d", "30d"):
+        cutoff = timezone.now() - timedelta(hours=24) if date_range == "24h" else timezone.now() - timedelta(days=7 if date_range == "7d" else 30)
+        structured = structured.filter(timestamp__gte=cutoff)
+        application = application.filter(created_at__gte=cutoff)
+    if end_date:
+        structured = structured.filter(timestamp__date__lte=end_date)
+        application = application.filter(created_at__date__lte=end_date)
+
     # Bound cross-model merging to the most recent 1,000 matching records.
     merged = [
         SimpleNamespace(
             pk=event.pk, action=event.action, module=event.module, resource=event.resource,
             timestamp=event.timestamp, hash=event.hash, source="Structured audit",
+            outcome="", severity="info",
         )
         for event in structured.order_by("-timestamp", "-id")[:500]
     ]
@@ -63,15 +84,35 @@ def audit_workspace(request):
             pk=event.pk, action=event.action, module=event.resource_type or "application",
             resource=f"{event.resource_id or '—'} · outcome={event.outcome}",
             timestamp=event.created_at, hash="", source="Application event",
+            outcome=str(event.outcome or ""), severity="info",
         )
         for event in application.order_by("-created_at", "-id")[:500]
     )
+    for event in merged:
+        label = f"{event.action} {event.module} {event.outcome}".lower()
+        if any(term in label for term in ("failed", "failure", "denied", "error", "blocked", "security alert")):
+            event.severity = "high"
+        elif any(term in label for term in ("withdraw", "risk", "permission", "password", "changed", "delete", "revoke")):
+            event.severity = "medium"
+        elif any(term in label for term in ("trade", "order", "api", "connect", "login", "create", "update")):
+            event.severity = "low"
     merged.sort(key=lambda event: (event.timestamp, str(event.pk)), reverse=True)
+    summary = {level: sum(1 for event in merged if event.severity == level) for level in ("info", "low", "medium", "high")}
+    if severity_filter in summary:
+        merged = [event for event in merged if event.severity == severity_filter]
     from django.core.paginator import Paginator
-    page = Paginator(merged, 50).get_page(request.GET.get("page", 1))
+    page = Paginator(merged, 10).get_page(request.GET.get("page", 1))
     return render(request, "core/audit_log.html", {
         "events": page.object_list, "event_count": len(merged), "page_obj": page,
-        "audit_filters": {"action": action, "module": module, "q": search},
+        "audit_filters": {"action": action, "module": module, "q": search, "range": date_range,
+                          "severity": severity_filter, "start": request.GET.get("start", ""),
+                          "end": request.GET.get("end", "")},
+        "event_summary": summary, "recent_events": sorted(
+            [event for event in [
+                SimpleNamespace(action=e.action, module=e.module, timestamp=e.timestamp, severity=e.severity)
+                for e in (page.object_list if page.object_list else [])
+            ]], key=lambda event: event.timestamp, reverse=True
+        )[:5],
     })
 
 @login_required
