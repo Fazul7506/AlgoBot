@@ -70,7 +70,7 @@
         {% for e in recent_events %}<div class="recent-item"><span class="audit-event-icon {{ e.severity }}">✓</span><div><strong>{{ e.action|title }}</strong><small>{{ e.timestamp|timesince }} ago · {{ e.module|title }}</small></div></div>{% empty %}<p class="audit-sub">No recent recorded activity.</p>{% endfor %}
         <a class="audit-btn secondary" style="width:100%;margin-top:6px" href="{% url 'audit_center' %}">View all events</a>
       </section>
-      <section class="audit-side-card"><h2>Quick Actions</h2><div class="audit-quick"><button class="audit-btn" type="button" id="audit-export-side">↓ Export visible logs</button><a class="audit-btn secondary" href="{% url 'security_center' %}">♢ View Security Center</a><a class="audit-btn secondary" href="{% url 'notifications_page' %}">♧ Manage Notifications</a></div></section>
+      <section class="audit-side-card"><h2>Quick Actions</h2><div class="audit-quick"><button class="audit-btn" type="button" id="audit-export-side">↓ Export visible logs</button><a class="audit-btn secondary" href="{% url 'security_center' %}">♢ View Security Center</a><a class="audit-btn secondary" href="/notifications/">♧ Manage Notifications</a></div></section>
     </aside>
   </div>
 </section>
