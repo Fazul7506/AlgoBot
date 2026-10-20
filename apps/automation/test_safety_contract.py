@@ -71,9 +71,7 @@ class AutomationSafetyTests(TestCase):
         events = payload.get("results", []) if isinstance(payload, dict) else payload
         self.assertEqual(events, [])
 
-    @override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "DEFAULT_THROTTLE_CLASSES": []})
-    @patch("core.throttling.ResilientAnonRateThrottle.allow_request", return_value=True)
-    @patch("core.throttling.ResilientUserRateThrottle.allow_request", return_value=True)
+    @patch("rest_framework.views.APIView.get_throttles", return_value=[])
     def test_schedule_endpoint_requires_active_workflow_and_creates_consumable_one_time_schedule(self, *_throttle_mocks):
         workflow = Workflow.objects.create(user=self.user, name="Scheduled workflow")
         self.client.force_login(self.user)
