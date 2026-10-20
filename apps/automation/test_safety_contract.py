@@ -72,8 +72,9 @@ class AutomationSafetyTests(TestCase):
         self.assertEqual(events, [])
 
     @override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "DEFAULT_THROTTLE_CLASSES": []})
-    @patch("apps.automation.api.schedule.cls.throttle_classes", [])
-    def test_schedule_endpoint_requires_active_workflow_and_creates_consumable_one_time_schedule(self):
+    @patch("core.throttling.ResilientUserRateThrottle.allow_request", return_value=True)
+    @patch("core.throttling.ResilientAnonRateThrottle.allow_request", return_value=True)
+    def test_schedule_endpoint_requires_active_workflow_and_creates_consumable_one_time_schedule(self, *_throttle_mocks):
         workflow = Workflow.objects.create(user=self.user, name="Scheduled workflow")
         self.client.force_login(self.user)
         inactive = self.client.post(
@@ -102,7 +103,6 @@ class AutomationSafetyTests(TestCase):
         )
         self.assertEqual(scheduled.status_code, 201)
         self.assertEqual(ScheduledTask.objects.filter(workflow=workflow, status="pending").count(), 1)
-
 
     def test_system_rule_api_does_not_expose_action_configuration(self):
         AutomationRule.objects.create(
