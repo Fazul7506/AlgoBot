@@ -33,7 +33,6 @@ def audit_workspace(request):
     """Render a merged, private feed from structured and application audit streams."""
     from datetime import timedelta
     from django.utils.dateparse import parse_date
-    from django.utils.timezone import make_aware, get_current_timezone
 
     structured = AuditLog.objects.filter(user=request.user)
     application = AuditEvent.objects.filter(actor_id=request.user.pk)
@@ -97,9 +96,16 @@ def audit_workspace(request):
         elif any(term in label for term in ("trade", "order", "api", "connect", "login", "create", "update")):
             event.severity = "low"
     merged.sort(key=lambda event: (event.timestamp, str(event.pk)), reverse=True)
-    summary = {level: sum(1 for event in merged if event.severity == level) for level in ("info", "low", "medium", "high")}
-    if severity_filter in summary:
+    if severity_filter in ("info", "low", "medium", "high"):
         merged = [event for event in merged if event.severity == severity_filter]
+    summary = {
+        level: sum(1 for event in merged if event.severity == level)
+        for level in ("info", "low", "medium", "high")
+    }
+    recent_events = [
+        SimpleNamespace(action=event.action, module=event.module, timestamp=event.timestamp, severity=event.severity)
+        for event in merged[:5]
+    ]
     from django.core.paginator import Paginator
     page = Paginator(merged, 10).get_page(request.GET.get("page", 1))
     return render(request, "core/audit_log.html", {
@@ -107,12 +113,7 @@ def audit_workspace(request):
         "audit_filters": {"action": action, "module": module, "q": search, "range": date_range,
                           "severity": severity_filter, "start": request.GET.get("start", ""),
                           "end": request.GET.get("end", "")},
-        "event_summary": summary, "recent_events": sorted(
-            [event for event in [
-                SimpleNamespace(action=e.action, module=e.module, timestamp=e.timestamp, severity=e.severity)
-                for e in (page.object_list if page.object_list else [])
-            ]], key=lambda event: event.timestamp, reverse=True
-        )[:5],
+        "event_summary": summary, "recent_events": recent_events,
     })
 
 @login_required
