@@ -8,7 +8,7 @@
   <header class="notice-hero">
     <div class="notice-hero-icon" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><path d="M24 5a4 4 0 0 0-4 4v2a13 13 0 0 0-9 12v8l-4 5h34l-4-5v-8a13 13 0 0 0-9-12V9a4 4 0 0 0-4-4Z" fill="white"/><path d="M18 40a6 6 0 0 0 12 0" stroke="white" stroke-width="3" stroke-linecap="round"/></svg></div>
     <div class="notice-hero-copy"><h1>Notifications</h1><p>Stay informed with trading alerts, system updates and important account events.</p><p>Manage your notification channels and preferences in one secure place.</p></div>
-    <div class="notice-system"><span class="notice-system-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 7v5c0 5 4 8 8 9 4-1 8-4 8-9V7l-8-4Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg></span><span><strong>Account Status</strong><small>Private notifications enabled</small></span></div>
+    <div class="notice-system"><span class="notice-system-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 7v5c0 5 4 8 8 9 4-1 8-4 8-9V7l-8-4Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg></span><span><strong>Account Status</strong><small data-telegram-runtime-status>Checking broker notification status…</small></span></div>
   </header>
 
   <div class="notice-layout">
@@ -58,7 +58,7 @@
           {% if page_obj.has_next %}<a class="notice-page" href="?category={{ selected_category }}&range={{ selected_range }}&priority={{ selected_priority }}&q={{ search_query|urlencode }}&page={{ page_obj.next_page_number }}" aria-label="Next page">›</a>{% else %}<span class="notice-page disabled" aria-hidden="true">›</span>{% endif %}
         </nav></footer>
       </section>
-      <p class="intro" style="color:#789ac4;font-size:11px;margin:10px 3px">Notification records are loaded from your authenticated account. No sample or fabricated events are displayed.</p>
+      <p class="intro" style="color:#789ac4;font-size:11px;margin:10px 3px">Notification records are loaded from your authenticated account. No fabricated client-side events are shown; delivery state comes from persisted backend records.</p>
     </main>
 
     <aside class="notice-side" aria-label="Notification summary and settings">
@@ -91,6 +91,8 @@
   const page = document.querySelector('[data-notification-page]');
   if (!page || page.dataset.pollBound === '1') return;
   page.dataset.pollBound = '1';
+  const filterForm = page.querySelector('.notice-filterbar');
+  if (filterForm) filterForm.querySelectorAll('select').forEach((control) => control.addEventListener('change', () => filterForm.requestSubmit()));
   const url = page.dataset.statusUrl;
   const healthUrl = page.dataset.healthUrl;
   let timer = null;
