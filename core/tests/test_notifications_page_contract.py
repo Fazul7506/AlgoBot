@@ -45,6 +45,13 @@ class TopbarNotificationActionTests(TestCase):
         notice.refresh_from_db()
         self.assertIsNone(notice.read_at)
 
+    def test_unread_count_is_scoped_to_authenticated_user(self):
+        Notification.objects.create(user=self.user, title="Unread", message="Mine")
+        Notification.objects.create(user=self.other, title="Other", message="Not mine")
+        response = self.client.get(reverse("enterprise-notifications-unread-count"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["unread_count"], 1)
+
     def test_mark_all_read_is_scoped_to_current_user(self):
         mine = Notification.objects.create(user=self.user, title="Mine", message="My alert")
         theirs = Notification.objects.create(user=self.other, title="Theirs", message="Other alert")
