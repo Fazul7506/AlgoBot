@@ -47,7 +47,7 @@
   <div class="avatar-editor__panel">
     <h2 id="avatar-editor-title">Edit profile photo</h2>
     <p class="account-help">Move the photo to position it, then adjust the zoom.</p>
-    <div class="avatar-editor__stage" data-avatar-stage><img data-avatar-crop-image alt="Photo crop preview" draggable="false></div>
+    <div class="avatar-editor__stage" data-avatar-stage><img data-avatar-crop-image alt="Photo crop preview" draggable="false"></div>
     <label class="avatar-editor__zoom" for="avatar-zoom">Zoom <input id="avatar-zoom" type="range" min="1" max="3" step="0.01" value="1" data-avatar-zoom></label>
     <p class="account-help" data-avatar-editor-error role="status"></p>
     <div class="account-actions avatar-editor__actions"><button type="button" class="account-btn" data-avatar-cancel>Cancel</button><button type="button" class="account-btn account-btn--primary" data-avatar-save>Save photo</button></div>
@@ -87,7 +87,7 @@
         const file = avatarInput.files && avatarInput.files[0]; if (!file) return;
         if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 5*1024*1024) { avatarInput.value=''; error.textContent='Choose a JPEG, PNG, WEBP or GIF image up to 5 MB.'; return; }
         if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-        sourceUrl = URL.createObjectURL(file); cropImage.onload = () => { imageWidth=cropImage.naturalWidth; imageHeight=cropImage.naturalHeight; scale=1; zoom.value='1'; const size=stageSize(); const base=Math.max(size/imageWidth,size/imageHeight); offsetX=(size-imageWidth*base)/2; offsetY=(size-imageHeight*base)/2; drawPreview(); editor.hidden=false; save.disabled=false; save.focus(); };
+        sourceUrl = URL.createObjectURL(file); cropImage.onload = () => { imageWidth=cropImage.naturalWidth; imageHeight=cropImage.naturalHeight; scale=1; zoom.value='1'; editor.hidden=false; const size=stageSize(); const base=Math.max(size/imageWidth,size/imageHeight); offsetX=(size-imageWidth*base)/2; offsetY=(size-imageHeight*base)/2; drawPreview(); save.disabled=false; save.focus(); };
         cropImage.onerror = () => { error.textContent='This image could not be opened. Choose another photo.'; closeEditor(); };
         cropImage.src=sourceUrl;
       });
