@@ -110,3 +110,10 @@
 .security-other-session{align-items:center}
 .security-other-session .account-btn{flex:0 0 auto;min-height:34px;padding:7px 10px;font-size:10px}
 @media(max-width:700px){.security-other-session{align-items:flex-start;flex-wrap:wrap}.security-other-session>div{flex:1;min-width:calc(100% - 60px)}.security-other-session .account-btn{margin-left:46px}}
+
+.security-sms-backup-status{display:flex;align-items:flex-start;gap:11px;margin-top:16px;padding:13px;border:1px solid #4c3d26;border-radius:11px;background:#171b25}
+.security-sms-backup-status>.material-symbols-rounded{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:50%;background:#3b3020;color:#ffd17a;font-size:20px}
+.security-sms-backup-status>div{flex:1;min-width:0}
+.security-sms-backup-status strong{display:block;color:#f0e5cf;font-size:11px}
+.security-sms-backup-status p{margin:4px 0 0;color:#b9b0a0;font-size:10px;line-height:1.55}
+@media(max-width:700px){.security-sms-backup-status{flex-wrap:wrap}.security-sms-backup-status>.security-pill{margin-left:45px}}
