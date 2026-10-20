@@ -45,7 +45,7 @@ class SecurityCenterHardeningTests(TestCase):
         self.assertContains(response, "Login activity")
         self.assertContains(response, "Active session")
         self.assertContains(response, "Security events")
-        self.assertContains(response, "security-events-table")
+        self.assertContains(response, "security-empty")
         self.assertEqual(response.context["security_events"], [])
         self.assertEqual(response.context["login_events"], [])
         self.assertIn(response.context["current_device"], ("Mobile browser", "Desktop or tablet browser"))
