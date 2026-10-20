@@ -2,29 +2,87 @@
 {% load static %}
 {% block title %}Notifications | AlgoBot{% endblock %}
 {% block mobile_title %}Notifications{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'core/css/notifications-center.css' %}?v=20261020-notifications-center1">{% endblock %}
 {% block content %}
 <div class="notifications-page" data-notification-page data-status-url="{% url 'notification_channels_status' %}" data-health-url="{% url 'telegram_health' %}">
-  <p class="eyebrow">NOTIFICATIONS</p>
-  <h1>Notification Center</h1>
-  <p class="intro">Manage the verified channels AlgoBot can use to deliver trading, risk, security and system notifications.</p>
-  <div class="runtime-status" data-telegram-runtime-status>Checking broker notification status…</div>
-  <p class="intro">No fabricated client-side events are shown; delivery state comes from authenticated backend records.</p>
-  <div class="channel-grid">
-    <article class="channel-card" data-channel-card="gmail">
-      <div class="channel-head"><div class="channel-icon" aria-label="Gmail icon"><svg viewBox="0 0 48 48" role="img"><path fill="#EA4335" d="M5 10v28h6V18l13 10 13-10v20h6V10L24 25 5 10z"/><path fill="#4285F4" d="M5 10l19 15v7L5 17z"/><path fill="#34A853" d="M43 10L24 25v7l19-15z"/></svg></div><div><h2>Gmail</h2><div class="status {% if channels.gmail.connected %}verified{% endif %}" data-channel-status>{% if channels.gmail.connected %}✓ Verified{% else %}Not connected{% endif %}</div></div></div>
-      <p>Use Google's secure OAuth sign-in. AlgoBot never asks for your Gmail password.</p>
-      {% if channels.gmail.address %}<p class="channel-address" data-channel-address><strong>{{ channels.gmail.address }}</strong></p>{% endif %}
-      <div class="actions">{% if channels.gmail.connected %}<form method="post" action="{% url 'gmail_disconnect' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button type="submit">Disconnect</button></form>{% else %}<form method="post" action="{% url 'gmail_connect' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button class="primary" type="submit">Connect Gmail</button></form>{% endif %}</div>
-    </article>
-    <article class="channel-card" data-channel-card="telegram">
-      <div class="channel-head"><div class="channel-icon" aria-label="Telegram icon"><svg viewBox="0 0 48 48" role="img"><circle cx="24" cy="24" r="22" fill="#229ED9"/><path fill="white" d="M10 23.4l25.7-10c1.2-.45 2.25.3 1.86 1.74l-4.37 20.6c-.33 1.48-1.2 1.84-2.44 1.15l-7.1-5.23-3.43 3.3c-.38.37-.7.68-1.43.68l.5-7.22 13.15-11.88c.57-.5-.13-.78-.9-.28L15.3 26.1l-6.94-2.17c-1.5-.48-1.53-1.5.32-2.22z"/></svg></div><div><h2>Telegram</h2><div class="status {% if channels.telegram.connected %}verified{% elif channels.telegram.status == 'pending' %}pending{% endif %}" data-channel-status>{% if channels.telegram.connected %}✓ Verified{% elif channels.telegram.status == 'pending' %}Waiting for Start{% else %}Not connected{% endif %}</div></div></div>
-      <p>Connect the Telegram account created specifically for AlgoBot. Open the secure bot link and press <strong>Start</strong>. No Telegram password is requested.</p>
-      {% if channels.telegram.address %}<p class="channel-address" data-channel-address><strong>{{ channels.telegram.address }}</strong></p>{% endif %}
-      <p class="verification-wait" data-verification-wait {% if channels.telegram.status != 'pending' %}hidden{% endif %}>Waiting for Telegram to confirm the connection. This page will update automatically without reloading.</p>
-      <div class="actions">{% if channels.telegram.connected %}<form method="post" action="{% url 'telegram_disconnect' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button type="submit">Disconnect</button></form>{% else %}<form method="post" action="{% url 'telegram_connect' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button class="primary" type="submit">Connect Telegram</button></form>{% if request.session.algobot_telegram_link %}<a href="{% url 'telegram_open' %}">Open Telegram</a>{% endif %}{% endif %}</div>
-    </article>
+  <header class="notice-hero">
+    <div class="notice-hero-icon" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><path d="M24 5a4 4 0 0 0-4 4v2a13 13 0 0 0-9 12v8l-4 5h34l-4-5v-8a13 13 0 0 0-9-12V9a4 4 0 0 0-4-4Z" fill="white"/><path d="M18 40a6 6 0 0 0 12 0" stroke="white" stroke-width="3" stroke-linecap="round"/></svg></div>
+    <div class="notice-hero-copy"><h1>Notifications</h1><p>Stay informed with trading alerts, system updates and important account events.</p><p>Manage your notification channels and preferences in one secure place.</p></div>
+    <div class="notice-system"><span class="notice-system-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 7v5c0 5 4 8 8 9 4-1 8-4 8-9V7l-8-4Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg></span><span><strong>Account Status</strong><small>Private notifications enabled</small></span></div>
+  </header>
+
+  <div class="notice-layout">
+    <main class="notice-main">
+      <section class="notice-panel" aria-label="Notification feed and filters">
+        <nav class="notice-tabs" aria-label="Notification categories">
+          <a class="notice-tab {% if selected_category == 'all' %}active{% endif %}" href="?category=all&range={{ selected_range }}&priority={{ selected_priority }}">All Notifications <span class="notice-tab-count">{{ category_counts.all }}</span></a>
+          <a class="notice-tab {% if selected_category == 'trading' %}active{% endif %}" href="?category=trading&range={{ selected_range }}&priority={{ selected_priority }}">Trading <span class="notice-tab-count">{{ category_counts.trading }}</span></a>
+          <a class="notice-tab {% if selected_category == 'account' %}active{% endif %}" href="?category=account&range={{ selected_range }}&priority={{ selected_priority }}">Account <span class="notice-tab-count">{{ category_counts.account }}</span></a>
+          <a class="notice-tab {% if selected_category == 'security' %}active{% endif %}" href="?category=security&range={{ selected_range }}&priority={{ selected_priority }}">Security <span class="notice-tab-count">{{ category_counts.security }}</span></a>
+          <a class="notice-tab {% if selected_category == 'monitoring' %}active{% endif %}" href="?category=monitoring&range={{ selected_range }}&priority={{ selected_priority }}">Monitoring <span class="notice-tab-count">{{ category_counts.monitoring }}</span></a>
+          <a class="notice-tab {% if selected_category == 'gmail' %}active{% endif %}" href="?category=gmail&range={{ selected_range }}&priority={{ selected_priority }}"><span class="mini-provider">G</span> Gmail <span class="notice-tab-count">{{ category_counts.gmail }}</span></a>
+          <a class="notice-tab {% if selected_category == 'telegram' %}active{% endif %}" href="?category=telegram&range={{ selected_range }}&priority={{ selected_priority }}"><span class="mini-provider tg">TG</span> Telegram <span class="notice-tab-count">{{ category_counts.telegram }}</span></a>
+        </nav>
+
+        <form class="notice-filterbar" method="get" action="{% url 'notifications_page' %}">
+          <input type="hidden" name="category" value="{{ selected_category }}">
+          <label class="notice-control"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg><span class="notice-accessible-label">Date range</span><select name="range" aria-label="Date range"><option value="24h" {% if selected_range == '24h' %}selected{% endif %}>Last 24 hours</option><option value="7d" {% if selected_range == '7d' %}selected{% endif %}>Last 7 days</option><option value="30d" {% if selected_range == '30d' %}selected{% endif %}>Last 30 days</option><option value="all" {% if selected_range == 'all' %}selected{% endif %}>All available</option></select></label>
+          <label class="notice-control"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a3 3 0 0 0-3 3v2a7 7 0 0 0-4 6v4l-2 2h18l-2-2v-4a7 7 0 0 0-4-6V6a3 3 0 0 0-3-3Z"/><path d="M9 21h6"/></svg><span class="notice-accessible-label">Notification type</span><select name="priority" aria-label="Priority level"><option value="all" {% if selected_priority == 'all' %}selected{% endif %}>All priority levels</option><option value="info" {% if selected_priority == 'info' %}selected{% endif %}>Info</option><option value="low" {% if selected_priority == 'low' %}selected{% endif %}>Low</option><option value="medium" {% if selected_priority == 'medium' %}selected{% endif %}>Medium</option><option value="high" {% if selected_priority == 'high' %}selected{% endif %}>High</option></select></label>
+          <label class="notice-control"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><span class="notice-accessible-label">Search notifications</span><input name="q" type="search" value="{{ search_query }}" placeholder="Search notifications…" aria-label="Search notifications"></label>
+          <button class="notice-btn primary notice-filter-submit" type="submit">Apply filters</button>
+        </form>
+
+        <div class="notice-feed-head"><div><h2>Recent Notifications</h2><p>Latest matching records · private to your account</p></div><div class="notice-actions"><form method="post" action="{% url 'enterprise-notifications-mark-all-read' %}">{% csrf_token %}<button class="notice-btn" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg>Mark all as read{% if unread_count %} ({{ unread_count }}){% endif %}</button></form></div></div>
+
+        <div class="notice-feed" aria-live="polite">
+          {% for notice in notifications %}
+          <article class="notice-item {% if not notice.read_at %}is-unread{% endif %}">
+            <span class="notice-item-icon {% if notice.priority == 'critical' or notice.priority == 'error' %}high{% elif notice.priority == 'warning' %}medium{% elif notice.priority == 'low' %}low{% else %}info{% endif %}" aria-hidden="true">
+              {% if notice.category == 'security' or notice.category == 'risk' or notice.priority == 'critical' or notice.priority == 'error' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 7v5c0 5 4 8 8 9 4-1 8-4 8-9V7l-8-4Z"/><path d="M12 8v5m0 3h.01"/></svg>
+              {% elif notice.category == 'trading' or notice.category == 'trade' or notice.category == 'broker' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17 9 11l4 4 8-9"/><path d="M15 6h6v6"/></svg>
+              {% elif notice.category == 'account' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+              {% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>{% endif %}
+            </span>
+            <div class="notice-item-copy"><h3>{{ notice.title }}</h3><p>{{ notice.message }}</p><small>{{ notice.category|title }} · {{ notice.channel|title }} · {{ notice.status|title }}</small></div>
+            <time class="notice-item-time" datetime="{{ notice.created_at|date:'c' }}">{{ notice.created_at|timesince }} ago</time>
+            <span class="notice-priority {% if notice.priority == 'critical' or notice.priority == 'error' %}high{% elif notice.priority == 'warning' %}medium{% elif notice.priority == 'low' %}low{% else %}info{% endif %}">{{ notice.priority|title }}</span>
+            {% if not notice.read_at %}<form method="post" action="{% url 'enterprise-notifications-mark-read' notice.pk %}">{% csrf_token %}<button class="notice-mark-read" type="submit" aria-label="Mark {{ notice.title }} as read" title="Mark as read"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg></button></form>{% else %}<span class="notice-unread-dot" title="Read notification"></span>{% endif %}
+          </article>
+          {% empty %}
+          <div class="notice-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3a3 3 0 0 0-3 3v2a7 7 0 0 0-4 6v4l-2 2h18l-2-2v-4a7 7 0 0 0-4-6V6a3 3 0 0 0-3-3Z"/><path d="M9 21h6"/></svg><h3>No notifications found</h3><p>There are no saved notifications matching these filters.</p></div>
+          {% endfor %}
+        </div>
+        <footer class="notice-pagination"><span>Showing {% if page_obj.paginator.count %}{{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} matching notifications{% else %}0 matching notifications{% endif %}</span><nav class="notice-pages" aria-label="Notification pages">
+          {% if page_obj.has_previous %}<a class="notice-page" href="?category={{ selected_category }}&range={{ selected_range }}&priority={{ selected_priority }}&q={{ search_query|urlencode }}&page={{ page_obj.previous_page_number }}" aria-label="Previous page">‹</a>{% else %}<span class="notice-page disabled" aria-hidden="true">‹</span>{% endif %}
+          {% for page_number in page_obj.paginator.page_range %}{% if page_number == page_obj.number %}<span class="notice-page active" aria-current="page">{{ page_number }}</span>{% elif page_number <= 3 or page_number == page_obj.paginator.num_pages %}<a class="notice-page" href="?category={{ selected_category }}&range={{ selected_range }}&priority={{ selected_priority }}&q={{ search_query|urlencode }}&page={{ page_number }}">{{ page_number }}</a>{% endif %}{% endfor %}
+          {% if page_obj.has_next %}<a class="notice-page" href="?category={{ selected_category }}&range={{ selected_range }}&priority={{ selected_priority }}&q={{ search_query|urlencode }}&page={{ page_obj.next_page_number }}" aria-label="Next page">›</a>{% else %}<span class="notice-page disabled" aria-hidden="true">›</span>{% endif %}
+        </nav></footer>
+      </section>
+      <p class="intro" style="color:#789ac4;font-size:11px;margin:10px 3px">Notification records are loaded from your authenticated account. No sample or fabricated events are displayed.</p>
+    </main>
+
+    <aside class="notice-side" aria-label="Notification summary and settings">
+      <section class="notice-side-panel"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>Notification Summary</h2>
+        <div class="notice-summary-row"><span class="notice-summary-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg></span><span class="notice-summary-label">Info</span><span class="notice-summary-value">{{ summary.info.count }}<small>{{ summary.info.percent }}%</small></span></div>
+        <div class="notice-summary-row"><span class="notice-summary-icon low"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg></span><span class="notice-summary-label">Low</span><span class="notice-summary-value">{{ summary.low.count }}<small>{{ summary.low.percent }}%</small></span></div>
+        <div class="notice-summary-row"><span class="notice-summary-icon medium"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 10l6-1 3-6Z"/></svg></span><span class="notice-summary-label">Medium</span><span class="notice-summary-value">{{ summary.medium.count }}<small>{{ summary.medium.percent }}%</small></span></div>
+        <div class="notice-summary-row"><span class="notice-summary-icon high"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 7v5c0 5 4 8 8 9 4-1 8-4 8-9V7l-8-4Z"/></svg></span><span class="notice-summary-label">High</span><span class="notice-summary-value">{{ summary.high.count }}<small>{{ summary.high.percent }}%</small></span></div>
+        <div class="notice-summary-total"><span>Total notifications</span><strong>{{ total_notifications }}</strong></div><div class="notice-summary-total" style="margin-top:8px;padding-top:8px"><span>Unread</span><strong>{{ unread_count }}</strong></div>
+      </section>
+
+      <section class="notice-side-panel"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 7v5c0 5 4 8 8 9 4-1 8-4 8-9V7l-8-4Z"/><path d="m8 12 2.5 2.5L16 9"/></svg>Quick Actions</h2>
+        <a class="notice-quick-link" href="?category=all&range={{ selected_range }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg>View all notifications</a>
+        <a class="notice-quick-link" href="{% url 'notification_channels' %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 3.1-.2-.1a1.7 1.7 0 0 0-1.8.1l-.2.1h-3.6l-.1-.2a1.7 1.7 0 0 0-1.5-1.1 1.7 1.7 0 0 0-1.5 1.1l-.1.2H5.4l-.1-.2a1.7 1.7 0 0 0-1.5-1.1l-.2.1-1.8-3.1.1-.1A1.7 1.7 0 0 0 2.2 14v-4a1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-3.1.2.1a1.7 1.7 0 0 0 1.8-.1l.2-.1h3.6l.1.2a1.7 1.7 0 0 0 1.5 1.1 1.7 1.7 0 0 0 1.5-1.1l.1-.2h3.6l.1.2a1.7 1.7 0 0 0 1.5 1.1l.2-.1 1.8 3.1-.1.1a1.7 1.7 0 0 0-.3 1.9Z"/></svg>Notification channel settings</a>
+        <a class="notice-quick-link" href="{% url 'notification_channels' %}#integrations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 1 1 2.3 5.7"/><path d="M4 17v-5h5"/></svg>Manage integrations</a>
+      </section>
+
+      <section class="notice-side-panel" id="integrations"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Connected Channels</h2>
+        <article class="notice-channel" data-channel-card="gmail"><div class="notice-channel-head"><span class="notice-channel-logo"><svg viewBox="0 0 48 48" role="img" aria-label="Gmail"><path fill="#EA4335" d="M5 10v28h6V18l13 10 13-10v20h6V10L24 25 5 10z"/><path fill="#4285F4" d="M5 10l19 15v7L5 17z"/><path fill="#34A853" d="M43 10L24 25v7l19-15z"/></svg></span><span><strong>Gmail</strong><small data-channel-status>{% if channels.gmail.connected %}✓ Verified{% else %}Not connected{% endif %}</small></span></div><p>{% if channels.gmail.connected %}Email notifications are enabled for the verified account.{% else %}Connect securely with Google OAuth to enable email alerts.{% endif %}</p><div class="actions">{% if channels.gmail.connected %}<form method="post" action="{% url 'gmail_disconnect' %}">{% csrf_token %}<button class="notice-btn" type="submit">Disconnect</button></form>{% else %}<form method="post" action="{% url 'gmail_connect' %}">{% csrf_token %}<button class="notice-btn primary" type="submit">Connect Gmail</button></form>{% endif %}</div></article>
+        <article class="notice-channel" data-channel-card="telegram"><div class="notice-channel-head"><span class="notice-channel-logo telegram"><svg viewBox="0 0 48 48" role="img" aria-label="Telegram"><path fill="white" d="M10 23.4l25.7-10c1.2-.45 2.25.3 1.86 1.74l-4.37 20.6c-.33 1.48-1.2 1.84-2.44 1.15l-7.1-5.23-3.43 3.3c-.38.37-.7.68-1.43.68l.5-7.22 13.15-11.88c.57-.5-.13-.78-.9-.28L15.3 26.1l-6.94-2.17c-1.5-.48-1.53-1.5.32-2.22z"/></svg></span><span><strong>Telegram</strong><small data-channel-status>{% if channels.telegram.connected %}✓ Verified{% elif channels.telegram.status == 'pending' %}Waiting for Start{% else %}Not connected{% endif %}</small></span></div><p>{% if channels.telegram.connected %}Telegram alerts are enabled for the verified chat.{% else %}Connect the dedicated AlgoBot bot and press Start to verify.{% endif %}</p><div class="actions">{% if channels.telegram.connected %}<form method="post" action="{% url 'telegram_disconnect' %}">{% csrf_token %}<button class="notice-btn" type="submit">Disconnect</button></form>{% else %}<form method="post" action="{% url 'telegram_connect' %}">{% csrf_token %}<button class="notice-btn primary" type="submit">Connect Telegram</button></form>{% if request.session.algobot_telegram_link %}<a class="notice-btn" href="{% url 'telegram_open' %}">Open Telegram</a>{% endif %}{% endif %}</div></article>
+      </section>
+      <div class="notice-secure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 7v5c0 5 4 8 8 9 4-1 8-4 8-9V7l-8-4Z"/><path d="m8 12 2.5 2.5L16 9"/></svg><strong>Your notifications are private</strong>Only your authenticated account's saved notifications and channel settings are shown. Provider credentials remain server-side.</div>
+    </aside>
   </div>
-  <section class="how"><h2>How verification works</h2><ol><li><strong>Gmail:</strong> approve AlgoBot's requested notification permission in Google's consent screen, then return here.</li><li><strong>Telegram:</strong> press <strong>Start</strong> in the AlgoBot bot. The one-time token binds that Telegram chat to your AlgoBot account.</li><li><strong>Delivery:</strong> only channels marked <strong>Verified</strong> are eligible for external notifications.</li></ol><p class="secure">Credentials are stored server-side and are never rendered into this page.</p></section>
 </div>
 {% endblock %}
 {% block extra_js %}
@@ -36,28 +94,19 @@
   const url = page.dataset.statusUrl;
   const healthUrl = page.dataset.healthUrl;
   let timer = null;
-  let healthTimer = null;
   let busy = false;
   let healthBusy = false;
   let attempts = 0;
   const maxAttempts = 225;
   const apply = (provider, data) => {
-    const card = page.querySelector(`[data-channel-card="${provider}"]`);
-    if (!card || !data) return;
-    const status = card.querySelector('[data-channel-status]');
-    const address = card.querySelector('[data-channel-address]');
-    const wait = card.querySelector('[data-verification-wait]');
-    if (status) {
-      status.textContent = data.connected ? '✓ Verified' : data.status === 'pending' ? 'Waiting for Start' : 'Not connected';
-      status.classList.toggle('verified', !!data.connected);
-      status.classList.toggle('pending', !data.connected && data.status === 'pending');
-    }
-    if (address) {
-      const strong = address.querySelector('strong');
-      if (strong) strong.textContent = data.address || '';
-      address.hidden = !data.address;
-    }
-    if (wait) wait.hidden = !(provider === 'telegram' && data.status === 'pending');
+    page.querySelectorAll(`[data-channel-card="${provider}"]`).forEach((card) => {
+      const status = card.querySelector('[data-channel-status]');
+      if (status) {
+        status.textContent = data.connected ? '✓ Verified' : data.status === 'pending' ? 'Waiting for Start' : 'Not connected';
+        status.classList.toggle('verified', !!data.connected);
+        status.classList.toggle('pending', !data.connected && data.status === 'pending');
+      }
+    });
   };
   const setRuntime = (state, text) => {
     const node = page.querySelector('[data-telegram-runtime-status]');
@@ -69,8 +118,7 @@
   const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
   const poll = async () => {
     if (busy || document.visibilityState === 'hidden' || attempts >= maxAttempts) return;
-    busy = true;
-    attempts += 1;
+    busy = true; attempts += 1;
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
@@ -78,9 +126,8 @@
       clearTimeout(timeout);
       Object.entries(payload.channels || {}).forEach(([provider, data]) => apply(provider, data));
       if (payload.channels?.telegram?.status !== 'pending') stop();
-    } catch (_) {
-      // Transient channel-status failures do not block the page or trigger reloads.
-    } finally { busy = false; }
+    } catch (_) { /* Preserve the page during transient status errors. */ }
+    finally { busy = false; }
   };
   const pollHealth = async () => {
     if (healthBusy || document.visibilityState === 'hidden') return;
@@ -91,18 +138,12 @@
       const data = await window.AlgoBotFrontendData.request(healthUrl, { cache: 'no-store', signal: controller.signal }, 5000);
       if (data.status === 'healthy') setRuntime('healthy', 'Telegram bot: Operational');
       else setRuntime('degraded', 'Telegram bot: Temporarily unavailable');
-    } catch (_) {
-      setRuntime('unavailable', 'Telegram bot: Status unavailable — Retry automatically');
-    } finally {
-      clearTimeout(timeout);
-      healthBusy = false;
-    }
+    } catch (_) { setRuntime('unavailable', 'Telegram bot: Status unavailable — Retry automatically'); }
+    finally { clearTimeout(timeout); healthBusy = false; }
   };
   const start = () => { stop(); attempts = 0; poll(); timer = setInterval(poll, 4000); };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { poll(); pollHealth(); } });
-  start();
-  pollHealth();
-  healthTimer = setInterval(pollHealth, 30000);
+  start(); pollHealth(); setInterval(pollHealth, 30000);
 })();
 </script>
 {% endblock %}
