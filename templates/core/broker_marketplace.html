@@ -47,7 +47,7 @@
               </div>
               <div class="broker-brand-copy"><h2>{{ broker.name }}</h2><small>{{ broker.broker_type|title }}</small></div>
             </div>
-            <span class="broker-pill {% if broker.user_connected %}is-connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}is-available{% else %}is-unavailable{% endif %}">{% if broker.user_connected %}Connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}Available{% elif broker.status != 'active' %}Unavailable{% else %}Not connected{% endif %}</span>
+            <span class="broker-pill {% if broker.user_connected %}is-connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}is-available{% else %}is-unavailable{% endif %}">{% if broker.user_connected %}Connected{% elif broker.status == 'active' and broker.broker_type == 'deriv' %}Available{% elif broker.status != 'active' %}Unavailable{% elif broker.status != 'active' %}Unavailable{% else %}Not supported{% endif %}</span>
           </div>
           <p class="broker-card-description">{% if broker.broker_type == 'deriv' %}Forex, CFDs, multipliers and options{% elif broker.broker_type == 'binance' or broker.broker_type == 'bybit' %}Crypto spot and derivatives{% elif broker.broker_type == 'alpaca' or broker.broker_type == 'interactive_brokers' %}Stocks and multi-market trading{% elif broker.broker_type == 'oanda' or broker.broker_type == 'forex_com' or broker.broker_type == 'pepperstone' or broker.broker_type == 'ic_markets' or broker.broker_type == 'exness' %}Forex, indices and CFDs{% else %}Broker integration registered in the AlgoBot directory{% endif %}</p>
           <div class="broker-metadata">
@@ -91,7 +91,7 @@
           {% for broker in brokers %}{% if broker.user_connected %}
           <a class="broker-connected-item" href="/operations/brokers/">
             <div class="broker-logo broker-logo--small">{% if broker.broker_type == 'deriv' %}<img src="https://deriv.com/favicon.ico" alt="" loading="lazy">{% else %}<span>{{ broker.name|first|upper }}</span>{% endif %}</div>
-            <div class="broker-connected-copy"><strong>{{ broker.name }}</strong>{% for account in broker.user_accounts %}<small>{{ account.account_id }}</small>{% empty %}<small>Connected account</small>{% endfor %}<small class="broker-account-provider">{{ broker.broker_type|title }} · Connection verified by AlgoBot</small></div>
+            <div class="broker-connected-copy"><strong>{{ broker.name }}</strong>{% for account in broker.user_accounts %}<small>{{ account.account_id }}</small>{% empty %}<small>Connected account</small>{% endfor %}<small class="broker-account-provider">{{ broker.broker_type|title }} · Account state from AlgoBot</small></div>
             <span class="broker-pill is-connected">Active</span><span class="material-symbols-rounded broker-connected-arrow" aria-hidden="true">chevron_right</span>
           </a>
           {% endif %}{% endfor %}
