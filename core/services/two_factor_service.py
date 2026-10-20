@@ -61,9 +61,13 @@ class TwoFactorService:
 
 
 def generate_recovery_codes(count=10):
-    """Return one-time display values and only their SHA-256 digests for storage."""
+    """Return one-time display values and persist only digests plus usage state."""
     codes = [secrets.token_hex(5).upper() for _ in range(count)]
-    return codes, [hashlib.sha256(code.encode("ascii")).hexdigest() for code in codes]
+    records = [
+        {"digest": hashlib.sha256(code.encode("ascii")).hexdigest(), "used": False}
+        for code in codes
+    ]
+    return codes, records
 
 
 def verify_user_code(profile, token, *, consume_recovery=False):
@@ -87,12 +91,21 @@ def verify_user_code(profile, token, *, consume_recovery=False):
         if locked is None or not locked.two_factor_enabled:
             return False
         saved_codes = list(locked.two_factor_recovery_codes or [])
-        matches = [hmac.compare_digest(str(saved), digest) for saved in saved_codes]
+        matches = [
+            hmac.compare_digest(
+                str(saved.get("digest", "")) if isinstance(saved, dict) else str(saved),
+                digest,
+            ) and not (isinstance(saved, dict) and saved.get("used", False))
+            for saved in saved_codes
+        ]
         if not any(matches):
             return False
         if consume_recovery:
+            # Keep digest-only tombstones so used codes remain marked consumed.
             locked.two_factor_recovery_codes = [
-                saved for saved, matched in zip(saved_codes, matches) if not matched
+                ({**saved, "used": True} if isinstance(saved, dict) and matched
+                 else ({"digest": str(saved), "used": True} if matched else saved))
+                for saved, matched in zip(saved_codes, matches)
             ]
             locked.save(update_fields=["two_factor_recovery_codes", "updated_at"])
             profile.two_factor_recovery_codes = locked.two_factor_recovery_codes
