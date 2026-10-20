@@ -119,10 +119,10 @@ class TwoFactorEnforcementTests(TestCase):
     def test_recovery_codes_are_hashed_and_single_use(self):
         codes, hashes = generate_recovery_codes()
         self.assertEqual(len(codes), 10)
-        self.assertTrue(all(hashlib.sha256(code.encode("ascii")).hexdigest() in hashes for code in codes))
+        self.assertTrue(all(any(isinstance(item, dict) and item.get("digest") == hashlib.sha256(code.encode("ascii")).hexdigest() and item.get("used") is False for item in hashes) for code in codes))
         self.profile.two_factor_recovery_codes = hashes
         self.profile.save(update_fields=["two_factor_recovery_codes"])
         self.assertTrue(verify_user_code(self.profile, codes[0], consume_recovery=True))
         self.profile.refresh_from_db()
-        self.assertNotIn(hashlib.sha256(codes[0].encode("ascii")).hexdigest(), self.profile.two_factor_recovery_codes)
+        self.assertFalse(any(isinstance(item, dict) and item.get("digest") == hashlib.sha256(codes[0].encode("ascii")).hexdigest() and item.get("used") is False for item in self.profile.two_factor_recovery_codes))
         self.assertFalse(verify_user_code(self.profile, codes[0], consume_recovery=True))
