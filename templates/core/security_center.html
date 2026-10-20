@@ -53,6 +53,11 @@
           <p class="account-subtitle">Set up an authenticator app to protect password sign-ins. The seed is encrypted using the server's configured credential-encryption key.</p>
           <form method="post" class="account-security-form">{% csrf_token %}<input type="hidden" name="security_action" value="setup_2fa">{% if password_required %}<div class="account-field"><label for="mfa-setup-password">Current password</label><input id="mfa-setup-password" type="password" name="current_password" autocomplete="current-password" required></div>{% endif %}<div class="account-actions"><button class="account-btn account-btn--primary" type="submit">Set up two-factor authentication</button></div></form>
         {% endif %}
+        <div class="security-sms-backup-status" role="note">
+          <span class="material-symbols-rounded" aria-hidden="true">sms</span>
+          <div><strong>SMS backup</strong><p>Not enabled. SMS backup requires a verified phone-number enrollment flow and a configured SMS delivery provider. AlgoBot will not show a working toggle until both are available.</p></div>
+          <span class="security-pill is-warn">Not configured</span>
+        </div>
       </section>
 
       
