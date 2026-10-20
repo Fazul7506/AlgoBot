@@ -110,16 +110,30 @@ class PreferenceService:
 
 
 class RoutingService:
+    @staticmethod
+    def is_critical(category="general", priority="info"):
+        normalized_category = (category or "general").strip().lower().replace("-", "_")
+        normalized_priority = (priority or "info").strip().lower()
+        return normalized_priority in {"critical", "error"} or normalized_category in {
+            "security", "security_alert", "account_security", "authentication",
+            "auth", "risk", "fraud", "credential", "password",
+        }
+
     def routes(self, user, category="general", priority="info"):
-        enabled = PreferenceService().enabled_channels(user)
+        # Routine activity is always in-app only; connected external integrations
+        # must not turn routine events into email or Telegram messages.
+        if not self.is_critical(category, priority):
+            return ["in_app"]
+
+        # Critical/security events go in-app and to every verified external mode.
+        # Routine preference toggles do not suppress critical safety alerts, while
+        # unavailable or unverified integrations are never attempted.
         channels = connection_status(user)
-        available = [
-            channel for channel in enabled
-            if channel == "in_app" or (channel in {"gmail", "telegram"} and channels.get(channel, {}).get("connected"))
-        ]
-        # Always retain a durable in-app notification if every selected external
-        # channel is currently disconnected or missing usable credentials.
-        return available or ["in_app"]
+        available = ["in_app"]
+        for channel in ("gmail", "telegram"):
+            if channels.get(channel, {}).get("connected"):
+                available.append(channel)
+        return available
 
 
 def _enqueue_telegram(notification: Notification) -> None:
@@ -176,7 +190,7 @@ class DeliveryService:
 class NotificationEngine:
     def publish(self, user, title, message, category="general", priority="info", channels=None, metadata=None):
         notices = []
-        for channel in (channels or RoutingService().routes(user, category, priority)):
+        for channel in (RoutingService().routes(user, category, priority) if channels is None or RoutingService.is_critical(category, priority) else channels):
             n = Notification.objects.create(user=user, title=title, message=message, category=category, priority=priority, channel=channel, metadata=metadata or {}, available_at=timezone.now())
             if channel == "telegram":
                 _enqueue_telegram(n)

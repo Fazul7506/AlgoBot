@@ -23,6 +23,13 @@ BROWSER_NOTIFICATIONS_URL = "/notifications/"
 @login_required
 def notification_channels_page(request):
     channels = connection_status(request.user)
+    if request.method == "POST" and "mark_all_read" in request.POST:
+        now = timezone.now()
+        updated = Notification.objects.filter(user=request.user, read_at__isnull=True).update(
+            read_at=now, updated_at=now
+        )
+        messages.success(request, f"Marked {updated} notification(s) as read.")
+        return redirect(request.get_full_path())
     if request.method == "POST" and "toggle_channel" in request.POST:
         channel = request.POST.get("toggle_channel", "")
         allowed_channels = {"in_app", "gmail", "telegram"}

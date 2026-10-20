@@ -67,9 +67,54 @@ class AuditMiddleware(MiddlewareMixin):
                         # Audit logging must not break the user's trading/API
                         # request; the failure is still visible in server logs.
                         audit_logger.exception("Could not persist structured audit event")
+
+                if request.method in {"POST", "PUT", "PATCH", "DELETE"} and response.status_code < 400:
+                    self._notify_successful_activity(request, user)
         except Exception:
             audit_logger.exception("AuditMiddleware failed")
         return response
+
+
+    @classmethod
+    def _notify_successful_activity(cls, request, user):
+        """Persist a private in-app alert for successful account mutations.
+
+        Notification endpoints are excluded to avoid a read/notification action
+        generating another notification. Message content never includes request
+        bodies, identifiers, tokens, or other user-supplied data.
+        """
+        path = request.path.lower()
+        if (
+            path.startswith(("/notifications/", "/api/notifications/", "/static/", "/media/"))
+            or "webhook" in path
+            or path.endswith("/callback/")
+        ):
+            return
+        try:
+            module = cls._module_for_path(request.path)
+            critical_markers = (
+                "security", "risk", "password", "credential", "two-factor",
+                "two_factor", "2fa", "mfa", "authentication",
+            )
+            is_critical = any(marker in path for marker in critical_markers)
+            category = "security" if is_critical else module[:40]
+            title = "Security alert" if is_critical else "Activity completed"
+            message = (
+                "A security-related account action was completed successfully."
+                if is_critical
+                else f"Your {module.replace('_', ' ')} action was completed successfully."
+            )
+            from apps.notifications.services import NotificationEngine
+            NotificationEngine().publish(
+                user=user,
+                title=title,
+                message=message,
+                category=category,
+                priority="critical" if is_critical else "info",
+            )
+        except Exception:
+            # Notifications are best-effort and must never break the action.
+            audit_logger.exception("Could not publish in-app activity notification")
 
     @staticmethod
     def _module_for_path(path):

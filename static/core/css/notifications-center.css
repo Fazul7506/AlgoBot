@@ -128,3 +128,11 @@
 .notifications-page .notice-switch input:checked+span:after{transform:translateX(14px);background:white}
 .notifications-page .notice-switch input:focus-visible+span{outline:2px solid #7fc0ff;outline-offset:3px}
 .notifications-page .notice-switch input:disabled+span{opacity:.42;cursor:not-allowed}
+
+.notifications-page .notice-tab .mini-provider{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;background:transparent;color:inherit;border-radius:50%;flex:0 0 18px}
+.notifications-page .notice-tab .mini-provider svg{display:block;width:18px;height:18px;overflow:visible}
+.notifications-page .notice-tab .mini-provider.gmail-logo{background:transparent;border-radius:0}
+.notifications-page .notice-tab .mini-provider.telegram-logo{background:transparent}
+.notifications-page .notice-channel small[data-channel-status]{display:block;max-width:100%;overflow-wrap:anywhere;line-height:1.4}
+.notifications-page .notice-channel p strong{overflow-wrap:anywhere}
+@media(max-width:520px){.notifications-page .notice-tab .mini-provider,.notifications-page .notice-tab .mini-provider svg{width:16px;height:16px;flex-basis:16px}.notifications-page .notice-channel small[data-channel-status]{font-size:10px}}
