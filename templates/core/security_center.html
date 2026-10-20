@@ -45,6 +45,20 @@
           <ul class="account-recovery-codes">{% for code in two_factor_recovery_codes %}<li><code data-recovery-code>{{ code }}</code><button type="button" class="account-btn account-recovery-copy" data-copy-recovery-code aria-label="Copy recovery code {{ forloop.counter }}">Copy</button></li>{% endfor %}</ul>
         {% endif %}
         {% if two_factor_enabled %}
+          {% if two_factor_recovery_code_statuses %}
+            <section class="account-recovery-status" aria-label="Recovery code usage status">
+              <h3>Recovery code status</h3>
+              <ul class="account-recovery-codes">
+                {% for item in two_factor_recovery_code_statuses %}
+                  <li>
+                    <span><strong>Recovery code {{ item.number }}</strong><br><code>{% if item.used %}••••••••••{% else %}Unused — code hidden{% endif %}</code></span>
+                    <span class="account-state {% if item.used %}account-state--warn{% else %}account-state--good{% endif %}">{% if item.used %}Used{% else %}Unused{% endif %}</span>
+                  </li>
+                {% endfor %}
+              </ul>
+              <p class="account-help">Used codes stay marked as used. Code values are never re-displayed after the one-time reveal.</p>
+            </section>
+          {% endif %}
           <p class="account-subtitle">Authenticator challenges are required at password sign-in. {{ two_factor_recovery_codes_remaining }} recovery code{{ two_factor_recovery_codes_remaining|pluralize }} remain.</p>
           <form method="post" class="account-security-form">
             {% csrf_token %}
