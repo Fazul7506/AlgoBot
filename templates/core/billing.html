@@ -2,22 +2,45 @@
 {% block title %}Billing | AlgoBot{% endblock %}
 {% block mobile_title %}Billing{% endblock %}
 {% block content %}
-<section class="billing-page">
-  <header class="page-heading"><div><p class="eyebrow">ACCOUNT</p><h1>Billing</h1><p class="billing-subtitle">Manage your plan and pay securely with IntaSend or Pesapal.</p></div><button class="btn ghost" type="button" data-billing-refresh>Refresh</button></header>
+<section class="billing-page billing-dashboard" data-billing-dashboard>
+  <header class="billing-hero">
+    <div class="billing-hero-mark" aria-hidden="true"><span class="material-symbols-rounded">credit_card</span></div>
+    <div class="billing-hero-copy"><p class="eyebrow">ACCOUNT · PAYMENTS</p><h1>Billing &amp; Payments</h1><p>Manage your subscription, review usage, and pay securely with AlgoBot.</p><small>Transparent pricing. Verified payment providers. Real usage data.</small></div>
+    <div class="billing-account-status"><span class="billing-status-icon material-symbols-rounded" aria-hidden="true">verified_user</span><div><strong>Account Status</strong><small data-billing-account-status>Checking subscription status…</small></div><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></div>
+  </header>
+  <nav class="billing-tabs" aria-label="Billing sections">
+    <a class="is-active" href="#billing-overview"><span class="material-symbols-rounded" aria-hidden="true">dashboard</span>Overview</a>
+    <a href="#billing-plans"><span class="material-symbols-rounded" aria-hidden="true">workspace_premium</span>Subscriptions</a>
+    <a href="#billing-invoices"><span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>Invoices</a>
+    <a href="#billing-payments"><span class="material-symbols-rounded" aria-hidden="true">payments</span>Payment Methods</a>
+    <a href="#billing-usage"><span class="material-symbols-rounded" aria-hidden="true">schedule</span>Usage</a>
+    <a href="#billing-settings"><span class="material-symbols-rounded" aria-hidden="true">settings</span>Billing Settings</a>
+    <button class="btn ghost" type="button" data-billing-refresh><span class="material-symbols-rounded" aria-hidden="true">refresh</span>Refresh</button>
+  </nav>
   <section class="panel billing-alert" data-billing-alert hidden role="alert" aria-live="polite"></section>
   <form id="billing-checkout-form" action="{% url 'billing_checkout_start' %}" method="post" hidden>
-    {% csrf_token %}
-    <input type="hidden" name="plan" data-checkout-form-plan>
-    <input type="hidden" name="provider" data-checkout-form-provider>
+    {% csrf_token %}<input type="hidden" name="plan" data-checkout-form-plan><input type="hidden" name="provider" data-checkout-form-provider>
   </form>
-  <section class="card-grid billing-plan-grid" data-plan-grid><div class="panel">Loading plans…</div></section>
-  <section class="billing-intasend-security" aria-label="IntaSend payment security">
-    <p class="provider-label">IntaSend checkout security</p>
-    {% include "core/partials/intasend_trust_badge.html" %}
+  <section id="billing-overview" class="billing-summary-grid" aria-label="Billing overview">
+    <article class="panel billing-summary-card"><div class="billing-summary-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">workspace_premium</span><span class="billing-state-pill" data-current-plan-state>Loading</span></div><small>Current Plan</small><h2 data-current-plan-name>Loading…</h2><p data-current-plan-description>Checking your active subscription.</p><strong class="billing-summary-value" data-current-plan-price>—</strong><a class="btn primary billing-summary-action" href="#billing-plans">Manage Subscription <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></article>
+    <article class="panel billing-summary-card"><div class="billing-summary-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">event</span></div><small>Next Billing / Expiry</small><h2 data-next-billing-date>Not supplied</h2><p data-next-billing-copy>Billing dates are shown only when provided by your subscription record.</p><a class="btn ghost billing-summary-action" href="#billing-invoices">View Invoices <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></article>
+    <article class="panel billing-summary-card"><div class="billing-summary-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">credit_card</span><span class="billing-state-pill">Secure checkout</span></div><small>Payment Methods</small><h2>Payment providers</h2><p>Choose a supported provider at checkout. No saved card details are displayed here.</p><div class="billing-provider-mini"><span>Pesapal</span><span>IntaSend</span></div><a class="btn ghost billing-summary-action" href="#billing-payments">View payment options <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></article>
+    <article class="panel billing-summary-card"><div class="billing-summary-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">notifications_active</span><span class="billing-state-pill is-green">Enabled</span></div><small>Billing Alerts</small><h2>Payment updates</h2><p>Review checkout and payment statuses here. Provider callbacks determine final payment state.</p><a class="btn ghost billing-summary-action" href="#billing-settings">Billing information <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></article>
   </section>
-  <section class="panel billing-section"><div class="section-heading"><div><p class="eyebrow">SUBSCRIPTION CYCLE</p><h2 data-subscription-plan>Loading…</h2></div><button class="btn danger" type="button" data-cancel-subscription hidden>Cancel renewal</button></div><p data-subscription-meta>Checking subscription…</p></section>
-  <section class="panel billing-section"><div class="section-heading"><div><p class="eyebrow">USAGE</p><h2>Plan limits</h2></div></div><p class="billing-meter-note">Usage is measured from persisted platform audit/database records. No synthetic quota values are generated.</p><div class="usage-grid" data-usage-grid><div class="empty-state">Loading usage…</div></div></section>
-  <section class="panel billing-section"><p class="eyebrow">PAYMENT HISTORY</p><div data-payment-list class="empty-state">No payment history yet.</div></section>
+  <div class="billing-main-layout">
+    <div class="billing-primary-column">
+      <section id="billing-plans" class="panel billing-section billing-plan-section"><div class="billing-section-heading"><div><p class="eyebrow">SUBSCRIPTION PLANS</p><h2>Choose your plan</h2><p>Compare the plans currently configured for your account.</p></div><span class="billing-small-label">Live plan catalog</span></div><div class="card-grid billing-plan-grid" data-plan-grid><div class="panel">Loading plans…</div></div></section>
+      <section id="billing-usage" class="panel billing-section"><div class="billing-section-heading"><div><p class="eyebrow">USAGE OVERVIEW</p><h2>Usage and limits</h2><p>Usage is based on persisted platform records, not estimates.</p></div><a class="billing-inline-link" href="#billing-invoices">Billing details <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></div><p class="billing-meter-note">Usage is measured from persisted platform audit/database records. No synthetic quota values are generated.</p><div class="usage-grid billing-usage-grid" data-usage-grid><div class="empty-state">Loading usage…</div></div></section>
+      <section id="billing-invoices" class="panel billing-section"><div class="billing-section-heading"><div><p class="eyebrow">PAYMENT HISTORY</p><h2>Invoices and transactions</h2><p>Payment records returned by AlgoBot.</p></div><span class="billing-small-label">Latest first</span></div><div class="billing-payment-table"><div class="billing-payment-head"><span>Date</span><span>Description</span><span>Amount</span><span>Status</span></div><div data-payment-list class="billing-payment-list empty-state">No payment history yet.</div></div></section>
+      <section id="billing-settings" class="panel billing-section"><div class="billing-section-heading"><div><p class="eyebrow">SUBSCRIPTION CYCLE</p><h2 data-subscription-plan>Loading…</h2><p data-subscription-meta>Checking subscription…</p></div><button class="btn danger" type="button" data-cancel-subscription hidden>Cancel renewal</button></div><p class="billing-settings-note">Renewal controls are shown only when the current subscription supports self-service cancellation.</p></section>
+    </div>
+    <aside class="billing-side-column" aria-label="Billing support and payment security">
+      <section id="billing-payments" class="panel billing-side-card"><div class="billing-side-heading"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">support_agent</span><div><h2>Billing Support</h2><p>Questions about a charge or subscription?</p></div></div><p>Use the recorded payment status and transaction details when contacting support.</p><a class="btn ghost billing-summary-action" href="mailto:support@algobot.com">Contact Support <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></section>
+      <section class="panel billing-side-card"><div class="billing-side-heading"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">lock</span><div><h2>Secure Payments</h2><p>Checkout handled by supported providers.</p></div></div><ul class="billing-security-list"><li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Secure provider checkout</li><li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Server-verified payment status</li><li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>No card data exposed in this page</li></ul><div class="billing-provider-badges"><span>Pesapal</span><span>IntaSend</span></div></section>
+      <section class="billing-intasend-security panel" aria-label="IntaSend payment security"><p class="provider-label">IntaSend checkout security</p>{% include "core/partials/intasend_trust_badge.html" %}</section>
+      <section class="panel billing-side-card billing-help-card"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">help</span><h2>Need help choosing?</h2><p>Review plan features and limits before starting a checkout. Plan availability and prices come from the live catalog.</p><a class="billing-inline-link" href="#billing-plans">Explore plans <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></section>
+    </aside>
+  </div>
 </section>
 {% endblock %}
 {% block extra_css %}<style>
@@ -37,6 +60,106 @@
 @media(min-width:560px){.billing-provider-choices{grid-template-columns:1fr 1fr}.billing-provider-button{min-height:58px}}
 @media(max-width:380px){.billing-provider-button{justify-content:flex-start;font-size:14px;padding:11px 12px}.billing-provider-logo{flex-basis:26px;width:26px;height:26px}}
 @media(prefers-reduced-motion:reduce){.billing-provider-button{transition:none}}
+
+/* Responsive Billing & Payments dashboard, scoped to avoid changing shared workspace components. */
+.billing-dashboard{--bill-blue:#1687ff;--bill-border:#17395f;--bill-panel:#061a33;--bill-green:#1fd5a0;max-width:1600px;margin:0 auto;padding:18px;color:#e8f2ff}
+.billing-dashboard .billing-hero{display:grid;grid-template-columns:78px minmax(0,1fr) minmax(230px,300px);align-items:center;gap:20px;padding:24px;border:1px solid #173b65;border-radius:15px;background:radial-gradient(ellipse at 78% 35%,rgba(0,107,255,.14),transparent 44%),linear-gradient(115deg,#082648,#06162e 75%);box-shadow:0 10px 32px #0002}
+.billing-dashboard .billing-hero-mark{display:grid;place-items:center;width:76px;height:82px;clip-path:polygon(50% 0,92% 20%,92% 78%,50% 100%,8% 78%,8% 20%);border-radius:18px;background:linear-gradient(145deg,#149eff,#0752c2);box-shadow:0 10px 30px #087cff30}
+.billing-dashboard .billing-hero-mark .material-symbols-rounded{font-size:42px;color:white}
+.billing-dashboard .billing-hero-copy h1{margin:3px 0 7px;font-size:clamp(25px,3vw,35px);letter-spacing:-.035em;line-height:1.15}
+.billing-dashboard .billing-hero-copy p:not(.eyebrow){margin:0 0 5px;color:#d4e5fc;font-size:14px}
+.billing-dashboard .billing-hero-copy small{color:#91aed3;font-size:12px}
+.billing-dashboard .billing-account-status{display:grid;grid-template-columns:40px minmax(0,1fr) 18px;align-items:center;gap:10px;padding:14px;border:1px solid #1c416c;border-radius:12px;background:#071d38}
+.billing-dashboard .billing-account-status>div{display:grid;gap:5px;min-width:0}
+.billing-dashboard .billing-account-status strong{color:#40e0ad;font-size:13px}
+.billing-dashboard .billing-account-status small{color:#9bb7d9;font-size:11px;line-height:1.4}
+.billing-dashboard .billing-account-status>.material-symbols-rounded:last-child{color:#81a4ce}
+.billing-dashboard .billing-status-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#06463f;color:#45e3b2;font-size:24px}
+.billing-dashboard .billing-tabs{display:flex;align-items:stretch;gap:3px;margin:14px 0 18px;overflow-x:auto;border-bottom:1px solid #173454;scrollbar-width:thin}
+.billing-dashboard .billing-tabs>a{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:47px;padding:0 14px;color:#a8bfdc;text-decoration:none;font-size:12px;white-space:nowrap}
+.billing-dashboard .billing-tabs>a .material-symbols-rounded{font-size:17px}
+.billing-dashboard .billing-tabs>a:hover,.billing-dashboard .billing-tabs>a.is-active{color:#40a8ff}
+.billing-dashboard .billing-tabs>a.is-active{font-weight:800}
+.billing-dashboard .billing-tabs>a.is-active:after{position:absolute;bottom:-1px;left:10px;right:10px;height:3px;border-radius:4px;background:#1687ff;content:""}
+.billing-dashboard .billing-tabs>[data-billing-refresh]{display:inline-flex;align-items:center;gap:6px;margin-left:auto;min-height:34px;align-self:center;white-space:nowrap}
+.billing-dashboard .billing-tabs>[data-billing-refresh] .material-symbols-rounded{font-size:16px}
+.billing-dashboard .billing-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-bottom:16px;scroll-margin-top:15px}
+.billing-dashboard .billing-summary-card,.billing-dashboard .billing-section,.billing-dashboard .billing-side-card{min-width:0;padding:17px;border:1px solid var(--bill-border);border-radius:13px;background:linear-gradient(145deg,#071d38,#04152b);box-shadow:0 8px 24px #0002}
+.billing-dashboard .billing-summary-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:13px}
+.billing-dashboard .billing-summary-icon{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border:1px solid #1b4c7d;border-radius:12px;background:linear-gradient(145deg,#124478,#09274a);color:#82c5ff;font-size:23px}
+.billing-dashboard .billing-state-pill{padding:5px 9px;border:1px solid #27527a;border-radius:18px;background:#0b2949;color:#a7d7ff;font-size:10px;font-weight:800}
+.billing-dashboard .billing-state-pill.is-green{background:#063b34;border-color:#0d6556;color:#42e1b2}
+.billing-dashboard .billing-summary-card>small{color:#a5bddc;font-size:12px}
+.billing-dashboard .billing-summary-card h2{margin:7px 0 6px;color:#eff6ff;font-size:20px;overflow-wrap:anywhere}
+.billing-dashboard .billing-summary-card>p{min-height:35px;margin:0 0 10px;color:#91acd0;font-size:11px;line-height:1.55}
+.billing-dashboard .billing-summary-value{display:block;margin:5px 0 13px;color:#f2f7ff;font-size:23px;font-variant-numeric:tabular-nums}
+.billing-dashboard .billing-summary-value small{font-size:11px;color:#9db8d8}
+.billing-dashboard .billing-summary-action{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;min-height:39px;margin-top:12px;padding:9px 11px;border-radius:9px;text-align:center;text-decoration:none;font-size:11px;white-space:normal}
+.billing-dashboard .billing-summary-action .material-symbols-rounded{font-size:16px}
+.billing-dashboard .billing-provider-mini,.billing-dashboard .billing-provider-badges{display:flex;flex-wrap:wrap;gap:7px}
+.billing-dashboard .billing-provider-mini span,.billing-dashboard .billing-provider-badges span{display:inline-flex;align-items:center;justify-content:center;padding:6px 9px;border:1px solid #21466f;border-radius:7px;background:#09213d;color:#bcd7f7;font-size:10px;font-weight:750}
+.billing-dashboard .billing-main-layout{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(250px,.85fr);gap:16px;align-items:start}
+.billing-dashboard .billing-primary-column,.billing-dashboard .billing-side-column{display:grid;gap:16px;min-width:0}
+.billing-dashboard .billing-section{padding:19px;scroll-margin-top:18px}
+.billing-dashboard .billing-section-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px}
+.billing-dashboard .billing-section-heading h2{margin:2px 0 5px;color:#eff6ff;font-size:18px}
+.billing-dashboard .billing-section-heading p:not(.eyebrow){margin:0;color:#96b0d1;font-size:11px;line-height:1.5}
+.billing-dashboard .billing-small-label{flex:0 0 auto;padding:6px 8px;border:1px solid #1d4269;border-radius:8px;background:#09213d;color:#91b9e7;font-size:10px}
+.billing-dashboard .billing-inline-link{display:inline-flex;align-items:center;gap:5px;color:#52acff;text-decoration:none;font-size:11px;font-weight:750;white-space:nowrap}
+.billing-dashboard .billing-inline-link .material-symbols-rounded{font-size:16px}
+.billing-dashboard .billing-plan-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.billing-dashboard .billing-plan-card{display:flex;flex-direction:column;gap:8px;min-width:0;padding:15px;border:1px solid #1b416a;border-radius:11px;background:linear-gradient(150deg,#082342,#06172d);overflow-wrap:anywhere}
+.billing-dashboard .billing-plan-card[data-current="true"]{border-color:#1598ff;box-shadow:inset 0 0 0 1px #1598ff45,0 0 18px #1687ff14}
+.billing-dashboard .billing-plan-card>.eyebrow{margin:0;color:#d7e7fc;font-size:12px;font-weight:800}
+.billing-dashboard .billing-plan-card .billing-plan-price{margin:0;color:#f5f8ff;font-size:24px;line-height:1.25}
+.billing-dashboard .billing-plan-card .billing-plan-price small{font-size:10px;color:#9bb8db;font-weight:500}
+.billing-dashboard .billing-plan-card>p:not(.eyebrow){margin:0;color:#91aaca;font-size:10px;line-height:1.5}
+.billing-dashboard .billing-plan-card .billing-plan-detail{display:flex;align-items:flex-start;gap:6px;color:#9eb8d9;font-size:10px;line-height:1.5}
+.billing-dashboard .billing-plan-card .billing-plan-detail .material-symbols-rounded{color:#3edcad;font-size:15px}
+.billing-dashboard .billing-plan-card .billing-plan-actions{margin-top:auto;padding-top:7px}
+.billing-dashboard .billing-plan-card .billing-plan-actions>.btn{width:100%;min-height:37px;padding:8px 9px;font-size:10px;white-space:normal}
+.billing-dashboard .billing-plan-card .billing-provider-choices{grid-template-columns:1fr;gap:7px}
+.billing-dashboard .billing-plan-card .billing-provider-button{min-height:37px;justify-content:flex-start;padding:7px 8px;font-size:10px}
+.billing-dashboard .billing-plan-card .billing-provider-logo{width:22px;height:22px;flex-basis:22px}
+.billing-dashboard .billing-meter-note{margin:0 0 13px;color:#88a6cb;font-size:11px;line-height:1.5}
+.billing-dashboard .billing-usage-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.billing-dashboard .usage-card{display:flex;flex-direction:column;gap:8px;min-width:0;padding:13px;border:1px solid #1b416a;border-radius:10px;background:#071b33}
+.billing-dashboard .usage-card>small:first-child{min-height:28px;color:#b0c6e2;font-size:10px;line-height:1.4}
+.billing-dashboard .usage-card>strong{color:#f2f7ff;font-size:20px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.billing-dashboard .usage-card>small{color:#88a7cc;font-size:10px;overflow-wrap:anywhere}
+.billing-dashboard .usage-card .usage-source{padding-top:7px;border-top:1px solid #173454;color:#718fb5;font-size:9px}
+.billing-dashboard .usage-reset-badge{display:block;padding:6px 7px;border-radius:7px;background:#392b16;color:#f1ca7c;font-size:10px}
+.billing-dashboard .billing-payment-table{min-width:0;overflow-x:auto}
+.billing-dashboard .billing-payment-head,.billing-dashboard .billing-row{display:grid;grid-template-columns:minmax(90px,.8fr) minmax(120px,1.5fr) minmax(90px,.8fr) minmax(90px,.7fr);align-items:center;gap:12px;min-width:490px;padding:12px 7px;border-bottom:1px solid #163454}
+.billing-dashboard .billing-payment-head{color:#9db7d8;font-size:10px;font-weight:750}
+.billing-dashboard .billing-row{color:#d6e5fb;font-size:11px}
+.billing-dashboard .billing-row>span{min-width:0;overflow-wrap:anywhere}
+.billing-dashboard .billing-row>span:last-child{color:#8da9cc;font-size:10px}
+.billing-dashboard .billing-status-completed,.billing-dashboard .billing-status-pending,.billing-dashboard .billing-status-failed{display:inline-flex;width:max-content;max-width:100%;padding:5px 8px;border-radius:18px;font-size:9px;font-weight:800}
+.billing-dashboard .billing-status-completed{background:#063d35;color:#40dfb0}
+.billing-dashboard .billing-status-pending{background:#3a2e19;color:#f0cb7d}
+.billing-dashboard .billing-status-failed{background:#401f2c;color:#ff9aaa}
+.billing-dashboard .billing-side-card{padding:17px}
+.billing-dashboard .billing-side-heading{display:flex;align-items:center;gap:11px;margin-bottom:13px}
+.billing-dashboard .billing-side-heading>div{min-width:0}
+.billing-dashboard .billing-side-heading h2,.billing-dashboard .billing-side-card h2{margin:0 0 5px;color:#edf5ff;font-size:14px}
+.billing-dashboard .billing-side-heading p,.billing-dashboard .billing-side-card>p{margin:0;color:#91acd0;font-size:11px;line-height:1.6}
+.billing-dashboard .billing-side-card>p{margin-bottom:12px}
+.billing-dashboard .billing-security-list{display:grid;gap:11px;margin:14px 0;padding:0;list-style:none}
+.billing-dashboard .billing-security-list li{display:flex;align-items:flex-start;gap:8px;color:#a8bfdd;font-size:11px;line-height:1.5}
+.billing-dashboard .billing-security-list .material-symbols-rounded{color:#36dca9;font-size:16px}
+.billing-dashboard .billing-intasend-security{padding:14px;border:1px solid #1a3d63;border-radius:12px;background:#061a33}
+.billing-dashboard .billing-intasend-security .provider-label{margin:0 0 10px;color:#b4cbe7;font-size:11px;font-weight:750}
+.billing-dashboard .billing-help-card>.billing-summary-icon{margin-bottom:12px}
+.billing-dashboard .billing-settings-note{color:#8da9cc;font-size:11px;line-height:1.6}
+.billing-dashboard .billing-alert{margin:12px 0;padding:13px;border:1px solid #9a4850;border-radius:10px;background:#321b2a;color:#ffd8dc}
+.billing-dashboard #billing-overview,.billing-dashboard #billing-plans,.billing-dashboard #billing-invoices,.billing-dashboard #billing-payments,.billing-dashboard #billing-usage,.billing-dashboard #billing-settings{scroll-margin-top:18px}
+@media(max-width:1200px){.billing-dashboard .billing-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.billing-dashboard .billing-main-layout{grid-template-columns:minmax(0,1.5fr) minmax(230px,.8fr)}.billing-dashboard .billing-plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.billing-dashboard .billing-usage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.billing-dashboard .billing-hero{grid-template-columns:65px minmax(0,1fr) minmax(200px,250px)}}
+@media(max-width:850px){.billing-dashboard{padding:12px}.billing-dashboard .billing-hero{grid-template-columns:58px minmax(0,1fr);gap:14px;padding:18px}.billing-dashboard .billing-hero-mark{width:58px;height:64px}.billing-dashboard .billing-hero-mark .material-symbols-rounded{font-size:32px}.billing-dashboard .billing-account-status{grid-column:1/-1;grid-template-columns:40px minmax(0,1fr) 18px}.billing-dashboard .billing-main-layout{grid-template-columns:1fr}.billing-dashboard .billing-side-column{grid-template-columns:repeat(2,minmax(0,1fr))}.billing-dashboard .billing-intasend-security{grid-column:1/-1}.billing-dashboard .billing-tabs{margin-bottom:14px}.billing-dashboard .billing-tabs>[data-billing-refresh]{margin-left:8px}}
+@media(max-width:580px){.billing-dashboard{padding:9px}.billing-dashboard .billing-hero{grid-template-columns:1fr;gap:12px;padding:15px}.billing-dashboard .billing-hero-mark{width:48px;height:53px}.billing-dashboard .billing-hero-mark .material-symbols-rounded{font-size:28px}.billing-dashboard .billing-hero-copy h1{font-size:25px}.billing-dashboard .billing-hero-copy p:not(.eyebrow){font-size:12px}.billing-dashboard .billing-account-status{grid-column:auto}.billing-dashboard .billing-tabs>a{padding:0 11px;font-size:11px}.billing-dashboard .billing-summary-grid{gap:8px}.billing-dashboard .billing-summary-card{padding:12px}.billing-dashboard .billing-summary-card h2{font-size:17px}.billing-dashboard .billing-summary-card>p{min-height:0}.billing-dashboard .billing-summary-value{font-size:20px}.billing-dashboard .billing-summary-icon{width:36px;height:36px;flex-basis:36px;font-size:20px}.billing-dashboard .billing-state-pill{padding:4px 6px;font-size:9px}.billing-dashboard .billing-plan-grid,.billing-dashboard .billing-usage-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.billing-dashboard .billing-plan-card{padding:11px}.billing-dashboard .billing-plan-card .billing-plan-price{font-size:21px}.billing-dashboard .billing-section{padding:13px}.billing-dashboard .billing-section-heading{gap:8px}.billing-dashboard .billing-section-heading h2{font-size:16px}.billing-dashboard .billing-small-label{font-size:9px}.billing-dashboard .billing-side-column{grid-template-columns:1fr}.billing-dashboard .billing-intasend-security{grid-column:auto}.billing-dashboard .billing-summary-action{font-size:10px;padding:8px}.billing-dashboard .billing-row,.billing-dashboard .billing-payment-head{min-width:500px}}
+@media(max-width:360px){.billing-dashboard .billing-summary-grid{grid-template-columns:1fr}.billing-dashboard .billing-plan-grid,.billing-dashboard .billing-usage-grid{grid-template-columns:1fr}.billing-dashboard .billing-summary-card h2{font-size:19px}.billing-dashboard .billing-tabs>a{padding:0 9px}.billing-dashboard .billing-small-label{display:none}.billing-dashboard .billing-section-heading{flex-direction:column}.billing-dashboard .billing-row,.billing-dashboard .billing-payment-head{min-width:480px}}
+@media(prefers-reduced-motion:reduce){.billing-dashboard *{scroll-behavior:auto!important;transition:none!important}}
+
 </style>{% endblock %}
 {% block extra_js %}<script>
 (()=> {
@@ -72,7 +195,7 @@
           <button class="btn primary provider-button billing-provider-button" type="button" data-checkout-plan="${esc(name)}" data-provider="intasend" aria-label="Continue with IntaSend for ${esc(name)}"><img class="billing-provider-logo intasend-logo" src="https://framerusercontent.com/images/EW5SO1YUyLv7luuQQdXwh1wLKa4.svg?height=810&amp;width=810" alt="" loading="lazy" decoding="async"><span>Continue with IntaSend</span></button>
         </div>`;
       }
-      return `<article class="panel billing-plan-card" data-plan="${esc(name)}"><p class="eyebrow">${esc(name)}</p><h2 class="billing-plan-price money-value">${price}</h2><p>${p.recurring?'30-day billing period':'No recurring charge'}</p>${!configured&&name!=='FREE'?'<span class="provider-label">This plan is not configured for checkout.</span>':''}<div class="billing-plan-actions">${action}</div></article>`;
+      return `<article class="panel billing-plan-card" data-plan="${esc(name)}" data-current="${active?'true':'false'}"><p class="eyebrow">${esc(name)}${active?' · CURRENT':''}</p><h2 class="billing-plan-price money-value">${price}</h2><p>${p.recurring?'30-day billing period':'No recurring charge'}</p><div class="billing-plan-detail"><span class="material-symbols-rounded" aria-hidden="true">check_circle</span><span>Usage limits enforced from your active entitlements</span></div><div class="billing-plan-detail"><span class="material-symbols-rounded" aria-hidden="true">check_circle</span><span>${configured?'Checkout status: available':'Checkout status: not configured'}</span></div>${!configured&&name!=='FREE'?'<span class="provider-label">This plan is not configured for checkout.</span>':''}<div class="billing-plan-actions">${action}</div></article>`;
     }).join('')||'<div class="panel">No billing plans are configured.</div>';
     const checkoutForm=$('#billing-checkout-form');
     const checkoutPlan=checkoutForm?.querySelector('[data-checkout-form-plan]');
@@ -91,8 +214,19 @@
       const [status,ent,plansData]=await Promise.all([api('/billing/status/'),api('/billing/entitlements/'),api('/billing/plans/')]);
       const current=ent.current||{},plan=String(current.plan||status.subscription?.plan||'FREE').toUpperCase();
       renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase());
-      $('[data-subscription-plan]').textContent=plan;
+      const plans=plansData.plans||status.plans||[];
       const s=status.subscription||{},expiry=s.expires_at?new Date(s.expires_at).toLocaleString():'';
+      const currentPlanData=plans.find(p=>String(p.plan||'').toUpperCase()===plan)||{};
+      const currentPrice=currentPlanData.price_cents==null?null:money(currentPlanData.price_cents,currentPlanData.currency);
+      $('[data-current-plan-name]').textContent=plan;
+      $('[data-current-plan-state]').textContent=(s.is_active||plan==='FREE'||plan==='ENTERPRISE')?'Active':'Inactive';
+      $('[data-current-plan-description]').textContent=plan==='FREE'?'Essential features with usage limits enforced by your current entitlements.':plan==='ENTERPRISE'?'Enterprise access; contact support for account-specific billing changes.':'Your current subscription and its configured entitlements.';
+      $('[data-current-plan-price]').innerHTML=currentPrice?esc(currentPrice)+(currentPlanData.recurring?' <small>/ 30 days</small>':''):'See plan catalog';
+      $('[data-next-billing-date]').textContent=expiry||'Not supplied';
+      $('[data-next-billing-copy]').textContent=s.is_active?(s.recurring?'Subscription expiry/next-cycle date supplied by billing records.':'One-time payment · no automatic renewal.'):'No active paid billing cycle is recorded.';
+      const activeStatus=(s.is_active||plan==='FREE'||plan==='ENTERPRISE')?'Active · billing data available':'Review subscription status';
+      $('[data-billing-account-status]').textContent=activeStatus;
+      $('[data-subscription-plan]').textContent=plan;
       const cycleLabel=s.is_active?(s.recurring?'Auto-renewal enabled':'One-time payment · no automatic renewal'):'No active paid cycle';
       const cancelButton=$('[data-cancel-subscription]');
       const freePlan=plan==='FREE';
@@ -102,12 +236,16 @@
       const u=current.usage||{},labels={api_calls:'Execution API calls / day',strategies:'Active strategies',backtests:'Backtests / day',predictions:'AI predictions / day',orders:'Orders / day',broker_accounts:'Connected broker integrations',automations:'Automation runs / day',live_orders:'Live orders / day'};
       $('[data-usage-grid]').innerHTML=Object.keys(labels).map(k=>{
         const x=u[k]||{},source=x.source==='database'?'database':'audit log',exhausted=!x.unlimited&&x.limit!=null&&Number(x.used||0)>=Number(x.limit),resetBadge=exhausted&&x.reset_at?`<span class="usage-reset-badge" role="status">Resets ${new Date(x.reset_at).toLocaleString()}</span>`:'';
-        return `<article class="usage-card"><small>${labels[k]}</small><strong>${x.unlimited?'Unlimited':`${x.used||0} / ${x.limit??'—'}`}</strong><small>${x.unlimited?'No restriction':`${x.remaining??0} remaining`}</small>${resetBadge}<small class="usage-source">Source: ${source}</small></article>`;
+        const iconMap={api_calls:'api',strategies:'psychology',backtests:'query_stats',predictions:'insights',orders:'receipt_long',broker_accounts:'hub',automations:'auto_mode',live_orders:'monitoring'};
+        return `<article class="usage-card"><div class="billing-usage-card-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">${iconMap[k]||'analytics'}</span><small>${labels[k]}</small></div><strong>${x.unlimited?'Unlimited':`${x.used||0} / ${x.limit??'—'}`}</strong><small>${x.unlimited?'No restriction':`${x.remaining??0} remaining`}</small><div class="billing-usage-track" aria-hidden="true"><span style="width:${x.unlimited?'100%':x.limit&&Number(x.limit)>0?Math.min(100,Math.max(0,Number(x.used||0)/Number(x.limit)*100))+'%':'0%'}"></span></div>${resetBadge}<small class="usage-source">Source: ${source}</small></article>`;
       }).join('');
       const payments=status.payments||[];
-      $('[data-payment-list]').innerHTML=payments.length?payments.map(x=>{const raw=String(x.status||'PENDING').toUpperCase(),cls=raw==='COMPLETED'?'billing-status-completed':raw==='FAILED'?'billing-status-failed':'billing-status-pending';return `<div class="billing-row"><span>${esc(x.metadata?.plan||'Subscription')}</span><span class="money-value">${money(x.amount_cents,x.currency)}</span><span class="${cls}">${raw}</span><span>${x.created_at?new Date(x.created_at).toLocaleString():''}</span></div>`;}).join(''):'No payment history yet. Complete a provider checkout and return here to record the result.';
+      $('[data-payment-list]').innerHTML=payments.length?payments.map(x=>{const raw=String(x.status||'PENDING').toUpperCase(),cls=raw==='COMPLETED'?'billing-status-completed':raw==='FAILED'?'billing-status-failed':'billing-status-pending';return `<div class="billing-row"><span>${x.created_at?esc(new Date(x.created_at).toLocaleDateString()):'—'}</span><span>${esc(x.metadata?.plan||'Subscription')}</span><span class="money-value">${money(x.amount_cents,x.currency)}</span><span><span class="${cls}">${esc(raw)}</span></span></div>`;}).join(''):'No payment history yet. Complete a provider checkout and return here to record the result.';
     }catch(e){console.error(e);showError(`Billing data could not be loaded: ${e?.message||'Please refresh and try again.'}`);}
   }
+  document.querySelectorAll('.billing-tabs a').forEach(link=>link.addEventListener('click',()=>{document.querySelectorAll('.billing-tabs a').forEach(item=>{item.classList.remove('is-active');item.removeAttribute('aria-current');});link.classList.add('is-active');link.setAttribute('aria-current','location');}));
+  const syncBillingTab=()=>{const hash=window.location.hash||'#billing-overview';document.querySelectorAll('.billing-tabs a').forEach(link=>{const active=link.getAttribute('href')===hash;link.classList.toggle('is-active',active);if(active)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');});};
+  window.addEventListener('hashchange',syncBillingTab);syncBillingTab();
   $('[data-billing-refresh]').onclick=load;
   $('[data-cancel-subscription]').textContent='Cancel renewal';
   $('[data-cancel-subscription]').onclick=async()=>{
