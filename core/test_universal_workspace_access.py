@@ -51,6 +51,28 @@ class UniversalWorkspaceAccessTests(TestCase):
                 self.assertNotEqual(response.status_code, 302, path)
                 self.assertEqual(response.status_code, 200, path)
 
+    def test_developer_dashboard_reference_layout_preserves_live_management_controls(self):
+        response = self.client.get("/developer/")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode("utf-8")
+        for marker in (
+            "Developer &amp; API", "Quick Start", "API Endpoints", "Sample Request",
+            "Your API Keys", "API Usage", "API Key Management", "Webhooks",
+            "Registered API Contract", 'data-sample-request',
+            '/api/developer/browser/keys/create/', '/api/developer/browser/webhooks/create/',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, html)
+        self.assertIn("developer_api_hardening.css?v=20261020-devapi3", html)
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "developer_api_hardening.css").read_text(encoding="utf-8")
+        self.assertIn(".dev-dashboard .dev-dashboard-layout", css)
+        self.assertIn("@media(max-width:900px)", css)
+        self.assertIn("@media(max-width:620px)", css)
+        self.assertIn("@media(max-width:360px)", css)
+        portal = (Path(settings.BASE_DIR) / "static" / "js" / "developer_portal.js").read_text(encoding="utf-8")
+        self.assertIn("function bindSectionNavigation()", portal)
+        self.assertIn("function bindCopyButtons()", portal)
+
     def test_removed_bot_runtime_page_has_no_route_or_sidebar_entry(self):
         response = self.client.get("/operations/deployments/")
         self.assertEqual(response.status_code, 404)
