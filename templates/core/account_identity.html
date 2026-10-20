@@ -1,18 +1,17 @@
 {% extends "base.html" %}
 {% load static %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account3">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account4"><script>
+document.addEventListener("click", event => { const button = event.target.closest("[data-password-toggle]"); if (!button) return; const input = button.closest(".account-password-control")?.querySelector("[data-password-field]"); if (!input) return; const show = input.type === "password"; input.type = show ? "text" : "password"; button.textContent = show ? "Hide" : "Show"; button.setAttribute("aria-label", show ? "Hide password" : "Show password"); });
+</script>
+{% endblock %}
 {% block title %}Account Identity | AlgoBot{% endblock %}
 {% block content %}
-<style>
-.connected-identity{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--ds-border,var(--line,#26364b));border-radius:14px;background:var(--ds-surface-1,var(--panel,#101722));margin:12px 0 16px}.connected-identity>span:nth-child(2){flex:1;min-width:0}.google-logo{display:grid;place-items:center;flex:0 0 48px;width:48px;height:48px;border-radius:50%;background:#fff;box-shadow:0 1px 4px #0002}.google-logo svg{display:block;width:28px;height:28px}.identity-muted{color:var(--ds-muted,var(--muted,#94a3b8));font-size:13px;line-height:1.5}
-</style>
-
 <main class="account-page" data-account-identity>
   <header class="account-hero">
     <div>
       <p class="account-kicker">ACCOUNT SECURITY</p>
       <h1>Account identity</h1>
-      <p>Manage your AlgoBot username and login email. Broker identity and Gmail notification delivery remain separate.</p>
+      
     </div>
     <span class="account-state {% if email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if email_verified %}Email verified{% else %}Email not verified{% endif %}</span>
   </header>
@@ -27,7 +26,7 @@
       {% if errors %}<ul class="error-list">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
       {% if password_required %}
         <label>Current password
-          <input name="current_password" type="password" autocomplete="current-password" required>
+          <span class="account-password-control"><input name="current_password" type="password" autocomplete="current-password" data-password-field required><button type="button" class="account-password-toggle" data-password-toggle aria-label="Show password">Show</button></span>
         </label>
         <p class="account-help">Confirm your current password before changing your login identity.</p>
       {% else %}
@@ -46,26 +45,35 @@
       </div>
     </form>
 
+    <form class="account-card" method="post" action="{% url 'account_identity_page' %}" data-password-change>
+      {% csrf_token %}
+      <input type="hidden" name="identity_action" value="change_password">
+      <h2>{% if password_required %}Change password{% else %}Set a password{% endif %}</h2>
+      {% if password_required %}<label>Current password<span class="account-password-control"><input name="current_password" type="password" autocomplete="current-password" data-password-field required><button type="button" class="account-password-toggle" data-password-toggle aria-label="Show password">Show</button></span></label>{% endif %}
+      <label>New password<span class="account-password-control"><input id="new-password" name="new_password" type="password" autocomplete="new-password" minlength="12" data-password-field required><button type="button" class="account-password-toggle" data-password-toggle aria-label="Show password">Show</button></span></label>
+      <div class="account-password-strength" aria-live="polite"><div class="account-password-strength__track"><span data-strength-bar></span></div><span data-strength-label>Use 12 or more characters</span></div>
+      <label>Confirm new password<span class="account-password-control"><input name="confirm_password" type="password" autocomplete="new-password" data-password-field required><button type="button" class="account-password-toggle" data-password-toggle aria-label="Show password">Show</button></span></label>
+      <div class="account-actions"><button type="submit" class="account-btn account-btn--primary">Save password</button></div>
+    </form>
+
     <aside class="panel">
       <h2>Connected identities</h2>
       {% if google_identity_linked %}
-        <div class="connected-identity connected-identity--google"><span class="google-logo" aria-hidden="true"><svg viewBox="0 0 48 48" role="img" focusable="false" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.8 6.1-15Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5.1c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.6a12 12 0 0 1 0-7.2v-5.3H5.8a20 20 0 0 0 0 17.8l6.8-5.3Z"/><path fill="#EA4335" d="M24 12c3 0 5.6 1 7.7 3l5.8-5.8C34 5.8 29.5 4 24 4A20 20 0 0 0 5.8 15.1l6.8 5.3C14.2 15.6 18.7 12 24 12Z"/></svg></span><span><strong>Google</strong><br><span class="identity-muted">Connected</span></span><span class="account-state account-state--good">Linked</span></div>
+        <div class="account-identity-provider"><span class="account-provider-mark" aria-hidden="true">G</span><div><strong>Google</strong><p>Connected</p></div><span class="account-state account-state--good">Linked</span></div>
         {% if password_required %}
           <form method="post" action="{% url 'google_unlink' %}">
             {% csrf_token %}
-            <label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>
-            <button type="submit" class="button">Unlink Google</button>
+            <label>Current password<span class="account-password-control"><input type="password" name="current_password" autocomplete="current-password" data-password-field required><button type="button" class="account-password-toggle" data-password-toggle aria-label="Show password">Show</button></span></label>
+            <button type="submit" class="account-btn account-btn--danger">Unlink Google</button>
           </form>
         {% else %}
           <p>Set a local password before unlinking Google so you retain a sign-in method.</p>
         {% endif %}
       {% else %}
-        <div class="connected-identity connected-identity--google"><span class="google-logo" aria-hidden="true"><svg viewBox="0 0 48 48" role="img" focusable="false" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.8 6.1-15Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5.1c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.6a12 12 0 0 1 0-7.2v-5.3H5.8a20 20 0 0 0 0 17.8l6.8-5.3Z"/><path fill="#EA4335" d="M24 12c3 0 5.6 1 7.7 3l5.8-5.8C34 5.8 29.5 4 24 4A20 20 0 0 0 5.8 15.1l6.8 5.3C14.2 15.6 18.7 12 24 12Z"/></svg></span><span><strong>Google</strong><br><span class="identity-muted">Not linked. Link a verified Google identity to this authenticated AlgoBot session.</span></span></div>
-        <a class="button" href="/auth/google/?intent=link">Link Google sign-in</a>
+        <div class="account-identity-provider"><span class="account-provider-mark" aria-hidden="true">G</span><div><strong>Google</strong><p>Not connected</p></div></div>
+        <a class="account-btn account-btn--google" href="/auth/google/?intent=link"><svg aria-hidden="true" viewBox="0 0 48 48" width="20" height="20"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 3.03 13.22l7.98 6.19C12.9 13.72 18.01 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.72 7.18l7.62 5.91c4.45-4.11 7.14-10.16 7.14-17.56z"/><path fill="#FBBC05" d="M11.01 28.59A14.5 14.5 0 0 1 10.25 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.52 3.03 10.78l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.89l-7.62-5.91c-2.12 1.42-4.83 2.27-8.28 2.27-5.99 0-11.1-4.22-12.99-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Continue with Google</span></a>
       {% endif %}
-      <p><strong>AlgoBot login</strong><br>Username and login email are controlled here.</p>
-      <p><strong>Broker account</strong><br>Deriv account IDs, tokens, and connection status are managed separately.</p>
-      <p><strong>Gmail notifications</strong><br>Connect or disconnect a verified Gmail sending address from notification settings. It does not replace your AlgoBot login email.</p>
+      
       <div class="form-actions">
         <a class="button" href="/brokers/connect/">Manage broker connection</a>
         <a class="button" href="/notifications/">Manage Gmail notifications</a>
@@ -73,4 +81,15 @@
     </aside>
   </div></div>
 </main>
+<script>
+document.addEventListener('input',function(event){
+ const input=event.target.closest('#new-password'); if(!input)return;
+ const value=input.value; let score=0;
+ if(value.length>=12)score++; if(value.length>=16)score++; if(/[a-z]/.test(value)&&/[A-Z]/.test(value))score++;
+ if(/[0-9]/.test(value))score++; if(/[^A-Za-z0-9]/.test(value))score++;
+ const bar=document.querySelector('[data-strength-bar]'); const label=document.querySelector('[data-strength-label]');
+ if(bar)bar.style.width=(score*20)+'%';
+ if(label)label.textContent=!value?'Use 12 or more characters':score<=2?'Weak — add length and character variety':score<=3?'Fair — improve character variety':score===4?'Strong':'Very strong';
+});
+</script>
 {% endblock %}
