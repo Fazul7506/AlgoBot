@@ -29,3 +29,111 @@
 .audit-dashboard .audit-section table.audit-table td .audit-empty{white-space:normal!important;padding:24px 12px!important}
 .audit-dashboard .summary-row>strong .summary-percent{display:inline-block!important;font-weight:500!important;white-space:nowrap!important;margin-left:6px!important}
 @media(max-width:760px){.audit-dashboard .audit-section table.audit-table{min-width:820px!important}.audit-dashboard .audit-section .audit-section-head{display:flex!important;align-items:flex-start!important;flex-direction:column!important}.audit-dashboard .audit-section .audit-event-actions{display:flex!important;flex-wrap:wrap!important;width:100%!important}.audit-dashboard .audit-section .audit-event-actions .audit-btn{white-space:normal!important;flex:1 1 130px!important}}
+
+
+/* Mobile audit records: readable stacked cards instead of a clipped wide table. */
+@media (max-width: 760px) {
+  .audit-dashboard .audit-section { overflow: hidden !important; }
+  .audit-dashboard .audit-table-wrap {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    padding: 8px !important;
+  }
+  .audit-dashboard .audit-section table.audit-table {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    table-layout: auto !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+  .audit-dashboard .audit-section table.audit-table thead { display: none !important; }
+  .audit-dashboard .audit-section table.audit-table tbody {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+  .audit-dashboard .audit-section table.audit-table tbody tr {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 5px 10px !important;
+    border: 1px solid #153d70 !important;
+    border-radius: 10px !important;
+    background: linear-gradient(145deg, #082650, #041a38) !important;
+    overflow: hidden !important;
+  }
+  .audit-dashboard .audit-section table.audit-table tbody tr:hover { background: #0a2a53 !important; }
+  .audit-dashboard .audit-section table.audit-table tbody td {
+    display: grid !important;
+    grid-template-columns: minmax(88px, 29%) minmax(0, 1fr) !important;
+    align-items: start !important;
+    gap: 8px !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    padding: 10px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid #15345a !important;
+    background: transparent !important;
+    color: #e0ecff !important;
+    text-align: left !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+  .audit-dashboard .audit-section table.audit-table tbody td:last-child { border-bottom: 0 !important; }
+  .audit-dashboard .audit-section table.audit-table tbody td::before {
+    content: attr(data-label) !important;
+    display: block !important;
+    color: #8faed7 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    line-height: 1.45 !important;
+    letter-spacing: .02em !important;
+    text-transform: uppercase !important;
+  }
+  .audit-dashboard .audit-section table.audit-table tbody td time {
+    display: block !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    font-size: 12px !important;
+    font-variant-numeric: tabular-nums !important;
+  }
+  .audit-dashboard .audit-section table.audit-table tbody td > small {
+    display: block !important;
+    max-width: 100% !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+    font-size: 11px !important;
+    line-height: 1.45 !important;
+    margin-top: 4px !important;
+  }
+  .audit-dashboard .audit-section table.audit-table tbody td .audit-event {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    align-items: flex-start !important;
+    overflow-wrap: anywhere !important;
+  }
+  .audit-dashboard .audit-section table.audit-table tbody td .audit-event > div,
+  .audit-dashboard .audit-section table.audit-table tbody td .audit-event strong,
+  .audit-dashboard .audit-section table.audit-table tbody td .audit-detail-text {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+  .audit-dashboard .audit-section table.audit-table tbody td .audit-event-icon { flex: 0 0 28px !important; width: 28px !important; height: 28px !important; }
+  .audit-dashboard .audit-section table.audit-table tbody td .audit-severity { justify-self: start !important; }
+  .audit-dashboard .audit-section table.audit-table tbody td[colspan="6"] { display: block !important; }
+  .audit-dashboard .audit-section table.audit-table tbody td[colspan="6"]::before { content: none !important; }
+}
