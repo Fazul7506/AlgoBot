@@ -30,14 +30,14 @@
       </form>
 
       <section class="audit-section">
-        <div class="audit-section-head"><div><h2>Recorded Events</h2><span class="audit-sub">Latest matching records · private to your account</span></div><div class="audit-event-actions"><button class="audit-btn secondary" type="button" id="audit-copy">Copy visible rows</button><button class="audit-btn" type="button" id="audit-export">↓ Export CSV</button></div></div>
+        <div class="audit-section-head"><div><h2>Recorded Events</h2><span class="audit-sub">Latest matching records · private to your account</span></div><div class="audit-event-actions"><button class="audit-btn secondary" type="button" id="audit-copy">Copy visible rows</button><button class="audit-btn" type="button" id="audit-export">↓ Export current page</button><a class="audit-btn secondary" href="?range={{ audit_filters.range|urlencode }}&action={{ audit_filters.action|urlencode }}&q={{ audit_filters.q|urlencode }}&module={{ audit_filters.module|urlencode }}&start={{ audit_filters.start|urlencode }}&end={{ audit_filters.end|urlencode }}&severity={{ audit_filters.severity|urlencode }}&export=csv">Export all filtered CSV</a></div></div>
         <div class="audit-table-wrap"><table class="audit-table" id="audit-events-table">
-          <thead><tr><th>Timestamp</th><th>Event</th><th>User / Source</th><th>Details / Resource</th><th>Origin</th><th>Severity</th></tr></thead>
+          <thead><tr><th>Timestamp</th><th>Event</th><th>User</th><th>Details</th><th>IP Address</th><th>Severity</th></tr></thead>
           <tbody>
           {% for e in events %}
             <tr><td><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'Y-m-d H:i:s' }}</time><small>{{ e.timestamp|timesince }} ago</small></td>
               <td><div class="audit-event"><span class="audit-event-icon {{ e.severity }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v5c0 5 4 8 8 9 4-1 8-4 8-9V7l-8-4z"/><path d="m8 12 2.5 2.5L16 9"/></svg></span><div><strong>{{ e.action|title }}</strong><small>{{ e.module|title }}</small></div></div></td>
-              <td><strong>{{ request.user.get_username }}</strong><small>{{ e.source }}</small></td><td>{{ e.resource|default:"Account action" }}<small>{% if e.hash %}Integrity reference: {{ e.hash|truncatechars:20 }}{% else %}Recorded application event{% endif %}</small></td><td>{{ e.source }}<small>IP address not recorded in this view</small></td><td><span class="audit-severity sev-{{ e.severity }}">● {{ e.severity|title }}</span></td></tr>
+              <td><strong>{{ e.username|default:request.user.get_username }}</strong><small>{% if e.username == "System" %}System event{% else %}Account user{% endif %}</small></td><td>{{ e.resource|default:"Account action" }}<small>{% if e.hash %}Integrity reference: {{ e.hash|truncatechars:20 }}{% else %}Recorded application event{% endif %}</small></td><td><strong>{{ e.ip_address|default:"Unavailable" }}</strong><small>{{ e.source }}</small></td><td><span class="audit-severity sev-{{ e.severity }}">● {{ e.severity|title }}</span></td></tr>
           {% empty %}<tr><td colspan="6"><div class="audit-empty"><strong>No recorded events match these filters.</strong><br><small>Try a wider date range or clear the filters. No sample events are fabricated.</small></div></td></tr>{% endfor %}
           </tbody>
         </table></div>
@@ -53,10 +53,10 @@
     </main>
     <aside class="audit-side">
       <section class="audit-side-card"><h2>Event Summary</h2>
-        <div class="summary-row"><span class="summary-dot">●</span><span>Info<small class="audit-summary-note">Informational records</small></span><strong>{{ event_summary.info }}</strong></div>
-        <div class="summary-row"><span class="summary-dot low">●</span><span>Low<small class="audit-summary-note">Routine actions</small></span><strong>{{ event_summary.low }}</strong></div>
-        <div class="summary-row"><span class="summary-dot medium">●</span><span>Medium<small class="audit-summary-note">Sensitive changes</small></span><strong>{{ event_summary.medium }}</strong></div>
-        <div class="summary-row"><span class="summary-dot high">●</span><span>High<small class="audit-summary-note">Failures / alerts</small></span><strong>{{ event_summary.high }}</strong></div>
+        <div class="summary-row"><span class="summary-dot">●</span><span>Info<small class="audit-summary-note">Informational records</small></span><strong>{{ event_summary.info }}<small class="summary-percent">{{ event_summary_percent.info}%</small></strong></div>
+        <div class="summary-row"><span class="summary-dot low">●</span><span>Low<small class="audit-summary-note">Routine actions</small></span><strong>{{ event_summary.low }}<small class="summary-percent">{{ event_summary_percent.low}%</small></strong></div>
+        <div class="summary-row"><span class="summary-dot medium">●</span><span>Medium<small class="audit-summary-note">Sensitive changes</small></span><strong>{{ event_summary.medium }}<small class="summary-percent">{{ event_summary_percent.medium}%</small></strong></div>
+        <div class="summary-row"><span class="summary-dot high">●</span><span>High<small class="audit-summary-note">Failures / alerts</small></span><strong>{{ event_summary.high }}<small class="summary-percent">{{ event_summary_percent.high}%</small></strong></div>
         <div class="summary-total"><span>Total events in view</span><strong>{{ event_count }}</strong></div>
       </section>
       <section class="audit-side-card"><h2>Recent Activity</h2>
