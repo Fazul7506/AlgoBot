@@ -66,10 +66,15 @@ def usage(user, metric, window="day"):
     if metric == "broker_accounts":
         try:
             from apps.brokers.models import BrokerAccount
+            now = timezone.now()
             return BrokerAccount.objects.filter(
                 user=user,
                 status="active",
+                token_status="active",
+                broker__status="active",
                 connections__status="connected",
+            ).filter(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now)
             ).distinct().count()
         except DatabaseError: return 0
     if metric == "strategies":
