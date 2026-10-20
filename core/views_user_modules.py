@@ -1,5 +1,7 @@
 """Independent trader-facing workspaces for operational features."""
 
+import hashlib
+
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -215,7 +217,8 @@ def security_workspace(request):
             "two_factor_setup_pending": bool(profile.two_factor_pending_secret_encrypted),
             "two_factor_setup_uri": setup_uri,
             "two_factor_recovery_codes": recovery_codes,
-            "two_factor_recovery_codes_remaining": len(profile.two_factor_recovery_codes or []),
+            "two_factor_recovery_codes_remaining": sum(1 for item in (profile.two_factor_recovery_codes or []) if not (isinstance(item, dict) and item.get("used", False))),
+            "two_factor_recovery_code_statuses": [{"used": bool(item.get("used", False)) if isinstance(item, dict) else False, "number": index + 1} for index, item in enumerate(profile.two_factor_recovery_codes or [])],
             "password_required": request.user.has_usable_password(),
         },
     )
