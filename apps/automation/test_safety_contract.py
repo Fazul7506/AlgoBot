@@ -71,6 +71,7 @@ class AutomationSafetyTests(TestCase):
         events = payload.get("results", []) if isinstance(payload, dict) else payload
         self.assertEqual(events, [])
 
+    @patch("core.middleware.plan_entitlement_middleware.check", return_value=(True, 0, 1000))
     @patch("rest_framework.views.APIView.check_throttles", return_value=None)
     def test_schedule_endpoint_requires_active_workflow_and_creates_consumable_one_time_schedule(self, *_throttle_mocks):
         workflow = Workflow.objects.create(user=self.user, name="Scheduled workflow")
