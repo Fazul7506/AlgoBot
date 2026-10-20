@@ -104,8 +104,20 @@ def security_workspace(request):
                     # Refresh credentials minted before MFA enrollment must not
                     # remain a way to bypass the newly enabled second factor.
                     from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-                    for outstanding in OutstandingToken.objects.filter(user=request.user):
-                        BlacklistedToken.objects.get_or_create(token=outstanding)
+                    # Revoke pre-enrollment refresh tokens in a bounded number of
+                    # database queries; per-token get_or_create made enrollment
+                    # latency grow linearly with the account's token history.
+                    outstanding_ids = OutstandingToken.objects.filter(
+                        user=request.user,
+                    ).exclude(
+                        id__in=BlacklistedToken.objects.filter(
+                            token__user=request.user,
+                        ).values("token_id"),
+                    ).values_list("id", flat=True)
+                    BlacklistedToken.objects.bulk_create(
+                        [BlacklistedToken(token_id=token_id) for token_id in outstanding_ids],
+                        ignore_conflicts=True,
+                    )
                     request.session["algobot_2fa_recovery_codes_once"] = recovery_codes
                     messages.success(request, "Two-factor authentication is enabled. Save these recovery codes now; they are shown only once.")
                     return redirect("security_center")
