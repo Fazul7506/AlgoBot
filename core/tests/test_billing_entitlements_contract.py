@@ -57,6 +57,13 @@ class BillingEntitlementsContractTests(TestCase):
         BrokerConnection.objects.create(broker=deriv, broker_account=first, status="connected")
         self.assertEqual(usage(user, "broker_accounts"), 1)
 
+        # A duplicate Broker registry row with the same provider type is still
+        # one integration, even if account records reference a different row.
+        duplicate_deriv = Broker.objects.create(name="Legacy Deriv Registry Row", broker_type="deriv", status="active")
+        duplicate_account = BrokerAccount.objects.create(user=user, broker=duplicate_deriv, account_id="CAPACITY-LEGACY", status="active")
+        BrokerConnection.objects.create(broker=duplicate_deriv, broker_account=duplicate_account, status="connected")
+        self.assertEqual(usage(user, "broker_accounts"), 1)
+
         # A second connected account row for the same integration must not
         # consume another slot, while a genuinely different broker does.
         BrokerConnection.objects.create(broker=deriv, broker_account=second, status="connected")
