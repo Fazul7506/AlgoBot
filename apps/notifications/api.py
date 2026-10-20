@@ -13,6 +13,11 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return Notification.objects.filter(user=self.request.user).order_by("-created_at", "-id")
 
+    @decorators.action(detail=False, methods=["get"], url_path="unread-count")
+    def unread_count(self, request):
+        count = Notification.objects.filter(user=request.user, read_at__isnull=True).count()
+        return response.Response({"unread_count": count})
+
     @decorators.action(detail=True, methods=["post"], url_path="read")
     def mark_read(self, request, pk=None):
         # Object lookup uses the user-scoped queryset: guessed IDs cannot expose
