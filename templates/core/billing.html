@@ -2,22 +2,45 @@
 {% block title %}Billing | AlgoBot{% endblock %}
 {% block mobile_title %}Billing{% endblock %}
 {% block content %}
-<section class="billing-page">
-  <header class="page-heading"><div><p class="eyebrow">ACCOUNT</p><h1>Billing</h1><p class="billing-subtitle">Manage your plan and pay securely with IntaSend or Pesapal.</p></div><button class="btn ghost" type="button" data-billing-refresh>Refresh</button></header>
+<section class="billing-page billing-dashboard" data-billing-dashboard>
+  <header class="billing-hero">
+    <div class="billing-hero-mark" aria-hidden="true"><span class="material-symbols-rounded">credit_card</span></div>
+    <div class="billing-hero-copy"><p class="eyebrow">ACCOUNT · PAYMENTS</p><h1>Billing &amp; Payments</h1><p>Manage your subscription, review usage, and pay securely with AlgoBot.</p><small>Transparent pricing. Verified payment providers. Real usage data.</small></div>
+    <div class="billing-account-status"><span class="billing-status-icon material-symbols-rounded" aria-hidden="true">verified_user</span><div><strong>Account Status</strong><small data-billing-account-status>Checking subscription status…</small></div><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></div>
+  </header>
+  <nav class="billing-tabs" aria-label="Billing sections">
+    <a class="is-active" href="#billing-overview"><span class="material-symbols-rounded" aria-hidden="true">dashboard</span>Overview</a>
+    <a href="#billing-plans"><span class="material-symbols-rounded" aria-hidden="true">workspace_premium</span>Subscriptions</a>
+    <a href="#billing-invoices"><span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>Invoices</a>
+    <a href="#billing-payments"><span class="material-symbols-rounded" aria-hidden="true">payments</span>Payment Methods</a>
+    <a href="#billing-usage"><span class="material-symbols-rounded" aria-hidden="true">schedule</span>Usage</a>
+    <a href="#billing-settings"><span class="material-symbols-rounded" aria-hidden="true">settings</span>Billing Settings</a>
+    <button class="btn ghost" type="button" data-billing-refresh><span class="material-symbols-rounded" aria-hidden="true">refresh</span>Refresh</button>
+  </nav>
   <section class="panel billing-alert" data-billing-alert hidden role="alert" aria-live="polite"></section>
   <form id="billing-checkout-form" action="{% url 'billing_checkout_start' %}" method="post" hidden>
-    {% csrf_token %}
-    <input type="hidden" name="plan" data-checkout-form-plan>
-    <input type="hidden" name="provider" data-checkout-form-provider>
+    {% csrf_token %}<input type="hidden" name="plan" data-checkout-form-plan><input type="hidden" name="provider" data-checkout-form-provider>
   </form>
-  <section class="card-grid billing-plan-grid" data-plan-grid><div class="panel">Loading plans…</div></section>
-  <section class="billing-intasend-security" aria-label="IntaSend payment security">
-    <p class="provider-label">IntaSend checkout security</p>
-    {% include "core/partials/intasend_trust_badge.html" %}
+  <section id="billing-overview" class="billing-summary-grid" aria-label="Billing overview">
+    <article class="panel billing-summary-card"><div class="billing-summary-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">workspace_premium</span><span class="billing-state-pill" data-current-plan-state>Loading</span></div><small>Current Plan</small><h2 data-current-plan-name>Loading…</h2><p data-current-plan-description>Checking your active subscription.</p><strong class="billing-summary-value" data-current-plan-price>—</strong><a class="btn primary billing-summary-action" href="#billing-plans">Manage Subscription <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></article>
+    <article class="panel billing-summary-card"><div class="billing-summary-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">event</span></div><small>Next Billing / Expiry</small><h2 data-next-billing-date>Not supplied</h2><p data-next-billing-copy>Billing dates are shown only when provided by your subscription record.</p><a class="btn ghost billing-summary-action" href="#billing-invoices">View Invoices <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></article>
+    <article class="panel billing-summary-card"><div class="billing-summary-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">credit_card</span><span class="billing-state-pill">Secure checkout</span></div><small>Payment Methods</small><h2>Payment providers</h2><p>Choose a supported provider at checkout. No saved card details are displayed here.</p><div class="billing-provider-mini"><span>Pesapal</span><span>IntaSend</span></div><a class="btn ghost billing-summary-action" href="#billing-payments">View payment options <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></article>
+    <article class="panel billing-summary-card"><div class="billing-summary-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">notifications_active</span><span class="billing-state-pill is-green">Enabled</span></div><small>Billing Alerts</small><h2>Payment updates</h2><p>Review checkout and payment statuses here. Provider callbacks determine final payment state.</p><a class="btn ghost billing-summary-action" href="#billing-settings">Billing information <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></article>
   </section>
-  <section class="panel billing-section"><div class="section-heading"><div><p class="eyebrow">SUBSCRIPTION CYCLE</p><h2 data-subscription-plan>Loading…</h2></div><button class="btn danger" type="button" data-cancel-subscription hidden>Cancel renewal</button></div><p data-subscription-meta>Checking subscription…</p></section>
-  <section class="panel billing-section"><div class="section-heading"><div><p class="eyebrow">USAGE</p><h2>Plan limits</h2></div></div><p class="billing-meter-note">Usage is measured from persisted platform audit/database records. No synthetic quota values are generated.</p><div class="usage-grid" data-usage-grid><div class="empty-state">Loading usage…</div></div></section>
-  <section class="panel billing-section"><p class="eyebrow">PAYMENT HISTORY</p><div data-payment-list class="empty-state">No payment history yet.</div></section>
+  <div class="billing-main-layout">
+    <div class="billing-primary-column">
+      <section id="billing-plans" class="panel billing-section billing-plan-section"><div class="billing-section-heading"><div><p class="eyebrow">SUBSCRIPTION PLANS</p><h2>Choose your plan</h2><p>Compare the plans currently configured for your account.</p></div><span class="billing-small-label">Live plan catalog</span></div><div class="card-grid billing-plan-grid" data-plan-grid><div class="panel">Loading plans…</div></div></section>
+      <section id="billing-usage" class="panel billing-section"><div class="billing-section-heading"><div><p class="eyebrow">USAGE OVERVIEW</p><h2>Usage and limits</h2><p>Usage is based on persisted platform records, not estimates.</p></div><a class="billing-inline-link" href="#billing-invoices">Billing details <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></div><p class="billing-meter-note">Usage is measured from persisted platform audit/database records. No synthetic quota values are generated.</p><div class="usage-grid billing-usage-grid" data-usage-grid><div class="empty-state">Loading usage…</div></div></section>
+      <section id="billing-invoices" class="panel billing-section"><div class="billing-section-heading"><div><p class="eyebrow">PAYMENT HISTORY</p><h2>Invoices and transactions</h2><p>Payment records returned by AlgoBot.</p></div><span class="billing-small-label">Latest first</span></div><div class="billing-payment-table"><div class="billing-payment-head"><span>Date</span><span>Description</span><span>Amount</span><span>Status</span></div><div data-payment-list class="billing-payment-list empty-state">No payment history yet.</div></div></section>
+      <section id="billing-settings" class="panel billing-section"><div class="billing-section-heading"><div><p class="eyebrow">SUBSCRIPTION CYCLE</p><h2 data-subscription-plan>Loading…</h2><p data-subscription-meta>Checking subscription…</p></div><button class="btn danger" type="button" data-cancel-subscription hidden>Cancel renewal</button></div><p class="billing-settings-note">Renewal controls are shown only when the current subscription supports self-service cancellation.</p></section>
+    </div>
+    <aside class="billing-side-column" aria-label="Billing support and payment security">
+      <section id="billing-payments" class="panel billing-side-card"><div class="billing-side-heading"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">support_agent</span><div><h2>Billing Support</h2><p>Questions about a charge or subscription?</p></div></div><p>Use the recorded payment status and transaction details when contacting support.</p><a class="btn ghost billing-summary-action" href="mailto:support@algobot.com">Contact Support <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></section>
+      <section class="panel billing-side-card"><div class="billing-side-heading"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">lock</span><div><h2>Secure Payments</h2><p>Checkout handled by supported providers.</p></div></div><ul class="billing-security-list"><li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Secure provider checkout</li><li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Server-verified payment status</li><li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>No card data exposed in this page</li></ul><div class="billing-provider-badges"><span>Pesapal</span><span>IntaSend</span></div></section>
+      <section class="billing-intasend-security panel" aria-label="IntaSend payment security"><p class="provider-label">IntaSend checkout security</p>{% include "core/partials/intasend_trust_badge.html" %}</section>
+      <section class="panel billing-side-card billing-help-card"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">help</span><h2>Need help choosing?</h2><p>Review plan features and limits before starting a checkout. Plan availability and prices come from the live catalog.</p><a class="billing-inline-link" href="#billing-plans">Explore plans <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></section>
+    </aside>
+  </div>
 </section>
 {% endblock %}
 {% block extra_css %}<style>
