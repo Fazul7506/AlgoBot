@@ -77,7 +77,12 @@
     A.data=d;
     const gate=d.execution_gate||{}, ai=d.ai||{}, layers=d.analysis_layers||{}, conf=d.confluence||{}, acct=d.account_context||{};
     set("aResearchState",state(d.research_state)); set("aBrokerState",state(d.broker_state)); set("aSymbol",d.symbol); set("aTf",String(d.timeframe||"M1").toUpperCase()); set("aPrice",num(d.price)); set("aSignal",d.signal==null?"UNAVAILABLE":d.signal); $("aSignal").className="value "+tone(d.signal); set("aTechnical",d.score!=null?num(d.score,1)+"/100":"Technical score —"); set("aFresh",d.data_provenance?.fresh?"FRESH DATA":"DATA UNVERIFIED"); set("liveQuote",num(d.live_quote?.price)); set("liveQuoteAge",d.live_quote?.age_seconds!=null?"Live quote age "+d.live_quote.age_seconds+"s":"Live quote freshness unavailable"); set("liveQuoteSource",d.live_quote?.source||"Deriv live quote");
-    set("aTechnical",d.score!=null?num(d.score,1)+"/100":"—"); set("aConfidence",pct(d.confidence)); set("aRegime",d.volatility_regime); set("aFresh",d.data_provenance?.fresh?"FRESH":"STALE");
+    set("aTechnical",d.score!=null?num(d.score,1)+"/100":"—"); set("aConfidence",pct(d.confidence)); set("aRegime",d.volatility_regime);
+    const sentiment=d.sentiment&&typeof d.sentiment==="object"?d.sentiment:null;
+    const sentimentLabel=sentiment?.label||sentiment?.sentiment||sentiment?.classification;
+    set("sentimentState",sentimentLabel?state(sentimentLabel):"Unavailable");
+    set("sentimentScore",sentiment?.score!=null?("Score "+num(sentiment.score,1)):"No verified score");
+    set("sentimentSummary",sentiment?.summary||sentiment?.source||"No sentiment feed supplied"); set("aFresh",d.data_provenance?.fresh?"FRESH":"STALE");
     const quoteFresh=Boolean(d.data_provenance?.fresh && d.live_quote?.fresh); setHealth(quoteFresh,quoteFresh?"DERIV LIVE":"DATA NOT FRESH"); const heroState=$("heroFeedState"); if(heroState)heroState.textContent=quoteFresh?"Live market feed connected":"Market data needs verification"; const pulse=document.querySelector(".status-pulse"); if(pulse)pulse.classList.toggle("is-live",quoteFresh);
     set("marketState",state(layers.market_data?.state)); set("marketSource",layers.market_data?.source||d.data_provenance?.broker); set("marketAge",d.data_provenance?.age_seconds!=null?d.data_provenance.age_seconds+"s":"—"); set("candleCount",d.candles??d.last_candles?.length);
     set("trendState",layers.technical?.structure||d.structure); set("trendScore",layers.technical?.score!=null?num(layers.technical.score,1)+"/100":"—"); set("momentumState",d.indicators?.rsi14!=null?"RSI "+num(d.indicators.rsi14,1):"—"); set("volatilityState",d.volatility_regime);
