@@ -127,3 +127,10 @@ body:has(.analysis-hero){background:#041326}
  .analysis-dashboard .analysis-chart-footer .kpi-badge{font-size:10px}
  .analysis-dashboard .analysis-detail-grid .metric-grid,.analysis-dashboard .analysis-secondary-grid .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+.analysis-dashboard .sentiment-news-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.analysis-dashboard .sentiment-status-card{display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid rgba(42,81,120,.65);background:rgba(10,37,66,.62);border-radius:10px;min-width:0}
+.analysis-dashboard .sentiment-status-card>div{min-width:0}
+.analysis-dashboard .sentiment-status-card strong{display:block;color:#eaf4ff;font-size:13px}
+.analysis-dashboard .sentiment-status-card p{margin:6px 0 0;color:#9fb8d8;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+@media(max-width:760px){.analysis-dashboard .sentiment-news-grid{grid-template-columns:minmax(0,1fr)}}
