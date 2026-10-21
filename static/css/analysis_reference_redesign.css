@@ -148,3 +148,32 @@ body:has(.analysis-hero){background:#041326}
 
 .analysis-dashboard .confidence-track{height:8px;width:100%;margin:2px 0 10px;border-radius:999px;background:#183555;overflow:hidden}
 .analysis-dashboard .confidence-track span{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8b72ff,#a06bff);box-shadow:0 0 10px rgba(139,114,255,.25);transition:width .25s ease}
+
+/* Reference-only lower dashboard: compact market/prediction tables, key levels, verified news. */
+.analysis-dashboard .analysis-secondary-grid,.analysis-dashboard .analysis-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch}
+.analysis-dashboard .reference-table-panel .section-head{min-height:70px}
+.analysis-dashboard .table-scroll{padding:0;overflow-x:auto}
+.analysis-dashboard .reference-table{width:100%;border-collapse:collapse;table-layout:auto;font-size:12px;color:#dcecff}
+.analysis-dashboard .reference-table th,.analysis-dashboard .reference-table td{padding:10px 12px;text-align:left;border-bottom:1px solid rgba(74,115,158,.2);white-space:nowrap}
+.analysis-dashboard .reference-table thead th{font-size:10px;font-weight:500;color:#a8c0df;background:rgba(4,19,38,.32)}
+.analysis-dashboard .reference-table tbody tr:last-child th,.analysis-dashboard .reference-table tbody tr:last-child td{border-bottom:0}
+.analysis-dashboard .reference-table tbody th{font-weight:500;color:#b4c9e4;width:58%}
+.analysis-dashboard .reference-table tbody td{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.analysis-dashboard .reference-table .empty{white-space:normal;text-align:left;padding:16px}
+.analysis-dashboard .signal-pill,.analysis-dashboard .prediction-direction{display:inline-flex;align-items:center;justify-content:center;padding:3px 9px;border-radius:999px;background:#163653;color:#c6dcf4;font-size:10px;font-weight:700}
+.analysis-dashboard .signal-pill.positive,.analysis-dashboard .prediction-direction.positive{background:#075d4c;color:#5ce7bc}
+.analysis-dashboard .signal-pill.negative,.analysis-dashboard .prediction-direction.negative{background:#6b2337;color:#ff9caf}
+.analysis-dashboard .news-list{padding:0 14px}
+.analysis-dashboard .news-row{display:flex;align-items:flex-start;gap:10px;padding:11px 2px;border-bottom:1px solid rgba(74,115,158,.2);min-width:0}
+.analysis-dashboard .news-row:last-child{border-bottom:0}
+.analysis-dashboard .news-dot{width:7px;height:7px;border-radius:50%;background:#eab44d;flex:0 0 auto;margin-top:5px}
+.analysis-dashboard .news-dot.positive{background:#20d6a0}.analysis-dashboard .news-dot.negative{background:#ff657d}
+.analysis-dashboard .news-copy{min-width:0;flex:1}
+.analysis-dashboard .news-copy strong{display:block;font-size:12px;line-height:1.4;color:#eaf4ff;overflow-wrap:anywhere}
+.analysis-dashboard .news-copy p{font-size:11px;line-height:1.45;color:#9fb8d8;margin:3px 0 0;overflow-wrap:anywhere}
+.analysis-dashboard .news-row time{font-size:10px;color:#89a5c7;white-space:nowrap;flex:0 0 auto}
+.analysis-dashboard .levels-table tbody tr:nth-child(3){background:rgba(14,61,105,.45)}
+.analysis-dashboard .levels-table tbody tr:nth-child(3) th,.analysis-dashboard .levels-table tbody tr:nth-child(3) td{color:#f0f7ff}
+@media(max-width:1100px){.analysis-dashboard .analysis-secondary-grid,.analysis-dashboard .analysis-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.analysis-dashboard .analysis-secondary-grid,.analysis-dashboard .analysis-detail-grid{grid-template-columns:minmax(0,1fr);gap:12px}.analysis-dashboard .reference-table th,.analysis-dashboard .reference-table td{padding:10px 9px}.analysis-dashboard .news-row{flex-wrap:wrap}.analysis-dashboard .news-row time{margin-left:17px}}
+@media(max-width:360px){.analysis-dashboard .reference-table{font-size:11px}.analysis-dashboard .reference-table th,.analysis-dashboard .reference-table td{padding:9px 6px}}
