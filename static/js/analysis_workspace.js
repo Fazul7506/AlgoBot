@@ -106,6 +106,18 @@
     const gateRows=[["Market data",gate.data_fresh],["History",gate.sufficient_history],["AI",gate.ai_ready],["Broker contracts",gate.broker_contracts_confirmed],["Account scope",gate.account_scope_confirmed],["Account ready",gate.account_ready],["Risk",gate.risk_ready],["Live quote",gate.live_quote_confirmed&&gate.live_quote_fresh]];
     list("gateList", gateRows, e => { const cls = e[1] ? "pass" : "fail"; const label = e[1] ? "PASS" : "BLOCKED"; return '<div class="gate-row"><span>' + esc(e[0]) + '</span><b class="' + cls + '">' + label + '</b></div>'; });
     set("support",num(d.levels?.support));set("resistance",num(d.levels?.resistance));set("range",num(d.levels?.range));set("change",d.change_pct!=null?num(d.change_pct,2)+"%":"—");
+    set("keyCurrentPrice",num(d.price));set("resistance1",num(d.levels?.resistance));set("support1",num(d.levels?.support));
+    set("resistance2",num(d.levels?.resistance2));set("support2",num(d.levels?.support2));
+    const signalText=d.signal==null?"UNAVAILABLE":String(d.signal).toUpperCase();
+    const confText=d.confidence==null?"—":pct(d.confidence);
+    list("marketOverviewRows",[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText}],x=>'<tr><td>'+esc(x.symbol)+'</td><td>'+esc(num(x.price))+'</td><td><span class="signal-pill '+tone(x.signal)+'">'+esc(x.signal)+'</span></td><td>'+esc(x.confidence)+'</td></tr>',"No verified market data available.");
+    const predictionDirection=layers.ai?.direction||layers.ai?.prediction||layers.ai?.decision||d.signal;
+    const predictionProbability=layers.ai?.probability??layers.ai?.probability_pct??d.prediction_probability;
+    list("predictionRows",predictionDirection?[{symbol:d.symbol,direction:predictionDirection,probability:predictionProbability}]:[],x=>'<tr><td>'+esc(x.symbol)+'</td><td><span class="prediction-direction '+tone(x.direction)+'">'+esc(state(x.direction))+'</span></td><td>'+esc(x.probability==null?"—":pct(Number(x.probability)>1?Number(x.probability):Number(x.probability)*100))+'</td></tr>',"No verified AI prediction is available.");
+    const newsItems=Array.isArray(d.news)?d.news:(Array.isArray(d.sentiment?.news)?d.sentiment.news:[]);
+    const sentimentItems=Array.isArray(d.sentiment?.items)?d.sentiment.items:[];
+    const combinedNews=[...newsItems,...sentimentItems].slice(0,8);
+    list("sentimentNewsRows",combinedNews,item=>'<div class="news-row"><span class="news-dot '+(tone(item.sentiment||item.direction)==="positive"?"positive":tone(item.sentiment||item.direction)==="negative"?"negative":"neutral")+'"></span><div class="news-copy"><strong>'+esc(item.title||item.headline||item.label||"Market update")+'</strong><p>'+esc(item.summary||item.description||item.source||"")+'</p></div><time>'+esc(item.time_ago||item.published_at||item.timestamp||"")+'</time></div>',"No verified sentiment or news feed is available.");
     set("sma20",num(d.indicators?.sma20));set("sma50",num(d.indicators?.sma50));set("sma200",num(d.indicators?.sma200));set("ema",num(d.indicators?.ema9)+" / "+num(d.indicators?.ema21));set("rsi",num(d.indicators?.rsi14,2));set("atr",num(d.indicators?.atr14));set("macd",num(d.indicators?.macd?.histogram));set("bb",d.indicators?.bollinger?.width!=null?num(d.indicators.bollinger.width,2)+"%":"—");
     const fs=d.factors||[]; list("factorList",fs,x=>'<span class="tag">'+esc(x)+"</span>","No additional technical factors.");
     list("events",d.events,x=>'<div class="evidence-row"><span>'+esc(x.type)+"</span><strong>"+num(x.price)+"</strong></div>");
