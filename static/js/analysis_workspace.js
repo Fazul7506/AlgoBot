@@ -163,7 +163,7 @@
     const generation=++A.loadGeneration;
     const symbol=$("symbol").value, tf=$("timeframe").value, limit=$("limit").value;
     if(!symbol){$("loadState").textContent="No active market is available.";return}
-    $("loadState").textContent="Loading fresh broker data…";
+    $("loadState").textContent="Loading available market analysis…";
     try{
       const refreshAccount=options.refreshAccount===true;
       const d=await request("/analysis/data/?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf)+"&limit="+limit+"&refresh=1&refresh_account="+(refreshAccount?"1":"0"));
@@ -205,7 +205,7 @@
   }
   function boot(){
     ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>load()));
-    $("refresh")?.addEventListener("click",()=>load({refreshAccount:true}));$("prepare")?.addEventListener("click",prepare);
+    $("refresh")?.addEventListener("click",()=>load({refreshAccount:true,refreshMarket:true}));$("prepare")?.addEventListener("click",prepare);
     $("auto")?.addEventListener("change",()=>{clearInterval(A.timer);if($("auto").checked)A.timer=setInterval(()=>load({refreshAccount:false}),15000)});
     window.addEventListener("resize",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});markets();
   }
