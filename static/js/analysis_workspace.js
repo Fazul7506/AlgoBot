@@ -149,6 +149,10 @@
       set("marketState","UNAVAILABLE");set("marketSource","—");set("marketAge","—");set("candleCount","—");
       set("liveQuote","UNAVAILABLE");set("liveQuoteAge","—");set("liveQuoteSource","—");
       set("gateState","BLOCKED");set("gateReason","Fresh analysis evidence could not be confirmed.");
+      list("marketOverviewRows",[],()=>"", "No verified market data available.");
+      list("predictionRows",[],()=>"", "No verified AI prediction is available.");
+      list("sentimentNewsRows",[],()=>"", "No verified sentiment or news feed is available.");
+      set("keyCurrentPrice","—");set("resistance1","—");set("resistance2","—");set("support1","—");set("support2","—");
       set("account","NO VERIFIED ACCOUNT CONTEXT");set("accountType","—");set("currency","—");set("balance","—");set("riskBudget","—");set("stake","—");
       drawChart([]); drawIndicators([]);
     }
