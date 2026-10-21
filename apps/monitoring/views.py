@@ -4,7 +4,8 @@ from django.db.models import Q
 from django.shortcuts import render
 
 from apps.brokers.models import BrokerAccount, BrokerConnection, Position, Order
-from .models import Alert, Incident
+from .models import Alert, Incident, Metric, SystemHealth
+from apps.notifications.models import NotificationChannelConnection
 from .services import MonitoringEngine
 
 
@@ -85,4 +86,43 @@ def dashboard(request):
     except Exception:
         dashboard["overall_system_health"] = "down"
 
-    return render(request, "monitoring/dashboard.html", {"dashboard": dashboard})
+    # Keep operational events and connected-channel details private to this account.
+    visible_alerts = Alert.objects.filter(user=request.user)
+    if request.user.is_staff:
+        visible_alerts = Alert.objects.filter(Q(user=request.user) | Q(user__isnull=True))
+    recent_events = visible_alerts.order_by("-created_at")[:6]
+    channel_connections = NotificationChannelConnection.objects.filter(
+        user=request.user, status="verified", provider__in=("gmail", "telegram")
+    ).only("provider", "address", "external_id", "metadata", "status")
+    connected_channels = {item.provider: item for item in channel_connections}
+
+    # Only staff can inspect global infrastructure health. Other accounts see
+    # the scoped health checks performed for this request and their own broker.
+    if request.user.is_staff:
+        service_rows = [
+            {"name": result.service_name, "status": result.status, "response_time": result.response_time}
+            for result in health_results if result is not None
+        ]
+        if not service_rows:
+            service_rows = list(SystemHealth.objects.order_by("-timestamp").values(
+                "service_name", "status", "response_time"
+            )[:6])
+            service_rows = [{"name": row["service_name"], "status": row["status"], "response_time": row["response_time"]} for row in service_rows]
+    else:
+        service_rows = [
+            {"name": "Trading account", "status": dashboard["broker_status"], "response_time": None},
+            {"name": "Application", "status": dashboard["overall_system_health"], "response_time": None},
+        ]
+        for provider, label in (("gmail", "Gmail notifications"), ("telegram", "Telegram notifications")):
+            service_rows.append({"name": label, "status": "healthy" if provider in connected_channels else "not_connected", "response_time": None})
+
+    metric_history = list(Metric.objects.filter(module="application").order_by("-timestamp").values(
+        "metric_name", "value", "unit", "timestamp"
+    )[:20])
+    return render(request, "monitoring/dashboard.html", {
+        "dashboard": dashboard,
+        "service_rows": service_rows,
+        "recent_events": recent_events,
+        "connected_channels": connected_channels,
+        "metric_history": metric_history,
+    })
