@@ -222,3 +222,84 @@
   .topbar-brand-favicon { flex-basis: 23px; width: 23px; height: 23px; }
   .topbar-brand-name { font-size: 14px; }
 }
+
+
+/* Final phone layout: keep the brand and every security control in one
+   compact, vertically centred row instead of allowing the brand to shove
+   the controls beyond the right edge. */
+@media (max-width: 700px) {
+  .topbar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    min-height: 54px;
+    padding-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
+    box-sizing: border-box;
+  }
+  .topbar-title {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 92px;
+    gap: 5px;
+    align-items: center;
+  }
+  .topbar-brand { gap: 5px; }
+  .topbar-brand-favicon {
+    width: 22px;
+    height: 22px;
+    flex-basis: 22px;
+  }
+  .topbar-brand-name { font-size: 13px; letter-spacing: -.04em; }
+  .topbar-actions {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    justify-content: flex-start;
+    gap: 5px;
+    margin-left: 0;
+  }
+  .topbar-account-control { flex: 1 1 auto; min-width: 0; }
+  .topbar-account-trigger {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    min-height: 36px;
+    padding: 4px 6px;
+    gap: 5px;
+  }
+  .topbar-account-shield {
+    width: 23px;
+    height: 23px;
+    flex-basis: 23px;
+    font-size: 15px;
+  }
+  .topbar-account-label { flex: 1 1 0; min-width: 0; gap: 1px; }
+  .topbar-account-label strong {
+    max-width: 100%;
+    font-size: 9px;
+    line-height: 1.2;
+  }
+  .topbar-account-label small { display: none; }
+  .topbar-chevron { font-size: 15px; }
+  .topbar-notifications { flex: 0 0 32px; }
+  .topbar-icon-button { width: 32px; height: 32px; flex-basis: 32px; }
+  .topbar-profile { flex: 0 0 auto; }
+  .topbar-profile-trigger { min-width: 30px; min-height: 34px; padding: 1px; gap: 0; }
+  .topbar-profile-avatar { width: 28px; height: 28px; flex-basis: 28px; }
+  .topbar-profile-trigger > .material-symbols-rounded { display: none; }
+  .topbar-actions [data-theme-toggle] { display: none; }
+}
+@media (max-width: 360px) {
+  .topbar { gap: 5px; padding-inline: max(6px, env(safe-area-inset-left)) max(6px, env(safe-area-inset-right)); }
+  .topbar-title { max-width: 78px; }
+  .topbar-brand-name { font-size: 12px; }
+  .topbar-actions { gap: 4px; }
+  .topbar-account-trigger { padding-inline: 4px; gap: 3px; }
+  .topbar-account-shield { width: 20px; height: 20px; flex-basis: 20px; font-size: 13px; }
+  .topbar-account-label strong { font-size: 8px; }
+  .topbar-notifications { flex-basis: 30px; }
+  .topbar-icon-button { width: 30px; height: 30px; flex-basis: 30px; }
+  .topbar-profile-avatar { width: 26px; height: 26px; flex-basis: 26px; }
+}
