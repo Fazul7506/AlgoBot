@@ -118,8 +118,13 @@
     if(otherMarkets.length)Promise.allSettled(otherMarkets.map(m=>request("/analysis/data/?symbol="+encodeURIComponent(m.symbol)+"&timeframe="+encodeURIComponent(d.timeframe||"M1")+"&limit="+encodeURIComponent($("limit")?.value||300)+"&refresh=1&refresh_account=0"))).then(results=>{
       if(overviewGeneration!==A.loadGeneration)return;
       const rows=[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText}];
-      results.forEach((result,i)=>{if(result.status!=="fulfilled"||!result.value||result.value.status==="error")return;const x=result.value;rows.push({symbol:x.symbol||otherMarkets[i].symbol,price:x.price,signal:x.signal==null?"UNAVAILABLE":String(x.signal).toUpperCase(),confidence:x.confidence==null?"—":pct(x.confidence)});});
+      const predictions=[];
+      const currentPredictionDirection=layers.ai?.direction||layers.ai?.prediction||layers.ai?.decision||d.signal;
+      const currentPredictionProbability=layers.ai?.probability??layers.ai?.probability_pct??d.prediction_probability;
+      if(currentPredictionDirection)predictions.push({symbol:d.symbol,direction:currentPredictionDirection,probability:currentPredictionProbability});
+      results.forEach((result,i)=>{if(result.status!=="fulfilled"||!result.value||result.value.status==="error")return;const x=result.value;rows.push({symbol:x.symbol||otherMarkets[i].symbol,price:x.price,signal:x.signal==null?"UNAVAILABLE":String(x.signal).toUpperCase(),confidence:x.confidence==null?"—":pct(x.confidence)});const ai=x.analysis_layers?.ai||x.ai||{};const direction=ai.direction||ai.prediction||ai.decision||x.signal;const probability=ai.probability??ai.probability_pct??x.prediction_probability;if(direction)predictions.push({symbol:x.symbol||otherMarkets[i].symbol,direction,probability});});
       list("marketOverviewRows",rows,overviewRow,"No verified market data available.");
+      list("predictionRows",predictions,x=>'<tr><td>'+esc(x.symbol)+'</td><td><span class="prediction-direction '+tone(x.direction)+'">'+esc(state(x.direction))+'</span></td><td>'+esc(x.probability==null?"—":pct(Number(x.probability)>1?Number(x.probability):Number(x.probability)*100))+'</td></tr>',"No verified AI prediction is available.");
     });
     const predictionDirection=layers.ai?.direction||layers.ai?.prediction||layers.ai?.decision||d.signal;
     const predictionProbability=layers.ai?.probability??layers.ai?.probability_pct??d.prediction_probability;
