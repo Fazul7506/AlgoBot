@@ -1,0 +1,53 @@
+/* Reference-inspired Analysis workspace skin. Keeps existing data hooks and trading controls intact. */
+:root{--analysis-bg:#041326;--analysis-panel:#081b32;--analysis-panel-2:#0b2340;--analysis-border:#193858;--analysis-muted:#9eb6d5;--analysis-text:#edf5ff;--analysis-green:#20d6a0;--analysis-blue:#37a9ff;--analysis-violet:#8b72ff;--analysis-amber:#ffb640}
+body:has(.analysis-hero){background:#041326}
+.analysis-hero,.analysis-toolbar,.workspace .panel,.analysis-kpi{background:linear-gradient(145deg,rgba(10,31,56,.97),rgba(5,22,42,.98))!important;border:1px solid var(--analysis-border)!important;border-radius:12px!important;box-shadow:0 10px 28px rgba(0,0,0,.15)!important;color:var(--analysis-text)}
+.workspace{max-width:1680px;padding:18px 22px 30px;gap:16px;color:var(--analysis-text)}
+.analysis-hero{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:20px 24px}
+.analysis-hero h1{font-size:clamp(25px,2.1vw,34px);letter-spacing:-.035em;color:#f4f8ff;margin:5px 0 7px}
+.analysis-hero h1 span{color:#6bbcff}
+.analysis-hero p:not(.eyebrow){color:#b5c9e5;max-width:780px}
+.analysis-hero .eyebrow{color:#72bfff}
+.analysis-hero-meta{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.status-pill,.hero-symbol,.hero-timeframe{border:1px solid #23486d;background:#0a2543;color:#bcd6f4;border-radius:8px}
+.status-pulse,.health-dot{background:var(--analysis-green)}
+.analysis-hero-actions .btn,.analysis-toolbar .btn{border-radius:8px;min-height:40px}
+.analysis-toolbar{display:flex;align-items:end;gap:12px;padding:14px 16px;flex-wrap:wrap}
+.toolbar-field{min-width:130px;flex:0 1 180px}
+.toolbar-field label{color:#aac3e2}
+.toolbar-field select,.analysis-toolbar select{background:#071a30;color:#eaf4ff;border:1px solid #214365;border-radius:8px;min-height:39px}
+.analysis-refresh{background:#0b5aa2;border-color:#267fc8}
+.auto-toggle{color:#b4c9e4}
+.feed-status{color:#b4c9e4}
+.analysis-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.analysis-kpi{min-height:130px;padding:17px 18px;position:relative;overflow:hidden}
+.analysis-kpi:after{content:"";position:absolute;inset:auto 0 0;height:2px;background:linear-gradient(90deg,#238ce1,transparent);opacity:.65}
+.analysis-kpi .label,.workspace .label{color:#aac0dd}
+.analysis-kpi .value{font-size:clamp(19px,1.7vw,27px);letter-spacing:-.03em;color:#f4f8ff}
+.kpi-icon{width:42px;height:42px;border-radius:12px;border:1px solid #244b72}
+.kpi-icon-blue{background:#103b65;color:#54b9ff}.kpi-icon-teal{background:#064c4a;color:#31e0bd}.kpi-icon-violet{background:#302365;color:#b6a5ff}.kpi-icon-amber{background:#573b12;color:#ffc45a}
+.kpi-foot{color:#8faacc}
+.kpi-badge{border:1px solid #28567c;background:#0b2948;color:#b8d8fa;border-radius:99px;padding:3px 8px}
+.workspace .two-col{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:16px}
+.workspace .panel{min-width:0;overflow:hidden}
+.workspace .section-head{padding:18px 20px 14px;border-bottom:1px solid rgba(74,115,158,.25)}
+.workspace .section-head h2{font-size:16px;color:#f0f6ff;letter-spacing:-.015em}
+.workspace .section-head p{color:#9fb7d6;font-size:12px}
+.workspace .body{padding:17px 19px}
+.workspace .metric-grid{gap:10px}
+.workspace .metric{background:rgba(10,37,66,.72);border:1px solid rgba(42,81,120,.65);border-radius:9px;padding:12px}
+.workspace .metric strong{color:#e9f3ff;font-size:13px;overflow-wrap:anywhere}
+.workspace .chart-wrap{height:390px;background:#06172b;border:1px solid #1b3b5c;border-radius:9px;padding:8px}
+#analysisChart{max-width:100%}
+.workspace .empty{color:#8faacc}
+.workspace .evidence-row{border-bottom:1px solid rgba(74,115,158,.22);padding:12px 4px;color:#a9c1df}
+.workspace .evidence-row strong{color:#e5f1ff}
+.workspace .actions{gap:10px;flex-wrap:wrap}
+.workspace .btn{border-radius:8px}
+.workspace button:focus-visible,.workspace select:focus-visible,.workspace a:focus-visible{outline:2px solid #50b8ff;outline-offset:3px}
+.workspace hr{border-color:#1b3b5c}
+@media(min-width:1200px){.workspace .analysis-hero{grid-column:1/-1}}
+@media(max-width:1100px){.workspace{padding:15px}.analysis-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace .two-col{grid-template-columns:minmax(0,1fr)}.analysis-hero{align-items:flex-start}.analysis-hero-actions{flex-wrap:wrap}}
+@media(max-width:700px){.workspace{padding:10px;gap:12px}.analysis-hero{display:block;padding:16px}.analysis-hero h1{font-size:27px}.analysis-hero-actions{display:grid;grid-template-columns:1fr 1fr;margin-top:14px}.analysis-hero-actions .btn{justify-content:center}.analysis-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:9px;padding:11px}.toolbar-field{min-width:0;width:100%}.toolbar-field select,.analysis-toolbar select{width:100%;min-width:0}.analysis-refresh,.auto-toggle,.feed-status,.load-state{grid-column:1/-1}.analysis-refresh{width:100%}.analysis-kpis{gap:9px}.analysis-kpi{padding:13px;min-height:115px}.kpi-icon{width:34px;height:34px}.workspace .section-head{padding:14px}.workspace .body{padding:12px}.workspace .chart-wrap{height:290px}.workspace .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace .metric{padding:10px}.workspace .metric strong{font-size:12px}}
+@media(max-width:380px){.analysis-kpis{grid-template-columns:minmax(0,1fr)}.analysis-hero-actions{grid-template-columns:1fr}.analysis-toolbar{grid-template-columns:minmax(0,1fr)}.analysis-refresh,.auto-toggle,.feed-status,.load-state{grid-column:1}.workspace .chart-wrap{height:250px}}
+@media(prefers-reduced-motion:reduce){.analysis-kpi,.workspace *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
