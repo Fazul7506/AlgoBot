@@ -1,47 +1,66 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Risk | AlgoBot{% endblock %}
+{% block title %}Risk Management | AlgoBot{% endblock %}
 {% block mobile_title %}Risk{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/risk.css' %}">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/risk.css' %}?v=20261021-risk4">{% endblock %}
 {% block content %}
 <section class="risk-center" data-risk-center>
   <header class="risk-hero">
-    <div><p class="eyebrow">TRADE PROTECTION</p><h1>Risk</h1><p>Know what you can afford to lose before you place a trade.</p><div class="risk-status" data-risk-status><span class="risk-status-dot"></span><span>Loading your account risk…</span></div></div>
-    <div class="risk-hero-actions"><button class="btn ghost" type="button" data-risk-refresh>Refresh</button><a class="btn primary" href="/trading/">Open terminal</a></div>
+    <div class="risk-hero-copy">
+      <div class="risk-hero-mark" aria-hidden="true"><svg viewBox="0 0 64 64" role="img"><path d="M32 4 56 17.5v29L32 60 8 46.5v-29L32 4Z" fill="currentColor" opacity=".18"/><path d="M32 4 56 17.5v29L32 60 8 46.5v-29L32 4Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M18 35h8l5-14 7 24 5-13h5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="risk-hero-text"><p class="eyebrow">PROTECT YOUR CAPITAL</p><h1>Risk Management</h1><p>Understand exposure, configure risk guidelines and review recent checks before trading.</p>
+        <div class="risk-status" data-risk-status role="status" aria-live="polite"><span class="risk-status-dot"></span><span>Loading your account risk…</span></div>
+      </div>
+    </div>
+    <div class="risk-hero-actions"><button class="risk-icon-button" type="button" data-risk-refresh aria-label="Refresh risk data" title="Refresh risk data"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 11.9-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><a class="risk-primary-action" href="/trading/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17 10 11l4 4 6-8M15 7h5v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Open terminal</a></div>
   </header>
+
+  <div class="risk-section-heading"><div><span class="risk-section-kicker">ACCOUNT OVERVIEW</span><h2>Risk at a glance</h2></div><span class="risk-live-label"><span></span> Account-linked data</span></div>
   <section class="risk-summary" aria-label="Risk summary">
-    <article class="risk-summary-card"><span>Account balance</span><strong data-risk-balance>—</strong><small>Your selected broker account</small></article>
-    <article class="risk-summary-card"><span>Risk per trade</span><strong data-r-risk>—</strong><small>Your configured guide</small></article>
-    <article class="risk-summary-card"><span>Daily loss limit</span><strong data-r-daily>—</strong><small>Your configured guide</small></article>
-    <article class="risk-summary-card"><span>Current drawdown</span><strong data-r-dd>—</strong><small>Based on recorded account results</small></article>
+    <article class="risk-summary-card"><div class="risk-summary-top"><span>Account balance</span><span class="risk-kpi-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M16 14h2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></div><strong data-risk-balance>—</strong><small>Selected broker account</small></article>
+    <article class="risk-summary-card"><div class="risk-summary-top"><span>Risk per trade</span><span class="risk-kpi-icon cyan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 21 20H3L12 3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 9v5m0 3h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></div><strong data-r-risk>—</strong><small>Configured guideline</small></article>
+    <article class="risk-summary-card"><div class="risk-summary-top"><span>Daily loss limit</span><span class="risk-kpi-icon amber"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14h16M7 9l4 4 3-3 5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><strong data-r-daily>—</strong><small>Configured guideline</small></article>
+    <article class="risk-summary-card"><div class="risk-summary-top"><span>Current drawdown</span><span class="risk-kpi-icon violet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14h16M6 9l4 4 3-3 5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><strong data-r-dd>—</strong><small>From available account results</small></article>
   </section>
-  <section class="risk-layout">
+
+  <section class="risk-layout" aria-label="Risk calculator and settings">
     <article class="risk-card calculator-card">
-      <div class="risk-card-head"><div><p class="eyebrow">CALCULATOR</p><h2>How much should I risk?</h2><p>Use simple money values. The calculator gives you a clear amount to consider before trading.</p></div></div>
+      <div class="risk-card-head"><div class="risk-title-with-icon"><span class="risk-heading-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7h8M8 11h2m4 0h2M8 15h2m4 0h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><div><p class="eyebrow">PLAN BEFORE YOU TRADE</p><h2>Risk calculator</h2><p>Estimate a loss budget from your balance and chosen risk percentage.</p></div></div></div>
       <form class="risk-calculator" data-risk-calculator>
-        <label>Account balance<input name="calc_balance" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Your balance" autocomplete="off"></label>
-        <label>Risk per trade<input name="calc_risk_pct" type="number" step="0.1" min="0" max="100" inputmode="decimal" placeholder="Example: 2" autocomplete="off"><small>Percent of your balance you are willing to lose on one trade.</small></label>
-        <label>Planned stake<input name="calc_stake" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Optional" autocomplete="off"><small>Leave blank if you only want the recommended risk amount.</small></label>
+        <label>Account balance<input name="calc_balance" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Enter account balance" autocomplete="off"></label>
+        <label>Risk per trade (%)<input name="calc_risk_pct" type="number" step="0.1" min="0" max="100" inputmode="decimal" placeholder="e.g. 2" autocomplete="off"><small>Percentage of your balance you are willing to lose on one trade.</small></label>
+        <label>Planned stake<input name="calc_stake" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Optional" autocomplete="off"><small>Optional comparison against your selected risk budget.</small></label>
       </form>
       <div class="calculator-result" data-risk-calculator-output aria-live="polite"><div class="calculator-empty">Enter your balance and risk percentage to calculate.</div></div>
+      <p class="risk-disclaimer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5m0-8h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Estimates are guidance, not a guarantee of maximum loss or trading outcome.</p>
     </article>
+
     <article class="risk-card profile-card">
-      <div class="risk-card-head"><div><p class="eyebrow">YOUR SETTINGS</p><h2>Risk profile</h2><p>These are guidance values. They are not hidden trade restrictions.</p></div></div>
+      <div class="risk-card-head"><div class="risk-title-with-icon"><span class="risk-heading-icon teal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6l8-3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m8.5 12 2.2 2.2 4.8-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><p class="eyebrow">PERSONAL CONTROLS</p><h2>Risk profile</h2><p>Save the risk guidelines used by your AlgoBot account.</p></div></div></div>
       <form class="risk-form" data-risk-form>
         <label>Risk level<select name="risk_level"><option value="conservative">Conservative</option><option value="moderate" selected>Moderate</option><option value="aggressive">Aggressive</option></select></label>
-        <label>Risk per trade<input name="max_risk_per_trade" type="number" step="0.001" min="0" max="1" inputmode="decimal"></label>
-        <label>Daily loss limit<input name="max_daily_loss" type="number" step="0.001" min="0" max="1" inputmode="decimal"></label>
-        <label>Maximum drawdown<input name="max_drawdown" type="number" step="0.001" min="0" max="1" inputmode="decimal"></label>
-        <label>Open trades limit<input name="max_open_positions" type="number" min="1" inputmode="numeric"></label>
-        <button class="btn primary" type="submit">Save risk settings</button>
+        <label>Risk per trade<input name="max_risk_per_trade" type="number" step="0.001" min="0" max="1" inputmode="decimal" required><small>Fraction of account balance (0.02 = 2%).</small></label>
+        <label>Daily loss limit<input name="max_daily_loss" type="number" step="0.001" min="0" max="1" inputmode="decimal" required></label>
+        <label>Maximum drawdown<input name="max_drawdown" type="number" step="0.001" min="0" max="1" inputmode="decimal" required></label>
+        <label class="risk-full-field">Open trades limit<input name="max_open_positions" type="number" min="1" step="1" inputmode="numeric" required></label>
+        <button class="risk-save-button" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3h2Zm2 0v6h10V3M7 21v-8h10v8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg> Save risk settings</button>
       </form>
-      <p class="risk-helper">You can still choose your trade size. AlgoBot will warn you when a planned trade is outside these guidelines.</p>
+      <div class="risk-helper"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5m0-8h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><p>These values guide your decisions. The risk profile does not silently change your trade size or replace broker-side safeguards.</p></div>
     </article>
   </section>
-  <section class="risk-layout secondary">
-    <article class="risk-card"><div class="risk-card-head"><div><p class="eyebrow">CURRENT EXPOSURE</p><h2>What is already at risk?</h2></div><a href="/positions/">View positions</a></div><div class="simple-list" data-risk-exposure><div class="calculator-empty">Loading exposure…</div></div></article>
-    <article class="risk-card"><div class="risk-card-head"><div><p class="eyebrow">RECENT CHECKS</p><h2>Risk checks</h2></div><a href="/trade-history/">Trade history</a></div><div class="simple-list" data-risk-assessments><div class="calculator-empty">Loading risk checks…</div></div></article>
+
+  <section class="risk-layout secondary" aria-label="Exposure and recent risk checks">
+    <article class="risk-card">
+      <div class="risk-card-head"><div class="risk-title-with-icon"><span class="risk-heading-icon cyan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5m0 14h16M7 15l4-5 3 3 5-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><p class="eyebrow">OPEN POSITIONS</p><h2>Current exposure</h2><p>Recorded exposure for your account.</p></div></div><a class="risk-text-link" href="/positions/">View positions <span aria-hidden="true">→</span></a></div>
+      <div class="simple-list" data-risk-exposure><div class="calculator-empty">Loading exposure…</div></div>
+    </article>
+    <article class="risk-card">
+      <div class="risk-card-head"><div class="risk-title-with-icon"><span class="risk-heading-icon violet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8M9 3h6v3H9zM6 5H4v16h16V5h-2M8 12l2.5 2.5L16 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><p class="eyebrow">PRE-TRADE SAFETY</p><h2>Recent risk checks</h2><p>Review the latest recorded trade assessments.</p></div></div><a class="risk-text-link" href="/trade-history/">Trade history <span aria-hidden="true">→</span></a></div>
+      <div class="simple-list" data-risk-assessments><div class="calculator-empty">Loading risk checks…</div></div>
+    </article>
   </section>
+
+  <footer class="risk-security-note"><span class="risk-security-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6l8-3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m8.5 12 2.2 2.2 4.8-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><strong>Your account data stays private</strong><p>Risk profiles, exposure and assessments are loaded through authenticated account-scoped endpoints.</p></div><span class="risk-security-state"><span></span> Account scoped</span></footer>
 </section>
 {% endblock %}
 {% block extra_js %}<script src="{% static 'js/risk.js' %}?v=20260916-risk3" defer></script>{% endblock %}
