@@ -170,3 +170,55 @@
 @media (prefers-reduced-motion: reduce) {
   .topbar-account-trigger, .topbar-profile-trigger, .topbar-icon-button { transition: none; }
 }
+
+
+/* Canonical AlgoBot topbar identity: use the shipped favicon asset, not a text/icon substitute. */
+.topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+  min-width: 0;
+  color: #edf5ff;
+  text-decoration: none;
+  font-weight: 850;
+  letter-spacing: -.035em;
+  line-height: 1;
+}
+.topbar-brand-favicon {
+  display: block;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  image-rendering: auto;
+}
+.topbar-brand-name { white-space: nowrap; font-size: clamp(16px, 1.35vw, 20px); }
+.topbar-brand:focus-visible { outline: 2px solid #54b7ff; outline-offset: 4px; border-radius: 5px; }
+.topbar-brand:hover { color: #8ddcff; }
+.topbar-title .mobile-page-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #91acce;
+  font-size: 11px;
+  font-weight: 650;
+}
+@media (max-width: 900px) {
+  .topbar-title { gap: 8px; }
+  .topbar-brand-favicon { flex-basis: 25px; width: 25px; height: 25px; }
+  .topbar-brand-name { font-size: 16px; }
+  .topbar-title .mobile-page-title { display: none; }
+}
+@media (max-width: 420px) {
+  .topbar-brand { gap: 6px; }
+  .topbar-brand-favicon { flex-basis: 23px; width: 23px; height: 23px; }
+  .topbar-brand-name { font-size: 14px; }
+}
