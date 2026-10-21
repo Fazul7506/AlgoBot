@@ -52,7 +52,7 @@
     <article class="risk-card profile-card">
       <div class="risk-card-head"><div class="risk-title-with-icon"><span class="risk-heading-icon teal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6l8-3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m8.5 12 2.2 2.2 4.8-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><p class="eyebrow">PERSONAL CONTROLS</p><h2>Risk profile</h2><p>Save the risk guidelines used by your AlgoBot account.</p></div></div></div>
       <form class="risk-form" data-risk-form>
-        <label>Risk level<select name="risk_level"><option value="conservative">Conservative</option><option value="moderate" selected>Moderate</option><option value="aggressive">Aggressive</option></select></label>
+        <label>Risk level<select name="risk_level"><option value="very_conservative">Very conservative</option><option value="conservative">Conservative</option><option value="moderate" selected>Moderate</option><option value="aggressive">Aggressive</option><option value="very_aggressive">Very aggressive</option><option value="custom">Custom</option></select></label>
         <label>Risk per trade<input name="max_risk_per_trade" type="number" step="0.001" min="0" max="1" inputmode="decimal" required><small>Fraction of account balance (0.02 = 2%).</small></label>
         <label>Daily loss limit<input name="max_daily_loss" type="number" step="0.001" min="0" max="1" inputmode="decimal" required></label>
         <label>Maximum drawdown<input name="max_drawdown" type="number" step="0.001" min="0" max="1" inputmode="decimal" required></label>
