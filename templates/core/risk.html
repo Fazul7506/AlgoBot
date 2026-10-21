@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Risk Management | AlgoBot{% endblock %}
 {% block mobile_title %}Risk{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/risk.css' %}?v=20261021-risk4">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/risk.css' %}?v=20261021-risk5">{% endblock %}
 {% block content %}
 <section class="risk-center" data-risk-center>
   <header class="risk-hero">
@@ -39,9 +39,11 @@
     <article class="risk-card calculator-card">
       <div class="risk-card-head"><div class="risk-title-with-icon"><span class="risk-heading-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7h8M8 11h2m4 0h2M8 15h2m4 0h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><div><p class="eyebrow">PLAN BEFORE YOU TRADE</p><h2>Risk calculator</h2><p>Estimate a loss budget from your balance and chosen risk percentage.</p></div></div></div>
       <form class="risk-calculator" data-risk-calculator>
-        <label>Account balance<input name="calc_balance" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Enter account balance" autocomplete="off"></label>
-        <label>Risk per trade (%)<input name="calc_risk_pct" type="number" step="0.1" min="0" max="100" inputmode="decimal" placeholder="e.g. 2" autocomplete="off"><small>Percentage of your balance you are willing to lose on one trade.</small></label>
-        <label>Planned stake<input name="calc_stake" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Optional" autocomplete="off"><small>Optional comparison against your selected risk budget.</small></label>
+        <label>Current account balance<input name="calc_balance" type="number" step="0.01" min="0" readonly aria-readonly="true" inputmode="decimal" placeholder="Loading selected account balance…" autocomplete="off"><small>Automatically refreshed from your selected broker account. Read-only.</small></label>
+        <label>Risk per trade (%)<input name="calc_risk_pct" type="number" step="0.01" min="0.01" max="100" inputmode="decimal" placeholder="Uses saved profile" required><small>Percentage of the verified balance allocated to this trade's risk budget.</small></label>
+        <label>Stop-loss distance (%)<input name="calc_stop_loss_pct" type="number" step="0.01" min="0.01" max="100" value="1" inputmode="decimal" required><small>Estimated adverse move before exiting. This is a calculator assumption, not an order instruction.</small></label>
+        <label>Reward-to-risk target<input name="calc_reward_risk" type="number" step="0.1" min="0.1" max="20" value="2" inputmode="decimal" required><small>Target reward multiple for each unit of risk.</small></label>
+        <label>Planned stake<input name="calc_stake" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Optional" autocomplete="off"><small>Optional stake to compare with your risk budget.</small></label>
       </form>
       <div class="calculator-result" data-risk-calculator-output aria-live="polite"><div class="calculator-empty">Enter your balance and risk percentage to calculate.</div></div>
       <p class="risk-disclaimer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5m0-8h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Estimates are guidance, not a guarantee of maximum loss or trading outcome.</p>
@@ -54,6 +56,7 @@
         <label>Risk per trade<input name="max_risk_per_trade" type="number" step="0.001" min="0" max="1" inputmode="decimal" required><small>Fraction of account balance (0.02 = 2%).</small></label>
         <label>Daily loss limit<input name="max_daily_loss" type="number" step="0.001" min="0" max="1" inputmode="decimal" required></label>
         <label>Maximum drawdown<input name="max_drawdown" type="number" step="0.001" min="0" max="1" inputmode="decimal" required></label>
+        <label>Maximum exposure (%)<input name="max_exposure" type="number" min="0.001" max="1" step="0.001" inputmode="decimal" required><small>Fraction of account balance (0.35 = 35%).</small></label>
         <label class="risk-full-field">Open trades limit<input name="max_open_positions" type="number" min="1" step="1" inputmode="numeric" required></label>
         <button class="risk-save-button" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3h2Zm2 0v6h10V3M7 21v-8h10v8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg> Save risk settings</button>
       </form>
@@ -75,4 +78,4 @@
   <footer class="risk-security-note"><span class="risk-security-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6l8-3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m8.5 12 2.2 2.2 4.8-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><strong>Your account data stays private</strong><p>Risk profiles, exposure and assessments are loaded through authenticated account-scoped endpoints.</p></div><span class="risk-security-state"><span></span> Account scoped</span></footer>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/risk.js' %}?v=20260916-risk3" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/risk.js' %}?v=20261021-risk5" defer></script>{% endblock %}
