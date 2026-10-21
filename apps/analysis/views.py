@@ -35,22 +35,40 @@ STRATEGY_BASELINE_MAX_AGE_SECONDS = 300
 logger = logging.getLogger(__name__)
 
 
+_analysis_cache_unavailable_until = 0.0
+_ANALYSIS_CACHE_FAILURE_COOLDOWN_SECONDS = 30.0
+
+
 def _safe_cache_get(key, default=None):
     """Cache reads must never take the Analysis API down when Redis is exhausted."""
+    global _analysis_cache_unavailable_until
+    now = time.monotonic()
+    if now < _analysis_cache_unavailable_until:
+        return default
     try:
-        return cache.get(key, default)
+        value = cache.get(key, default)
+        _analysis_cache_unavailable_until = 0.0
+        return value
     except Exception as exc:
-        logger.warning("analysis_cache_read_unavailable", extra={"cache_key": key, "error": str(exc)[:180]})
+        if now >= _analysis_cache_unavailable_until:
+            logger.warning("analysis_cache_unavailable", extra={"cache_key": key, "error": str(exc)[:180]})
+        _analysis_cache_unavailable_until = now + _ANALYSIS_CACHE_FAILURE_COOLDOWN_SECONDS
         return default
 
 
 def _safe_cache_set(key, value, timeout):
     """Best-effort cache write; the database/broker remains the source of truth."""
+    global _analysis_cache_unavailable_until
+    now = time.monotonic()
+    if now < _analysis_cache_unavailable_until:
+        return False
     try:
         cache.set(key, value, timeout)
+        _analysis_cache_unavailable_until = 0.0
         return True
     except Exception as exc:
-        logger.warning("analysis_cache_write_unavailable", extra={"cache_key": key, "error": str(exc)[:180]})
+        logger.warning("analysis_cache_unavailable", extra={"cache_key": key, "error": str(exc)[:180]})
+        _analysis_cache_unavailable_until = now + _ANALYSIS_CACHE_FAILURE_COOLDOWN_SECONDS
         return False
 
 
