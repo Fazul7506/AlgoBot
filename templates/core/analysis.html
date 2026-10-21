@@ -68,7 +68,7 @@
   <section class="panel"><div class="section-head"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Data provenance & freshness</h2><p>Current source authority and freshness are explicit.</p></div><div class="body"><div class="evidence-row"><span>Market data</span><strong id="provenanceMarket">—</strong></div><div class="evidence-row"><span>Historical data</span><strong id="provenanceCandles">—</strong></div><div class="evidence-row"><span>Analysis pipeline</span><strong id="provenanceAnalysis">—</strong></div><div class="evidence-row"><span>Execution status</span><strong id="provenanceExecution">—</strong></div><div class="evidence-row"><span>Quote source</span><strong id="liveQuote">—</strong></div><div class="evidence-row"><span>Broker state</span><strong id="aBrokerState">—</strong></div></div></section>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/analysis_workspace.js' %}?v=20261021-analysis-pro4" defer></script>
+{% block extra_js %}<script src="{% static 'js/analysis_workspace.js' %}?v=20261021-analysis-pro5" defer></script>
 <script>
 document.addEventListener("DOMContentLoaded",function(){
  const mirror=(source,target)=>{const a=document.getElementById(source),b=document.getElementById(target);if(!a||!b)return;const sync=()=>b.textContent=a.textContent;const observer=new MutationObserver(sync);observer.observe(a,{childList:true,characterData:true,subtree:true});sync();};
