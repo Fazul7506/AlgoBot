@@ -95,7 +95,8 @@
     set("sentimentState",sentimentLabel?state(sentimentLabel):"Unavailable");
     set("sentimentScore",sentiment?.score!=null?("Score "+num(sentiment.score,1)):"No verified score");
     set("sentimentSummary",sentiment?.summary||sentiment?.source||"No sentiment feed supplied"); set("aFresh",d.data_provenance?.fresh?"FRESH":"STALE");
-    const quoteFresh=Boolean(d.data_provenance?.fresh && d.live_quote?.fresh); setHealth(quoteFresh,quoteFresh?"DERIV LIVE":"DATA NOT FRESH"); const heroState=$("heroFeedState"); if(heroState)heroState.textContent=quoteFresh?"Live market feed connected":"Market data needs verification"; const pulse=document.querySelector(".status-pulse"); if(pulse)pulse.classList.toggle("is-live",quoteFresh);
+    const quoteFresh=Boolean(d.data_provenance?.fresh && d.live_quote?.fresh); setHealth(quoteFresh,quoteFresh?"DERIV LIVE":"DATA NOT FRESH"); const heroState=$("heroFeedState"); if(heroState)heroState.textContent=quoteFresh?"Live Analysis":"Market data needs verification"; const updated=$("referenceUpdatedAt");if(updated)updated.textContent="Last updated: "+new Date().toLocaleString();const pulse=document.querySelector(".reference-live-dot");if(pulse)pulse.style.background=quoteFresh?"#20d6a0":"#eab44d";
+    const regime=String(d.volatility_regime||"").toLowerCase();const volatilityFill=$("volatilityFill");if(volatilityFill)volatilityFill.style.width=/high|extreme|highly/.test(regime)?"85%":/low|quiet/.test(regime)?"28%":/moderate|normal|medium/.test(regime)?"50%":"0%";
     set("marketState",state(layers.market_data?.state)); set("marketSource",layers.market_data?.source||d.data_provenance?.broker); set("marketAge",d.data_provenance?.age_seconds!=null?d.data_provenance.age_seconds+"s":"—"); set("candleCount",d.candles??d.last_candles?.length);
     set("trendState",layers.technical?.structure||d.structure); set("trendScore",layers.technical?.score!=null?num(layers.technical.score,1)+"/100":"—"); set("momentumState",d.indicators?.rsi14!=null?"RSI "+num(d.indicators.rsi14,1):"—"); set("volatilityState",d.volatility_regime);
     set("strategyState",state(layers.strategy?.state)); set("strategyDirection",layers.strategy?.direction||"WAIT"); set("strategyEvidence",(layers.strategy?.evidence||[]).join(" · ")||"No persisted strategy evidence");
@@ -110,7 +111,16 @@
     set("resistance2",num(d.levels?.resistance2));set("support2",num(d.levels?.support2));
     const signalText=d.signal==null?"UNAVAILABLE":String(d.signal).toUpperCase();
     const confText=d.confidence==null?"—":pct(d.confidence);
-    list("marketOverviewRows",[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText}],x=>'<tr><td>'+esc(x.symbol)+'</td><td>'+esc(num(x.price))+'</td><td><span class="signal-pill '+tone(x.signal)+'">'+esc(x.signal)+'</span></td><td>'+esc(x.confidence)+'</td></tr>',"No verified market data available.");
+    const overviewRow=x=>'<tr><td>'+esc(x.symbol)+'</td><td>'+esc(num(x.price))+'</td><td><span class="signal-pill '+tone(x.signal)+'">'+esc(x.signal)+'</span></td><td>'+esc(x.confidence)+'</td></tr>';
+    list("marketOverviewRows",[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText}],overviewRow,"No verified market data available.");
+    const overviewGeneration=A.loadGeneration;
+    const otherMarkets=(A.markets||[]).filter(m=>m.symbol&&m.symbol!==d.symbol).slice(0,4);
+    if(otherMarkets.length)Promise.allSettled(otherMarkets.map(m=>request("/analysis/data/?symbol="+encodeURIComponent(m.symbol)+"&timeframe="+encodeURIComponent(d.timeframe||"M1")+"&limit="+encodeURIComponent($("limit")?.value||300)+"&refresh=1&refresh_account=0"))).then(results=>{
+      if(overviewGeneration!==A.loadGeneration)return;
+      const rows=[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText}];
+      results.forEach((result,i)=>{if(result.status!=="fulfilled"||!result.value||result.value.status==="error")return;const x=result.value;rows.push({symbol:x.symbol||otherMarkets[i].symbol,price:x.price,signal:x.signal==null?"UNAVAILABLE":String(x.signal).toUpperCase(),confidence:x.confidence==null?"—":pct(x.confidence)});});
+      list("marketOverviewRows",rows,overviewRow,"No verified market data available.");
+    });
     const predictionDirection=layers.ai?.direction||layers.ai?.prediction||layers.ai?.decision||d.signal;
     const predictionProbability=layers.ai?.probability??layers.ai?.probability_pct??d.prediction_probability;
     list("predictionRows",predictionDirection?[{symbol:d.symbol,direction:predictionDirection,probability:predictionProbability}]:[],x=>'<tr><td>'+esc(x.symbol)+'</td><td><span class="prediction-direction '+tone(x.direction)+'">'+esc(state(x.direction))+'</span></td><td>'+esc(x.probability==null?"—":pct(Number(x.probability)>1?Number(x.probability):Number(x.probability)*100))+'</td></tr>',"No verified AI prediction is available.");
