@@ -34,10 +34,10 @@
   function render(d){
     A.data=d;
     const gate=d.execution_gate||{}, ai=d.ai||{}, layers=d.analysis_layers||{}, conf=d.confluence||{}, acct=d.account_context||{};
-    set("aResearchState",state(d.research_state)); set("aBrokerState",state(d.broker_state)); set("aSymbol",d.symbol); set("aTf",d.timeframe); set("aPrice",num(d.price)); set("aSignal",d.signal==null?"UNAVAILABLE":d.signal); $("aSignal").className="value "+tone(d.signal);
+    set("aResearchState",state(d.research_state)); set("aBrokerState",state(d.broker_state)); set("aSymbol",d.symbol); set("aTf",String(d.timeframe||"M1").toUpperCase()); set("aPrice",num(d.price)); set("aSignal",d.signal==null?"UNAVAILABLE":d.signal); $("aSignal").className="value "+tone(d.signal); set("aTechnical",d.score!=null?num(d.score,1)+"/100":"Technical score —"); set("aFresh",d.data_provenance?.fresh?"FRESH DATA":"DATA UNVERIFIED"); set("liveQuote",num(d.price)); set("liveQuoteAge",d.data_provenance?.age_seconds!=null?"Quote age "+d.data_provenance.age_seconds+"s":"Quote freshness unavailable"); set("liveQuoteSource",d.data_provenance?.broker||d.snapshot?.source||"Deriv quote source");
     set("aTechnical",d.score!=null?num(d.score,1)+"/100":"—"); set("aConfidence",pct(d.confidence)); set("aRegime",d.volatility_regime); set("aFresh",d.data_provenance?.fresh?"FRESH":"STALE");
-    setHealth(Boolean(d.data_provenance?.fresh && d.live_quote?.fresh),d.live_quote?.fresh?"DERIV LIVE":"DATA NOT FRESH");
-    set("marketState",state(layers.market_data?.state)); set("marketSource",layers.market_data?.source); set("marketAge",d.data_provenance?.age_seconds!=null?d.data_provenance.age_seconds+"s":"—"); set("candleCount",d.candles);
+    const quoteFresh=Boolean(d.data_provenance?.fresh && (d.live_quote?.fresh || d.price!=null)); setHealth(quoteFresh,quoteFresh?"DERIV LIVE":"DATA NOT FRESH"); const heroState=$("heroFeedState"); if(heroState)heroState.textContent=quoteFresh?"Live market feed connected":"Market data needs verification"; const pulse=document.querySelector(".status-pulse"); if(pulse)pulse.classList.toggle("is-live",quoteFresh);
+    set("marketState",state(layers.market_data?.state)); set("marketSource",layers.market_data?.source||d.data_provenance?.broker); set("marketAge",d.data_provenance?.age_seconds!=null?d.data_provenance.age_seconds+"s":"—"); set("candleCount",d.candles??d.last_candles?.length);
     set("trendState",layers.technical?.structure||d.structure); set("trendScore",layers.technical?.score!=null?num(layers.technical.score,1)+"/100":"—"); set("momentumState",d.indicators?.rsi14!=null?"RSI "+num(d.indicators.rsi14,1):"—"); set("volatilityState",d.volatility_regime);
     set("strategyState",state(layers.strategy?.state)); set("strategyDirection",layers.strategy?.direction||"WAIT"); set("strategyEvidence",(layers.strategy?.evidence||[]).join(" · ")||"No persisted strategy evidence");
     set("aiState",state(layers.ai?.state)); set("aiDecision",layers.ai?.decision||"UNAVAILABLE"); set("aiConfidence",pct(layers.ai?.confidence)); set("aiModels",layers.ai?.models_used?String(layers.ai.models_used):"0"); set("aiAgreement",layers.ai?.agreement!=null?pct(Number(layers.ai.agreement)*100):"—");
@@ -74,7 +74,7 @@
       if(generation!==A.loadGeneration)return;
       A.data=null;
       $("loadState").textContent=e?.message||"Analysis unavailable";setHealth(false,"UNAVAILABLE");
-      set("aResearchState","UNAVAILABLE");set("aBrokerState","UNAVAILABLE");set("aPrice","—");set("aSignal","UNAVAILABLE");
+      set("aResearchState","UNAVAILABLE");set("aBrokerState","UNAVAILABLE");set("aPrice","—");set("aSignal","UNAVAILABLE");set("aTechnical","Technical score —");set("aFresh","DATA UNAVAILABLE");set("liveQuote","UNAVAILABLE");set("liveQuoteAge","Quote freshness unavailable");set("liveQuoteSource","—");const heroState=$("heroFeedState");if(heroState)heroState.textContent="Market feed unavailable";const pulse=document.querySelector(".status-pulse");if(pulse)pulse.classList.remove("is-live");
       set("marketState","UNAVAILABLE");set("marketSource","—");set("marketAge","—");set("candleCount","—");
       set("liveQuote","UNAVAILABLE");set("liveQuoteAge","—");set("liveQuoteSource","—");
       set("gateState","BLOCKED");set("gateReason","Fresh analysis evidence could not be confirmed.");
