@@ -145,3 +145,6 @@ body:has(.analysis-hero){background:#041326}
 .analysis-dashboard .indicator-chart-wrap canvas{display:block;width:100%;height:100%}
 .analysis-dashboard .indicator-chart-wrap .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:8px;text-align:center;font-size:11px}
 @media(max-width:760px){.analysis-dashboard .indicator-panel{padding-left:10px;padding-right:10px}.analysis-dashboard .indicator-chart-wrap{height:82px;min-height:82px}}
+
+.analysis-dashboard .confidence-track{height:8px;width:100%;margin:2px 0 10px;border-radius:999px;background:#183555;overflow:hidden}
+.analysis-dashboard .confidence-track span{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8b72ff,#a06bff);box-shadow:0 0 10px rgba(139,114,255,.25);transition:width .25s ease}
