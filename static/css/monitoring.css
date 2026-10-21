@@ -4,3 +4,41 @@
 @media(max-width:850px){.monitoring-layout{grid-template-columns:minmax(0,1fr)}.monitoring-sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.monitoring-events-panel{grid-row:span 2}.monitoring-security-note{align-self:stretch}.monitoring-system-state{min-width:180px}.monitoring-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.monitoring-workspace{gap:12px}.monitoring-hero{align-items:flex-start;flex-wrap:wrap;padding:15px;gap:12px}.monitoring-hero-icon{width:50px;height:50px;flex-basis:50px;border-radius:15px}.monitoring-hero-icon svg{width:34px;height:34px}.monitoring-hero-copy{flex:1 1 calc(100% - 65px)}.monitoring-hero-copy p{font-size:.82rem;line-height:1.45}.monitoring-system-state{width:100%;min-width:0;padding:10px 12px}.monitoring-shield{width:34px;height:34px}.monitoring-kpis{grid-template-columns:minmax(0,1fr);gap:9px}.monitoring-kpi{padding:12px}.monitoring-kpi-icon{width:42px;height:42px}.monitoring-layout,.monitoring-main-column,.monitoring-sidebar{gap:12px}.monitoring-sidebar{display:flex}.monitoring-panel-heading{padding:13px;align-items:flex-start}.monitoring-heading-actions{gap:6px}.monitoring-updated{max-width:110px;white-space:normal;text-align:right}.monitoring-table{min-width:520px}.monitoring-table th,.monitoring-table td{padding:10px}.monitoring-badge{font-size:.66rem;padding:4px 7px}.monitoring-event{gap:8px}.monitoring-events{padding:0 12px}.monitoring-channel{gap:9px}.monitoring-channel-logo{width:36px;height:36px;flex-basis:36px}.monitoring-channel-logo svg{width:26px;height:26px}.monitoring-channel-logo.telegram-logo svg{width:36px;height:36px}.monitoring-channel .monitoring-badge{max-width:94px;white-space:normal;text-align:center}.monitoring-panel-heading h2{font-size:.95rem}.monitoring-metric-history{padding:0 13px}.monitoring-metric-row{gap:9px}.monitoring-quick-actions>a{padding:12px 14px}}
 @media(prefers-reduced-motion:reduce){.monitoring-workspace *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+/* Mobile gets its own card geometry; tablet layout remains a separate two-column composition. */
+@media(min-width:601px) and (max-width:850px){
+ .monitoring-workspace{gap:14px}
+ .monitoring-layout{grid-template-columns:minmax(0,1fr);gap:14px}
+ .monitoring-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+ .monitoring-sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+ .monitoring-events-panel{grid-row:auto}
+ .monitoring-system-state{width:auto;min-width:0}
+ .monitoring-kpi{min-width:0;align-items:flex-start}
+ .monitoring-kpi>div{min-width:0}
+}
+@media(max-width:600px){
+ .monitoring-workspace{width:100%;max-width:100%;overflow-x:clip;padding-inline:0;gap:12px}
+ .monitoring-layout,.monitoring-main-column,.monitoring-sidebar{width:100%;min-width:0;display:flex;flex-direction:column;gap:12px}
+ .monitoring-kpis{width:100%;grid-template-columns:minmax(0,1fr);gap:10px}
+ .monitoring-kpi{width:100%;min-width:0;display:flex;align-items:center;padding:13px;gap:12px}
+ .monitoring-kpi>div{flex:1;min-width:0}
+ .monitoring-panel,.monitoring-card{width:100%;max-width:100%;min-width:0}
+ .monitoring-panel-heading{width:100%;min-width:0;flex-wrap:wrap}
+ .monitoring-service-panel .monitoring-table-wrap{max-width:100%;overflow-x:auto}
+ .monitoring-service-panel .monitoring-table{min-width:530px}
+ .monitoring-channel{align-items:center}
+ .monitoring-channel-copy{width:0;flex:1}
+ .monitoring-channel .monitoring-badge{flex:0 0 auto}
+ .monitoring-security-note{width:100%;min-width:0;box-sizing:border-box}
+}
+@media(max-width:380px){
+ .monitoring-hero{padding:12px}
+ .monitoring-kpi{padding:11px;gap:10px}
+ .monitoring-kpi-icon{width:38px;height:38px;flex-basis:38px}
+ .monitoring-panel-heading{padding:11px}
+ .monitoring-events{padding-inline:10px}
+ .monitoring-event{gap:7px}
+ .monitoring-event-icon{width:28px;height:28px;flex-basis:28px}
+ .monitoring-channel-logo{width:32px;height:32px;flex-basis:32px}
+ .monitoring-channel .monitoring-badge{font-size:.62rem;padding:4px 6px}
+}
