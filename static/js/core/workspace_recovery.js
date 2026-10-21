@@ -8,6 +8,7 @@
   let rail;
   let hideTimer;
   let lastSignature = '';
+  let dismissedSignature = '';
 
   function ensureRail() {
     if (rail) return rail;
@@ -17,7 +18,7 @@
     rail.hidden = true;
     rail.innerHTML = '<div class="algobot-recovery-icon" aria-hidden="true">!</div><div class="algobot-recovery-copy"><strong data-recovery-title>Data connection issue</strong><span data-recovery-message></span></div><button type="button" data-recovery-retry>Retry</button><button type="button" class="algobot-recovery-close" data-recovery-close aria-label="Dismiss">×</button>';
     document.body.appendChild(rail);
-    rail.querySelector('[data-recovery-close]').addEventListener('click', () => { rail.hidden = true; });
+    rail.querySelector('[data-recovery-close]').addEventListener('click', () => { dismissedSignature = lastSignature; rail.hidden = true; clearTimeout(hideTimer); });
     return rail;
   }
 
@@ -31,7 +32,8 @@
     const message = node.querySelector('[data-recovery-message]');
     const retry = node.querySelector('[data-recovery-retry]');
     const signature = `${detail.code}|${detail.url}|${detail.status}`;
-    if (signature === lastSignature && !node.hidden) return;
+    if (signature === lastSignature && (!node.hidden || dismissedSignature === signature)) return;
+    if (signature !== lastSignature) dismissedSignature = '';
     lastSignature = signature;
     node.dataset.state = detail.edgeChallenge ? 'edge' : 'error';
     title.textContent = detail.edgeChallenge ? 'Production edge protection interrupted the request' : 'Data connection issue';
@@ -39,7 +41,7 @@
       ? 'No market or trading data was fabricated. Retry when the edge challenge clears.'
       : (detail.message || 'The backend did not return usable data.');
     retry.hidden = !detail.retryable;
-    retry.onclick = detail.retryable && typeof detail.retry === 'function' ? detail.retry : null;
+    retry.onclick = detail.retryable && typeof detail.retry === 'function' ? () => { dismissedSignature = ''; lastSignature = ''; node.hidden = true; detail.retry(); } : null;
     node.hidden = false;
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => { if (node) node.hidden = true; }, detail.edgeChallenge ? 12000 : 9000);
