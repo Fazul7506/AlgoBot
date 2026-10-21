@@ -701,6 +701,15 @@ def broker_account_context(request):
         )
         context = build_account_risk_context(request.user, account, broker_data=broker_data)
     except Exception as exc:
+        logger.exception(
+            "broker_account_context_refresh_failed",
+            extra={
+                "user_id": request.user.pk,
+                "broker_account_id": account.pk,
+                "broker_type": getattr(getattr(account, "broker", None), "broker_type", None),
+                "error_type": exc.__class__.__name__,
+            },
+        )
         return JsonResponse(
             {
                 "status": "error",
