@@ -35,6 +35,25 @@ STRATEGY_BASELINE_MAX_AGE_SECONDS = 300
 logger = logging.getLogger(__name__)
 
 
+def _safe_cache_get(key, default=None):
+    """Cache reads must never take the Analysis API down when Redis is exhausted."""
+    try:
+        return cache.get(key, default)
+    except Exception as exc:
+        logger.warning("analysis_cache_read_unavailable", extra={"cache_key": key, "error": str(exc)[:180]})
+        return default
+
+
+def _safe_cache_set(key, value, timeout):
+    """Best-effort cache write; the database/broker remains the source of truth."""
+    try:
+        cache.set(key, value, timeout)
+        return True
+    except Exception as exc:
+        logger.warning("analysis_cache_write_unavailable", extra={"cache_key": key, "error": str(exc)[:180]})
+        return False
+
+
 def _latest_strategy_baseline(request, account, symbol, timeframe):
     """Read the latest persisted strategy result for the active broker account.
 
@@ -238,7 +257,7 @@ def analysis_data(request):
             bool(account_refresh_requested),
         ]).encode("utf-8")
     ).hexdigest()
-    cached = cache.get(cache_key)
+    cached = _safe_cache_get(cache_key)
     if cached is not None:
         return JsonResponse(cached)
 
@@ -616,12 +635,12 @@ def analysis_data(request):
         "no_look_ahead": True,
         "execution_separate": True,
     }
-    cache.set(cache_key, result, ANALYSIS_CACHE_SECONDS)
+    _safe_cache_set(cache_key, result, ANALYSIS_CACHE_SECONDS)
     return JsonResponse(result)
 
 
 def _analysis_markets():
-    cached = cache.get("algobot:analysis:markets:v1")
+    cached = _safe_cache_get("algobot:analysis:markets:v1")
     if cached is not None:
         return cached
     markets = list(
@@ -629,7 +648,7 @@ def _analysis_markets():
         .values("symbol", "display_name", "market", "sub_market")
         .order_by("market", "symbol")
     )
-    cache.set("algobot:analysis:markets:v1", markets, ANALYSIS_MARKETS_CACHE_SECONDS)
+    _safe_cache_set("algobot:analysis:markets:v1", markets, ANALYSIS_MARKETS_CACHE_SECONDS)
     return markets
 
 
