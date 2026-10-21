@@ -34,6 +34,11 @@
       <article class="panel reference-table-panel"><div class="section-head"><h2><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Sentiment &amp; News</h2></div><div class="body"><div id="sentimentNewsRows" class="news-list"><div class="empty">No verified sentiment or news feed is available.</div></div></div></article>
     </aside>
   </section>
+  <section class="analysis-secondary-grid reference-bottom-grid" aria-label="Market overview and AI predictions">
+    <article class="panel reference-table-panel"><div class="section-head"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Market Overview</h2><p>Top assets by live AI signal</p></div><div class="body table-scroll"><table class="reference-table"><thead><tr><th>Asset</th><th>Price</th><th>Signal</th><th>Confidence</th></tr></thead><tbody id="marketOverviewRows"><tr><td colspan="4" class="empty">Waiting for verified market data…</td></tr></tbody></table></div></article>
+    <article class="panel reference-table-panel"><div class="section-head"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5z"/></svg>AI Predictions</h2><p>Next 24 hours · model-backed outputs only</p></div><div class="body table-scroll"><table class="reference-table"><thead><tr><th>Asset</th><th>Direction</th><th>Probability</th></tr></thead><tbody id="predictionRows"><tr><td colspan="3" class="empty">Waiting for verified prediction data…</td></tr></tbody></table></div></article>
+  </section>
+  <span id="aFeed" class="reference-hidden-data"></span><span id="loadState" class="reference-hidden-data" role="status" aria-live="polite"></span><span id="prepareState" class="reference-hidden-data"></span><button id="prepare" type="button" hidden aria-hidden="true" tabindex="-1"></button>
 </main>
 {% endblock %}
 {% block extra_js %}<script src="{% static 'js/analysis_workspace.js' %}?v=20261021-analysis-pro9" defer></script>
