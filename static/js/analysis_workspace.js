@@ -19,23 +19,82 @@
   function setHealth(ok,text){$("aFeed").className="health-dot "+(ok?"live":"");set("aFeedText",text)}
 
   function drawChart(candles){
-    const canvas=$("analysisChart"), empty=$("chartEmpty");
-    if(!canvas)return;
-    if(!candles?.length){canvas.hidden=true;empty.hidden=false;return}
-    canvas.hidden=false;empty.hidden=true;
-    const box=canvas.getBoundingClientRect(), q=window.devicePixelRatio||1, w=Math.max(320,box.width), h=Math.max(280,box.height);
-    canvas.width=w*q;canvas.height=h*q;const ctx=canvas.getContext("2d");ctx.setTransform(q,0,0,q,0,0);ctx.clearRect(0,0,w,h);
-    const hi=Math.max(...candles.map(x=>Number(x.high))), lo=Math.min(...candles.map(x=>Number(x.low))), span=hi-lo||1;
-    const y=v=>h-24-(Number(v)-lo)/span*(h-48), step=w/Math.max(1,candles.length-1);
-    ctx.strokeStyle="rgba(148,163,184,.15)"; for(let i=1;i<6;i++){ctx.beginPath();ctx.moveTo(0,h*i/6);ctx.lineTo(w,h*i/6);ctx.stroke()}
-    candles.forEach((x,i)=>{const xx=i*step,up=Number(x.close)>=Number(x.open);ctx.strokeStyle=up?"#22c55e":"#ef4444";ctx.beginPath();ctx.moveTo(xx,y(x.high));ctx.lineTo(xx,y(x.low));ctx.stroke();const top=Math.min(y(x.open),y(x.close)), bh=Math.max(1,Math.abs(y(x.close)-y(x.open)));ctx.fillStyle=ctx.strokeStyle;ctx.fillRect(xx-2,top,4,bh)});
+    const canvas=$("analysisChart"),empty=$("chartEmpty");if(!canvas)return;
+    const valid=(candles||[]).filter(c=>[c.open,c.high,c.low,c.close].every(v=>Number.isFinite(Number(v))));
+    if(!valid.length){canvas.hidden=true;if(empty)empty.hidden=false;return}
+    canvas.hidden=false;if(empty)empty.hidden=true;
+    const box=canvas.getBoundingClientRect(),q=window.devicePixelRatio||1,w=Math.max(320,box.width),h=Math.max(250,box.height);
+    canvas.width=Math.round(w*q);canvas.height=Math.round(h*q);const ctx=canvas.getContext("2d");ctx.setTransform(q,0,0,q,0,0);ctx.clearRect(0,0,w,h);
+    const pad={l:8,r:54,t:12,b:20},closes=valid.map(c=>Number(c.close));
+    const bands=closes.map((_,i)=>{if(i<19)return null;const a=closes.slice(i-19,i+1),mean=a.reduce((x,y)=>x+y,0)/a.length,sd=Math.sqrt(a.reduce((x,y)=>x+(y-mean)**2,0)/a.length);return {mid:mean,upper:mean+2*sd,lower:mean-2*sd}});
+    const lows=valid.map(c=>Number(c.low)),highs=valid.map(c=>Number(c.high));
+    bands.forEach(b=>{if(b){lows.push(b.lower);highs.push(b.upper)}});
+    let lo=Math.min(...lows),hi=Math.max(...highs);if(!Number.isFinite(lo)||!Number.isFinite(hi)){lo=Math.min(...valid.map(c=>Number(c.low)));hi=Math.max(...valid.map(c=>Number(c.high)))}
+    const span=hi-lo||Math.max(Math.abs(hi)*.001,1),x=i=>pad.l+i/Math.max(1,valid.length-1)*(w-pad.l-pad.r),y=v=>h-pad.b-(Number(v)-lo)/span*(h-pad.t-pad.b);
+    ctx.font="10px system-ui";ctx.textAlign="left";ctx.textBaseline="middle";ctx.strokeStyle="rgba(148,177,211,.17)";ctx.fillStyle="#8faacc";
+    for(let i=0;i<=5;i++){const val=hi-(hi-lo)*i/5,yy=y(val);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();ctx.fillText(val.toFixed(Math.abs(val)<10?4:2),w-pad.r+5,yy)}
+    const plotLine=(key,color,width=1.1)=>{ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=width;let begun=false;bands.forEach((b,i)=>{if(!b){begun=false;return}const v=b[key];if(!begun){ctx.moveTo(x(i),y(v));begun=true}else ctx.lineTo(x(i),y(v))});ctx.stroke()};
+    plotLine("upper","#2689f4",1);plotLine("mid","#8b72ff",1);plotLine("lower","#2689f4",1);
+    const step=(w-pad.l-pad.r)/Math.max(1,valid.length),body=Math.max(1,Math.min(7,step*.68));
+    valid.forEach((c,i)=>{const xx=x(i),up=Number(c.close)>=Number(c.open);ctx.strokeStyle=up?"#21d6a0":"#ff526d";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(xx,y(c.high));ctx.lineTo(xx,y(c.low));ctx.stroke();const top=Math.min(y(c.open),y(c.close)),bh=Math.max(1,Math.abs(y(c.close)-y(c.open)));ctx.fillStyle=up?"#21d6a0":"#ff526d";ctx.fillRect(xx-body/2,top,body,bh)});
+    ctx.fillStyle="#8faacc";ctx.textAlign="center";ctx.textBaseline="top";
+    [0,.25,.5,.75,1].forEach(f=>{const i=Math.min(valid.length-1,Math.round((valid.length-1)*f)),stamp=valid[i]?.time??valid[i]?.timestamp??valid[i]?.datetime;if(stamp!=null){let label=String(stamp);const dt=new Date(typeof stamp==="number"&&stamp<1e12?stamp*1000:stamp);if(!Number.isNaN(dt.getTime()))label=dt.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});ctx.fillText(label,x(i),h-pad.b+5,w/5)}});
+  }
+
+  function emaSeries(values, period){
+    const out=Array(values.length).fill(null); if(values.length<period)return out;
+    const k=2/(period+1); let current=values.slice(0,period).reduce((a,b)=>a+b,0)/period; out[period-1]=current;
+    for(let i=period;i<values.length;i++){current=values[i]*k+current*(1-k);out[i]=current}
+    return out;
+  }
+  function drawLinePanel(canvasId,emptyId,series,opts={}){
+    const canvas=$(canvasId), empty=$(emptyId); if(!canvas)return;
+    const valid=series.filter(s=>Array.isArray(s.values)&&s.values.some(Number.isFinite));
+    if(!valid.length){canvas.hidden=true;if(empty)empty.hidden=false;return}
+    canvas.hidden=false;if(empty)empty.hidden=true;
+    const box=canvas.getBoundingClientRect(),q=window.devicePixelRatio||1,w=Math.max(240,box.width),h=Math.max(90,box.height);
+    canvas.width=Math.round(w*q);canvas.height=Math.round(h*q);const ctx=canvas.getContext("2d");ctx.setTransform(q,0,0,q,0,0);ctx.clearRect(0,0,w,h);
+    const pad={l:8,r:8,t:8,b:8},n=Math.max(...valid.map(s=>s.values.length));
+    let lo=opts.min??Math.min(...valid.flatMap(s=>s.values.filter(Number.isFinite))),hi=opts.max??Math.max(...valid.flatMap(s=>s.values.filter(Number.isFinite)));
+    if(opts.min==null){const span=hi-lo||1;lo-=span*.12;hi+=span*.12}
+    if(hi===lo)hi=lo+1;
+    const px=i=>pad.l+i/Math.max(1,n-1)*(w-pad.l-pad.r),py=v=>h-pad.b-(v-lo)/(hi-lo)*(h-pad.t-pad.b);
+    ctx.lineWidth=1;ctx.strokeStyle="rgba(148,177,211,.18)";
+    for(let i=1;i<4;i++){const y=pad.t+(h-pad.t-pad.b)*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke()}
+    (opts.levels||[]).forEach(level=>{ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle="rgba(167,186,215,.55)";ctx.beginPath();ctx.moveTo(pad.l,py(level));ctx.lineTo(w-pad.r,py(level));ctx.stroke();ctx.restore()});
+    if(opts.histogram){const values=opts.histogram.filter(Number.isFinite),base=opts.zero?py(0):h-pad.b,bw=Math.max(1,(w-pad.l-pad.r)/Math.max(1,opts.histogram.length)*.72);opts.histogram.forEach((v,i)=>{if(!Number.isFinite(v))return;ctx.fillStyle=v>=0?"#25d3a0":"#f05270";const yy=py(v),xx=pad.l+i/Math.max(1,n-1)*(w-pad.l-pad.r);ctx.fillRect(xx-bw/2,Math.min(yy,base),bw,Math.max(1,Math.abs(base-yy)))});}
+    valid.forEach(s=>{ctx.beginPath();ctx.strokeStyle=s.color;ctx.lineWidth=1.6;let started=false;s.values.forEach((v,i)=>{if(!Number.isFinite(v)){started=false;return}if(!started){ctx.moveTo(px(i),py(v));started=true}else ctx.lineTo(px(i),py(v))});ctx.stroke()});
+    if(opts.zero){ctx.strokeStyle="rgba(167,186,215,.55)";ctx.beginPath();ctx.moveTo(pad.l,py(0));ctx.lineTo(w-pad.r,py(0));ctx.stroke()}
+  }
+  function drawIndicators(candles){
+    const closes=(candles||[]).map(c=>Number(c.close)).filter(Number.isFinite);
+    if(closes.length<2){drawLinePanel("macdChart","macdEmpty",[]);drawLinePanel("rsiChart","rsiEmpty",[]);return}
+    const fast=emaSeries(closes,12),slow=emaSeries(closes,26);
+    const macd=closes.map((_,i)=>fast[i]!=null&&slow[i]!=null?fast[i]-slow[i]:null);
+    const macdValues=macd.filter(Number.isFinite),signalCompact=emaSeries(macdValues,9);
+    const signal=Array(macd.length).fill(null);let si=0;macd.forEach((v,i)=>{if(Number.isFinite(v)){signal[i]=signalCompact[si++]}});
+    const histogram=macd.map((v,i)=>Number.isFinite(v)&&Number.isFinite(signal[i])?v-signal[i]:null);
+    drawLinePanel("macdChart","macdEmpty",[
+      {values:macd,color:"#a78bfa"},{values:signal,color:"#f6ad45"}
+    ],{zero:true,histogram});
+    const rsi=Array(closes.length).fill(null);
+    if(closes.length>=15){let gains=0,losses=0;for(let i=1;i<=14;i++){const d=closes[i]-closes[i-1];if(d>=0)gains+=d;else losses-=d}
+      let avgGain=gains/14,avgLoss=losses/14;rsi[14]=avgLoss===0?100:100-100/(1+avgGain/avgLoss);
+      for(let i=15;i<closes.length;i++){const d=closes[i]-closes[i-1];avgGain=(avgGain*13+Math.max(d,0))/14;avgLoss=(avgLoss*13+Math.max(-d,0))/14;rsi[i]=avgLoss===0?100:100-100/(1+avgGain/avgLoss)}
+    }
+    drawLinePanel("rsiChart","rsiEmpty",[{values:rsi,color:"#a78bfa"}],{min:0,max:100,levels:[30,50,70]});
   }
 
   function render(d){
     A.data=d;
     const gate=d.execution_gate||{}, ai=d.ai||{}, layers=d.analysis_layers||{}, conf=d.confluence||{}, acct=d.account_context||{};
     set("aResearchState",state(d.research_state)); set("aBrokerState",state(d.broker_state)); set("aSymbol",d.symbol); set("aTf",String(d.timeframe||"M1").toUpperCase()); set("aPrice",num(d.price)); set("aSignal",d.signal==null?"UNAVAILABLE":d.signal); $("aSignal").className="value "+tone(d.signal); set("aTechnical",d.score!=null?num(d.score,1)+"/100":"Technical score —"); set("aFresh",d.data_provenance?.fresh?"FRESH DATA":"DATA UNVERIFIED"); set("liveQuote",num(d.live_quote?.price)); set("liveQuoteAge",d.live_quote?.age_seconds!=null?"Live quote age "+d.live_quote.age_seconds+"s":"Live quote freshness unavailable"); set("liveQuoteSource",d.live_quote?.source||"Deriv live quote");
-    set("aTechnical",d.score!=null?num(d.score,1)+"/100":"—"); set("aConfidence",pct(d.confidence)); set("aRegime",d.volatility_regime); set("aFresh",d.data_provenance?.fresh?"FRESH":"STALE");
+    set("aTechnical",d.score!=null?num(d.score,1)+"/100":"—"); set("aConfidence",pct(d.confidence)); const confidenceValue=Number(d.confidence);const confidenceFill=$("confidenceFill");if(confidenceFill)confidenceFill.style.width=Number.isFinite(confidenceValue)?Math.max(0,Math.min(100,confidenceValue<=1?confidenceValue*100:confidenceValue))+"%":"0%"; set("aRegime",d.volatility_regime);
+    const sentiment=d.sentiment&&typeof d.sentiment==="object"?d.sentiment:null;
+    const sentimentLabel=sentiment?.label||sentiment?.sentiment||sentiment?.classification;
+    set("sentimentState",sentimentLabel?state(sentimentLabel):"Unavailable");
+    set("sentimentScore",sentiment?.score!=null?("Score "+num(sentiment.score,1)):"No verified score");
+    set("sentimentSummary",sentiment?.summary||sentiment?.source||"No sentiment feed supplied"); set("aFresh",d.data_provenance?.fresh?"FRESH":"STALE");
     const quoteFresh=Boolean(d.data_provenance?.fresh && d.live_quote?.fresh); setHealth(quoteFresh,quoteFresh?"DERIV LIVE":"DATA NOT FRESH"); const heroState=$("heroFeedState"); if(heroState)heroState.textContent=quoteFresh?"Live market feed connected":"Market data needs verification"; const pulse=document.querySelector(".status-pulse"); if(pulse)pulse.classList.toggle("is-live",quoteFresh);
     set("marketState",state(layers.market_data?.state)); set("marketSource",layers.market_data?.source||d.data_provenance?.broker); set("marketAge",d.data_provenance?.age_seconds!=null?d.data_provenance.age_seconds+"s":"—"); set("candleCount",d.candles??d.last_candles?.length);
     set("trendState",layers.technical?.structure||d.structure); set("trendScore",layers.technical?.score!=null?num(layers.technical.score,1)+"/100":"—"); set("momentumState",d.indicators?.rsi14!=null?"RSI "+num(d.indicators.rsi14,1):"—"); set("volatilityState",d.volatility_regime);
@@ -56,7 +115,7 @@
     list("patterns",d.candlestick_patterns,x=>'<div class="evidence-row"><span>'+esc(x.type)+"</span><strong>"+esc(x.bias)+"</strong></div>");
     set("account",acct.account_id||"NO ACTIVE ACCOUNT");set("accountType",acct.account_type||"—");set("currency",acct.currency||"—");set("balance",money(acct.balance,acct.currency));set("riskBudget",money(acct.risk_budget,acct.currency));set("stake",money(acct.recommended_stake,acct.currency));
     set("provenanceMarket",d.data_provenance?.broker||"—");set("provenanceCandles",d.data_provenance?.candle_source||"—");set("provenanceAnalysis","AlgoBot technical + AI pipeline");set("provenanceExecution","Broker only");
-    drawChart(d.last_candles||[]);
+    drawChart(d.last_candles||[]); drawIndicators(d.last_candles||[]);
   }
 
   async function load(options={}){
@@ -79,7 +138,7 @@
       set("liveQuote","UNAVAILABLE");set("liveQuoteAge","—");set("liveQuoteSource","—");
       set("gateState","BLOCKED");set("gateReason","Fresh analysis evidence could not be confirmed.");
       set("account","NO VERIFIED ACCOUNT CONTEXT");set("accountType","—");set("currency","—");set("balance","—");set("riskBudget","—");set("stake","—");
-      drawChart([]);
+      drawChart([]); drawIndicators([]);
     }
   }
   async function markets(){
@@ -103,7 +162,7 @@
     ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>load()));
     $("refresh")?.addEventListener("click",()=>load({refreshAccount:true}));$("prepare")?.addEventListener("click",prepare);
     $("auto")?.addEventListener("change",()=>{clearInterval(A.timer);if($("auto").checked)A.timer=setInterval(()=>load({refreshAccount:false}),15000)});
-    window.addEventListener("resize",()=>A.data&&drawChart(A.data.last_candles||[]));markets();
+    window.addEventListener("resize",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});markets();
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
 })();
