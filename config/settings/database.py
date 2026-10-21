@@ -1,4 +1,4 @@
-"Database settings for AlgoBot."
+"""Database settings for AlgoBot."""
 
 import os
 from urllib.parse import urlparse
