@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Analysis | AlgoBot{% endblock %}
 {% block mobile_title %}Analysis{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/analysis_workspace.css' %}?v=20261021-analysis-pro1"><link rel="stylesheet" href="{% static 'css/analysis_reference_redesign.css' %}?v=20261021-reference8">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/analysis_workspace.css' %}?v=20261021-analysis-pro1"><link rel="stylesheet" href="{% static 'css/analysis_reference_redesign.css' %}?v=20261021-reference9">{% endblock %}
 {% block content %}
 <span id="aSignal" hidden aria-hidden="true">UNAVAILABLE</span>
 <main id="main-content" class="workspace analysis-dashboard">
@@ -36,7 +36,7 @@
   </section>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/analysis_workspace.js' %}?v=20261021-analysis-pro8" defer></script>
+{% block extra_js %}<script src="{% static 'js/analysis_workspace.js' %}?v=20261021-analysis-pro9" defer></script>
 <script>
 document.addEventListener("DOMContentLoaded",function(){
  const mirror=(source,target)=>{const a=document.getElementById(source),b=document.getElementById(target);if(!a||!b)return;const sync=()=>b.textContent=a.textContent;const observer=new MutationObserver(sync);observer.observe(a,{childList:true,characterData:true,subtree:true});sync();};
