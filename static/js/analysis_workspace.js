@@ -19,16 +19,26 @@
   function setHealth(ok,text){$("aFeed").className="health-dot "+(ok?"live":"");set("aFeedText",text)}
 
   function drawChart(candles){
-    const canvas=$("analysisChart"), empty=$("chartEmpty");
-    if(!canvas)return;
-    if(!candles?.length){canvas.hidden=true;empty.hidden=false;return}
-    canvas.hidden=false;empty.hidden=true;
-    const box=canvas.getBoundingClientRect(), q=window.devicePixelRatio||1, w=Math.max(320,box.width), h=Math.max(280,box.height);
-    canvas.width=w*q;canvas.height=h*q;const ctx=canvas.getContext("2d");ctx.setTransform(q,0,0,q,0,0);ctx.clearRect(0,0,w,h);
-    const hi=Math.max(...candles.map(x=>Number(x.high))), lo=Math.min(...candles.map(x=>Number(x.low))), span=hi-lo||1;
-    const y=v=>h-24-(Number(v)-lo)/span*(h-48), step=w/Math.max(1,candles.length-1);
-    ctx.strokeStyle="rgba(148,163,184,.15)"; for(let i=1;i<6;i++){ctx.beginPath();ctx.moveTo(0,h*i/6);ctx.lineTo(w,h*i/6);ctx.stroke()}
-    candles.forEach((x,i)=>{const xx=i*step,up=Number(x.close)>=Number(x.open);ctx.strokeStyle=up?"#22c55e":"#ef4444";ctx.beginPath();ctx.moveTo(xx,y(x.high));ctx.lineTo(xx,y(x.low));ctx.stroke();const top=Math.min(y(x.open),y(x.close)), bh=Math.max(1,Math.abs(y(x.close)-y(x.open)));ctx.fillStyle=ctx.strokeStyle;ctx.fillRect(xx-2,top,4,bh)});
+    const canvas=$("analysisChart"),empty=$("chartEmpty");if(!canvas)return;
+    const valid=(candles||[]).filter(c=>[c.open,c.high,c.low,c.close].every(v=>Number.isFinite(Number(v))));
+    if(!valid.length){canvas.hidden=true;if(empty)empty.hidden=false;return}
+    canvas.hidden=false;if(empty)empty.hidden=true;
+    const box=canvas.getBoundingClientRect(),q=window.devicePixelRatio||1,w=Math.max(320,box.width),h=Math.max(250,box.height);
+    canvas.width=Math.round(w*q);canvas.height=Math.round(h*q);const ctx=canvas.getContext("2d");ctx.setTransform(q,0,0,q,0,0);ctx.clearRect(0,0,w,h);
+    const pad={l:8,r:54,t:12,b:20},closes=valid.map(c=>Number(c.close));
+    const bands=closes.map((_,i)=>{if(i<19)return null;const a=closes.slice(i-19,i+1),mean=a.reduce((x,y)=>x+y,0)/a.length,sd=Math.sqrt(a.reduce((x,y)=>x+(y-mean)**2,0)/a.length);return {mid:mean,upper:mean+2*sd,lower:mean-2*sd}});
+    const lows=valid.map(c=>Number(c.low)),highs=valid.map(c=>Number(c.high));
+    bands.forEach(b=>{if(b){lows.push(b.lower);highs.push(b.upper)}});
+    let lo=Math.min(...lows),hi=Math.max(...highs);if(!Number.isFinite(lo)||!Number.isFinite(hi)){lo=Math.min(...valid.map(c=>Number(c.low)));hi=Math.max(...valid.map(c=>Number(c.high)))}
+    const span=hi-lo||Math.max(Math.abs(hi)*.001,1),x=i=>pad.l+i/Math.max(1,valid.length-1)*(w-pad.l-pad.r),y=v=>h-pad.b-(Number(v)-lo)/span*(h-pad.t-pad.b);
+    ctx.font="10px system-ui";ctx.textAlign="left";ctx.textBaseline="middle";ctx.strokeStyle="rgba(148,177,211,.17)";ctx.fillStyle="#8faacc";
+    for(let i=0;i<=5;i++){const val=hi-(hi-lo)*i/5,yy=y(val);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();ctx.fillText(val.toFixed(Math.abs(val)<10?4:2),w-pad.r+5,yy)}
+    const plotLine=(key,color,width=1.1)=>{ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=width;let begun=false;bands.forEach((b,i)=>{if(!b){begun=false;return}const v=b[key];if(!begun){ctx.moveTo(x(i),y(v));begun=true}else ctx.lineTo(x(i),y(v))});ctx.stroke()};
+    plotLine("upper","#2689f4",1);plotLine("mid","#8b72ff",1);plotLine("lower","#2689f4",1);
+    const step=(w-pad.l-pad.r)/Math.max(1,valid.length),body=Math.max(1,Math.min(7,step*.68));
+    valid.forEach((c,i)=>{const xx=x(i),up=Number(c.close)>=Number(c.open);ctx.strokeStyle=up?"#21d6a0":"#ff526d";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(xx,y(c.high));ctx.lineTo(xx,y(c.low));ctx.stroke();const top=Math.min(y(c.open),y(c.close)),bh=Math.max(1,Math.abs(y(c.close)-y(c.open)));ctx.fillStyle=up?"#21d6a0":"#ff526d";ctx.fillRect(xx-body/2,top,body,bh)});
+    ctx.fillStyle="#8faacc";ctx.textAlign="center";ctx.textBaseline="top";
+    [0,.25,.5,.75,1].forEach(f=>{const i=Math.min(valid.length-1,Math.round((valid.length-1)*f)),stamp=valid[i]?.time??valid[i]?.timestamp??valid[i]?.datetime;if(stamp!=null){let label=String(stamp);const dt=new Date(typeof stamp==="number"&&stamp<1e12?stamp*1000:stamp);if(!Number.isNaN(dt.getTime()))label=dt.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});ctx.fillText(label,x(i),h-pad.b+5,w/5)}});
   }
 
   function emaSeries(values, period){
@@ -126,7 +136,7 @@
       set("liveQuote","UNAVAILABLE");set("liveQuoteAge","—");set("liveQuoteSource","—");
       set("gateState","BLOCKED");set("gateReason","Fresh analysis evidence could not be confirmed.");
       set("account","NO VERIFIED ACCOUNT CONTEXT");set("accountType","—");set("currency","—");set("balance","—");set("riskBudget","—");set("stake","—");
-      drawChart([]);
+      drawChart([]); drawIndicators([]);
     }
   }
   async function markets(){
