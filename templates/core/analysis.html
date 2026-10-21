@@ -66,7 +66,7 @@
 {% block extra_js %}<script src="{% static 'js/analysis_workspace.js' %}?v=20261021-analysis-pro2" defer></script>
 <script>
 document.addEventListener("DOMContentLoaded",function(){
- const mirror=(source,target)=>{const a=document.getElementById(source),b=document.getElementById(target);if(!a||!b)return;const sync=()=>b.textContent=a.textContent;a.addEventListener("DOMSubtreeModified",sync);const observer=new MutationObserver(sync);observer.observe(a,{childList:true,characterData:true,subtree:true});sync();};
- [["aSymbol","overviewSymbol"],["aPrice","overviewPrice"],["aPrice","levelPrice"],["aSignal","overviewSignal"],["aConfidence","overviewConfidence"],["aiDecision","aiDecisionSecondary"],["aiConfidence","aiConfidenceSecondary"],["aiAgreement","aiAgreementSecondary"],["rsi","rsiDetail"],["macd","macdDetail"],["bb","bbDetail"],["trendState","trendStateDetail"],["validationState","validationStateDetail"],["validationDirection","validationDirectionDetail"]].forEach(x=>mirror(x[0],x[1]));
+ const mirror=(source,target)=>{const a=document.getElementById(source),b=document.getElementById(target);if(!a||!b)return;const sync=()=>b.textContent=a.textContent;const observer=new MutationObserver(sync);observer.observe(a,{childList:true,characterData:true,subtree:true});sync();};
+ [["aSymbol","overviewSymbol"],["aPrice","overviewPrice"],["aPrice","levelPrice"],["aSignal","overviewSignal"],["aConfidence","overviewConfidence"],["aiDecision","aiDecisionSecondary"],["aiConfidence","aiConfidenceSecondary"],["aiModels","aiModelsSecondary"],["aiAgreement","aiAgreementSecondary"],["rsi","rsiDetail"],["macd","macdDetail"],["bb","bbDetail"],["trendState","trendStateDetail"],["validationState","validationStateDetail"],["validationDirection","validationDirectionDetail"]].forEach(x=>mirror(x[0],x[1]));
 });
 </script>{% endblock %}
