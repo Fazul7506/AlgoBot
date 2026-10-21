@@ -71,3 +71,59 @@ body:has(.analysis-hero){background:#041326}
 @media(max-width:760px){.workspace .grid-2,.workspace .two-col{grid-template-columns:minmax(0,1fr)}.analysis-hero-meta{gap:7px}.analysis-hero-actions .btn{min-width:0;padding:10px}.workspace .chart-wrap{height:300px}.workspace .evidence-row{align-items:flex-start}.workspace .evidence-row>strong{text-align:left}}
 @media(max-width:420px){.workspace .grid-2,.workspace .grid-4,.workspace .two-col{grid-template-columns:minmax(0,1fr)}.workspace .chart-wrap{height:250px}.workspace .analysis-hero-actions{grid-template-columns:minmax(0,1fr)}.workspace .analysis-hero-actions .btn{width:100%}.workspace .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace .analysis-toolbar .toolbar-field{grid-column:1/-1}}
 @media(prefers-reduced-motion:reduce){.workspace *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* Full reference layout components */
+.analysis-dashboard{display:grid;grid-template-columns:minmax(0,1fr);align-content:start}
+.analysis-dashboard>.analysis-hero,.analysis-dashboard>.analysis-toolbar,.analysis-dashboard>.analysis-kpis,.analysis-dashboard>.analysis-main-grid,.analysis-dashboard>.analysis-secondary-grid,.analysis-dashboard>.analysis-detail-grid,.analysis-dashboard>.analysis-operations-grid,.analysis-dashboard>section.panel{grid-column:1/-1}
+.analysis-dashboard .analysis-main-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(290px,1fr);gap:16px;align-items:stretch}
+.analysis-dashboard .analysis-secondary-grid,.analysis-dashboard .analysis-detail-grid,.analysis-dashboard .analysis-operations-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch}
+.analysis-dashboard .section-head h2 svg{width:21px;height:21px;flex:0 0 auto;color:#64baff;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.analysis-dashboard .analysis-chart-panel .chart-wrap{height:390px;min-height:280px;padding:8px}
+.analysis-dashboard .analysis-chart-footer{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 18px;border-top:1px solid rgba(74,115,158,.24);color:#dcecff}
+.analysis-dashboard .analysis-chart-footer strong{margin-right:12px;color:#f3f8ff}
+.analysis-dashboard .insights-panel .body{padding:6px 18px}
+.analysis-dashboard .insight-item{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid rgba(74,115,158,.22);min-width:0}
+.analysis-dashboard .insight-item:last-child{border-bottom:0}
+.analysis-dashboard .insight-item>div{min-width:0;flex:1}
+.analysis-dashboard .insight-item strong{display:block;color:#edf5ff;font-size:13px;line-height:1.45;overflow-wrap:anywhere}
+.analysis-dashboard .insight-item p{margin:4px 0 0;color:#9fb8d8;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.analysis-dashboard .insight-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto;border:1px solid rgba(255,255,255,.08)}
+.analysis-dashboard .insight-icon svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.analysis-dashboard .insight-green{background:#064b43;color:#35e1b5}.analysis-dashboard .insight-violet{background:#302465;color:#b6a5ff}.analysis-dashboard .insight-amber{background:#553a12;color:#ffc45a}.analysis-dashboard .insight-blue{background:#103b65;color:#55b9ff}
+.analysis-dashboard .analysis-overview-meta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 14px;align-items:center;margin-top:16px;padding-top:13px;border-top:1px solid rgba(74,115,158,.22)}
+.analysis-dashboard .analysis-overview-meta strong{font-size:12px;color:#e7f2ff;overflow-wrap:anywhere}
+.analysis-dashboard .metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.analysis-dashboard .analysis-detail-grid .body .label{display:block;margin:9px 0 5px}
+.analysis-dashboard #factorList{display:flex;flex-wrap:wrap;gap:4px}
+.analysis-dashboard #factorList .tag{margin:0}
+.analysis-dashboard #gateList{margin:10px 0 14px}
+.analysis-dashboard .analysis-operations-grid .actions{margin-top:14px}
+.analysis-dashboard #prepareState{overflow-wrap:anywhere}
+.analysis-dashboard .analysis-chart-panel .section-head{display:flex;flex-direction:column}
+.analysis-dashboard .analysis-chart-panel .section-head h2{display:flex;align-items:center;gap:9px}
+.analysis-dashboard .analysis-chart-panel .section-head h2:before{display:none}
+.analysis-dashboard .analysis-detail-grid .body+.body{border-top:1px solid rgba(74,115,158,.2)}
+.analysis-dashboard .analysis-operations-grid .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media(max-width:1100px){
+ .analysis-dashboard .analysis-main-grid{grid-template-columns:minmax(0,1fr)}
+ .analysis-dashboard .analysis-secondary-grid,.analysis-dashboard .analysis-detail-grid,.analysis-dashboard .analysis-operations-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .analysis-dashboard .analysis-chart-panel .chart-wrap{height:340px}
+}
+@media(max-width:760px){
+ .analysis-dashboard{padding:12px;gap:12px}
+ .analysis-dashboard .analysis-secondary-grid,.analysis-dashboard .analysis-detail-grid,.analysis-dashboard .analysis-operations-grid{grid-template-columns:minmax(0,1fr);gap:12px}
+ .analysis-dashboard .analysis-main-grid{gap:12px}
+ .analysis-dashboard .analysis-chart-panel .chart-wrap{height:300px;min-height:250px}
+ .analysis-dashboard .analysis-chart-footer{padding:11px 12px;gap:7px}
+ .analysis-dashboard .insights-panel .body{padding:4px 13px}
+ .analysis-dashboard .analysis-operations-grid .grid-2{grid-template-columns:minmax(0,1fr)}
+ .analysis-dashboard .analysis-overview-meta{grid-template-columns:minmax(0,1fr)}
+ .analysis-dashboard .analysis-overview-meta strong{margin-bottom:5px}
+}
+@media(max-width:420px){
+ .analysis-dashboard .analysis-kpis{grid-template-columns:minmax(0,1fr)}
+ .analysis-dashboard .analysis-chart-panel .chart-wrap{height:255px;min-height:220px}
+ .analysis-dashboard .analysis-chart-footer{align-items:flex-start}
+ .analysis-dashboard .analysis-chart-footer .kpi-badge{font-size:10px}
+ .analysis-dashboard .analysis-detail-grid .metric-grid,.analysis-dashboard .analysis-secondary-grid .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
