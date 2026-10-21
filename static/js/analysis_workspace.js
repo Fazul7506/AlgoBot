@@ -10,7 +10,7 @@
   const money = (v,c) => v==null || v==="" || !Number.isFinite(Number(v)) ? "—" : (c ? c+" " : "")+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const state = v => String(v ?? "UNAVAILABLE").replaceAll("_"," ");
   const tone = v => ["BUY","BULLISH","STRONG BULLISH"].includes(String(v||"").toUpperCase()) ? "positive" : ["SELL","BEARISH","STRONG BEARISH"].includes(String(v||"").toUpperCase()) ? "negative" : "neutral";
-  const A = {markets:[],data:null,contract:null,timer:null,loadGeneration:0};
+  const A = {markets:[],data:null,contract:null,timer:null,loadGeneration:0,overviewKey:'',overviewCache:[],predictionCache:[],overviewFetchedAt:0,overviewPending:false};
 
   async function request(path, options={}) {
     return window.AlgoBotFrontendData.request(path, options, 12000);
@@ -114,22 +114,35 @@
     const confText=pctNorm(d.confidence);
     const overviewRow=x=>'<tr><td>'+esc(x.symbol)+'</td><td>'+esc(num(x.price))+'</td><td><span class="signal-pill '+tone(x.signal)+'">'+esc(x.signal)+'</span></td><td>'+esc(x.confidence)+'</td></tr>';
     list("marketOverviewRows",[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText}],overviewRow,"No verified market data available.");
-    const overviewGeneration=A.loadGeneration;
-    const otherMarkets=(A.markets||[]).filter(m=>m.symbol&&m.symbol!==d.symbol).slice(0,4);
-    if(otherMarkets.length)Promise.allSettled(otherMarkets.map(m=>request("/analysis/data/?symbol="+encodeURIComponent(m.symbol)+"&timeframe="+encodeURIComponent(d.timeframe||"M1")+"&limit="+encodeURIComponent($("limit")?.value||300)+"&refresh=1&refresh_account=0"))).then(results=>{
-      if(overviewGeneration!==A.loadGeneration)return;
-      const rows=[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText}];
-      const predictions=[];
-      const currentPredictionDirection=layers.ai?.direction||layers.ai?.prediction||layers.ai?.decision||d.signal;
-      const currentPredictionProbability=layers.ai?.probability??layers.ai?.probability_pct??d.prediction_probability;
-      if(currentPredictionDirection)predictions.push({symbol:d.symbol,direction:currentPredictionDirection,probability:currentPredictionProbability});
-      results.forEach((result,i)=>{if(result.status!=="fulfilled"||!result.value||result.value.status==="error")return;const x=result.value;rows.push({symbol:x.symbol||otherMarkets[i].symbol,price:x.price,signal:x.signal==null?"UNAVAILABLE":String(x.signal).toUpperCase(),confidence:pctNorm(x.confidence)});const ai=x.analysis_layers?.ai||x.ai||{};const direction=ai.direction||ai.prediction||ai.decision||x.signal;const probability=ai.probability??ai.probability_pct??x.prediction_probability;if(direction)predictions.push({symbol:x.symbol||otherMarkets[i].symbol,direction,probability});});
-      list("marketOverviewRows",rows,overviewRow,"No verified market data available.");
-      list("predictionRows",predictions,x=>'<tr><td>'+esc(x.symbol)+'</td><td><span class="prediction-direction '+tone(x.direction)+'">'+esc(state(x.direction))+'</span></td><td>'+esc(x.probability==null?"—":pct(Number(x.probability)>1?Number(x.probability):Number(x.probability)*100))+'</td></tr>',"No verified AI prediction is available.");
-    });
+    const overviewKey=[d.symbol,d.timeframe||"M1",$("limit")?.value||300].join("|");
+    if(A.overviewKey!==overviewKey){A.overviewKey=overviewKey;A.overviewCache=[];A.predictionCache=[];A.overviewFetchedAt=0;A.overviewPending=false;}
+    A.overviewCache=[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText},...A.overviewCache.filter(x=>x.symbol!==d.symbol)].slice(0,5);
     const predictionDirection=layers.ai?.direction||layers.ai?.prediction||layers.ai?.decision||d.signal;
     const predictionProbability=layers.ai?.probability??layers.ai?.probability_pct??d.prediction_probability;
-    list("predictionRows",predictionDirection?[{symbol:d.symbol,direction:predictionDirection,probability:predictionProbability}]:[],x=>'<tr><td>'+esc(x.symbol)+'</td><td><span class="prediction-direction '+tone(x.direction)+'">'+esc(state(x.direction))+'</span></td><td>'+esc(x.probability==null?"—":pct(Number(x.probability)>1?Number(x.probability):Number(x.probability)*100))+'</td></tr>',"No verified AI prediction is available.");
+    A.predictionCache=[...(predictionDirection?[{symbol:d.symbol,direction:predictionDirection,probability:predictionProbability}]:[]),...A.predictionCache.filter(x=>x.symbol!==d.symbol)].slice(0,5);
+    list("marketOverviewRows",A.overviewCache,overviewRow,"No verified market data available.");
+    const predictionRow=x=>'<tr><td>'+esc(x.symbol)+'</td><td><span class="prediction-direction '+tone(x.direction)+'">'+esc(state(x.direction))+'</span></td><td>'+esc(x.probability==null?"—":pct(Number(x.probability)>1?Number(x.probability):Number(x.probability)*100))+'</td></tr>';
+    list("predictionRows",A.predictionCache,predictionRow,"No verified AI prediction is available.");
+    const otherMarkets=(A.markets||[]).filter(m=>m.symbol&&m.symbol!==d.symbol).slice(0,4);
+    const shouldRefreshOverview=otherMarkets.length&&!A.overviewPending&&(Date.now()-A.overviewFetchedAt>60000);
+    if(shouldRefreshOverview){
+      A.overviewPending=true;A.overviewFetchedAt=Date.now();
+      Promise.allSettled(otherMarkets.map(m=>request("/analysis/data/?symbol="+encodeURIComponent(m.symbol)+"&timeframe="+encodeURIComponent(d.timeframe||"M1")+"&limit="+encodeURIComponent($("limit")?.value||300)+"&refresh=0&refresh_account=0"))).then(results=>{
+        if(A.overviewKey!==overviewKey)return;
+        const rows=[...A.overviewCache];const predictions=[...A.predictionCache];
+        results.forEach((result,i)=>{
+          if(result.status!=="fulfilled"||!result.value||result.value.status==="error")return;
+          const x=result.value,symbol=x.symbol||otherMarkets[i].symbol;
+          const row={symbol,price:x.price,signal:x.signal==null?"UNAVAILABLE":String(x.signal).toUpperCase(),confidence:pctNorm(x.confidence)};
+          const index=rows.findIndex(item=>item.symbol===symbol);if(index>=0)rows[index]=row;else rows.push(row);
+          const ai=x.analysis_layers?.ai||x.ai||{},direction=ai.direction||ai.prediction||ai.decision||x.signal,probability=ai.probability??ai.probability_pct??x.prediction_probability;
+          if(direction){const pIndex=predictions.findIndex(item=>item.symbol===symbol),item={symbol,direction,probability};if(pIndex>=0)predictions[pIndex]=item;else predictions.push(item);}
+        });
+        A.overviewCache=rows.slice(0,5);A.predictionCache=predictions.slice(0,5);
+        list("marketOverviewRows",A.overviewCache,overviewRow,"No verified market data available.");
+        list("predictionRows",A.predictionCache,predictionRow,"No verified AI prediction is available.");
+      }).catch(()=>{}).finally(()=>{if(A.overviewKey===overviewKey)A.overviewPending=false;});
+    }
     const newsItems=Array.isArray(d.news)?d.news:(Array.isArray(d.sentiment?.news)?d.sentiment.news:[]);
     const sentimentItems=Array.isArray(d.sentiment?.items)?d.sentiment.items:[];
     const combinedNews=[...newsItems,...sentimentItems].slice(0,8);
