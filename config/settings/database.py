@@ -52,12 +52,12 @@ def _database_pool_options(database_url):
 
     try:
         min_size = int(env("DB_POOL_MIN_SIZE", "1"))
-        max_size = int(env("DB_POOL_MAX_SIZE", "3"))
+        max_size = int(env("DB_POOL_MAX_SIZE", "6"))
         max_lifetime = int(env("DB_POOL_MAX_LIFETIME", "1800"))
-        timeout = int(env("DB_POOL_TIMEOUT", "10"))
+        timeout = int(env("DB_POOL_TIMEOUT", "20"))
     except ValueError as exc:
         raise ValueError(
-            "DB_POOL_MIN_SIZE, DB_POOL_MAX_SIZE, and DB_POOL_MAX_LIFETIME must be integers."
+            "DB_POOL_MIN_SIZE, DB_POOL_MAX_SIZE, DB_POOL_MAX_LIFETIME, and DB_POOL_TIMEOUT must be integers."
         ) from exc
 
     if min_size < 0:
