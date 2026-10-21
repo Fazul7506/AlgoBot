@@ -62,6 +62,7 @@
     ctx.lineWidth=1;ctx.strokeStyle="rgba(148,177,211,.18)";
     for(let i=1;i<4;i++){const y=pad.t+(h-pad.t-pad.b)*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke()}
     (opts.levels||[]).forEach(level=>{ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle="rgba(167,186,215,.55)";ctx.beginPath();ctx.moveTo(pad.l,py(level));ctx.lineTo(w-pad.r,py(level));ctx.stroke();ctx.restore()});
+    if(opts.histogram){const values=opts.histogram.filter(Number.isFinite),base=opts.zero?py(0):h-pad.b,bw=Math.max(1,(w-pad.l-pad.r)/Math.max(1,opts.histogram.length)*.72);opts.histogram.forEach((v,i)=>{if(!Number.isFinite(v))return;ctx.fillStyle=v>=0?"#25d3a0":"#f05270";const yy=py(v),xx=pad.l+i/Math.max(1,n-1)*(w-pad.l-pad.r);ctx.fillRect(xx-bw/2,Math.min(yy,base),bw,Math.max(1,Math.abs(base-yy)))});}
     valid.forEach(s=>{ctx.beginPath();ctx.strokeStyle=s.color;ctx.lineWidth=1.6;let started=false;s.values.forEach((v,i)=>{if(!Number.isFinite(v)){started=false;return}if(!started){ctx.moveTo(px(i),py(v));started=true}else ctx.lineTo(px(i),py(v))});ctx.stroke()});
     if(opts.zero){ctx.strokeStyle="rgba(167,186,215,.55)";ctx.beginPath();ctx.moveTo(pad.l,py(0));ctx.lineTo(w-pad.r,py(0));ctx.stroke()}
   }
@@ -72,9 +73,10 @@
     const macd=closes.map((_,i)=>fast[i]!=null&&slow[i]!=null?fast[i]-slow[i]:null);
     const macdValues=macd.filter(Number.isFinite),signalCompact=emaSeries(macdValues,9);
     const signal=Array(macd.length).fill(null);let si=0;macd.forEach((v,i)=>{if(Number.isFinite(v)){signal[i]=signalCompact[si++]}});
+    const histogram=macd.map((v,i)=>Number.isFinite(v)&&Number.isFinite(signal[i])?v-signal[i]:null);
     drawLinePanel("macdChart","macdEmpty",[
       {values:macd,color:"#a78bfa"},{values:signal,color:"#f6ad45"}
-    ],{zero:true});
+    ],{zero:true,histogram});
     const rsi=Array(closes.length).fill(null);
     if(closes.length>=15){let gains=0,losses=0;for(let i=1;i<=14;i++){const d=closes[i]-closes[i-1];if(d>=0)gains+=d;else losses-=d}
       let avgGain=gains/14,avgLoss=losses/14;rsi[14]=avgLoss===0?100:100-100/(1+avgGain/avgLoss);
