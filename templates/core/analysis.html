@@ -33,7 +33,11 @@
     <article class="panel analysis-chart-panel">
       <div class="section-head"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16M10 8v8M16 3v18M22 7v10"/><path d="M2 8h4M8 11h4M14 6h4M20 10h4"/></svg>Market analysis</h2><p>Broker-sourced historical candles. Select market, timeframe and history above.</p></div>
       <div class="body chart-wrap"><canvas id="analysisChart" aria-label="Market candlestick chart"></canvas><div id="chartEmpty" class="empty">No broker-authoritative candles available.</div></div>
-      <div class="analysis-chart-footer"><span class="kpi-badge">MACD (12, 26, 9)</span><strong id="macd">—</strong><span class="kpi-badge">RSI (14)</span><strong id="rsi">—</strong><span class="kpi-badge">Bollinger width</span><strong id="bb">—</strong></div>
+      <div class="analysis-indicator-grid">
+        <section class="indicator-panel"><div class="indicator-heading"><strong>MACD</strong><span>12, 26, 9</span><strong id="macd">—</strong></div><div class="indicator-chart-wrap"><canvas id="macdChart" aria-label="MACD line and signal chart"></canvas><div id="macdEmpty" class="empty">MACD requires market candles.</div></div></section>
+        <section class="indicator-panel"><div class="indicator-heading"><strong>RSI</strong><span>14-period relative strength</span><strong id="rsi">—</strong></div><div class="indicator-chart-wrap"><canvas id="rsiChart" aria-label="RSI chart with 30 and 70 reference levels"></canvas><div id="rsiEmpty" class="empty">RSI requires market candles.</div></div></section>
+      </div>
+      <div class="analysis-chart-footer"><span class="kpi-badge">Bollinger width</span><strong id="bb">—</strong><span class="kpi-badge">Indicators computed from displayed candles</span></div>
     </article>
     <aside class="panel insights-panel">
       <div class="section-head"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 16v5M2.5 18.5h5"/></svg>AI analysis & insights</h2><p>Evidence-backed context from the current response</p></div>
