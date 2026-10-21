@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import math
 import time
 from decimal import Decimal, InvalidOperation
@@ -30,6 +31,8 @@ from core.permissions import BrokerOnboardingRequired
 ANALYSIS_MARKETS_CACHE_SECONDS = 15
 ANALYSIS_CACHE_SECONDS = 3
 STRATEGY_BASELINE_MAX_AGE_SECONDS = 300
+
+logger = logging.getLogger(__name__)
 
 
 def _latest_strategy_baseline(request, account, symbol, timeframe):
