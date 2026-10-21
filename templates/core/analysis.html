@@ -34,54 +34,6 @@
       <article class="panel reference-table-panel"><div class="section-head"><h2><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Sentiment &amp; News</h2></div><div class="body"><div id="sentimentNewsRows" class="news-list"><div class="empty">No verified sentiment or news feed is available.</div></div></div></article>
     </aside>
   </section>
-  <section class="two-col analysis-main-grid">
-    <article class="panel analysis-chart-panel">
-      <div class="section-head"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16M10 8v8M16 3v18M22 7v10"/><path d="M2 8h4M8 11h4M14 6h4M20 10h4"/></svg>Market analysis</h2><p>Broker-sourced historical candles. Select market, timeframe and history above.</p></div>
-      <div class="body chart-wrap"><canvas id="analysisChart" aria-label="Market candlestick chart"></canvas><div id="chartEmpty" class="empty">No broker-authoritative candles available.</div></div>
-      <div class="analysis-indicator-grid">
-        <section class="indicator-panel"><div class="indicator-heading"><strong>MACD</strong><span>12, 26, 9</span><strong id="macd">—</strong></div><div class="indicator-chart-wrap"><canvas id="macdChart" aria-label="MACD line and signal chart"></canvas><div id="macdEmpty" class="empty">MACD requires market candles.</div></div></section>
-        <section class="indicator-panel"><div class="indicator-heading"><strong>RSI</strong><span>14-period relative strength</span><strong id="rsi">—</strong></div><div class="indicator-chart-wrap"><canvas id="rsiChart" aria-label="RSI chart with 30 and 70 reference levels"></canvas><div id="rsiEmpty" class="empty">RSI requires market candles.</div></div></section>
-      </div>
-      <div class="analysis-chart-footer"><span class="kpi-badge">Bollinger width</span><strong id="bb">—</strong><span class="kpi-badge">Indicators computed from displayed candles</span></div>
-    </article>
-    <aside class="panel insights-panel">
-      <div class="section-head"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 16v5M2.5 18.5h5"/></svg>AI analysis & insights</h2><p>Evidence-backed context from the current response</p></div>
-      <div class="body">
-        <div class="insight-item"><span class="insight-icon insight-green"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l6-6 4 3 6-8"/><path d="M14 5h6v6"/></svg></span><div><strong id="strategyState">Strategy state unavailable</strong><p id="strategyEvidence">No persisted strategy evidence</p></div></div>
-        <div class="insight-item"><span class="insight-icon insight-violet"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8 12l3 3 5-6"/></svg></span><div><strong id="confluenceState">Confluence unavailable</strong><p id="confluenceDirection">Direction —</p><p id="confluenceScore">Score —</p></div></div>
-        <div class="insight-item"><span class="insight-icon insight-amber"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 9v5M12 17h.01"/></svg></span><div><strong>Signal validation</strong><p id="validationState">Awaiting validation</p><p id="validationDirection">Direction —</p></div></div>
-        <div class="insight-item"><span class="insight-icon insight-blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5h16v14z"/><path d="M8 15l3-4 3 2 3-5"/></svg></span><div><strong>Live quote freshness</strong><p id="liveQuoteAge">Live quote freshness unavailable</p><p id="marketAge">Market age —</p></div></div>
-      </div>
-    </aside>
-  </section>
-
-  <section class="analysis-secondary-grid">
-    <article class="panel reference-table-panel">
-      <div class="section-head"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Market overview</h2><p>Top assets by AI signal · live selected-market evidence</p></div>
-      <div class="body table-scroll"><table class="reference-table"><thead><tr><th>Asset</th><th>Price</th><th>Signal</th><th>Confidence</th></tr></thead><tbody id="marketOverviewRows"><tr><td colspan="4" class="empty">Waiting for verified market data…</td></tr></tbody></table></div>
-    </article>
-    <article class="panel reference-table-panel">
-      <div class="section-head"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5z"/></svg>AI predictions</h2><p>Next 24 hours · only model-backed outputs</p></div>
-      <div class="body table-scroll"><table class="reference-table"><thead><tr><th>Asset</th><th>Direction</th><th>Probability</th></tr></thead><tbody id="predictionRows"><tr><td colspan="3" class="empty">Waiting for verified prediction data…</td></tr></tbody></table></div>
-    </article>
-  </section>
-
-  <section class="analysis-detail-grid">
-    <article class="panel reference-table-panel">
-      <div class="section-head"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l4 2M16 3h5v5"/></svg>Key levels</h2><p>Support and resistance calculated from current market history</p></div>
-      <div class="body table-scroll"><table class="reference-table levels-table"><tbody>
-        <tr><th>Resistance 1</th><td id="resistance1">—</td></tr>
-        <tr><th>Resistance 2</th><td id="resistance2">—</td></tr>
-        <tr><th>Current price</th><td id="keyCurrentPrice">—</td></tr>
-        <tr><th>Support 1</th><td id="support1">—</td></tr>
-        <tr><th>Support 2</th><td id="support2">—</td></tr>
-      </tbody></table></div>
-    </article>
-    <article class="panel reference-table-panel">
-      <div class="section-head"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Sentiment & news</h2><p>Latest verified market news and sentiment signals</p></div>
-      <div class="body"><div id="sentimentNewsRows" class="news-list"><div class="empty">No verified sentiment or news feed is available.</div></div></div>
-    </article>
-  </section>
 </main>
 {% endblock %}
 {% block extra_js %}<script src="{% static 'js/analysis_workspace.js' %}?v=20261021-analysis-pro8" defer></script>
