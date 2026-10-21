@@ -340,8 +340,8 @@ class SynchronizationService:
         if data.get('avatar_url'): credentials['avatar_url'] = str(data['avatar_url'])
         if credentials != (account.credentials or {}): account.credentials = credentials; fields.append('credentials')
         account.status = 'active'; account.last_synced_at = timezone.now(); fields.extend(['status', 'last_synced_at'])
-        await sync_to_async(account.save)(update_fields=list(dict.fromkeys(fields)))
-        await sync_to_async(BrokerConnection.objects.update_or_create)(broker_account=account, defaults={'broker': account.broker, 'status': 'connected', 'last_ping': timezone.now(), 'connected_at': timezone.now()})
+        await sync_to_async(account.save, thread_sensitive=False)(update_fields=list(dict.fromkeys(fields)))
+        await sync_to_async(BrokerConnection.objects.update_or_create, thread_sensitive=False)(broker_account=account, defaults={'broker': account.broker, 'status': 'connected', 'last_ping': timezone.now(), 'connected_at': timezone.now()})
         return account, data
 
 
