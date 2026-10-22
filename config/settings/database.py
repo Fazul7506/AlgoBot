@@ -51,12 +51,11 @@ def _database_pool_options(database_url):
 
     try:
         min_size = int(env("DB_POOL_MIN_SIZE", "1"))
-        # Four connections per process reduce local pool starvation while
-        # remaining bounded across the web and background worker services.
-        max_size = int(env("DB_POOL_MAX_SIZE", "4"))
+        # Keep the per-process maximum at the validated Supabase pooler limit.
+        max_size = int(env("DB_POOL_MAX_SIZE", "3"))
+        # Allow short request bursts to wait for a connection to be returned
+        # rather than failing a normal page request after only six seconds.
         max_lifetime = int(env("DB_POOL_MAX_LIFETIME", "1800"))
-        # A short burst should wait for a connection to be returned rather
-        # than failing a normal page request after only six seconds.
         timeout = int(env("DB_POOL_TIMEOUT", "20"))
     except ValueError as exc:
         raise ValueError(
