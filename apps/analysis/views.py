@@ -28,8 +28,8 @@ from apps.ai_engine.services import PredictionService, RecommendationService
 from core.permissions import BrokerOnboardingRequired
 
 
-ANALYSIS_MARKETS_CACHE_SECONDS = 15
-ANALYSIS_CACHE_SECONDS = 3
+ANALYSIS_MARKETS_CACHE_SECONDS = 60
+ANALYSIS_CACHE_SECONDS = 15
 STRATEGY_BASELINE_MAX_AGE_SECONDS = 300
 
 logger = logging.getLogger(__name__)
@@ -261,7 +261,7 @@ def analysis_data(request):
     except (TypeError, ValueError):
         limit = 300
 
-    refresh_requested = str(request.GET.get("refresh", "1")).lower() in {"1", "true", "yes"}
+    refresh_requested = str(request.GET.get("refresh", "0")).lower() in {"1", "true", "yes"}
     account_refresh_requested = str(request.GET.get("refresh_account", "0")).lower() in {"1", "true", "yes"}
     active_account = get_active_account(request.user, request=request)
     cache_key = "algobot:analysis:v5:" + hashlib.sha256(

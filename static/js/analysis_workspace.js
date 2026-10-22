@@ -13,7 +13,7 @@
   const A = {markets:[],data:null,contract:null,timer:null,loadGeneration:0,overviewKey:'',overviewCache:[],predictionCache:[],overviewFetchedAt:0,overviewPending:false};
 
   async function request(path, options={}) {
-    return window.AlgoBotFrontendData.request(path, options, 12000);
+    return window.AlgoBotFrontendData.request(path, options, 45000);
   }
   function set(id,v){const e=$(id);if(e)e.textContent=v==null||v===""?"—":v}
   function list(id,items,fn,empty="No observed evidence."){const e=$(id);if(e)e.innerHTML=items?.length?items.map(fn).join(""):'<span class="muted">'+esc(empty)+"</span>"}
@@ -166,7 +166,8 @@
     $("loadState").textContent="Loading available market analysis…";
     try{
       const refreshAccount=options.refreshAccount===true;
-      const d=await request("/analysis/data/?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf)+"&limit="+limit+"&refresh=1&refresh_account="+(refreshAccount?"1":"0"));
+      const refreshMarket=options.refreshMarket===true;
+      const d=await request("/analysis/data/?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf)+"&limit="+limit+"&refresh="+(refreshMarket?"1":"0")+"&refresh_account="+(refreshAccount?"1":"0"));
       if(generation!==A.loadGeneration||symbol!==$("symbol").value||tf!==$("timeframe").value||limit!==$("limit").value)return;
       if(d.status==="error")throw new Error(d.message||"Analysis unavailable");
       render(d);$("loadState").textContent="Updated "+new Date().toLocaleTimeString();

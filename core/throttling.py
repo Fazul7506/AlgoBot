@@ -2,9 +2,9 @@
 
 Rate limiting remains enabled when Redis is healthy. If the shared Redis cache
 is unavailable or exhausted, the API must not wait on Redis for every request
-or turn cache pressure into a page-wide loading failure. A short process-local
-cooldown routes throttling to an emergency in-memory bucket until Redis is
-healthy again.
+or turn cache pressure into a page-wide loading failure. A bounded process-local cooldown routes throttling to an emergency
+in-memory bucket until Redis is healthy again, avoiding repeated network timeouts
+while preserving per-process rate limits during an outage.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 logger = logging.getLogger(__name__)
 _fallback_cache = LocMemCache("algobot-throttle-fallback", {})
-_REDIS_FAILURE_COOLDOWN_SECONDS = 30.0
+_REDIS_FAILURE_COOLDOWN_SECONDS = 120.0
 _redis_unavailable_until = 0.0
 
 

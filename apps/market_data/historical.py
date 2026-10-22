@@ -59,14 +59,14 @@ def _validate_history_count(count: int) -> int:
 async def _request(payload: dict) -> dict:
     """Execute one bounded Deriv history request with safe transient retries."""
     last_error = None
-    for attempt in range(3):
+    for attempt in range(2):
         try:
             async with websockets.connect(
-                _ws_url(), open_timeout=10, close_timeout=10,
+                _ws_url(), open_timeout=5, close_timeout=2,
                 ping_interval=20, ping_timeout=5
             ) as ws:
                 await ws.send(json.dumps(payload))
-                raw = await asyncio.wait_for(ws.recv(), timeout=15)
+                raw = await asyncio.wait_for(ws.recv(), timeout=8)
             response = json.loads(raw)
             error = response.get("error")
             if error:
@@ -81,8 +81,8 @@ async def _request(payload: dict) -> dict:
         except (asyncio.TimeoutError, OSError, websockets.WebSocketException, json.JSONDecodeError) as exc:
             last_error = RuntimeError("Deriv historical market-data request failed temporarily")
             last_error.__cause__ = exc
-        if attempt < 2:
-            await asyncio.sleep(1.5 * (2 ** attempt))
+        if attempt < 1:
+            await asyncio.sleep(0.5)
     raise last_error or RuntimeError("Deriv historical market-data request failed")
 
 
