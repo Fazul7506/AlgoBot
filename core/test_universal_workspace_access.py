@@ -273,7 +273,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertContains(response, "css/runtime_recovery.css?v=20261008-css-recovery1")
         self.assertContains(response, "css/sidebar_responsive_contract.css?v=20261013-shell2")
         self.assertContains(response, "js/sidebar_account_switch.js?v=20261013-samescope1")
-        self.assertContains(response, "js/base_shell.js?v=20261017-api-error-dedupe1")
+        self.assertContains(response, "js/base_shell.js?v=20261021-toast-dedupe2")
         shell = (Path("static/js/base_shell.js")).read_text(encoding="utf-8")
         self.assertIn("function bindNavigationPrefetch(links)", shell)
         self.assertIn("prefetchedNavigation.size >= 5", shell)
