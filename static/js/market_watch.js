@@ -19,7 +19,7 @@
         '<img loading="lazy" decoding="async" src="' + esc(base.flag) + '" alt="' + esc(base.name) + ' flag">' +
         '<img loading="lazy" decoding="async" src="' + esc(quote.flag) + '" alt="' + esc(quote.name) + ' flag"></span>';
     }
-    if (resolved?.status === 'verified' && resolved.asset?.src) {
+    if ((resolved?.status === 'verified' || resolved?.status === 'category') && resolved.asset?.src) {
       return '<img class="market-asset-verified" loading="lazy" decoding="async" src="' + esc(resolved.asset.src) + '" alt="' + esc(resolved.displayName || row.symbol) + '">';
     }
     return '<span class="market-avatar market-avatar-unmapped" aria-hidden="true">' +
