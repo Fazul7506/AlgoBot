@@ -91,6 +91,10 @@ for (const instrument of [
 const syncScript = fs.readFileSync('scripts/sync_deriv_market_asset_manifest.py','utf8');
 assert(syncScript.includes('load_existing_official_media_entries'), 'manifest sync preserves manually verified modern Deriv synthetic SVG entries');
 assert(syncScript.includes('OFFICIAL_DERIV_MEDIA_PREFIX'), 'manifest sync explicitly validates the official Deriv media CDN');
+assert(syncScript.includes('def validate_svg_asset(url):'), 'sync verifies fetched asset content, not only URL suffixes');
+assert(syncScript.includes('response.read(16384)'), 'sync inspects the actual SVG response body');
+assert(syncScript.includes('for asset_url in sorted({item["url"] for item in entries}):'), 'asset validation order is deterministic and duplicate URLs are fetched once');
+assert(!syncScript.includes('"generatedAt": __import__("datetime")'), 'manifest output does not contain a volatile generation timestamp');
 const report = api.coverage([{symbol:'frxEURUSD'},{symbol:'CRYBTCUSD'},{symbol:'R_100'},{symbol:'AAPL',market:'stock'}]);
 assert(report.total === 4 && report.verified === 3 && report.missing === 1, 'coverage counts only authentic Deriv SVGs');
 assert(report.byFamily.forex.mapped === 1 && report.byFamily['synthetic-indices'].mapped === 1, 'coverage reports source assets by market family');
