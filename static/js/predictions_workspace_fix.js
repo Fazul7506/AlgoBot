@@ -3,7 +3,7 @@
   if (!page) return;
   const esc = v => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const list = v => Array.isArray(v) ? v : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : []));
-  const getJSON = async url => { const request=window.AlgoBotFrontendData?.request; if(typeof request!=='function') throw new Error('Authenticated API transport is not ready. Refresh the page and try again.'); return request(url,{headers:{Accept:'application/json'}},10000); };
+  const getJSON = async url => { const request=window.AlgoBotFrontendData?.request; if(typeof request!=='function') throw new Error('Authenticated API transport is not ready. Refresh the page and try again.'); return request(url,{headers:{Accept:'application/json'}},25000); };
   const marketAssetIcon = (raw, market, displayName) => {
     const s = String(raw || '').toUpperCase(), m = String(market || '').toLowerCase(), n = String(displayName || '').toLowerCase();
     const svg = (label, body, bg='#123b68') => '<svg viewBox="0 0 32 32" role="img" aria-label="'+esc(label)+'" focusable="false"><circle cx="16" cy="16" r="15" fill="'+bg+'"/>'+body+'</svg>';
