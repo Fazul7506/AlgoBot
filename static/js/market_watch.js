@@ -117,7 +117,7 @@
           .filter(([family]) => family !== 'other')
           .map(([family, value]) => family.replace(/-/g, ' ') + ': ' + value.mapped + '/' + value.total);
         coverageDetail.textContent = coverage.total
-          ? coverage.illustrated + '/' + coverage.total + ' illustrated · ' + coverage.verified + ' verified · ' + (coverage.authored || 0) + ' AlgoBot-authored · ' + coverage.missing + ' without artwork' + (families.length ? ' · ' + families.join(' · ') : '')
+          ? coverage.illustrated + '/' + coverage.total + ' mapped · ' + coverage.verified + ' source assets · ' + coverage.missing + ' without a verified asset' + (families.length ? ' · ' + families.join(' · ') : '')
           : 'Waiting for active instruments';
       }
     }
