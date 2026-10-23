@@ -70,6 +70,22 @@
     const status = entry ? 'verified' : forex ? 'mapped' : 'missing';
     return {...instrument, family, asset, status, source: entry?.source || forex?.source || null, licence: entry?.licence || forex?.licence || null};
   };
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const renderIcon = raw => {
+    const resolved = resolve(raw);
+    const label = resolved.displayName || resolved.symbol || 'Unknown instrument';
+    if (resolved.status === 'mapped' && resolved.asset?.type === 'forex-pair') {
+      const base = resolved.asset.base, quote = resolved.asset.quote;
+      return '<span class="market-asset-pair" role="img" aria-label="' + escapeHtml(base.name + ' / ' + quote.name) + '">' +
+        '<img loading="lazy" decoding="async" src="' + escapeHtml(base.flag) + '" alt="' + escapeHtml(base.name + ' flag') + '">' +
+        '<img loading="lazy" decoding="async" src="' + escapeHtml(quote.flag) + '" alt="' + escapeHtml(quote.name + ' flag') + '"></span>';
+    }
+    if (resolved.status === 'verified' && resolved.asset?.src) {
+      return '<img class="market-asset-verified" loading="lazy" decoding="async" src="' + escapeHtml(resolved.asset.src) + '" alt="' + escapeHtml(label) + '">';
+    }
+    const initials = String(raw?.display_name || label || resolved.symbol).split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase();
+    return '<span class="market-avatar market-avatar-unmapped" aria-hidden="true">' + escapeHtml(initials) + '</span>';
+  };
   const coverage = instruments => {
     const rows = Array.from(instruments || [], resolve);
     const verified = rows.filter(row => row.status === 'verified').length;
@@ -83,5 +99,5 @@
     });
     return {total: rows.length, verified, illustrated, missing: rows.length - illustrated, percent: rows.length ? Math.round(illustrated / rows.length * 10000) / 100 : 100, byFamily, missingSymbols: rows.filter(row => row.status === 'missing').map(row => ({symbol: row.symbol, family: row.family}))};
   };
-  window.AlgoBotMarketAssets = Object.freeze({normalise, resolve, coverage, classify, registry, currencies});
+  window.AlgoBotMarketAssets = Object.freeze({normalise, resolve, renderIcon, coverage, classify, registry, currencies});
 })();

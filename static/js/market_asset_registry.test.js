@@ -14,6 +14,9 @@ assert(legacy.symbol === current.symbol && legacy.displayName === current.displa
 const pair = api.resolve({underlying_symbol:'frxEURUSD',underlying_symbol_name:'EUR/USD'});
 assert(pair.status === 'mapped' && pair.asset.type === 'forex-pair', 'maps supported Deriv forex pairs to local flag artwork');
 assert(pair.asset.base.flag.endsWith('/eur.svg') && pair.asset.quote.flag.endsWith('/usd.svg'), 'uses the correct base and quote currency flags');
+assert(api.renderIcon({symbol:'cryBTCUSD'}).includes('/static/images/market-assets/crypto/bitcoin.svg'), 'shared renderer uses the exact local crypto SVG');
+assert(api.renderIcon({symbol:'frxEURUSD'}).includes('/static/images/market-flags/eur.svg') && api.renderIcon({symbol:'frxEURUSD'}).includes('/static/images/market-flags/usd.svg'), 'shared renderer displays both forex flags');
+assert(api.renderIcon({symbol:'XAUUSD'}).includes('market-avatar-unmapped'), 'missing artwork uses a neutral fallback instead of a fake logo');
 const report = api.coverage([
   {underlying_symbol:'frxEURUSD', market:'forex'},
   {symbol:'R_100'},
