@@ -58,29 +58,35 @@
       }
     };
   const load = async root => {
-    const [models, preds, jobs] = await Promise.allSettled([
+    const [models, preds, jobs, governance] = await Promise.allSettled([
       getJSON('/api/ai/models/'),
       getJSON('/api/ai/predictions/'),
-      getJSON('/api/ai/training-jobs/')
+      getJSON('/api/ai/training-jobs/'),
+      getJSON('/api/ai/governance/')
     ]);
     const modelOk = models.status === 'fulfilled';
     const predictionOk = preds.status === 'fulfilled';
     const jobsOk = jobs.status === 'fulfilled';
+    const governanceOk = governance.status === 'fulfilled';
+    const governanceData = governanceOk ? (governance.value?.data || governance.value || {}) : {};
+    const performance = governanceData.performance_7d || {};
     const ms = modelOk ? list(models.value) : [];
     const ps = predictionOk ? list(preds.value) : [];
     const js = jobsOk ? list(jobs.value) : [];
     const set = (q, v) => { const e = root.querySelector(q); if (e) e.textContent = v; };
     set('[data-ai-count]', predictionOk ? String(ps.length) : 'Unavailable');
-    set('[data-ai-performance-total]', predictionOk ? String(ps.length) : 'Unavailable');
-    set('[data-ai-performance-correct]', 'Unavailable');
-    set('[data-ai-performance-return]', 'Unavailable');
+    set('[data-ai-performance-total]', governanceOk && performance.total_signals != null ? String(performance.total_signals) : predictionOk ? String(ps.length) : 'Unavailable');
+    set('[data-ai-performance-correct]', governanceOk && performance.correct_signals != null ? String(performance.correct_signals) : 'Unavailable');
+    set('[data-ai-performance-return]', governanceOk && performance.average_return != null && Number.isFinite(Number(performance.average_return)) ? (Number(performance.average_return) > 0 ? '+' : '') + (Number(performance.average_return) * 100).toFixed(1) + '%' : 'Unavailable');
     set('[data-ai-model-count]', modelOk ? String(ms.length) : 'Unavailable');
     set('[data-ai-job-count]', jobsOk ? String(js.length) : 'Unavailable');
     const calibrated = ps.filter(p => Number(p.payload?.models_used || 0) > 0 && p.confidence != null && p.confidence !== '' && Number.isFinite(Number(p.confidence)));
     set('[data-ai-confidence]', !predictionOk || !calibrated.length
       ? 'Unavailable'
       : (calibrated.reduce((sum, p) => sum + Number(p.confidence), 0) / calibrated.length).toFixed(1) + '%');
-    set('[data-ai-performance-confidence]', !predictionOk || !calibrated.length ? 'Unavailable' : (calibrated.reduce((sum, p) => sum + Number(p.confidence), 0) / calibrated.length).toFixed(1) + '%');
+    set('[data-ai-performance-confidence]', governanceOk && performance.average_confidence != null && Number.isFinite(Number(performance.average_confidence)) ? (Number(performance.average_confidence) <= 1 ? Number(performance.average_confidence) * 100 : Number(performance.average_confidence)).toFixed(1) + '%' : 'Unavailable');
+    set('[data-ai-accuracy]', governanceOk && performance.accuracy != null && Number.isFinite(Number(performance.accuracy)) ? (Number(performance.accuracy) * 100).toFixed(1) + '%' : 'Unavailable');
+    set('[data-ai-accuracy-small]', governanceOk && performance.accuracy != null && Number.isFinite(Number(performance.accuracy)) ? (Number(performance.accuracy) * 100).toFixed(1) + '%' : 'Unavailable');
     const mg = root.querySelector('[data-ai-models]');
     if (!modelOk) {
       mg.innerHTML = '<p class="ai-note">Model registry unavailable. Model count and validation metrics have not been inferred.</p>';
