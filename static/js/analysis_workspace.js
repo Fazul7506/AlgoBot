@@ -17,7 +17,29 @@
   }
   function set(id,v){const e=$(id);if(e)e.textContent=v==null||v===""?"—":v}
   function list(id,items,fn,empty="No observed evidence."){const e=$(id);if(e)e.innerHTML=items?.length?items.map(fn).join(""):'<span class="muted">'+esc(empty)+"</span>"}
-  function setHealth(ok,text){$("aFeed").className="health-dot "+(ok?"live":"");set("aFeedText",text)}
+  function setHealth(ok,text){const feed=$("aFeed");if(feed){feed.className="health-dot "+(ok?"live":"");feed.textContent=text}set("aFeedText",text)}
+  function resetUnavailable(){
+    const values={
+      aResearchState:"UNAVAILABLE",aBrokerState:"UNAVAILABLE",aSymbol:"—",aTf:"—",aPrice:"—",aSignal:"UNAVAILABLE",aTechnical:"—",aConfidence:"—",aRegime:"—",aFresh:"DATA UNAVAILABLE",
+      liveQuote:"—",liveQuoteAge:"Live quote freshness unavailable",liveQuoteSource:"—",sentimentState:"Unavailable",sentimentScore:"No verified score",sentimentSummary:"No verified sentiment feed supplied",
+      trendState:"Unavailable",trendScore:"—",momentumState:"—",volatilityState:"Unavailable",strategyState:"No verified strategy evidence",strategyDirection:"WAIT",strategyEvidence:"No verified strategy evidence",
+      aiState:"UNAVAILABLE",aiDecision:"UNAVAILABLE",aiConfidence:"—",aiModels:"0",aiAgreement:"—",confluenceState:"UNAVAILABLE",confluenceDirection:"WAIT",confluenceScore:"—",
+      validationState:"UNAVAILABLE",validationDirection:"WAIT",validationExpiry:"—",noLookAhead:"UNCONFIRMED",marketState:"UNAVAILABLE",marketSource:"—",marketAge:"—",candleCount:"—",
+      keyCurrentPrice:"—",resistance1:"—",resistance2:"—",support1:"—",support2:"—",sma20:"—",sma50:"—",sma200:"—",ema:"— / —",rsi:"—",atr:"—",macd:"—",bb:"—",
+      account:"NO VERIFIED ACCOUNT CONTEXT",accountType:"—",currency:"—",balance:"—",riskBudget:"—",stake:"—",provenanceMarket:"—",provenanceCandles:"—",provenanceAnalysis:"—",provenanceExecution:"—",
+      gateState:"BLOCKED",gateReason:"Fresh analysis evidence could not be confirmed.",heroFeedState:"Market feed unavailable",referenceUpdatedAt:"Last update unavailable",aiReason:"No verified AI analysis available"
+    };
+    Object.entries(values).forEach(([id,value])=>set(id,value));
+    const fill=$("confidenceFill");if(fill)fill.style.width="0%";
+    const pulse=document.querySelector(".reference-live-dot");if(pulse)pulse.style.background="#eab44d";
+    const statusPulse=document.querySelector(".status-pulse");if(statusPulse)statusPulse.classList.remove("is-live");
+    list("marketOverviewRows",[],()=>"", "No verified market data available.");
+    list("predictionRows",[],()=>"", "No verified AI prediction is available.");
+    list("sentimentNewsRows",[],()=>"", "No verified sentiment or news feed is available.");
+    list("factorList",[],()=>"", "No verified technical factors.");
+    ["events","sweeps","fvgs","zones","patterns"].forEach(id=>list(id,[],()=>"", "No verified evidence available."));
+    drawChart([]);drawIndicators([]);
+  }
 
   function drawChart(candles){
     const canvas=$("analysisChart"),empty=$("chartEmpty");if(!canvas)return;
@@ -174,6 +196,7 @@
     }catch(e){
       if(generation!==A.loadGeneration)return;
       A.data=null;
+      resetUnavailable();
       $("loadState").textContent=e?.message||"Analysis unavailable";setHealth(false,"UNAVAILABLE");
       set("aResearchState","UNAVAILABLE");set("aBrokerState","UNAVAILABLE");set("aPrice","—");set("aSignal","UNAVAILABLE");set("aTechnical","Technical score —");set("aFresh","DATA UNAVAILABLE");set("liveQuote","UNAVAILABLE");set("liveQuoteAge","Live quote freshness unavailable");set("liveQuoteSource","—");set("validationState","UNAVAILABLE");set("validationDirection","WAIT");set("validationExpiry","—");set("noLookAhead","UNCONFIRMED");const heroState=$("heroFeedState");if(heroState)heroState.textContent="Market feed unavailable";const pulse=document.querySelector(".status-pulse");if(pulse)pulse.classList.remove("is-live");
       set("marketState","UNAVAILABLE");set("marketSource","—");set("marketAge","—");set("candleCount","—");

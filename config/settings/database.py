@@ -30,9 +30,8 @@ def _database_conn_max_age(database_url):
             raise ValueError("DB_CONN_MAX_AGE must be >= 0.")
         return value
 
-    # AlgoBot runs ASGI on Render. Keep Django's per-request connection lifetime
-    # at zero so database connections are returned promptly; production uses the
-    # explicit psycopg connection pool below to cap concurrent client sessions.
+    # ASGI deployments should promptly release request connections when using
+    # an external pooler; psycopg's pool handles connection reuse.
     hostname = (urlparse(database_url).hostname or "").lower()
     if hostname.endswith(".pooler.supabase.com"):
         return 0
@@ -52,9 +51,12 @@ def _database_pool_options(database_url):
 
     try:
         min_size = int(env("DB_POOL_MIN_SIZE", "1"))
+        # Keep the per-process maximum at the validated Supabase pooler limit.
         max_size = int(env("DB_POOL_MAX_SIZE", "3"))
+        # Allow short request bursts to wait for a connection to be returned
+        # rather than failing a normal page request after only six seconds.
         max_lifetime = int(env("DB_POOL_MAX_LIFETIME", "1800"))
-        timeout = int(env("DB_POOL_TIMEOUT", "6"))
+        timeout = int(env("DB_POOL_TIMEOUT", "20"))
     except ValueError as exc:
         raise ValueError(
             "DB_POOL_MIN_SIZE, DB_POOL_MAX_SIZE, DB_POOL_MAX_LIFETIME, and DB_POOL_TIMEOUT must be integers."
@@ -69,11 +71,9 @@ def _database_pool_options(database_url):
     if timeout <= 0:
         raise ValueError("DB_POOL_TIMEOUT must be > 0.")
 
-    # Django 5.2+ supports psycopg's built-in pool. A small explicit maximum is
-    # important for Supabase session-mode pooling, where the client pool size
-    # is the effective per-role connection ceiling. Keep server-side cursors
-    # disabled so the same configuration remains safe if the URL is later
-    # moved to Supabase transaction pooling.
+    # Keep server-side cursors disabled so this remains safe with transaction
+    # poolers. DB_POOL_MAX_SIZE is per process: account for all Render services
+    # when setting it so their combined maximum stays within the DB limit.
     return {
         "pool": {
             "min_size": min_size,
