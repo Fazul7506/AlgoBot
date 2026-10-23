@@ -26,6 +26,7 @@
   const classify = instrument => {
     const text = [instrument.market, instrument.subMarket, instrument.symbolType, instrument.displayName].join(' ').toLowerCase();
     const symbol = instrument.symbol.toUpperCase();
+    if (/basket_index|forex_basket|basket indices|currency basket/.test(text) || /^(?:WLD(?:AUD|EUR|GBP|USD)|WLDCOM|WLDXAU)$/.test(symbol)) return 'basket-indices';
     if (/commodit|metal|energy|oil|gold|silver|palladium|platinum/.test(text) || /^(?:XAU|XAG|XPT|XPD|WTI|BRENT|NGAS|UKOIL|USOIL)/.test(symbol) || /^FRX(?:XAU|XAG|XPT|XPD|NGAS|UKOIL|USOIL)/.test(symbol)) return 'commodities';
     if (/\bforex\b|\bcurrency\b|foreign exchange/.test(text) || /^FRX[A-Z]{6}$/.test(symbol)) return 'forex';
     if (/synthetic|derived|volatility|boom|crash|jump|step|range break|dex|drift|trek|skew|daily reset|multi step|volatility switch|hybrid/.test(text) || /^(?:R_\d+|RB_\d+|1HZ\d+V|BOOM\d+|CRASH\d+|JUMP\d+|JD\d+|STEP\d+|STP\d+|DEX\d+|RDBEAR|RDBULL|DRIFT)/.test(symbol)) return 'synthetic-indices';
