@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "audit-output" / "repository-file-reference-audit.csv"
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache"}
 TEXT_SUFFIXES = {".py", ".html", ".htm", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".css", ".scss", ".json", ".toml", ".ini", ".cfg", ".yml", ".yaml", ".txt", ".md", ".sh", ".ps1", ".sql", ".xml", ".env", ".example"}
-DYNAMIC_ROOTS = ("apps/", "config/", "deriv_platform/", "templates/", "static/", "scripts/", ".github/", "migrations/", "tests/")
+DYNAMIC_ROOTS = ("apps/", "config/", "core/", "services/", "urls/", "deriv_platform/", "templates/", "static/", "scripts/", "deploy/", ".github/", "migrations/", "tests/")
 HIGH_RISK_NAMES = {"manage.py", "Procfile", "render.yaml", "requirements.txt", "pyproject.toml", "setup.cfg", "tox.ini", "Dockerfile", "Makefile"}
 
 
@@ -57,7 +57,7 @@ def main() -> int:
         if name and len(name) >= 4 and name in corpus:
             pattern = re.compile(r"(?<![A-Za-z0-9_.-])" + re.escape(name) + r"(?![A-Za-z0-9_.-])")
             filename_refs = [source for source, body in contents.items() if source != rel and pattern.search(body)]
-        if rel.startswith(("apps/", "config/", "deriv_platform/")) and path.suffix == ".py":
+        if rel.startswith(("apps/", "config/", "core/", "services/", "urls/", "deriv_platform/")) and path.suffix == ".py":
             module = rel[:-3].replace("/", ".")
             if module in corpus:
                 module_refs = [source for source, body in contents.items() if source != rel and module in body]
@@ -68,7 +68,7 @@ def main() -> int:
         refs = sorted(set(exact_path_refs + filename_refs + module_refs))
         if rel == "docs/REPOSITORY_DEAD_CODE_AUDIT.md":
             decision, risk, reason = "REMOVE_DOCUMENTATION", "low", "Superseded by generated per-file audit output and PR description; user requested removal after audit."
-        elif name in HIGH_RISK_NAMES or rel.startswith((".github/", "config/", "deriv_platform/", "apps/")):
+        elif name in HIGH_RISK_NAMES or rel.startswith((".github/", "config/", "core/", "services/", "urls/", "deploy/", "scripts/", "deriv_platform/", "apps/", "tests/")) or "/tests/" in rel or name.startswith("test_"):
             decision, risk, reason = "RETAIN_REVIEW_REFERENCES", "high", "Framework/runtime/deployment entry point; static text references cannot establish reachability."
         elif rel.endswith(("/migrations/",)) or "/migrations/" in rel or re.search(r"(^|/)migrations?(_|/|\.)", rel):
             decision, risk, reason = "RETAIN_MIGRATION_REVIEW", "critical", "Migration history/schema dependencies require database-state and migration-graph validation."
