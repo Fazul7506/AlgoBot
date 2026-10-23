@@ -66,7 +66,7 @@ for (const [symbol, name] of [['BOOM100','Boom 100 Index'],['BOOM1000','Boom 100
   assert(resolved.status === 'verified', symbol + ' resolves to a genuine Deriv-hosted SVG');
   assert(resolved.asset.src.startsWith('https://media.ffycdn.net/eu/deriv/'), symbol + ' uses official Deriv source');
   if (symbol === 'BOOM100') assert(resolved.asset.src === 'https://media.ffycdn.net/eu/deriv/weWSGazF7NvtHUvaN3qX.svg', 'Boom 100 uses the exact official catalogue SVG');
-  if (symbol === 'BOOM1000') assert(resolved.asset.src === 'https://media.ffycdn.net/eu/deriv/1efQ7vFdtWrE5Ukwop8y.svg', 'Boom 1000 uses the exact official catalogue SVG');
+  if (symbol === 'BOOM1000') assert(resolved.asset.src === 'https://media.ffycdn.net/eu/deriv/gizQHBi5p49igXwLwZQS.svg', 'Boom 1000 uses the exact official catalogue SVG');
 }
 // Every recognized synthetic family must stay in the synthetic group even while its
 // official instrument-specific SVG is unavailable; never borrow a different family's art.
