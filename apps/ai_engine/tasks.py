@@ -43,10 +43,25 @@ def scheduled_ai_training(timeframe="M1", min_accuracy=0.52):
     """Train active symbols only when canonical market data is ready."""
     outcome_summary = resolve_prediction_outcomes(timeframe=timeframe, horizon_candles=1)
     summary = AIDataPipeline().training_summary(timeframe=timeframe, lookback_hours=168)
-    if not summary["ready"]:
-        return {"status": "skipped", "reason": "no_market_data", "summary": summary}
+    # The aggregate readiness flag can be false when one symbol lacks history
+    # even though other active symbols have enough candles to train. Always let
+    # the per-symbol trainer validate its own dataset; it safely skips symbols
+    # with insufficient history or models that fail walk-forward profitability.
     result = MarketModelTrainer().train_active_symbols(timeframe=timeframe, min_accuracy=min_accuracy)
-    return {"status": "trained", "summary": summary, "outcomes": outcome_summary, "result": result}
+    trained = sum(1 for value in result.values() if value.get("status") != "skipped")
+    skipped = len(result) - trained
+    return {
+        "status": "trained" if trained else "no_models_trained",
+        "summary": summary,
+        "outcomes": outcome_summary,
+        "symbols_requested": len(result),
+        "models_trained": trained,
+        "symbols_skipped": skipped,
+        "reason": None if trained else (
+            "no_active_tradable_symbols" if not result else "insufficient_history_or_validation_failed"
+        ),
+        "result": result,
+    }
 
 
 @app.task
