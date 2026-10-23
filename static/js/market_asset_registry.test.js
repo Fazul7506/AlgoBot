@@ -30,12 +30,12 @@ const report = api.coverage([
   {symbol:'XAUUSD', market:'commodities'},
   {symbol:'AAPL', market:'stock'}
 ]);
-assert(report.total === 5 && report.missing === 2 && report.verified === 1 && report.authored === 1 && report.illustrated === 3, 'coverage counts exact symbol mappings and mapped forex flags only');
+assert(report.total === 5 && report.missing === 1 && report.verified === 1 && report.authored === 2 && report.illustrated === 4, 'coverage counts exact symbol mappings and mapped forex flags only');
 assert(report.byFamily.forex.mapped === 1 && report.byFamily['synthetic-indices'].mapped === 1, 'coverage reports mapped and missing artwork by market family');
 assert(api.resolve({symbol:'BTCUSD', market:'cryptocurrency'}).family === 'cryptocurrency', 'classifies crypto instruments without inventing artwork');
 assert(api.resolve({symbol:'XAUUSD', market:'commodities'}).family === 'commodities', 'classifies commodity instruments without inventing artwork');
 assert(api.resolve({symbol:'AAPL', market:'stock'}).family === 'stocks-and-indices', 'classifies equities from catalogue metadata');
-assert(report.missingSymbols.length === 2, 'unmapped symbols are explicitly reported as missing artwork');
+assert(report.missingSymbols.length === 1, 'unmapped symbols are explicitly reported as missing artwork');
 assert(api.resolve({symbol:'R_100'}).status === 'authored' && api.resolve({symbol:'R_100'}).asset.src.endsWith('/r-100.svg'), 'known synthetic instruments receive distinct authored artwork');
 assert(api.resolve({symbol:'RB_100'}).family === 'synthetic-indices', 'Range Break symbols are classified as synthetic indices without catalogue metadata');
 assert(api.resolve({symbol:'frxXAUUSD', market:'commodities'}).family === 'commodities', 'Deriv precious-metal symbols are classified as commodities before the forex prefix rule');
