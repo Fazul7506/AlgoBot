@@ -11,7 +11,7 @@
       const base = resolved.asset.base, quote = resolved.asset.quote;
       return '<span class="ai-forex-pair-icon" role="img" aria-label="' + esc(base.name + ' / ' + quote.name) + '"><img loading="lazy" decoding="async" src="' + esc(base.flag) + '" alt="' + esc(base.name) + ' flag"><img loading="lazy" decoding="async" src="' + esc(quote.flag) + '" alt="' + esc(quote.name) + ' flag"></span>';
     }
-    if (resolved?.status === 'verified' && resolved.asset?.src) {
+    if ((resolved?.status === 'verified' || resolved?.status === 'category') && resolved.asset?.src) {
       return '<img class="ai-verified-market-asset" loading="lazy" decoding="async" src="' + esc(resolved.asset.src) + '" alt="' + esc(resolved.displayName || raw) + '">';
     }
     // Do not invent a generic/category SVG and misrepresent it as the instrument logo.
