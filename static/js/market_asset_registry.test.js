@@ -56,6 +56,27 @@ for (const [symbol, name] of [['BOOM1000','Boom 1000 Index'],['BOOM300','Boom 30
   assert(resolved.status === 'verified', symbol + ' resolves to a genuine Deriv-hosted SVG');
   assert(resolved.asset.src.startsWith('https://media.ffycdn.net/eu/deriv/'), symbol + ' uses official Deriv source');
 }
+// Every recognized synthetic family must stay in the synthetic group even while its
+// official instrument-specific SVG is unavailable; never borrow a different family's art.
+for (const instrument of [
+  {symbol:'JD10', display_name:'Jump 10 Index', market:'synthetic'},
+  {symbol:'STP100', display_name:'Step 100 Index', market:'synthetic'},
+  {symbol:'RB_100', display_name:'Range Break 100 Index', market:'synthetic'},
+  {symbol:'HYBRID100', display_name:'Hybrid 100 Index', market:'synthetic'},
+  {symbol:'RDBULL', display_name:'Daily Reset Bull Index', market:'synthetic'},
+  {symbol:'MULTISTEP2', display_name:'Multi Step 2 Index', market:'synthetic'},
+  {symbol:'TREK_UP', display_name:'Trek Up Index', market:'synthetic'},
+  {symbol:'SKEWSTEP2', display_name:'Skew Step 2 Index', market:'synthetic'},
+  {symbol:'VSWITCH10', display_name:'Volatility Switch 10 Index', market:'synthetic'}
+]) {
+  const resolved = api.resolve(instrument);
+  assert(resolved.family === 'synthetic-indices', instrument.symbol + ' is classified as synthetic');
+  assert(resolved.status === 'missing', instrument.symbol + ' must not receive an unverified or unrelated SVG');
+  assert(api.renderIcon(instrument).includes('market-avatar-unmapped'), instrument.symbol + ' receives neutral fallback until its official SVG is verified');
+}
+const syncScript = fs.readFileSync('scripts/sync_deriv_market_asset_manifest.py','utf8');
+assert(syncScript.includes('load_existing_official_media_entries'), 'manifest sync preserves manually verified modern Deriv synthetic SVG entries');
+assert(syncScript.includes('OFFICIAL_DERIV_MEDIA_PREFIX'), 'manifest sync explicitly validates the official Deriv media CDN');
 const report = api.coverage([{symbol:'frxEURUSD'},{symbol:'CRYBTCUSD'},{symbol:'R_100'},{symbol:'AAPL',market:'stock'}]);
 assert(report.total === 4 && report.verified === 3 && report.missing === 1, 'coverage counts only authentic Deriv SVGs');
 assert(report.byFamily.forex.mapped === 1 && report.byFamily['synthetic-indices'].mapped === 1, 'coverage reports source assets by market family');
