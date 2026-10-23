@@ -145,26 +145,8 @@
     list("marketOverviewRows",A.overviewCache,overviewRow,"No verified market data available.");
     const predictionRow=x=>'<tr><td>'+esc(x.symbol)+'</td><td><span class="prediction-direction '+tone(x.direction)+'">'+esc(state(x.direction))+'</span></td><td>'+esc(x.probability==null?"—":pct(Number(x.probability)>1?Number(x.probability):Number(x.probability)*100))+'</td></tr>';
     list("predictionRows",A.predictionCache,predictionRow,"No verified AI prediction is available.");
-    const otherMarkets=(A.markets||[]).filter(m=>m.symbol&&m.symbol!==d.symbol).slice(0,4);
-    const shouldRefreshOverview=otherMarkets.length&&!A.overviewPending&&(Date.now()-A.overviewFetchedAt>60000);
-    if(shouldRefreshOverview){
-      A.overviewPending=true;A.overviewFetchedAt=Date.now();
-      Promise.allSettled(otherMarkets.map(m=>request("/analysis/data/?symbol="+encodeURIComponent(m.symbol)+"&timeframe="+encodeURIComponent(d.timeframe||"M1")+"&limit="+encodeURIComponent($("limit")?.value||300)+"&refresh=0&refresh_account=0"))).then(results=>{
-        if(A.overviewKey!==overviewKey)return;
-        const rows=[...A.overviewCache];const predictions=[...A.predictionCache];
-        results.forEach((result,i)=>{
-          if(result.status!=="fulfilled"||!result.value||result.value.status==="error")return;
-          const x=result.value,symbol=x.symbol||otherMarkets[i].symbol;
-          const row={symbol,price:x.price,signal:x.signal==null?"UNAVAILABLE":String(x.signal).toUpperCase(),confidence:pctNorm(x.confidence)};
-          const index=rows.findIndex(item=>item.symbol===symbol);if(index>=0)rows[index]=row;else rows.push(row);
-          const ai=x.analysis_layers?.ai||x.ai||{},direction=ai.direction||ai.prediction||ai.decision||x.signal,probability=ai.probability??ai.probability_pct??x.prediction_probability;
-          if(direction){const pIndex=predictions.findIndex(item=>item.symbol===symbol),item={symbol,direction,probability};if(pIndex>=0)predictions[pIndex]=item;else predictions.push(item);}
-        });
-        A.overviewCache=rows.slice(0,5);A.predictionCache=predictions.slice(0,5);
-        list("marketOverviewRows",A.overviewCache,overviewRow,"No verified market data available.");
-        list("predictionRows",A.predictionCache,predictionRow,"No verified AI prediction is available.");
-      }).catch(()=>{}).finally(()=>{if(A.overviewKey===overviewKey)A.overviewPending=false;});
-    }
+    // Avoid firing multiple full AI/database analysis requests for overview rows.
+    // Only the selected market is fetched here; overview data must not exhaust the DB pool.
     const newsItems=Array.isArray(d.news)?d.news:(Array.isArray(d.sentiment?.news)?d.sentiment.news:[]);
     const sentimentItems=Array.isArray(d.sentiment?.items)?d.sentiment.items:[];
     const combinedNews=[...newsItems,...sentimentItems].slice(0,8);
@@ -218,7 +200,9 @@
       s.innerHTML=A.markets.map(m=>'<option value="'+esc(m.symbol)+'">'+esc(m.symbol)+" · "+esc(m.display_name||m.symbol)+"</option>").join("");
       if(!A.markets.length){$("loadState").textContent="No active markets are available.";setHealth(false,"UNAVAILABLE");return}
       if(!s.value&&A.markets[0])s.value=A.markets[0].symbol;
-      await load({refreshAccount:true});
+      // Initial page load must not synchronously refresh broker account state.
+      // Account refresh is explicit and remains available through the refresh control.
+      await load();
     }catch(e){$("loadState").textContent=e.message||"Markets unavailable"}
   }
   async function prepare(){
