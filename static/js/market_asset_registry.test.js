@@ -1,39 +1,59 @@
 /* Contract tests: node static/js/market_asset_registry.test.js */
 const fs = require('fs');
 const vm = require('vm');
-const source = fs.readFileSync('static/js/market_asset_registry.js', 'utf8');
 const context = {window: {}};
-vm.runInNewContext(source, context);
+vm.runInNewContext(fs.readFileSync('static/js/deriv_market_asset_manifest.js', 'utf8'), context);
+vm.runInNewContext(fs.readFileSync('static/js/market_asset_registry.js', 'utf8'), context);
 const api = context.window.AlgoBotMarketAssets;
 function assert(condition, message) { if (!condition) throw new Error(message); }
 const current = api.normalise({underlying_symbol:'frxEURUSD',underlying_symbol_name:'EUR/USD',underlying_symbol_type:'forex',market:'forex'});
-assert(current.symbol === 'frxEURUSD' && current.displayName === 'EUR/USD', 'normalizes current Deriv field names');
+assert(current.symbol === 'frxEURUSD' && current.displayName === 'EUR/USD', 'normalizes current Deriv fields');
 const legacy = api.normalise({symbol:'frxEURUSD',display_name:'EUR/USD',symbol_type:'forex'});
 assert(legacy.symbol === current.symbol && legacy.displayName === current.displayName, 'normalizes legacy Deriv fields');
-const pair = api.resolve({underlying_symbol:'frxEURUSD',underlying_symbol_name:'EUR/USD'});
-assert(pair.status === 'mapped' && pair.asset.type === 'forex-pair', 'uses remote currency flags for forex pair');
-assert(pair.asset.base.flag === 'https://flagcdn.com/eu.svg' && pair.asset.quote.flag === 'https://flagcdn.com/us.svg', 'uses authentic remote country flag URLs');
-assert(api.renderIcon({symbol:'frxEURUSD'}).includes('https://flagcdn.com/eu.svg'), 'shared renderer uses remote flag assets');
-assert(api.resolve({symbol:'CRYBTCUSD'}).status === 'verified', 'exact crypto symbol has source-attributed icon');
-assert(api.resolve({symbol:'CRYBTCUSD'}).asset.src === 'https://cdn.simpleicons.org/bitcoin', 'crypto icon is fetched from upstream CDN');
-assert(api.renderIcon({symbol:'CRYBTCUSD'}).includes('https://cdn.simpleicons.org/bitcoin'), 'shared renderer uses upstream remote icon');
-for (const symbol of ['R_10','R_25','R_50','R_75','R_100','1HZ10V','1HZ15V','1HZ30V','1HZ50V','1HZ75V','1HZ90V','1HZ100V','RDBULL','RDBEAR','RB_100','RB_200','BOOM1000','CRASH1000','frxXAUUSD','AAPL','CRYAVAXUSD']) {
-  assert(api.resolve({symbol}).status === 'missing', symbol + ' must not receive fabricated or guessed artwork');
-  assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback until a source asset is verified');
+assert(api.manifestEntries.length >= 100, 'loads a broad manifest of source-verified Deriv SVG URLs');
+assert(api.manifestEntries.every(x => x.url.startsWith('https://cdn.prod.website-files.com/') && x.url.endsWith('.svg')), 'manifest only contains remote SVGs from Deriv CDN');
+assert(!api.manifestEntries.some(x => x.url.includes('instruments-placeholder.svg')), 'placeholder icons are excluded');
+for (const [symbol, suffix] of [
+  ['CRYBTCUSD','market-cryptocurrency-btcusd.svg'],
+  ['CRYADAUSD','market-cryptocurrency-adausd.svg'],
+  ['CRYBNBUSD','market-cryptocurrency-bnbusd.svg'],
+  ['CRYDOGEUSD','market-cryptocurrency-dogusd.svg'],
+  ['frxEURUSD','market-forex-eurusd.svg'],
+  ['frxAUDCAD','market-forex-audcad.svg'],
+  ['frxXAUUSD','market-commodity-goldusd.svg'],
+  ['R_10','market-derived-volatility-10.svg'],
+  ['R_25','market-derived-volatility-25.svg'],
+  ['R_50','market-derived-volatility-50.svg'],
+  ['R_75','market-derived-volatility-75.svg'],
+  ['R_100','market-derived-volatility-100.svg'],
+  ['1HZ10V','market-derived-volatility-10-1s.svg'],
+  ['1HZ15V','Volatility%25252015%252520(1s).svg'],
+  ['1HZ25V','market-derived-volatility-25-1s.svg'],
+  ['1HZ30V','Volatility%25252030%252520(1s).svg'],
+  ['1HZ50V','market-derived-volatility-50-1s.svg'],
+  ['1HZ75V','market-derived-volatility-75-1s.svg'],
+  ['1HZ90V','Volatility%25252090%252520(1s).svg'],
+  ['1HZ100V','market-derived-volatility-100-1s.svg']
+]) {
+  const resolved = api.resolve({symbol});
+  assert(resolved.status === 'verified', symbol + ' resolves to an authentic Deriv SVG');
+  assert(resolved.asset.src.includes(suffix), symbol + ' uses its exact Deriv-hosted SVG');
 }
-assert(api.resolve({symbol:'BTCUSD',market:'cryptocurrency'}).asset === null, 'aliases do not inherit another symbol logo');
-assert(api.resolve({symbol:'XAUUSD',market:'commodities'}).family === 'commodities', 'classifies commodities');
-assert(api.resolve({symbol:'AAPL',market:'stock'}).family === 'stocks-and-indices', 'classifies equities without inventing artwork');
-assert(api.resolve({symbol:'RB_100'}).family === 'synthetic-indices', 'classifies Range Break indices without artwork');
+for (const symbol of ['RDBULL','RDBEAR','RB_100','RB_200','BOOM1000','CRASH1000','AAPL','CRYNOTINCATALOGUE']) {
+  assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped instead of receiving a fabricated or unrelated icon');
+  assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback');
+}
 const report = api.coverage([{symbol:'frxEURUSD'},{symbol:'CRYBTCUSD'},{symbol:'R_100'},{symbol:'AAPL',market:'stock'}]);
-assert(report.total === 4 && report.verified === 1 && report.missing === 2 && report.mapped === undefined, 'coverage reports verified source assets and missing instruments');
-assert(report.byFamily.forex.mapped === 1 && report.byFamily['synthetic-indices'].missing === 1, 'coverage is split by market family');
-assert(report.missingSymbols.length === 2, 'coverage enumerates unmapped symbols');
+assert(report.total === 4 && report.verified === 3 && report.missing === 1, 'coverage counts only authentic Deriv SVGs');
+assert(report.byFamily.forex.mapped === 1 && report.byFamily['synthetic-indices'].mapped === 1, 'coverage reports source assets by market family');
+assert(report.missingSymbols.length === 1, 'coverage enumerates unmapped symbols');
+assert(!fs.existsSync('static/images/market-assets/synthetic') && !fs.existsSync('static/images/market-flags'), 'no locally authored market SVG directories remain');
 for (const file of ['static/js/trading_terminal.js','static/js/market_scanner.js','static/js/predictions_workspace_fix.js']) {
   const content = fs.readFileSync(file,'utf8');
-  assert(!content.includes("status==='authored'") && !content.includes("status === 'authored'"), file + ' no longer renders generated SVG artwork');
+  assert(!content.includes("status==='authored'") && !content.includes("status === 'authored'"), file + ' has no generated artwork path');
 }
-assert(!fs.existsSync('static/images/market-assets/synthetic'), 'authored synthetic SVG files removed');
-assert(!fs.existsSync('static/images/market-flags'), 'authored local currency SVG files removed');
-assert(fs.readFileSync('templates/core/trading.html','utf8').includes('market_asset_registry.js'), 'trading template loads shared registry');
-console.log('remote market asset registry contract tests passed');
+for (const file of ['templates/core/markets.html','templates/core/predictions.html','templates/core/market_scanner.html','templates/core/trading.html']) {
+  const content = fs.readFileSync(file,'utf8');
+  assert(content.indexOf('deriv_market_asset_manifest.js') < content.indexOf('market_asset_registry.js'), file + ' loads official source manifest before registry');
+}
+console.log('official Deriv market SVG registry contract tests passed');

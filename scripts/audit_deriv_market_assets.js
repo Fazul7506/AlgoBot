@@ -7,9 +7,9 @@
 const fs = require('node:fs');
 const vm = require('node:vm');
 const strict = process.argv.includes('--strict');
-const registrySource = fs.readFileSync('static/js/market_asset_registry.js', 'utf8');
 const context = { window: {} };
-vm.runInNewContext(registrySource, context);
+vm.runInNewContext(fs.readFileSync('static/js/deriv_market_asset_manifest.js', 'utf8'), context);
+vm.runInNewContext(fs.readFileSync('static/js/market_asset_registry.js', 'utf8'), context);
 const assets = context.window.AlgoBotMarketAssets;
 const timeoutMs = Number(process.env.DERIV_SYMBOL_AUDIT_TIMEOUT_MS || 15000);
 const appId = process.env.DERIV_APP_ID || '1089';
@@ -17,7 +17,7 @@ const appId = process.env.DERIV_APP_ID || '1089';
 function fetchSymbols() {
   return new Promise((resolve, reject) => {
     if (typeof WebSocket === 'undefined') return reject(new Error('This script requires a Node.js runtime with global WebSocket support (Node 22+).'));
-    const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=' + encodeURIComponent(appId));
+    const ws = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=' + encodeURIComponent(appId));
     const timer = setTimeout(() => { try { ws.close(); } catch (_) {} reject(new Error('Timed out waiting for Deriv active_symbols response')); }, timeoutMs);
     ws.addEventListener('open', () => ws.send(JSON.stringify({ active_symbols: 'full' })), { once: true });
     ws.addEventListener('message', event => {

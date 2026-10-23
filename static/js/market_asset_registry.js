@@ -1,53 +1,27 @@
-/* Symbol-aware remote asset registry. No locally authored SVGs; unmapped means no verified source asset. */
+/* Exact-symbol renderer for remote, source-attributed Deriv SVGs only. */
 (() => {
   'use strict';
-  const currencies = Object.freeze({
-    EUR: {name:'Euro area', flag:'https://flagcdn.com/eu.svg'},
-    USD: {name:'United States dollar', flag:'https://flagcdn.com/us.svg'},
-    GBP: {name:'British pound', flag:'https://flagcdn.com/gb.svg'},
-    JPY: {name:'Japanese yen', flag:'https://flagcdn.com/jp.svg'},
-    AUD: {name:'Australian dollar', flag:'https://flagcdn.com/au.svg'},
-    NZD: {name:'New Zealand dollar', flag:'https://flagcdn.com/nz.svg'},
-    CAD: {name:'Canadian dollar', flag:'https://flagcdn.com/ca.svg'},
-    CHF: {name:'Swiss franc', flag:'https://flagcdn.com/ch.svg'},
-    CNY: {name:'Chinese yuan', flag:'https://flagcdn.com/cn.svg'},
-    SEK: {name:'Swedish krona', flag:'https://flagcdn.com/se.svg'},
-    NOK: {name:'Norwegian krone', flag:'https://flagcdn.com/no.svg'},
-    DKK: {name:'Danish krone', flag:'https://flagcdn.com/dk.svg'},
-    SGD: {name:'Singapore dollar', flag:'https://flagcdn.com/sg.svg'},
-    HKD: {name:'Hong Kong dollar', flag:'https://flagcdn.com/hk.svg'},
-    ZAR: {name:'South African rand', flag:'https://flagcdn.com/za.svg'},
-    MXN: {name:'Mexican peso', flag:'https://flagcdn.com/mx.svg'},
-    PLN: {name:'Polish złoty', flag:'https://flagcdn.com/pl.svg'},
-    TRY: {name:'Turkish lira', flag:'https://flagcdn.com/tr.svg'}
+  const manifest = window.AlgoBotDerivMarketAssetManifest;
+  const entries = Array.isArray(manifest?.entries) ? manifest.entries : [];
+  const normaliseLabel = value => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const syntheticNames = Object.freeze({
+    R_10:'Volatility 10 Index', R_25:'Volatility 25 Index',
+    R_50:'Volatility 50 Index', R_75:'Volatility 75 Index',
+    R_100:'Volatility 100 Index',
+    '1HZ10V':'Volatility 10 (1s) Index', '1HZ15V':'Volatility 15 (1s) Index',
+    '1HZ25V':'Volatility 25 (1s) Index', '1HZ30V':'Volatility 30 (1s) Index',
+    '1HZ50V':'Volatility 50 (1s) Index', '1HZ75V':'Volatility 75 (1s) Index',
+    '1HZ90V':'Volatility 90 (1s) Index', '1HZ100V':'Volatility 100 (1s) Index'
   });
-  const registry = Object.freeze({
-    "CRYBTCUSD": {src:'https://cdn.simpleicons.org/bitcoin', label:"Bitcoin", source:"https://github.com/simple-icons/simple-icons", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
-    "CRYETHUSD": {src:'https://cdn.simpleicons.org/ethereum', label:"Ethereum", source:"https://github.com/simple-icons/simple-icons", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
-    "CRYLTCUSD": {src:'https://cdn.simpleicons.org/litecoin', label:"Litecoin", source:"https://github.com/simple-icons/simple-icons", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
-    "CRYDOGEUSD": {src:'https://cdn.simpleicons.org/dogecoin', label:"Dogecoin", source:"https://github.com/simple-icons/simple-icons", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
-    "CRYSOLUSD": {src:'https://cdn.simpleicons.org/solana', label:"Solana", source:"https://github.com/simple-icons/simple-icons", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
-    "CRYXRPUSD": {src:'https://cdn.simpleicons.org/ripple', label:"Ripple", source:"https://github.com/simple-icons/simple-icons", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
-    "CRYADAUSD": {src:'https://cdn.simpleicons.org/cardano', label:"Cardano", source:"https://github.com/simple-icons/simple-icons", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
-    "CRYDOTUSD": {src:'https://cdn.simpleicons.org/polkadot', label:"Polkadot", source:"https://github.com/simple-icons/simple-icons", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
-    "CRYBNBUSD": {src:'https://cdn.simpleicons.org/binance', label:"Binance", source:"https://github.com/simple-icons/simple-icons", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
-    "CRYLINKUSD": {src:'https://cdn.simpleicons.org/chainlink', label:"Chainlink", source:"https://github.com/simple-icons/simple-icons", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
-    "CRYXLMUSD": {src:'https://cdn.simpleicons.org/stellar', label:"Stellar", source:"https://github.com/simple-icons/simple-icons", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
-  });
-
-  const allRegistry = registry;
-
-  // Classification is intentionally separate from artwork mapping: identifying a
-  // market family never implies that an official logo exists for that instrument.
+  const cryptoAliases = Object.freeze({DOGEUSD:'DOGUSD', AVAXUSD:'AVAUSD'});
   const classify = instrument => {
     const text = [instrument.market, instrument.subMarket, instrument.symbolType, instrument.displayName].join(' ').toLowerCase();
     const symbol = instrument.symbol.toUpperCase();
-    if (/commodit|metal|energy|oil|gold|silver/.test(text) || /^(?:XAU|XAG|XPT|XPD|WTI|BRENT|NGAS|UKOIL|USOIL)/.test(symbol) || /^FRX(?:XAU|XAG|XPT|XPD)/.test(symbol)) return 'commodities';
+    if (/commodit|metal|energy|oil|gold|silver|palladium|platinum/.test(text) || /^(?:XAU|XAG|XPT|XPD|WTI|BRENT|NGAS|UKOIL|USOIL)/.test(symbol) || /^FRX(?:XAU|XAG|XPT|XPD)/.test(symbol)) return 'commodities';
     if (/\bforex\b|\bcurrency\b|foreign exchange/.test(text) || /^FRX[A-Z]{6}$/.test(symbol)) return 'forex';
     if (/synthetic|derived|volatility|boom|crash|jump|step|range break/.test(text) || /^(?:R_\d+|RB_\d+|1HZ\d+V|BOOM\d+|CRASH\d+|JUMP\d+|STEP\d+|RDBEAR|RDBULL)/.test(symbol)) return 'synthetic-indices';
     if (/crypt|digital asset/.test(text) || /^(?:CRY|BTC|ETH|LTC|XRP|BCH|ADA|DOGE|SOL|DOT|BNB|TRX|AVAX|LINK|XLM|EOS|DASH|ZEC|XMR)[A-Z0-9/_-]*$/.test(symbol)) return 'cryptocurrency';
-    if (/commodit|metal|energy|oil|gas|gold|silver/.test(text) || /^(?:XAU|XAG|XPT|XPD|WTI|BRENT|NGAS|UKOIL|USOIL)/.test(symbol)) return 'commodities';
-    if (/stock|equity|share|indices|index/.test(text) || /^(?:AAPL|STOCK|ETF|[A-Z]{1,5}\.[A-Z]{1,3})/.test(symbol)) return 'stocks-and-indices';
+    if (/stock|equity|share|indices|index|etf/.test(text) || /^(?:AAPL|STOCK|ETF|[A-Z]{1,5}\.[A-Z]{1,3})/.test(symbol)) return 'stocks-and-indices';
     return 'other';
   };
   const normalise = raw => {
@@ -59,50 +33,88 @@
     const subMarket = String(item.submarket || item.sub_market || item.subgroup || '').trim();
     return {symbol, displayName, symbolType, market, subMarket};
   };
+  const findOfficialAsset = instrument => {
+    const symbol = instrument.symbol.toUpperCase();
+    const family = classify(instrument);
+    const candidates = [];
+    const add = value => { const key = normaliseLabel(value); if (key && !candidates.includes(key)) candidates.push(key); };
+    add(instrument.displayName);
+    if (family === 'forex' || family === 'commodities') {
+      const ticker = symbol.replace(/^FRX/, '');
+      add(ticker);
+    } else if (family === 'cryptocurrency') {
+      const ticker = symbol.replace(/^CRY/, '');
+      add(cryptoAliases[ticker] || ticker);
+    } else if (family === 'synthetic-indices') {
+      add(syntheticNames[symbol]);
+    }
+    const eligible = entries.filter(item => item.market === family && item.url && item.url.endsWith('.svg'));
+    for (const candidate of candidates) {
+      const exact = eligible.filter(item => normaliseLabel(item.name) === candidate);
+      if (exact.length === 1) return exact[0];
+    }
+    // Display names can include an added "Index" suffix; only accept a unique longest-prefix match.
+    const displayKey = normaliseLabel(instrument.displayName);
+    if (displayKey) {
+      const matches = eligible.filter(item => {
+        const key = normaliseLabel(item.name);
+        return key && (displayKey.startsWith(key) || key.startsWith(displayKey));
+      }).sort((a,b) => normaliseLabel(b.name).length - normaliseLabel(a.name).length);
+      if (matches.length && (matches.length === 1 || normaliseLabel(matches[0].name).length > normaliseLabel(matches[1].name).length)) return matches[0];
+    }
+    return null;
+  };
   const resolve = raw => {
     const instrument = normalise(raw);
-    const entry = allRegistry[instrument.symbol.toUpperCase()] || null;
     const family = classify(instrument);
-    // Deriv forex symbols use the frx + six-letter ISO currency pair convention.
-    const match = /^frx([A-Z]{6})$/i.exec(instrument.symbol);
-    const pair = match ? match[1].toUpperCase() : '';
-    const base = pair ? currencies[pair.slice(0, 3)] : null;
-    const quote = pair ? currencies[pair.slice(3, 6)] : null;
-    const forex = base && quote ? {type:'forex-pair', base, quote, source:'https://flagcdn.com/', licence:'FlagCDN-hosted country flags; source terms apply'} : null;
-    // Never substitute generic/category artwork for a specific Deriv instrument.
-    // Only source-attributed third-party symbol marks or remote currency flags render.
-    const asset = entry ? {...entry, type:'symbol-svg'} : forex || null;
-    const status = entry ? 'verified' : forex ? 'mapped' : 'missing';
-    return {...instrument, family, asset, status, source: entry?.source || forex?.source || null, licence: entry?.licence || forex?.licence || null};
+    const sourceAsset = findOfficialAsset(instrument);
+    const asset = sourceAsset ? {
+      src: sourceAsset.url,
+      label: sourceAsset.name,
+      source: sourceAsset.sourcePage,
+      licence: 'Official Deriv-hosted SVG; subject to Deriv terms and trademark rules',
+      type: 'symbol-svg',
+      artworkKind: 'deriv-official'
+    } : null;
+    return {...instrument, family, asset, status: asset ? 'verified' : 'missing',
+      source: asset?.source || null, licence: asset?.licence || null};
   };
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const renderIcon = raw => {
     const resolved = resolve(raw);
     const label = resolved.displayName || resolved.symbol || 'Unknown instrument';
-    if (resolved.status === 'mapped' && resolved.asset?.type === 'forex-pair') {
-      const base = resolved.asset.base, quote = resolved.asset.quote;
-      return '<span class="market-asset-pair" role="img" aria-label="' + escapeHtml(base.name + ' / ' + quote.name) + '">' +
-        '<img loading="lazy" decoding="async" src="' + escapeHtml(base.flag) + '" alt="' + escapeHtml(base.name + ' flag') + '">' +
-        '<img loading="lazy" decoding="async" src="' + escapeHtml(quote.flag) + '" alt="' + escapeHtml(quote.name + ' flag') + '"></span>';
+    if (resolved.status === 'verified' && resolved.asset?.src) {
+      return '<img class="market-asset-verified" data-remote-market-asset data-symbol-fallback="' +
+        escapeHtml(String(resolved.symbol || '?').slice(0, 2)) + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" src="' +
+        escapeHtml(resolved.asset.src) + '" alt="' + escapeHtml(label) + '">';
     }
-    if ((resolved.status === 'verified') && resolved.asset?.src) {
-      return '<img class="market-asset-verified" loading="lazy" decoding="async" src="' + escapeHtml(resolved.asset.src) + '" alt="' + escapeHtml(label) + '">';
-    }
-    const initials = String(raw?.display_name || label || resolved.symbol).split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase();
+    const initials = String(label || resolved.symbol).split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase();
     return '<span class="market-avatar market-avatar-unmapped" aria-hidden="true">' + escapeHtml(initials) + '</span>';
   };
   const coverage = instruments => {
     const rows = Array.from(instruments || [], resolve);
     const verified = rows.filter(row => row.status === 'verified').length;
-    const illustrated = rows.filter(row => row.status === 'verified' || row.status === 'mapped').length;
     const byFamily = {};
     rows.forEach(row => {
       if (!byFamily[row.family]) byFamily[row.family] = {total: 0, mapped: 0, missing: 0};
       byFamily[row.family].total += 1;
-      if (row.status === 'verified' || row.status === 'mapped') byFamily[row.family].mapped += 1;
+      if (row.status === 'verified') byFamily[row.family].mapped += 1;
       else byFamily[row.family].missing += 1;
     });
-    return {total: rows.length, verified, illustrated, missing: rows.length - illustrated, percent: rows.length ? Math.round(illustrated / rows.length * 10000) / 100 : 100, byFamily, missingSymbols: rows.filter(row => row.status === 'missing').map(row => ({symbol: row.symbol, family: row.family}))};
+    return {total: rows.length, verified, illustrated: verified, missing: rows.length - verified,
+      percent: rows.length ? Math.round(verified / rows.length * 10000) / 100 : 100,
+      byFamily, missingSymbols: rows.filter(row => row.status === 'missing').map(row => ({symbol: row.symbol, family: row.family}))};
   };
-  window.AlgoBotMarketAssets = Object.freeze({normalise, resolve, renderIcon, coverage, classify, registry: allRegistry, currencies});
+  if (typeof document !== 'undefined') {
+    document.addEventListener('error', event => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement) || !image.src.startsWith('https://cdn.prod.website-files.com/')) return;
+      const fallback = document.createElement('span');
+      fallback.className = 'market-avatar market-avatar-unmapped';
+      fallback.setAttribute('aria-hidden', 'true');
+      fallback.textContent = image.getAttribute('data-symbol-fallback') || String(image.alt || '?').trim().slice(0, 2) || '?';
+      image.replaceWith(fallback);
+    }, true);
+  }
+  window.AlgoBotMarketAssets = Object.freeze({normalise, resolve, renderIcon, coverage, classify, registry: Object.freeze({}), manifestEntries: entries});
 })();

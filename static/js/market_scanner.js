@@ -63,9 +63,7 @@
         : '—';
       const asset = window.AlgoBotMarketAssets?.resolve?.(row);
       let artwork = '<span class="scanner-market-unmapped" aria-hidden="true">' + esc(String(row.symbol || '?').slice(0, 2)) + '</span>';
-      if (asset?.status === 'mapped' && asset.asset?.type === 'forex-pair') {
-        artwork = '<span class="scanner-market-pair" aria-label="' + esc(asset.asset.base.name) + ' / ' + esc(asset.asset.quote.name) + '"><img src="' + esc(asset.asset.base.flag) + '" alt="" loading="lazy"><img src="' + esc(asset.asset.quote.flag) + '" alt="" loading="lazy"></span>';
-      } else if ((asset?.status === 'verified') && asset.asset?.src) {
+      if (asset?.status === 'verified' && asset.asset?.src) {
         artwork = '<img class="scanner-market-art" src="' + esc(asset.asset.src) + '" alt="" loading="lazy">';
       }
       return '<tr>' +
