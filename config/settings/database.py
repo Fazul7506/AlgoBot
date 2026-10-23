@@ -52,11 +52,11 @@ def _database_pool_options(database_url):
     try:
         min_size = int(env("DB_POOL_MIN_SIZE", "1"))
         # Keep the per-process maximum at the validated Supabase pooler limit.
-        max_size = int(env("DB_POOL_MAX_SIZE", "3"))
+        max_size = int(env("DB_POOL_MAX_SIZE", "5"))
         # Allow short request bursts to wait for a connection to be returned
         # rather than failing a normal page request after only six seconds.
         max_lifetime = int(env("DB_POOL_MAX_LIFETIME", "1800"))
-        timeout = int(env("DB_POOL_TIMEOUT", "20"))
+        timeout = int(env("DB_POOL_TIMEOUT", "30"))
     except ValueError as exc:
         raise ValueError(
             "DB_POOL_MIN_SIZE, DB_POOL_MAX_SIZE, DB_POOL_MAX_LIFETIME, and DB_POOL_TIMEOUT must be integers."
