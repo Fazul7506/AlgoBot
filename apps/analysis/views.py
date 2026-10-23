@@ -280,11 +280,9 @@ def analysis_data(request):
             symbol,
             timeframe.lower(),
             limit,
-            bool(refresh_requested),
-            bool(account_refresh_requested),
         ]).encode("utf-8")
     ).hexdigest()
-    cached = _safe_cache_get(cache_key)
+    cached = None if (refresh_requested or account_refresh_requested) else _safe_cache_get(cache_key)
     if cached is not None:
         return JsonResponse(cached)
 
@@ -664,7 +662,8 @@ def analysis_data(request):
         "no_look_ahead": True,
         "execution_separate": True,
     }
-    _safe_cache_set(cache_key, result, ANALYSIS_CACHE_SECONDS)
+    if not refresh_requested and not account_refresh_requested:
+        _safe_cache_set(cache_key, result, ANALYSIS_CACHE_SECONDS)
     return JsonResponse(result)
 
 
