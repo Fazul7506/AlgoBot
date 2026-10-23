@@ -18,3 +18,23 @@ The SVG files in `crypto/` are copied from [Simple Icons](https://github.com/sim
 | `CRYBNBUSD` | Binance | https://binance.com |
 | `CRYLINKUSD` | Chainlink | https://chain.link/brand-assets |
 | `CRYXLMUSD` | Stellar | https://stellar.org/brand-resources |
+
+
+## AlgoBot-authored synthetic-index artwork
+
+These SVGs are original in-repository illustrations created for instrument identification in AlgoBot. They are **not official Deriv logos** and are not copied from a third-party brand pack. The registry labels them as `authored`, separately from source-verified third-party marks. Each exact symbol has its own distinctive waveform illustration and visible symbol label.
+
+| Deriv symbol | Asset |
+|---|---|
+| `R_10` | `static/images/market-assets/synthetic/r-10.svg` |
+| `R_25` | `static/images/market-assets/synthetic/r-25.svg` |
+| `R_50` | `static/images/market-assets/synthetic/r-50.svg` |
+| `R_75` | `static/images/market-assets/synthetic/r-75.svg` |
+| `R_100` | `static/images/market-assets/synthetic/r-100.svg` |
+| `1HZ10V` | `static/images/market-assets/synthetic/1hz10v.svg` |
+| `1HZ25V` | `static/images/market-assets/synthetic/1hz25v.svg` |
+| `1HZ50V` | `static/images/market-assets/synthetic/1hz50v.svg` |
+| `1HZ75V` | `static/images/market-assets/synthetic/1hz75v.svg` |
+| `1HZ100V` | `static/images/market-assets/synthetic/1hz100v.svg` |
+
+Only exact symbols listed in the registry receive these illustrations. Other symbols in the same market family remain unmapped until their exact symbol is explicitly supported. Deriv's Active Symbols response remains the source of truth for which symbols are currently available.

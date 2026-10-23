@@ -17,20 +17,23 @@ assert(pair.asset.base.flag.endsWith('/eur.svg') && pair.asset.quote.flag.endsWi
 assert(api.renderIcon({symbol:'cryBTCUSD'}).includes('/static/images/market-assets/crypto/bitcoin.svg'), 'shared renderer uses the exact local crypto SVG');
 assert(api.renderIcon({symbol:'frxEURUSD'}).includes('/static/images/market-flags/eur.svg') && api.renderIcon({symbol:'frxEURUSD'}).includes('/static/images/market-flags/usd.svg'), 'shared renderer displays both forex flags');
 assert(api.renderIcon({symbol:'XAUUSD'}).includes('market-avatar-unmapped'), 'missing artwork uses a neutral fallback instead of a fake logo');
+assert(api.resolve({symbol:'R_100'}).status === 'authored' && api.resolve({symbol:'R_100'}).asset.src.endsWith('/r-100.svg'), 'known synthetic index resolves to its own AlgoBot-authored SVG');
+assert(api.resolve({symbol:'1HZ50V'}).asset.src.endsWith('/1hz50v.svg'), 'one-second synthetic index resolves to its own SVG');
+assert(api.renderIcon({symbol:'R_100'}).includes('/static/images/market-assets/synthetic/r-100.svg'), 'shared renderer displays exact-symbol authored synthetic artwork');
 const report = api.coverage([
   {underlying_symbol:'frxEURUSD', market:'forex'},
-  {symbol:'R_100'},
+  {symbol:'R_10'},
   {symbol:'cryBTCUSD', market:'cryptocurrency'},
   {symbol:'XAUUSD', market:'commodities'},
   {symbol:'AAPL', market:'stock'}
 ]);
-assert(report.total === 5 && report.missing === 3 && report.verified === 1 && report.illustrated === 2, 'coverage counts exact symbol mappings and mapped forex flags only');
-assert(report.byFamily.forex.mapped === 1 && report.byFamily['synthetic-indices'].mapped === 0, 'coverage reports mapped and missing artwork by market family');
+assert(report.total === 5 && report.missing === 2 && report.verified === 1 && report.authored === 1 && report.illustrated === 3, 'coverage counts exact symbol mappings and mapped forex flags only');
+assert(report.byFamily.forex.mapped === 1 && report.byFamily['synthetic-indices'].mapped === 1, 'coverage reports mapped and missing artwork by market family');
 assert(api.resolve({symbol:'BTCUSD', market:'cryptocurrency'}).family === 'cryptocurrency', 'classifies crypto instruments without inventing artwork');
 assert(api.resolve({symbol:'XAUUSD', market:'commodities'}).family === 'commodities', 'classifies commodity instruments without inventing artwork');
 assert(api.resolve({symbol:'AAPL', market:'stock'}).family === 'stocks-and-indices', 'classifies equities from catalogue metadata');
 assert(report.missingSymbols.length === 3, 'unmapped symbols are explicitly reported as missing artwork');
-assert(api.resolve({symbol:'R_100'}).asset === null && api.resolve({symbol:'R_100'}).status === 'missing', 'synthetic instruments do not receive fabricated category art');
+assert(api.resolve({symbol:'R_100'}).status === 'authored' && api.resolve({symbol:'R_100'}).asset.src.endsWith('/r-100.svg'), 'known synthetic instruments receive distinct authored artwork');
 assert(api.resolve({symbol:'cryBTCUSD', market:'cryptocurrency'}).status === 'verified' && api.resolve({symbol:'cryBTCUSD'}).asset.src.endsWith('/bitcoin.svg'), 'Deriv Bitcoin symbol resolves to its exact local SVG');
 assert(api.resolve({symbol:'cryETHUSD'}).asset.src.endsWith('/ethereum.svg'), 'Deriv Ethereum symbol resolves to its exact local SVG');
 assert(api.resolve({symbol:'cryLTCUSD'}).asset.src.endsWith('/litecoin.svg'), 'Deriv Litecoin symbol resolves to its exact local SVG');

@@ -38,6 +38,20 @@
     "CRYXLMUSD": {src:'/static/images/market-assets/crypto/stellar.svg', label:"Stellar", source:"https://stellar.org/brand-resources", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
   });
 
+  const authoredRegistry = Object.freeze({
+    "R_10": {src:"/static/images/market-assets/synthetic/r-10.svg", label:"Volatility 10 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "R_25": {src:"/static/images/market-assets/synthetic/r-25.svg", label:"Volatility 25 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "R_50": {src:"/static/images/market-assets/synthetic/r-50.svg", label:"Volatility 50 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "R_75": {src:"/static/images/market-assets/synthetic/r-75.svg", label:"Volatility 75 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "R_100": {src:"/static/images/market-assets/synthetic/r-100.svg", label:"Volatility 100 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "1HZ10V": {src:"/static/images/market-assets/synthetic/1hz10v.svg", label:"Volatility 10 (1s) Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "1HZ25V": {src:"/static/images/market-assets/synthetic/1hz25v.svg", label:"Volatility 25 (1s) Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "1HZ50V": {src:"/static/images/market-assets/synthetic/1hz50v.svg", label:"Volatility 50 (1s) Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "1HZ75V": {src:"/static/images/market-assets/synthetic/1hz75v.svg", label:"Volatility 75 (1s) Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "1HZ100V": {src:"/static/images/market-assets/synthetic/1hz100v.svg", label:"Volatility 100 (1s) Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+  });
+  const allRegistry = Object.freeze({...registry, ...authoredRegistry});
+
   // Classification is intentionally separate from artwork mapping: identifying a
   // market family never implies that an official logo exists for that instrument.
   const classify = instrument => {
@@ -61,7 +75,7 @@
   };
   const resolve = raw => {
     const instrument = normalise(raw);
-    const entry = registry[instrument.symbol.toUpperCase()] || null;
+    const entry = allRegistry[instrument.symbol.toUpperCase()] || null;
     const family = classify(instrument);
     // Deriv forex symbols use the frx + six-letter ISO currency pair convention.
     const match = /^frx([A-Z]{6})$/i.exec(instrument.symbol);
@@ -72,7 +86,7 @@
     // Never substitute generic/category artwork for a specific Deriv instrument.
     // Only explicit source-verified symbol mappings or currency-pair flags render.
     const asset = entry ? {...entry, type:'symbol-svg'} : forex || null;
-    const status = entry ? 'verified' : forex ? 'mapped' : 'missing';
+    const status = entry ? (entry.artworkKind === 'authored' ? 'authored' : 'verified') : forex ? 'mapped' : 'missing';
     return {...instrument, family, asset, status, source: entry?.source || forex?.source || null, licence: entry?.licence || forex?.licence || null};
   };
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -85,7 +99,7 @@
         '<img loading="lazy" decoding="async" src="' + escapeHtml(base.flag) + '" alt="' + escapeHtml(base.name + ' flag') + '">' +
         '<img loading="lazy" decoding="async" src="' + escapeHtml(quote.flag) + '" alt="' + escapeHtml(quote.name + ' flag') + '"></span>';
     }
-    if (resolved.status === 'verified' && resolved.asset?.src) {
+    if ((resolved.status === 'verified' || resolved.status === 'authored') && resolved.asset?.src) {
       return '<img class="market-asset-verified" loading="lazy" decoding="async" src="' + escapeHtml(resolved.asset.src) + '" alt="' + escapeHtml(label) + '">';
     }
     const initials = String(raw?.display_name || label || resolved.symbol).split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase();
@@ -94,15 +108,16 @@
   const coverage = instruments => {
     const rows = Array.from(instruments || [], resolve);
     const verified = rows.filter(row => row.status === 'verified').length;
-    const illustrated = rows.filter(row => row.status === 'verified' || row.status === 'mapped').length;
+    const authored = rows.filter(row => row.status === 'authored').length;
+    const illustrated = rows.filter(row => row.status === 'verified' || row.status === 'authored' || row.status === 'mapped').length;
     const byFamily = {};
     rows.forEach(row => {
       if (!byFamily[row.family]) byFamily[row.family] = {total: 0, mapped: 0, missing: 0};
       byFamily[row.family].total += 1;
-      if (row.status === 'verified' || row.status === 'mapped') byFamily[row.family].mapped += 1;
+      if (row.status === 'verified' || row.status === 'authored' || row.status === 'mapped') byFamily[row.family].mapped += 1;
       else byFamily[row.family].missing += 1;
     });
-    return {total: rows.length, verified, illustrated, missing: rows.length - illustrated, percent: rows.length ? Math.round(illustrated / rows.length * 10000) / 100 : 100, byFamily, missingSymbols: rows.filter(row => row.status === 'missing').map(row => ({symbol: row.symbol, family: row.family}))};
+    return {total: rows.length, verified, authored, illustrated, missing: rows.length - illustrated, percent: rows.length ? Math.round(illustrated / rows.length * 10000) / 100 : 100, byFamily, missingSymbols: rows.filter(row => row.status === 'missing').map(row => ({symbol: row.symbol, family: row.family}))};
   };
-  window.AlgoBotMarketAssets = Object.freeze({normalise, resolve, renderIcon, coverage, classify, registry, currencies});
+  window.AlgoBotMarketAssets = Object.freeze({normalise, resolve, renderIcon, coverage, classify, registry: allRegistry, currencies});
 })();
