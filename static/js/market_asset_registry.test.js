@@ -46,9 +46,15 @@ for (const [symbol, suffix] of [
   assert(resolved.status === 'verified', symbol + ' resolves to an authentic Deriv SVG');
   assert(resolved.asset.src.includes(suffix), symbol + ' uses its exact Deriv-hosted SVG');
 }
-for (const symbol of ['RDBULL','RDBEAR','RB_100','RB_200','BOOM1000','CRASH1000','AAPL','CRYNOTINCATALOGUE']) {
+for (const symbol of ['RDBULL','RDBEAR','RB_100','RB_200','CRASH1000','AAPL','CRYNOTINCATALOGUE']) {
   assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped instead of receiving a fabricated or unrelated icon');
   assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback');
+}
+for (const [symbol, name] of [['BOOM1000','Boom 1000 Index'],['BOOM300','Boom 300 Index'],['CRASH500','Crash 500 Index'],['DEX1500UP','DEX 1500 UP Index'],['DRIFT_SWITCH_10','Drift Switch Index 10']]) {
+  const resolved = api.resolve({symbol, display_name:name, market:'synthetic'});
+  assert(resolved.family === 'synthetic-indices', symbol + ' is classified as synthetic');
+  assert(resolved.status === 'verified', symbol + ' resolves to a genuine Deriv-hosted SVG');
+  assert(resolved.asset.src.startsWith('https://media.ffycdn.net/eu/deriv/'), symbol + ' uses official Deriv source');
 }
 const report = api.coverage([{symbol:'frxEURUSD'},{symbol:'CRYBTCUSD'},{symbol:'R_100'},{symbol:'AAPL',market:'stock'}]);
 assert(report.total === 4 && report.verified === 3 && report.missing === 1, 'coverage counts only authentic Deriv SVGs');
