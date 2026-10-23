@@ -117,7 +117,7 @@
           .filter(([family]) => family !== 'other')
           .map(([family, value]) => family.replace(/-/g, ' ') + ': ' + value.mapped + '/' + value.total);
         coverageDetail.textContent = coverage.total
-          ? coverage.illustrated + '/' + coverage.total + ' illustrated · ' + coverage.verified + ' instrument-specific · ' + coverage.missing + ' without artwork' + (families.length ? ' · ' + families.join(' · ') : '')
+          ? coverage.illustrated + '/' + coverage.total + ' illustrated · ' + coverage.verified + ' verified · ' + (coverage.authored || 0) + ' AlgoBot-authored · ' + coverage.missing + ' without artwork' + (families.length ? ' · ' + families.join(' · ') : '')
           : 'Waiting for active instruments';
       }
     }
