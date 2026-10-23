@@ -11,20 +11,8 @@
   const money = value => value == null || value === '' || !Number.isFinite(Number(value))
     ? 'Unavailable'
     : Number(value).toLocaleString(undefined, { maximumFractionDigits: 8 });
-  const marketAssetIcon = row => {
-    const resolved = window.AlgoBotMarketAssets?.resolve?.(row);
-    if (resolved?.status === 'mapped' && resolved.asset?.type === 'forex-pair') {
-      const base = resolved.asset.base, quote = resolved.asset.quote;
-      return '<span class="market-asset-pair" role="img" aria-label="' + esc(base.name + ' / ' + quote.name) + '">' +
-        '<img loading="lazy" decoding="async" src="' + esc(base.flag) + '" alt="' + esc(base.name) + ' flag">' +
-        '<img loading="lazy" decoding="async" src="' + esc(quote.flag) + '" alt="' + esc(quote.name) + ' flag"></span>';
-    }
-    if ((resolved?.status === 'verified' || resolved?.status === 'category') && resolved.asset?.src) {
-      return '<img class="market-asset-verified" loading="lazy" decoding="async" src="' + esc(resolved.asset.src) + '" alt="' + esc(resolved.displayName || row.symbol) + '">';
-    }
-    return '<span class="market-avatar market-avatar-unmapped" aria-hidden="true">' +
-      esc(String(row.display_name || row.symbol).split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase()) + '</span>';
-  };
+  const marketAssetIcon = row => window.AlgoBotMarketAssets?.renderIcon?.(row) || '';
+
 
 
   const storedFavourites = () => {
@@ -129,7 +117,7 @@
           .filter(([family]) => family !== 'other')
           .map(([family, value]) => family.replace(/-/g, ' ') + ': ' + value.mapped + '/' + value.total);
         coverageDetail.textContent = coverage.total
-          ? coverage.illustrated + '/' + coverage.total + ' illustrated · ' + coverage.verified + ' instrument-specific · ' + coverage.missing + ' without artwork' + (families.length ? ' · ' + families.join(' · ') : '')
+          ? coverage.illustrated + '/' + coverage.total + ' mapped · ' + coverage.verified + ' source assets · ' + coverage.missing + ' without a verified asset' + (families.length ? ' · ' + families.join(' · ') : '')
           : 'Waiting for active instruments';
       }
     }

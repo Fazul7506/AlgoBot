@@ -1,47 +1,28 @@
-/* AlgoBot symbol-aware market asset registry.
- * Local currency flags are authored SVG assets; they are market-identification artwork,
- * not Deriv-provided official logos. Unknown instruments remain explicitly unmapped.
- */
+/* Exact-symbol renderer for remote, source-attributed Deriv SVGs only. */
 (() => {
   'use strict';
-  const currencies = Object.freeze({
-    EUR: {name:'Euro area', flag:'/static/images/market-flags/eur.svg'},
-    USD: {name:'United States dollar', flag:'/static/images/market-flags/usd.svg'},
-    GBP: {name:'British pound', flag:'/static/images/market-flags/gbp.svg'},
-    JPY: {name:'Japanese yen', flag:'/static/images/market-flags/jpy.svg'},
-    AUD: {name:'Australian dollar', flag:'/static/images/market-flags/aud.svg'},
-    NZD: {name:'New Zealand dollar', flag:'/static/images/market-flags/nzd.svg'},
-    CAD: {name:'Canadian dollar', flag:'/static/images/market-flags/cad.svg'},
-    CHF: {name:'Swiss franc', flag:'/static/images/market-flags/chf.svg'},
-    CNY: {name:'Chinese yuan', flag:'/static/images/market-flags/cny.svg'},
-    SEK: {name:'Swedish krona', flag:'/static/images/market-flags/sek.svg'},
-    NOK: {name:'Norwegian krone', flag:'/static/images/market-flags/nok.svg'},
-    DKK: {name:'Danish krone', flag:'/static/images/market-flags/dkk.svg'},
-    SGD: {name:'Singapore dollar', flag:'/static/images/market-flags/sgd.svg'},
-    HKD: {name:'Hong Kong dollar', flag:'/static/images/market-flags/hkd.svg'},
-    ZAR: {name:'South African rand', flag:'/static/images/market-flags/zar.svg'},
-    MXN: {name:'Mexican peso', flag:'/static/images/market-flags/mxn.svg'},
-    PLN: {name:'Polish złoty', flag:'/static/images/market-flags/pln.svg'},
-    TRY: {name:'Turkish lira', flag:'/static/images/market-flags/try.svg'}
+  const manifest = window.AlgoBotDerivMarketAssetManifest;
+  const entries = Array.isArray(manifest?.entries) ? manifest.entries : [];
+  const normaliseLabel = value => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const syntheticNames = Object.freeze({
+    R_10:'Volatility 10 Index', R_25:'Volatility 25 Index',
+    R_50:'Volatility 50 Index', R_75:'Volatility 75 Index',
+    R_100:'Volatility 100 Index',
+    '1HZ10V':'Volatility 10 (1s) Index', '1HZ15V':'Volatility 15 (1s) Index',
+    '1HZ25V':'Volatility 25 (1s) Index', '1HZ30V':'Volatility 30 (1s) Index',
+    '1HZ50V':'Volatility 50 (1s) Index', '1HZ75V':'Volatility 75 (1s) Index',
+    '1HZ90V':'Volatility 90 (1s) Index', '1HZ100V':'Volatility 100 (1s) Index'
   });
-  const familyArtwork = Object.freeze({
-    'synthetic-indices': {src:'/static/images/market-families/synthetic-indices.svg', label:'Synthetic indices category artwork'},
-    cryptocurrency: {src:'/static/images/market-families/cryptocurrency.svg', label:'Cryptocurrency category artwork'},
-    commodities: {src:'/static/images/market-families/commodities.svg', label:'Commodities category artwork'},
-    'stocks-and-indices': {src:'/static/images/market-families/stocks-and-indices.svg', label:'Stocks and indices category artwork'}
-  });
-  const registry = Object.freeze({});
-
-  // Classification is intentionally separate from artwork mapping: identifying a
-  // market family never implies that an official logo exists for that instrument.
+  const cryptoAliases = Object.freeze({DOGEUSD:'DOGUSD', AVAXUSD:'AVAUSD', LINKUSD:'LNKUSD', DASHUSD:'DSHUSD'});
+  const commodityAliases = Object.freeze({UKOIL:'UK Brent Oil', USOIL:'US Oil'});
   const classify = instrument => {
     const text = [instrument.market, instrument.subMarket, instrument.symbolType, instrument.displayName].join(' ').toLowerCase();
     const symbol = instrument.symbol.toUpperCase();
+    if (/commodit|metal|energy|oil|gold|silver|palladium|platinum/.test(text) || /^(?:XAU|XAG|XPT|XPD|WTI|BRENT|NGAS|UKOIL|USOIL)/.test(symbol) || /^FRX(?:XAU|XAG|XPT|XPD|NGAS|UKOIL|USOIL)/.test(symbol)) return 'commodities';
     if (/\bforex\b|\bcurrency\b|foreign exchange/.test(text) || /^FRX[A-Z]{6}$/.test(symbol)) return 'forex';
-    if (/synthetic|derived|volatility|boom|crash|jump|step|range break/.test(text) || /^(?:R_\d+|1HZ\d+V|BOOM\d+|CRASH\d+|JUMP\d+|STEP\d+|RDBEAR|RDBULL)/.test(symbol)) return 'synthetic-indices';
+    if (/synthetic|derived|volatility|boom|crash|jump|step|range break/.test(text) || /^(?:R_\d+|RB_\d+|1HZ\d+V|BOOM\d+|CRASH\d+|JUMP\d+|STEP\d+|RDBEAR|RDBULL)/.test(symbol)) return 'synthetic-indices';
     if (/crypt|digital asset/.test(text) || /^(?:CRY|BTC|ETH|LTC|XRP|BCH|ADA|DOGE|SOL|DOT|BNB|TRX|AVAX|LINK|XLM|EOS|DASH|ZEC|XMR)[A-Z0-9/_-]*$/.test(symbol)) return 'cryptocurrency';
-    if (/commodit|metal|energy|oil|gas|gold|silver/.test(text) || /^(?:XAU|XAG|XPT|XPD|WTI|BRENT|NGAS|UKOIL|USOIL)/.test(symbol)) return 'commodities';
-    if (/stock|equity|share|indices|index/.test(text) || /^(?:STOCK|ETF|[A-Z]{1,5}\.[A-Z]{1,3})/.test(symbol)) return 'stocks-and-indices';
+    if (/stock|equity|share|indices|index|etf/.test(text) || /^(?:AAPL|STOCK|ETF|[A-Z]{1,5}\.[A-Z]{1,3})/.test(symbol)) return 'stocks-and-indices';
     return 'other';
   };
   const normalise = raw => {
@@ -53,33 +34,88 @@
     const subMarket = String(item.submarket || item.sub_market || item.subgroup || '').trim();
     return {symbol, displayName, symbolType, market, subMarket};
   };
+  const findOfficialAsset = instrument => {
+    const symbol = instrument.symbol.toUpperCase();
+    const family = classify(instrument);
+    const candidates = [];
+    const add = value => { const key = normaliseLabel(value); if (key && !candidates.includes(key)) candidates.push(key); };
+    add(instrument.displayName);
+    if (family === 'forex' || family === 'commodities') {
+      const ticker = symbol.replace(/^FRX/, '');
+      add(ticker);
+    } else if (family === 'cryptocurrency') {
+      const ticker = symbol.replace(/^CRY/, '');
+      add(cryptoAliases[ticker] || ticker);
+    } else if (family === 'synthetic-indices') {
+      add(syntheticNames[symbol]);
+    }
+    const eligible = entries.filter(item => item.market === family && item.url && item.url.endsWith('.svg'));
+    for (const candidate of candidates) {
+      const exact = eligible.filter(item => normaliseLabel(item.name) === candidate);
+      if (exact.length === 1) return exact[0];
+    }
+    // Display names can include an added "Index" suffix; only accept a unique longest-prefix match.
+    const displayKey = normaliseLabel(instrument.displayName);
+    if (displayKey) {
+      const matches = eligible.filter(item => {
+        const key = normaliseLabel(item.name);
+        return key && (displayKey.startsWith(key) || key.startsWith(displayKey));
+      }).sort((a,b) => normaliseLabel(b.name).length - normaliseLabel(a.name).length);
+      if (matches.length && (matches.length === 1 || normaliseLabel(matches[0].name).length > normaliseLabel(matches[1].name).length)) return matches[0];
+    }
+    return null;
+  };
   const resolve = raw => {
     const instrument = normalise(raw);
-    const entry = registry[instrument.symbol] || null;
     const family = classify(instrument);
-    // Deriv forex symbols use the frx + six-letter ISO currency pair convention.
-    const match = /^frx([A-Z]{6})$/i.exec(instrument.symbol);
-    const pair = match ? match[1].toUpperCase() : '';
-    const base = pair ? currencies[pair.slice(0, 3)] : null;
-    const quote = pair ? currencies[pair.slice(3, 6)] : null;
-    const forex = base && quote ? {type:'forex-pair', base, quote, source:'AlgoBot-authored SVG currency flags', licence:'Public-domain flag designs; artwork authored in-repository'} : null;
-    const familyAsset = familyArtwork[family] || null;
-    const asset = entry || forex || (familyAsset ? {...familyAsset, type:'family-icon', source:'AlgoBot-authored market-family SVG', licence:'Original artwork created for AlgoBot'} : null);
-    const status = entry ? 'verified' : forex ? 'mapped' : familyAsset ? 'category' : 'missing';
-    return {...instrument, family, asset, status, source: entry?.source || forex?.source || familyAsset?.source || null, licence: entry?.licence || forex?.licence || familyAsset?.licence || null};
+    const sourceAsset = findOfficialAsset(instrument);
+    const asset = sourceAsset ? {
+      src: sourceAsset.url,
+      label: sourceAsset.name,
+      source: sourceAsset.sourcePage,
+      licence: 'Official Deriv-hosted SVG; subject to Deriv terms and trademark rules',
+      type: 'symbol-svg',
+      artworkKind: 'deriv-official'
+    } : null;
+    return {...instrument, family, asset, status: asset ? 'verified' : 'missing',
+      source: asset?.source || null, licence: asset?.licence || null};
+  };
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const renderIcon = raw => {
+    const resolved = resolve(raw);
+    const label = resolved.displayName || resolved.symbol || 'Unknown instrument';
+    if (resolved.status === 'verified' && resolved.asset?.src) {
+      return '<img class="market-asset-verified" data-remote-market-asset data-symbol-fallback="' +
+        escapeHtml(String(resolved.symbol || '?').slice(0, 2)) + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" src="' +
+        escapeHtml(resolved.asset.src) + '" alt="' + escapeHtml(label) + '">';
+    }
+    const initials = String(label || resolved.symbol).split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase();
+    return '<span class="market-avatar market-avatar-unmapped" aria-hidden="true">' + escapeHtml(initials) + '</span>';
   };
   const coverage = instruments => {
     const rows = Array.from(instruments || [], resolve);
-    const verified = rows.filter(row => row.status === 'verified' || row.status === 'mapped').length;
-    const illustrated = rows.filter(row => row.status === 'verified' || row.status === 'mapped' || row.status === 'category').length;
+    const verified = rows.filter(row => row.status === 'verified').length;
     const byFamily = {};
     rows.forEach(row => {
       if (!byFamily[row.family]) byFamily[row.family] = {total: 0, mapped: 0, missing: 0};
       byFamily[row.family].total += 1;
-      if (row.status === 'verified' || row.status === 'mapped' || row.status === 'category') byFamily[row.family].mapped += 1;
+      if (row.status === 'verified') byFamily[row.family].mapped += 1;
       else byFamily[row.family].missing += 1;
     });
-    return {total: rows.length, verified, illustrated, missing: rows.length - illustrated, percent: rows.length ? Math.round(illustrated / rows.length * 10000) / 100 : 100, byFamily, missingSymbols: rows.filter(row => row.status === 'missing').map(row => ({symbol: row.symbol, family: row.family}))};
+    return {total: rows.length, verified, illustrated: verified, missing: rows.length - verified,
+      percent: rows.length ? Math.round(verified / rows.length * 10000) / 100 : 100,
+      byFamily, missingSymbols: rows.filter(row => row.status === 'missing').map(row => ({symbol: row.symbol, family: row.family}))};
   };
-  window.AlgoBotMarketAssets = Object.freeze({normalise, resolve, coverage, classify, registry, currencies});
+  if (typeof document !== 'undefined') {
+    document.addEventListener('error', event => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement) || !image.src.startsWith('https://cdn.prod.website-files.com/')) return;
+      const fallback = document.createElement('span');
+      fallback.className = 'market-avatar market-avatar-unmapped';
+      fallback.setAttribute('aria-hidden', 'true');
+      fallback.textContent = image.getAttribute('data-symbol-fallback') || String(image.alt || '?').trim().slice(0, 2) || '?';
+      image.replaceWith(fallback);
+    }, true);
+  }
+  window.AlgoBotMarketAssets = Object.freeze({normalise, resolve, renderIcon, coverage, classify, registry: Object.freeze({}), manifestEntries: entries});
 })();
