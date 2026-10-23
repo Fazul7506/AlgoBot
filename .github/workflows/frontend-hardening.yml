@@ -25,6 +25,14 @@ jobs:
       - name: Run frontend hygiene audit
         run: python scripts/frontend_audit.py
 
+      - name: Set up Node.js for market icon contract tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate official market icon registry contract
+        run: node static/js/market_asset_registry.test.js
+
       - name: Validate Django templates
         run: |
           python -m pip install --disable-pip-version-check -r requirements.txt
