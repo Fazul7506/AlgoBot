@@ -11,3 +11,5 @@
 .scanner-market-unmapped{display:grid;place-items:center;width:100%;height:100%;font-size:.68rem;font-weight:800;color:var(--text-secondary,currentColor);}
 .scanner-symbol-copy{display:flex;flex-direction:column;gap:2px;min-width:0;}
 .scanner-symbol-copy small{opacity:.72;}
+
+.market-artwork-coverage small{display:block;margin-top:4px;color:var(--muted);font-size:11px;line-height:1.4}.market-asset-category{object-fit:contain;padding:3px;box-sizing:border-box}@media(max-width:760px){.market-artwork-coverage{grid-column:1/-1}}
