@@ -51,7 +51,8 @@ assert(api.resolve({symbol:'cryXLMUSD'}).asset.src.endsWith('/stellar.svg'), 'De
 assert(api.resolve({symbol:'cryDOGEUSD'}).asset.src.endsWith('/dogecoin.svg'), 'Deriv Dogecoin symbol resolves to its exact local SVG');
 assert(api.resolve({symbol:'BTCUSD', market:'cryptocurrency'}).asset === null, 'unsupported aliases do not inherit a different symbol logo');
 assert(api.resolve({symbol:'XAUUSD', market:'commodities'}).asset === null, 'commodities remain unmapped until a verified symbol-specific asset exists');
-assert(api.resolve({symbol:'AAPL', market:'stock'}).asset === null, 'stocks remain unmapped until a verified symbol-specific asset exists');
+assert(api.resolve({symbol:'AAPL', market:'stock'}).status === 'authored' && api.resolve({symbol:'AAPL', market:'stock'}).asset.src.endsWith('/stocks/aapl.svg'), 'AAPL has distinct authored ticker artwork rather than a fabricated company logo');
+assert(api.resolve({symbol:'AAPL'}).family === 'stocks-and-indices', 'known AAPL ticker is classified as an equity even without catalogue metadata');
 const terminalSource = fs.readFileSync('static/js/trading_terminal.js', 'utf8');
 const scannerSource = fs.readFileSync('static/js/market_scanner.js', 'utf8');
 const predictionsSource = fs.readFileSync('static/js/predictions_workspace_fix.js', 'utf8');

@@ -64,3 +64,8 @@ The mapping remains explicit per symbol. Other currently active symbols, includi
 - `frxXAUUSD` — `static/images/market-assets/commodities/gold.svg` — original AlgoBot-authored gold illustration, not an official Deriv or commodity-provider logo.
 
 Precious-metal symbols with the `frx` prefix must be classified as commodities before the general forex-prefix rule. Other commodity symbols remain unmapped until exact catalogue symbols are confirmed and individually added.
+
+
+## Equity artwork
+
+- `AAPL` — `static/images/market-assets/stocks/aapl.svg` — original AlgoBot-authored ticker illustration, not an official Apple logo. The mapping covers this exact ticker only; other stocks and ETFs remain unmapped until exact symbols are confirmed against the active broker catalogue.
