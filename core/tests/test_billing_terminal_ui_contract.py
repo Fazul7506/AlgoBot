@@ -201,7 +201,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("const [models, preds] = await Promise.allSettled([", client)
         self.assertIn("Staff only", client, "The page must not misrepresent staff-only training job data as a user-accessible metric.")
         self.assertIn("new MutationObserver(() => cleanupLegacy())", client, "Legacy shell scripts must not reintroduce duplicate page headings.")
-        self.assertIn("ai-predictions-reliability-pr1", Path("templates/core/predictions.html").read_text(encoding="utf-8"))
+        self.assertIn("ai-predictions-reliability-pr2", Path("templates/core/predictions.html").read_text(encoding="utf-8"))
         self.assertNotIn("credentials:'same-origin'", client)
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("document.cookie.match", client)
