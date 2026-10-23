@@ -14,9 +14,9 @@ class DatabasePoolContractTests(SimpleTestCase):
             )
 
         self.assertEqual(options["pool"]["min_size"], 1)
-        self.assertEqual(options["pool"]["max_size"], 3)
+        self.assertEqual(options["pool"]["max_size"], 5)
         self.assertEqual(options["pool"]["max_lifetime"], 1800)
-        self.assertEqual(options["pool"]["timeout"], 20)
+        self.assertEqual(options["pool"]["timeout"], 30)
         self.assertNotIn("DISABLE_SERVER_SIDE_CURSORS", options)
         self.assertFalse(options["server_side_binding"])
 
