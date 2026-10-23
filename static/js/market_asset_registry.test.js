@@ -52,4 +52,11 @@ assert(api.resolve({symbol:'cryDOGEUSD'}).asset.src.endsWith('/dogecoin.svg'), '
 assert(api.resolve({symbol:'BTCUSD', market:'cryptocurrency'}).asset === null, 'unsupported aliases do not inherit a different symbol logo');
 assert(api.resolve({symbol:'XAUUSD', market:'commodities'}).asset === null, 'commodities remain unmapped until a verified symbol-specific asset exists');
 assert(api.resolve({symbol:'AAPL', market:'stock'}).asset === null, 'stocks remain unmapped until a verified symbol-specific asset exists');
+const terminalSource = fs.readFileSync('static/js/trading_terminal.js', 'utf8');
+const scannerSource = fs.readFileSync('static/js/market_scanner.js', 'utf8');
+const predictionsSource = fs.readFileSync('static/js/predictions_workspace_fix.js', 'utf8');
+assert(terminalSource.includes("resolved?.status==='authored'"), 'trading terminal renders authored market artwork');
+assert(scannerSource.includes("asset?.status === 'authored'"), 'market scanner renders authored market artwork');
+assert(predictionsSource.includes("resolved?.status === 'authored'"), 'AI Predictions renders authored market artwork');
+assert(fs.readFileSync('templates/core/trading.html', 'utf8').includes('market_asset_registry.js'), 'trading template loads shared market asset registry');
 console.log('market asset registry contract tests passed');
