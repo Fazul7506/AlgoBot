@@ -17,7 +17,7 @@ assert(pair.asset.base.flag.endsWith('/eur.svg') && pair.asset.quote.flag.endsWi
 const report = api.coverage([
   {underlying_symbol:'frxEURUSD', market:'forex'},
   {symbol:'R_100'},
-  {symbol:'BTCUSD', market:'cryptocurrency'},
+  {symbol:'cryBTCUSD', market:'cryptocurrency'},
   {symbol:'XAUUSD', market:'commodities'},
   {symbol:'AAPL', market:'stock'}
 ]);
