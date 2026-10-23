@@ -60,6 +60,7 @@
     "RB_200": {src:"/static/images/market-assets/synthetic/rb-200.svg", label:"Range Break 200 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
     "BOOM1000": {src:"/static/images/market-assets/synthetic/boom1000.svg", label:"Boom 1000 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
     "CRASH1000": {src:"/static/images/market-assets/synthetic/crash1000.svg", label:"Crash 1000 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "frxXAUUSD": {src:"/static/images/market-assets/commodities/gold.svg", label:"Gold vs US Dollar", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv or commodity-provider logo'},
   });
   const allRegistry = Object.freeze({...registry, ...authoredRegistry, ...additionalAuthoredRegistry});
 
@@ -68,6 +69,7 @@
   const classify = instrument => {
     const text = [instrument.market, instrument.subMarket, instrument.symbolType, instrument.displayName].join(' ').toLowerCase();
     const symbol = instrument.symbol.toUpperCase();
+    if (/commodit|metal|energy|oil|gold|silver/.test(text) || /^(?:XAU|XAG|XPT|XPD|WTI|BRENT|NGAS|UKOIL|USOIL)/.test(symbol) || /^FRX(?:XAU|XAG|XPT|XPD)/.test(symbol)) return 'commodities';
     if (/\bforex\b|\bcurrency\b|foreign exchange/.test(text) || /^FRX[A-Z]{6}$/.test(symbol)) return 'forex';
     if (/synthetic|derived|volatility|boom|crash|jump|step|range break/.test(text) || /^(?:R_\d+|RB_\d+|1HZ\d+V|BOOM\d+|CRASH\d+|JUMP\d+|STEP\d+|RDBEAR|RDBULL)/.test(symbol)) return 'synthetic-indices';
     if (/crypt|digital asset/.test(text) || /^(?:CRY|BTC|ETH|LTC|XRP|BCH|ADA|DOGE|SOL|DOT|BNB|TRX|AVAX|LINK|XLM|EOS|DASH|ZEC|XMR)[A-Z0-9/_-]*$/.test(symbol)) return 'cryptocurrency';

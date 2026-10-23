@@ -57,3 +57,10 @@ Recent Deriv API product notes identify new 1-second volatility indices and addi
 | `CRASH1000` | `static/images/market-assets/synthetic/crash1000.svg` |
 
 The mapping remains explicit per symbol. Other currently active symbols, including other Crash/Boom variants, are not covered by these mappings unless separately listed in the registry.
+
+
+## Commodity artwork
+
+- `frxXAUUSD` — `static/images/market-assets/commodities/gold.svg` — original AlgoBot-authored gold illustration, not an official Deriv or commodity-provider logo.
+
+Precious-metal symbols with the `frx` prefix must be classified as commodities before the general forex-prefix rule. Other commodity symbols remain unmapped until exact catalogue symbols are confirmed and individually added.

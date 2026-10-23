@@ -38,6 +38,8 @@ assert(api.resolve({symbol:'AAPL', market:'stock'}).family === 'stocks-and-indic
 assert(report.missingSymbols.length === 2, 'unmapped symbols are explicitly reported as missing artwork');
 assert(api.resolve({symbol:'R_100'}).status === 'authored' && api.resolve({symbol:'R_100'}).asset.src.endsWith('/r-100.svg'), 'known synthetic instruments receive distinct authored artwork');
 assert(api.resolve({symbol:'RB_100'}).family === 'synthetic-indices', 'Range Break symbols are classified as synthetic indices without catalogue metadata');
+assert(api.resolve({symbol:'frxXAUUSD', market:'commodities'}).family === 'commodities', 'Deriv precious-metal symbols are classified as commodities before the forex prefix rule');
+assert(api.resolve({symbol:'frxXAUUSD', market:'commodities'}).status === 'authored' && api.resolve({symbol:'frxXAUUSD'}).asset.src.endsWith('/commodities/gold.svg'), 'gold symbol resolves to its own authored SVG');
 assert(api.resolve({symbol:'cryBTCUSD', market:'cryptocurrency'}).status === 'verified' && api.resolve({symbol:'cryBTCUSD'}).asset.src.endsWith('/bitcoin.svg'), 'Deriv Bitcoin symbol resolves to its exact local SVG');
 assert(api.resolve({symbol:'cryETHUSD'}).asset.src.endsWith('/ethereum.svg'), 'Deriv Ethereum symbol resolves to its exact local SVG');
 assert(api.resolve({symbol:'cryLTCUSD'}).asset.src.endsWith('/litecoin.svg'), 'Deriv Litecoin symbol resolves to its exact local SVG');
