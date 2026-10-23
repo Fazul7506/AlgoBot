@@ -79,6 +79,7 @@ for (const instrument of [
   {symbol:'JD75', display_name:'Jump 75 Index', market:'synthetic'},
   {symbol:'JD100', display_name:'Jump 100 Index', market:'synthetic'},
   {symbol:'RB_100', display_name:'Range Break 100 Index', market:'synthetic'},
+  {symbol:'STP100', display_name:'Step Index', market:'synthetic'},
   {symbol:'STP200', display_name:'Step 200 Index', market:'synthetic'},
   {symbol:'STP300', display_name:'Step 300 Index', market:'synthetic'},
   {symbol:'STP400', display_name:'Step 400 Index', market:'synthetic'},
