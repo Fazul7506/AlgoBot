@@ -245,3 +245,13 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Registry-backed market artwork in the trading terminal watchlist. */
+.terminal-watch-artwork{display:inline-flex;align-items:center;justify-content:center;flex:0 0 34px;width:34px;height:28px;overflow:hidden;border-radius:7px;background:var(--surface-raised,rgba(127,127,127,.12));}
+.terminal-market-pair{display:inline-flex;align-items:center;justify-content:center;gap:2px;width:100%;height:100%;}
+.terminal-market-pair img{display:block;width:15px;height:15px;object-fit:cover;border-radius:50%;border:1px solid rgba(127,127,127,.3);}
+.terminal-market-art{display:block;max-width:100%;max-height:100%;object-fit:contain;}
+.terminal-market-unmapped{display:grid;place-items:center;width:100%;height:100%;font-size:.68rem;font-weight:800;letter-spacing:.02em;color:var(--text-secondary,currentColor);}
+.terminal-watch-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px;}
+.terminal-watch-copy strong,.terminal-watch-copy small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.terminal-watch-copy small{font-size:.72rem;opacity:.7;}
