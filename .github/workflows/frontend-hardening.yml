@@ -30,10 +30,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Require official SVG coverage for every active Deriv instrument
-        env:
-          DERIV_SYMBOL_AUDIT_TIMEOUT_MS: '20000'
-        run: node scripts/audit_deriv_market_assets.js --strict
+      - name: Validate official market icon registry contract
+        run: node static/js/market_asset_registry.test.js
 
       - name: Validate Django templates
         run: |
