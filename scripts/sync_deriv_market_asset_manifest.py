@@ -50,8 +50,8 @@ def validate_svg_asset(url):
     )
     with urllib.request.urlopen(request, timeout=20) as response:
         content_type = response.headers.get("Content-Type", "").lower()
-        sample = response.read(16384).decode("utf-8", "replace").lstrip("\\ufeff\\x00 \\t\\r\\n")
-    if "text/html" in content_type or not re.search(r"<svg(?:\\s|>)", sample, re.I):
+        sample = response.read(16384).decode("utf-8", "replace").lstrip("\ufeff\x00 \t\r\n")
+    if "text/html" in content_type or not re.search(r"<svg(?:\s|>)", sample, re.I):
         raise ValueError("Official asset did not return SVG markup: " + url)
 
 
