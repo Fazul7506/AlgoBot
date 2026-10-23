@@ -1,17 +1,34 @@
 /* AlgoBot symbol-aware market asset registry.
- * Only entries with a verified local asset and recorded provenance are rendered as verified.
- * Unknown symbols are reported as missing; they must never be silently marked as official logos.
+ * Local currency flags are authored SVG assets; they are market-identification artwork,
+ * not Deriv-provided official logos. Unknown instruments remain explicitly unmapped.
  */
 (() => {
   'use strict';
-  const registry = Object.freeze({
-    // Initial verified, locally bundled artwork mappings are added by market category.
-    // Keep this registry exact-symbol keyed: never infer a brand from a substring.
+  const currencies = Object.freeze({
+    EUR: {name:'Euro area', flag:'/static/images/market-flags/eur.svg'},
+    USD: {name:'United States dollar', flag:'/static/images/market-flags/usd.svg'},
+    GBP: {name:'British pound', flag:'/static/images/market-flags/gbp.svg'},
+    JPY: {name:'Japanese yen', flag:'/static/images/market-flags/jpy.svg'},
+    AUD: {name:'Australian dollar', flag:'/static/images/market-flags/aud.svg'},
+    NZD: {name:'New Zealand dollar', flag:'/static/images/market-flags/nzd.svg'},
+    CAD: {name:'Canadian dollar', flag:'/static/images/market-flags/cad.svg'},
+    CHF: {name:'Swiss franc', flag:'/static/images/market-flags/chf.svg'},
+    CNY: {name:'Chinese yuan', flag:'/static/images/market-flags/cny.svg'},
+    SEK: {name:'Swedish krona', flag:'/static/images/market-flags/sek.svg'},
+    NOK: {name:'Norwegian krone', flag:'/static/images/market-flags/nok.svg'},
+    DKK: {name:'Danish krone', flag:'/static/images/market-flags/dkk.svg'},
+    SGD: {name:'Singapore dollar', flag:'/static/images/market-flags/sgd.svg'},
+    HKD: {name:'Hong Kong dollar', flag:'/static/images/market-flags/hkd.svg'},
+    ZAR: {name:'South African rand', flag:'/static/images/market-flags/zar.svg'},
+    MXN: {name:'Mexican peso', flag:'/static/images/market-flags/mxn.svg'},
+    PLN: {name:'Polish złoty', flag:'/static/images/market-flags/pln.svg'},
+    TRY: {name:'Turkish lira', flag:'/static/images/market-flags/try.svg'}
   });
+  const registry = Object.freeze({});
   const normalise = raw => {
     const item = typeof raw === 'string' ? {symbol: raw} : (raw || {});
-    const symbol = String(item.underlying_symbol || item.symbol || item.underlyingSymbol || '').trim();
-    const displayName = String(item.underlying_symbol_name || item.display_name || item.displayName || symbol).trim();
+    const symbol = String(item.underlying_symbol || item.symbol || item.underlyingSymbol || item.code || '').trim();
+    const displayName = String(item.underlying_symbol_name || item.display_name || item.displayName || item.name || symbol).trim();
     const symbolType = String(item.underlying_symbol_type || item.symbol_type || item.symbolType || '').trim();
     const market = String(item.market || item.market_type || item.asset_class || '').trim();
     const subMarket = String(item.submarket || item.sub_market || item.subgroup || '').trim();
@@ -20,12 +37,18 @@
   const resolve = raw => {
     const instrument = normalise(raw);
     const entry = registry[instrument.symbol] || null;
-    return { ...instrument, asset: entry, status: entry ? 'verified' : 'missing', source: entry?.source || null, licence: entry?.licence || null };
+    // Deriv forex symbols use the frx + six-letter ISO currency pair convention.
+    const match = /^frx([A-Z]{6})$/i.exec(instrument.symbol);
+    const pair = match ? match[1].toUpperCase() : '';
+    const base = pair ? currencies[pair.slice(0, 3)] : null;
+    const quote = pair ? currencies[pair.slice(3, 6)] : null;
+    const forex = base && quote ? {type:'forex-pair', base, quote, source:'AlgoBot-authored SVG currency flags', licence:'Public-domain flag designs; artwork authored in-repository'} : null;
+    return {...instrument, asset: entry || forex, status: entry ? 'verified' : forex ? 'mapped' : 'missing', source: entry?.source || forex?.source || null, licence: entry?.licence || forex?.licence || null};
   };
   const coverage = instruments => {
     const rows = Array.from(instruments || [], resolve);
-    const verified = rows.filter(row => row.status === 'verified').length;
+    const verified = rows.filter(row => row.status === 'verified' || row.status === 'mapped').length;
     return {total: rows.length, verified, missing: rows.length - verified, percent: rows.length ? Math.round(verified / rows.length * 10000) / 100 : 100, missingSymbols: rows.filter(row => row.status === 'missing').map(row => row.symbol)};
   };
-  window.AlgoBotMarketAssets = Object.freeze({normalise, resolve, coverage, registry});
+  window.AlgoBotMarketAssets = Object.freeze({normalise, resolve, coverage, registry, currencies});
 })();
