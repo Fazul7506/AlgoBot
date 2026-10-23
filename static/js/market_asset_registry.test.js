@@ -50,11 +50,11 @@ for (const symbol of ['RDBULL','RDBEAR','RB_100','RB_200','CRASH1000','AAPL','CR
   assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped instead of receiving a fabricated or unrelated icon');
   assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback');
 }
-for (const [symbol, name] of [['WLDEUR','EUR Basket'],['WLDGBP','GBP Basket'],['WLDUSD','USD Basket'],['WLDXAU','Gold Basket']]) {
+for (const [symbol, name, suffix] of [['WLDEUR','EUR Basket','bpNanTKWJ5JDU6Sydc9D.svg'],['WLDGBP','GBP Basket','WmaK2jWb4kU2uA5pN5St.svg'],['WLDUSD','USD Basket','pyyuRjcSgsPjHKFiQofK.svg'],['WLDXAU','Gold Basket','eDGZPTkJwKGPEcSkN95s.svg']]) {
   const basket = api.resolve({underlying_symbol:symbol, underlying_symbol_name:name, underlying_symbol_type:'forex_basket', market:'basket_index', submarket:'forex_basket'});
   assert(basket.family === 'basket-indices', symbol + ' is classified as a basket index');
-  assert(basket.status === 'missing', symbol + ' must not borrow AUD Basket artwork without its own verified official source');
-  assert(api.renderIcon({underlying_symbol:symbol, underlying_symbol_name:name, underlying_symbol_type:'forex_basket', market:'basket_index', submarket:'forex_basket'}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback until its official SVG is verified');
+  assert(basket.status === 'verified', symbol + ' resolves to its official basket SVG');
+  assert(basket.asset.src.endsWith(suffix), symbol + ' uses its exact instrument catalogue asset');
 }
 const audBasket = api.resolve({underlying_symbol:'WLDAUD', underlying_symbol_name:'AUD Basket', underlying_symbol_type:'forex_basket', market:'basket_index', submarket:'forex_basket'});
 assert(audBasket.family === 'basket-indices', 'Deriv AUD Basket uses the basket-index family');
@@ -74,19 +74,35 @@ for (const [symbol, name] of [['BOOM100','Boom 100 Index'],['BOOM1000','Boom 100
 // official instrument-specific SVG is unavailable; never borrow a different family's art.
 for (const instrument of [
   {symbol:'JD10', display_name:'Jump 10 Index', market:'synthetic'},
-  {symbol:'STP100', display_name:'Step 100 Index', market:'synthetic'},
+  {symbol:'JD25', display_name:'Jump 25 Index', market:'synthetic'},
+  {symbol:'JD50', display_name:'Jump 50 Index', market:'synthetic'},
+  {symbol:'JD75', display_name:'Jump 75 Index', market:'synthetic'},
+  {symbol:'JD100', display_name:'Jump 100 Index', market:'synthetic'},
   {symbol:'RB_100', display_name:'Range Break 100 Index', market:'synthetic'},
+  {symbol:'STP200', display_name:'Step 200 Index', market:'synthetic'},
+  {symbol:'STP300', display_name:'Step 300 Index', market:'synthetic'},
+  {symbol:'STP400', display_name:'Step 400 Index', market:'synthetic'},
+  {symbol:'STP500', display_name:'Step 500 Index', market:'synthetic'},
+  {symbol:'MULTISTEP2', display_name:'Multi Step 2 Index', market:'synthetic'},
+  {symbol:'DEX1500UP', display_name:'DEX 1500 UP Index', market:'synthetic'},
+  {symbol:'DRIFT_SWITCH_30', display_name:'Drift Switch Index 30', market:'synthetic'}
+]) {
+  const resolved = api.resolve(instrument);
+  assert(resolved.family === 'synthetic-indices', instrument.symbol + ' is classified as synthetic');
+  assert(resolved.status === 'verified', instrument.symbol + ' resolves to a source-verified official Deriv SVG');
+  assert(resolved.asset.src.startsWith('https://media.ffycdn.net/eu/deriv/'), instrument.symbol + ' uses the official Deriv media CDN');
+}
+for (const instrument of [
   {symbol:'HYBRID100', display_name:'Hybrid 100 Index', market:'synthetic'},
   {symbol:'RDBULL', display_name:'Daily Reset Bull Index', market:'synthetic'},
-  {symbol:'MULTISTEP2', display_name:'Multi Step 2 Index', market:'synthetic'},
   {symbol:'TREK_UP', display_name:'Trek Up Index', market:'synthetic'},
   {symbol:'SKEWSTEP2', display_name:'Skew Step 2 Index', market:'synthetic'},
   {symbol:'VSWITCH10', display_name:'Volatility Switch 10 Index', market:'synthetic'}
 ]) {
   const resolved = api.resolve(instrument);
   assert(resolved.family === 'synthetic-indices', instrument.symbol + ' is classified as synthetic');
-  assert(resolved.status === 'missing', instrument.symbol + ' must not receive an unverified or unrelated SVG');
-  assert(api.renderIcon(instrument).includes('market-avatar-unmapped'), instrument.symbol + ' receives neutral fallback until its official SVG is verified');
+  assert(resolved.status === 'missing', instrument.symbol + ' must not receive shared generic or unverified artwork');
+  assert(api.renderIcon(instrument).includes('market-avatar-unmapped'), instrument.symbol + ' receives neutral fallback until instrument-specific official artwork is verified');
 }
 const syncScript = fs.readFileSync('scripts/sync_deriv_market_asset_manifest.py','utf8');
 assert(syncScript.includes('load_existing_official_media_entries'), 'manifest sync preserves manually verified modern Deriv synthetic SVG entries');
