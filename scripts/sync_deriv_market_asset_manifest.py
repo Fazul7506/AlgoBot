@@ -38,6 +38,23 @@ def normalise_name(name):
     return re.sub(r"[^A-Z0-9]", "", name.upper())
 
 
+def validate_svg_asset(url):
+    """Fetch an official catalogue asset and reject HTML/error pages masquerading as SVG."""
+    if not (
+        url.startswith(OFFICIAL_WEBFLOW_PREFIX)
+        or url.startswith(OFFICIAL_DERIV_MEDIA_PREFIX)
+    ) or not url.lower().endswith(".svg"):
+        raise ValueError("Unapproved official SVG URL: " + url)
+    request = urllib.request.Request(
+        url, headers={"User-Agent": USER_AGENT, "Accept": "image/svg+xml"}
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        content_type = response.headers.get("Content-Type", "").lower()
+        sample = response.read(16384).decode("utf-8", "replace").lstrip("\\ufeff\\x00 \\t\\r\\n")
+    if "text/html" in content_type or not re.search(r"<svg(?:\\s|>)", sample, re.I):
+        raise ValueError("Official asset did not return SVG markup: " + url)
+
+
 def load_existing_official_media_entries():
     """Retain verified modern synthetic SVG URLs not emitted by the legacy scraper."""
     if not OUTPUT.exists():
@@ -122,9 +139,14 @@ def main():
         if not (item["market"] == "stocks-and-indices" and counts[item["url"]] > 1)
     ]
     entries.sort(key=lambda item: (item["market"], item["name"]))
+    # Verify the actual response for each distinct URL before publishing metadata.
+    # Repeated URLs are intentionally not silently rewritten: visual identity must be
+    # audited against the official catalogue rather than guessed from a filename.
+    for asset_url in sorted({item["url"] for item in entries}):
+        validate_svg_asset(asset_url)
+
     payload = {
         "source": "Official Deriv market catalogue pages",
-        "generatedAt": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
         "entries": entries,
     }
     OUTPUT.write_text(
