@@ -27,7 +27,7 @@
     // The prediction page owns its only visible title. Some legacy shell scripts
     // insert a second heading after DOMContentLoaded, so clean both existing and
     // subsequently-added legacy title nodes without touching this page/sidebar.
-    document.querySelectorAll('.enterprise-page__workspace,.module-workspace,.workspace-banner,.enterprise-hero,.page-heading,.enterprise-page__header,.page-header,[data-page-heading],[data-enterprise-page-title]').forEach(node => {
+    document.querySelectorAll('.enterprise-page__workspace,.module-workspace,.workspace-banner,.enterprise-hero,.page-heading,.page-title,.enterprise-page__header,.page-header,[data-page-heading],[data-enterprise-page-title]').forEach(node => {
       if (node.closest('[data-page="core-predictions"]')) return;
       const text = (node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
       if (/^(prediction engine|ai prediction center|ai predictions)(\s|$)|workspace is ready|use the live module controls/.test(text)) node.remove();
@@ -134,8 +134,8 @@
       select.innerHTML='<option value="">Loading connected broker instruments…</option>';
       const timeout = new Promise((_,reject)=>setTimeout(()=>reject(new Error('Instrument catalogue request timed out')),12000));
       try {
-        const d=await Promise.race([getJSON('/api/market/symbols/?limit=500'),timeout]);
-        const instruments=Array.isArray(d.symbols)?d.symbols:list(d);
+        const d=await Promise.race([getJSON('/api/market/broker-catalogue/?limit=500'),timeout]);
+        const instruments=Array.isArray(d?.symbols)?d.symbols:list(d);
         const current=select.value;
         select.innerHTML='<option value="">Choose a broker instrument</option>'+instruments.map(x=>({symbol:String(x.symbol||''),name:String(x.display_name||x.name||x.symbol||''),market:String(x.market||x.sub_market||'Market')})).filter(x=>x.symbol).map(x=>'<option value="'+esc(x.symbol)+'">'+esc(x.name)+' · '+esc(x.market)+' ('+esc(x.symbol)+')</option>').join('');
         if(current && instruments.some(x=>x.symbol===current))select.value=current;
