@@ -12,3 +12,9 @@ The SVG files in `crypto/` are copied from [Simple Icons](https://github.com/sim
 | `CRYDOGEUSD` | Dogecoin | https://cryptologos.cc/dogecoin |
 | `CRYSOLUSD` | Solana | https://solana.com/branding |
 | `CRYXRPUSD` | Ripple | https://www.ripple.com/media-kit/ |
+
+| `CRYADAUSD` | Cardano | https://cardano.org/brand-assets/ |
+| `CRYDOTUSD` | Polkadot | https://polkadot.network/brand-assets/ |
+| `CRYBNBUSD` | Binance | https://binance.com |
+| `CRYLINKUSD` | Chainlink | https://chain.link/brand-assets |
+| `CRYXLMUSD` | Stellar | https://stellar.org/brand-resources |

@@ -31,6 +31,11 @@
     "CRYDOGEUSD": {src:'/static/images/market-assets/crypto/dogecoin.svg', label:"Dogecoin", source:"https://cryptologos.cc/dogecoin", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
     "CRYSOLUSD": {src:'/static/images/market-assets/crypto/solana.svg', label:"Solana", source:"https://solana.com/branding", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
     "CRYXRPUSD": {src:'/static/images/market-assets/crypto/ripple.svg', label:"Ripple", source:"https://www.ripple.com/media-kit/", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
+    "CRYADAUSD": {src:'/static/images/market-assets/crypto/cardano.svg', label:"Cardano", source:"https://cardano.org/brand-assets/", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
+    "CRYDOTUSD": {src:'/static/images/market-assets/crypto/polkadot.svg', label:"Polkadot", source:"https://polkadot.network/brand-assets/", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
+    "CRYBNBUSD": {src:'/static/images/market-assets/crypto/binance.svg', label:"Binance", source:"https://binance.com", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
+    "CRYLINKUSD": {src:'/static/images/market-assets/crypto/chainlink.svg', label:"Chainlink", source:"https://chain.link/brand-assets", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
+    "CRYXLMUSD": {src:'/static/images/market-assets/crypto/stellar.svg', label:"Stellar", source:"https://stellar.org/brand-resources", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
   });
 
   // Classification is intentionally separate from artwork mapping: identifying a

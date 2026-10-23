@@ -34,6 +34,11 @@ assert(api.resolve({symbol:'R_100'}).asset === null && api.resolve({symbol:'R_10
 assert(api.resolve({symbol:'cryBTCUSD', market:'cryptocurrency'}).status === 'verified' && api.resolve({symbol:'cryBTCUSD'}).asset.src.endsWith('/bitcoin.svg'), 'Deriv Bitcoin symbol resolves to its exact local SVG');
 assert(api.resolve({symbol:'cryETHUSD'}).asset.src.endsWith('/ethereum.svg'), 'Deriv Ethereum symbol resolves to its exact local SVG');
 assert(api.resolve({symbol:'cryLTCUSD'}).asset.src.endsWith('/litecoin.svg'), 'Deriv Litecoin symbol resolves to its exact local SVG');
+assert(api.resolve({symbol:'cryADAUSD'}).asset.src.endsWith('/cardano.svg'), 'Deriv Cardano symbol resolves to its exact local SVG');
+assert(api.resolve({symbol:'cryDOTUSD'}).asset.src.endsWith('/polkadot.svg'), 'Deriv Polkadot symbol resolves to its exact local SVG');
+assert(api.resolve({symbol:'cryBNBUSD'}).asset.src.endsWith('/binance.svg'), 'Deriv BNB symbol resolves to its exact local SVG');
+assert(api.resolve({symbol:'cryLINKUSD'}).asset.src.endsWith('/chainlink.svg'), 'Deriv Chainlink symbol resolves to its exact local SVG');
+assert(api.resolve({symbol:'cryXLMUSD'}).asset.src.endsWith('/stellar.svg'), 'Deriv Stellar symbol resolves to its exact local SVG');
 assert(api.resolve({symbol:'cryDOGEUSD'}).asset.src.endsWith('/dogecoin.svg'), 'Deriv Dogecoin symbol resolves to its exact local SVG');
 assert(api.resolve({symbol:'BTCUSD', market:'cryptocurrency'}).asset === null, 'unsupported aliases do not inherit a different symbol logo');
 assert(api.resolve({symbol:'XAUUSD', market:'commodities'}).asset === null, 'commodities remain unmapped until a verified symbol-specific asset exists');
