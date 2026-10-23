@@ -45,7 +45,7 @@ class DatabaseConnectionSettingsTests(TestCase):
             )
             self.assertEqual(options["server_side_binding"], False)
             self.assertNotIn("DISABLE_SERVER_SIDE_CURSORS", options)
-            self.assertEqual(options["pool"]["max_size"], 3)
+            self.assertEqual(options["pool"]["max_size"], 5)
 
     def test_pool_cursor_setting_belongs_to_database_config(self):
         with patch.dict(os.environ, {"DJANGO_ENV": "production"}, clear=False):
