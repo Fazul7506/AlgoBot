@@ -118,7 +118,7 @@
   if (typeof document !== 'undefined') {
     document.addEventListener('error', event => {
       const image = event.target;
-      if (!(image instanceof HTMLImageElement) || !image.src.startsWith('https://cdn.prod.website-files.com/')) return;
+      if (!(image instanceof HTMLImageElement) || !(image.src.startsWith('https://cdn.prod.website-files.com/') || image.src.startsWith('https://media.ffycdn.net/eu/deriv/'))) return;
       const fallback = document.createElement('span');
       fallback.className = 'market-avatar market-avatar-unmapped';
       fallback.setAttribute('aria-hidden', 'true');
