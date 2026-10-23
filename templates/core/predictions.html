@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}AI prediction center | AlgoBot{% endblock %}
-{% block content %}<h1 class="sr-only">Prediction engine</h1>
-{% include "components/enterprise_page.html" with title="AI prediction center" module="AI" page_id="core-predictions" %}
+{% block title %}AI Predictions | AlgoBot{% endblock %}
+{% block content %}
+<section class="ai-predictions-page" data-module="AI" data-page="core-predictions" data-page-id="core-predictions" aria-label="AI Predictions workspace">
+  <h1 class="sr-only">AI Predictions</h1>
+</section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/predictions_workspace_fix.js' %}?v=20261023-predictions-dashboard" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/predictions_workspace_fix.js' %}?v=20261023-reference-redesign1" defer></script>{% endblock %}
