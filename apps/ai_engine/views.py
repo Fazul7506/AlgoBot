@@ -115,6 +115,26 @@ def model_governance(request):
         "mean_confidence": round(float(resolved.aggregate(v=Avg("prediction__confidence"))["v"] or 0), 6) if total else None,
         "status": "available" if total else "insufficient_data",
     }
+    seven_day_cutoff = timezone.now() - timedelta(days=7)
+    recent_predictions = Prediction.objects.filter(created_at__gte=seven_day_cutoff)
+    recent_outcomes = PredictionOutcome.objects.filter(
+        prediction__in=recent_predictions,
+        resolved_at__isnull=False,
+        correct__isnull=False,
+    )
+    recent_outcome_count = recent_outcomes.count()
+    recent_correct_count = recent_outcomes.filter(correct=True).count()
+    recent_avg_return = recent_outcomes.aggregate(v=Avg("actual_return"))["v"] if recent_outcome_count else None
+    recent_avg_confidence = recent_outcomes.aggregate(v=Avg("prediction__confidence"))["v"] if recent_outcome_count else None
+    performance_7d = {
+        "total_signals": recent_predictions.count(),
+        "correct_signals": recent_correct_count if recent_outcome_count else None,
+        "resolved_signals": recent_outcome_count,
+        "accuracy": round(recent_correct_count / recent_outcome_count, 6) if recent_outcome_count else None,
+        "average_confidence": round(float(recent_avg_confidence), 6) if recent_avg_confidence is not None else None,
+        "average_return": round(float(recent_avg_return), 6) if recent_avg_return is not None else None,
+        "status": "available" if recent_outcome_count else "insufficient_data",
+    }
     latest_features = FeatureVector.objects.filter(timestamp__gte=recent_cutoff).count()
     previous_features = FeatureVector.objects.filter(timestamp__lt=recent_cutoff, timestamp__gte=recent_cutoff - timedelta(days=30)).count()
     drift = {
@@ -126,6 +146,7 @@ def model_governance(request):
         "models": AIModelSerializer(AIModel.objects.all(), many=True).data,
         "versions": ModelVersionSerializer(versions, many=True).data,
         "calibration": calibration,
+        "performance_7d": performance_7d,
         "drift": drift,
         "governance": {"live_trading_authority": False, "role": "research_and_advisory"},
     })
