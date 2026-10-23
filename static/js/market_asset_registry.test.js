@@ -50,8 +50,8 @@ for (const symbol of ['RDBULL','RDBEAR','RB_100','RB_200','CRASH1000','AAPL','CR
   assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped instead of receiving a fabricated or unrelated icon');
   assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback');
 }
-const audBasket = api.resolve({symbol:'AUD_BASKET', display_name:'AUD Basket', market:'synthetic'});
-assert(audBasket.family === 'synthetic-indices', 'AUD Basket is classified as synthetic');
+const audBasket = api.resolve({underlying_symbol:'WLDAUD', underlying_symbol_name:'AUD Basket', underlying_symbol_type:'forex_basket', market:'basket_index', submarket:'forex_basket'});
+assert(audBasket.family === 'basket-indices', 'Deriv AUD Basket uses the basket-index family');
 assert(audBasket.status === 'verified', 'AUD Basket resolves to its official catalogue SVG');
 assert(audBasket.asset.src === 'https://media.ffycdn.net/eu/deriv/ko79afRJyfjSUyZqXK5a.svg', 'AUD Basket uses the exact official Deriv SVG source');
 for (const [symbol, name] of [['BOOM1000','Boom 1000 Index'],['BOOM300','Boom 300 Index'],['CRASH500','Crash 500 Index'],['DEX1500UP','DEX 1500 UP Index'],['DRIFT_SWITCH_10','Drift Switch Index 10']]) {
