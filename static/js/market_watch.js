@@ -119,6 +119,20 @@
     if (fav) fav.textContent = rows.filter(row => favourites.has(row.symbol)).length;
     if (live) live.textContent = [...quotes.values()].filter(q => q.state === 'live').length;
     if (markets) markets.textContent = new Set(rows.map(row => row.market).filter(Boolean)).size;
+    const coverageValue = $('[data-market-artwork-coverage]');
+    const coverageDetail = $('[data-market-artwork-detail]');
+    if (coverageValue || coverageDetail) {
+      const coverage = window.AlgoBotMarketAssets?.coverage?.(rows);
+      if (coverageValue) coverageValue.textContent = coverage ? coverage.percent + '%' : '—';
+      if (coverageDetail && coverage) {
+        const families = Object.entries(coverage.byFamily || {})
+          .filter(([family]) => family !== 'other')
+          .map(([family, value]) => family.replace(/-/g, ' ') + ': ' + value.mapped + '/' + value.total);
+        coverageDetail.textContent = coverage.total
+          ? coverage.illustrated + '/' + coverage.total + ' illustrated · ' + coverage.verified + ' instrument-specific · ' + coverage.missing + ' without artwork' + (families.length ? ' · ' + families.join(' · ') : '')
+          : 'Waiting for active instruments';
+      }
+    }
   };
 
   const render = message => {
