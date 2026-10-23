@@ -1,5 +1,0 @@
-# Production-only dependencies layered on the shared base requirements.
--r base.txt
-psycopg[binary,pool]
-sentry-sdk
-gunicorn
