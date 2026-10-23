@@ -37,17 +37,57 @@
         return `<article class="ai-model"><strong>${esc(m.name)}</strong><div>v${esc(m.version)} · ${esc(m.algorithm)}</div><div>Status: <span class="ai-badge">${esc(m.status)}</span></div><div>Accuracy: ${metric(m.accuracy)}</div><div>Precision: ${metric(m.precision)}</div><div>Recall: ${metric(m.recall)}</div><div>F1: ${metric(m.f1_score)}</div><div>AUC: ${metric(m.auc)}</div></article>`;
       }).join('') : '<p class="ai-note">No registered models yet. Train and validate a model before treating predictions as actionable.</p>';
     }
+    const validConfidence = p => p.confidence != null && p.confidence !== '' && Number.isFinite(Number(p.confidence));
+    const modeled = ps.filter(p => Number(p.payload?.models_used || 0) > 0);
+    const high = modeled.filter(p => validConfidence(p) && Number(p.confidence) >= 70);
+    set('[data-ai-high]', predictionOk ? String(high.length) : 'Unavailable');
+    set('[data-ai-high-note]', predictionOk ? (modeled.length ? Math.round(high.length / modeled.length * 100) + '% of model-backed outputs' : 'No model-backed outputs yet') : 'Prediction API unavailable');
+    set('[data-ai-accuracy]', 'Unavailable');
+    set('[data-ai-accuracy-small]', 'Unavailable');
+    const activeModels = ms.filter(m => ['active','champion'].includes(String(m.status || '').toLowerCase()));
+    set('[data-ai-status]', !modelOk ? 'Unavailable' : activeModels.length ? 'Online' : 'Not validated');
+    set('[data-ai-status-note]', !modelOk ? 'Model registry could not be reached' : activeModels.length ? activeModels.length + ' active/champion model(s)' : 'No active validated model');
+    set('[data-ai-chart-symbol]', 'Model forecast · selected asset');
     const hb = root.querySelector('[data-ai-history]');
     if (!predictionOk) {
-      hb.innerHTML = '<tr><td colspan="7">Prediction history unavailable.</td></tr>';
+      hb.innerHTML = '<tr><td colspan="6">Prediction history unavailable. Check the authenticated AI API and server logs.</td></tr>';
     } else {
-      hb.innerHTML = ps.length ? ps.slice(0, 50).map(p => {
+      hb.innerHTML = ps.length ? ps.slice(0, 20).map((p, i) => {
         const hasModel = Number(p.payload?.models_used || 0) > 0;
-        const probability = hasModel && p.probability != null && p.probability !== '' && Number.isFinite(Number(p.probability)) ? (Number(p.probability) * 100).toFixed(1) + '%' : '—';
-        const confidence = hasModel && p.confidence != null && p.confidence !== '' && Number.isFinite(Number(p.confidence)) ? Number(p.confidence).toFixed(1) + '%' : '—';
-        return `<tr><td>${esc(p.symbol)}</td><td>${esc(p.timeframe)}</td><td>${esc(p.prediction)}</td><td>${probability}</td><td>${confidence}</td><td>${p.risk_score != null && p.risk_score !== '' && Number.isFinite(Number(p.risk_score)) ? Number(p.risk_score).toFixed(2) : '—'}</td><td>${esc(p.created_at)}</td></tr>`;
-      }).join('') : '<tr><td colspan="7">No predictions recorded.</td></tr>';
+        const probability = hasModel && p.probability != null && p.probability !== '' && Number.isFinite(Number(p.probability)) ? (Number(p.probability) <= 1 ? Number(p.probability) * 100 : Number(p.probability)).toFixed(1) + '%' : '—';
+        const confidence = hasModel && validConfidence(p) ? Number(p.confidence).toFixed(1) + '%' : '—';
+        const direction = String(p.prediction || '').toLowerCase();
+        const up = /up|bull|buy|rise|long/.test(direction), down = /down|bear|sell|fall|short/.test(direction);
+        const badge = up ? 'up' : down ? 'down' : 'mid';
+        const symbol = esc(p.symbol || 'Unknown asset');
+        return '<tr data-ai-row="' + i + '" tabindex="0" role="button"><td><strong>' + symbol + '</strong></td><td><span class="ai-badge ' + badge + '">' + (up ? '↑ UP' : down ? '↓ DOWN' : esc(p.prediction || 'UNAVAILABLE')) + '</span></td><td>' + probability + '</td><td>' + (confidence === '—' ? '<span class="ai-badge mid">Unverified</span>' : '<span class="ai-badge ' + (Number(p.confidence) >= 70 ? 'up' : 'mid') + '">' + confidence + '</span>') + '</td><td>' + esc(p.timeframe || '—') + '</td><td>' + esc(p.payload?.insight || p.payload?.explanation || (hasModel ? 'Model-backed output recorded.' : 'No verified strategy evidence')) + '</td></tr>';
+      }).join('') : '<tr><td colspan="6">No predictions recorded yet. Run a model-backed prediction below when market data and a validated model are available.</td></tr>';
     }
+    const renderSelected = p => {
+      if (!p) return;
+      const hasModel = Number(p.payload?.models_used || 0) > 0;
+      set('[data-ai-selected]', (p.symbol || 'Asset') + ' · ' + (p.timeframe || 'timeframe'));
+      const details = root.querySelector('[data-ai-details]');
+      const confidence = hasModel && validConfidence(p) ? Number(p.confidence).toFixed(1) + '%' : 'Unavailable';
+      const probability = hasModel && p.probability != null && p.probability !== '' && Number.isFinite(Number(p.probability)) ? (Number(p.probability) <= 1 ? Number(p.probability) * 100 : Number(p.probability)).toFixed(1) + '%' : 'Unavailable';
+      details.innerHTML = [['Direction',esc(p.prediction || 'Unavailable')],['Probability',probability],['Confidence',confidence],['Timeframe',esc(p.timeframe || '—')],['Recorded',esc(p.created_at || '—')],['Risk score',p.risk_score != null && Number.isFinite(Number(p.risk_score)) ? Number(p.risk_score).toFixed(2) : 'Unavailable']].map(([k,v]) => '<div class="ai-detail-row"><span>' + k + '</span><strong>' + v + '</strong></div>').join('');
+      const chart = root.querySelector('[data-ai-chart]');
+      const series = p.payload?.forecast_points || p.payload?.forecast || [];
+      if (Array.isArray(series) && series.length) chart.textContent = 'Forecast data received (' + series.length + ' points). Chart rendering requires numeric price values from the model response.';
+      else chart.textContent = 'No verified candle/forecast series supplied for ' + (p.symbol || 'this asset') + '. The chart will not invent prices.';
+    };
+    hb.querySelectorAll('[data-ai-row]').forEach(row => {
+      const selectRow = () => renderSelected(ps[Number(row.getAttribute('data-ai-row'))]);
+      row.addEventListener('click', selectRow);
+      row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectRow(); } });
+    });
+    const insights = root.querySelector('[data-ai-insights]');
+    insights.innerHTML = ps.length ? ps.slice(0, 6).map(p => {
+      const direction = String(p.prediction || '').toLowerCase();
+      const up = /up|bull|buy|rise|long/.test(direction), down = /down|bear|sell|fall|short/.test(direction);
+      return '<div class="ai-insight"><span>' + esc(p.created_at || 'Recorded') + '</span><span><strong>' + esc(p.symbol || 'Asset') + '</strong> · ' + esc(p.payload?.insight || p.payload?.explanation || 'No verified insight supplied by model') + '</span><span class="ai-badge ' + (up ? 'up' : down ? 'down' : 'mid') + '">' + (up ? 'UP' : down ? 'DOWN' : 'UNAVAILABLE') + '</span></div>';
+    }).join('') : '<p class="ai-empty">No verified insights recorded.</p>';
+    if (ps.length) renderSelected(ps[0]);
   };
   const bind = root => {
     const button = root.querySelector('[data-ai-run]');
