@@ -109,4 +109,31 @@ for (const file of ['templates/core/markets.html','templates/core/predictions.ht
   const content = fs.readFileSync(file,'utf8');
   assert(content.indexOf('deriv_market_asset_manifest.js') < content.indexOf('market_asset_registry.js'), file + ' loads official source manifest before registry');
 }
+// The same verified source registry must be wired into every instrument-list surface.
+for (const [file, needles] of [
+  ['static/js/market_watch.js', ['AlgoBotMarketAssets', 'renderIcon']],
+  ['static/js/market_scanner.js', ['AlgoBotMarketAssets', 'resolve']],
+  ['static/js/trading_terminal.js', ['AlgoBotMarketAssets', 'marketArtwork']],
+  ['templates/core/markets.html', ['deriv_market_asset_manifest.js', 'market_asset_registry.js']],
+  ['templates/core/market_scanner.html', ['deriv_market_asset_manifest.js', 'market_asset_registry.js']],
+  ['templates/core/trading.html', ['deriv_market_asset_manifest.js', 'market_asset_registry.js']],
+  ['templates/core/predictions.html', ['deriv_market_asset_manifest.js', 'market_asset_registry.js']]
+]) {
+  const source = fs.readFileSync(file, 'utf8');
+  for (const needle of needles) assert(source.includes(needle), file + ' must wire the official market asset registry (' + needle + ')');
+  if (file.startsWith('templates/')) {
+    assert(source.indexOf('deriv_market_asset_manifest.js') < source.indexOf('market_asset_registry.js'), file + ' must load the manifest before the renderer');
+  }
+}
+for (const instrument of [
+  {symbol:'BOOM100', display_name:'Boom 100 Index', market:'synthetic'},
+  {symbol:'BOOM1000', display_name:'Boom 1000 Index', market:'synthetic'},
+  {symbol:'BOOM900', display_name:'Boom 900 Index', market:'synthetic'},
+  {symbol:'DEX1500UP', display_name:'DEX 1500 UP Index', market:'synthetic'},
+  {symbol:'DRIFT_SWITCH_10', display_name:'Drift Switch Index 10', market:'synthetic'}
+]) {
+  const icon = api.renderIcon(instrument);
+  assert(icon.includes('market-asset-verified') && icon.includes('https://media.ffycdn.net/eu/deriv/'), instrument.symbol + ' renders official Deriv artwork in the shared icon renderer');
+  assert(icon.includes('alt=') && icon.includes('loading="lazy"'), instrument.symbol + ' has accessible lazy-loaded icon markup');
+}
 console.log('official Deriv market SVG registry contract tests passed');
