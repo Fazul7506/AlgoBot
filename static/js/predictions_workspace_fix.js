@@ -33,13 +33,20 @@
       if (/^(prediction engine|ai prediction center|ai predictions)(\s|$)|workspace is ready|use the live module controls/.test(text)) node.remove();
     });
     document.querySelectorAll('h1,h2').forEach(node => {
-      if (node.closest('[data-page="core-predictions"],.app-sidebar,.topbar')) return;
+      if (node.closest('[data-page="core-predictions"],.app-sidebar,.topbar,nav,aside')) return;
       const text = (node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
       if (text === 'ai predictions' || text === 'prediction engine' || text === 'ai prediction center') {
-        const wrapper = node.closest('.page-title,.page-header,.page-heading,.enterprise-hero,.mobile-page-title');
+        const wrapper = node.closest('.page-title,.page-header,.page-heading,.enterprise-hero,.mobile-page-title,.enterprise-page__header,.app-page-header');
         if (wrapper && !wrapper.closest('[data-page="core-predictions"]')) wrapper.remove();
         else node.remove();
       }
+    });
+    // Remove shell-generated page-title containers by their own text, even when
+    // the legacy shell does not use a heading element inside them.
+    document.querySelectorAll('body > .page-title, .app-content > .page-title, .app-content > .page-heading, .app-content > .enterprise-hero, .app-content > .enterprise-page__header, .app-content > .app-page-header, .mobile-page-title').forEach(node => {
+      if (node.closest('[data-page="core-predictions"],.app-sidebar,.topbar')) return;
+      const text=(node.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+      if (/^(ai predictions|prediction engine|ai prediction center)(\s|$)/.test(text)) node.remove();
     });
   };
   const mount = () => {
@@ -135,18 +142,22 @@
       const timeout = new Promise((_,reject)=>setTimeout(()=>reject(new Error('Instrument catalogue request timed out')),12000));
       try {
         const d=await Promise.race([getJSON('/api/market/broker-catalogue/?limit=500'),timeout]);
-        const instruments=Array.isArray(d?.symbols)?d.symbols:list(d);
+        if (!d || !Array.isArray(d.symbols)) throw new Error(d?.detail || 'Broker catalogue returned no instrument list');
+        const instruments=d.symbols.filter(x=>x && (x.symbol || x.underlying_symbol)).map(x=>({...x,symbol:String(x.symbol||x.underlying_symbol),display_name:String(x.display_name||x.name||x.symbol||x.underlying_symbol||'')}));
         const current=select.value;
-        select.innerHTML='<option value="">Choose a broker instrument</option>'+instruments.map(x=>({symbol:String(x.symbol||''),name:String(x.display_name||x.name||x.symbol||''),market:String(x.market||x.sub_market||'Market')})).filter(x=>x.symbol).map(x=>'<option value="'+esc(x.symbol)+'">'+esc(x.name)+' · '+esc(x.market)+' ('+esc(x.symbol)+')</option>').join('');
+        select.innerHTML='<option value="">Choose a broker instrument</option>'+instruments.map(x=>({symbol:x.symbol,name:x.display_name,market:String(x.market||x.sub_market||x.submarket||'Market')})).filter(x=>x.symbol).map(x=>'<option value="'+esc(x.symbol)+'">'+esc(x.name)+' · '+esc(x.market)+' ('+esc(x.symbol)+')</option>').join('');
         if(current && instruments.some(x=>x.symbol===current))select.value=current;
         else if(instruments.length)select.selectedIndex=1;
-        if(!instruments.length)select.innerHTML='<option value="">No active instruments in broker catalogue</option>';
+        if(!instruments.length) throw new Error('Connected broker returned zero active instruments');
+        select.dataset.aiInstrumentCatalogueState='loaded';
         if(select.value) await renderLiveChart(root,select.value,root.querySelector('[data-ai-timeframe]')?.value||'H1',[]);
-      } catch (_) {
+      } catch (error) {
+        select.dataset.aiInstrumentCatalogueState='error';
         select.innerHTML='<option value="">Instrument list unavailable — retry</option>';
-        const retry=document.createElement('button');retry.type='button';retry.className='ai-action';retry.textContent='Retry instrument list';retry.dataset.aiRetryInstruments='';
-        select.insertAdjacentElement('afterend',retry);
-        retry.addEventListener('click',()=>{retry.disabled=true;retry.textContent='Retrying…';void loadInstrumentCatalogue().finally(()=>retry.remove());});
+        let retry=root.querySelector('[data-ai-retry-instruments]');
+        if(!retry){retry=document.createElement('button');retry.type='button';retry.className='ai-action';retry.textContent='Retry instrument list';retry.dataset.aiRetryInstruments='';select.insertAdjacentElement('afterend',retry);}
+        retry.title=String(error?.message||'Unable to load connected broker instruments');
+        retry.onclick=()=>{retry.disabled=true;retry.textContent='Retrying…';void loadInstrumentCatalogue().finally(()=>{retry.disabled=false;retry.textContent='Retry instrument list';});};
       } finally {
         select.removeAttribute('aria-busy');
       }
