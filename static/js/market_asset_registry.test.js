@@ -19,6 +19,9 @@ assert(api.renderIcon({symbol:'frxEURUSD'}).includes('/static/images/market-flag
 assert(api.renderIcon({symbol:'XAUUSD'}).includes('market-avatar-unmapped'), 'missing artwork uses a neutral fallback instead of a fake logo');
 assert(api.resolve({symbol:'R_100'}).status === 'authored' && api.resolve({symbol:'R_100'}).asset.src.endsWith('/r-100.svg'), 'known synthetic index resolves to its own AlgoBot-authored SVG');
 assert(api.resolve({symbol:'1HZ50V'}).asset.src.endsWith('/1hz50v.svg'), 'one-second synthetic index resolves to its own SVG');
+for (const [symbol, file] of [['1HZ15V','1hz15v.svg'],['1HZ30V','1hz30v.svg'],['1HZ90V','1hz90v.svg'],['RDBULL','rdbull.svg'],['RDBEAR','rdbear.svg'],['RB_100','rb-100.svg'],['RB_200','rb-200.svg'],['BOOM1000','boom1000.svg'],['CRASH1000','crash1000.svg']]) {
+  assert(api.resolve({symbol}).status === 'authored' && api.resolve({symbol}).asset.src.endsWith('/' + file), symbol + ' resolves to its own authored SVG');
+}
 assert(api.renderIcon({symbol:'R_100'}).includes('/static/images/market-assets/synthetic/r-100.svg'), 'shared renderer displays exact-symbol authored synthetic artwork');
 const report = api.coverage([
   {underlying_symbol:'frxEURUSD', market:'forex'},

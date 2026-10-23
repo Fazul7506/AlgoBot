@@ -38,3 +38,22 @@ These SVGs are original in-repository illustrations created for instrument ident
 | `1HZ100V` | `static/images/market-assets/synthetic/1hz100v.svg` |
 
 Only exact symbols listed in the registry receive these illustrations. Other symbols in the same market family remain unmapped until their exact symbol is explicitly supported. Deriv's Active Symbols response remains the source of truth for which symbols are currently available.
+
+
+### Additional synthetic and derived indices
+
+Recent Deriv API product notes identify new 1-second volatility indices and additional Crash/Boom and Range Break products. The following exact-symbol artwork is original AlgoBot illustration, not official Deriv branding:
+
+| Symbol | Asset |
+|---|---|
+| `1HZ15V` | `static/images/market-assets/synthetic/1hz15v.svg` |
+| `1HZ30V` | `static/images/market-assets/synthetic/1hz30v.svg` |
+| `1HZ90V` | `static/images/market-assets/synthetic/1hz90v.svg` |
+| `RDBULL` | `static/images/market-assets/synthetic/rdbull.svg` |
+| `RDBEAR` | `static/images/market-assets/synthetic/rdbear.svg` |
+| `RB_100` | `static/images/market-assets/synthetic/rb-100.svg` |
+| `RB_200` | `static/images/market-assets/synthetic/rb-200.svg` |
+| `BOOM1000` | `static/images/market-assets/synthetic/boom1000.svg` |
+| `CRASH1000` | `static/images/market-assets/synthetic/crash1000.svg` |
+
+The mapping remains explicit per symbol. Other currently active symbols, including other Crash/Boom variants, are not covered by these mappings unless separately listed in the registry.

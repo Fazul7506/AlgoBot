@@ -50,7 +50,18 @@
     "1HZ75V": {src:"/static/images/market-assets/synthetic/1hz75v.svg", label:"Volatility 75 (1s) Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
     "1HZ100V": {src:"/static/images/market-assets/synthetic/1hz100v.svg", label:"Volatility 100 (1s) Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
   });
-  const allRegistry = Object.freeze({...registry, ...authoredRegistry});
+  const additionalAuthoredRegistry = Object.freeze({
+    "1HZ15V": {src:"/static/images/market-assets/synthetic/1hz15v.svg", label:"Volatility 15 (1s) Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "1HZ30V": {src:"/static/images/market-assets/synthetic/1hz30v.svg", label:"Volatility 30 (1s) Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "1HZ90V": {src:"/static/images/market-assets/synthetic/1hz90v.svg", label:"Volatility 90 (1s) Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "RDBULL": {src:"/static/images/market-assets/synthetic/rdbull.svg", label:"RDBULL Derived Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "RDBEAR": {src:"/static/images/market-assets/synthetic/rdbear.svg", label:"RDBEAR Derived Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "RB_100": {src:"/static/images/market-assets/synthetic/rb-100.svg", label:"Range Break 100 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "RB_200": {src:"/static/images/market-assets/synthetic/rb-200.svg", label:"Range Break 200 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "BOOM1000": {src:"/static/images/market-assets/synthetic/boom1000.svg", label:"Boom 1000 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+    "CRASH1000": {src:"/static/images/market-assets/synthetic/crash1000.svg", label:"Crash 1000 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
+  });
+  const allRegistry = Object.freeze({...registry, ...authoredRegistry, ...additionalAuthoredRegistry});
 
   // Classification is intentionally separate from artwork mapping: identifying a
   // market family never implies that an official logo exists for that instrument.
