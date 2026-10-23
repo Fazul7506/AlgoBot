@@ -24,7 +24,14 @@
     PLN: {name:'Polish złoty', flag:'/static/images/market-flags/pln.svg'},
     TRY: {name:'Turkish lira', flag:'/static/images/market-flags/try.svg'}
   });
-  const registry = Object.freeze({});
+  const registry = Object.freeze({
+    "CRYBTCUSD": {src:'/static/images/market-assets/crypto/bitcoin.svg', label:"Bitcoin", source:"https://bitcoin.org", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
+    "CRYETHUSD": {src:'/static/images/market-assets/crypto/ethereum.svg', label:"Ethereum", source:"https://ethereum.org/en/assets/", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
+    "CRYLTCUSD": {src:'/static/images/market-assets/crypto/litecoin.svg', label:"Litecoin", source:"https://litecoin-foundation.org/litecoin-branding-guidelines/", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
+    "CRYDOGEUSD": {src:'/static/images/market-assets/crypto/dogecoin.svg', label:"Dogecoin", source:"https://cryptologos.cc/dogecoin", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
+    "CRYSOLUSD": {src:'/static/images/market-assets/crypto/solana.svg', label:"Solana", source:"https://solana.com/branding", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
+    "CRYXRPUSD": {src:'/static/images/market-assets/crypto/ripple.svg', label:"Ripple", source:"https://www.ripple.com/media-kit/", licence:'Simple Icons repository CC0-1.0; trademark rights remain with owner'},
+  });
 
   // Classification is intentionally separate from artwork mapping: identifying a
   // market family never implies that an official logo exists for that instrument.
@@ -49,7 +56,7 @@
   };
   const resolve = raw => {
     const instrument = normalise(raw);
-    const entry = registry[instrument.symbol] || null;
+    const entry = registry[instrument.symbol.toUpperCase()] || null;
     const family = classify(instrument);
     // Deriv forex symbols use the frx + six-letter ISO currency pair convention.
     const match = /^frx([A-Z]{6})$/i.exec(instrument.symbol);
@@ -59,7 +66,7 @@
     const forex = base && quote ? {type:'forex-pair', base, quote, source:'AlgoBot-authored SVG currency flags', licence:'Public-domain flag designs; artwork authored in-repository'} : null;
     // Never substitute generic/category artwork for a specific Deriv instrument.
     // Only explicit source-verified symbol mappings or currency-pair flags render.
-    const asset = entry || forex || null;
+    const asset = entry ? {...entry, type:'symbol-svg'} : forex || null;
     const status = entry ? 'verified' : forex ? 'mapped' : 'missing';
     return {...instrument, family, asset, status, source: entry?.source || forex?.source || null, licence: entry?.licence || forex?.licence || null};
   };

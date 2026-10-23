@@ -21,14 +21,18 @@ const report = api.coverage([
   {symbol:'XAUUSD', market:'commodities'},
   {symbol:'AAPL', market:'stock'}
 ]);
-assert(report.total === 5 && report.missing === 4 && report.verified === 0 && report.illustrated === 1, 'coverage only counts explicit instrument mappings and mapped forex flags');
+assert(report.total === 5 && report.missing === 3 && report.verified === 1 && report.illustrated === 2, 'coverage counts exact symbol mappings and mapped forex flags only');
 assert(report.byFamily.forex.mapped === 1 && report.byFamily['synthetic-indices'].mapped === 0, 'coverage reports mapped and missing artwork by market family');
 assert(api.resolve({symbol:'BTCUSD', market:'cryptocurrency'}).family === 'cryptocurrency', 'classifies crypto instruments without inventing artwork');
 assert(api.resolve({symbol:'XAUUSD', market:'commodities'}).family === 'commodities', 'classifies commodity instruments without inventing artwork');
 assert(api.resolve({symbol:'AAPL', market:'stock'}).family === 'stocks-and-indices', 'classifies equities from catalogue metadata');
-assert(report.missingSymbols.length === 4, 'unmapped symbols are explicitly reported as missing artwork');
+assert(report.missingSymbols.length === 3, 'unmapped symbols are explicitly reported as missing artwork');
 assert(api.resolve({symbol:'R_100'}).asset === null && api.resolve({symbol:'R_100'}).status === 'missing', 'synthetic instruments do not receive fabricated category art');
-assert(api.resolve({symbol:'BTCUSD', market:'cryptocurrency'}).asset === null, 'crypto remains unmapped until a verified symbol-specific asset exists');
+assert(api.resolve({symbol:'cryBTCUSD', market:'cryptocurrency'}).status === 'verified' && api.resolve({symbol:'cryBTCUSD'}).asset.src.endsWith('/bitcoin.svg'), 'Deriv Bitcoin symbol resolves to its exact local SVG');
+assert(api.resolve({symbol:'cryETHUSD'}).asset.src.endsWith('/ethereum.svg'), 'Deriv Ethereum symbol resolves to its exact local SVG');
+assert(api.resolve({symbol:'cryLTCUSD'}).asset.src.endsWith('/litecoin.svg'), 'Deriv Litecoin symbol resolves to its exact local SVG');
+assert(api.resolve({symbol:'cryDOGEUSD'}).asset.src.endsWith('/dogecoin.svg'), 'Deriv Dogecoin symbol resolves to its exact local SVG');
+assert(api.resolve({symbol:'BTCUSD', market:'cryptocurrency'}).asset === null, 'unsupported aliases do not inherit a different symbol logo');
 assert(api.resolve({symbol:'XAUUSD', market:'commodities'}).asset === null, 'commodities remain unmapped until a verified symbol-specific asset exists');
 assert(api.resolve({symbol:'AAPL', market:'stock'}).asset === null, 'stocks remain unmapped until a verified symbol-specific asset exists');
 console.log('market asset registry contract tests passed');
