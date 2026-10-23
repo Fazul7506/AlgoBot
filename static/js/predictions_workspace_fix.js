@@ -33,12 +33,13 @@
       if (/^(prediction engine|ai prediction center|ai predictions)(\s|$)|workspace is ready|use the live module controls/.test(text)) node.remove();
     });
     document.querySelectorAll('h1,h2').forEach(node => {
-      if (node.closest('[data-page="core-predictions"],.app-sidebar,.topbar,nav,aside')) return;
+      // The only visible AI Predictions heading allowed is the one inside our own hero.
+      if (node.closest('.ai-hero,.app-sidebar,nav,aside')) return;
       const text = (node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
       if (text === 'ai predictions' || text === 'prediction engine' || text === 'ai prediction center') {
         const wrapper = node.closest('.page-title,.page-header,.page-heading,.enterprise-hero,.mobile-page-title,.enterprise-page__header,.app-page-header');
-        if (wrapper && !wrapper.closest('[data-page="core-predictions"]')) wrapper.remove();
-        else node.remove();
+        if (wrapper && !wrapper.querySelector('.ai-hero h1')) wrapper.remove();
+        else if (!wrapper) node.remove();
       }
     });
     // Remove shell-generated page-title containers by their own text, even when
@@ -146,9 +147,19 @@
       select.innerHTML='<option value="">Loading connected broker instruments…</option>';
       const timeout = new Promise((_,reject)=>setTimeout(()=>reject(new Error('Instrument catalogue request timed out')),12000));
       try {
-        const d=await Promise.race([getJSON('/api/market/broker-catalogue/?limit=500'),timeout]);
-        if (!d || !Array.isArray(d.symbols)) throw new Error(d?.detail || 'Broker catalogue returned no instrument list');
-        const instruments=d.symbols.filter(x=>x && (x.symbol || x.underlying_symbol)).map(x=>({...x,symbol:String(x.symbol||x.underlying_symbol),display_name:String(x.display_name||x.name||x.symbol||x.underlying_symbol||'')}));
+        let d;
+        try {
+          d=await Promise.race([getJSON('/api/market/broker-catalogue/?limit=500'),timeout]);
+        } catch (primaryError) {
+          // Keep the connected-broker endpoint authoritative; the public symbol
+          // endpoint is a bounded fallback for deployments where broker catalogue
+          // routing is temporarily unavailable.
+          d=await Promise.race([getJSON('/api/market/symbols/?limit=500'),timeout]);
+          if (!d || (!Array.isArray(d.symbols) && !Array.isArray(d.results) && !Array.isArray(d.data))) throw primaryError;
+        }
+        const rows=Array.isArray(d?.symbols)?d.symbols:(Array.isArray(d?.results)?d.results:(Array.isArray(d?.data)?d.data:[]));
+        if (!rows.length) throw new Error(d?.detail || 'Market API returned no active instruments');
+        const instruments=rows.filter(x=>x && (x.symbol || x.underlying_symbol || x.code)).map(x=>({...x,symbol:String(x.symbol||x.underlying_symbol||x.code),display_name:String(x.display_name||x.name||x.symbol||x.underlying_symbol||x.code||'')}));
         const current=select.value;
         select.innerHTML='<option value="">Choose a broker instrument</option>'+instruments.map(x=>({symbol:x.symbol,name:x.display_name,market:String(x.market||x.sub_market||x.submarket||'Market')})).filter(x=>x.symbol).map(x=>'<option value="'+esc(x.symbol)+'">'+esc(x.name)+' · '+esc(x.market)+' ('+esc(x.symbol)+')</option>').join('');
         if(current && instruments.some(x=>x.symbol===current))select.value=current;
