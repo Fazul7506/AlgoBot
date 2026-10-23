@@ -24,6 +24,12 @@
     PLN: {name:'Polish złoty', flag:'/static/images/market-flags/pln.svg'},
     TRY: {name:'Turkish lira', flag:'/static/images/market-flags/try.svg'}
   });
+  const familyArtwork = Object.freeze({
+    'synthetic-indices': {src:'/static/images/market-families/synthetic-indices.svg', label:'Synthetic indices category artwork'},
+    cryptocurrency: {src:'/static/images/market-families/cryptocurrency.svg', label:'Cryptocurrency category artwork'},
+    commodities: {src:'/static/images/market-families/commodities.svg', label:'Commodities category artwork'},
+    'stocks-and-indices': {src:'/static/images/market-families/stocks-and-indices.svg', label:'Stocks and indices category artwork'}
+  });
   const registry = Object.freeze({});
 
   // Classification is intentionally separate from artwork mapping: identifying a
@@ -57,19 +63,23 @@
     const base = pair ? currencies[pair.slice(0, 3)] : null;
     const quote = pair ? currencies[pair.slice(3, 6)] : null;
     const forex = base && quote ? {type:'forex-pair', base, quote, source:'AlgoBot-authored SVG currency flags', licence:'Public-domain flag designs; artwork authored in-repository'} : null;
-    return {...instrument, family, asset: entry || forex, status: entry ? 'verified' : forex ? 'mapped' : 'missing', source: entry?.source || forex?.source || null, licence: entry?.licence || forex?.licence || null};
+    const familyAsset = familyArtwork[family] || null;
+    const asset = entry || forex || (familyAsset ? {...familyAsset, type:'family-icon', source:'AlgoBot-authored market-family SVG', licence:'Original artwork created for AlgoBot'} : null);
+    const status = entry ? 'verified' : forex ? 'mapped' : familyAsset ? 'category' : 'missing';
+    return {...instrument, family, asset, status, source: entry?.source || forex?.source || familyAsset?.source || null, licence: entry?.licence || forex?.licence || familyAsset?.licence || null};
   };
   const coverage = instruments => {
     const rows = Array.from(instruments || [], resolve);
     const verified = rows.filter(row => row.status === 'verified' || row.status === 'mapped').length;
+    const illustrated = rows.filter(row => row.status === 'verified' || row.status === 'mapped' || row.status === 'category').length;
     const byFamily = {};
     rows.forEach(row => {
       if (!byFamily[row.family]) byFamily[row.family] = {total: 0, mapped: 0, missing: 0};
       byFamily[row.family].total += 1;
-      if (row.status === 'verified' || row.status === 'mapped') byFamily[row.family].mapped += 1;
+      if (row.status === 'verified' || row.status === 'mapped' || row.status === 'category') byFamily[row.family].mapped += 1;
       else byFamily[row.family].missing += 1;
     });
-    return {total: rows.length, verified, missing: rows.length - verified, percent: rows.length ? Math.round(verified / rows.length * 10000) / 100 : 100, byFamily, missingSymbols: rows.filter(row => row.status === 'missing').map(row => ({symbol: row.symbol, family: row.family}))};
+    return {total: rows.length, verified, illustrated, missing: rows.length - illustrated, percent: rows.length ? Math.round(illustrated / rows.length * 10000) / 100 : 100, byFamily, missingSymbols: rows.filter(row => row.status === 'missing').map(row => ({symbol: row.symbol, family: row.family}))};
   };
   window.AlgoBotMarketAssets = Object.freeze({normalise, resolve, coverage, classify, registry, currencies});
 })();
