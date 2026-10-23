@@ -60,7 +60,7 @@
     "RB_200": {src:"/static/images/market-assets/synthetic/rb-200.svg", label:"Range Break 200 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
     "BOOM1000": {src:"/static/images/market-assets/synthetic/boom1000.svg", label:"Boom 1000 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
     "CRASH1000": {src:"/static/images/market-assets/synthetic/crash1000.svg", label:"Crash 1000 Index", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv logo'},
-    "frxXAUUSD": {src:"/static/images/market-assets/commodities/gold.svg", label:"Gold vs US Dollar", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv or commodity-provider logo'},
+    "FRXXAUUSD": {src:"/static/images/market-assets/commodities/gold.svg", label:"Gold vs US Dollar", source:'AlgoBot-authored SVG artwork', artworkKind:'authored', licence:'Original in-repository artwork; not an official Deriv or commodity-provider logo'},
   });
   const allRegistry = Object.freeze({...registry, ...authoredRegistry, ...additionalAuthoredRegistry});
 
