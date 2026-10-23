@@ -43,7 +43,7 @@ def load_existing_official_media_entries():
     if not OUTPUT.exists():
         return []
     text = OUTPUT.read_text(encoding="utf-8")
-    match = re.search(r"Object\\.freeze\\((\\{.*\\})\\);", text, re.S)
+    match = re.search(r"Object\.freeze\((\{.*\})\);", text, re.S)
     if not match:
         return []
     try:
@@ -73,7 +73,7 @@ def collect(market, slug):
         seen_urls.add(url)
         page = fetch(url)
         rows = re.findall(
-            r'<img[^>]*src="([^"]+)"[^>]*class="ts_cell-icon"[^>]*>\\s*'
+            r'<img[^>]*src="([^"]+)"[^>]*class="ts_cell-icon"[^>]*>\s*'
             r'<p[^>]*fs-cmsfilter-field="name"[^>]*>(.*?)</p>',
             page, re.S
         )
@@ -128,9 +128,9 @@ def main():
         "entries": entries,
     }
     OUTPUT.write_text(
-        "/* Source URL metadata only. No SVG bytes are generated or stored by AlgoBot. */\\n"
+        "/* Source URL metadata only. No SVG bytes are generated or stored by AlgoBot. */\n"
         "window.AlgoBotDerivMarketAssetManifest = Object.freeze(" +
-        json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + ");\\n",
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + ");\n",
         encoding="utf-8",
     )
     print("Wrote", len(entries), "verified Deriv-hosted SVG URL records to", OUTPUT)
