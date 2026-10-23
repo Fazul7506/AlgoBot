@@ -32,7 +32,7 @@ assert(report.byFamily.forex.mapped === 1 && report.byFamily['synthetic-indices'
 assert(api.resolve({symbol:'BTCUSD', market:'cryptocurrency'}).family === 'cryptocurrency', 'classifies crypto instruments without inventing artwork');
 assert(api.resolve({symbol:'XAUUSD', market:'commodities'}).family === 'commodities', 'classifies commodity instruments without inventing artwork');
 assert(api.resolve({symbol:'AAPL', market:'stock'}).family === 'stocks-and-indices', 'classifies equities from catalogue metadata');
-assert(report.missingSymbols.length === 3, 'unmapped symbols are explicitly reported as missing artwork');
+assert(report.missingSymbols.length === 2, 'unmapped symbols are explicitly reported as missing artwork');
 assert(api.resolve({symbol:'R_100'}).status === 'authored' && api.resolve({symbol:'R_100'}).asset.src.endsWith('/r-100.svg'), 'known synthetic instruments receive distinct authored artwork');
 assert(api.resolve({symbol:'cryBTCUSD', market:'cryptocurrency'}).status === 'verified' && api.resolve({symbol:'cryBTCUSD'}).asset.src.endsWith('/bitcoin.svg'), 'Deriv Bitcoin symbol resolves to its exact local SVG');
 assert(api.resolve({symbol:'cryETHUSD'}).asset.src.endsWith('/ethereum.svg'), 'Deriv Ethereum symbol resolves to its exact local SVG');
