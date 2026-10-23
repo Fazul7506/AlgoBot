@@ -25,6 +25,8 @@ scikit-learn>=1.7,<2
 joblib>=1.4,<2
 xgboost>=3,<4
 lightgbm>=4,<5
+# Required by the optional LSTM ensemble model in apps/ai_engine/ensemble_predictor.py.
+tensorflow>=2.20,<2.21
 statsmodels>=0.14,<1
 psycopg[binary,pool]
 sentry-sdk

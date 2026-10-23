@@ -296,6 +296,8 @@ def analysis_data(request):
         return JsonResponse({"status": "error", "message": str(exc)}, status=404)
 
     refresh_result = None
+    # Initialize the optional live quote for requests that do not force refresh.
+    live_tick = None
     if refresh_requested:
         try:
             if canonical_timeframe == "tick" or TIMEFRAMES[canonical_timeframe] < 60:
