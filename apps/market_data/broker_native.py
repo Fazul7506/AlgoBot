@@ -38,13 +38,25 @@ def _public_deriv(payload):
 
 
 def _normalise_symbol(item):
-    symbol = str(item.get("underlying_symbol") or "").strip()
+    """Normalise current and legacy Deriv active_symbols payloads consistently."""
+    symbol = str(
+        item.get("underlying_symbol") or item.get("symbol") or item.get("code") or ""
+    ).strip()
     return {
         "symbol": symbol,
-        "display_name": str(item.get("underlying_symbol_name") or symbol),
-        "market": str(item.get("market") or ""),
-        "sub_market": str(item.get("submarket") or item.get("subgroup") or ""),
-        "symbol_type": str(item.get("underlying_symbol_type") or ""),
+        "display_name": str(
+            item.get("underlying_symbol_name")
+            or item.get("display_name")
+            or item.get("name")
+            or symbol
+        ).strip(),
+        "market": str(item.get("market") or item.get("market_name") or "").strip(),
+        "sub_market": str(
+            item.get("submarket") or item.get("sub_market") or item.get("subgroup") or ""
+        ).strip(),
+        "symbol_type": str(
+            item.get("underlying_symbol_type") or item.get("symbol_type") or ""
+        ).strip(),
         "pip_size": item.get("pip_size"),
         "is_active": bool(item.get("exchange_is_open", True)) and not bool(item.get("is_trading_suspended", False)),
         "is_tradable": bool(item.get("exchange_is_open", True)) and not bool(item.get("is_trading_suspended", False)),
