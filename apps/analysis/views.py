@@ -39,6 +39,15 @@ _analysis_cache_unavailable_until = 0.0
 _ANALYSIS_CACHE_FAILURE_COOLDOWN_SECONDS = 30.0
 
 
+def _as_items(value):
+    """Normalize broker/API fields that may be scalar or collection-shaped."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return list(value)
+    return [value]
+
+
 def _safe_cache_get(key, default=None):
     """Cache reads must never take the Analysis API down when Redis is exhausted."""
     global _analysis_cache_unavailable_until
@@ -118,7 +127,7 @@ def _authenticated_contract_capabilities(account, symbol):
         "submarkets": sorted({str(item.get("submarket")) for item in contracts if item.get("submarket")}),
         "expiry_types": sorted({str(item.get("expiry_type")) for item in contracts if item.get("expiry_type")}),
         "sentiments": sorted({str(item.get("sentiment")) for item in contracts if item.get("sentiment")}),
-        "barriers": sorted({str(value) for item in contracts for value in (item.get("barriers") or []) if value not in (None, "")}),
+        "barriers": sorted({str(value) for item in contracts for value in _as_items(item.get("barriers")) if value not in (None, "")}),
         "fetched_at": int(time.time()),
     }
 
@@ -201,7 +210,7 @@ def _broker_trade_spec(result, market, capabilities, account_context=None):
     sentiments = [str(v) for v in caps.get("sentiments", []) if v]
     signal = str(result.get("signal") or "Neutral")
     regime = str(result.get("volatility_regime") or "normal")
-    factors = [str(v) for v in result.get("factors") or [] if v]
+    factors = [str(v) for v in _as_items(result.get("factors")) if v]
     structure = str(result.get("structure") or "Range")
     direction = "BUY" if "Bullish" in signal else "SELL" if "Bearish" in signal else "HOLD"
     strategy_parts = []

@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 
-from apps.analysis.views import _select_validated_contract
+from apps.analysis.views import _as_items, _select_validated_contract
 
 
 class ValidatedContractSelectionTests(SimpleTestCase):
@@ -46,3 +46,14 @@ class ValidatedContractSelectionTests(SimpleTestCase):
 
     def test_no_direction_does_not_invent_a_contract(self):
         self.assertIsNone(_select_validated_contract(self.capabilities, direction=None, timeframe="M1"))
+
+
+class BrokerPayloadTypeSafetyTests(SimpleTestCase):
+    def test_scalar_barrier_is_normalized_to_one_item(self):
+        self.assertEqual(_as_items(5), [5])
+
+    def test_collection_barriers_remain_a_collection(self):
+        self.assertEqual(_as_items([1, "2"]), [1, "2"])
+
+    def test_missing_barriers_normalize_to_empty_collection(self):
+        self.assertEqual(_as_items(None), [])
