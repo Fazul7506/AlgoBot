@@ -60,13 +60,15 @@ const audBasket = api.resolve({underlying_symbol:'WLDAUD', underlying_symbol_nam
 assert(audBasket.family === 'basket-indices', 'Deriv AUD Basket uses the basket-index family');
 assert(audBasket.status === 'verified', 'AUD Basket resolves to its official catalogue SVG');
 assert(audBasket.asset.src === 'https://media.ffycdn.net/eu/deriv/ko79afRJyfjSUyZqXK5a.svg', 'AUD Basket uses the exact official Deriv SVG source');
-for (const [symbol, name] of [['BOOM100','Boom 100 Index'],['BOOM1000','Boom 1000 Index'],['BOOM300','Boom 300 Index'],['CRASH500','Crash 500 Index'],['DEX1500UP','DEX 1500 UP Index'],['DRIFT_SWITCH_10','Drift Switch Index 10']]) {
+for (const [symbol, name] of [['BOOM100','Boom 100 Index'],['BOOM1000','Boom 1000 Index'],['BOOM900','Boom 900 Index'],['BOOM300','Boom 300 Index'],['CRASH500','Crash 500 Index'],['DEX1500UP','DEX 1500 UP Index'],['DRIFT_SWITCH_10','Drift Switch Index 10']]) {
   const resolved = api.resolve({symbol, display_name:name, market:'synthetic'});
   assert(resolved.family === 'synthetic-indices', symbol + ' is classified as synthetic');
   assert(resolved.status === 'verified', symbol + ' resolves to a genuine Deriv-hosted SVG');
   assert(resolved.asset.src.startsWith('https://media.ffycdn.net/eu/deriv/'), symbol + ' uses official Deriv source');
   if (symbol === 'BOOM100') assert(resolved.asset.src === 'https://media.ffycdn.net/eu/deriv/weWSGazF7NvtHUvaN3qX.svg', 'Boom 100 uses the exact official catalogue SVG');
+  if (symbol === 'BOOM900') assert(resolved.asset.src === 'https://media.ffycdn.net/eu/deriv/1efQ7vFdtWrE5Ukwop8y.svg', 'Boom 900 uses its own exact official catalogue SVG');
   if (symbol === 'BOOM1000') assert(resolved.asset.src === 'https://media.ffycdn.net/eu/deriv/gizQHBi5p49igXwLwZQS.svg', 'Boom 1000 uses the exact official catalogue SVG');
+  if (symbol === 'BOOM1000') assert(resolved.asset.src !== 'https://media.ffycdn.net/eu/deriv/1efQ7vFdtWrE5Ukwop8y.svg', 'Boom 1000 must never reuse the Boom 900 SVG');
 }
 // Every recognized synthetic family must stay in the synthetic group even while its
 // official instrument-specific SVG is unavailable; never borrow a different family's art.
