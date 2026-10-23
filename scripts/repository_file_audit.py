@@ -1,42 +1,30 @@
 #!/usr/bin/env python3
-"""Generate a conservative per-file reference inventory for AlgoBot.
+"""Generate a conservative, per-tracked-file reference inventory for AlgoBot.
 
-Usage: python scripts/repository_file_audit.py [--output audit-output/repository-file-reference-audit.csv]
-This is a candidate detector, not an automatic deletion tool. Django, Celery,
-templates, migrations, deployment and externally invoked files need runtime-aware
-review before removal.
+This tool intentionally does not delete files. It combines repository-wide text
+references with framework/deployment risk rules and emits a CSV for review. A
+zero text-reference count is a candidate signal, never proof of dead code.
 """
 from __future__ import annotations
-
-import argparse
-import csv
-import re
-import subprocess
+import csv, re, subprocess
 from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TEXT_SUFFIXES = {
-    ".py", ".html", ".htm", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
-    ".css", ".scss", ".json", ".toml", ".ini", ".cfg", ".yml", ".yaml",
-    ".txt", ".md", ".sh", ".ps1", ".sql", ".xml", ".env", ".example",
-}
-RUNTIME_NAMES = {
-    "manage.py", "Procfile", "render.yaml", "requirements.txt", "Dockerfile",
-    "Makefile", "pyproject.toml", "setup.cfg", "tox.ini",
-}
+OUTPUT = ROOT / "audit-output" / "repository-file-reference-audit.csv"
+SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache"}
+TEXT_SUFFIXES = {".py", ".html", ".htm", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".css", ".scss", ".json", ".toml", ".ini", ".cfg", ".yml", ".yaml", ".txt", ".md", ".sh", ".ps1", ".sql", ".xml", ".env", ".example"}
+DYNAMIC_ROOTS = ("apps/", "config/", "deriv_platform/", "templates/", "static/", "scripts/", ".github/", "migrations/", "tests/")
+HIGH_RISK_NAMES = {"manage.py", "Procfile", "render.yaml", "requirements.txt", "pyproject.toml", "setup.cfg", "tox.ini", "Dockerfile", "Makefile"}
 
 
-def tracked_paths() -> list[str]:
-    result = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=ROOT, check=True,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
+def tracked_files() -> list[str]:
+    result = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, stdout=subprocess.PIPE)
     return sorted(p.decode() for p in result.stdout.split(b"\0") if p)
 
 
-def source_text(path: Path) -> str | None:
-    if path.suffix.lower() not in TEXT_SUFFIXES and path.name not in RUNTIME_NAMES:
+def read_text(path: Path) -> str | None:
+    if path.suffix.lower() not in TEXT_SUFFIXES and path.name not in HIGH_RISK_NAMES:
         return None
     try:
         data = path.read_bytes()
@@ -48,62 +36,56 @@ def source_text(path: Path) -> str | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output", default="audit-output/repository-file-reference-audit.csv")
-    args = parser.parse_args()
-    paths = tracked_paths()
-    sources = {p: value for p in paths if (value := source_text(ROOT / p)) is not None}
-    corpus = "\n".join(f"\n# SOURCE:{name}\n{text}" for name, text in sources.items())
+    paths = tracked_files()
+    contents: dict[str, str] = {}
+    for rel in paths:
+        value = read_text(ROOT / rel)
+        if value is not None:
+            contents[rel] = value
+    corpus = "\n".join(f"\n# SOURCE:{name}\n{text}" for name, text in contents.items())
     rows = []
     for rel in paths:
         path = ROOT / rel
         name = path.name
-        exact_refs: list[str] = []
-        filename_refs: list[str] = []
-        module_refs: list[str] = []
+        stem = path.stem
+        # Count independent source files containing the path or its filename/stem.
+        exact_path_refs = []
+        filename_refs = []
+        # Cheap corpus prefilter avoids scanning every source for every path.
         if rel in corpus:
-            exact_refs = [s for s, body in sources.items() if s != rel and rel in body.replace("\\", "/")]
-        if len(name) >= 4 and name in corpus:
+            exact_path_refs = [source for source, body in contents.items() if source != rel and rel in body.replace("\\", "/")]
+        if name and len(name) >= 4 and name in corpus:
             pattern = re.compile(r"(?<![A-Za-z0-9_.-])" + re.escape(name) + r"(?![A-Za-z0-9_.-])")
-            filename_refs = [s for s, body in sources.items() if s != rel and pattern.search(body)]
-        if rel.endswith(".py") and rel.startswith(("apps/", "config/", "deriv_platform/")):
+            filename_refs = [source for source, body in contents.items() if source != rel and pattern.search(body)]
+        if rel.startswith(("apps/", "config/", "deriv_platform/")) and path.suffix == ".py":
             module = rel[:-3].replace("/", ".")
             if module in corpus:
-                module_refs = [s for s, body in sources.items() if s != rel and module in body]
-        refs = sorted(set(exact_refs + filename_refs + module_refs))
-        if "/migrations/" in rel or rel.startswith("migrations/"):
-            decision, risk, basis = "RETAIN_MIGRATION_REVIEW", "critical", "Migration graph and deployed database state must be checked."
-        elif name in RUNTIME_NAMES or rel.startswith((".github/", "config/", "deriv_platform/", "apps/")):
-            decision, risk, basis = "RETAIN_RUNTIME_REVIEW", "high", "Framework, deployment, dynamic import, task, URL or discovery entry point."
-        elif refs:
-            decision, risk, basis = "RETAIN_REFERENCED", "medium", "Static path/name/module references found; confirm semantic reachability."
+                module_refs = [source for source, body in contents.items() if source != rel and module in body]
+            else:
+                module_refs = []
         else:
-            decision, risk, basis = "CANDIDATE_MANUAL_REVIEW", "unknown", "No static references found; not proof of dead code or safe deletion."
-        rows.append({
-            "path": rel,
-            "bytes": path.stat().st_size if path.exists() else 0,
-            "exact_path_reference_files": len(set(exact_refs)),
-            "filename_reference_files": len(set(filename_refs)),
-            "module_reference_files": len(set(module_refs)),
-            "reference_files": ";".join(refs),
-            "decision": decision,
-            "risk": risk,
-            "decision_basis": basis,
-        })
-    output = (ROOT / args.output).resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
+            module_refs = []
+        refs = sorted(set(exact_path_refs + filename_refs + module_refs))
+        if rel == "docs/REPOSITORY_DEAD_CODE_AUDIT.md":
+            decision, risk, reason = "REMOVE_DOCUMENTATION", "low", "Superseded by generated per-file audit output and PR description; user requested removal after audit."
+        elif name in HIGH_RISK_NAMES or rel.startswith((".github/", "config/", "deriv_platform/", "apps/")):
+            decision, risk, reason = "RETAIN_REVIEW_REFERENCES", "high", "Framework/runtime/deployment entry point; static text references cannot establish reachability."
+        elif rel.endswith(("/migrations/",)) or "/migrations/" in rel or re.search(r"(^|/)migrations?(_|/|\.)", rel):
+            decision, risk, reason = "RETAIN_MIGRATION_REVIEW", "critical", "Migration history/schema dependencies require database-state and migration-graph validation."
+        elif refs:
+            decision, risk, reason = "RETAIN_REFERENCED", "medium", "Found repository text/module references; inspect reference semantics before any consolidation."
+        else:
+            decision, risk, reason = "CANDIDATE_MANUAL_REVIEW", "unknown", "No static filename/path/module reference found; dynamic imports, framework discovery, external use, or binary/runtime use may exist. Not safe to auto-delete."
+        rows.append({"path": rel, "file_type": path.suffix or "[no extension]", "bytes": path.stat().st_size if path.exists() else 0, "exact_path_reference_files": len(set(exact_path_refs)), "filename_reference_files": len(set(filename_refs)), "module_reference_files": len(set(module_refs)), "reference_files": ";".join(refs), "decision": decision, "risk": risk, "decision_basis": reason})
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    with OUTPUT.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()), lineterminator="\n")
+        writer.writeheader(); writer.writerows(rows)
     counts = Counter(row["decision"] for row in rows)
-    print(f"Tracked paths: {len(paths)}; text sources scanned: {len(sources)}")
-    for decision, count in sorted(counts.items()):
-        print(f"{decision}: {count}")
-    print(f"Report: {output.relative_to(ROOT)}")
-    print("Candidates require manual framework, runtime, deployment and data checks; no files are deleted.")
+    print(f"tracked_files={len(paths)} text_sources_scanned={len(contents)} report={OUTPUT.relative_to(ROOT)}")
+    for key, value in sorted(counts.items()): print(f"{key}={value}")
+    print("NOTE: candidate rows are not deletion approvals; dynamic and external references require manual validation.")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
