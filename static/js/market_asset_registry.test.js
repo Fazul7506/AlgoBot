@@ -50,6 +50,12 @@ for (const symbol of ['RDBULL','RDBEAR','RB_100','RB_200','CRASH1000','AAPL','CR
   assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped instead of receiving a fabricated or unrelated icon');
   assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback');
 }
+for (const [symbol, name] of [['WLDEUR','EUR Basket'],['WLDGBP','GBP Basket'],['WLDUSD','USD Basket'],['WLDXAU','Gold Basket']]) {
+  const basket = api.resolve({underlying_symbol:symbol, underlying_symbol_name:name, underlying_symbol_type:'forex_basket', market:'basket_index', submarket:'forex_basket'});
+  assert(basket.family === 'basket-indices', symbol + ' is classified as a basket index');
+  assert(basket.status === 'missing', symbol + ' must not borrow AUD Basket artwork without its own verified official source');
+  assert(api.renderIcon({underlying_symbol:symbol, underlying_symbol_name:name, underlying_symbol_type:'forex_basket', market:'basket_index', submarket:'forex_basket'}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback until its official SVG is verified');
+}
 const audBasket = api.resolve({underlying_symbol:'WLDAUD', underlying_symbol_name:'AUD Basket', underlying_symbol_type:'forex_basket', market:'basket_index', submarket:'forex_basket'});
 assert(audBasket.family === 'basket-indices', 'Deriv AUD Basket uses the basket-index family');
 assert(audBasket.status === 'verified', 'AUD Basket resolves to its official catalogue SVG');
