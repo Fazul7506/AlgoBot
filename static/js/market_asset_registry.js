@@ -13,11 +13,12 @@
     '1HZ50V':'Volatility 50 (1s) Index', '1HZ75V':'Volatility 75 (1s) Index',
     '1HZ90V':'Volatility 90 (1s) Index', '1HZ100V':'Volatility 100 (1s) Index'
   });
-  const cryptoAliases = Object.freeze({DOGEUSD:'DOGUSD', AVAXUSD:'AVAUSD'});
+  const cryptoAliases = Object.freeze({DOGEUSD:'DOGUSD', AVAXUSD:'AVAUSD', LINKUSD:'LNKUSD', DASHUSD:'DSHUSD'});
+  const commodityAliases = Object.freeze({UKOIL:'UK Brent Oil', USOIL:'US Oil'});
   const classify = instrument => {
     const text = [instrument.market, instrument.subMarket, instrument.symbolType, instrument.displayName].join(' ').toLowerCase();
     const symbol = instrument.symbol.toUpperCase();
-    if (/commodit|metal|energy|oil|gold|silver|palladium|platinum/.test(text) || /^(?:XAU|XAG|XPT|XPD|WTI|BRENT|NGAS|UKOIL|USOIL)/.test(symbol) || /^FRX(?:XAU|XAG|XPT|XPD)/.test(symbol)) return 'commodities';
+    if (/commodit|metal|energy|oil|gold|silver|palladium|platinum/.test(text) || /^(?:XAU|XAG|XPT|XPD|WTI|BRENT|NGAS|UKOIL|USOIL)/.test(symbol) || /^FRX(?:XAU|XAG|XPT|XPD|NGAS|UKOIL|USOIL)/.test(symbol)) return 'commodities';
     if (/\bforex\b|\bcurrency\b|foreign exchange/.test(text) || /^FRX[A-Z]{6}$/.test(symbol)) return 'forex';
     if (/synthetic|derived|volatility|boom|crash|jump|step|range break/.test(text) || /^(?:R_\d+|RB_\d+|1HZ\d+V|BOOM\d+|CRASH\d+|JUMP\d+|STEP\d+|RDBEAR|RDBULL)/.test(symbol)) return 'synthetic-indices';
     if (/crypt|digital asset/.test(text) || /^(?:CRY|BTC|ETH|LTC|XRP|BCH|ADA|DOGE|SOL|DOT|BNB|TRX|AVAX|LINK|XLM|EOS|DASH|ZEC|XMR)[A-Z0-9/_-]*$/.test(symbol)) return 'cryptocurrency';

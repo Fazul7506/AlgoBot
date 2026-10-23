@@ -12,6 +12,13 @@ const legacy = api.normalise({symbol:'frxEURUSD',display_name:'EUR/USD',symbol_t
 assert(legacy.symbol === current.symbol && legacy.displayName === current.displayName, 'normalizes legacy Deriv fields');
 assert(api.manifestEntries.length >= 100, 'loads a broad manifest of source-verified Deriv SVG URLs');
 assert(api.manifestEntries.every(x => x.url.startsWith('https://cdn.prod.website-files.com/') && x.url.endsWith('.svg')), 'manifest only contains remote SVGs from Deriv CDN');
+for (const symbol of ['CRYETHUSD','CRYLTCUSD','CRYSOLUSD','CRYXRPUSD','CRYDOTUSD','CRYLINKUSD','CRYXLMUSD','CRYDASHUSD','CRYAVAXUSD']) {
+  assert(api.resolve({symbol}).status === 'verified', symbol + ' resolves through the official Deriv crypto catalogue');
+}
+for (const symbol of ['frxXAGEUR','frxXAGUSD','frxXAUEUR','frxXPDUSD','frxXPTUSD','frxNGAS']) {
+  assert(api.resolve({symbol}).status === 'verified', symbol + ' resolves through the official Deriv commodities catalogue');
+}
+
 assert(!api.manifestEntries.some(x => x.url.includes('instruments-placeholder.svg')), 'placeholder icons are excluded');
 for (const [symbol, suffix] of [
   ['CRYBTCUSD','market-cryptocurrency-btcusd.svg'],
@@ -48,6 +55,7 @@ assert(report.total === 4 && report.verified === 3 && report.missing === 1, 'cov
 assert(report.byFamily.forex.mapped === 1 && report.byFamily['synthetic-indices'].mapped === 1, 'coverage reports source assets by market family');
 assert(report.missingSymbols.length === 1, 'coverage enumerates unmapped symbols');
 assert(!fs.existsSync('static/images/market-assets/synthetic') && !fs.existsSync('static/images/market-flags'), 'no locally authored market SVG directories remain');
+assert(!fs.readFileSync('static/js/market_asset_registry.js','utf8').includes('cdn.simpleicons.org') && !fs.readFileSync('static/js/market_asset_registry.js','utf8').includes('flagcdn.com'), 'market registry does not fall back to third-party generated or generic icon sources');
 for (const file of ['static/js/trading_terminal.js','static/js/market_scanner.js','static/js/predictions_workspace_fix.js']) {
   const content = fs.readFileSync(file,'utf8');
   assert(!content.includes("status==='authored'") && !content.includes("status === 'authored'"), file + ' has no generated artwork path');
