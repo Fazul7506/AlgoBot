@@ -143,28 +143,26 @@
       }
     };
   const load = async root => {
-    const [models, preds, jobs] = await Promise.allSettled([
+    // Only request endpoints this authenticated, non-staff page is authorized to read.
+    // Training jobs/model governance are staff-only and must not be polled here.
+    const [models, preds] = await Promise.allSettled([
       getJSON('/api/ai/models/'),
-      getJSON('/api/ai/predictions/'),
-      getJSON('/api/ai/training-jobs/')
+      getJSON('/api/ai/predictions/')
     ]);
     const modelOk = models.status === 'fulfilled';
     const predictionOk = preds.status === 'fulfilled';
-    const jobsOk = jobs.status === 'fulfilled';
-    // Governance is staff-only. Never call its endpoint from this user-facing page.
-    // Outcome metrics stay unavailable until a user-scoped, verified-outcomes API exists.
+    // Accuracy/return metrics remain unavailable until verified outcomes exist.
     const governanceOk = false;
     const performance = {};
     const ms = modelOk ? list(models.value) : [];
     const ps = predictionOk ? list(preds.value) : [];
-    const js = jobsOk ? list(jobs.value) : [];
     const set = (q, v) => { const e = root.querySelector(q); if (e) e.textContent = v; };
     set('[data-ai-count]', predictionOk ? String(ps.length) : 'Unavailable');
     set('[data-ai-performance-total]', governanceOk && performance.total_signals != null ? String(performance.total_signals) : predictionOk ? String(ps.length) : 'Unavailable');
     set('[data-ai-performance-correct]', governanceOk && performance.correct_signals != null ? String(performance.correct_signals) : 'Unavailable');
     set('[data-ai-performance-return]', governanceOk && performance.average_return != null && Number.isFinite(Number(performance.average_return)) ? (Number(performance.average_return) > 0 ? '+' : '') + (Number(performance.average_return) * 100).toFixed(1) + '%' : 'Unavailable');
     set('[data-ai-model-count]', modelOk ? String(ms.length) : 'Unavailable');
-    set('[data-ai-job-count]', jobsOk ? String(js.length) : 'Unavailable');
+    set('[data-ai-job-count]', 'Staff only');
     const calibrated = ps.filter(p => Number(p.payload?.models_used || 0) > 0 && p.confidence != null && p.confidence !== '' && Number.isFinite(Number(p.confidence)));
     set('[data-ai-confidence]', !predictionOk || !calibrated.length
       ? 'Unavailable'
