@@ -6,7 +6,13 @@ broker or accepts a production account as a test target.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Callable
+
+BROKER_SLUG_RE = re.compile(r"[a-z][a-z0-9_]{1,47}")
+SENSITIVE_EVIDENCE_RE = re.compile(
+    r"(?i)(?:bearer\s|access[_-]?token|client[_-]?secret|password|api[_-]?key|authorization|[?&](?:token|otp|code)=)"
+)
 
 REQUIRED_SANDBOX_CHECKS = (
     "authentication",
@@ -34,7 +40,9 @@ class SandboxCheckResult:
         return {
             "status": "passed" if self.passed else "failed",
             "evidence": self.evidence,
-            "details": self.details,
+            # Never echo provider-supplied detail strings: they may contain secrets
+            # or account data. Emit a controlled status description instead.
+            "details": "Provider check passed." if self.passed else "Provider check failed.",
             "resubmit_before_reconcile": self.reconciled_before_resubmit is False,
         }
 
@@ -54,8 +62,8 @@ class BrokerSandboxVerifier:
             raise SandboxVerificationError("Broker verification must target a provider sandbox/demo environment.")
         if not account_identity_verified:
             raise SandboxVerificationError("Sandbox account identity must be verified before any order test.")
-        if not broker_slug or not broker_slug.replace("_", "").isalnum() or not broker_slug[0].isalpha():
-            raise SandboxVerificationError("broker_slug is invalid.")
+        if not isinstance(broker_slug, str) or not BROKER_SLUG_RE.fullmatch(broker_slug):
+            raise SandboxVerificationError("broker_slug must be a safe lowercase slug.")
         missing = sorted(set(REQUIRED_SANDBOX_CHECKS) - set(checks))
         extra = sorted(set(checks) - set(REQUIRED_SANDBOX_CHECKS))
         if missing:
@@ -67,9 +75,7 @@ class BrokerSandboxVerifier:
 
     def run(self, *, commit_sha: str) -> dict[str, Any]:
         """Execute trusted sandbox checks and return sanitized, evidence-backed results."""
-        import re
-
-        if not re.fullmatch(r"[0-9a-f]{40}", commit_sha or ""):
+        if not isinstance(commit_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", commit_sha):
             raise SandboxVerificationError("A full candidate commit SHA is required.")
         results: dict[str, Any] = {}
         for name in REQUIRED_SANDBOX_CHECKS:
@@ -90,11 +96,16 @@ class BrokerSandboxVerifier:
                     "details": "Provider check returned an invalid result type.",
                 }
                 continue
-            if not result.evidence.strip():
+            if (
+                not isinstance(result.evidence, str)
+                or not result.evidence.strip()
+                or len(result.evidence) > 500
+                or SENSITIVE_EVIDENCE_RE.search(result.evidence)
+            ):
                 results[name] = {
                     "status": "failed",
                     "evidence": "",
-                    "details": "Provider check supplied no evidence reference.",
+                    "details": "Provider check supplied an invalid or potentially sensitive evidence reference.",
                 }
                 continue
             if name == "ambiguous_execution_reconciliation" and result.reconciled_before_resubmit is not True:
