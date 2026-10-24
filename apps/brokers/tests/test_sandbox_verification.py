@@ -61,6 +61,37 @@ class BrokerSandboxVerifierTests(unittest.TestCase):
             report["checks"]["ambiguous_execution_reconciliation"]["status"], "failed"
         )
 
+    def test_rejects_noncanonical_broker_slugs(self):
+        for slug in ("Deriv", "bad-slug", "x", "a" * 49, "../deriv"):
+            with self.subTest(slug=slug):
+                with self.assertRaises(SandboxVerificationError):
+                    BrokerSandboxVerifier(
+                        broker_slug=slug, environment="sandbox",
+                        account_identity_verified=True, checks=self.make_checks(),
+                    )
+
+    def test_does_not_echo_provider_details_or_sensitive_evidence(self):
+        checks = self.make_checks()
+        checks["market_data"] = lambda: SandboxCheckResult(
+            passed=True, evidence="https://example.invalid/report?access_token=secret",
+            details="Bearer secret-account-token",
+        )
+        checks["fills"] = lambda: SandboxCheckResult(
+            passed=True, evidence="sanitized-report#fills",
+            details="account password should not leak",
+        )
+        verifier = BrokerSandboxVerifier(
+            broker_slug="deriv_demo", environment="sandbox",
+            account_identity_verified=True, checks=checks,
+        )
+        report = verifier.run(commit_sha="a" * 40)
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["checks"]["market_data"]["status"], "failed")
+        self.assertNotIn("access_token=secret", str(report))
+        self.assertNotIn("Bearer secret-account-token", str(report))
+        self.assertNotIn("account password should not leak", str(report))
+        self.assertEqual(report["checks"]["fills"]["details"], "Provider check passed.")
+
     def test_sanitizes_provider_exceptions_and_requires_full_commit(self):
         checks = self.make_checks()
         checks["market_data"] = lambda: (_ for _ in ()).throw(RuntimeError("secret token should not leak"))
