@@ -11,6 +11,10 @@ assert(current.symbol === 'frxEURUSD' && current.displayName === 'EUR/USD', 'nor
 const legacy = api.normalise({symbol:'frxEURUSD',display_name:'EUR/USD',symbol_type:'forex'});
 assert(legacy.symbol === current.symbol && legacy.displayName === current.displayName, 'normalizes legacy Deriv fields');
 assert(api.manifestEntries.length >= 100, 'loads a broad manifest of source-verified Deriv SVG URLs');
+const apple = api.resolve({symbol:'AAPL', display_name:'Apple Inc', market:'stock'});
+assert(apple.status === 'verified', 'AAPL resolves through its exact official Deriv stock SVG');
+assert(apple.asset.src === 'https://media.ffycdn.net/eu/deriv/EbzwV8V7sdkDD2hsoJQd.svg', 'AAPL uses the official Apple-specific Deriv SVG');
+assert(api.manifestEntries.some(x => x.symbol === 'AAPL.OQ' && x.market === 'stocks-and-indices'), 'stock manifest retains exchange-qualified ticker identity');
 assert(api.manifestEntries.every(x => (x.url.startsWith('https://cdn.prod.website-files.com/') || x.url.startsWith('https://media.ffycdn.net/eu/deriv/')) && x.url.endsWith('.svg')), 'manifest only contains remote SVGs from Deriv CDN');
 for (const symbol of ['CRYETHUSD','CRYLTCUSD','CRYSOLUSD','CRYXRPUSD','CRYDOTUSD','CRYLINKUSD','CRYXLMUSD','CRYDASHUSD','CRYAVAXUSD']) {
   assert(api.resolve({symbol}).status === 'verified', symbol + ' resolves through the official Deriv crypto catalogue');
@@ -46,7 +50,7 @@ for (const [symbol, suffix] of [
   assert(resolved.status === 'verified', symbol + ' resolves to an authentic Deriv SVG');
   assert(resolved.asset.src.includes(suffix), symbol + ' uses its exact Deriv-hosted SVG');
 }
-for (const symbol of ['RDBULL','RDBEAR','AAPL','CRYNOTINCATALOGUE','CRASH50','CRASH150N','CRASH600','BOOM50','BOOM100','BOOM150','BOOM200','frxNGAS','USOIL']) {
+for (const symbol of ['RDBULL','RDBEAR','CRYNOTINCATALOGUE','CRASH50','CRASH150N','CRASH600','BOOM50','BOOM100','BOOM150','BOOM200','frxNGAS','USOIL']) {
   assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped until its own official instrument-specific SVG is verified');
   assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback rather than shared or fabricated artwork');
 }
@@ -127,6 +131,8 @@ for (const instrument of [
 }
 const syncScript = fs.readFileSync('scripts/sync_deriv_market_asset_manifest.py','utf8');
 assert(syncScript.includes('load_existing_official_media_entries'), 'manifest sync preserves manually verified modern Deriv synthetic SVG entries');
+assert(syncScript.includes('("stocks-and-indices", "stocks")'), 'manifest sync scrapes the official individual-stock catalogue as well as stock indices');
+assert(syncScript.includes('symbol, name = match.group(1).strip(), match.group(2).strip()'), 'stock sync preserves exact exchange-qualified ticker symbols');
 assert(syncScript.includes('OFFICIAL_DERIV_MEDIA_PREFIX'), 'manifest sync explicitly validates the official Deriv media CDN');
 assert(syncScript.includes('def validate_svg_asset(url):'), 'sync verifies fetched asset content, not only URL suffixes');
 assert(syncScript.includes('response.read(16384)'), 'sync inspects the actual SVG response body');
