@@ -12,6 +12,8 @@ on:
       - "apps/brokers/generated_drafts/**"
       - "scripts/validate_broker_*.py"
       - ".github/workflows/broker-adapter-validation.yml"
+      - ".github/workflows/broker-onboarding-pipeline.yml"
+      - "scripts/generate_broker_draft.py"
       - "requirements/base.txt"
   workflow_dispatch:
     inputs:
