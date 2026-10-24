@@ -26,6 +26,8 @@ BASE = "https://ae.deriv.com/markets/"
 USER_AGENT = "AlgoBot-Deriv-Asset-Sync/1.0"
 OFFICIAL_WEBFLOW_PREFIX = "https://cdn.prod.website-files.com/"
 OFFICIAL_DERIV_MEDIA_PREFIX = "https://media.ffycdn.net/eu/deriv/"
+OFFICIAL_SMARTCHARTS_RAW_PREFIX = "https://raw.githubusercontent.com/deriv-com/deriv-smartcharts/e8243d9cb0f47a3d3dcbd184910d36667eb4b43d/"
+OFFICIAL_SMARTCHARTS_SOURCE_PREFIX = "https://github.com/deriv-com/deriv-smartcharts/blob/e8243d9cb0f47a3d3dcbd184910d36667eb4b43d/"
 
 
 def fetch(url):
@@ -43,6 +45,7 @@ def validate_svg_asset(url):
     if not (
         url.startswith(OFFICIAL_WEBFLOW_PREFIX)
         or url.startswith(OFFICIAL_DERIV_MEDIA_PREFIX)
+        or url.startswith(OFFICIAL_SMARTCHARTS_RAW_PREFIX)
     ) or not url.lower().endswith(".svg"):
         raise ValueError("Unapproved official SVG URL: " + url)
     request = urllib.request.Request(
@@ -72,11 +75,17 @@ def load_existing_official_media_entries():
         url = item.get("url", "")
         if (
             item.get("market") in {"synthetic-indices", "basket-indices", "stocks-and-indices"}
-            and url.startswith(OFFICIAL_DERIV_MEDIA_PREFIX)
+            and (
+                url.startswith(OFFICIAL_DERIV_MEDIA_PREFIX)
+                or url.startswith(OFFICIAL_SMARTCHARTS_RAW_PREFIX)
+            )
             and url.lower().endswith(".svg")
             and "instruments-placeholder.svg" not in url
             and item.get("name")
-            and item.get("sourcePage", "").startswith(("https://deriv.com/", "https://ae.deriv.com/"))
+            and (
+                item.get("sourcePage", "").startswith(("https://deriv.com/", "https://ae.deriv.com/"))
+                or item.get("sourcePage", "").startswith(OFFICIAL_SMARTCHARTS_SOURCE_PREFIX)
+            )
         ):
             preserved.append(item)
     return preserved
