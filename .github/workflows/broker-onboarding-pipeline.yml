@@ -82,15 +82,15 @@ jobs:
           cat > /tmp/Dockerfile.broker-draft <<'EOF'
           FROM python:3.13-slim
           ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
-          WORKDIR /candidate
-          ARG BROKER_SLUG
-          RUN python -m pip install --no-cache-dir pytest
-          COPY apps/brokers/generated_drafts/${BROKER_SLUG}/ /candidate/
+          WORKDIR /app
+          COPY requirements/base.txt /tmp/requirements-base.txt
+          RUN python -m pip install --no-cache-dir -r /tmp/requirements-base.txt pytest
+          COPY . /app
           USER 65532:65532
           CMD ["pytest", "-q", "test_adapter_contract.py"]
           EOF
           docker build --pull --no-cache --build-arg BROKER_SLUG="$BROKER_SLUG" -f /tmp/Dockerfile.broker-draft -t algobot-broker-candidate .
-          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 512m --cpus 1 algobot-broker-candidate
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 768m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=64m --env DJANGO_ENV=development --env DJANGO_TESTING=true --env USE_REDIS=false --env SECRET_KEY=isolated-test-only-secret --env CREDENTIALS_ENCRYPTION_KEY=isolated-test-only-key algobot-broker-candidate python -m pytest -q "apps/brokers/generated_drafts/$BROKER_SLUG/test_adapter_contract.py"
       - name: Create reviewable draft PR
         env:
           GH_TOKEN: ${{ github.token }}
