@@ -15,6 +15,10 @@ const step100 = api.resolve({symbol:'STP100', display_name:'Step Index', market:
 assert(step100.status === 'verified', 'STP100 resolves to the official Step Index SVG');
 assert(step100.asset.src === 'https://media.ffycdn.net/eu/deriv/iHeoSRskrtmfrmvq3SXr.svg', 'STP100 uses the exact official Step Index SVG');
 assert(api.manifestEntries.some(x => x.symbol === 'STP100' && x.name === 'Step Index'), 'manifest explicitly records the STP100 symbol identity');
+const step100BrokerAlias = api.resolve({symbol:'stpRNG', display_name:'Step Index 100', market:'synthetic'});
+assert(step100BrokerAlias.status === 'verified', 'Deriv stpRNG / Step Index 100 resolves to the official Step Index SVG');
+assert(step100BrokerAlias.asset.src === step100.asset.src, 'Step Index 100 broker alias uses the exact same official Step Index SVG');
+assert(api.renderIcon({symbol:'stpRNG', display_name:'Step Index 100', market:'synthetic'}).includes(step100.asset.src), 'Step Index 100 broker alias renders the official SVG');
 const apple = api.resolve({symbol:'AAPL', display_name:'Apple Inc', market:'stock'});
 assert(apple.status === 'verified', 'AAPL resolves through its exact official Deriv stock SVG');
 assert(apple.asset.src === 'https://media.ffycdn.net/eu/deriv/EbzwV8V7sdkDD2hsoJQd.svg', 'AAPL uses the official Apple-specific Deriv SVG');
