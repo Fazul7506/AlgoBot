@@ -57,6 +57,10 @@ for (const symbol of ['CRYNOTINCATALOGUE','CRASH150N','frxNGAS','USOIL']) {
   assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback rather than shared or fabricated artwork');
 }
 // These exact symbols use official, commit-pinned instrument SVGs from Deriv SmartCharts.
+for (const [symbol, displayName] of [['RDBULL','Daily Reset Bull Index'],['RDBEAR','Daily Reset Bear Index']]) {
+  assert(api.resolve({symbol, display_name:displayName, market:'synthetic'}).status === 'verified',
+    symbol + ' resolves by exact API symbol even when Deriv supplies a display-name alias');
+}
 for (const [symbol, suffix] of [
   ['BOOM50','boom50%20index/boom50%20index.svg'],
   ['BOOM100','boom100%20index/boom100%20index.svg'],
