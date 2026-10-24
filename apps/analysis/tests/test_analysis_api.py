@@ -104,7 +104,7 @@ class AnalysisSmokeTests(TestCase):
         for epoch, close in ((100, 100), (160, 101), (220, 102)):
             Candle.objects.create(
                 symbol=market, timeframe="1m", open=close, high=close + 1,
-                low=close - 1, close=close, volume=1, epoch=epoch,
+                low=close - 1, close=close, volume=1, epoch=epoch, source="deriv_candles",
             )
         def slow_capabilities(symbol):
             time.sleep(1.0)
