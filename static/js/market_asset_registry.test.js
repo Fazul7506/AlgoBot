@@ -15,6 +15,8 @@ const apple = api.resolve({symbol:'AAPL', display_name:'Apple Inc', market:'stoc
 assert(apple.status === 'verified', 'AAPL resolves through its exact official Deriv stock SVG');
 assert(apple.asset.src === 'https://media.ffycdn.net/eu/deriv/EbzwV8V7sdkDD2hsoJQd.svg', 'AAPL uses the official Apple-specific Deriv SVG');
 assert(api.manifestEntries.some(x => x.symbol === 'AAPL.OQ' && x.market === 'stocks-and-indices'), 'stock manifest retains exchange-qualified ticker identity');
+const aal = api.resolve({symbol:'AAL', display_name:'American Airlines Group Inc', market:'stock'});
+assert(aal.status === 'verified' && aal.asset.src === 'https://media.ffycdn.net/eu/deriv/xKHk2HaxuRu2vzJBbQEk.svg', 'AAL resolves to its distinct official Deriv stock SVG');
 assert(api.manifestEntries.every(x => (x.url.startsWith('https://cdn.prod.website-files.com/') || x.url.startsWith('https://media.ffycdn.net/eu/deriv/')) && x.url.endsWith('.svg')), 'manifest only contains remote SVGs from Deriv CDN');
 for (const symbol of ['CRYETHUSD','CRYLTCUSD','CRYSOLUSD','CRYXRPUSD','CRYDOTUSD','CRYLINKUSD','CRYXLMUSD','CRYDASHUSD','CRYAVAXUSD']) {
   assert(api.resolve({symbol}).status === 'verified', symbol + ' resolves through the official Deriv crypto catalogue');
