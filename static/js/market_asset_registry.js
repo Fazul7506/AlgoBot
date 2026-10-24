@@ -66,6 +66,7 @@
       add(normaliseStockSymbol(symbol));
       add(symbol.replace(/\.[A-Z]+$/, ''));
     } else if (family === 'synthetic-indices') {
+      add(symbol);
       add(syntheticNames[symbol]);
       add(syntheticNames[symbol.replace(/[^A-Z0-9]/g, '')]);
     }
