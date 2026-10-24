@@ -34,7 +34,7 @@ class Migration(migrations.Migration):
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("provider_name", models.CharField(db_index=True, max_length=120)),
-                ("provider_slug", models.SlugField(db_index=True, max_length=120)),
+                ("provider_slug", models.SlugField(max_length=120)),
                 ("status", models.CharField(choices=[("queued", "Queued"), ("generating", "Generating"), ("pr_open", "PR Open"), ("validating", "Validating"), ("failed", "Failed"), ("merged", "Merged")], db_index=True, default="queued", max_length=20)),
                 ("pull_request_number", models.PositiveIntegerField(blank=True, null=True)),
                 ("pull_request_url", models.URLField(blank=True)),
