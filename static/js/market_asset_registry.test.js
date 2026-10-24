@@ -50,11 +50,12 @@ for (const symbol of ['RDBULL','RDBEAR','AAPL','CRYNOTINCATALOGUE','CRASH50','CR
   assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped until its own official instrument-specific SVG is verified');
   assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback rather than shared or fabricated artwork');
 }
-// No shared official URL may be treated as a verified instrument-specific synthetic icon.
+// The published manifest itself must not claim shared synthetic art is instrument-specific.
 const syntheticByUrl = new Map();
 for (const item of api.manifestEntries.filter(x => x.market === 'synthetic-indices')) {
   syntheticByUrl.set(item.url, (syntheticByUrl.get(item.url) || 0) + 1);
 }
+assert([...syntheticByUrl.values()].every(count => count === 1), 'every synthetic manifest entry has its own unique official SVG URL');
 for (const [url, count] of syntheticByUrl) {
   if (count > 1) {
     const shared = api.manifestEntries.filter(x => x.market === 'synthetic-indices' && x.url === url);
