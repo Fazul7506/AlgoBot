@@ -71,7 +71,7 @@ def load_existing_official_media_entries():
     for item in payload.get("entries", []):
         url = item.get("url", "")
         if (
-            item.get("market") in {"synthetic-indices", "basket-indices"}
+            item.get("market") in {"synthetic-indices", "basket-indices", "stocks-and-indices"}
             and url.startswith(OFFICIAL_DERIV_MEDIA_PREFIX)
             and url.lower().endswith(".svg")
             and "instruments-placeholder.svg" not in url
