@@ -19,7 +19,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       DJANGO_ENV: development
       DJANGO_TESTING: "true"
@@ -48,6 +48,7 @@ jobs:
           DRAFT="apps/brokers/generated_drafts/$CANDIDATE_SLUG"
           test -f "$DRAFT/adapter.py"
           test -f "$DRAFT/test_adapter_contract.py"
+          test -f "$DRAFT/README.md"
           test -f "$DRAFT/readiness.json"
           python -m pip install --upgrade pip
           python -m pip install -r requirements/base.txt
@@ -72,7 +73,22 @@ jobs:
         env:
           CANDIDATE_SLUG: ${{ inputs.candidate_slug }}
         run: |
-          docker run --rm --network none --read-only --cap-drop ALL             --security-opt no-new-privileges --pids-limit 128 --memory 768m --cpus 1             --tmpfs /tmp:rw,noexec,nosuid,size=64m             --env DJANGO_ENV=development --env DJANGO_TESTING=true --env USE_REDIS=false             --env SECRET_KEY=isolated-test-only-secret             --env CREDENTIALS_ENCRYPTION_KEY=isolated-test-only-key             algobot-broker-proposal:ci             python -m pytest -q "apps/brokers/generated_drafts/$CANDIDATE_SLUG/test_adapter_contract.py"
+          docker run --rm \
+            --network none \
+            --read-only \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --pids-limit 128 \
+            --memory 768m \
+            --cpus 1 \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --env DJANGO_ENV=development \
+            --env DJANGO_TESTING=true \
+            --env USE_REDIS=false \
+            --env SECRET_KEY=isolated-test-only-secret \
+            --env CREDENTIALS_ENCRYPTION_KEY=isolated-test-only-key \
+            algobot-broker-proposal:ci \
+            python -m pytest -q "apps/brokers/generated_drafts/$CANDIDATE_SLUG/test_adapter_contract.py"
 
   create-proposal:
     needs: validate
@@ -88,9 +104,14 @@ jobs:
         env:
           CANDIDATE_SLUG: ${{ inputs.candidate_slug }}
           SOURCE_REF: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git fetch origin "$SOURCE_REF"
-          git checkout "origin/$SOURCE_REF" --             "apps/brokers/generated_drafts/$CANDIDATE_SLUG/adapter.py"             "apps/brokers/generated_drafts/$CANDIDATE_SLUG/test_adapter_contract.py"             "apps/brokers/generated_drafts/$CANDIDATE_SLUG/README.md"             "apps/brokers/generated_drafts/$CANDIDATE_SLUG/readiness.json"
+          git checkout "origin/$SOURCE_REF" -- \
+            "apps/brokers/generated_drafts/$CANDIDATE_SLUG/adapter.py" \
+            "apps/brokers/generated_drafts/$CANDIDATE_SLUG/test_adapter_contract.py" \
+            "apps/brokers/generated_drafts/$CANDIDATE_SLUG/README.md" \
+            "apps/brokers/generated_drafts/$CANDIDATE_SLUG/readiness.json"
           mkdir -p "apps/brokers/adapters/proposals/$CANDIDATE_SLUG"
           cp "apps/brokers/generated_drafts/$CANDIDATE_SLUG/adapter.py" "apps/brokers/adapters/proposals/$CANDIDATE_SLUG/adapter.py"
           cp "apps/brokers/generated_drafts/$CANDIDATE_SLUG/test_adapter_contract.py" "apps/brokers/adapters/proposals/$CANDIDATE_SLUG/test_adapter_contract.py"
@@ -99,11 +120,11 @@ jobs:
           git checkout main -- "apps/brokers/generated_drafts/$CANDIDATE_SLUG"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          BRANCH="broker-proposal/$CANDIDATE_SLUG-$GITHUB_RUN_ID"
-          git checkout -b "$BRANCH"
+          PROPOSAL_BRANCH="broker-proposal/$CANDIDATE_SLUG-$GITHUB_RUN_ID"
+          git checkout -b "$PROPOSAL_BRANCH"
           git add "apps/brokers/adapters/proposals/$CANDIDATE_SLUG"
           git commit -m "Propose reviewed broker adapter: $CANDIDATE_SLUG"
-          git push origin "$BRANCH"
-          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH"             --draft --title "[Draft] Propose broker adapter: $CANDIDATE_SLUG"             --body "Automated proposal only. Static checks, isolated contract tests, sandbox evidence, and recorded human review were required by the workflow. This PR does not register or enable the broker. Maintainers must inspect the diff and re-run CI. Unknown order outcomes must be reconciled before resubmission."
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git push origin "$PROPOSAL_BRANCH"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$PROPOSAL_BRANCH" \
+            --draft --title "[Draft] Propose broker adapter: $CANDIDATE_SLUG" \
+            --body "Automated proposal only. Static checks, isolated contract tests, sandbox evidence, and recorded human review were required by the workflow. This PR does not register or enable the broker. Maintainers must inspect the diff and re-run CI. Unknown order outcomes must be reconciled before resubmission."
