@@ -56,16 +56,12 @@ for (const symbol of ['RDBULL','RDBEAR','CRYNOTINCATALOGUE','CRASH50','CRASH150N
   assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped until its own official instrument-specific SVG is verified');
   assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback rather than shared or fabricated artwork');
 }
-// Deriv's catalogue intentionally shares one official SVG across Boom 50/100/150/200.
-const sharedBoomSvg = 'https://media.ffycdn.net/eu/deriv/weWSGazF7NvtHUvaN3qX.svg';
-for (const [symbol, name] of [['BOOM50','Boom 50 Index'],['BOOM100','Boom 100 Index'],['BOOM150','Boom 150 Index'],['BOOM200','Boom 200 Index']]) {
-  const resolved = api.resolve({symbol, display_name:name, market:'synthetic'});
-  assert(resolved.status === 'verified', symbol + ' resolves through Deriv catalogue shared SVG mapping');
-  assert(resolved.asset.src === sharedBoomSvg, symbol + ' uses Deriv shared catalogue SVG');
+// Boom 50/100/150/200 remain unmapped until verified instrument-specific artwork is found.
+for (const symbol of ['BOOM50','BOOM100','BOOM150','BOOM200']) {
+  const resolved = api.resolve({symbol, market:'synthetic'});
+  assert(resolved.status === 'missing', symbol + ' must not use the Deriv brand logo as instrument artwork');
+  assert(api.renderIcon({symbol, market:'synthetic'}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback until authentic instrument artwork is verified');
 }
-const sharedBoomEntries = api.manifestEntries.filter(x => ['Boom 50 Index','Boom 100 Index','Boom 150 Index','Boom 200 Index'].includes(x.name));
-assert(sharedBoomEntries.length === 4, 'manifest retains every Boom instrument even when its official SVG URL is shared');
-assert(sharedBoomEntries.every(x => x.url === sharedBoomSvg), 'Boom instruments preserve Deriv shared SVG URL mapping');
 for (const [symbol, name, suffix] of [['WLDEUR','EUR Basket','bpNanTKWJ5JDU6Sydc9D.svg'],['WLDGBP','GBP Basket','WmaK2jWb4kU2uA5pN5St.svg'],['WLDUSD','USD Basket','pyyuRjcSgsPjHKFiQofK.svg'],['WLDXAU','Gold Basket','eDGZPTkJwKGPEcSkN95s.svg']]) {
   const basket = api.resolve({underlying_symbol:symbol, underlying_symbol_name:name, underlying_symbol_type:'forex_basket', market:'basket_index', submarket:'forex_basket'});
   assert(basket.family === 'basket-indices', symbol + ' is classified as a basket index');
