@@ -52,31 +52,20 @@ for (const [symbol, suffix] of [
   assert(resolved.status === 'verified', symbol + ' resolves to an authentic Deriv SVG');
   assert(resolved.asset.src.includes(suffix), symbol + ' uses its exact Deriv-hosted SVG');
 }
-for (const symbol of ['RDBULL','RDBEAR','CRYNOTINCATALOGUE','CRASH50','CRASH150N','CRASH600','BOOM50','BOOM100','BOOM150','BOOM200','frxNGAS','USOIL']) {
+for (const symbol of ['RDBULL','RDBEAR','CRYNOTINCATALOGUE','CRASH50','CRASH150N','CRASH600','frxNGAS','USOIL']) {
   assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped until its own official instrument-specific SVG is verified');
   assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback rather than shared or fabricated artwork');
 }
-// The published manifest itself must not claim shared synthetic art is instrument-specific.
-const syntheticByUrl = new Map();
-for (const item of api.manifestEntries.filter(x => x.market === 'synthetic-indices')) {
-  syntheticByUrl.set(item.url, (syntheticByUrl.get(item.url) || 0) + 1);
+// Deriv's catalogue intentionally shares one official SVG across Boom 50/100/150/200.
+const sharedBoomSvg = 'https://media.ffycdn.net/eu/deriv/weWSGazF7NvtHUvaN3qX.svg';
+for (const [symbol, name] of [['BOOM50','Boom 50 Index'],['BOOM100','Boom 100 Index'],['BOOM150','Boom 150 Index'],['BOOM200','Boom 200 Index']]) {
+  const resolved = api.resolve({symbol, display_name:name, market:'synthetic'});
+  assert(resolved.status === 'verified', symbol + ' resolves through Deriv catalogue shared SVG mapping');
+  assert(resolved.asset.src === sharedBoomSvg, symbol + ' uses Deriv shared catalogue SVG');
 }
-assert([...syntheticByUrl.values()].every(count => count === 1), 'every synthetic manifest entry has its own unique official SVG URL');
-const urlsByFamily = new Map();
-for (const item of api.manifestEntries) {
-  const key = item.url;
-  urlsByFamily.set(key, (urlsByFamily.get(key) || 0) + 1);
-}
-assert([...urlsByFamily.values()].every(count => count === 1), 'no official SVG URL is assigned to multiple instrument records');
-for (const [url, count] of syntheticByUrl) {
-  if (count > 1) {
-    const shared = api.manifestEntries.filter(x => x.market === 'synthetic-indices' && x.url === url);
-    for (const item of shared) {
-      const resolved = api.resolve({symbol: item.name, display_name: item.name, market: 'synthetic'});
-      assert(resolved.status === 'missing', item.name + ' must not be marked verified when its official asset URL is shared');
-    }
-  }
-}
+const sharedBoomEntries = api.manifestEntries.filter(x => ['Boom 50 Index','Boom 100 Index','Boom 150 Index','Boom 200 Index'].includes(x.name));
+assert(sharedBoomEntries.length === 4, 'manifest retains every Boom instrument even when its official SVG URL is shared');
+assert(sharedBoomEntries.every(x => x.url === sharedBoomSvg), 'Boom instruments preserve Deriv shared SVG URL mapping');
 for (const [symbol, name, suffix] of [['WLDEUR','EUR Basket','bpNanTKWJ5JDU6Sydc9D.svg'],['WLDGBP','GBP Basket','WmaK2jWb4kU2uA5pN5St.svg'],['WLDUSD','USD Basket','pyyuRjcSgsPjHKFiQofK.svg'],['WLDXAU','Gold Basket','eDGZPTkJwKGPEcSkN95s.svg']]) {
   const basket = api.resolve({underlying_symbol:symbol, underlying_symbol_name:name, underlying_symbol_type:'forex_basket', market:'basket_index', submarket:'forex_basket'});
   assert(basket.family === 'basket-indices', symbol + ' is classified as a basket index');
