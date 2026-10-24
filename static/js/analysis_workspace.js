@@ -10,12 +10,30 @@
   const money = (v,c) => v==null || v==="" || !Number.isFinite(Number(v)) ? "—" : (c ? c+" " : "")+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const state = v => String(v ?? "UNAVAILABLE").replaceAll("_"," ");
   const tone = v => ["BUY","BULLISH","STRONG BULLISH"].includes(String(v||"").toUpperCase()) ? "positive" : ["SELL","BEARISH","STRONG BEARISH"].includes(String(v||"").toUpperCase()) ? "negative" : "neutral";
-  const A = {markets:[],data:null,contract:null,timer:null,loadGeneration:0,overviewKey:'',overviewCache:[],predictionCache:[],overviewFetchedAt:0,overviewPending:false};
+  const A = {markets:[],data:null,contract:null,timer:null,loadGeneration:0,overviewKey:'',overviewCache:[],predictionCache:[],overviewFetchedAt:0,overviewPending:false,cachedData:null,cacheKey:''};
 
   async function request(path, options={}) {
-    return window.AlgoBotFrontendData.request(path, options, 45000);
+    return window.AlgoBotFrontendData.request(path, options, 12000);
   }
   function set(id,v){const e=$(id);if(e)e.textContent=v==null||v===""?"—":v}
+  function marketName(row){
+    if(!row)return "Market instrument";
+    const symbol=String(row.symbol||row.underlying_symbol||row.code||"").trim();
+    const supplied=String(row.display_name||row.displayName||row.name||row.underlying_symbol_name||"").trim();
+    if(supplied&&supplied.toUpperCase()!==symbol.toUpperCase()&&supplied!=="Market instrument")return supplied;
+    const resolved=window.AlgoBotMarketAssets?.resolve?.({...row,symbol});
+    if(resolved?.status==="verified"&&resolved.asset?.label)return resolved.asset.label;
+    const key=symbol.toUpperCase().replace(/^CRY/,"");
+    const known={R_10:"Volatility 10 Index",R_25:"Volatility 25 Index",R_50:"Volatility 50 Index",R_75:"Volatility 75 Index",R_100:"Volatility 100 Index",BOOM50:"Boom 50 Index",BOOM100:"Boom 100 Index",BOOM150:"Boom 150 Index",BOOM200:"Boom 200 Index",BOOM300:"Boom 300 Index",BOOM500:"Boom 500 Index",BOOM600:"Boom 600 Index",BOOM900:"Boom 900 Index",BOOM1000:"Boom 1000 Index",CRASH50:"Crash 50 Index",CRASH150:"Crash 150 Index",CRASH300:"Crash 300 Index",CRASH500:"Crash 500 Index",CRASH600:"Crash 600 Index",CRASH900:"Crash 900 Index",CRASH1000:"Crash 1000 Index",STPRNG:"Step Index 100",STP100:"Step Index 100",STP200:"Step Index 200",STP300:"Step Index 300",STP400:"Step Index 400",STP500:"Step Index 500",JD10:"Jump 10 Index",JD25:"Jump 25 Index",JD50:"Jump 50 Index",JD75:"Jump 75 Index",JD100:"Jump 100 Index",RB100:"Range Break 100 Index",RB200:"Range Break 200 Index",RDBEAR:"Bear Market Index",RDBULL:"Bull Market Index",BTCUSD:"BTC/USD",ETHUSD:"ETH/USD"};
+    if(known[key])return known[key];
+    const fast=/^1HZ(\d+)V$/.exec(key);if(fast)return "Volatility "+fast[1]+" (1s) Index";
+    const fx=/^FRX([A-Z]{6})$/.exec(key);if(fx)return fx[1].slice(0,3)+"/"+fx[1].slice(3);
+    return "Market instrument";
+  }
+  function iconFor(row){return window.AlgoBotMarketAssets?.renderIcon?.({...row,display_name:marketName(row)})||'<span class="market-avatar market-avatar-unmapped" aria-hidden="true">•</span>';}
+  function updateSelectedMarketIcon(){const select=$("symbol"),icon=$("analysisMarketIcon");if(!select||!icon)return;const row=A.markets.find(item=>String(item.symbol)===String(select.value));icon.innerHTML=row?iconFor(row):"";}
+  function cacheKey(symbol,tf,limit){return "algobot:analysis:snapshot:v1:"+[symbol,tf,limit].join(":");}
+  function restoreCached(symbol,tf,limit){A.cachedData=null;try{const raw=sessionStorage.getItem(cacheKey(symbol,tf,limit));const data=raw?JSON.parse(raw):null;if(data&&data.symbol===symbol&&Array.isArray(data.last_candles)){A.cachedData=data;A.data=data;render(data);setHealth(false,"SAVED DATA · REFRESHING");set("aFresh","SAVED DATA · NOT LIVE");const hero=$("heroFeedState");if(hero)hero.textContent="Showing saved analysis while refreshing";const stateNode=$("loadState");if(stateNode)stateNode.textContent="Showing last saved analysis; checking for current broker data…";return true;}}catch(_){}return false;}
   function list(id,items,fn,empty="No observed evidence."){const e=$(id);if(e)e.innerHTML=items?.length?items.map(fn).join(""):'<span class="muted">'+esc(empty)+"</span>"}
   function setHealth(ok,text){const feed=$("aFeed");if(feed){feed.className="health-dot "+(ok?"live":"");feed.textContent=text}set("aFeedText",text)}
   function resetUnavailable(){
@@ -111,8 +129,12 @@
   function render(d){
     A.data=d;
     const gate=d.execution_gate||{}, ai=d.ai||{}, layers=d.analysis_layers||{}, conf=d.confluence||{}, acct=d.account_context||{};
-    set("aResearchState",state(d.research_state)); set("aBrokerState",state(d.broker_state)); set("aSymbol",d.symbol); set("aTf",String(d.timeframe||"M1").toUpperCase()); set("aPrice",num(d.price)); set("aSignal",d.signal==null?"UNAVAILABLE":d.signal); $("aSignal").className="value "+tone(d.signal); set("aTechnical",d.score!=null?num(d.score,1)+"/100":"Technical score —"); set("aFresh",d.data_provenance?.fresh?"FRESH DATA":"DATA UNVERIFIED"); set("liveQuote",num(d.live_quote?.price)); set("liveQuoteAge",d.live_quote?.age_seconds!=null?"Live quote age "+d.live_quote.age_seconds+"s":"Live quote freshness unavailable"); set("liveQuoteSource",d.live_quote?.source||"Deriv live quote");
-    set("aTechnical",d.score!=null?num(d.score,1)+"/100":"—"); set("aConfidence",pctNorm(d.confidence)); const confidenceValue=Number(d.confidence);const confidenceFill=$("confidenceFill");if(confidenceFill)confidenceFill.style.width=Number.isFinite(confidenceValue)?Math.max(0,Math.min(100,confidenceValue<=1?confidenceValue*100:confidenceValue))+"%":"0%"; set("aRegime",d.volatility_regime);
+    const aiModelsUsed=Number(layers.ai?.models_used??ai.models_used??0);
+    const aiConfidenceValue=layers.ai?.confidence??ai.confidence??d.confidence;
+    const aiDecisionValue=layers.ai?.decision||ai.decision||layers.ai?.direction||ai.direction;
+    const hasModelEvidence=gate.ai_ready===true&&aiModelsUsed>0&&aiConfidenceValue!=null&&['BUY','SELL'].includes(String(aiDecisionValue||'').toUpperCase());
+    set("aResearchState",state(d.research_state)); set("aBrokerState",state(d.broker_state)); set("aSymbol",marketName(A.markets.find(m=>m.symbol===d.symbol)||{symbol:d.symbol})); set("aTf",String(d.timeframe||"M1").toUpperCase()); set("aPrice",num(d.price)); set("aSignal",d.signal==null?"UNAVAILABLE":d.signal); $("aSignal").className="value "+tone(d.signal); set("aTechnical",d.score!=null?num(d.score,1)+"/100":"Technical score —"); set("aFresh",d.data_provenance?.fresh?"FRESH DATA":"DATA UNVERIFIED"); set("liveQuote",num(d.live_quote?.price)); set("liveQuoteAge",d.live_quote?.age_seconds!=null?"Live quote age "+d.live_quote.age_seconds+"s":"Live quote freshness unavailable"); set("liveQuoteSource",d.live_quote?.source||"Deriv live quote");
+    set("aTechnical",d.score!=null?num(d.score,1)+"/100":"—"); set("aConfidence",hasModelEvidence?pctNorm(aiConfidenceValue):"Unavailable"); const confidenceValue=Number(aiConfidenceValue);const confidenceFill=$("confidenceFill");if(confidenceFill)confidenceFill.style.width=hasModelEvidence&&Number.isFinite(confidenceValue)?Math.max(0,Math.min(100,confidenceValue<=1?confidenceValue*100:confidenceValue))+"%":"0%"; set("aRegime",d.volatility_regime);
     const sentiment=d.sentiment&&typeof d.sentiment==="object"?d.sentiment:null;
     const sentimentLabel=sentiment?.label||sentiment?.sentiment||sentiment?.classification;
     set("sentimentState",sentimentLabel?state(sentimentLabel):"Unavailable");
@@ -123,7 +145,7 @@
     set("marketState",state(layers.market_data?.state)); set("marketSource",layers.market_data?.source||d.data_provenance?.broker); set("marketAge",d.data_provenance?.age_seconds!=null?d.data_provenance.age_seconds+"s":"—"); set("candleCount",d.candles??d.last_candles?.length);
     set("trendState",layers.technical?.structure||d.structure); set("trendScore",layers.technical?.score!=null?num(layers.technical.score,1)+"/100":"—"); set("momentumState",d.indicators?.rsi14!=null?"RSI "+num(d.indicators.rsi14,1):"—"); set("volatilityState",d.volatility_regime);
     set("strategyState",state(layers.strategy?.state)); set("strategyDirection",layers.strategy?.direction||"WAIT"); set("strategyEvidence",(layers.strategy?.evidence||[]).join(" · ")||"No persisted strategy evidence");
-    set("aiState",state(layers.ai?.state)); set("aiDecision",layers.ai?.decision||"UNAVAILABLE"); set("aiConfidence",pctNorm(layers.ai?.confidence)); set("aiModels",layers.ai?.models_used?String(layers.ai.models_used):"0"); set("aiAgreement",layers.ai?.agreement!=null?pct(Number(layers.ai.agreement)*100):"—");
+    set("aiState",state(layers.ai?.state)); set("aiDecision",hasModelEvidence?aiDecisionValue:"UNAVAILABLE"); set("aiConfidence",hasModelEvidence?pctNorm(aiConfidenceValue):"Unavailable"); set("aiModels",aiModelsUsed>0?String(aiModelsUsed):"0"); set("aiAgreement",layers.ai?.agreement!=null?pct(Number(layers.ai.agreement)*100):"—");
     set("confluenceState",state(conf.state)); set("confluenceDirection",conf.direction||"WAIT"); set("confluenceScore",conf.score!=null?num(conf.score,1)+"/100":"—");
     list("confluenceEvidence", conf.evidence, e => { const cls = e.passed ? "pass" : "fail"; const label = e.passed ? "PASS" : "WAIT"; return '<div class="evidence-row"><span>' + esc(e.layer) + '</span><strong>' + esc(e.condition) + '</strong><b class="' + cls + '">' + label + '</b></div>'; });
     set("gateState",gate.ready?"EXECUTION ELIGIBLE":"BLOCKED"); set("gateReason",gate.reason|| (gate.ready?"All configured gates passed.":"One or more execution gates are not confirmed.")); set("validationState",state(d.signal_validation?.state)); set("validationDirection",d.signal_validation?.signal||"WAIT"); set("validationExpiry",d.signal_validation?.expires_after_seconds!=null?d.signal_validation.expires_after_seconds+" seconds":"—"); set("noLookAhead",d.signal_validation?.no_look_ahead===true?"CONFIRMED":"UNCONFIRMED");
@@ -132,18 +154,18 @@
     set("support",num(d.levels?.support));set("resistance",num(d.levels?.resistance));set("range",num(d.levels?.range));set("change",d.change_pct!=null?num(d.change_pct,2)+"%":"—");
     set("keyCurrentPrice",num(d.price));set("resistance1",num(d.levels?.resistance));set("support1",num(d.levels?.support));
     set("resistance2",num(d.levels?.resistance2));set("support2",num(d.levels?.support2));
-    const signalText=d.signal==null?"UNAVAILABLE":String(d.signal).toUpperCase();
-    const confText=pctNorm(d.confidence);
-    const overviewRow=x=>'<tr><td>'+esc(x.symbol)+'</td><td>'+esc(num(x.price))+'</td><td><span class="signal-pill '+tone(x.signal)+'">'+esc(x.signal)+'</span></td><td>'+esc(x.confidence)+'</td></tr>';
+    const signalText=hasModelEvidence?String(aiDecisionValue).toUpperCase():"UNAVAILABLE";
+    const confText=hasModelEvidence?pctNorm(aiConfidenceValue):"—";
+    const overviewRow=x=>{const market=A.markets.find(m=>m.symbol===x.symbol)||{symbol:x.symbol};return '<tr><td><span class="analysis-market-cell">'+iconFor(market)+'<span>'+esc(marketName(market))+'</span></span></td><td>'+esc(num(x.price))+'</td><td><span class="signal-pill '+tone(x.signal)+'">'+esc(x.signal)+'</span></td><td>'+esc(x.confidence)+'</td></tr>';};
     list("marketOverviewRows",[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText}],overviewRow,"No verified market data available.");
     const overviewKey=[d.symbol,d.timeframe||"M1",$("limit")?.value||300].join("|");
     if(A.overviewKey!==overviewKey){A.overviewKey=overviewKey;A.overviewCache=[];A.predictionCache=[];A.overviewFetchedAt=0;A.overviewPending=false;}
     A.overviewCache=[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText},...A.overviewCache.filter(x=>x.symbol!==d.symbol)].slice(0,5);
-    const predictionDirection=layers.ai?.direction||layers.ai?.prediction||layers.ai?.decision||d.signal;
-    const predictionProbability=layers.ai?.probability??layers.ai?.probability_pct??d.prediction_probability;
+    const predictionDirection=hasModelEvidence?(layers.ai?.direction||layers.ai?.prediction||ai.direction||ai.prediction||aiDecisionValue):null;
+    const predictionProbability=hasModelEvidence?(layers.ai?.probability??layers.ai?.probability_pct??ai.probability??ai.probability_pct??d.prediction_probability):null;
     A.predictionCache=[...(predictionDirection?[{symbol:d.symbol,direction:predictionDirection,probability:predictionProbability}]:[]),...A.predictionCache.filter(x=>x.symbol!==d.symbol)].slice(0,5);
     list("marketOverviewRows",A.overviewCache,overviewRow,"No verified market data available.");
-    const predictionRow=x=>'<tr><td>'+esc(x.symbol)+'</td><td><span class="prediction-direction '+tone(x.direction)+'">'+esc(state(x.direction))+'</span></td><td>'+esc(x.probability==null?"—":pct(Number(x.probability)>1?Number(x.probability):Number(x.probability)*100))+'</td></tr>';
+    const predictionRow=x=>{const market=A.markets.find(m=>m.symbol===x.symbol)||{symbol:x.symbol};return '<tr><td><span class="analysis-market-cell">'+iconFor(market)+'<span>'+esc(marketName(market))+'</span></span></td><td><span class="prediction-direction '+tone(x.direction)+'">'+esc(state(x.direction))+'</span></td><td>'+esc(x.probability==null?"—":pct(Number(x.probability)>1?Number(x.probability):Number(x.probability)*100))+'</td></tr>';};
     list("predictionRows",A.predictionCache,predictionRow,"No verified AI prediction is available.");
     // Avoid firing multiple full AI/database analysis requests for overview rows.
     // Only the selected market is fetched here; overview data must not exhaust the DB pool.
@@ -167,16 +189,33 @@
     const generation=++A.loadGeneration;
     const symbol=$("symbol").value, tf=$("timeframe").value, limit=$("limit").value;
     if(!symbol){$("loadState").textContent="No active market is available.";return}
+    if(A.data&&String(A.data.symbol||"")!==String(symbol)&&!A.cachedData){A.data=null;resetUnavailable();}
     $("loadState").textContent="Loading available market analysis…";
+    const refreshAccount=options.refreshAccount===true;
+    const refreshMarket=options.refreshMarket===true;
+    const endpoint="/analysis/data/?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf)+"&limit="+limit+"&refresh="+(refreshMarket?"1":"0")+"&refresh_account="+(refreshAccount?"1":"0");
     try{
-      const refreshAccount=options.refreshAccount===true;
-      const refreshMarket=options.refreshMarket===true;
-      const d=await request("/analysis/data/?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf)+"&limit="+limit+"&refresh="+(refreshMarket?"1":"0")+"&refresh_account="+(refreshAccount?"1":"0"));
+      const d=await request(endpoint);
       if(generation!==A.loadGeneration||symbol!==$("symbol").value||tf!==$("timeframe").value||limit!==$("limit").value)return;
       if(d.status==="error")throw new Error(d.message||"Analysis unavailable");
-      render(d);$("loadState").textContent="Updated "+new Date().toLocaleTimeString();
+      render(d);A.cachedData=null;try{sessionStorage.setItem(cacheKey(symbol,tf,limit),JSON.stringify(d));}catch(_){}$("loadState").textContent="Updated "+new Date().toLocaleTimeString();
+      // Show persisted research immediately, then refresh broker candles in the background
+      // when the API marks the current snapshot stale. A refresh failure never upgrades stale data.
+      if(!refreshMarket&&!options.backgroundRefresh&&d.data_provenance?.fresh!==true){void load({refreshMarket:true,backgroundRefresh:true,refreshAccount:false});}
     }catch(e){
       if(generation!==A.loadGeneration)return;
+      // A first visit may have no persisted candles yet. Try the broker-backed
+      // refresh once, without making the initial catalogue/data read serial.
+      if(!refreshMarket&&!options.backgroundRefresh&&!A.cachedData&&Number(e?.status)===503){
+        $("loadState").textContent="No saved candles yet · requesting broker-authoritative market data…";
+        try{
+          const refreshed=await request(endpoint.replace("&refresh=0","&refresh=1"));
+          if(generation!==A.loadGeneration||symbol!==$("symbol").value||tf!==$("timeframe").value||limit!==$("limit").value)return;
+          if(refreshed.status==="error")throw new Error(refreshed.message||"Broker candle refresh unavailable");
+          render(refreshed);A.cachedData=null;try{sessionStorage.setItem(cacheKey(symbol,tf,limit),JSON.stringify(refreshed));}catch(_){}$("loadState").textContent="Updated "+new Date().toLocaleTimeString();return;
+        }catch(refreshError){e=refreshError;if(generation!==A.loadGeneration)return;}
+      }
+      const fallback=A.cachedData||(A.data&&String(A.data.symbol||"")===String(symbol)?A.data:null);if(fallback){A.data=fallback;setHealth(false,"SAVED DATA · NOT LIVE");set("aFresh","SAVED DATA · NOT LIVE");const hero=$("heroFeedState");if(hero)hero.textContent="Current analysis unavailable · saved data shown";$("loadState").textContent=(e?.message||"Analysis unavailable")+" · saved data is not live";return;}
       A.data=null;
       resetUnavailable();
       $("loadState").textContent=e?.message||"Analysis unavailable";setHealth(false,"UNAVAILABLE");
@@ -193,17 +232,16 @@
     }
   }
   async function markets(){
-    try{
-      const d=await request("/analysis/markets/");
-      A.markets=d.markets||[];
-      const s=$("symbol");
-      s.innerHTML=A.markets.map(m=>'<option value="'+esc(m.symbol)+'">'+esc(m.symbol)+" · "+esc(m.display_name||m.symbol)+"</option>").join("");
-      if(!A.markets.length){$("loadState").textContent="No active markets are available.";setHealth(false,"UNAVAILABLE");return}
-      if(!s.value&&A.markets[0])s.value=A.markets[0].symbol;
-      // Initial page load must not synchronously refresh broker account state.
-      // Account refresh is explicit and remains available through the refresh control.
-      await load();
-    }catch(e){$("loadState").textContent=e.message||"Markets unavailable"}
+    const select=$("symbol");
+    try{const node=$("analysis-markets-data");const bootstrapped=node?JSON.parse(node.textContent||"[]"):[];if(Array.isArray(bootstrapped)&&bootstrapped.length)A.markets=bootstrapped;}catch(_){}
+    if(!A.markets.length){try{const d=await request("/analysis/markets/");A.markets=Array.isArray(d.markets)?d.markets:[];}catch(e){$("loadState").textContent=e.message||"Markets unavailable";}}
+    if(!select)return;
+    select.innerHTML=A.markets.map(m=>'<option value="'+esc(m.symbol)+'">'+esc(marketName(m))+'</option>').join("");
+    if(!A.markets.length){select.innerHTML='<option value="">No markets available</option>';$("loadState").textContent="No active markets are available.";setHealth(false,"UNAVAILABLE");return;}
+    const requested=new URLSearchParams(location.search).get("symbol");const preferred=[requested,A.markets[0].symbol].find(value=>A.markets.some(m=>m.symbol===value));select.value=preferred||A.markets[0].symbol;updateSelectedMarketIcon();
+    const tf=$("timeframe").value,limit=$("limit").value;const restored=restoreCached(select.value,tf,limit);
+    // Start the broker refresh immediately when a saved snapshot is already visible.
+    void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});
   }
   async function prepare(){
     if(!A.data)return;
@@ -212,9 +250,9 @@
     $("prepareState").textContent="BLOCKED: "+(A.data.execution_gate?.reason||"Execution gates are not confirmed.");
   }
   function boot(){
-    ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>load()));
+    ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>{updateSelectedMarketIcon();const restored=restoreCached($("symbol").value,$("timeframe").value,$("limit").value);void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});}));
     $("refresh")?.addEventListener("click",()=>load({refreshAccount:true,refreshMarket:true}));$("prepare")?.addEventListener("click",prepare);
-    $("auto")?.addEventListener("change",()=>{clearInterval(A.timer);if($("auto").checked)A.timer=setInterval(()=>load({refreshAccount:false}),15000)});
+    $("auto")?.addEventListener("change",()=>{clearInterval(A.timer);if($("auto").checked)A.timer=setInterval(()=>load({refreshAccount:false}),30000)});
     window.addEventListener("resize",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});markets();
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();

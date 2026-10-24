@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import time
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation
 
 from django.core.cache import cache
@@ -30,6 +31,8 @@ from core.permissions import BrokerOnboardingRequired
 
 ANALYSIS_MARKETS_CACHE_SECONDS = 60
 ANALYSIS_CACHE_SECONDS = 15
+ANALYSIS_CONTRACT_TIMEOUT_SECONDS = 2.5
+_ANALYSIS_CONTRACT_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="analysis-contracts")
 STRATEGY_BASELINE_MAX_AGE_SECONDS = 300
 
 logger = logging.getLogger(__name__)
@@ -336,20 +339,38 @@ def analysis_data(request):
     strategy_baseline = _latest_strategy_baseline(
         request, active_account, market.symbol, canonical_timeframe.upper()
     )
+    # Broker contract discovery is supplementary to historical research. Do not
+    # hold the entire Analysis response open behind an unbounded remote broker
+    # call: time-box the lookup and keep all trade eligibility blocked when the
+    # broker has not authoritatively confirmed its capabilities.
+    capability_future = None
     try:
         if active_account is not None and getattr(active_account.broker, "broker_type", "") == "deriv":
-            broker_capabilities = _authenticated_contract_capabilities(active_account, market.symbol)
+            capability_future = _ANALYSIS_CONTRACT_EXECUTOR.submit(
+                _authenticated_contract_capabilities, active_account, market.symbol
+            )
         else:
-            broker_capabilities = fetch_contracts_for(market.symbol)
+            capability_future = _ANALYSIS_CONTRACT_EXECUTOR.submit(fetch_contracts_for, market.symbol)
+        broker_capabilities = capability_future.result(timeout=ANALYSIS_CONTRACT_TIMEOUT_SECONDS)
+        if not isinstance(broker_capabilities, dict):
+            raise RuntimeError("Broker returned an invalid contract capability payload")
     except Exception as exc:
-        return JsonResponse({
-            "status": "error",
-            "code": "BROKER_CONTRACT_DATA_FAILED",
-            "message": "Deriv contract capabilities could not be confirmed for this analysis.",
-            "detail": str(exc),
+        if capability_future is not None:
+            capability_future.cancel()
+        logger.warning(
+            "analysis_contract_capabilities_unavailable",
+            extra={"symbol": market.symbol, "timeout_seconds": ANALYSIS_CONTRACT_TIMEOUT_SECONDS, "error": str(exc)[:180]},
+        )
+        broker_capabilities = {
             "symbol": market.symbol,
-            "timeframe": canonical_timeframe,
-        }, status=503)
+            "source": "unavailable",
+            "available": [],
+            "available_contract_types": [],
+            "available_contract_families": [],
+            "expiry_types": [],
+            "sentiments": [],
+            "reason": "Broker contract capabilities were not confirmed within the Analysis response budget; trading remains blocked until the broker confirms them.",
+        }
     # The analysis page is also an AI inference surface, but only from the
     # same broker-ingested candles shown above. No heuristic confidence is
     # promoted to an executable signal.

@@ -213,9 +213,83 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("data-ai-market-symbol", client)
         self.assertIn("Instrument catalogue request timed out", client)
         self.assertIn("Retry instrument list", client)
+        self.assertIn("data-ai-selected-icon", client, "Selected prediction must show its verified instrument SVG beside its name.")
+        self.assertIn("ai-insight-market-icon", client, "Every insight instrument label must carry its resolved market SVG or an explicit unmapped fallback.")
+        self.assertIn("algobot-ai-predictions-card-parity", client, "Selected prediction and insights cards must share responsive card styling.")
+        self.assertIn("data-ai-catalogue-status", client, "Instrument catalogue failures must be visible with a retry path rather than leave a loading message indefinitely.")
         self.assertNotIn("credentials:'same-origin'", client)
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("document.cookie.match", client)
+
+    def test_analysis_bootstraps_markets_and_shared_picker_hides_symbols(self):
+        from pathlib import Path
+        analysis = Path("static/js/analysis_workspace.js").read_text(encoding="utf-8")
+        analysis_template = Path("templates/core/analysis.html").read_text(encoding="utf-8")
+        shared_picker = Path("static/js/market_picker_enhancement.js").read_text(encoding="utf-8")
+        base = Path("templates/base.html").read_text(encoding="utf-8")
+        api = Path("apps/analysis/views.py").read_text(encoding="utf-8")
+        self.assertIn('json_script:"analysis-markets-data"', analysis_template)
+        self.assertIn('id="analysisMarketIcon"', analysis_template)
+        self.assertIn('marketOverviewRows', analysis)
+        self.assertIn('analysis-market-cell', analysis)
+        self.assertIn('hasModelEvidence', analysis)
+        self.assertIn('const signalText=hasModelEvidence?', analysis)
+        self.assertIn('predictionDirection=hasModelEvidence?', analysis)
+        self.assertIn('sessionStorage.setItem(cacheKey(symbol,tf,limit)', analysis)
+        self.assertIn('request(path, options, 12000)', analysis)
+        self.assertIn('market_picker_enhancement.js', base)
+        self.assertIn('market_asset_registry.js', base)
+        self.assertIn('option.textContent = name', shared_picker)
+        self.assertIn('AlgoBotMarketAssets?.renderIcon', shared_picker)
+        self.assertIn('ANALYSIS_CONTRACT_TIMEOUT_SECONDS', api)
+        self.assertIn('trading remains blocked', api)
+
+    def test_market_labels_hide_tickers_across_user_facing_workspaces(self):
+        from pathlib import Path
+        checks = {
+            "static/js/market_scanner.js": ["esc(marketDisplayName)", "scanner-market-unmapped"],
+            "static/js/predictions_workspace_fix.js": ["chartMarketName", "marketDisplayName(rawSymbol"],
+            "static/js/trading_terminal.js": ["marketDisplayName(r)", "PRE-TRADE ESTIMATE"],
+            "static/js/trade_history.js": ["loadMarketCatalogue", "marketIcon(row)"],
+            "static/js/positions.js": ["Market", "AlgoBotMarketPicker?.marketName"],
+            "static/js/trade_history.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/signals.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/signals_workspace.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/orders.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/risk.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/backtesting_workspace_fix.js": ["['symbol','Market']", "Market / timeframe"],
+            "static/js/data_center.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/strategy_builder.js": ["<span>Market</span>"],
+            "static/js/strategy_center_fix.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/dashboard_command_center.js": ["const marketName = item"],
+        }
+        for filename, markers in checks.items():
+            source = Path(filename).read_text(encoding="utf-8")
+            for marker in markers:
+                with self.subTest(filename=filename, marker=marker):
+                    self.assertIn(marker, source)
+        picker = Path("static/js/market_picker_enhancement.js").read_text(encoding="utf-8")
+        self.assertIn('select[name="symbol"]', picker)
+        self.assertIn('select[data-ai-symbol]', picker)
+        self.assertIn('select[data-symbol]', picker)
+        self.assertIn('market-picker-icon', picker)
+        self.assertIn('const marketIcon = item', picker)
+        self.assertIn('const enhanceDisplay = node', picker)
+        self.assertIn('select[data-history-symbol]', picker)
+        history_template = Path("templates/core/trade_history.html").read_text(encoding="utf-8")
+        self.assertIn('Market<select data-history-symbol>', history_template)
+
+    def test_server_rendered_market_attribution_uses_display_names(self):
+        from pathlib import Path
+        portfolio_views = Path("core/views_portfolio_v2.py").read_text(encoding="utf-8")
+        performance_template = Path("templates/core/performance_center.html").read_text(encoding="utf-8")
+        postmortem_template = Path("templates/core/trade_postmortems.html").read_text(encoding="utf-8")
+        self.assertIn('row["display_name"] = market_names.get', portfolio_views)
+        self.assertIn('trade.display_name = market_names.get', portfolio_views)
+        self.assertIn("{{ row.display_name|default:'Market instrument' }}", performance_template)
+        self.assertIn('{{ t.display_name|default:"Market instrument" }}', postmortem_template)
+        self.assertNotIn('>{{ row.symbol }}<', performance_template)
+        self.assertNotIn('>{{ t.symbol }}<', postmortem_template)
 
     def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
         from pathlib import Path

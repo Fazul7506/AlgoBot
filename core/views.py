@@ -70,7 +70,7 @@ def analysis_page(request):
     return render(
         request,
         "core/analysis.html",
-        {"analysis_markets_json": json.dumps(markets)},
+        {"analysis_markets": markets},
     )
 @login_required
 def billing_success_page(request): return render(request,'core/billing_success.html')

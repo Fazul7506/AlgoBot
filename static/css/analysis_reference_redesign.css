@@ -248,3 +248,20 @@ body:has(.analysis-hero){background:#041326}
 @media(max-width:1100px){.analysis-dashboard .reference-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-dashboard .reference-main-grid{grid-template-columns:minmax(0,1.3fr) minmax(270px,1fr)}}
 @media(max-width:760px){.analysis-dashboard .reference-page-heading{align-items:flex-start;flex-wrap:wrap;gap:11px}.analysis-dashboard .reference-heading-icon{width:48px;height:48px;flex-basis:48px}.analysis-dashboard .reference-heading-icon svg{width:25px;height:25px}.analysis-dashboard .reference-heading-copy{flex:1 1 calc(100% - 65px)}.analysis-dashboard .reference-heading-copy h1{font-size:22px}.analysis-dashboard .reference-heading-copy p{font-size:12px}.analysis-dashboard .reference-live-card{width:100%;min-width:0;margin-top:1px}.analysis-dashboard .reference-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.analysis-dashboard .reference-kpis .analysis-kpi{padding:11px;min-height:142px}.analysis-dashboard .reference-kpi-top{gap:8px}.analysis-dashboard .reference-kpi-top .kpi-icon{width:35px;height:35px;flex-basis:35px}.analysis-dashboard .reference-kpi-top .label{font-size:11px}.analysis-dashboard .reference-kpis .value,.analysis-dashboard .reference-kpis p{margin-left:0}.analysis-dashboard .reference-kpis .value{margin-top:8px;font-size:17px}.analysis-dashboard .reference-kpis p{min-height:30px}.analysis-dashboard .reference-main-grid{grid-template-columns:minmax(0,1fr)}.analysis-dashboard .reference-chart-head{align-items:flex-start}.analysis-dashboard .reference-chart-controls{width:100%}.analysis-dashboard .reference-chart-controls select{flex:1;max-width:none;min-width:0}.analysis-dashboard .reference-right-column{gap:11px}}
 @media(max-width:390px){.analysis-dashboard .reference-kpis{grid-template-columns:minmax(0,1fr)}.analysis-dashboard .reference-kpis .analysis-kpi{min-height:unset}.analysis-dashboard .reference-kpi-top .label{font-size:12px}.analysis-dashboard .reference-kpis p{min-height:0}}
+
+/* Instrument-first labels and official market artwork in the Analysis workspace. */
+.analysis-market-picker{display:flex;align-items:center;gap:8px;min-width:0}
+.analysis-market-picker select{min-width:0;max-width:100%;flex:1 1 auto}
+.analysis-market-icon,.analysis-market-cell{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-width:0}
+.analysis-market-icon{width:30px;height:30px;flex:0 0 30px;border:1px solid var(--analysis-border);border-radius:8px;background:#071a30;overflow:hidden}
+.analysis-market-icon img,.analysis-market-cell img{width:100%;height:100%;max-width:26px;max-height:26px;object-fit:contain}
+.analysis-market-icon .market-avatar,.analysis-market-cell .market-avatar{display:inline-flex;width:100%;height:100%;align-items:center;justify-content:center;font-size:11px}
+.analysis-market-cell{justify-content:flex-start;text-align:left;overflow-wrap:anywhere}
+.analysis-market-cell>span:last-child{min-width:0;overflow-wrap:anywhere}
+.reference-chart-controls{min-width:0;max-width:100%;flex-wrap:wrap}
+.reference-chart-controls label{min-width:0}
+.reference-chart-controls select{max-width:100%;min-width:0}
+.analysis-dashboard .table-scroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.analysis-dashboard .reference-table{width:100%;min-width:420px}
+@media(max-width:760px){.analysis-market-picker{width:100%}.analysis-market-icon{width:28px;height:28px;flex-basis:28px}.reference-chart-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);width:100%}.reference-chart-controls label{width:100%}.reference-chart-controls select{width:100%}.analysis-dashboard .analysis-main-grid,.analysis-dashboard .analysis-secondary-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:380px){.reference-chart-controls{grid-template-columns:minmax(0,1fr)}.analysis-dashboard .reference-table{min-width:390px}}
