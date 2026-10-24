@@ -64,7 +64,7 @@
     // instruments. Never present shared synthetic artwork as instrument-specific.
     const urlCounts = new Map();
     familyEntries.forEach(item => urlCounts.set(item.url, (urlCounts.get(item.url) || 0) + 1));
-    const eligible = familyEntries.filter(item => family !== 'synthetic-indices' || urlCounts.get(item.url) === 1);
+    const eligible = familyEntries.filter(item => urlCounts.get(item.url) === 1);
     for (const candidate of candidates) {
       const exact = eligible.filter(item => normaliseLabel(item.name) === candidate);
       if (exact.length === 1) return exact[0];
