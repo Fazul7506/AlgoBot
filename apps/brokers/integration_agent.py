@@ -123,11 +123,6 @@ class BrokerIntegrationAgent:
 
     def generate(self, *, broker_slug: str, provider_name: str, api_docs: str) -> BrokerIntegrationDraft:
         self._validate_request(broker_slug, provider_name, api_docs)
-        if not self.api_key:
-            raise BrokerIntegrationAgentError(
-                "OPENAI_API_KEY is not configured. Set it in the deployment secret manager; never commit it."
-            )
-
         # Documentation is treated as untrusted reference material, not instructions.
         instructions = (
             "You are a senior Python/Django broker-integration engineer. Draft a broker adapter "
@@ -155,40 +150,46 @@ class BrokerIntegrationAgent:
             "The existing adapter lives under apps/brokers/adapters/. Current source documents Deriv as the "
             "only production-supported adapter; all other broker names are scaffolds until independently verified."
         )
-        try:
-            response = requests.post(
-                OPENAI_RESPONSES_URL,
-                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                json={
-                    "model": self.model,
-                    "store": False,
-                    "instructions": instructions,
-                    "input": user_input,
-                    "text": {
-                        "format": {
-                            "type": "json_schema",
-                            "name": "broker_integration_draft",
-                            "strict": True,
-                            "schema": OUTPUT_SCHEMA,
-                        }
-                    },
-                },
-                timeout=self.timeout,
-            )
-        except requests.RequestException as exc:
-            # Avoid echoing HTTP request objects, which may retain authorization headers.
-            raise BrokerIntegrationAgentError(
-                "Could not reach the OpenAI Responses API; check network access and retry."
-            ) from None
-        if not response.ok:
-            # Do not include request headers, credentials, or raw request data in exceptions.
-            raise BrokerIntegrationAgentError(
-                f"OpenAI Responses API returned HTTP {response.status_code}; check API access, model, and configuration."
-            )
-        try:
-            result = json.loads(self._extract_output_text(response.json()))
-        except (ValueError, TypeError, KeyError) as exc:
-            raise BrokerIntegrationAgentError("OpenAI returned invalid JSON for the broker draft.") from exc
+        # Prefer OpenAI, then try explicitly configured compatible providers.
+        # This is failover, not a guarantee that third-party tiers remain free.
+        providers = []
+        if self.api_key:
+            providers.append({"name": "openai", "key": self.api_key, "url": OPENAI_RESPONSES_URL, "model": self.model})
+        fallback_specs = (
+            ("nvidia", "NVIDIA_API_KEY", "NVIDIA_BASE_URL", "NVIDIA_MODEL", "https://integrate.api.nvidia.com/v1", "meta/llama-3.3-70b-instruct"),
+            ("openrouter", "OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "OPENROUTER_MODEL", "https://openrouter.ai/api/v1", "openai/gpt-oss-20b"),
+            ("groq", "GROQ_API_KEY", "GROQ_BASE_URL", "GROQ_MODEL", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
+        )
+        for name, key_name, base_name, model_name, default_base, default_model in fallback_specs:
+            key = os.environ.get(key_name) or getattr(settings, key_name, "")
+            if key:
+                providers.append({"name": name, "key": key, "url": (os.environ.get(base_name) or default_base).rstrip("/") + "/chat/completions", "model": os.environ.get(model_name) or getattr(settings, model_name, default_model)})
+        if not providers:
+            raise BrokerIntegrationAgentError("OPENAI_API_KEY is not configured and no fallback AI provider is available. Set OPENAI_API_KEY, NVIDIA_API_KEY, OPENROUTER_API_KEY, or GROQ_API_KEY in deployment secrets.")
+        result = None
+        provider_errors = []
+        for provider in providers:
+            try:
+                if provider["name"] == "openai":
+                    payload = {"model": provider["model"], "store": False, "instructions": instructions, "input": user_input, "text": {"format": {"type": "json_schema", "name": "broker_integration_draft", "strict": True, "schema": OUTPUT_SCHEMA}}}
+                else:
+                    payload = {"model": provider["model"], "messages": [{"role": "system", "content": instructions + "\nReturn one JSON object matching the requested schema."}, {"role": "user", "content": user_input}], "response_format": {"type": "json_object"}, "temperature": 0.1}
+                response = requests.post(provider["url"], headers={"Authorization": f"Bearer {provider['key']}", "Content-Type": "application/json"}, json=payload, timeout=self.timeout)
+                if not response.ok:
+                    provider_errors.append(f"{provider['name']}: HTTP {response.status_code}")
+                    continue
+                body = response.json()
+                output = self._extract_output_text(body) if provider["name"] == "openai" else body["choices"][0]["message"]["content"]
+                candidate = json.loads(output)
+                if isinstance(candidate, dict):
+                    result = candidate
+                    break
+                provider_errors.append(f"{provider['name']}: response was not a JSON object")
+            except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, BrokerIntegrationAgentError):
+                provider_errors.append(f"{provider['name']}: unavailable or invalid response")
+                continue
+        if result is None:
+            raise BrokerIntegrationAgentError("All configured AI providers failed or exhausted quota (" + "; ".join(provider_errors) + "). Configure another provider/model or restore quota.")
 
         if result.get("broker_slug") != broker_slug or result.get("provider_name") != provider_name:
             raise BrokerIntegrationAgentError("Generated draft identity does not match the requested provider.")

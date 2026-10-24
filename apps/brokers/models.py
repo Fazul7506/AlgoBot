@@ -119,3 +119,53 @@ class Position(models.Model):
 
 class TradeReconciliation(models.Model):
     broker=models.ForeignKey(Broker,on_delete=models.CASCADE,related_name='reconciliations'); trade=models.JSONField(default=dict,blank=True); matched=models.BooleanField(default=False); difference=models.JSONField(default=dict,blank=True); repaired=models.BooleanField(default=False); timestamp=models.DateTimeField(auto_now_add=True)
+
+
+class BrokerIntegrationRequest(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"), ("in_progress", "In Progress"),
+        ("completed", "Completed"), ("rejected", "Rejected"),
+    ]
+    provider_name = models.CharField(max_length=120, db_index=True)
+    provider_website = models.URLField(blank=True)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="broker_integration_requests")
+    contact_email = models.EmailField(blank=True)
+    use_case = models.TextField()
+    desired_capabilities = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True)
+    linked_pr_url = models.URLField(blank=True)
+    team_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.provider_name} integration request ({self.status})"
+
+
+class BrokerIntegrationRun(models.Model):
+    STATUS_CHOICES = [
+        ("queued", "Queued"), ("generating", "Generating"),
+        ("pr_open", "PR Open"), ("validating", "Validating"),
+        ("failed", "Failed"), ("merged", "Merged"),
+    ]
+    provider_name = models.CharField(max_length=120, db_index=True)
+    provider_slug = models.SlugField(max_length=120, db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="queued", db_index=True)
+    pull_request_number = models.PositiveIntegerField(null=True, blank=True)
+    pull_request_url = models.URLField(blank=True)
+    head_sha = models.CharField(max_length=64, blank=True)
+    validation_results = models.JSONField(default=dict, blank=True)
+    requested_enhancements = models.JSONField(default=list, blank=True)
+    failure_detail = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="broker_integration_runs")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.provider_name} integration run ({self.status})"
