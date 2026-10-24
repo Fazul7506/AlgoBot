@@ -32,8 +32,11 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 def load_trusted_harness(slug: str) -> ModuleType:
     if not SLUG_RE.fullmatch(slug):
         raise ValueError("Invalid broker slug.")
-    path = (HARNESS_ROOT / f"{slug}.py").resolve()
-    if path.parent != HARNESS_ROOT or not path.is_file() or path.is_symlink():
+    candidate = HARNESS_ROOT / f"{slug}.py"
+    if candidate.is_symlink():
+        raise ValueError("Trusted harness path must not be a symlink.")
+    path = candidate.resolve()
+    if path.parent != HARNESS_ROOT or not path.is_file():
         raise ValueError(
             f"No trusted provider harness found at apps/brokers/sandbox_harnesses/{slug}.py. "
             "Implement and review provider-specific sandbox checks before running this gate."
