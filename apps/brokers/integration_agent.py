@@ -165,7 +165,7 @@ class BrokerIntegrationAgent:
             if key:
                 providers.append({"name": name, "key": key, "url": (os.environ.get(base_name) or default_base).rstrip("/") + "/chat/completions", "model": os.environ.get(model_name) or getattr(settings, model_name, default_model)})
         if not providers:
-            raise BrokerIntegrationAgentError("No AI provider is configured. Set OPENAI_API_KEY, NVIDIA_API_KEY, OPENROUTER_API_KEY, or GROQ_API_KEY in deployment secrets.")
+            raise BrokerIntegrationAgentError("OPENAI_API_KEY is not configured and no fallback AI provider is available. Set OPENAI_API_KEY, NVIDIA_API_KEY, OPENROUTER_API_KEY, or GROQ_API_KEY in deployment secrets.")
         result = None
         provider_errors = []
         for provider in providers:
