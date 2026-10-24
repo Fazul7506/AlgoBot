@@ -130,13 +130,17 @@ def main():
                 entries_by_name[key] = item
 
     entries = list(entries_by_name.values())
-    # Reject repeated generic stock-index artwork used for unrelated instruments.
+    # Reject shared artwork across instrument-specific families. A shared URL is
+    # not evidence that each instrument has its own official SVG.
     counts = {}
     for item in entries:
-        counts[item["url"]] = counts.get(item["url"], 0) + 1
+        counts[(item["market"], item["url"])] = counts.get((item["market"], item["url"]), 0) + 1
     entries = [
         item for item in entries
-        if not (item["market"] == "stocks-and-indices" and counts[item["url"]] > 1)
+        if not (
+            item["market"] in {"synthetic-indices", "stocks-and-indices"}
+            and counts[(item["market"], item["url"])] > 1
+        )
     ]
     entries.sort(key=lambda item: (item["market"], item["name"]))
     # Verify the actual response for each distinct URL before publishing metadata.
