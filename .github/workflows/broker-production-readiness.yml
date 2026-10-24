@@ -1,0 +1,67 @@
+name: Broker Production Readiness Approval
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_slug:
+        description: "Candidate slug under apps/brokers/generated_drafts/"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require complete sandbox evidence and prior test results
+        env:
+          CANDIDATE_SLUG: ${{ inputs.candidate_slug }}
+        run: |
+          case "$CANDIDATE_SLUG" in
+            (*[!a-z0-9_]*|'') echo "Invalid candidate slug" >&2; exit 2 ;;
+          esac
+          test "${#CANDIDATE_SLUG}" -ge 2
+          test "${#CANDIDATE_SLUG}" -le 48
+          DRAFT="apps/brokers/generated_drafts/$CANDIDATE_SLUG"
+          test -f "$DRAFT/readiness.json"
+          EVIDENCE_COMMIT="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["commit_sha"])' "$DRAFT/readiness.json")"
+          git cat-file -e "$EVIDENCE_COMMIT^{commit}"
+          git merge-base --is-ancestor "$EVIDENCE_COMMIT" HEAD
+          python scripts/validate_broker_readiness.py "$DRAFT/readiness.json" --commit "$EVIDENCE_COMMIT"
+          {
+            echo "## Broker readiness evidence passed"
+            echo
+            echo "- Candidate: `$CANDIDATE_SLUG`"
+            echo "- Evidence commit: `$EVIDENCE_COMMIT`"
+            echo "- Required sandbox checks and recorded human review are present."
+            echo "- No broker registration, production enablement, deployment, or order placement was performed."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  protected-human-approval:
+    needs: evidence-gate
+    runs-on: ubuntu-latest
+    environment:
+      name: broker-production-approval
+    steps:
+      - name: Record protected environment approval boundary
+        env:
+          CANDIDATE_SLUG: ${{ inputs.candidate_slug }}
+          APPROVER: ${{ github.actor }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          {
+            echo "## Protected human approval gate completed"
+            echo
+            echo "- Candidate: `$CANDIDATE_SLUG`"
+            echo "- Workflow initiator: `$APPROVER`"
+            echo "- Workflow commit: `$COMMIT`"
+            echo "- This workflow only records that the protected environment gate was passed."
+            echo "- A separate reviewed code change is still required to register a broker as production-supported."
+            echo "- Unknown order outcomes must be reconciled before any resubmission."
+          } >> "$GITHUB_STEP_SUMMARY"
