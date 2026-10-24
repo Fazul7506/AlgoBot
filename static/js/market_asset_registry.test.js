@@ -46,9 +46,23 @@ for (const [symbol, suffix] of [
   assert(resolved.status === 'verified', symbol + ' resolves to an authentic Deriv SVG');
   assert(resolved.asset.src.includes(suffix), symbol + ' uses its exact Deriv-hosted SVG');
 }
-for (const symbol of ['RDBULL','RDBEAR','AAPL','CRYNOTINCATALOGUE']) {
-  assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped instead of receiving a fabricated or unrelated icon');
-  assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback');
+for (const symbol of ['RDBULL','RDBEAR','AAPL','CRYNOTINCATALOGUE','CRASH50','CRASH150N','CRASH600','BOOM50','BOOM150']) {
+  assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped until its own official instrument-specific SVG is verified');
+  assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback rather than shared or fabricated artwork');
+}
+// No shared official URL may be treated as a verified instrument-specific synthetic icon.
+const syntheticByUrl = new Map();
+for (const item of api.manifestEntries.filter(x => x.market === 'synthetic-indices')) {
+  syntheticByUrl.set(item.url, (syntheticByUrl.get(item.url) || 0) + 1);
+}
+for (const [url, count] of syntheticByUrl) {
+  if (count > 1) {
+    const shared = api.manifestEntries.filter(x => x.market === 'synthetic-indices' && x.url === url);
+    for (const item of shared) {
+      const resolved = api.resolve({symbol: item.name, display_name: item.name, market: 'synthetic'});
+      assert(resolved.status === 'missing', item.name + ' must not be marked verified when its official asset URL is shared');
+    }
+  }
 }
 for (const [symbol, name, suffix] of [['WLDEUR','EUR Basket','bpNanTKWJ5JDU6Sydc9D.svg'],['WLDGBP','GBP Basket','WmaK2jWb4kU2uA5pN5St.svg'],['WLDUSD','USD Basket','pyyuRjcSgsPjHKFiQofK.svg'],['WLDXAU','Gold Basket','eDGZPTkJwKGPEcSkN95s.svg']]) {
   const basket = api.resolve({underlying_symbol:symbol, underlying_symbol_name:name, underlying_symbol_type:'forex_basket', market:'basket_index', submarket:'forex_basket'});
