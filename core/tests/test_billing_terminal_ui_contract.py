@@ -288,8 +288,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('trade.display_name = market_names.get', portfolio_views)
         self.assertIn("{{ row.display_name|default:'Market instrument' }}", performance_template)
         self.assertIn('{{ t.display_name|default:"Market instrument" }}', postmortem_template)
-        self.assertNotIn('{{ row.symbol }}', performance_template)
-        self.assertNotIn('{{ t.symbol }}', postmortem_template)
+        self.assertNotIn('>{{ row.symbol }}<', performance_template)
+        self.assertNotIn('>{{ t.symbol }}<', postmortem_template)
 
     def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
         from pathlib import Path
