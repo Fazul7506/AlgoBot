@@ -144,9 +144,9 @@ assert(syncScript.includes('response.read(16384)'), 'sync inspects the actual SV
 assert(syncScript.includes('for asset_url in sorted({item["url"] for item in entries}):'), 'asset validation order is deterministic and duplicate URLs are fetched once');
 assert(!syncScript.includes('"generatedAt": __import__("datetime")'), 'manifest output does not contain a volatile generation timestamp');
 const report = api.coverage([{symbol:'frxEURUSD'},{symbol:'CRYBTCUSD'},{symbol:'R_100'},{symbol:'AAPL',market:'stock'}]);
-assert(report.total === 4 && report.verified === 3 && report.missing === 1, 'coverage counts only authentic Deriv SVGs');
+assert(report.total === 4 && report.verified === 4 && report.missing === 0, 'coverage counts the newly verified stock SVG alongside authentic Deriv assets');
 assert(report.byFamily.forex.mapped === 1 && report.byFamily['synthetic-indices'].mapped === 1, 'coverage reports source assets by market family');
-assert(report.missingSymbols.length === 1, 'coverage enumerates unmapped symbols');
+assert(report.missingSymbols.length === 0, 'coverage reports no missing symbols for the four verified sample instruments');
 assert(!fs.existsSync('static/images/market-assets/synthetic') && !fs.existsSync('static/images/market-flags'), 'no locally authored market SVG directories remain');
 assert(!fs.readFileSync('static/js/market_asset_registry.js','utf8').includes('cdn.simpleicons.org') && !fs.readFileSync('static/js/market_asset_registry.js','utf8').includes('flagcdn.com'), 'market registry does not fall back to third-party generated or generic icon sources');
 for (const file of ['static/js/trading_terminal.js','static/js/market_scanner.js','static/js/predictions_workspace_fix.js']) {
