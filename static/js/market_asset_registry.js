@@ -70,11 +70,10 @@
       add(syntheticNames[symbol.replace(/[^A-Z0-9]/g, '')]);
     }
     const familyEntries = entries.filter(item => item.market === family && item.url && item.url.endsWith('.svg'));
-    // A catalogue can expose the same generic illustration for several different
-    // instruments. Never present shared synthetic artwork as instrument-specific.
-    const urlCounts = new Map();
-    familyEntries.forEach(item => urlCounts.set(item.url, (urlCounts.get(item.url) || 0) + 1));
-    const eligible = familyEntries.filter(item => urlCounts.get(item.url) === 1);
+    // Mirror Deriv's catalogue mapping: distinct instruments may intentionally
+    // reference the same official SVG URL. Resolve by exact instrument name/symbol;
+    // URL sharing alone must not discard otherwise valid catalogue rows.
+    const eligible = familyEntries;
     for (const candidate of candidates) {
       const exact = eligible.filter(item =>
         normaliseLabel(item.name) === candidate ||
