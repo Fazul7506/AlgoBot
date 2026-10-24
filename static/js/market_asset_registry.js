@@ -14,7 +14,7 @@
     CRASH50:'Crash 50 Index', CRASH150:'Crash 150 Index', CRASH500:'Crash 500 Index', CRASH600:'Crash 600 Index', CRASH900:'Crash 900 Index', CRASH1000:'Crash 1000 Index', DEX1500DOWN:'DEX 1500 DOWN Index', DEX1500UP:'DEX 1500 UP Index',
     DEX600DOWN:'DEX 600 DOWN Index', DEX600UP:'DEX 600 UP Index', DEX900DOWN:'DEX 900 DOWN Index',
     DEX900UP:'DEX 900 UP Index', JD10:'Jump 10 Index', JD25:'Jump 25 Index', JD50:'Jump 50 Index',
-    JD75:'Jump 75 Index', JD100:'Jump 100 Index', STP100:'Step Index', STP200:'Step Index 200',
+    JD75:'Jump 75 Index', JD100:'Jump 100 Index', STP100:'Step Index', STPRNG:'Step Index', STP200:'Step Index 200',
     STP300:'Step Index 300', STP400:'Step Index 400', STP500:'Step Index 500',
     '1HZ10V':'Volatility 10 (1s) Index', '1HZ15V':'Volatility 15 (1s) Index',
     '1HZ25V':'Volatility 25 (1s) Index', '1HZ30V':'Volatility 30 (1s) Index',
