@@ -80,8 +80,12 @@ def validate_broker_draft(draft_files: list[dict[str, str]]) -> dict[str, Any]:
                         root = name.split(".", 1)[0]
                         if root in FORBIDDEN_IMPORT_ROOTS:
                             errors.append(f"Forbidden high-risk import {root!r} in adapter.py.")
-                        if isinstance(node, ast.ImportFrom) and name == "apps.brokers.adapters.base":
-                            if any(alias.name == "BrokerAdapter" for alias in node.names):
+                        if isinstance(node, ast.ImportFrom):
+                            absolute_base_import = name == "apps.brokers.adapters.base"
+                            relative_base_import = name == "base" and node.level == 1
+                            if (absolute_base_import or relative_base_import) and any(
+                                alias.name == "BrokerAdapter" for alias in node.names
+                            ):
                                 imports_base = True
                 if isinstance(node, ast.Call):
                     if isinstance(node.func, ast.Name) and node.func.id in FORBIDDEN_CALLS:
