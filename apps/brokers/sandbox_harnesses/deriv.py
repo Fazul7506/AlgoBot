@@ -28,6 +28,42 @@ MAX_STAKE = 1.0
 TIMEOUT = 12
 
 
+def identify_ambiguous_contract(before_ids: set[str], portfolio: list[dict[str, Any]],
+                                history: list[dict[str, Any]], *, symbol: str,
+                                contract_type: str, stake: float) -> int | None:
+    """Return a contract only when provider read-back uniquely identifies this buy.
+
+    Never guess when multiple new trades exist or provider history lacks enough
+    identifying fields. The caller must not resubmit if this returns None.
+    """
+    candidates: dict[str, dict[str, Any]] = {}
+    for row in [*portfolio, *history]:
+        if not isinstance(row, dict):
+            continue
+        cid = str(row.get("contract_id") or "")
+        if not cid or cid in before_ids:
+            continue
+        row_symbol = row.get("symbol")
+        row_type = row.get("contract_type")
+        row_stake = row.get("buy_price", row.get("buy_price"))
+        if row_symbol is not None and str(row_symbol) != symbol:
+            continue
+        if row_type is not None and str(row_type) != contract_type:
+            continue
+        if row_stake is not None:
+            try:
+                if abs(float(row_stake) - stake) > 0.00000001:
+                    continue
+            except (TypeError, ValueError):
+                continue
+        # At least two provider attributes must support a match; ID alone is insufficient.
+        matched_fields = sum(value is not None for value in (row_symbol, row_type, row_stake))
+        if matched_fields < 2:
+            continue
+        candidates[cid] = row
+    return int(next(iter(candidates))) if len(candidates) == 1 else None
+
+
 class DerivDemoHarness:
     def __init__(self) -> None:
         self.ws: Any = None
@@ -35,6 +71,9 @@ class DerivDemoHarness:
         self.currency = ""
         self.contract_id: int | None = None
         self.buy_marker = "algobot-" + uuid.uuid4().hex
+        self.pre_buy_contract_ids: set[str] = set()
+        self.expected_contract_type = ""
+        self.expected_stake = STAKE
         self.results: dict[str, SandboxCheckResult] = {}
 
     async def request(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -93,6 +132,12 @@ class DerivDemoHarness:
         contract_type = "CALL" if "CALL" in supported else ("PUT" if "PUT" in supported else "")
         if not contract_type:
             raise RuntimeError("No supported short CALL/PUT contract for configured demo symbol")
+        self.expected_contract_type = contract_type
+        before = await self.request({"portfolio": 1})
+        self.pre_buy_contract_ids = {
+            str(item.get("contract_id")) for item in ((before.get("portfolio") or {}).get("contracts") or [])
+            if isinstance(item, dict) and item.get("contract_id") is not None
+        }
         proposal = await self.request({
             "proposal": 1, "amount": STAKE, "basis": "stake", "contract_type": contract_type,
             "currency": self.currency, "duration": 5, "duration_unit": "t", "symbol": SYMBOL,
@@ -107,25 +152,37 @@ class DerivDemoHarness:
             bought = await self.request({"buy": str(proposal_id), "price": ask, "passthrough": {"client_marker": self.buy_marker}})
         except (TimeoutError, asyncio.TimeoutError):
             # Ambiguous outcome: reconcile before any further order request. Never resubmit.
-            await self.reconcile_ambiguous()
-            raise RuntimeError("Buy response was ambiguous; reconciled without resubmitting")
+            if await self.reconcile_ambiguous():
+                return SandboxCheckResult(True, "deriv-ambiguous-buy-uniquely-matched-in-provider-history")
+            raise RuntimeError("Buy response ambiguous and provider history did not uniquely identify outcome")
         details = bought.get("buy") or {}
         contract_id = details.get("contract_id")
         if not contract_id:
-            await self.reconcile_ambiguous()
-            raise RuntimeError("Buy response had no contract id; reconciled without resubmitting")
+            if await self.reconcile_ambiguous():
+                return SandboxCheckResult(True, "deriv-ambiguous-buy-uniquely-matched-in-provider-history")
+            raise RuntimeError("Buy response lacked contract id and provider history did not uniquely identify outcome")
         self.contract_id = int(contract_id)
         return SandboxCheckResult(True, "deriv-demo-order-accepted-with-contract-id")
 
-    async def reconcile_ambiguous(self) -> None:
-        # Read-only portfolio reconciliation. No second buy is ever issued here.
-        portfolio = await self.request({"portfolio": 1})
-        contracts = (portfolio.get("portfolio") or {}).get("contracts") or []
-        for item in contracts:
-            if str(item.get("contract_id", "")) == str(self.contract_id or ""):
-                return
-        # Request trade history as a second read path; marker is not assumed to be searchable.
-        await self.request({"profit_table": 1, "description": 1, "limit": 50})
+    async def reconcile_ambiguous(self) -> bool:
+        """Read provider state and adopt only a unique, attribute-matched new contract."""
+        portfolio_response = await self.request({"portfolio": 1})
+        portfolio = (portfolio_response.get("portfolio") or {}).get("contracts") or []
+        history_response = await self.request({
+            "profit_table": 1, "description": 1, "limit": 50,
+        })
+        history_payload = history_response.get("profit_table") or {}
+        history = history_payload.get("transactions") or history_payload.get("profit_table") or []
+        if not isinstance(history, list):
+            history = []
+        found = identify_ambiguous_contract(
+            self.pre_buy_contract_ids, portfolio, history, symbol=SYMBOL,
+            contract_type=self.expected_contract_type, stake=self.expected_stake,
+        )
+        if found is None:
+            return False
+        self.contract_id = found
+        return True
 
     async def check_cancel(self) -> SandboxCheckResult:
         if self.contract_id is None:
@@ -161,8 +218,13 @@ class DerivDemoHarness:
     async def check_reconciliation(self) -> SandboxCheckResult:
         # Explicitly verify read-after-write visibility. This does not trigger a retry.
         if self.contract_id is None:
-            await self.reconcile_ambiguous()
-            return SandboxCheckResult(False, "deriv-ambiguous-execution-had-no-confirmed-contract")
+            reconciled = await self.reconcile_ambiguous()
+            return SandboxCheckResult(
+                reconciled,
+                "deriv-ambiguous-buy-uniquely-matched-in-provider-history" if reconciled
+                else "deriv-ambiguous-execution-not-uniquely-reconciled",
+                reconciled_before_resubmit=reconciled,
+            )
         portfolio = await self.request({"portfolio": 1})
         contracts = (portfolio.get("portfolio") or {}).get("contracts") or []
         visible = any(str(item.get("contract_id", "")) == str(self.contract_id) for item in contracts)
