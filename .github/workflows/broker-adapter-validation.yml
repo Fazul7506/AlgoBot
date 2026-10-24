@@ -5,8 +5,10 @@ on:
     paths:
       - "apps/brokers/integration_agent.py"
       - "apps/brokers/integration_validation.py"
+      - "apps/brokers/sandbox_verification.py"
       - "apps/brokers/tests/test_integration_*.py"
       - "apps/brokers/tests/test_readiness_gate.py"
+      - "apps/brokers/tests/test_sandbox_verification.py"
       - "apps/brokers/generated_drafts/**"
       - "scripts/validate_broker_*.py"
       - ".github/workflows/broker-adapter-validation.yml"
@@ -58,6 +60,7 @@ jobs:
           apps.brokers.tests.test_integration_agent
           apps.brokers.tests.test_integration_validation
           apps.brokers.tests.test_readiness_gate
+          apps.brokers.tests.test_sandbox_verification
           --verbosity 2
       - name: Validate manually selected candidate
         if: github.event_name == 'workflow_dispatch' && inputs.candidate_slug != ''
