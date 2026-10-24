@@ -151,25 +151,31 @@ class BrokerIntegrationAgent:
             "The existing adapter lives under apps/brokers/adapters/. Current source documents Deriv as the "
             "only production-supported adapter; all other broker names are scaffolds until independently verified."
         )
-        response = requests.post(
-            OPENAI_RESPONSES_URL,
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-            json={
-                "model": self.model,
-                "store": False,
-                "instructions": instructions,
-                "input": user_input,
-                "text": {
-                    "format": {
-                        "type": "json_schema",
-                        "name": "broker_integration_draft",
-                        "strict": True,
-                        "schema": OUTPUT_SCHEMA,
-                    }
+        try:
+            response = requests.post(
+                OPENAI_RESPONSES_URL,
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": self.model,
+                    "store": False,
+                    "instructions": instructions,
+                    "input": user_input,
+                    "text": {
+                        "format": {
+                            "type": "json_schema",
+                            "name": "broker_integration_draft",
+                            "strict": True,
+                            "schema": OUTPUT_SCHEMA,
+                        }
+                    },
                 },
-            },
-            timeout=self.timeout,
-        )
+                timeout=self.timeout,
+            )
+        except requests.RequestException as exc:
+            # Avoid echoing HTTP request objects, which may retain authorization headers.
+            raise BrokerIntegrationAgentError(
+                "Could not reach the OpenAI Responses API; check network access and retry."
+            ) from None
         if not response.ok:
             # Do not include request headers, credentials, or raw request data in exceptions.
             raise BrokerIntegrationAgentError(
