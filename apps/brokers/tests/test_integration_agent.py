@@ -62,6 +62,8 @@ class BrokerIntegrationAgentTests(SimpleTestCase):
         self.assertFalse(payload["production_enabled"])
         self.assertFalse(payload["executed_generated_code"])
         self.assertEqual(len(payload["draft_files"]), 3)
+        self.assertIn("static_validation", payload)
+        self.assertIn("passed", payload["static_validation"])
         request_payload = post.call_args.kwargs["json"]
         self.assertFalse(request_payload["store"])
         self.assertNotIn("not-a-real-key", json.dumps(request_payload))
