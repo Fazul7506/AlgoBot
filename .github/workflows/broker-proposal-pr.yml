@@ -117,7 +117,7 @@ jobs:
           cp "apps/brokers/generated_drafts/$CANDIDATE_SLUG/test_adapter_contract.py" "apps/brokers/adapters/proposals/$CANDIDATE_SLUG/test_adapter_contract.py"
           cp "apps/brokers/generated_drafts/$CANDIDATE_SLUG/README.md" "apps/brokers/adapters/proposals/$CANDIDATE_SLUG/README.md"
           cp "apps/brokers/generated_drafts/$CANDIDATE_SLUG/readiness.json" "apps/brokers/adapters/proposals/$CANDIDATE_SLUG/readiness.json"
-          git checkout main -- "apps/brokers/generated_drafts/$CANDIDATE_SLUG"
+          git rm -r "apps/brokers/generated_drafts/$CANDIDATE_SLUG"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           PROPOSAL_BRANCH="broker-proposal/$CANDIDATE_SLUG-$GITHUB_RUN_ID"
