@@ -24,3 +24,20 @@ Required `checks` keys: `authentication`, `account_identity`, `market_data`, `or
 ## Reviewed pull-request creation
 
 A reviewed draft can be promoted to a feature branch and proposed pull request only after static and isolated tests pass and a maintainer has inspected the diff. PR creation must not merge, deploy, or activate a broker. Keep the integration-agent PR in draft until the checks are green and the workflow is reviewed. Configure the repository's `broker-production-approval` environment with required reviewers before using any production approval workflow.
+
+
+## Deriv demo smoke verification
+
+Run the manual **Deriv Demo Sandbox Smoke Verification** workflow only after configuring
+the `DERIV_DEMO_TOKEN` secret and `DERIV_APP_ID` Actions variable in the
+`broker-production-approval` environment. The workflow uses the PAT to authorize
+against Deriv's WebSocket API and fails closed unless Deriv explicitly reports both
+a `VRTC` login ID and `is_virtual` true. It then checks a live quote and available
+contracts for the selected symbol. It never prints the token, account ID, balance,
+or raw provider responses.
+
+This smoke workflow intentionally does **not** claim the full sandbox gate is passed:
+it does not submit an order and cannot verify fills, cancellation/close behavior, or
+ambiguous-execution reconciliation. Those checks require a separately reviewed,
+explicitly opt-in demo trade lifecycle test. Do not use this smoke result as the
+seven-check evidence manifest required for broker readiness or production approval.
