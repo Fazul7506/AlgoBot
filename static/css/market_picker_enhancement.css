@@ -1,0 +1,11 @@
+/* Shared instrument picker: name visible, canonical symbol remains in option value. */
+.market-picker-control{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%;vertical-align:middle}
+.market-picker-control select{min-width:0;max-width:100%;flex:1 1 auto}
+.market-picker-icon,.terminal-selected-market-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 30px;width:30px;height:30px;overflow:hidden;border:1px solid var(--ds-border,#28435f);border-radius:8px;background:var(--ds-surface-2,#071a30)}
+.market-picker-icon img,.terminal-selected-market-icon img,.analysis-market-icon img{display:block;width:100%;height:100%;max-width:26px;max-height:26px;object-fit:contain}
+.market-picker-icon .market-avatar,.terminal-selected-market-icon .market-avatar{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:11px}
+.terminal-toolbar .toolbar-symbol{display:grid;grid-template-columns:32px minmax(0,1fr);align-items:center;gap:8px;min-width:0}
+.terminal-toolbar .toolbar-symbol>label{grid-column:1/-1}
+.terminal-toolbar .toolbar-symbol>select{width:100%;min-width:0}
+.market-card-copy h2,.market-card-copy p,.terminal-watch-copy strong,.scanner-symbol-copy strong{overflow-wrap:anywhere}
+@media(max-width:760px){.market-picker-control{display:flex;width:100%}.market-picker-control select{width:100%}.terminal-toolbar .toolbar-symbol{grid-template-columns:30px minmax(0,1fr)}.market-picker-icon,.terminal-selected-market-icon{width:28px;height:28px;flex-basis:28px}}

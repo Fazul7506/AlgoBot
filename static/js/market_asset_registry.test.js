@@ -193,4 +193,25 @@ for (const instrument of [
   assert(icon.includes('market-asset-verified') && icon.includes('https://media.ffycdn.net/eu/deriv/'), instrument.symbol + ' renders official Deriv artwork in the shared icon renderer');
   assert(icon.includes('alt=') && icon.includes('loading="lazy"'), instrument.symbol + ' has accessible lazy-loaded icon markup');
 }
+const analysisMarkets = [
+  ['BOOM1000','Boom 1000 Index'],['BOOM150N','Boom 150 Index'],['BOOM300N','Boom 300 Index'],['BOOM50','Boom 50 Index'],['BOOM500','Boom 500 Index'],['BOOM600','Boom 600 Index'],['BOOM900','Boom 900 Index'],
+  ['CRASH1000','Crash 1000 Index'],['CRASH150N','Crash 150 Index'],['CRASH300N','Crash 300 Index'],['CRASH50','Crash 50 Index'],['CRASH500','Crash 500 Index'],['CRASH600','Crash 600 Index'],['CRASH900','Crash 900 Index'],
+  ['cryBTCUSD','BTC/USD'],['cryETHUSD','ETH/USD'],['RB100','Range Break 100 Index'],['RB200','Range Break 200 Index'],['RDBEAR','Bear Market Index'],['RDBULL','Bull Market Index'],
+  ['stpRNG','Step Index 100'],['stpRNG2','Step Index 200'],['stpRNG3','Step Index 300'],['stpRNG4','Step Index 400'],['stpRNG5','Step Index 500'],
+  ['JD10','Jump 10 Index'],['JD100','Jump 100 Index'],['JD25','Jump 25 Index'],['JD50','Jump 50 Index'],['JD75','Jump 75 Index'],
+  ['1HZ100V','Volatility 100 (1s) Index'],['1HZ10V','Volatility 10 (1s) Index'],['1HZ15V','Volatility 15 (1s) Index'],['1HZ25V','Volatility 25 (1s) Index'],['1HZ30V','Volatility 30 (1s) Index'],['1HZ50V','Volatility 50 (1s) Index'],['1HZ75V','Volatility 75 (1s) Index'],['1HZ90V','Volatility 90 (1s) Index'],
+  ['R_10','Volatility 10 Index'],['R_100','Volatility 100 Index'],['R_25','Volatility 25 Index'],['R_50','Volatility 50 Index'],['R_75','Volatility 75 Index']
+].map(([symbol,display_name]) => ({symbol,display_name}));
+const analysisCoverage = api.coverage(analysisMarkets);
+assert(analysisCoverage.missing === 0, 'all 43 synthetic-index and cryptocurrency markets in the Analysis screenshot resolve to verified Deriv SVGs');
+const analysisCoverageStepOneHundred = api.resolve({symbol:'stpRNG',display_name:'Step Index 100'});
+assert(analysisCoverageStepOneHundred.status === 'verified' && analysisCoverageStepOneHundred.asset.label === 'Step Index', 'Step Index 100 remains mapped to its official Deriv SVG');
+const sharedPicker = fs.readFileSync('static/js/market_picker_enhancement.js','utf8');
+assert(sharedPicker.includes('option.textContent = name'), 'shared market pickers display human-readable market names');
+assert(sharedPicker.includes('AlgoBotMarketAssets?.renderIcon'), 'shared market pickers use the verified Deriv SVG resolver');
+assert(sharedPicker.includes('data-ai-symbol') && sharedPicker.includes('data-symbol'), 'shared market picker coverage includes Analysis, Terminal and AI Predictions');
+const baseTemplate = fs.readFileSync('templates/base.html','utf8');
+assert(baseTemplate.includes('market_picker_enhancement.js'), 'the shared picker enhancement is installed across AlgoBot pages');
+const analysisTemplate = fs.readFileSync('templates/core/analysis.html','utf8');
+assert(analysisTemplate.includes('analysis-markets-data') && analysisTemplate.includes('analysisMarketIcon'), 'Analysis bootstraps its market catalogue and selected SVG without a second blocking catalogue request');
 console.log('official Deriv market SVG registry contract tests passed');

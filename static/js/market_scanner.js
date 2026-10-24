@@ -62,6 +62,7 @@
         ? '<a class="scanner-action" href="/trading/?symbol=' + encodeURIComponent(row.symbol) + '">Trade</a>'
         : '—';
       const asset = window.AlgoBotMarketAssets?.resolve?.(row);
+      const marketDisplayName = row.display_name || row.name || (asset?.status === 'verified' ? asset.asset?.label : '') || 'Market instrument';
       let artwork = '<span class="scanner-market-unmapped" aria-hidden="true">' + esc(String(row.symbol || '?').slice(0, 2)) + '</span>';
       if (asset?.status === 'verified' && asset.asset?.src) {
         artwork = '<img class="scanner-market-art" src="' + esc(asset.asset.src) + '" alt="" loading="lazy">';

@@ -92,6 +92,38 @@ class AnalysisSmokeTests(TestCase):
         self.assertTrue(payload["signal_validation"]["no_look_ahead"])
         self.assertTrue(payload["signal_validation"]["execution_separate"])
 
+    @patch.object(views, "ANALYSIS_CONTRACT_TIMEOUT_SECONDS", 0.01)
+    @patch.object(views, "fetch_contracts_for")
+    def test_analysis_data_does_not_block_on_slow_supplementary_contract_lookup(self, fetch_contracts):
+        import time
+        market = MarketSymbol.objects.create(
+            symbol="R_100",
+            display_name="Volatility 100 Index",
+            market="Volatility Indices",
+        )
+        for epoch, close in ((100, 100), (160, 101), (220, 102)):
+            Candle.objects.create(
+                symbol=market, timeframe="1m", open=close, high=close + 1,
+                low=close - 1, close=close, volume=1, epoch=epoch,
+            )
+        def slow_capabilities(symbol):
+            time.sleep(0.4)
+            return {"available_contract_types": ["MULTUP"]}
+        fetch_contracts.side_effect = slow_capabilities
+        with patch.object(
+            views, "analyze_candles",
+            return_value={"status":"ok", "candles":3, "signal":"NO_TRADE", "technical_signal":"Neutral", "technical_score":50, "confidence":None, "structure":"Neutral", "volatility_regime":"normal", "factors":[]},
+        ):
+            started = time.monotonic()
+            response = self.client.get(reverse("analysis-data"), {"symbol":market.symbol,"timeframe":"M1","limit":300})
+            elapsed = time.monotonic() - started
+        self.assertEqual(response.status_code, 200)
+        self.assertLess(elapsed, 0.25)
+        payload = response.json()
+        self.assertEqual(payload["contract_capabilities"]["source"], "unavailable")
+        self.assertFalse(payload["execution_gate"]["broker_contracts_confirmed"])
+        self.assertIn("not confirmed", payload["contract_capabilities"]["reason"])
+
     def test_analysis_data_reports_missing_persisted_candles(self):
         market = MarketSymbol.objects.create(
             symbol="R_100",

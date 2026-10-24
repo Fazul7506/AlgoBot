@@ -221,6 +221,26 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("document.cookie.match", client)
 
+    def test_analysis_bootstraps_markets_and_shared_picker_hides_symbols(self):
+        from pathlib import Path
+        analysis = Path("static/js/analysis_workspace.js").read_text(encoding="utf-8")
+        analysis_template = Path("templates/core/analysis.html").read_text(encoding="utf-8")
+        shared_picker = Path("static/js/market_picker_enhancement.js").read_text(encoding="utf-8")
+        base = Path("templates/base.html").read_text(encoding="utf-8")
+        api = Path("apps/analysis/views.py").read_text(encoding="utf-8")
+        self.assertIn('json_script:"analysis-markets-data"', analysis_template)
+        self.assertIn('id="analysisMarketIcon"', analysis_template)
+        self.assertIn('marketOverviewRows', analysis)
+        self.assertIn('analysis-market-cell', analysis)
+        self.assertIn('sessionStorage.setItem(cacheKey(symbol,tf,limit)', analysis)
+        self.assertIn('request(path, options, 12000)', analysis)
+        self.assertIn('market_picker_enhancement.js', base)
+        self.assertIn('market_asset_registry.js', base)
+        self.assertIn('option.textContent = name', shared_picker)
+        self.assertIn('AlgoBotMarketAssets?.renderIcon', shared_picker)
+        self.assertIn('ANALYSIS_CONTRACT_TIMEOUT_SECONDS', api)
+        self.assertIn('trading remains blocked', api)
+
     def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
         from pathlib import Path
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")

@@ -12,6 +12,7 @@
     ? 'Unavailable'
     : Number(value).toLocaleString(undefined, { maximumFractionDigits: 8 });
   const marketAssetIcon = row => window.AlgoBotMarketAssets?.renderIcon?.(row) || '';
+  const marketDisplayName = row => { const symbol=String(row?.symbol||'');const supplied=String(row?.display_name||row?.name||'').trim();if(supplied&&supplied.toUpperCase()!==symbol.toUpperCase())return supplied;const resolved=window.AlgoBotMarketAssets?.resolve?.({...row,symbol,display_name:symbol});return resolved?.status==='verified'&&resolved.asset?.label?resolved.asset.label:'Market instrument'; };
 
 
 
@@ -82,7 +83,7 @@
     if (selectedSort === 'favourite') {
       result.sort((a, b) =>
         Number(favourites.has(b.symbol)) - Number(favourites.has(a.symbol)) ||
-        String(a.display_name || a.symbol).localeCompare(String(b.display_name || b.symbol))
+        String(marketDisplayName(a)).localeCompare(String(marketDisplayName(b)))
       );
     } else if (selectedSort === 'price') {
       result.sort((a, b) =>
@@ -91,7 +92,7 @@
       );
     } else {
       result.sort((a, b) =>
-        String(a.display_name || a.symbol).localeCompare(String(b.display_name || b.symbol))
+        String(marketDisplayName(a)).localeCompare(String(marketDisplayName(b)))
       );
     }
     return result.slice(0, 120);
@@ -146,12 +147,12 @@
       return '<article class="market-card ' + (favourite ? 'is-favourite' : '') +
         '" data-symbol="' + esc(row.symbol) + '">' +
         '<button class="icon-btn" type="button" data-favourite="' + esc(row.symbol) +
-        '" aria-label="' + (favourite ? 'Remove ' : 'Add ') + esc(row.symbol) +
+        '" aria-label="' + (favourite ? 'Remove ' : 'Add ') + esc(marketDisplayName(row)) +
         ' ' + (favourite ? 'from' : 'to') + ' favourites">' +
         (favourite ? '★' : '☆') + '</button>' +
         '<span class="market-asset-icon">' + marketAssetIcon(row) + '</span>' +
         '<div class="market-card-copy"><span class="eyebrow">' + esc(row.market || 'Broker market') +
-        '</span><h2>' + esc(row.symbol) + '</h2><p>' + esc(row.display_name || row.symbol) +
+        '</span><h2>' + esc(marketDisplayName(row)) + '</h2><p>' + esc(row.sub_market || row.market || 'Broker market') +
         '</p></div>' +
         '<div class="market-quote"><strong data-quote>' + quoteText +
         '</strong><span data-bidask>' + esc(bidAsk) + '</span></div>' +
