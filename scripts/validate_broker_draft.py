@@ -21,6 +21,12 @@ def main() -> int:
 
     files = []
     for path in sorted(root.iterdir()):
+        # Readiness evidence is metadata, not generated source; validate it in its own gate.
+        if path.name == "readiness.json":
+            if path.is_symlink() or not path.is_file():
+                print(json.dumps({"passed": False, "errors": ["readiness.json must be a regular non-symlink file."], "warnings": []}, indent=2))
+                return 2
+            continue
         if path.is_symlink() or not path.is_file():
             print(json.dumps({"passed": False, "errors": [f"Draft entry must be a regular non-symlink file: {path.name}"], "warnings": []}, indent=2))
             return 2
