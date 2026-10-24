@@ -35,9 +35,30 @@ class BrokerRegistry:
     adapter_paths = {'deriv': 'apps.brokers.adapters.deriv.DerivAdapter', **{broker: f'apps.brokers.adapters.{broker}.Adapter' for broker in c.SCAFFOLD_BROKERS}}
     def register(self, broker_type, adapter_cls_or_path): self.adapter_paths[broker_type] = adapter_cls_or_path
     def get(self, broker_type):
-        target = self.adapter_paths[broker_type]
+        if broker_type not in c.BROKER_TYPES:
+            raise BrokerRoutingError(f"Unsupported broker type: {broker_type}")
+        target = self.adapter_paths.get(broker_type)
+        # Persistent registrations survive worker/process restarts. Prefer the
+        # reviewed database path when one exists, while retaining built-in defaults.
+        try:
+            persisted = Broker.objects.filter(broker_type=broker_type).values_list("metadata", flat=True).first()
+            if isinstance(persisted, dict) and persisted.get("adapter_path"):
+                target = persisted["adapter_path"]
+        except Exception:
+            # Keep the built-in registry usable during startup/migrations when DB
+            # access is not yet available; registration itself never swallows DB errors.
+            pass
+        if target is None:
+            raise BrokerRoutingError(f"No adapter registered for broker type: {broker_type}")
         if isinstance(target, str):
-            module, cls = target.rsplit('.', 1); target = getattr(importlib.import_module(module), cls); self.adapter_paths[broker_type] = target
+            if "." not in target:
+                raise BrokerRoutingError("Adapter path must be a fully-qualified class path")
+            module, cls = target.rsplit(".", 1)
+            target = getattr(importlib.import_module(module), cls)
+            from .adapters.base import BrokerAdapter
+            if not isinstance(target, type) or not issubclass(target, BrokerAdapter) or target is BrokerAdapter:
+                raise BrokerRoutingError("Registered adapter must subclass BrokerAdapter")
+            self.adapter_paths[broker_type] = target
         return target
     def adapter(self, broker, account=None): return self.get(broker.broker_type)(broker=broker, account=account, credentials=getattr(account, 'credentials', {}) or {})
 
@@ -49,7 +70,47 @@ class BrokerManager:
             defaults = {'status': data.get('status', 'coming_soon'), 'supports_live': data.get('supports_live', False), 'metadata': {'auth': data['auth'], 'adapter_state': 'production' if broker_type in c.PRODUCTION_BROKERS else 'scaffold'}}
             if data.get('websocket_endpoint'): defaults['websocket_endpoint'] = data['websocket_endpoint']
             Broker.objects.get_or_create(name=data['name'], broker_type=broker_type, defaults=defaults)
-    def register_broker(self, broker_type, adapter_path, **metadata): BrokerRegistry().register(broker_type, adapter_path); return metadata
+    def register_broker(self, broker_type, adapter_path, **metadata):
+        """Persist a validated adapter path without enabling or promoting live trading."""
+        if broker_type not in c.BROKER_TYPES:
+            raise BrokerRoutingError(f"Unsupported broker type: {broker_type}")
+        if not isinstance(adapter_path, str) or "." not in adapter_path or len(adapter_path) > 240:
+            raise BrokerRoutingError("adapter_path must be a fully-qualified adapter class path")
+        module_name, class_name = adapter_path.rsplit(".", 1)
+        if not module_name.startswith("apps.brokers.adapters."):
+            raise BrokerRoutingError("Adapters must live under apps.brokers.adapters")
+        try:
+            adapter_cls = getattr(importlib.import_module(module_name), class_name)
+            from .adapters.base import BrokerAdapter
+            if not isinstance(adapter_cls, type) or not issubclass(adapter_cls, BrokerAdapter) or adapter_cls is BrokerAdapter:
+                raise TypeError
+            if getattr(adapter_cls, "broker_type", broker_type) not in ("base", broker_type):
+                raise TypeError
+            if getattr(adapter_cls, "__abstractmethods__", None):
+                raise TypeError
+        except Exception:
+            raise BrokerRoutingError("Adapter path must resolve to a concrete BrokerAdapter for this broker type") from None
+        broker = Broker.objects.filter(broker_type=broker_type).first()
+        if broker is None:
+            broker_name = str(metadata.pop("name", broker_type.replace("_", " ").title())).strip()
+            if not broker_name:
+                raise BrokerRoutingError("Broker name is required")
+            broker = Broker.objects.create(
+                name=broker_name,
+                broker_type=broker_type,
+                status="coming_soon",
+                supports_live=False,
+                metadata={"adapter_state": "registered", "adapter_path": adapter_path, **metadata},
+            )
+        else:
+            current = dict(broker.metadata or {})
+            current.update(metadata)
+            current.update({"adapter_state": "registered", "adapter_path": adapter_path})
+            broker.metadata = current
+            # Registration does not alter status or live-trading capability.
+            broker.save(update_fields=["metadata"])
+        BrokerRegistry().register(broker_type, adapter_cls)
+        return broker
     def enable(self, broker): broker.status = 'active'; broker.save(update_fields=['status']); return broker
     def disable(self, broker): broker.status = 'disabled'; broker.save(update_fields=['status']); return broker
     async def reconnect(self, broker, account=None):
