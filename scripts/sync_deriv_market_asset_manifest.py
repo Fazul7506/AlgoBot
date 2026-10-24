@@ -132,10 +132,18 @@ def main():
         normalise_name(item.get("symbol") or item["name"]): item
         for item in load_existing_official_media_entries()
     }
+    legacy_synthetic_by_name = {}
     for market, slug in PAGES:
-        for item in collect(market, slug):
+        collected = collect(market, slug)
+        if market == "synthetic-indices" and slug == "derived-indices":
+            legacy_synthetic_by_name.update({
+                normalise_name(item.get("symbol") or item["name"]): item
+                for item in collected
+            })
+        for item in collected:
             key = normalise_name(item.get("symbol") or item["name"])
-            # A verified modern Deriv synthetic SVG takes precedence over legacy pages.
+            # The modern catalogue is preferred only when it identifies an asset
+            # uniquely. Keep legacy candidates available as a verified fallback.
             modern_synthetic_catalogue = (
                 market == "synthetic-indices"
                 and slug == "derived-indices/synthetic-indices"
@@ -145,6 +153,26 @@ def main():
                 and entries_by_name[key].get("market") != "synthetic-indices"
             ):
                 entries_by_name[key] = item
+
+    # If a modern synthetic listing reuses a generic URL, fall back to the legacy
+    # catalogue's URL for that same instrument when it is distinct and unique.
+    # Never synthesize filenames or guess an asset from a neighbouring instrument.
+    selected_counts = {}
+    for item in entries_by_name.values():
+        selected_counts[item["url"]] = selected_counts.get(item["url"], 0) + 1
+    legacy_counts = {}
+    for item in legacy_synthetic_by_name.values():
+        legacy_counts[item["url"]] = legacy_counts.get(item["url"], 0) + 1
+    for key, item in list(entries_by_name.items()):
+        if item.get("market") != "synthetic-indices" or selected_counts.get(item["url"], 0) < 2:
+            continue
+        fallback = legacy_synthetic_by_name.get(key)
+        if (
+            fallback
+            and fallback["url"] != item["url"]
+            and legacy_counts.get(fallback["url"], 0) == 1
+        ):
+            entries_by_name[key] = fallback
 
     entries = list(entries_by_name.values())
     # A shared URL cannot satisfy an instrument-specific icon requirement.
