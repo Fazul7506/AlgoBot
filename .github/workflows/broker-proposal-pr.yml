@@ -57,7 +57,7 @@ jobs:
           git cat-file -e "$EVIDENCE_COMMIT^{commit}"
           git merge-base --is-ancestor "$EVIDENCE_COMMIT" HEAD
           python scripts/validate_broker_readiness.py "$DRAFT/readiness.json" --commit "$EVIDENCE_COMMIT"
-          python manage.py test apps.brokers.tests.test_integration_agent apps.brokers.tests.test_integration_validation apps.brokers.tests.test_readiness_gate --verbosity 2
+          python manage.py test apps.brokers.tests.test_integration_agent apps.brokers.tests.test_integration_validation apps.brokers.tests.test_readiness_gate apps.brokers.tests.test_sandbox_verification --verbosity 2
       - name: Build isolated test image
         run: |
           cat > /tmp/Dockerfile.broker-proposal <<'EOF'
