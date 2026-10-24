@@ -56,6 +56,12 @@ for (const item of api.manifestEntries.filter(x => x.market === 'synthetic-indic
   syntheticByUrl.set(item.url, (syntheticByUrl.get(item.url) || 0) + 1);
 }
 assert([...syntheticByUrl.values()].every(count => count === 1), 'every synthetic manifest entry has its own unique official SVG URL');
+const urlsByFamily = new Map();
+for (const item of api.manifestEntries) {
+  const key = item.market + '|' + item.url;
+  urlsByFamily.set(key, (urlsByFamily.get(key) || 0) + 1);
+}
+assert([...urlsByFamily.values()].every(count => count === 1), 'no official SVG URL is assigned to multiple instrument records');
 for (const [url, count] of syntheticByUrl) {
   if (count > 1) {
     const shared = api.manifestEntries.filter(x => x.market === 'synthetic-indices' && x.url === url);
