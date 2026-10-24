@@ -186,7 +186,7 @@
         const activity = $('[data-activity-list]', page);
         const list = normalise(data).slice(0, 5);
         if (activity) activity.innerHTML = list.length
-          ? list.map(item => `<li><span class="dot ok"></span><div><strong>${escapeHtml(item.name || item.symbol || item.status || item.event || 'Backend record')}</strong><small>${escapeHtml(item.updated_at || item.created_at || item.timestamp || item.createdAt || 'Live')}</small></div></li>`).join('')
+          ? list.map(item => `<li><span class="dot ok"></span><div><strong>${escapeHtml(item.name || item.display_name || (item.symbol ? (window.AlgoBotMarketPicker?.marketName({value:item.symbol,textContent:item.display_name||item.symbol})||'Market instrument') : '') || item.status || item.event || 'Backend record')}</strong><small>${escapeHtml(item.updated_at || item.created_at || item.timestamp || item.createdAt || 'Live')}</small></div></li>`).join('')
           : '<li class="empty-state">No recent records.</li>';
       }
       if (status) status.textContent = 'Backend connected';
@@ -295,19 +295,19 @@
     async function loadPositions(p) {
       try {
         const rows = normalise(await json('/api/positions/open/'));
-        $('[data-positions]', p).innerHTML = rows.length ? rows.map(x => `<div class="mini-row"><strong>${escapeHtml(x.symbol)}</strong><span>${escapeHtml(x.direction || '')}</span><b>${money(x.profit ?? x.pnl ?? x.profit_loss)}</b></div>`).join('') : '<div class="empty-state">No open positions.</div>';
+        $('[data-positions]', p).innerHTML = rows.length ? rows.map(x => `<div class="mini-row"><strong>${escapeHtml(window.AlgoBotMarketPicker?.marketName({value:x.symbol||'',textContent:x.display_name||x.symbol||''})||x.display_name||'Market instrument')}</strong><span>${escapeHtml(x.direction || '')}</span><b>${money(x.profit ?? x.pnl ?? x.profit_loss)}</b></div>`).join('') : '<div class="empty-state">No open positions.</div>';
       } catch { $('[data-positions]', p).innerHTML = '<div class="empty-state">Unable to load positions.</div>'; }
     }
     async function loadSignals(p) {
       try {
         const rows = normalise(await json(`/api/dashboard/signals/?symbol=${encodeURIComponent(symbol.value)}&limit=8`));
-        $('[data-signals]', p).innerHTML = rows.length ? rows.map(x => `<div class="signal-row"><strong>${escapeHtml(x.symbol)} ${escapeHtml(x.direction || x.signal || 'HOLD')}</strong><span>${escapeHtml(x.strategy || 'Strategy')}</span><b>${pct(x.confidence)}</b></div>`).join('') : '<div class="empty-state">No recent signals.</div>';
+        $('[data-signals]', p).innerHTML = rows.length ? rows.map(x => `<div class="signal-row"><strong>${escapeHtml(window.AlgoBotMarketPicker?.marketName({value:x.symbol||'',textContent:x.display_name||x.symbol||''})||x.display_name||'Market instrument')} ${escapeHtml(x.direction || x.signal || 'HOLD')}</strong><span>${escapeHtml(x.strategy || 'Strategy')}</span><b>${pct(x.confidence)}</b></div>`).join('') : '<div class="empty-state">No recent signals.</div>';
       } catch { $('[data-signals]', p).innerHTML = '<div class="empty-state">No signals available.</div>'; }
     }
     async function loadOrders(p) {
       try {
         const rows = normalise(await json('/api/orders/')).slice(0, 8);
-        $('[data-orders]', p).innerHTML = rows.length ? rows.map(x => `<div class="mini-row"><strong>${escapeHtml(x.symbol)}</strong><span>${escapeHtml(x.direction || '')}</span><b>${escapeHtml(x.status || '')}</b></div>`).join('') : '<div class="empty-state">No orders yet.</div>';
+        $('[data-orders]', p).innerHTML = rows.length ? rows.map(x => `<div class="mini-row"><strong>${escapeHtml(window.AlgoBotMarketPicker?.marketName({value:x.symbol||'',textContent:x.display_name||x.symbol||''})||x.display_name||'Market instrument')}</strong><span>${escapeHtml(x.direction || '')}</span><b>${escapeHtml(x.status || '')}</b></div>`).join('') : '<div class="empty-state">No orders yet.</div>';
       } catch { $('[data-orders]', p).innerHTML = '<div class="empty-state">No orders yet.</div>'; }
     }
 

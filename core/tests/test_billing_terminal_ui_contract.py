@@ -232,6 +232,9 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('id="analysisMarketIcon"', analysis_template)
         self.assertIn('marketOverviewRows', analysis)
         self.assertIn('analysis-market-cell', analysis)
+        self.assertIn('hasModelEvidence', analysis)
+        self.assertIn('const signalText=hasModelEvidence?', analysis)
+        self.assertIn('predictionDirection=hasModelEvidence?', analysis)
         self.assertIn('sessionStorage.setItem(cacheKey(symbol,tf,limit)', analysis)
         self.assertIn('request(path, options, 12000)', analysis)
         self.assertIn('market_picker_enhancement.js', base)
@@ -240,6 +243,35 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('AlgoBotMarketAssets?.renderIcon', shared_picker)
         self.assertIn('ANALYSIS_CONTRACT_TIMEOUT_SECONDS', api)
         self.assertIn('trading remains blocked', api)
+
+    def test_market_labels_hide_tickers_across_user_facing_workspaces(self):
+        from pathlib import Path
+        checks = {
+            "static/js/market_scanner.js": ["esc(marketDisplayName)", "scanner-market-unmapped"],
+            "static/js/predictions_workspace_fix.js": ["chartMarketName", "marketDisplayName(rawSymbol"],
+            "static/js/trading_terminal.js": ["marketDisplayName(r)", "PRE-TRADE ESTIMATE"],
+            "static/js/positions.js": ["Market", "AlgoBotMarketPicker?.marketName"],
+            "static/js/trade_history.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/signals.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/signals_workspace.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/orders.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/risk.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/backtesting_workspace_fix.js": ["['symbol','Market']", "Market / timeframe"],
+            "static/js/data_center.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/strategy_builder.js": ["<span>Market</span>"],
+            "static/js/strategy_center_fix.js": ["AlgoBotMarketPicker?.marketName"],
+            "static/js/dashboard_command_center.js": ["const marketName = item"],
+        }
+        for filename, markers in checks.items():
+            source = Path(filename).read_text(encoding="utf-8")
+            for marker in markers:
+                with self.subTest(filename=filename, marker=marker):
+                    self.assertIn(marker, source)
+        picker = Path("static/js/market_picker_enhancement.js").read_text(encoding="utf-8")
+        self.assertIn('select[name="symbol"]', picker)
+        self.assertIn('select[data-ai-symbol]', picker)
+        self.assertIn('select[data-symbol]', picker)
+        self.assertIn('market-picker-icon', picker)
 
     def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
         from pathlib import Path

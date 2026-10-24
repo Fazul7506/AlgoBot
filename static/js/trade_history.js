@@ -66,7 +66,7 @@
       return `
         <tr>
           <td>${esc(time(row.broker_timestamp || row.purchase_time))}</td>
-          <td><strong>${esc(row.display_name || row.symbol)}</strong><br><small>${esc(row.symbol)}</small></td>
+          <td><strong>${esc(window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument')}</strong></td>
           <td>${esc(row.contract_type)}</td>
           <td>${esc(row.direction)}</td>
           <td class="num">${money(row.stake, row.currency)}</td>

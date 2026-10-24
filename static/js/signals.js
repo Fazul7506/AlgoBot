@@ -104,7 +104,7 @@ function applySignalContract(){const type=$('signalsContractType').value;if(!typ
       return;
     }
     tbody.innerHTML = rows.map(row => `<tr data-symbol="${esc(row.symbol)}">
-      <td><strong>${esc(row.display_name || row.symbol)}</strong><small>${esc(row.symbol)}</small></td>
+      <td><strong>${esc(window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument')}</strong></td>
       <td>${esc(row.market || '—')}<small>${esc(row.sub_market || '')}</small></td>
       <td>${esc(row.timeframe || '—')}</td>
       <td>${esc(num(row.live?.price))}</td>
@@ -129,7 +129,7 @@ function applySignalContract(){const type=$('signalsContractType').value;if(!typ
     }
     $('marketCount').textContent = `${rows.length} markets`;
     tape.innerHTML = rows.slice(0, 20).map(row => `<button type="button" class="tape-row" data-symbol="${esc(row.symbol)}">
-      <span><strong>${esc(row.symbol)}</strong><small>${esc(row.market || 'Deriv')}</small></span>
+      <span><strong>${esc(window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument')}</strong><small>${esc(row.market || 'Deriv')}</small></span>
       <strong>${esc(num(row.live?.price))}</strong>
       <span class="tape-signal ${tone(row.direction)}">${esc(row.direction || '—')}</span>
       <span>${esc(pct(row.confidence))}</span>
@@ -210,7 +210,7 @@ function applySignalContract(){const type=$('signalsContractType').value;if(!typ
       renderValidatedContract(null);
       return;
     }
-    $('focusInstrument').textContent = row.display_name || row.instrument || row.symbol || '—';
+    $('focusInstrument').textContent = window.AlgoBotMarketPicker?.marketName({value:row.symbol||row.instrument||'',textContent:row.display_name||row.name||row.symbol||''}) || row.display_name || row.name || 'Market instrument';
     $('focusState').textContent = stateText(row.status);
     $('focusState').className = `signal-state ${tone(row.direction)}${row.status === 'WAITING_FOR_ANALYSIS' ? ' waiting' : ''}`;
     $('focusPrice').textContent = num(row.live?.price);

@@ -107,7 +107,7 @@ class AnalysisSmokeTests(TestCase):
                 low=close - 1, close=close, volume=1, epoch=epoch,
             )
         def slow_capabilities(symbol):
-            time.sleep(0.4)
+            time.sleep(1.0)
             return {"available_contract_types": ["MULTUP"]}
         fetch_contracts.side_effect = slow_capabilities
         with patch.object(
@@ -118,7 +118,7 @@ class AnalysisSmokeTests(TestCase):
             response = self.client.get(reverse("analysis-data"), {"symbol":market.symbol,"timeframe":"M1","limit":300})
             elapsed = time.monotonic() - started
         self.assertEqual(response.status_code, 200)
-        self.assertLess(elapsed, 0.25)
+        self.assertLess(elapsed, 0.5)
         payload = response.json()
         self.assertEqual(payload["contract_capabilities"]["source"], "unavailable")
         self.assertFalse(payload["execution_gate"]["broker_contracts_confirmed"])

@@ -243,7 +243,7 @@
     if (event.symbol || event.timeframe) {
       const meta = document.createElement("span");
       meta.className = "rb-log-meta";
-      meta.textContent = [event.symbol, event.timeframe].filter(Boolean).join(" · ");
+      meta.textContent = [window.AlgoBotMarketPicker?.marketName({value:event.symbol||"",textContent:event.display_name||event.symbol||""}) || event.display_name || "Market instrument", event.timeframe].filter(Boolean).join(" · ");
       message.appendChild(meta);
     }
     row.append(time, level, message);

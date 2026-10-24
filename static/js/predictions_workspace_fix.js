@@ -60,7 +60,7 @@
       const chart = root.querySelector('[data-ai-chart]');
       const title = root.querySelector('[data-ai-chart-symbol]');
       if (!chart || !symbol) return;
-      if (title) title.textContent = 'Loading live broker candles · ' + symbol; const chartContextIcon=root.querySelector('[data-ai-chart-icon]'); const selectedInstrumentOption=root.querySelector('[data-ai-symbol]')?.selectedOptions?.[0]; if(chartContextIcon) chartContextIcon.innerHTML=marketAssetIcon(symbol,'',selectedInstrumentOption?.textContent || symbol);
+      const selectedInstrumentOption=root.querySelector('[data-ai-symbol]')?.selectedOptions?.[0]; const chartMarketName=marketDisplayName(symbol,selectedInstrumentOption?.value===symbol?selectedInstrumentOption.textContent:''); if (title) title.textContent = 'Loading live broker candles · ' + chartMarketName; const chartContextIcon=root.querySelector('[data-ai-chart-icon]'); if(chartContextIcon) chartContextIcon.innerHTML=marketAssetIcon(symbol,'',chartMarketName);
       chart.innerHTML = '<div class="ai-note">Connecting to the selected broker and loading real candle data…</div>';
       const granularity = ({M1:60,M5:300,M15:900,H1:3600,H4:14400,D1:86400})[String(timeframe || 'M1').toUpperCase()] || 60;
       try {
@@ -78,7 +78,7 @@
           .slice(-72);
         if (!rows.length) {
           chart.innerHTML = '<div class="ai-note">The connected broker returned no valid timestamped candles for ' + esc(symbol) + '. No synthetic or placeholder candles have been drawn. Retry or select another active instrument.</div>';
-          if (title) title.textContent = (d.broker || 'Connected broker') + ' · ' + symbol + ' · candle data unavailable';
+          if (title) title.textContent = (d.broker || 'Connected broker') + ' · ' + chartMarketName + ' · candle data unavailable';
           return;
         }
         const forecasts = (Array.isArray(forecast) ? forecast : []).map(x => {
@@ -129,10 +129,10 @@
         const legend='<div class="ai-chart-legend"><span><i style="background:#14d7a0"></i>Bullish candle</span><span><i style="background:#f05270"></i>Bearish candle</span><span><i style="background:#4aa8ff"></i>MA (20)</span>'+(forecasts.length?'<span><i style="background:#10d7a0"></i>AI forecast</span>':'')+'<span><i style="background:#ffc75e"></i>Prediction event ('+visibleEvents.length+')</span></div>';
         chart.innerHTML='<div class="ai-chart-viewport">'+svg+'</div>'+legend;
         const chartSvg=chart.querySelector('.ai-chart-viewport svg');if(chartSvg){chartSvg.style.width='100%';chartSvg.style.maxWidth='100%';chartSvg.style.height='auto';chartSvg.setAttribute('preserveAspectRatio','xMidYMid meet');}
-        if(title)title.textContent=(d.broker||'Connected broker')+' · '+symbol+' · '+String(timeframe||'M1')+' · live broker candles';
+        if(title)title.textContent=(d.broker||'Connected broker')+' · '+chartMarketName+' · '+String(timeframe||'M1')+' · live broker candles';
       } catch (err) {
         chart.innerHTML='<div class="ai-note">Live candles are temporarily unavailable for '+esc(symbol)+'. No placeholder candles are shown. Retry or choose another broker instrument.</div>';
-        if(title)title.textContent='Live broker feed temporarily unavailable · '+symbol;
+        if(title)title.textContent='Live broker feed temporarily unavailable · '+chartMarketName;
       }
     };
     const loadInstrumentCatalogue = async () => {

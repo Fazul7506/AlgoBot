@@ -129,8 +129,12 @@
   function render(d){
     A.data=d;
     const gate=d.execution_gate||{}, ai=d.ai||{}, layers=d.analysis_layers||{}, conf=d.confluence||{}, acct=d.account_context||{};
-    set("aResearchState",state(d.research_state)); set("aBrokerState",state(d.broker_state)); set("aSymbol",d.symbol); set("aTf",String(d.timeframe||"M1").toUpperCase()); set("aPrice",num(d.price)); set("aSignal",d.signal==null?"UNAVAILABLE":d.signal); $("aSignal").className="value "+tone(d.signal); set("aTechnical",d.score!=null?num(d.score,1)+"/100":"Technical score —"); set("aFresh",d.data_provenance?.fresh?"FRESH DATA":"DATA UNVERIFIED"); set("liveQuote",num(d.live_quote?.price)); set("liveQuoteAge",d.live_quote?.age_seconds!=null?"Live quote age "+d.live_quote.age_seconds+"s":"Live quote freshness unavailable"); set("liveQuoteSource",d.live_quote?.source||"Deriv live quote");
-    set("aTechnical",d.score!=null?num(d.score,1)+"/100":"—"); set("aConfidence",pctNorm(d.confidence)); const confidenceValue=Number(d.confidence);const confidenceFill=$("confidenceFill");if(confidenceFill)confidenceFill.style.width=Number.isFinite(confidenceValue)?Math.max(0,Math.min(100,confidenceValue<=1?confidenceValue*100:confidenceValue))+"%":"0%"; set("aRegime",d.volatility_regime);
+    const aiModelsUsed=Number(layers.ai?.models_used??ai.models_used??0);
+    const aiConfidenceValue=layers.ai?.confidence??ai.confidence??d.confidence;
+    const aiDecisionValue=layers.ai?.decision||ai.decision||layers.ai?.direction||ai.direction;
+    const hasModelEvidence=aiModelsUsed>0&&aiConfidenceValue!=null&&Boolean(aiDecisionValue)&&!['UNAVAILABLE','NO_MODEL','NO PREDICTION'].includes(String(aiDecisionValue).toUpperCase());
+    set("aResearchState",state(d.research_state)); set("aBrokerState",state(d.broker_state)); set("aSymbol",marketName(A.markets.find(m=>m.symbol===d.symbol)||{symbol:d.symbol})); set("aTf",String(d.timeframe||"M1").toUpperCase()); set("aPrice",num(d.price)); set("aSignal",d.signal==null?"UNAVAILABLE":d.signal); $("aSignal").className="value "+tone(d.signal); set("aTechnical",d.score!=null?num(d.score,1)+"/100":"Technical score —"); set("aFresh",d.data_provenance?.fresh?"FRESH DATA":"DATA UNVERIFIED"); set("liveQuote",num(d.live_quote?.price)); set("liveQuoteAge",d.live_quote?.age_seconds!=null?"Live quote age "+d.live_quote.age_seconds+"s":"Live quote freshness unavailable"); set("liveQuoteSource",d.live_quote?.source||"Deriv live quote");
+    set("aTechnical",d.score!=null?num(d.score,1)+"/100":"—"); set("aConfidence",hasModelEvidence?pctNorm(aiConfidenceValue):"Unavailable"); const confidenceValue=Number(aiConfidenceValue);const confidenceFill=$("confidenceFill");if(confidenceFill)confidenceFill.style.width=hasModelEvidence&&Number.isFinite(confidenceValue)?Math.max(0,Math.min(100,confidenceValue<=1?confidenceValue*100:confidenceValue))+"%":"0%"; set("aRegime",d.volatility_regime);
     const sentiment=d.sentiment&&typeof d.sentiment==="object"?d.sentiment:null;
     const sentimentLabel=sentiment?.label||sentiment?.sentiment||sentiment?.classification;
     set("sentimentState",sentimentLabel?state(sentimentLabel):"Unavailable");
@@ -141,7 +145,7 @@
     set("marketState",state(layers.market_data?.state)); set("marketSource",layers.market_data?.source||d.data_provenance?.broker); set("marketAge",d.data_provenance?.age_seconds!=null?d.data_provenance.age_seconds+"s":"—"); set("candleCount",d.candles??d.last_candles?.length);
     set("trendState",layers.technical?.structure||d.structure); set("trendScore",layers.technical?.score!=null?num(layers.technical.score,1)+"/100":"—"); set("momentumState",d.indicators?.rsi14!=null?"RSI "+num(d.indicators.rsi14,1):"—"); set("volatilityState",d.volatility_regime);
     set("strategyState",state(layers.strategy?.state)); set("strategyDirection",layers.strategy?.direction||"WAIT"); set("strategyEvidence",(layers.strategy?.evidence||[]).join(" · ")||"No persisted strategy evidence");
-    set("aiState",state(layers.ai?.state)); set("aiDecision",layers.ai?.decision||"UNAVAILABLE"); set("aiConfidence",pctNorm(layers.ai?.confidence)); set("aiModels",layers.ai?.models_used?String(layers.ai.models_used):"0"); set("aiAgreement",layers.ai?.agreement!=null?pct(Number(layers.ai.agreement)*100):"—");
+    set("aiState",state(layers.ai?.state)); set("aiDecision",hasModelEvidence?aiDecisionValue:"UNAVAILABLE"); set("aiConfidence",hasModelEvidence?pctNorm(aiConfidenceValue):"Unavailable"); set("aiModels",aiModelsUsed>0?String(aiModelsUsed):"0"); set("aiAgreement",layers.ai?.agreement!=null?pct(Number(layers.ai.agreement)*100):"—");
     set("confluenceState",state(conf.state)); set("confluenceDirection",conf.direction||"WAIT"); set("confluenceScore",conf.score!=null?num(conf.score,1)+"/100":"—");
     list("confluenceEvidence", conf.evidence, e => { const cls = e.passed ? "pass" : "fail"; const label = e.passed ? "PASS" : "WAIT"; return '<div class="evidence-row"><span>' + esc(e.layer) + '</span><strong>' + esc(e.condition) + '</strong><b class="' + cls + '">' + label + '</b></div>'; });
     set("gateState",gate.ready?"EXECUTION ELIGIBLE":"BLOCKED"); set("gateReason",gate.reason|| (gate.ready?"All configured gates passed.":"One or more execution gates are not confirmed.")); set("validationState",state(d.signal_validation?.state)); set("validationDirection",d.signal_validation?.signal||"WAIT"); set("validationExpiry",d.signal_validation?.expires_after_seconds!=null?d.signal_validation.expires_after_seconds+" seconds":"—"); set("noLookAhead",d.signal_validation?.no_look_ahead===true?"CONFIRMED":"UNCONFIRMED");
@@ -150,15 +154,15 @@
     set("support",num(d.levels?.support));set("resistance",num(d.levels?.resistance));set("range",num(d.levels?.range));set("change",d.change_pct!=null?num(d.change_pct,2)+"%":"—");
     set("keyCurrentPrice",num(d.price));set("resistance1",num(d.levels?.resistance));set("support1",num(d.levels?.support));
     set("resistance2",num(d.levels?.resistance2));set("support2",num(d.levels?.support2));
-    const signalText=d.signal==null?"UNAVAILABLE":String(d.signal).toUpperCase();
-    const confText=pctNorm(d.confidence);
+    const signalText=hasModelEvidence?String(aiDecisionValue).toUpperCase():"UNAVAILABLE";
+    const confText=hasModelEvidence?pctNorm(aiConfidenceValue):"—";
     const overviewRow=x=>{const market=A.markets.find(m=>m.symbol===x.symbol)||{symbol:x.symbol};return '<tr><td><span class="analysis-market-cell">'+iconFor(market)+'<span>'+esc(marketName(market))+'</span></span></td><td>'+esc(num(x.price))+'</td><td><span class="signal-pill '+tone(x.signal)+'">'+esc(x.signal)+'</span></td><td>'+esc(x.confidence)+'</td></tr>';};
     list("marketOverviewRows",[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText}],overviewRow,"No verified market data available.");
     const overviewKey=[d.symbol,d.timeframe||"M1",$("limit")?.value||300].join("|");
     if(A.overviewKey!==overviewKey){A.overviewKey=overviewKey;A.overviewCache=[];A.predictionCache=[];A.overviewFetchedAt=0;A.overviewPending=false;}
     A.overviewCache=[{symbol:d.symbol,price:d.price,signal:signalText,confidence:confText},...A.overviewCache.filter(x=>x.symbol!==d.symbol)].slice(0,5);
-    const predictionDirection=layers.ai?.direction||layers.ai?.prediction||layers.ai?.decision||d.signal;
-    const predictionProbability=layers.ai?.probability??layers.ai?.probability_pct??d.prediction_probability;
+    const predictionDirection=hasModelEvidence?(layers.ai?.direction||layers.ai?.prediction||ai.direction||ai.prediction||aiDecisionValue):null;
+    const predictionProbability=hasModelEvidence?(layers.ai?.probability??layers.ai?.probability_pct??ai.probability??ai.probability_pct??d.prediction_probability):null;
     A.predictionCache=[...(predictionDirection?[{symbol:d.symbol,direction:predictionDirection,probability:predictionProbability}]:[]),...A.predictionCache.filter(x=>x.symbol!==d.symbol)].slice(0,5);
     list("marketOverviewRows",A.overviewCache,overviewRow,"No verified market data available.");
     const predictionRow=x=>{const market=A.markets.find(m=>m.symbol===x.symbol)||{symbol:x.symbol};return '<tr><td><span class="analysis-market-cell">'+iconFor(market)+'<span>'+esc(marketName(market))+'</span></span></td><td><span class="prediction-direction '+tone(x.direction)+'">'+esc(state(x.direction))+'</span></td><td>'+esc(x.probability==null?"—":pct(Number(x.probability)>1?Number(x.probability):Number(x.probability)*100))+'</td></tr>';};

@@ -31,7 +31,7 @@
       const haystack = `${r.symbol} ${r.display_name} ${r.market} ${r.sub_market}`.toLowerCase();
       return (!query || haystack.includes(query)) && (state === 'all' || r.status === state);
     }).slice(0, limit);
-    if (rowsEl) rowsEl.innerHTML = visible.length ? visible.map(r => `<tr><td><strong>${esc(r.symbol)}</strong><small>${esc(r.display_name)}</small></td><td>${esc(r.market)}${r.sub_market ? `<small>${esc(r.sub_market)}</small>` : ''}</td><td>${fmt(r.tick_count)}</td><td>${fmt(r.candle_count)}</td><td>${r.candle_timeframes?.length ? esc(r.candle_timeframes.join(', ')) : '—'}</td><td>${age(r.latest_age_seconds)}</td><td><span class="data-state ${esc(r.status)}">${esc(String(r.status || '').replace('_', ' '))}</span></td></tr>`).join('') : '<tr><td colspan="7" class="data-empty">No instruments match the current filter.</td></tr>';
+    if (rowsEl) rowsEl.innerHTML = visible.length ? visible.map(r => `<tr><td><strong>${esc(window.AlgoBotMarketPicker?.marketName({value:r.symbol||'',textContent:r.display_name||r.symbol||''})||r.display_name||'Market instrument')}</strong></td><td>${esc(r.market)}${r.sub_market ? `<small>${esc(r.sub_market)}</small>` : ''}</td><td>${fmt(r.tick_count)}</td><td>${fmt(r.candle_count)}</td><td>${r.candle_timeframes?.length ? esc(r.candle_timeframes.join(', ')) : '—'}</td><td>${age(r.latest_age_seconds)}</td><td><span class="data-state ${esc(r.status)}">${esc(String(r.status || '').replace('_', ' '))}</span></td></tr>`).join('') : '<tr><td colspan="7" class="data-empty">No instruments match the current filter.</td></tr>';
   }
 
   async function load() {

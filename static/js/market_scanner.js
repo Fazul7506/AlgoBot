@@ -62,13 +62,13 @@
         ? '<a class="scanner-action" href="/trading/?symbol=' + encodeURIComponent(row.symbol) + '">Trade</a>'
         : '—';
       const asset = window.AlgoBotMarketAssets?.resolve?.(row);
-      const marketDisplayName = row.display_name || row.name || (asset?.status === 'verified' ? asset.asset?.label : '') || 'Market instrument';
-      let artwork = '<span class="scanner-market-unmapped" aria-hidden="true">' + esc(String(row.symbol || '?').slice(0, 2)) + '</span>';
+      const marketDisplayName = window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.name||row.symbol||''}) || row.display_name || row.name || (asset?.status === 'verified' ? asset.asset?.label : '') || 'Market instrument';
+      let artwork = '<span class=\"scanner-market-unmapped\" aria-hidden=\"true\">•</span>';
       if (asset?.status === 'verified' && asset.asset?.src) {
         artwork = '<img class="scanner-market-art" src="' + esc(asset.asset.src) + '" alt="" loading="lazy">';
       }
       return '<tr>' +
-        '<td><span class="scanner-symbol-cell"><span class="scanner-market-artwork">' + artwork + '</span><span class="scanner-symbol-copy"><strong>' + esc(row.symbol) + '</strong><small>' + esc(row.display_name) + '</small></span></span></td>' +
+        '<td><span class=\"scanner-symbol-cell\"><span class=\"scanner-market-artwork\">' + artwork + '</span><span class=\"scanner-symbol-copy\"><strong>' + esc(marketDisplayName) + '</strong></span></span></td>' +
         '<td>' + esc(row.market) + '</td>' +
         '<td>' + fmt(row.last_price) + '</td>' +
         '<td class="' + (change > 0 ? 'up' : change < 0 ? 'down' : '') + '">' +
