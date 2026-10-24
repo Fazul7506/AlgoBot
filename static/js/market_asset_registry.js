@@ -11,7 +11,7 @@
     BOOM50:'Boom 50 Index', BOOM100:'Boom 100 Index', BOOM150:'Boom 150 Index',
     BOOM200:'Boom 200 Index', BOOM300:'Boom 300 Index', BOOM500:'Boom 500 Index',
     BOOM600:'Boom 600 Index', BOOM900:'Boom 900 Index', BOOM1000:'Boom 1000 Index',
-    CRASH500:'Crash 500 Index', DEX1500DOWN:'DEX 1500 DOWN Index', DEX1500UP:'DEX 1500 UP Index',
+    CRASH50:'Crash 50 Index', CRASH150:'Crash 150 Index', CRASH500:'Crash 500 Index', CRASH600:'Crash 600 Index', CRASH900:'Crash 900 Index', CRASH1000:'Crash 1000 Index', DEX1500DOWN:'DEX 1500 DOWN Index', DEX1500UP:'DEX 1500 UP Index',
     DEX600DOWN:'DEX 600 DOWN Index', DEX600UP:'DEX 600 UP Index', DEX900DOWN:'DEX 900 DOWN Index',
     DEX900UP:'DEX 900 UP Index', JD10:'Jump 10 Index', JD25:'Jump 25 Index', JD50:'Jump 50 Index',
     JD75:'Jump 75 Index', JD100:'Jump 100 Index', STP100:'Step Index', STP200:'Step Index 200',
@@ -23,6 +23,11 @@
   });
   const cryptoAliases = Object.freeze({DOGEUSD:'DOGUSD', AVAXUSD:'AVAUSD', LINKUSD:'LNKUSD', DASHUSD:'DSHUSD'});
   const commodityAliases = Object.freeze({UKOIL:'UK Brent Oil', USOIL:'US Oil'});
+  // Official Deriv stock-catalogue rows may carry exchange-qualified tickers
+  // (e.g. AAPL.OQ). Match the exact ticker metadata when present, never by
+  // borrowing a stock-index illustration or a company-name prefix.
+  const normaliseStockSymbol = value => normaliseLabel(String(value || '').toUpperCase().replace(/\.(?:OQ|N|O|P|K|A|L|M|B|V|F|U|D|Q|Y|Z)$/, ''));
+
   const classify = instrument => {
     const text = [instrument.market, instrument.subMarket, instrument.symbolType, instrument.displayName].join(' ').toLowerCase();
     const symbol = instrument.symbol.toUpperCase();
@@ -52,21 +57,38 @@
     if (family === 'forex' || family === 'commodities') {
       const ticker = symbol.replace(/^FRX/, '');
       add(ticker);
+      add(commodityAliases[ticker]);
     } else if (family === 'cryptocurrency') {
       const ticker = symbol.replace(/^CRY/, '');
       add(cryptoAliases[ticker] || ticker);
+    } else if (family === 'stocks-and-indices') {
+      add(symbol);
+      add(normaliseStockSymbol(symbol));
+      add(symbol.replace(/\.[A-Z]+$/, ''));
     } else if (family === 'synthetic-indices') {
+      add(symbol);
       add(syntheticNames[symbol]);
       add(syntheticNames[symbol.replace(/[^A-Z0-9]/g, '')]);
     }
-    const eligible = entries.filter(item => item.market === family && item.url && item.url.endsWith('.svg'));
+    const familyEntries = entries.filter(item => item.market === family && item.url && item.url.endsWith('.svg'));
+    // Mirror Deriv's catalogue mapping: distinct instruments may intentionally
+    // reference the same official SVG URL. Resolve by exact instrument name/symbol;
+    // URL sharing alone must not discard otherwise valid catalogue rows.
+    const eligible = familyEntries;
     for (const candidate of candidates) {
-      const exact = eligible.filter(item => normaliseLabel(item.name) === candidate);
+      const exact = eligible.filter(item =>
+        normaliseLabel(item.name) === candidate ||
+        (item.symbol && (normaliseLabel(item.symbol) === candidate ||
+          normaliseStockSymbol(item.symbol) === candidate))
+      );
       if (exact.length === 1) return exact[0];
     }
     // Display names can include an added "Index" suffix; only accept a unique longest-prefix match.
     const displayKey = normaliseLabel(instrument.displayName);
-    if (displayKey) {
+    // Synthetic symbols often differ only by trailing digits (e.g. CRASH50 vs CRASH500).
+    // Prefix matching can silently assign another instrument's SVG, so synthetic
+    // indices require an exact catalogue-name match only.
+    if (displayKey && family !== 'synthetic-indices') {
       const matches = eligible.filter(item => {
         const key = normaliseLabel(item.name);
         return key && (displayKey.startsWith(key) || key.startsWith(displayKey));
