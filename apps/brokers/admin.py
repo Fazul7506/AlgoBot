@@ -202,3 +202,29 @@ class TradeReconciliationAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return False
     def has_change_permission(self, request, obj=None): return False
     def has_delete_permission(self, request, obj=None): return False
+
+
+@admin.register(BrokerIntegrationRequest)
+class BrokerIntegrationRequestAdmin(admin.ModelAdmin):
+    list_display = ("provider_name", "status", "requested_by", "created_at", "updated_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("provider_name", "use_case", "contact_email")
+    readonly_fields = ("requested_by", "created_at", "updated_at")
+    fieldsets = (
+        ("Request", {"fields": ("provider_name", "provider_website", "contact_email", "use_case", "desired_capabilities")}),
+        ("Triage", {"fields": ("status", "linked_pr_url", "team_notes", "requested_by", "created_at", "updated_at")}),
+    )
+
+
+@admin.register(BrokerIntegrationRun)
+class BrokerIntegrationRunAdmin(admin.ModelAdmin):
+    list_display = ("provider_name", "provider_slug", "status", "pull_request_number", "updated_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("provider_name", "provider_slug", "pull_request_url", "failure_detail")
+    readonly_fields = ("created_at", "updated_at")
+    fieldsets = (
+        ("Provider", {"fields": ("provider_name", "provider_slug", "status", "created_by")}),
+        ("Pull request", {"fields": ("pull_request_number", "pull_request_url", "head_sha")}),
+        ("Validation and follow-up", {"fields": ("validation_results", "requested_enhancements", "failure_detail")}),
+        ("Timestamps", {"fields": ("created_at", "updated_at")}),
+    )
