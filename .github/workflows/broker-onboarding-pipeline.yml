@@ -83,8 +83,9 @@ jobs:
           FROM python:3.13-slim
           ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
           WORKDIR /candidate
+          ARG BROKER_SLUG
           RUN python -m pip install --no-cache-dir pytest
-          COPY apps/brokers/generated_drafts/$BROKER_SLUG/ /candidate/
+          COPY apps/brokers/generated_drafts/${BROKER_SLUG}/ /candidate/
           USER 65532:65532
           CMD ["pytest", "-q", "test_adapter_contract.py"]
           EOF
