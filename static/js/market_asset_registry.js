@@ -71,7 +71,10 @@
     }
     // Display names can include an added "Index" suffix; only accept a unique longest-prefix match.
     const displayKey = normaliseLabel(instrument.displayName);
-    if (displayKey) {
+    // Synthetic symbols often differ only by trailing digits (e.g. CRASH50 vs CRASH500).
+    // Prefix matching can silently assign another instrument's SVG, so synthetic
+    // indices require an exact catalogue-name match only.
+    if (displayKey && family !== 'synthetic-indices') {
       const matches = eligible.filter(item => {
         const key = normaliseLabel(item.name);
         return key && (displayKey.startsWith(key) || key.startsWith(displayKey));
