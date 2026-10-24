@@ -1,5 +1,8 @@
 from django.contrib import admin
 from django.template.response import TemplateResponse
+from django.contrib import messages
+from django.shortcuts import redirect
+from django.utils.text import slugify
 from django.urls import path
 
 from .models import (
@@ -12,6 +15,8 @@ from .models import (
     Order,
     Position,
     TradeReconciliation,
+    BrokerIntegrationRequest,
+    BrokerIntegrationRun,
 )
 
 
@@ -28,7 +33,26 @@ class BrokerAdmin(admin.ModelAdmin):
         return custom + super().get_urls()
 
     def integration_management(self, request):
+        if request.method == "POST":
+            provider_name = request.POST.get("provider_name", "").strip()
+            use_case = request.POST.get("use_case", "").strip()
+            provider_website = request.POST.get("provider_website", "").strip()
+            contact_email = request.POST.get("contact_email", "").strip()
+            if not provider_name or not use_case:
+                messages.error(request, "Provider name and integration use case are required.")
+            else:
+                BrokerIntegrationRequest.objects.create(
+                    provider_name=provider_name[:120],
+                    provider_website=provider_website,
+                    contact_email=contact_email,
+                    use_case=use_case,
+                    requested_by=request.user,
+                )
+                messages.success(request, "Broker integration request saved for the AlgoBot team.")
+            return redirect("admin:brokers_broker_integration_management")
         brokers = list(Broker.objects.all().order_by("name"))
+        integration_requests = BrokerIntegrationRequest.objects.select_related("requested_by").all()[:30]
+        integration_runs = BrokerIntegrationRun.objects.all()[:20]
         context = {
             **self.admin_site.each_context(request),
             "title": "Broker Integration Management",
@@ -37,6 +61,10 @@ class BrokerAdmin(admin.ModelAdmin):
             "total_brokers": len(brokers),
             "active_brokers": sum(1 for broker in brokers if broker.status == "active"),
             "scaffolded_brokers": sum(1 for broker in brokers if (broker.metadata or {}).get("adapter_state") == "scaffold"),
+            "integration_requests": integration_requests,
+            "integration_runs": integration_runs,
+            "pending_requests": BrokerIntegrationRequest.objects.filter(status="pending").count(),
+            "open_runs": BrokerIntegrationRun.objects.exclude(status__in=["merged", "failed"]).count(),
         }
         return TemplateResponse(request, "admin/brokers/broker/integration_management.html", context)
 
