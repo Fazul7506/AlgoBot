@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Sync official Deriv SVG source URLs without downloading or generating SVG files.
 
-The modern synthetic-indices catalogue publishes some official assets on
-media.ffycdn.net, while the legacy market pages use Deriv's Webflow CDN.
-Preserve previously verified modern-catalogue records when refreshing the
-legacy pages, so a routine sync cannot silently remove those mappings.
+Scrapes Deriv's official market catalogues, including individual stocks (not only
+stock indices), and preserves verified modern media-CDN synthetic assets.
 """
 import html
 import json
@@ -15,13 +13,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "static/js/deriv_market_asset_manifest.js"
-PAGES = {
-    "synthetic-indices": "derived-indices",
-    "cryptocurrency": "cryptocurrencies",
-    "forex": "forex",
-    "commodities": "commodities",
-    "stocks-and-indices": "stock-indices",
-}
+PAGES = [
+    ("synthetic-indices", "derived-indices"),
+    ("cryptocurrency", "cryptocurrencies"),
+    ("forex", "forex"),
+    ("commodities", "commodities"),
+    ("stocks-and-indices", "stock-indices"),
+    ("stocks-and-indices", "stocks"),
+]
 BASE = "https://ae.deriv.com/markets/"
 USER_AGENT = "AlgoBot-Deriv-Asset-Sync/1.0"
 OFFICIAL_WEBFLOW_PREFIX = "https://cdn.prod.website-files.com/"
@@ -86,7 +85,7 @@ def collect(market, slug):
     url = urllib.parse.urljoin(BASE, slug)
     seen_urls = set()
     entries = {}
-    while url and url not in seen_urls and len(seen_urls) < 30:
+    while url and url not in seen_urls and len(seen_urls) < 60:
         seen_urls.add(url)
         page = fetch(url)
         rows = re.findall(
@@ -95,34 +94,43 @@ def collect(market, slug):
             page, re.S
         )
         for asset_url, raw_name in rows:
-            name = html.unescape(re.sub(r"<[^>]+>", "", raw_name)).strip()
+            label = html.unescape(re.sub(r"<[^>]+>", "", raw_name)).strip()
             asset_url = html.unescape(asset_url)
-            if not name or "instruments-placeholder.svg" in asset_url:
+            if not label or "instruments-placeholder.svg" in asset_url:
                 continue
             if not asset_url.startswith(OFFICIAL_WEBFLOW_PREFIX) or not asset_url.lower().endswith(".svg"):
                 continue
-            key = normalise_name(name)
-            entries[key] = {
+            symbol = None
+            name = label
+            if market == "stocks-and-indices":
+                # Stock catalogue labels have the form "AAPL.OQ: Apple Inc (NASDAQ)".
+                match = re.match(r"^([A-Z0-9.^_-]+):\s*(.+)$", label)
+                if match:
+                    symbol, name = match.group(1).strip(), match.group(2).strip()
+            key = normalise_name(symbol or name)
+            entry = {
                 "market": market,
                 "name": name,
                 "url": asset_url,
                 "sourcePage": BASE + slug,
             }
+            if symbol:
+                entry["symbol"] = symbol
+            entries[key] = entry
         match = re.search(r'<a[^>]*href="([^"]+)"[^>]*aria-label="Next Page"', page)
         url = urllib.parse.urljoin(url, match.group(1)) if match else None
     return list(entries.values())
 
 
 def main():
-    # Keep modern synthetic catalogue entries; they are not exposed by the legacy scraper.
     entries_by_name = {
-        normalise_name(item["name"]): item
+        normalise_name(item.get("symbol") or item["name"]): item
         for item in load_existing_official_media_entries()
     }
-    for market, slug in PAGES.items():
+    for market, slug in PAGES:
         for item in collect(market, slug):
-            key = normalise_name(item["name"])
-            # For synthetic names, a verified modern Deriv media URL takes precedence.
+            key = normalise_name(item.get("symbol") or item["name"])
+            # A verified modern Deriv synthetic SVG takes precedence over legacy pages.
             if key not in entries_by_name or (
                 market != "synthetic-indices"
                 and entries_by_name[key].get("market") != "synthetic-indices"
@@ -130,23 +138,16 @@ def main():
                 entries_by_name[key] = item
 
     entries = list(entries_by_name.values())
-    # Reject shared artwork in every instrument family. A shared URL is not
-    # evidence that each instrument has its own official SVG.
+    # A shared URL cannot satisfy an instrument-specific icon requirement.
     counts = {}
     for item in entries:
         counts[item["url"]] = counts.get(item["url"], 0) + 1
     entries = [item for item in entries if counts[item["url"]] == 1]
     entries.sort(key=lambda item: (item["market"], item["name"]))
-    # Verify the actual response for each distinct URL before publishing metadata.
-    # Repeated URLs are intentionally not silently rewritten: visual identity must be
-    # audited against the official catalogue rather than guessed from a filename.
     for asset_url in sorted({item["url"] for item in entries}):
         validate_svg_asset(asset_url)
 
-    payload = {
-        "source": "Official Deriv market catalogue pages",
-        "entries": entries,
-    }
+    payload = {"source": "Official Deriv market catalogue pages", "entries": entries}
     OUTPUT.write_text(
         "/* Source URL metadata only. No SVG bytes are generated or stored by AlgoBot. */\n"
         "window.AlgoBotDerivMarketAssetManifest = Object.freeze(" +
