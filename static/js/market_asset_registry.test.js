@@ -62,7 +62,7 @@ for (const item of api.manifestEntries.filter(x => x.market === 'synthetic-indic
 assert([...syntheticByUrl.values()].every(count => count === 1), 'every synthetic manifest entry has its own unique official SVG URL');
 const urlsByFamily = new Map();
 for (const item of api.manifestEntries) {
-  const key = item.market + '|' + item.url;
+  const key = item.url;
   urlsByFamily.set(key, (urlsByFamily.get(key) || 0) + 1);
 }
 assert([...urlsByFamily.values()].every(count => count === 1), 'no official SVG URL is assigned to multiple instrument records');
@@ -132,6 +132,8 @@ for (const instrument of [
 const syncScript = fs.readFileSync('scripts/sync_deriv_market_asset_manifest.py','utf8');
 assert(syncScript.includes('load_existing_official_media_entries'), 'manifest sync preserves manually verified modern Deriv synthetic SVG entries');
 assert(syncScript.includes('("stocks-and-indices", "stocks")'), 'manifest sync scrapes the official individual-stock catalogue as well as stock indices');
+assert(syncScript.includes('("synthetic-indices", "derived-indices/synthetic-indices")'), 'manifest sync scrapes the current official synthetic-indices catalogue');
+assert(syncScript.includes('asset_url.startswith(OFFICIAL_DERIV_MEDIA_PREFIX)'), 'synthetic sync accepts the official Deriv media CDN');
 assert(syncScript.includes('symbol, name = match.group(1).strip(), match.group(2).strip()'), 'stock sync preserves exact exchange-qualified ticker symbols');
 assert(syncScript.includes('OFFICIAL_DERIV_MEDIA_PREFIX'), 'manifest sync explicitly validates the official Deriv media CDN');
 assert(syncScript.includes('def validate_svg_asset(url):'), 'sync verifies fetched asset content, not only URL suffixes');
