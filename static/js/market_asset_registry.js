@@ -23,6 +23,11 @@
   });
   const cryptoAliases = Object.freeze({DOGEUSD:'DOGUSD', AVAXUSD:'AVAUSD', LINKUSD:'LNKUSD', DASHUSD:'DSHUSD'});
   const commodityAliases = Object.freeze({UKOIL:'UK Brent Oil', USOIL:'US Oil'});
+  // Official Deriv stock-catalogue rows may carry exchange-qualified tickers
+  // (e.g. AAPL.OQ). Match the exact ticker metadata when present, never by
+  // borrowing a stock-index illustration or a company-name prefix.
+  const normaliseStockSymbol = value => normaliseLabel(value).replace(/(?:OQ|N|O|P|K|A|L|M|B|V|F|U|D|Q|Y|Z)$/, '');
+
   const classify = instrument => {
     const text = [instrument.market, instrument.subMarket, instrument.symbolType, instrument.displayName].join(' ').toLowerCase();
     const symbol = instrument.symbol.toUpperCase();
@@ -55,6 +60,10 @@
     } else if (family === 'cryptocurrency') {
       const ticker = symbol.replace(/^CRY/, '');
       add(cryptoAliases[ticker] || ticker);
+    } else if (family === 'stocks-and-indices') {
+      add(symbol);
+      add(normaliseStockSymbol(symbol));
+      add(symbol.replace(/\\.[A-Z]+$/, ''));
     } else if (family === 'synthetic-indices') {
       add(syntheticNames[symbol]);
       add(syntheticNames[symbol.replace(/[^A-Z0-9]/g, '')]);
@@ -66,7 +75,11 @@
     familyEntries.forEach(item => urlCounts.set(item.url, (urlCounts.get(item.url) || 0) + 1));
     const eligible = familyEntries.filter(item => urlCounts.get(item.url) === 1);
     for (const candidate of candidates) {
-      const exact = eligible.filter(item => normaliseLabel(item.name) === candidate);
+      const exact = eligible.filter(item =>
+        normaliseLabel(item.name) === candidate ||
+        (item.symbol && (normaliseLabel(item.symbol) === candidate ||
+          normaliseStockSymbol(item.symbol) === candidate))
+      );
       if (exact.length === 1) return exact[0];
     }
     // Display names can include an added "Index" suffix; only accept a unique longest-prefix match.
