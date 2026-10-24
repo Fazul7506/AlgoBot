@@ -57,6 +57,7 @@
     if (family === 'forex' || family === 'commodities') {
       const ticker = symbol.replace(/^FRX/, '');
       add(ticker);
+      add(commodityAliases[ticker]);
     } else if (family === 'cryptocurrency') {
       const ticker = symbol.replace(/^CRY/, '');
       add(cryptoAliases[ticker] || ticker);
