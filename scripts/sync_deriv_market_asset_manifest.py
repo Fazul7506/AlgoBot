@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "static/js/deriv_market_asset_manifest.js"
 PAGES = [
     ("synthetic-indices", "derived-indices"),
+    ("synthetic-indices", "derived-indices/synthetic-indices"),
     ("cryptocurrency", "cryptocurrencies"),
     ("forex", "forex"),
     ("commodities", "commodities"),
@@ -75,7 +76,7 @@ def load_existing_official_media_entries():
             and url.lower().endswith(".svg")
             and "instruments-placeholder.svg" not in url
             and item.get("name")
-            and item.get("sourcePage", "").startswith("https://deriv.com/")
+            and item.get("sourcePage", "").startswith(("https://deriv.com/", "https://ae.deriv.com/"))
         ):
             preserved.append(item)
     return preserved
@@ -98,7 +99,11 @@ def collect(market, slug):
             asset_url = html.unescape(asset_url)
             if not label or "instruments-placeholder.svg" in asset_url:
                 continue
-            if not asset_url.startswith(OFFICIAL_WEBFLOW_PREFIX) or not asset_url.lower().endswith(".svg"):
+            allowed_source = asset_url.startswith(OFFICIAL_WEBFLOW_PREFIX) or (
+                market == "synthetic-indices"
+                and asset_url.startswith(OFFICIAL_DERIV_MEDIA_PREFIX)
+            )
+            if not allowed_source or not asset_url.lower().endswith(".svg"):
                 continue
             symbol = None
             name = label
@@ -131,7 +136,11 @@ def main():
         for item in collect(market, slug):
             key = normalise_name(item.get("symbol") or item["name"])
             # A verified modern Deriv synthetic SVG takes precedence over legacy pages.
-            if key not in entries_by_name or (
+            modern_synthetic_catalogue = (
+                market == "synthetic-indices"
+                and slug == "derived-indices/synthetic-indices"
+            )
+            if key not in entries_by_name or modern_synthetic_catalogue or (
                 market != "synthetic-indices"
                 and entries_by_name[key].get("market") != "synthetic-indices"
             ):
