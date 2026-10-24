@@ -11,6 +11,10 @@ assert(current.symbol === 'frxEURUSD' && current.displayName === 'EUR/USD', 'nor
 const legacy = api.normalise({symbol:'frxEURUSD',display_name:'EUR/USD',symbol_type:'forex'});
 assert(legacy.symbol === current.symbol && legacy.displayName === current.displayName, 'normalizes legacy Deriv fields');
 assert(api.manifestEntries.length >= 100, 'loads a broad manifest of source-verified Deriv SVG URLs');
+const step100 = api.resolve({symbol:'STP100', display_name:'Step Index', market:'synthetic'});
+assert(step100.status === 'verified', 'STP100 resolves to the official Step Index SVG');
+assert(step100.asset.src === 'https://media.ffycdn.net/eu/deriv/iHeoSRskrtmfrmvq3SXr.svg', 'STP100 uses the exact official Step Index SVG');
+assert(api.manifestEntries.some(x => x.symbol === 'STP100' && x.name === 'Step Index'), 'manifest explicitly records the STP100 symbol identity');
 const apple = api.resolve({symbol:'AAPL', display_name:'Apple Inc', market:'stock'});
 assert(apple.status === 'verified', 'AAPL resolves through its exact official Deriv stock SVG');
 assert(apple.asset.src === 'https://media.ffycdn.net/eu/deriv/EbzwV8V7sdkDD2hsoJQd.svg', 'AAPL uses the official Apple-specific Deriv SVG');
