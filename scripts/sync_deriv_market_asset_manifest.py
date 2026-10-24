@@ -154,32 +154,10 @@ def main():
             ):
                 entries_by_name[key] = item
 
-    # If a modern synthetic listing reuses a generic URL, fall back to the legacy
-    # catalogue's URL for that same instrument when it is distinct and unique.
-    # Never synthesize filenames or guess an asset from a neighbouring instrument.
-    selected_counts = {}
-    for item in entries_by_name.values():
-        selected_counts[item["url"]] = selected_counts.get(item["url"], 0) + 1
-    legacy_counts = {}
-    for item in legacy_synthetic_by_name.values():
-        legacy_counts[item["url"]] = legacy_counts.get(item["url"], 0) + 1
-    for key, item in list(entries_by_name.items()):
-        if item.get("market") != "synthetic-indices" or selected_counts.get(item["url"], 0) < 2:
-            continue
-        fallback = legacy_synthetic_by_name.get(key)
-        if (
-            fallback
-            and fallback["url"] != item["url"]
-            and legacy_counts.get(fallback["url"], 0) == 1
-        ):
-            entries_by_name[key] = fallback
-
+    # Preserve Deriv's catalogue mapping exactly, including shared official SVG
+    # URLs assigned to multiple instruments. The registry resolves by exact name or
+    # symbol, so shared URLs do not cause cross-instrument fuzzy matches.
     entries = list(entries_by_name.values())
-    # A shared URL cannot satisfy an instrument-specific icon requirement.
-    counts = {}
-    for item in entries:
-        counts[item["url"]] = counts.get(item["url"], 0) + 1
-    entries = [item for item in entries if counts[item["url"]] == 1]
     entries.sort(key=lambda item: (item["market"], item["name"]))
     for asset_url in sorted({item["url"] for item in entries}):
         validate_svg_asset(asset_url)
