@@ -21,6 +21,11 @@ class BrokerDraftValidationTests(SimpleTestCase):
         self.assertTrue(report["passed"])
         self.assertEqual(report["errors"], [])
 
+    def test_accepts_adapter_relative_base_import(self):
+        source = "from .base import BrokerAdapter\\n\\nclass ExampleAdapter(BrokerAdapter):\\n    async def connect(self): ...\\n"
+        report = validate_broker_draft([{"path": "adapter.py", "content": source}])
+        self.assertTrue(report["passed"])
+
     def test_rejects_path_traversal(self):
         report = validate_broker_draft([
             {"path": "../settings.py", "content": "DEBUG = True"},
