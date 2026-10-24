@@ -1,0 +1,38 @@
+name: Deriv Demo Sandbox Smoke Verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: "Deriv demo market symbol (default R_100)"
+        required: false
+        default: "R_100"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deriv-demo-sandbox-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  demo-smoke:
+    name: Verify Deriv demo identity and market data
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: broker-production-approval
+    env:
+      DERIV_APP_ID: ${{ vars.DERIV_APP_ID }}
+      DERIV_DEMO_TOKEN: ${{ secrets.DERIV_DEMO_TOKEN }}
+      DERIV_DEMO_SYMBOL: ${{ inputs.symbol }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install WebSocket client
+        run: python -m pip install --disable-pip-version-check "websockets>=15,<16"
+      - name: Verify authenticated virtual account and demo market data
+        run: python scripts/verify_deriv_demo.py

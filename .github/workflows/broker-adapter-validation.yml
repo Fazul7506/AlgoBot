@@ -1,0 +1,118 @@
+name: Broker Adapter Validation Gate
+
+on:
+  pull_request:
+    paths:
+      - "apps/brokers/integration_agent.py"
+      - "apps/brokers/integration_validation.py"
+      - "apps/brokers/sandbox_verification.py"
+      - "apps/brokers/tests/test_integration_*.py"
+      - "apps/brokers/tests/test_readiness_gate.py"
+      - "apps/brokers/tests/test_sandbox_verification.py"
+      - "apps/brokers/generated_drafts/**"
+      - "scripts/validate_broker_*.py"
+      - ".github/workflows/broker-adapter-validation.yml"
+      - "requirements/base.txt"
+  workflow_dispatch:
+    inputs:
+      candidate_slug:
+        description: "Optional slug under apps/brokers/generated_drafts/ to statically validate and execute in isolation"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: broker-adapter-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused-tests:
+    name: Static gate and focused Django tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DJANGO_ENV: development
+      DJANGO_TESTING: "true"
+      USE_REDIS: "false"
+      SECRET_KEY: ci-test-secret-key
+      CREDENTIALS_ENCRYPTION_KEY: ci-test-credentials-encryption-key
+      DEBUG: "True"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements/base.txt
+      - name: Install application dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/base.txt
+      - name: Compile broker integration sources
+        run: python -m compileall -q apps/brokers scripts/validate_broker_draft.py scripts/validate_broker_readiness.py
+      - name: Run focused integration and readiness tests
+        run: >-
+          python manage.py test
+          apps.brokers.tests.test_integration_agent
+          apps.brokers.tests.test_integration_validation
+          apps.brokers.tests.test_readiness_gate
+          apps.brokers.tests.test_sandbox_verification
+          --verbosity 2
+      - name: Validate manually selected candidate
+        if: github.event_name == 'workflow_dispatch' && inputs.candidate_slug != ''
+        env:
+          CANDIDATE_SLUG: ${{ inputs.candidate_slug }}
+        run: |
+          case "$CANDIDATE_SLUG" in
+            (*[!a-z0-9_]*|'') echo "Invalid candidate slug" >&2; exit 2 ;;
+          esac
+          test "${#CANDIDATE_SLUG}" -ge 2
+          test "${#CANDIDATE_SLUG}" -le 48
+          python scripts/validate_broker_draft.py "apps/brokers/generated_drafts/$CANDIDATE_SLUG"
+
+  isolated-contract-tests:
+    name: Run candidate tests in restricted disposable container
+    needs: focused-tests
+    if: github.event_name == 'workflow_dispatch' && inputs.candidate_slug != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate candidate slug and build disposable test image
+        env:
+          CANDIDATE_SLUG: ${{ inputs.candidate_slug }}
+        run: |
+          case "$CANDIDATE_SLUG" in
+            (*[!a-z0-9_]*|'') echo "Invalid candidate slug" >&2; exit 2 ;;
+          esac
+          test "${#CANDIDATE_SLUG}" -ge 2
+          test "${#CANDIDATE_SLUG}" -le 48
+          test -f "apps/brokers/generated_drafts/$CANDIDATE_SLUG/adapter.py"
+          test -f "apps/brokers/generated_drafts/$CANDIDATE_SLUG/test_adapter_contract.py"
+          python - <<'PY'
+          from pathlib import Path
+          root = Path("apps/brokers/generated_drafts") / __import__("os").environ["CANDIDATE_SLUG"]
+          allowed = {"adapter.py", "test_adapter_contract.py", "README.md"}
+          if any(p.is_symlink() or not p.is_file() or p.name not in allowed for p in root.iterdir()):
+              raise SystemExit("Candidate contains an unapproved file or non-regular entry.")
+          PY
+          cat > /tmp/Dockerfile.broker-draft <<'EOF'
+          FROM python:3.13-slim
+          ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+          WORKDIR /app
+          COPY requirements/base.txt /tmp/requirements-base.txt
+          RUN python -m pip install --no-cache-dir -r /tmp/requirements-base.txt pytest
+          COPY . /app
+          EOF
+          docker build --pull --no-cache -f /tmp/Dockerfile.broker-draft -t algobot-broker-draft-sandbox:ci .
+      - name: Execute only the candidate contract tests without network or credentials
+        env:
+          CANDIDATE_SLUG: ${{ inputs.candidate_slug }}
+        run: |
+          docker run --rm             --network none             --read-only             --cap-drop ALL             --security-opt no-new-privileges             --pids-limit 128             --memory 768m             --cpus 1             --tmpfs /tmp:rw,noexec,nosuid,size=64m             --env DJANGO_ENV=development             --env DJANGO_TESTING=true             --env USE_REDIS=false             --env SECRET_KEY=isolated-test-only-secret             --env CREDENTIALS_ENCRYPTION_KEY=isolated-test-only-key             algobot-broker-draft-sandbox:ci             python -m pytest -q "apps/brokers/generated_drafts/$CANDIDATE_SLUG/test_adapter_contract.py"
