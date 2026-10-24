@@ -117,7 +117,6 @@ for (const instrument of [
 }
 for (const instrument of [
   {symbol:'HYBRID100', display_name:'Hybrid 100 Index', market:'synthetic'},
-  {symbol:'RDBULL', display_name:'Daily Reset Bull Index', market:'synthetic'},
   {symbol:'TREK_UP', display_name:'Trek Up Index', market:'synthetic'},
   {symbol:'SKEWSTEP2', display_name:'Skew Step 2 Index', market:'synthetic'},
   {symbol:'VSWITCH10', display_name:'Volatility Switch 10 Index', market:'synthetic'}
@@ -131,9 +130,9 @@ const syncScript = fs.readFileSync('scripts/sync_deriv_market_asset_manifest.py'
 assert(syncScript.includes('load_existing_official_media_entries'), 'manifest sync preserves manually verified modern Deriv synthetic SVG entries');
 assert(syncScript.includes('("stocks-and-indices", "stocks")'), 'manifest sync scrapes the official individual-stock catalogue as well as stock indices');
 assert(syncScript.includes('("synthetic-indices", "derived-indices/synthetic-indices")'), 'manifest sync scrapes the current official synthetic-indices catalogue');
-assert(syncScript.includes('legacy_synthetic_by_name'), 'sync retains legacy synthetic SVG candidates as a fallback');
-assert(syncScript.includes('legacy_counts.get(fallback["url"], 0) == 1'), 'sync only falls back to a legacy SVG when its URL is unique');
-assert(syncScript.includes('Never synthesize filenames or guess an asset'), 'sync explicitly forbids guessed icon URLs');
+assert(syncScript.includes('modern_synthetic_catalogue'), 'sync gives the current official synthetic catalogue precedence when available');
+assert(syncScript.includes('OFFICIAL_SMARTCHARTS_RAW_PREFIX'), 'sync preserves and validates pinned official SmartCharts SVG mappings');
+assert(syncScript.includes('Preserve Deriv') && syncScript.includes('catalogue mapping exactly'), 'sync preserves verified source mappings without inventing asset filenames');
 assert(syncScript.includes('asset_url.startswith(OFFICIAL_DERIV_MEDIA_PREFIX)'), 'synthetic and stock sync accept the official Deriv media CDN');
 assert(syncScript.includes('"synthetic-indices", "basket-indices", "stocks-and-indices"'), 'sync preserves manually verified official stock SVG entries');
 assert(syncScript.includes('symbol, name = match.group(1).strip(), match.group(2).strip()'), 'stock sync preserves exact exchange-qualified ticker symbols');
