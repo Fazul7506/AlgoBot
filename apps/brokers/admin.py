@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.template.response import TemplateResponse
+from django.urls import path
 
 from .models import (
     Broker,
@@ -20,6 +22,23 @@ class BrokerAdmin(admin.ModelAdmin):
     search_fields = ["name", "broker_type"]
     readonly_fields = ["created_at"]
     list_per_page = 50
+
+    def get_urls(self):
+        custom = [path("integration-management/", self.admin_site.admin_view(self.integration_management), name="brokers_broker_integration_management")]
+        return custom + super().get_urls()
+
+    def integration_management(self, request):
+        brokers = list(Broker.objects.all().order_by("name"))
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Broker Integration Management",
+            "opts": self.model._meta,
+            "brokers": brokers,
+            "total_brokers": len(brokers),
+            "active_brokers": sum(1 for broker in brokers if broker.status == "active"),
+            "scaffolded_brokers": sum(1 for broker in brokers if (broker.metadata or {}).get("adapter_state") == "scaffold"),
+        }
+        return TemplateResponse(request, "admin/brokers/broker/integration_management.html", context)
 
 
 @admin.register(BrokerAccount)
