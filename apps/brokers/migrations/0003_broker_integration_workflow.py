@@ -6,7 +6,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("brokers", "0001_initial"),
+        ("brokers", "0009_alter_position_options"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
