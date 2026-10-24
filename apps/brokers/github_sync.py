@@ -26,8 +26,11 @@ def sync_integration_run(run) -> dict:
     combined = get(f"{base}/commits/{sha}/status") if sha else {"state": "pending", "statuses": []}
     check_runs = checks.get("check_runs", [])
     conclusions = [c.get("conclusion") or c.get("status") for c in check_runs]
-    all_passed = bool(check_runs or combined.get("statuses")) and all(c == "success" or c == "completed" and any(x.get("conclusion") == "success" for x in check_runs) for c in conclusions) and combined.get("state", "pending") == "success"
-    failed = any(c in {"failure", "cancelled", "timed_out", "action_required"} for c in conclusions) or combined.get("state") == "failure"
+    legacy_statuses = combined.get("statuses", [])
+    checks_complete = bool(check_runs) and all(c.get("status") == "completed" and c.get("conclusion") == "success" for c in check_runs)
+    legacy_complete = bool(legacy_statuses) and all(c.get("state") == "success" for c in legacy_statuses)
+    all_passed = (checks_complete or (not check_runs and legacy_complete)) and combined.get("state") != "failure"
+    failed = any(c in {"failure", "cancelled", "timed_out", "action_required"} for c in conclusions) or any(c.get("state") == "failure" or c.get("state") == "error" for c in legacy_statuses) or combined.get("state") == "failure"
     ready = bool(all_passed and not pr.get("draft") and pr.get("mergeable") is True and pr.get("state") == "open")
     data = {
         "synced": True, "pr_state": pr.get("state"), "draft": bool(pr.get("draft")),
