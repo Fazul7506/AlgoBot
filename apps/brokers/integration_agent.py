@@ -67,6 +67,9 @@ class BrokerIntegrationDraft:
     provider_questions: list[str]
 
     def as_dict(self) -> dict[str, Any]:
+        from apps.brokers.integration_validation import validate_broker_draft
+
+        static_validation = validate_broker_draft(self.draft_files)
         return {
             "broker_slug": self.broker_slug,
             "provider_name": self.provider_name,
@@ -79,6 +82,7 @@ class BrokerIntegrationDraft:
             "status": "draft_requires_human_review",
             "production_enabled": False,
             "executed_generated_code": False,
+            "static_validation": static_validation,
         }
 
 
