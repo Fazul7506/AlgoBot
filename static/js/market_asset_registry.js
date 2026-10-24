@@ -26,7 +26,7 @@
   // Official Deriv stock-catalogue rows may carry exchange-qualified tickers
   // (e.g. AAPL.OQ). Match the exact ticker metadata when present, never by
   // borrowing a stock-index illustration or a company-name prefix.
-  const normaliseStockSymbol = value => normaliseLabel(value).replace(/(?:OQ|N|O|P|K|A|L|M|B|V|F|U|D|Q|Y|Z)$/, '');
+  const normaliseStockSymbol = value => normaliseLabel(String(value || '').toUpperCase().replace(/\\.(?:OQ|N|O|P|K|A|L|M|B|V|F|U|D|Q|Y|Z)$/, ''));
 
   const classify = instrument => {
     const text = [instrument.market, instrument.subMarket, instrument.symbolType, instrument.displayName].join(' ').toLowerCase();
