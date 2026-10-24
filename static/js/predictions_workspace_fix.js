@@ -52,7 +52,7 @@
       const chart = root.querySelector('[data-ai-chart]');
       const title = root.querySelector('[data-ai-chart-symbol]');
       if (!chart || !symbol) return;
-      if (title) title.textContent = 'Loading live broker candles · ' + symbol;
+      if (title) title.textContent = 'Loading live broker candles · ' + symbol; const chartContextIcon=root.querySelector('[data-ai-chart-icon]'); const selectedInstrumentOption=root.querySelector('[data-ai-symbol]')?.selectedOptions?.[0]; if(chartContextIcon) chartContextIcon.innerHTML=marketAssetIcon(symbol,'',selectedInstrumentOption?.textContent || symbol);
       chart.innerHTML = '<div class="ai-note">Connecting to the selected broker and loading real candle data…</div>';
       const granularity = ({M1:60,M5:300,M15:900,H1:3600,H4:14400,D1:86400})[String(timeframe || 'M1').toUpperCase()] || 60;
       try {
