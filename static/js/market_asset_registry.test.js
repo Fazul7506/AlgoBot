@@ -15,7 +15,7 @@ assert(api.manifestEntries.every(x => (x.url.startsWith('https://cdn.prod.websit
 for (const symbol of ['CRYETHUSD','CRYLTCUSD','CRYSOLUSD','CRYXRPUSD','CRYDOTUSD','CRYLINKUSD','CRYXLMUSD','CRYDASHUSD','CRYAVAXUSD']) {
   assert(api.resolve({symbol}).status === 'verified', symbol + ' resolves through the official Deriv crypto catalogue');
 }
-for (const symbol of ['frxXAGEUR','frxXAGUSD','frxXAUEUR','frxXPDUSD','frxXPTUSD','frxNGAS']) {
+for (const symbol of ['frxXAGEUR','frxXAGUSD','frxXAUEUR','frxXPDUSD','frxXPTUSD']) {
   assert(api.resolve({symbol}).status === 'verified', symbol + ' resolves through the official Deriv commodities catalogue');
 }
 
@@ -46,7 +46,7 @@ for (const [symbol, suffix] of [
   assert(resolved.status === 'verified', symbol + ' resolves to an authentic Deriv SVG');
   assert(resolved.asset.src.includes(suffix), symbol + ' uses its exact Deriv-hosted SVG');
 }
-for (const symbol of ['RDBULL','RDBEAR','AAPL','CRYNOTINCATALOGUE','CRASH50','CRASH150N','CRASH600','BOOM50','BOOM150']) {
+for (const symbol of ['RDBULL','RDBEAR','AAPL','CRYNOTINCATALOGUE','CRASH50','CRASH150N','CRASH600','BOOM50','BOOM100','BOOM150','BOOM200','frxNGAS','USOIL']) {
   assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped until its own official instrument-specific SVG is verified');
   assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback rather than shared or fabricated artwork');
 }
