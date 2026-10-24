@@ -17,7 +17,7 @@ assert(apple.asset.src === 'https://media.ffycdn.net/eu/deriv/EbzwV8V7sdkDD2hsoJ
 assert(api.manifestEntries.some(x => x.symbol === 'AAPL.OQ' && x.market === 'stocks-and-indices'), 'stock manifest retains exchange-qualified ticker identity');
 const aal = api.resolve({symbol:'AAL', display_name:'American Airlines Group Inc', market:'stock'});
 assert(aal.status === 'verified' && aal.asset.src === 'https://media.ffycdn.net/eu/deriv/xKHk2HaxuRu2vzJBbQEk.svg', 'AAL resolves to its distinct official Deriv stock SVG');
-assert(api.manifestEntries.every(x => (x.url.startsWith('https://cdn.prod.website-files.com/') || x.url.startsWith('https://media.ffycdn.net/eu/deriv/')) && x.url.endsWith('.svg')), 'manifest only contains remote SVGs from Deriv CDN');
+assert(api.manifestEntries.every(x => (x.url.startsWith('https://cdn.prod.website-files.com/') || x.url.startsWith('https://media.ffycdn.net/eu/deriv/') || x.url.startsWith('https://raw.githubusercontent.com/deriv-com/deriv-smartcharts/e8243d9cb0f47a3d3dcbd184910d36667eb4b43d/')) && x.url.endsWith('.svg')), 'manifest only contains remote SVGs from Deriv CDN');
 for (const symbol of ['CRYETHUSD','CRYLTCUSD','CRYSOLUSD','CRYXRPUSD','CRYDOTUSD','CRYLINKUSD','CRYXLMUSD','CRYDASHUSD','CRYAVAXUSD']) {
   assert(api.resolve({symbol}).status === 'verified', symbol + ' resolves through the official Deriv crypto catalogue');
 }
@@ -52,15 +52,26 @@ for (const [symbol, suffix] of [
   assert(resolved.status === 'verified', symbol + ' resolves to an authentic Deriv SVG');
   assert(resolved.asset.src.includes(suffix), symbol + ' uses its exact Deriv-hosted SVG');
 }
-for (const symbol of ['RDBULL','RDBEAR','CRYNOTINCATALOGUE','CRASH50','CRASH150N','CRASH600','frxNGAS','USOIL']) {
+for (const symbol of ['CRYNOTINCATALOGUE','CRASH150N','frxNGAS','USOIL']) {
   assert(api.resolve({symbol}).status === 'missing', symbol + ' must remain unmapped until its own official instrument-specific SVG is verified');
   assert(api.renderIcon({symbol}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback rather than shared or fabricated artwork');
 }
-// Boom 50/100/150/200 remain unmapped until verified instrument-specific artwork is found.
-for (const symbol of ['BOOM50','BOOM100','BOOM150','BOOM200']) {
+// These exact symbols use official, commit-pinned instrument SVGs from Deriv SmartCharts.
+for (const [symbol, suffix] of [
+  ['BOOM50','boom50%20index/boom50%20index.svg'],
+  ['BOOM100','boom100%20index/boom100%20index.svg'],
+  ['BOOM150','boom150%20index/boom150%20index.svg'],
+  ['BOOM200','boom200%20index/boom200%20index.svg'],
+  ['CRASH50','crash50%20index/crash50%20index.svg'],
+  ['CRASH150','crash150%20index/crash150%20index.svg'],
+  ['CRASH600','crash600%20index/crash600%20index.svg'],
+  ['RDBEAR','bear%20market/ic-marketbear.svg'],
+  ['RDBULL','bull%20market/ic-marketbull.svg']
+]) {
   const resolved = api.resolve({symbol, market:'synthetic'});
-  assert(resolved.status === 'missing', symbol + ' must not use the Deriv brand logo as instrument artwork');
-  assert(api.renderIcon({symbol, market:'synthetic'}).includes('market-avatar-unmapped'), symbol + ' uses neutral fallback until authentic instrument artwork is verified');
+  assert(resolved.status === 'verified', symbol + ' resolves to official Deriv SmartCharts SVG');
+  assert(resolved.asset.src.includes(suffix), symbol + ' resolves to its own instrument-specific SVG');
+  assert(resolved.asset.src.startsWith('https://raw.githubusercontent.com/deriv-com/deriv-smartcharts/e8243d9cb0f47a3d3dcbd184910d36667eb4b43d/'), symbol + ' uses the pinned official SmartCharts source');
 }
 for (const [symbol, name, suffix] of [['WLDEUR','EUR Basket','bpNanTKWJ5JDU6Sydc9D.svg'],['WLDGBP','GBP Basket','WmaK2jWb4kU2uA5pN5St.svg'],['WLDUSD','USD Basket','pyyuRjcSgsPjHKFiQofK.svg'],['WLDXAU','Gold Basket','eDGZPTkJwKGPEcSkN95s.svg']]) {
   const basket = api.resolve({underlying_symbol:symbol, underlying_symbol_name:name, underlying_symbol_type:'forex_basket', market:'basket_index', submarket:'forex_basket'});
