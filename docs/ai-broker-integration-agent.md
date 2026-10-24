@@ -29,6 +29,8 @@ print(draft.as_dict())
 ## Safety and limits
 
 - The agent returns drafts only. It never writes files, imports generated modules, runs generated code, changes broker status, opens PRs, deploys, or places orders.
+- `apps/brokers/integration_validation.py` performs static preflight checks for Python syntax, the base adapter import/subclass, disallowed paths, high-risk imports and dynamic execution calls, file-size limits, and likely hard-coded credentials. Its report is advisory defense-in-depth, not a sandbox or proof of safety.
+- A failed preflight must block promotion to further automated testing; a passed preflight still requires isolated CI execution, review, and provider sandbox validation.
 - Only `adapter.py`, `test_adapter_contract.py`, and `README.md` are allowed as generated draft paths.
 - No credentials or account data should be supplied as input. Requests use `store: false`; provider docs are still sent to the configured OpenAI API, so submit only material you're permitted to share.
 - Missing provider facts must remain explicit TODOs/questions; never invent endpoints or assume an undocumented protocol.
