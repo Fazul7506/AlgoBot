@@ -100,7 +100,7 @@ def collect(market, slug):
             if not label or "instruments-placeholder.svg" in asset_url:
                 continue
             allowed_source = asset_url.startswith(OFFICIAL_WEBFLOW_PREFIX) or (
-                market == "synthetic-indices"
+                market in {"synthetic-indices", "stocks-and-indices"}
                 and asset_url.startswith(OFFICIAL_DERIV_MEDIA_PREFIX)
             )
             if not allowed_source or not asset_url.lower().endswith(".svg"):
