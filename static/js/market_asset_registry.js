@@ -11,7 +11,7 @@
     BOOM50:'Boom 50 Index', BOOM100:'Boom 100 Index', BOOM150:'Boom 150 Index',
     BOOM200:'Boom 200 Index', BOOM300:'Boom 300 Index', BOOM500:'Boom 500 Index',
     BOOM600:'Boom 600 Index', BOOM900:'Boom 900 Index', BOOM1000:'Boom 1000 Index',
-    CRASH500:'Crash 500 Index', DEX1500DOWN:'DEX 1500 DOWN Index', DEX1500UP:'DEX 1500 UP Index',
+    CRASH50:'Crash 50 Index', CRASH150:'Crash 150 Index', CRASH150N:'Crash 150 Index', CRASH500:'Crash 500 Index', CRASH600:'Crash 600 Index', CRASH900:'Crash 900 Index', CRASH1000:'Crash 1000 Index', DEX1500DOWN:'DEX 1500 DOWN Index', DEX1500UP:'DEX 1500 UP Index',
     DEX600DOWN:'DEX 600 DOWN Index', DEX600UP:'DEX 600 UP Index', DEX900DOWN:'DEX 900 DOWN Index',
     DEX900UP:'DEX 900 UP Index', JD10:'Jump 10 Index', JD25:'Jump 25 Index', JD50:'Jump 50 Index',
     JD75:'Jump 75 Index', JD100:'Jump 100 Index', STP100:'Step Index', STP200:'Step Index 200',
@@ -59,7 +59,12 @@
       add(syntheticNames[symbol]);
       add(syntheticNames[symbol.replace(/[^A-Z0-9]/g, '')]);
     }
-    const eligible = entries.filter(item => item.market === family && item.url && item.url.endsWith('.svg'));
+    const familyEntries = entries.filter(item => item.market === family && item.url && item.url.endsWith('.svg'));
+    // A catalogue can expose the same generic illustration for several different
+    // instruments. Never present shared synthetic artwork as instrument-specific.
+    const urlCounts = new Map();
+    familyEntries.forEach(item => urlCounts.set(item.url, (urlCounts.get(item.url) || 0) + 1));
+    const eligible = familyEntries.filter(item => family !== 'synthetic-indices' || urlCounts.get(item.url) === 1);
     for (const candidate of candidates) {
       const exact = eligible.filter(item => normaliseLabel(item.name) === candidate);
       if (exact.length === 1) return exact[0];
