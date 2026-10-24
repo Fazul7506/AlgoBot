@@ -82,6 +82,9 @@ class BrokerAdmin(admin.ModelAdmin):
             "integration_requests": integration_requests, "integration_runs": integration_runs,
             "pending_requests": BrokerIntegrationRequest.objects.filter(status="pending").count(),
             "open_runs": BrokerIntegrationRun.objects.exclude(status__in=["merged", "failed"]).count(),
+            "generating_runs": BrokerIntegrationRun.objects.filter(status__in=["queued", "generating", "validating"]).count(),
+            "merged_runs": BrokerIntegrationRun.objects.filter(status="merged").count(),
+            "failed_runs": BrokerIntegrationRun.objects.filter(status="failed").count(),
         }
         return TemplateResponse(request, "admin/brokers/broker/integration_management.html", context)
 
