@@ -20,7 +20,7 @@
     // Remove only the exact backend symbol from the option label, retaining the readable name.
     const escapedSymbol = symbol.replace(/[.]/g, '\\.');
     label = clean(label.replace(new RegExp(escapedSymbol, 'ig'), ' '));
-    if (label && label.toUpperCase() !== symbol.toUpperCase()) return label;
+    if (label && label.toUpperCase() !== symbol.toUpperCase() && label !== 'Market instrument') return label;
     const resolved = window.AlgoBotMarketAssets?.resolve?.({symbol, display_name: label || symbol});
     if (resolved?.status === 'verified' && resolved.asset?.label) return resolved.asset.label;
     const upper = symbol.toUpperCase();
@@ -34,6 +34,12 @@
     const row = {symbol, display_name: name};
     return window.AlgoBotMarketAssets?.renderIcon?.(row) || '<span class="market-avatar market-avatar-unmapped" aria-hidden="true">•</span>';
   };
+  const marketIcon = item => {
+    const symbol = String((typeof item?.symbol === 'object' ? item.symbol.symbol : item?.symbol) || item?.underlying_symbol || item?.code || '');
+    const supplied = String(item?.display_name || (typeof item?.symbol === 'object' ? item.symbol.display_name : '') || item?.name || '');
+    const name = marketName({value:symbol,textContent:supplied || symbol});
+    return window.AlgoBotMarketAssets?.renderIcon?.({...item,symbol,display_name:name}) || '<span class="market-avatar market-avatar-unmapped" aria-hidden="true">•</span>';
+  };
   const ensureIcon = select => {
     let icon = select.parentElement?.querySelector(':scope > .analysis-market-icon, :scope > .terminal-selected-market-icon, :scope > .market-picker-icon');
     if (!icon) {
@@ -44,6 +50,23 @@
     }
     const selected = select.selectedOptions?.[0];
     const html = selected && selected.value ? renderIcon(select, marketName(selected)) : '';
+    if (icon.innerHTML !== html) icon.innerHTML = html;
+  };
+  const enhanceDisplay = node => {
+    if (!node || !node.isConnected) return;
+    const symbol = String(node.dataset.marketSymbol || '');
+    const labelNode = node.querySelector('[data-market-display-label]') || node;
+    const supplied = String(node.dataset.marketName || labelNode.textContent || '');
+    const name = marketName({value:symbol,textContent:supplied || symbol});
+    if (labelNode !== node && labelNode.textContent !== name) labelNode.textContent = name;
+    let icon = node.querySelector(':scope > .market-display-icon');
+    if (!icon) {
+      icon = document.createElement('span');
+      icon.className = 'market-display-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      node.insertBefore(icon, node.firstChild);
+    }
+    const html = marketIcon({symbol,display_name:name});
     if (icon.innerHTML !== html) icon.innerHTML = html;
   };
   const enhance = select => {
@@ -60,10 +83,12 @@
     }
     ensureIcon(select);
   };
-  const selector = 'select#symbol, select[name="symbol"], select[data-symbol], select[data-ai-symbol], select#symbolFilter, select[data-instrument-symbol], select[data-market-symbol]';
+  const selector = 'select#symbol, select[name="symbol"], select[data-symbol], select[data-ai-symbol], select#symbolFilter, select[data-instrument-symbol], select[data-market-symbol], select[data-history-symbol]';
   const scan = root => {
     if (root?.matches?.(selector)) enhance(root);
     root?.querySelectorAll?.(selector).forEach(enhance);
+    if (root?.matches?.('[data-market-display]')) enhanceDisplay(root);
+    root?.querySelectorAll?.('[data-market-display]').forEach(enhanceDisplay);
   };
   const start = () => {
     scan(document);
@@ -78,5 +103,5 @@
     observer.observe(document.getElementById('app-content') || document.body, {subtree:true,childList:true});
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once:true}); else start();
-  window.AlgoBotMarketPicker = Object.freeze({marketName, enhance});
+  window.AlgoBotMarketPicker = Object.freeze({marketName, marketIcon, enhance});
 })();

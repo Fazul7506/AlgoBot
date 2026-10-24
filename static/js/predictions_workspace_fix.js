@@ -15,7 +15,7 @@
   };
   const marketDisplayName = (symbol, supplied) => {
     const raw = String(symbol || '').trim(); const given = String(supplied || '').trim();
-    if (given && given.toUpperCase() !== raw.toUpperCase()) return given;
+    if (given && given.toUpperCase() !== raw.toUpperCase() && given !== 'Market instrument') return given;
     const resolved = window.AlgoBotMarketAssets?.resolve?.({symbol:raw,display_name:raw});
     if (resolved?.status === 'verified' && resolved.asset?.label) return resolved.asset.label;
     const names = {R_10:'Volatility 10 Index',R_25:'Volatility 25 Index',R_50:'Volatility 50 Index',R_75:'Volatility 75 Index',R_100:'Volatility 100 Index',BOOM50:'Boom 50 Index',BOOM100:'Boom 100 Index',BOOM150:'Boom 150 Index',BOOM200:'Boom 200 Index',BOOM300:'Boom 300 Index',BOOM500:'Boom 500 Index',BOOM600:'Boom 600 Index',BOOM900:'Boom 900 Index',BOOM1000:'Boom 1000 Index',CRASH50:'Crash 50 Index',CRASH150:'Crash 150 Index',CRASH300:'Crash 300 Index',CRASH500:'Crash 500 Index',CRASH600:'Crash 600 Index',CRASH900:'Crash 900 Index',CRASH1000:'Crash 1000 Index',STPRNG:'Step Index 100',STP100:'Step Index 100',STP200:'Step Index 200',STP300:'Step Index 300',STP400:'Step Index 400',STP500:'Step Index 500',JD10:'Jump 10 Index',JD25:'Jump 25 Index',JD50:'Jump 50 Index',JD75:'Jump 75 Index',JD100:'Jump 100 Index',RB100:'Range Break 100 Index',RB200:'Range Break 200 Index',RDBEAR:'Bear Market Index',RDBULL:'Bull Market Index',BTCUSD:'BTC/USD',ETHUSD:'ETH/USD'};

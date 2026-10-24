@@ -43,7 +43,7 @@
     const q = String($('[data-page-search]')?.value || '').trim().toLowerCase();
     const status = String($('[data-position-status]')?.value || '').toLowerCase();
     const order = String($('[data-position-order]')?.value || 'newest');
-    let rows = state.rows.filter(r => (!status || String(r.status || '').toLowerCase() === status) && (!q || [r.symbol,r.contract_id,r.transaction_id,r.contract_type].some(v => String(v ?? '').toLowerCase().includes(q))));
+    let rows = state.rows.filter(r => (!status || String(r.status || '').toLowerCase() === status) && (!q || [r.display_name,r.symbol,r.contract_id,r.transaction_id,r.contract_type].some(v => String(v ?? '').toLowerCase().includes(q))));
     const value = r => order === 'pnl' || order === '-pnl' ? (knownNumber(r.profit) ? Number(r.profit) : NaN) : order === 'stake' ? (knownNumber(r.stake) ? Number(r.stake) : NaN) : order === 'expiry' ? (Date.parse(r.expiry_time || '') || NaN) : Date.parse(r.broker_timestamp || r.opened_at || '') || 0;
     const dir = order === 'oldest' || order === '-pnl' ? 1 : -1;
     rows.sort((a,b) => { const av=value(a),bv=value(b); return (Number.isFinite(av)&&Number.isFinite(bv)) ? (av-bv)*dir : 0; });
@@ -59,7 +59,7 @@
     }
     tbody.innerHTML = rows.map(r => {
       const pnlKnown = knownNumber(r.profit), pnl = pnlKnown ? Number(r.profit) : NaN, cls = pnlKnown ? (pnl > 0 ? 'is-profit' : pnl < 0 ? 'is-loss' : '') : 'is-unknown';
-      return '<tr data-position-id="' + esc(r.contract_id) + '" tabindex="0"><td><div class="position-instrument"><strong>' + esc(window.AlgoBotMarketPicker?.marketName({value:r.symbol||'',textContent:r.display_name||r.symbol||''}) || r.display_name || 'Market instrument') + '</strong><small>' + esc(r.contract_type || 'Broker contract') + '</small></div></td><td><div class="position-contract"><strong>' + esc(r.contract_type || 'Unavailable') + '</strong><code>' + esc(r.contract_id) + '</code></div></td><td>' + money(r.stake,r.currency) + '</td><td>' + money(r.entry_price,r.currency) + '</td><td>' + money(r.current_price,r.currency) + '</td><td><span class="position-pnl ' + cls + '">' + (pnlKnown ? money(pnl,r.currency) : 'Unavailable') + '</span></td><td>' + esc(dateText(r.expiry_time)) + '</td><td><span class="position-status">' + esc(r.status || 'unknown') + '</span></td></tr>';
+      return '<tr data-position-id="' + esc(r.contract_id) + '" tabindex="0"><td><div class="position-instrument"><span class="market-inline-label">' + (window.AlgoBotMarketPicker?.marketIcon(r)||'') + '<strong>' + esc(window.AlgoBotMarketPicker?.marketName({value:r.symbol||'',textContent:r.display_name||r.symbol||''}) || r.display_name || 'Market instrument') + '</strong></span><small>' + esc(r.contract_type || 'Broker contract') + '</small></div></td><td><div class="position-contract"><strong>' + esc(r.contract_type || 'Unavailable') + '</strong><code>' + esc(r.contract_id) + '</code></div></td><td>' + money(r.stake,r.currency) + '</td><td>' + money(r.entry_price,r.currency) + '</td><td>' + money(r.current_price,r.currency) + '</td><td><span class="position-pnl ' + cls + '">' + (pnlKnown ? money(pnl,r.currency) : 'Unavailable') + '</span></td><td>' + esc(dateText(r.expiry_time)) + '</td><td><span class="position-status">' + esc(r.status || 'unknown') + '</span></td></tr>';
     }).join('');
     rows.forEach(r => {
       const row = [...tbody.querySelectorAll('tr[data-position-id]')].find(el => el.getAttribute('data-position-id') === String(r.contract_id));

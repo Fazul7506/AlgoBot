@@ -12,7 +12,7 @@
     ? 'Unavailable'
     : Number(value).toLocaleString(undefined, { maximumFractionDigits: 8 });
   const marketAssetIcon = row => window.AlgoBotMarketAssets?.renderIcon?.(row) || '';
-  const marketDisplayName = row => { const symbol=String(row?.symbol||'');const supplied=String(row?.display_name||row?.name||'').trim();if(supplied&&supplied.toUpperCase()!==symbol.toUpperCase())return supplied;const resolved=window.AlgoBotMarketAssets?.resolve?.({...row,symbol,display_name:symbol});return resolved?.status==='verified'&&resolved.asset?.label?resolved.asset.label:'Market instrument'; };
+  const marketDisplayName = row => { const symbol=String(row?.symbol||'');const supplied=String(row?.display_name||row?.name||'').trim();if(supplied&&supplied.toUpperCase()!==symbol.toUpperCase()&&supplied!=='Market instrument')return supplied;const resolved=window.AlgoBotMarketAssets?.resolve?.({...row,symbol,display_name:symbol});return resolved?.status==='verified'&&resolved.asset?.label?resolved.asset.label:'Market instrument'; };
 
 
 

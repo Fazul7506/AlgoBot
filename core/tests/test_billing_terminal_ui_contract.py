@@ -250,6 +250,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
             "static/js/market_scanner.js": ["esc(marketDisplayName)", "scanner-market-unmapped"],
             "static/js/predictions_workspace_fix.js": ["chartMarketName", "marketDisplayName(rawSymbol"],
             "static/js/trading_terminal.js": ["marketDisplayName(r)", "PRE-TRADE ESTIMATE"],
+            "static/js/trade_history.js": ["loadMarketCatalogue", "marketIcon(row)"],
             "static/js/positions.js": ["Market", "AlgoBotMarketPicker?.marketName"],
             "static/js/trade_history.js": ["AlgoBotMarketPicker?.marketName"],
             "static/js/signals.js": ["AlgoBotMarketPicker?.marketName"],
@@ -272,6 +273,23 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('select[data-ai-symbol]', picker)
         self.assertIn('select[data-symbol]', picker)
         self.assertIn('market-picker-icon', picker)
+        self.assertIn('const marketIcon = item', picker)
+        self.assertIn('const enhanceDisplay = node', picker)
+        self.assertIn('select[data-history-symbol]', picker)
+        history_template = Path("templates/core/trade_history.html").read_text(encoding="utf-8")
+        self.assertIn('Market<select data-history-symbol>', history_template)
+
+    def test_server_rendered_market_attribution_uses_display_names(self):
+        from pathlib import Path
+        portfolio_views = Path("core/views_portfolio_v2.py").read_text(encoding="utf-8")
+        performance_template = Path("templates/core/performance_center.html").read_text(encoding="utf-8")
+        postmortem_template = Path("templates/core/trade_postmortems.html").read_text(encoding="utf-8")
+        self.assertIn('row["display_name"] = market_names.get', portfolio_views)
+        self.assertIn('trade.display_name = market_names.get', portfolio_views)
+        self.assertIn("{{ row.display_name|default:'Market instrument' }}", performance_template)
+        self.assertIn('{{ t.display_name|default:"Market instrument" }}', postmortem_template)
+        self.assertNotIn('{{ row.symbol }}', performance_template)
+        self.assertNotIn('{{ t.symbol }}', postmortem_template)
 
     def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
         from pathlib import Path

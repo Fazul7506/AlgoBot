@@ -209,6 +209,7 @@ assert(analysisCoverageStepOneHundred.status === 'verified' && analysisCoverageS
 const sharedPicker = fs.readFileSync('static/js/market_picker_enhancement.js','utf8');
 assert(sharedPicker.includes('option.textContent = name'), 'shared market pickers display human-readable market names');
 assert(sharedPicker.includes('AlgoBotMarketAssets?.renderIcon'), 'shared market pickers use the verified Deriv SVG resolver');
+assert(sharedPicker.includes('const marketIcon = item'), 'market name cells can use the same verified SVG resolver');
 assert(sharedPicker.includes('data-ai-symbol') && sharedPicker.includes('data-symbol'), 'shared market picker coverage includes Analysis, Terminal and AI Predictions');
 const baseTemplate = fs.readFileSync('templates/base.html','utf8');
 assert(baseTemplate.includes('market_picker_enhancement.js'), 'the shared picker enhancement is installed across AlgoBot pages');

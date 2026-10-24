@@ -30,11 +30,11 @@
   <section class="panel" data-journal-workspace>
     <div class="trade-history-toolbar" role="search" aria-label="Trade history filters">
       <label class="search-field">Search
-        <input type="search" data-history-search placeholder="Contract ID, transaction ID, symbol…" autocomplete="off">
+        <input type="search" data-history-search placeholder="Contract ID, transaction ID, market name…" autocomplete="off">
       </label>
       <label>From<input type="date" data-history-date-from></label>
       <label>To<input type="date" data-history-date-to></label>
-      <label>Symbol<input type="text" data-history-symbol placeholder="1HZ100V"></label>
+      <label>Market<select data-history-symbol><option value="">All markets</option></select></label>
       <label>Status<select data-history-status-filter><option value="">All statuses</option><option value="open">Open</option><option value="won">Won</option><option value="lost">Lost</option><option value="sold">Sold</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option><option value="rejected">Rejected</option></select></label>
       <label>Direction<select data-history-direction-filter><option value="">All</option><option value="buy">Buy</option><option value="sell">Sell</option><option value="call">Call</option><option value="put">Put</option></select></label>
       <button class="btn" type="button" data-history-apply>Apply</button>

@@ -20,7 +20,7 @@
     if(!row)return "Market instrument";
     const symbol=String(row.symbol||row.underlying_symbol||row.code||"").trim();
     const supplied=String(row.display_name||row.displayName||row.name||row.underlying_symbol_name||"").trim();
-    if(supplied&&supplied.toUpperCase()!==symbol.toUpperCase())return supplied;
+    if(supplied&&supplied.toUpperCase()!==symbol.toUpperCase()&&supplied!=="Market instrument")return supplied;
     const resolved=window.AlgoBotMarketAssets?.resolve?.({...row,symbol});
     if(resolved?.status==="verified"&&resolved.asset?.label)return resolved.asset.label;
     const key=symbol.toUpperCase().replace(/^CRY/,"");
@@ -132,7 +132,7 @@
     const aiModelsUsed=Number(layers.ai?.models_used??ai.models_used??0);
     const aiConfidenceValue=layers.ai?.confidence??ai.confidence??d.confidence;
     const aiDecisionValue=layers.ai?.decision||ai.decision||layers.ai?.direction||ai.direction;
-    const hasModelEvidence=aiModelsUsed>0&&aiConfidenceValue!=null&&Boolean(aiDecisionValue)&&!['UNAVAILABLE','NO_MODEL','NO PREDICTION'].includes(String(aiDecisionValue).toUpperCase());
+    const hasModelEvidence=gate.ai_ready===true&&aiModelsUsed>0&&aiConfidenceValue!=null&&['BUY','SELL'].includes(String(aiDecisionValue||'').toUpperCase());
     set("aResearchState",state(d.research_state)); set("aBrokerState",state(d.broker_state)); set("aSymbol",marketName(A.markets.find(m=>m.symbol===d.symbol)||{symbol:d.symbol})); set("aTf",String(d.timeframe||"M1").toUpperCase()); set("aPrice",num(d.price)); set("aSignal",d.signal==null?"UNAVAILABLE":d.signal); $("aSignal").className="value "+tone(d.signal); set("aTechnical",d.score!=null?num(d.score,1)+"/100":"Technical score —"); set("aFresh",d.data_provenance?.fresh?"FRESH DATA":"DATA UNVERIFIED"); set("liveQuote",num(d.live_quote?.price)); set("liveQuoteAge",d.live_quote?.age_seconds!=null?"Live quote age "+d.live_quote.age_seconds+"s":"Live quote freshness unavailable"); set("liveQuoteSource",d.live_quote?.source||"Deriv live quote");
     set("aTechnical",d.score!=null?num(d.score,1)+"/100":"—"); set("aConfidence",hasModelEvidence?pctNorm(aiConfidenceValue):"Unavailable"); const confidenceValue=Number(aiConfidenceValue);const confidenceFill=$("confidenceFill");if(confidenceFill)confidenceFill.style.width=hasModelEvidence&&Number.isFinite(confidenceValue)?Math.max(0,Math.min(100,confidenceValue<=1?confidenceValue*100:confidenceValue))+"%":"0%"; set("aRegime",d.volatility_regime);
     const sentiment=d.sentiment&&typeof d.sentiment==="object"?d.sentiment:null;

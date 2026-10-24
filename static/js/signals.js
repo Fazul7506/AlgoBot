@@ -104,7 +104,7 @@ function applySignalContract(){const type=$('signalsContractType').value;if(!typ
       return;
     }
     tbody.innerHTML = rows.map(row => `<tr data-symbol="${esc(row.symbol)}">
-      <td><strong>${esc(window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument')}</strong></td>
+      <td><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(row)||''}<strong>${esc(window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument')}</strong></span></td>
       <td>${esc(row.market || '—')}<small>${esc(row.sub_market || '')}</small></td>
       <td>${esc(row.timeframe || '—')}</td>
       <td>${esc(num(row.live?.price))}</td>
@@ -129,7 +129,7 @@ function applySignalContract(){const type=$('signalsContractType').value;if(!typ
     }
     $('marketCount').textContent = `${rows.length} markets`;
     tape.innerHTML = rows.slice(0, 20).map(row => `<button type="button" class="tape-row" data-symbol="${esc(row.symbol)}">
-      <span><strong>${esc(window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument')}</strong><small>${esc(row.market || 'Deriv')}</small></span>
+      <span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(row)||''}<strong>${esc(window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument')}</strong><small>${esc(row.market || 'Deriv')}</small></span>
       <strong>${esc(num(row.live?.price))}</strong>
       <span class="tape-signal ${tone(row.direction)}">${esc(row.direction || '—')}</span>
       <span>${esc(pct(row.confidence))}</span>

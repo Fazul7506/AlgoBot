@@ -66,7 +66,7 @@
       return `
         <tr>
           <td>${esc(time(row.broker_timestamp || row.purchase_time))}</td>
-          <td><strong>${esc(window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument')}</strong></td>
+          <td><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(row)||''}<strong>${esc(window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument')}</strong></span></td>
           <td>${esc(row.contract_type)}</td>
           <td>${esc(row.direction)}</td>
           <td class="num">${money(row.stake, row.currency)}</td>
@@ -129,6 +129,26 @@
     next.disabled = !payload.next;
   }
 
+  async function loadMarketCatalogue() {
+    const select = $('[data-history-symbol]');
+    if (!select) return;
+    const previous = select.value;
+    try {
+      const payload = await window.AlgoBotAPI.apiClient.get('/api/market/broker-catalogue/');
+      const items = Array.isArray(payload?.symbols) ? payload.symbols : Array.isArray(payload?.results) ? payload.results : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.markets) ? payload.markets : [];
+      select.innerHTML = '<option value="">All markets</option>' + items.map(item => {
+        const symbol = String(item?.symbol || item?.underlying_symbol || item?.code || '');
+        if (!symbol) return '';
+        const supplied = item?.display_name || item?.name || item?.underlying_symbol_name || '';
+        const label = window.AlgoBotMarketPicker?.marketName({value:symbol,textContent:String(supplied || symbol)}) || supplied || 'Market instrument';
+        return '<option value="' + esc(symbol) + '">' + esc(label) + '</option>';
+      }).join('');
+      if ([...select.options].some(option => option.value === previous)) select.value = previous;
+    } catch (_) {
+      select.innerHTML = '<option value="">All markets · catalogue unavailable</option>';
+    }
+  }
+
   async function load(targetPage = 1, refreshBroker = true) {
     page = targetPage;
     const seq = ++requestSeq;
@@ -160,9 +180,9 @@
   function exportCsv() {
     const rows = lastPayload?.results || [];
     if (!rows.length) return;
-    const header = ['time','symbol','contract','direction','stake','entry','exit','payout','profit_loss','status','contract_id','transaction_id'];
+    const header = ['time','market','contract','direction','stake','entry','exit','payout','profit_loss','status','contract_id','transaction_id'];
     const data = rows.map(row => [
-      time(row.broker_timestamp || row.purchase_time), row.symbol, row.contract_type, row.direction,
+      time(row.broker_timestamp || row.purchase_time), window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument', row.contract_type, row.direction,
       row.stake ?? '', row.entry_price ?? row.buy_price ?? '', row.exit_price ?? row.sell_price ?? '',
       row.payout ?? '', row.profit_loss ?? '', row.status, row.broker_contract_id ?? '', row.broker_transaction_id ?? ''
     ]);
@@ -197,5 +217,6 @@
     prev.disabled = true; next.disabled = true;
     if (nextId) load(1, true);
   });
+  void loadMarketCatalogue();
   load();
 })();

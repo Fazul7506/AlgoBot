@@ -9,3 +9,9 @@
 .terminal-toolbar .toolbar-symbol>select{width:100%;min-width:0}
 .market-card-copy h2,.market-card-copy p,.terminal-watch-copy strong,.scanner-symbol-copy strong{overflow-wrap:anywhere}
 @media(max-width:760px){.market-picker-control{display:flex;width:100%}.market-picker-control select{width:100%}.terminal-toolbar .toolbar-symbol{grid-template-columns:30px minmax(0,1fr)}.market-picker-icon,.terminal-selected-market-icon{width:28px;height:28px;flex-basis:28px}}
+
+.market-inline-label{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%;vertical-align:middle}
+.market-inline-label>span:last-child,.market-inline-label>strong{min-width:0;overflow-wrap:anywhere}
+.market-inline-label img{display:block;width:26px;height:26px;max-width:26px;max-height:26px;object-fit:contain;flex:0 0 26px}
+.market-inline-label .market-avatar{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex:0 0 26px;border-radius:7px}
+@media(max-width:760px){.market-inline-label{gap:6px}.market-inline-label img,.market-inline-label .market-avatar{width:24px;height:24px;max-width:24px;max-height:24px;flex-basis:24px}}

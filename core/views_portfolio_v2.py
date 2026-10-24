@@ -3,6 +3,7 @@ from django.db.models import Count, Q, Sum
 from django.shortcuts import render
 
 from apps.execution.models import BrokerTradeHistory, Order
+from apps.market_data.models import MarketSymbol
 from apps.portfolio.models import Portfolio, PortfolioAllocation, PortfolioExposure, PortfolioPerformance, CashFlow
 
 
@@ -63,6 +64,9 @@ def performance_center(request):
     by_symbol = list(
         metrics["known_pnl"].values("symbol").annotate(trades=Count("id"), pnl=Sum("profit_loss")).order_by("-trades")[:20]
     )
+    market_names = dict(MarketSymbol.objects.filter(symbol__in=[row["symbol"] for row in by_symbol]).values_list("symbol", "display_name"))
+    for row in by_symbol:
+        row["display_name"] = market_names.get(row["symbol"], "Market instrument") or "Market instrument"
     # Broker trade history does not have a canonical strategy association, so do
     # not infer strategy P/L from order counts.
     return render(request, "core/performance_center.html", {
@@ -79,4 +83,7 @@ def performance_center(request):
 @login_required
 def trade_postmortems(request):
     trades = list(Order.objects.filter(user=request.user).select_related("broker_account").order_by("-created_at")[:100])
+    market_names = dict(MarketSymbol.objects.filter(symbol__in={trade.symbol for trade in trades if trade.symbol}).values_list("symbol", "display_name"))
+    for trade in trades:
+        trade.display_name = market_names.get(trade.symbol, "Market instrument") or "Market instrument"
     return render(request, "core/trade_postmortems.html", {"trades": trades})
