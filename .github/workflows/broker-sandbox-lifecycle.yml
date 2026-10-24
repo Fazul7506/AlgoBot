@@ -27,10 +27,12 @@ jobs:
       name: broker-sandbox-${{ inputs.broker_slug }}
     env:
       BROKER_TARGET_ENVIRONMENT: sandbox
-      BROKER_SANDBOX_API_TOKEN: ${{ secrets.BROKER_SANDBOX_API_TOKEN }}
-      BROKER_SANDBOX_APP_ID: ${{ secrets.BROKER_SANDBOX_APP_ID }}
+      BROKER_SANDBOX_API_TOKEN: ${{ secrets.BROKER_SANDBOX_API_TOKEN || secrets.DERIV_DEMO_TOKEN }}
+      BROKER_SANDBOX_APP_ID: ${{ secrets.BROKER_SANDBOX_APP_ID || vars.DERIV_APP_ID }}
       BROKER_SANDBOX_CLIENT_ID: ${{ secrets.BROKER_SANDBOX_CLIENT_ID }}
       BROKER_SANDBOX_CLIENT_SECRET: ${{ secrets.BROKER_SANDBOX_CLIENT_SECRET }}
+      DERIV_DEMO_SYMBOL: ${{ vars.DERIV_DEMO_SYMBOL || 'R_100' }}
+      DERIV_DEMO_STAKE: ${{ vars.DERIV_DEMO_STAKE || '1' }}
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
     steps:
