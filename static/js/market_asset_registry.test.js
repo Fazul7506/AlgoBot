@@ -135,6 +135,9 @@ const syncScript = fs.readFileSync('scripts/sync_deriv_market_asset_manifest.py'
 assert(syncScript.includes('load_existing_official_media_entries'), 'manifest sync preserves manually verified modern Deriv synthetic SVG entries');
 assert(syncScript.includes('("stocks-and-indices", "stocks")'), 'manifest sync scrapes the official individual-stock catalogue as well as stock indices');
 assert(syncScript.includes('("synthetic-indices", "derived-indices/synthetic-indices")'), 'manifest sync scrapes the current official synthetic-indices catalogue');
+assert(syncScript.includes('legacy_synthetic_by_name'), 'sync retains legacy synthetic SVG candidates as a fallback');
+assert(syncScript.includes('legacy_counts.get(fallback["url"], 0) == 1'), 'sync only falls back to a legacy SVG when its URL is unique');
+assert(syncScript.includes('Never synthesize filenames or guess an asset'), 'sync explicitly forbids guessed icon URLs');
 assert(syncScript.includes('asset_url.startswith(OFFICIAL_DERIV_MEDIA_PREFIX)'), 'synthetic and stock sync accept the official Deriv media CDN');
 assert(syncScript.includes('"synthetic-indices", "basket-indices", "stocks-and-indices"'), 'sync preserves manually verified official stock SVG entries');
 assert(syncScript.includes('symbol, name = match.group(1).strip(), match.group(2).strip()'), 'stock sync preserves exact exchange-qualified ticker symbols');
