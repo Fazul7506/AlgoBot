@@ -19,7 +19,7 @@ from apps.market_data.web_views import market_catalogue
 from apps.market_data.signal_views import strategy_signals
 from apps.market_data import views as market_data_views
 from core.views import (
-    broker_connect_page, broker_marketplace_page, home, login_page,
+    broker_connect_page, broker_marketplace_page, submit_broker_marketplace_request, home, login_page,
     register_page, dashboard_page, markets_page, strategies_page, trading_page,
     backtesting_page, predictions_page, settings_page, profile_page, profile_completion_page,
     terms_page, privacy_page, forgot_password_page, reset_password_page,
@@ -126,6 +126,7 @@ urlpatterns = [
     path("operations/<str:module>/", login_required(operations_module_page), name="operations_module"),
     path("brokers/connect/", broker_connect_page, name="broker_connect_page"),
     path("brokers/marketplace/", broker_marketplace_page, name="broker_marketplace_page"),
+    path("api/broker-integration-requests/", submit_broker_marketplace_request, name="submit_broker_marketplace_request"),
     path("developer/", login_required(developer_views.dashboard), name="developer_page"),
     path("developer/api/explorer/", login_required(developer_views.api_explorer), name="developer_api_explorer"),
     path("developer/api/status/", login_required(developer_views.api_status), name="developer_api_status"),
