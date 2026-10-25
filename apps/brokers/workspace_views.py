@@ -85,7 +85,7 @@ def _fetch_official_broker_documentation(provider_name):
             for marker in ("api", "endpoint", "authentication", "authorization", "websocket", "rest")
         ):
             return ""
-        return ("Official source: " + url + "\\nRetrieved content: " + extracted)[:60000]
+        return ("Official source: " + url + "\nRetrieved content: " + extracted)[:60000]
     except (requests.RequestException, ValueError):
         return ""
 
