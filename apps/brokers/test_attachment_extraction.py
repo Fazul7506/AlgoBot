@@ -48,3 +48,19 @@ class AttachmentExtractionTests(TestCase):
     def test_unknown_binary_format_is_rejected(self):
         with self.assertRaises(AttachmentExtractionError):
             extract_document_text(".exe", b"binary")
+
+    def test_zip_attachment_extracts_text_files_without_executing_them(self):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("src/example.py", "print('safe text extraction only')")
+            archive.writestr("README.md", "# Project notes")
+        extracted = extract_document_text(".zip", output.getvalue())
+        self.assertIn("src/example.py", extracted)
+        self.assertIn("Project notes", extracted)
+
+    def test_zip_attachment_rejects_path_traversal(self):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("../outside.py", "should never be extracted")
+        with self.assertRaises(AttachmentExtractionError):
+            extract_document_text(".zip", output.getvalue())
