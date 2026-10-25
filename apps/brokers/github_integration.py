@@ -74,10 +74,13 @@ def open_project_change_pr(*, task: str, report: dict) -> dict:
     session = requests.Session()
 
     def call(method, path, *, expected=(200,), **kwargs):
-        response = session.request(
-            method, f"{API}/repos/{repo}/{path.lstrip('/')}",
-            headers=headers, timeout=25, **kwargs,
-        )
+        try:
+            response = session.request(
+                method, f"{API}/repos/{repo}/{path.lstrip('/')}",
+                headers=headers, timeout=25, **kwargs,
+            )
+        except requests.RequestException as exc:
+            raise GitHubIntegrationError("GitHub could not be reached while preparing the review-only project PR.") from exc
         if response.status_code not in expected:
             raise GitHubIntegrationError(
                 f"GitHub API {method} {path} returned HTTP {response.status_code}; verify permissions and source freshness."
