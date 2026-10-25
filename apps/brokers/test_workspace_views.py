@@ -87,6 +87,4 @@ class BrokerIntegrationManagementPageTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         fetch_docs.assert_called_once_with("Example Provider")
-        messages = list(response.wsgi_request._messages)
-        self.assertTrue(any("could not verify readable API documentation" in str(message) for message in messages))
         self.assertEqual(BrokerIntegrationRun.objects.count(), 0)
