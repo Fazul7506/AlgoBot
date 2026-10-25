@@ -9,6 +9,74 @@ from django.shortcuts import render, redirect
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods, require_POST
 
+# Provider documentation sources are fixed, official origins (never user-supplied URLs).
+_OFFICIAL_BROKER_DOCS = {
+    "alpaca": "https://docs.alpaca.markets/docs",
+    "binance": "https://developers.binance.com/docs/binance-spot-api-docs",
+    "bybit": "https://bybit-exchange.github.io/docs/v5/intro",
+    "ctrader": "https://help.ctrader.com/open-api/",
+    "deriv": "https://developers.deriv.com/docs/",
+    "dxtrade": "https://dx.trade/",
+    "exness": "https://get.exness.help/",
+    "forex_com": "https://www.forex.com/en-us/market-analysis/latest-research/",
+    "ic_markets": "https://www.icmarkets.com/global/en/",
+    "interactive_brokers": "https://www.interactivebrokers.com/campus/ibkr-api-page/",
+    "metatrader_gateway": "https://www.metatrader5.com/en/terminal/help/algotrading",
+    "mt5": "https://www.metatrader5.com/en/terminal/help/algotrading",
+    "oanda": "https://developer.oanda.com/rest-live-v20/introduction/",
+    "pepperstone": "https://pepperstone.com/",
+    "kraken": "https://docs.kraken.com/api/",
+    "coinbase": "https://docs.cdp.coinbase.com/",
+    "xtb": "https://www.xtb.com/",
+}
+
+
+def _fetch_official_broker_documentation(provider_name):
+    """Best-effort retrieval from a fixed provider documentation origin."""
+    from html.parser import HTMLParser
+    from urllib.parse import urlparse
+    import requests
+
+    class TextExtractor(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.parts = []
+            self.skip_depth = 0
+
+        def handle_starttag(self, tag, attrs):
+            if tag in {"script", "style", "noscript", "svg"}:
+                self.skip_depth += 1
+
+        def handle_endtag(self, tag):
+            if tag in {"script", "style", "noscript", "svg"} and self.skip_depth:
+                self.skip_depth -= 1
+
+        def handle_data(self, data):
+            if not self.skip_depth and data.strip():
+                self.parts.append(data.strip())
+
+    slug = slugify(provider_name).replace("-", "_")
+    url = _OFFICIAL_BROKER_DOCS.get(slug)
+    if not url or urlparse(url).scheme != "https":
+        return ""
+    try:
+        response = requests.get(
+            url, timeout=(4, 8), allow_redirects=True,
+            headers={"User-Agent": "AlgoBot-Broker-Integration-Research/1.0"},
+        )
+        if not response.ok or len(response.content) > 1_000_000:
+            return ""
+        if urlparse(response.url).scheme != "https":
+            return ""
+        parser = TextExtractor()
+        parser.feed(response.text[:1_000_000])
+        extracted = " ".join(parser.parts)
+        return ("Official source: " + url + "\nRetrieved content: " + extracted)[:60000] if len(extracted) >= 80 else ""
+    except (requests.RequestException, ValueError):
+        return ""
+
+
+
 from .models import Broker, BrokerIntegrationRequest, BrokerIntegrationRun
 
 
@@ -157,6 +225,20 @@ def broker_integration_assistant_chat(request):
         candidate = provider_match.group(1).strip(" ._-")
         if candidate and candidate.lower() not in {"a broker", "broker", "integration", "support"}:
             pending["provider_name"] = candidate[:120]
+    elif not pending.get("provider_name"):
+        # A provider name by itself is enough to begin the autonomous workflow.
+        known_names = {
+            "alpaca": "Alpaca", "binance": "Binance", "bybit": "Bybit",
+            "ctrader": "cTrader", "deriv": "Deriv", "dxtrade": "DXTrade",
+            "exness": "Exness", "forex.com": "Forex.com", "forex_com": "Forex.com",
+            "ic markets": "IC Markets", "ic_markets": "IC Markets",
+            "interactive brokers": "Interactive Brokers", "interactive_brokers": "Interactive Brokers",
+            "metatrader gateway": "MetaTrader Gateway", "mt5": "MetaTrader 5",
+            "oanda": "OANDA", "pepperstone": "Pepperstone", "kraken": "Kraken",
+            "coinbase": "Coinbase", "xtb": "XTB",
+        }
+        if message.strip().lower() in known_names:
+            pending["provider_name"] = known_names[message.strip().lower()]
 
     lower = message.lower()
     request_match = re.search(r"(?:work on|process|start|open)\s+(?:broker\s+)?request\s*#?(\d+)", message, re.IGNORECASE)
@@ -218,6 +300,11 @@ def broker_integration_assistant_chat(request):
 
     provider_name = pending.get("provider_name")
     api_docs = pending.get("api_docs")
+    if provider_name and not api_docs:
+        # Research the provider automatically; do not ask the user to assemble API docs.
+        api_docs = _fetch_official_broker_documentation(provider_name)
+        if api_docs:
+            pending["api_docs"] = api_docs
     if provider_name and api_docs and len(api_docs) >= 80:
         from .integration_agent import BrokerIntegrationAgent, BrokerIntegrationAgentError
         from .github_integration import open_provider_draft_pr, GitHubIntegrationError
@@ -273,7 +360,7 @@ def broker_integration_assistant_chat(request):
 
     request.session["broker_assistant_pending"] = pending
     if provider_name and not api_docs:
-        return JsonResponse({"reply": f"I can start the {provider_name} integration directly from this chat. Please paste at least 80 characters of official {provider_name} API documentation into your next message (include the endpoint, authentication, and request/response details you have). I'll generate a review-only draft PR from it—no separate form is needed."})
+        return JsonResponse({"reply": f"I identified {provider_name} and attempted to retrieve its documentation automatically, but the official source was unavailable or did not expose enough readable API details. I have not guessed the API contract or opened a speculative PR. You can retry later; no additional form is needed.", "action": "provider_research_unavailable"})
 
     if any(term in lower for term in ("add broker", "new broker", "integrate", "create adapter", "request a broker", "support broker")):
         return JsonResponse({"reply": "I can create a broker adapter draft directly from chat. Tell me the provider name and paste at least 80 characters of its official API documentation, including authentication and endpoint details. I'll validate the draft and open a review-only PR; I won't enable unverified trading code."})
