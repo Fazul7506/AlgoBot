@@ -231,25 +231,51 @@ def broker_integration_assistant_chat(request):
         return JsonResponse({"reply": "Attach up to 10 files at a time."}, status=400)
     attachment_text_parts = []
     image_attachments = []
-    allowed_text_extensions = {".txt", ".md", ".json", ".py", ".js", ".ts", ".html", ".css", ".yaml", ".yml", ".toml", ".csv", ".log"}
-    allowed_image_types = {"image/png", "image/jpeg", "image/webp"}
+    from .attachment_extraction import (
+        AttachmentExtractionError, IMAGE_MIME_TYPES, TEXT_EXTENSIONS,
+        DOCUMENT_EXTENSIONS, decode_data_url, extract_document_text,
+    )
+    supported_extensions = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS
+    encoded_bytes_total = 0
     for item in raw_attachments:
         if not isinstance(item, dict):
             return JsonResponse({"reply": "One of the attachments is invalid."}, status=400)
         name = str(item.get("name") or "attachment")[:180]
-        mime_type = str(item.get("type") or "").lower()
-        if len(str(item.get("text") or "")) > 200_000:
-            return JsonResponse({"reply": f"{name} is too large to process as text (200 KB maximum)."}, status=400)
-        if mime_type in allowed_image_types:
+        extension = Path(name).suffix.lower()
+        mime_type = str(item.get("type") or "").lower().split(";", 1)[0]
+        if extension in {".png", ".jpg", ".jpeg", ".webp"} or mime_type in IMAGE_MIME_TYPES:
+            if mime_type not in IMAGE_MIME_TYPES:
+                return JsonResponse({"reply": f"{name} has an unsupported image type."}, status=400)
             data_url = str(item.get("data_url") or "")
-            expected_prefix = f"data:{mime_type};base64,"
-            if not data_url.startswith(expected_prefix) or len(data_url) > 7_000_000:
-                return JsonResponse({"reply": f"{name} is not a valid supported image or exceeds 5 MB."}, status=400)
+            try:
+                validated_mime, image_bytes = decode_data_url(data_url, mime_type)
+            except AttachmentExtractionError as exc:
+                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+            encoded_bytes_total += len(image_bytes)
             image_attachments.append({"name": name, "data_url": data_url})
-        elif Path(name).suffix.lower() in allowed_text_extensions and isinstance(item.get("text"), str):
-            attachment_text_parts.append(f"\n\nAttached file: {name}\n<attached_file>\n{item['text']}\n</attached_file>")
+        elif extension in supported_extensions and isinstance(item.get("text"), str):
+            text_content = item["text"]
+            if len(text_content.encode("utf-8", errors="replace")) > 200_000:
+                return JsonResponse({"reply": f"{name} is too large to process as text (200 KB maximum)."}, status=400)
+            attachment_text_parts.append(f"\n\nAttached file: {name}\n<attached_file>\n{text_content}\n</attached_file>")
+            encoded_bytes_total += len(text_content.encode("utf-8", errors="replace"))
+        elif extension in DOCUMENT_EXTENSIONS:
+            data_url = str(item.get("data_url") or "")
+            try:
+                _, binary_data = decode_data_url(data_url)
+                extracted = extract_document_text(extension, binary_data)
+            except AttachmentExtractionError as exc:
+                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+            encoded_bytes_total += len(binary_data)
+            attachment_text_parts.append(
+                f"\n\nExtracted text from attachment: {name}\n<attached_file>\n{extracted}\n</attached_file>"
+            )
         else:
-            return JsonResponse({"reply": f"{name} has an unsupported format. Attach text/code files or PNG, JPEG, or WebP images."}, status=400)
+            return JsonResponse({
+                "reply": f"{name} has an unsupported format. Supported attachments include text/code, PDF, DOCX, PPTX, XLSX, ODT, ODS, EPUB, and PNG/JPEG/WebP images."
+            }, status=400)
+        if encoded_bytes_total > 12 * 1024 * 1024:
+            return JsonResponse({"reply": "Combined attachments exceed the 12 MB total limit. Send fewer or smaller files."}, status=400)
     if not message and not raw_attachments:
         return JsonResponse({"reply": "Type a message or attach a file."}, status=400)
     if len(message) > 60000:
