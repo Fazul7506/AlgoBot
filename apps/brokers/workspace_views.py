@@ -150,7 +150,7 @@ def broker_integration_assistant_chat(request):
 
     pending = request.session.get("broker_assistant_pending", {})
     provider_match = re.search(
-        r"(?:add|integrate|create|connect|support|request)(?:\\s+(?:a|the|new|broker|integration|for|with))*\\s+([A-Za-z][A-Za-z0-9 ._-]{1,80}?)(?=\\s+(?:broker|integration|using|with|from|api|docs|documentation|please)|[,.:]|$)",
+        r"(?:add|integrate|create|connect|support|request)(?:\s+(?:a|the|new|broker|integration|for|with))*\s+([A-Za-z][A-Za-z0-9 ._-]{1,80}?)(?=\s+(?:broker|integration|using|with|from|api|docs|documentation|please)|[,.:]|$)",
         message, re.IGNORECASE,
     )
     if provider_match:
@@ -184,7 +184,7 @@ def broker_integration_assistant_chat(request):
         return JsonResponse({"reply": "I'll open the broker catalog for you.", "action": "catalog"})
 
     docs_match = re.search(
-        r"(?:official api documentation|api documentation|api docs|documentation excerpts|docs are|docs:|documentation:)(?:\\s*[:=-]\\s*|\\s+)(.+)$",
+        r"(?:official api documentation|api documentation|api docs|documentation excerpts|docs are|docs:|documentation:)(?:\s*[:=-]\s*|\s+)(.+)$",
         message, re.IGNORECASE | re.DOTALL,
     )
     docs = docs_match.group(1).strip() if docs_match else ""
