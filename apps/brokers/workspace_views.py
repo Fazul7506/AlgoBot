@@ -159,6 +159,28 @@ def broker_integration_assistant_chat(request):
             pending["provider_name"] = candidate[:120]
 
     lower = message.lower()
+    request_match = re.search(r"(?:work on|process|start|open)\s+(?:broker\s+)?request\s*#?(\d+)", message, re.IGNORECASE)
+    if request_match:
+        integration_request = BrokerIntegrationRequest.objects.filter(pk=int(request_match.group(1))).first()
+        if not integration_request:
+            return JsonResponse({"reply": "I couldn't find that saved broker request. Ask me to list pending requests to see the recorded request IDs."})
+        if integration_request.status == "rejected":
+            return JsonResponse({"reply": f"Request #{integration_request.pk} for {integration_request.provider_name} is marked rejected. Review the team notes before reopening it."})
+        pending["integration_request_id"] = integration_request.pk
+        pending["provider_name"] = integration_request.provider_name
+        integration_request.status = "in_progress"
+        integration_request.save(update_fields=["status", "updated_at"])
+        request.session["broker_assistant_pending"] = pending
+        return JsonResponse({"reply": f"I'm working on marketplace request #{integration_request.pk} for {integration_request.provider_name}. Request details: {integration_request.use_case[:700]}. Please paste at least 80 characters of official provider API documentation in your next message so I can prepare a review-only adapter PR. The request is now marked In Progress.", "action": "request_selected", "request_id": integration_request.pk})
+
+    if any(term in lower for term in ("pending requests", "list broker requests", "show broker requests", "integration requests", "marketplace requests")):
+        saved_requests = list(BrokerIntegrationRequest.objects.exclude(status="rejected")[:10])
+        if not saved_requests:
+            return JsonResponse({"reply": "There are no saved broker integration requests to work on yet.", "action": "requests"})
+        lines = [f"Request #{item.pk}: {item.provider_name} — {item.get_status_display()}" for item in saved_requests]
+        return JsonResponse({"reply": "Saved marketplace requests: " + "; ".join(lines) + ". To start one, message me: work on request #ID. I'll then ask for official API documentation and track the draft PR against that request.", "action": "requests"})
+
+
     if any(term in lower for term in ("check pr", "pull request status", "show prs", "pr status")):
         runs = list(BrokerIntegrationRun.objects.all()[:8])
         request.session["broker_assistant_pending"] = pending
@@ -230,6 +252,14 @@ def broker_integration_assistant_chat(request):
                 "status", "pull_request_number", "pull_request_url", "head_sha",
                 "validation_results", "updated_at",
             ])
+            linked_request_id = pending.get("integration_request_id")
+            if linked_request_id:
+                linked_request = BrokerIntegrationRequest.objects.filter(pk=linked_request_id).first()
+                if linked_request:
+                    linked_request.status = "in_progress"
+                    linked_request.linked_pr_url = result["url"]
+                    linked_request.team_notes = (linked_request.team_notes + "\nDraft PR opened: " + result["url"] + ". Static preflight passed; CI, sandbox validation, and human review remain required.").strip()[-4000:]
+                    linked_request.save(update_fields=["status", "linked_pr_url", "team_notes", "updated_at"])
             request.session.pop("broker_assistant_pending", None)
             return JsonResponse({
                 "reply": f"I generated the {provider_name} adapter draft, passed its static preflight, and opened PR #{result['number']} for human review: {result['url']}. The generated code has not been executed or enabled; CI, sandbox validation, and human review are still required.",
