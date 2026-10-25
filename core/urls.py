@@ -1,11 +1,11 @@
 from django.urls import path
-from .views import deriv_login, broker_connect_page, broker_marketplace_page
+from .views import deriv_login, broker_connect_page, broker_marketplace_page, submit_broker_marketplace_request
 from .views_deriv_oauth_safe import callback
 from .views import strategy_builder_page
 from .settings_api import account_settings_api
 from .views_oauth import disconnect_deriv, refresh_deriv_token, deriv_account_status, reconnect_deriv
 
-urlpatterns = [
+urlpatterns = [\n    path("api/broker-integration-requests/", submit_broker_marketplace_request, name="submit_broker_marketplace_request"),
     path("connect-deriv/", deriv_login, name="connect_deriv"),
     path("callback/", callback, name="callback"),
     path("api/deriv/disconnect/", disconnect_deriv, name="deriv_disconnect"),
