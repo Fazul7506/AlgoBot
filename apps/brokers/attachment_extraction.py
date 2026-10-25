@@ -15,7 +15,7 @@ MAX_EXTRACTED_CHARS = 200_000
 TEXT_EXTENSIONS = {
     ".txt", ".md", ".json", ".py", ".js", ".jsx", ".ts", ".tsx", ".html",
     ".css", ".scss", ".yaml", ".yml", ".toml", ".csv", ".tsv", ".log",
-    ".xml", ".sql", ".sh", ".bash", ".ini", ".cfg", ".conf", ".rtf", ".ipynb",
+    ".xml", ".svg", ".sql", ".sh", ".bash", ".ini", ".cfg", ".conf", ".rtf", ".ipynb",
     ".go", ".rs", ".java", ".kt", ".kts", ".swift", ".c", ".h", ".cc", ".cpp", ".hpp",
     ".cs", ".php", ".rb", ".r", ".scala", ".lua", ".pl", ".vue", ".svelte", ".astro",
     ".mdx", ".graphql", ".gql", ".proto", ".prisma", ".tf", ".hcl", ".dockerfile", ".lock",
