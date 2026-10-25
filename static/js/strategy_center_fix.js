@@ -19,6 +19,7 @@
   const metric = (s, ...keys) => { const sources=[s,strategyMetrics(s),activeState(s),activeState(s)?.metrics||{}]; for(const key of keys) for(const source of sources){const v=source?.[key];if(v!==null&&v!==undefined&&v!=='')return v;} return null; };
   const displayMetric = (v,suffix='') => v===null||v===undefined||v===''?'—':`${Number.isFinite(Number(v))?Number(v).toLocaleString(undefined,{maximumFractionDigits:2}):esc(v)}${suffix}`;
   const percentMetric = v => {if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?`${(Math.abs(n)<=1?n*100:n).toFixed(1)}%`:esc(v);};
+  const strategyIcon = s => { const cat=strategyCategory(s); const paths={ai:'<path d="M12 3a3 3 0 0 0-3 3v.5a4 4 0 0 0-3 3.8A3.5 3.5 0 0 0 5.5 17H6a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3h.5a3.5 3.5 0 0 0-.5-6.7 4 4 0 0 0-3-3.8V6a3 3 0 0 0-3-3Z"/><path d="M9 10h.01M15 10h.01M9 15c1.8 1.4 4.2 1.4 6 0M12 7v10"/>',trend:'<path d="M3 17 9 11l4 3 8-9"/><path d="M15 5h6v6"/>',mean:'<path d="M4 7h16M4 17h16"/><path d="m8 4-4 3 4 3m8 4 4 3-4 3"/>',scalping:'<circle cx="12" cy="12" r="8"/><path d="m12 7 2.5 5-2.5 5-2.5-5 2.5-5Z"/>',other:'<path d="M4 18V6m0 12h16"/><path d="m7 14 4-4 3 2 5-6"/>'}; return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'+(paths[cat]||paths.other)+'</svg>'; };
   const strategyCategory = s => {const t=String(s.category||s.strategy_type||s.type||'').toLowerCase(),name=String(s.name||s.slug||'').toLowerCase(),tags=Array.isArray(s.tags)?s.tags.join(' ').toLowerCase():'';if(s.ai_powered||/ai|momentum|sentiment|machine/.test(`${t} ${name} ${tags}`))return 'ai';if(/mean|reversion|rsi/.test(`${t} ${name} ${tags}`))return 'mean';if(/scalp/.test(`${t} ${name} ${tags}`))return 'scalping';if(/trend|breakout/.test(`${t} ${name} ${tags}`))return 'trend';return 'other';};
 
   function counts(data, signals) {
@@ -44,6 +45,7 @@
       const state=running?'RUNNING':paused?'PAUSED':configured?'CONFIGURED':'AVAILABLE';
       const stateClass=running?'active':paused?'paused':configured?'configured':'available';
       const category=esc(s.category||s.strategy_type||'Strategy');
+      const icon=strategyIcon(s);
       const description=esc(s.description||s.summary||'Configure this strategy to inspect supported markets, execution settings and available metrics.');
       const detail=active?`${esc(window.AlgoBotMarketPicker?.marketName({value:active.symbol||'',textContent:active.display_name||active.symbol||''})||active.display_name||active.symbol||'Market instrument')} · ${esc(active.timeframe||'Timeframe not set')}`:configured?`${configs.length} saved configuration${configs.length===1?'':'s'}`:'Not configured';
       const win=percentMetric(metric(s,'win_rate','winRate')),trades=displayMetric(metric(s,'total_trades','trade_count','trades_count')),pf=displayMetric(metric(s,'profit_factor','profitFactor'));
