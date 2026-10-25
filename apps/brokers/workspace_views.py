@@ -1,4 +1,4 @@
-"""Standalone, staff-gated Broker Integration Management workspace."""
+""""Standalone, staff-gated Broker Integration Management workspace."""
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.shortcuts import render, redirect
@@ -43,7 +43,7 @@ def broker_integration_management_page(request):
                 result = open_provider_draft_pr(
                     provider_name=provider_name, provider_slug=slug,
                     draft_files=draft.draft_files,
-                    summary="\n".join(draft.implementation_plan),
+                    summary="\\n".join(draft.implementation_plan),
                 )
                 run.status = "pr_open"
                 run.pull_request_number = result["number"]
@@ -82,7 +82,9 @@ def broker_integration_management_page(request):
     requests_qs = BrokerIntegrationRequest.objects.select_related("requested_by").all()[:30]
     runs = list(BrokerIntegrationRun.objects.all()[:20])
     # Attach only persisted PR metadata; never synthesize a PR number or readiness status.
-    runs_by_slug = {}\n    for run in runs:\n        runs_by_slug.setdefault(run.provider_slug.lower(), run)
+    runs_by_slug = {}
+    for run in runs:
+        runs_by_slug.setdefault(run.provider_slug.lower(), run)
     for broker in brokers:
         key = slugify(broker.name).replace("-", "_")
         related_run = runs_by_slug.get(key)
@@ -103,7 +105,6 @@ def broker_integration_management_page(request):
         "title": "Broker Integration Management",
         "brokers": brokers, "total_brokers": len(brokers),
         "providers": sorted({broker.broker_type for broker in brokers}),
-        "open_prs": sum(1 for run in runs if run.pull_request_number and run.status not in {"merged", "failed"}),
         "completed_requests": BrokerIntegrationRequest.objects.filter(status="completed").count(),
         "in_progress_requests": BrokerIntegrationRequest.objects.filter(status="in_progress").count(),
         "pipeline_steps": pipeline_steps,
@@ -121,3 +122,4 @@ def broker_integration_management_page(request):
         "failed_runs": BrokerIntegrationRun.objects.filter(status="failed").count(),
     }
     return render(request, "brokers/integration_management.html", context)
+"
