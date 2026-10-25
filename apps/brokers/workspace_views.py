@@ -332,6 +332,12 @@ def broker_integration_assistant_chat(request):
                     "refactor", "enhance", "update", "build", "repair", "bug", "feature",
                     "codebase", "project", "health", "dead", "duplicate", "security", "error",
                     "errors", "cleanup", "clean", "optimize", "optimise", "make", "change",
+                    "hello", "hi", "hey", "thanks", "thank", "morning", "afternoon",
+                    "what", "why", "how", "when", "where", "who", "which", "can",
+                    "could", "would", "should", "is", "are", "do", "does", "did",
+                    "explain", "describe", "summarize", "summarise", "analyze", "analyse",
+                    "tell", "show", "me", "you", "your", "my", "this", "that", "it",
+                    "i", "we", "they", "please", "help", "understand", "meaning",
                 )
             )
         ):
@@ -587,4 +593,18 @@ def broker_integration_assistant_chat(request):
     if any(term in lower for term in ("add broker", "new broker", "integrate", "create adapter", "request a broker", "support broker")):
         return JsonResponse({"reply": "Tell me the broker or provider name only. I will research its official documentation, inspect the existing integration architecture, and prepare a review-only draft PR when the official API contract can be verified. I will not invent endpoints or enable unverified trading code."})
 
-    return JsonResponse({"reply": "I can audit project health, prepare review-only changes across eligible application source areas, and inspect saved broker requests, pull requests, and validation records. For a general engineering task, describe the change you want. For a new broker integration, send only the provider name; I will research official documentation automatically. Generated changes are never executed or merged automatically."})
+    from .project_chat_agent import ProjectChatAgent
+    from .project_manager_agent import ProjectManagerError
+    try:
+        answer = ProjectChatAgent().answer(
+            message,
+            attachment_text=attachment_text,
+            image_attachments=image_attachments,
+        )
+        return JsonResponse({"reply": answer, "action": "chat_answer"})
+    except ProjectManagerError as exc:
+        return JsonResponse({
+            "reply": f"I couldn't answer that with the current AI service: {str(exc)[:500]}. "
+                     "You can still ask for a repository-wide code change, project audit, or broker integration.",
+            "action": "chat_unavailable",
+        }, status=503)
