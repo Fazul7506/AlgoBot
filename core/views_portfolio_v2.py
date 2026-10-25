@@ -106,6 +106,12 @@ def performance_center(request):
         if multiplier:
             duration_seconds.append(value * multiplier)
     average_duration_seconds = sum(duration_seconds) / len(duration_seconds) if duration_seconds else None
+    average_duration_label = None
+    if average_duration_seconds is not None:
+        total_seconds = int(round(average_duration_seconds))
+        minutes, seconds = divmod(total_seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        average_duration_label = (f"{hours}h " if hours else "") + (f"{minutes}m " if minutes or hours else "") + f"{seconds}s"
     return render(request, "core/performance_center.html", {
         "snapshots": [],
         "performance": performance,
@@ -127,6 +133,7 @@ def performance_center(request):
         "average_loss": average_loss,
         "max_drawdown": max_drawdown,
         "average_duration_seconds": average_duration_seconds,
+        "average_duration_label": average_duration_label,
         "has_trade_pnl": metrics["has_trade_pnl"],
     })
 
