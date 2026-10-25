@@ -1,4 +1,6 @@
 """Standalone, staff-gated Broker Integration Management workspace."""
+import os
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.shortcuts import render, redirect
@@ -83,6 +85,7 @@ def broker_integration_management_page(request):
     runs = BrokerIntegrationRun.objects.all()[:20]
     context = {
         "title": "Broker Integration Management",
+        "github_repository": os.environ.get("GITHUB_REPOSITORY", "Fazul7506/AlgoBot"),
         "brokers": brokers, "total_brokers": len(brokers),
         "active_brokers": sum(1 for broker in brokers if broker.status == "active"),
         "scaffolded_brokers": sum(
