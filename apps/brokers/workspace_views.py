@@ -19,9 +19,11 @@ _OFFICIAL_BROKER_DOCS = {
     "dxtrade": "https://dx.trade/",
     "exness": "https://get.exness.help/",
     "forex_com": "https://www.forex.com/en-us/market-analysis/latest-research/",
+    "forexcom": "https://www.forex.com/en-us/market-analysis/latest-research/",
     "ic_markets": "https://www.icmarkets.com/global/en/",
     "interactive_brokers": "https://www.interactivebrokers.com/campus/ibkr-api-page/",
     "metatrader_gateway": "https://www.metatrader5.com/en/terminal/help/algotrading",
+    "metatrader_5": "https://www.metatrader5.com/en/terminal/help/algotrading",
     "mt5": "https://www.metatrader5.com/en/terminal/help/algotrading",
     "oanda": "https://developer.oanda.com/rest-live-v20/introduction/",
     "pepperstone": "https://pepperstone.com/",
@@ -71,7 +73,12 @@ def _fetch_official_broker_documentation(provider_name):
         parser = TextExtractor()
         parser.feed(response.text[:1_000_000])
         extracted = " ".join(parser.parts)
-        return ("Official source: " + url + "\nRetrieved content: " + extracted)[:60000] if len(extracted) >= 80 else ""
+        if len(extracted) < 80 or not any(
+            marker in extracted.lower()
+            for marker in ("api", "endpoint", "authentication", "authorization", "websocket", "rest")
+        ):
+            return ""
+        return ("Official source: " + url + "\\nRetrieved content: " + extracted)[:60000]
     except (requests.RequestException, ValueError):
         return ""
 
