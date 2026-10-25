@@ -102,7 +102,6 @@ def _inventory(task: str = "") -> tuple[list[str], list[dict[str, str]]]:
         except (OSError, UnicodeError):
             pass
     words = {word.lower() for word in re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", task)}
-    count = 0
     for directory, subdirs, filenames in os.walk(ROOT):
         subdirs[:] = sorted(name for name in subdirs if name.lower() not in EXCLUDED_DIRS)
         for filename in sorted(filenames):
@@ -130,7 +129,6 @@ def _inventory(task: str = "") -> tuple[list[str], list[dict[str, str]]]:
                 lowered = source.lower()
                 score += sum(1 for word in words if word in lowered)
             ranked.append((score, {"path": relative, "content": source[:5000]}))
-            count += 1
     ranked.sort(key=lambda item: (item[0], item[1]["path"]), reverse=True)
     selected = []
     total_chars = 0
@@ -160,7 +158,7 @@ def _extract_text(payload: dict[str, Any]) -> str:
 
 
 class ProjectManagerAgent:
-    """Generate a bounded source patch set for human review, not production execution."""
+    """Generate repository-wide source changes for review, without production execution."""
 
     def __init__(self, api_key: str | None = None, model: str | None = None, timeout: int = 90):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY") or getattr(settings, "OPENAI_API_KEY", "")
@@ -216,7 +214,7 @@ class ProjectManagerAgent:
                             {"type": "input_text", "text": json.dumps(user_input, ensure_ascii=False)},
                             *[
                                 {"type": "input_image", "image_url": str(item.get("data_url") or ""), "detail": "high"}
-                                for item in (image_attachments or [])[:4]
+                                for item in (image_attachments or [])
                                 if str(item.get("data_url") or "").startswith((
                                     "data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,"
                                 ))
