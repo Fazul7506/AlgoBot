@@ -1,4 +1,4 @@
-""""Standalone, staff-gated Broker Integration Management workspace."""
+"""Standalone, staff-gated Broker Integration Management workspace."""
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.shortcuts import render, redirect
@@ -43,7 +43,7 @@ def broker_integration_management_page(request):
                 result = open_provider_draft_pr(
                     provider_name=provider_name, provider_slug=slug,
                     draft_files=draft.draft_files,
-                    summary="\\n".join(draft.implementation_plan),
+                    summary="\n".join(draft.implementation_plan),
                 )
                 run.status = "pr_open"
                 run.pull_request_number = result["number"]
