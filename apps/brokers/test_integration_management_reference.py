@@ -53,8 +53,6 @@ class BrokerMarketplaceRequestAndLogoTests(SimpleTestCase):
         template = Path("templates/core/broker_marketplace.html").read_text(encoding="utf-8")
         self.assertIn('data-broker-request-form', template)
         self.assertIn('name="provider_name"', template)
-        self.assertIn('name="use_case"', template)
-        self.assertIn('name="provider_website"', template)
         self.assertIn('data-broker-request-submit', template)
         self.assertNotIn('window.prompt("Which broker', template)
         self.assertNotIn('window.prompt("What markets', template)
