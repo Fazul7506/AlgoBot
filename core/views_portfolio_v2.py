@@ -28,12 +28,14 @@ def _settled_trade_metrics(user):
         "closed_count": settled.count(),
         "wins": wins,
         "losses": losses,
+        "breakeven": known_pnl.filter(profit_loss=0).count(),
         "win_rate": (wins / known_count * 100) if known_count else None,
         "net_pnl": aggregate["net"] if known_count else None,
         "gross_profit": gross_profit,
         "gross_loss": abs(gross_loss),
         "profit_factor": (gross_profit / abs(gross_loss)) if gross_loss else None,
         "has_trade_pnl": known_count > 0,
+        "known_count": known_count,
     }
 
 
@@ -67,23 +69,25 @@ def performance_center(request):
     market_names = dict(MarketSymbol.objects.filter(symbol__in=[row["symbol"] for row in by_symbol]).values_list("symbol", "display_name"))
     for row in by_symbol:
         row["display_name"] = market_names.get(row["symbol"], "Market instrument") or "Market instrument"
+    recent_trades = list(metrics["settled"].order_by("-settlement_time", "-broker_timestamp", "-id")[:8])
     # Broker trade history does not have a canonical strategy association, so do
-    # not infer strategy P/L from order counts.
+    # not infer strategy P/L from order counts or fabricate strategy attribution.
     return render(request, "core/performance_center.html", {
         "snapshots": [],
         "performance": performance,
         "by_strategy": [],
         "by_symbol": by_symbol,
+        "recent_trades": recent_trades,
         "closed_count": metrics["closed_count"],
+        "trade_count": metrics["trade_count"],
+        "known_count": metrics["known_count"],
+        "wins": metrics["wins"],
+        "losses": metrics["losses"],
+        "breakeven": metrics["breakeven"],
+        "win_rate": metrics["win_rate"],
         "net_pnl": metrics["net_pnl"],
+        "gross_profit": metrics["gross_profit"],
+        "gross_loss": metrics["gross_loss"],
+        "profit_factor": metrics["profit_factor"],
         "has_trade_pnl": metrics["has_trade_pnl"],
     })
-
-
-@login_required
-def trade_postmortems(request):
-    trades = list(Order.objects.filter(user=request.user).select_related("broker_account").order_by("-created_at")[:100])
-    market_names = dict(MarketSymbol.objects.filter(symbol__in={trade.symbol for trade in trades if trade.symbol}).values_list("symbol", "display_name"))
-    for trade in trades:
-        trade.display_name = market_names.get(trade.symbol, "Market instrument") or "Market instrument"
-    return render(request, "core/trade_postmortems.html", {"trades": trades})
