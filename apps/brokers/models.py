@@ -21,6 +21,25 @@ class Broker(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta: ordering=['name']
     def __str__(self): return f'{self.name} ({self.broker_type})'
+    @property
+    def is_live_trading_supported(self):
+        """Expose live readiness only for an explicitly production-supported adapter."""
+        from .constants import PRODUCTION_BROKERS
+        metadata = self.metadata if isinstance(self.metadata, dict) else {}
+        adapter_state = str(metadata.get("adapter_state") or "").lower()
+        return bool(
+            self.supports_live
+            and self.broker_type in PRODUCTION_BROKERS
+            and adapter_state not in {"scaffold", "draft", "unverified", "disabled"}
+        )
+
+    @property
+    def live_capability_status(self):
+        if self.is_live_trading_supported:
+            return "production_supported"
+        if self.broker_type not in __import__("apps.brokers.constants", fromlist=["PRODUCTION_BROKERS"]).PRODUCTION_BROKERS:
+            return "setup_required"
+        return "disabled"
 
 class BrokerAccount(models.Model):
     TOKEN_STATUS_CHOICES=[('active','Active'),('expired','Expired'),('revoked','Revoked'),('refreshing','Refreshing')]
