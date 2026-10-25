@@ -20,7 +20,7 @@ TEXT_EXTENSIONS = {
     ".cs", ".php", ".rb", ".r", ".scala", ".lua", ".pl", ".vue", ".svelte", ".astro",
     ".mdx", ".graphql", ".gql", ".proto", ".prisma", ".tf", ".hcl", ".dockerfile", ".lock",
 }
-DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".xlsx", ".odt", ".ods", ".epub", ".zip"}
+DOCUMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".odt", ".ods", ".epub", ".zip"}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mpga", ".mpeg", ".mp4", ".webm", ".ogg", ".opus", ".flac", ".aac"}
 IMAGE_MIME_TYPES = {
     "image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp",
@@ -59,6 +59,46 @@ def extract_document_text(extension: str, data: bytes) -> str:
             text = re.sub(r"\\[a-zA-Z]+-?\d* ?", " ", text)
             text = text.replace("{", " ").replace("}", " ")
         return _clean_text(text)
+    if extension in {".doc", ".xls", ".ppt"}:
+        # Legacy OLE Office containers are never opened by Office or executed. Recover
+        # readable ASCII/UTF-16 text from bounded streams; this is best-effort and
+        # cannot preserve layout, formulas, charts, or embedded objects.
+        try:
+            import olefile
+        except ImportError as exc:
+            raise AttachmentExtractionError(
+                "Legacy Office extraction requires olefile; this file was not processed."
+            ) from exc
+        if not olefile.isOleFile(io.BytesIO(data)):
+            raise AttachmentExtractionError("The legacy Office file is not a valid OLE document.")
+        chunks = []
+        try:
+            with olefile.OleFileIO(io.BytesIO(data)) as compound:
+                for stream_path in compound.listdir(streams=True, storages=False):
+                    stream_name = "/".join(stream_path)
+                    if stream_name.lower().endswith(("vbaproject.bin", "vba", "macros")):
+                        continue
+                    raw = compound.openstream(stream_path).read(MAX_DECODED_BYTES + 1)
+                    if len(raw) > MAX_DECODED_BYTES:
+                        continue
+                    ascii_runs = re.findall(rb"[\\x20-\\x7e]{4,}", raw)
+                    utf16_runs = re.findall(rb"(?:[\\x20-\\x7e]\\x00){4,}", raw)
+                    for run in ascii_runs:
+                        chunks.append(run.decode("latin-1", errors="replace"))
+                    for run in utf16_runs:
+                        chunks.append(run.decode("utf-16le", errors="ignore"))
+                    if sum(map(len, chunks)) >= MAX_EXTRACTED_CHARS:
+                        break
+        except AttachmentExtractionError:
+            raise
+        except Exception as exc:
+            raise AttachmentExtractionError("The legacy Office file could not be safely inspected.") from exc
+        result = _clean_text("\\n".join(chunks))
+        if not result.strip():
+            raise AttachmentExtractionError(
+                "No readable text could be recovered from this legacy Office file; convert it to DOCX/XLSX/PPTX for full extraction."
+            )
+        return result
     if extension == ".zip":
         chunks = []
         try:
