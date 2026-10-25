@@ -42,7 +42,6 @@ class BrokerAdmin(admin.ModelAdmin):
             if action == "generate_pr":
                 from .integration_agent import BrokerIntegrationAgent, BrokerIntegrationAgentError
                 from .github_integration import open_provider_draft_pr, GitHubIntegrationError
-                from .models import BrokerIntegrationRun
                 api_docs = request.POST.get("api_docs", "").strip()
                 slug = slugify(request.POST.get("provider_slug") or provider_name).replace("-", "_")
                 run = BrokerIntegrationRun.objects.create(provider_name=provider_name[:120], provider_slug=slug, status="generating", created_by=request.user)
