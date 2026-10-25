@@ -18,8 +18,12 @@ TEXT_EXTENSIONS = {
     ".xml", ".sql", ".sh", ".ini", ".cfg", ".conf", ".rtf",
 }
 DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".xlsx", ".odt", ".ods", ".epub"}
-AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mpga", ".mpeg"}
-IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mpga", ".mpeg", ".mp4", ".webm", ".ogg", ".opus", ".flac", ".aac"}
+IMAGE_MIME_TYPES = {
+    "image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp",
+    "image/tiff", "image/x-ms-bmp",
+}
+VISION_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 
 class AttachmentExtractionError(ValueError):
@@ -132,6 +136,46 @@ def transcribe_audio(data: bytes, filename: str) -> str:
     if not text:
         raise AttachmentExtractionError("No speech transcript was returned for this audio file.")
     return _clean_text(text)
+
+
+def normalize_image_for_vision(data: bytes, mime_type: str) -> tuple[str, bytes]:
+    """Decode common still-image formats and normalize them to model-supported PNG/JPEG/WebP."""
+    if mime_type.lower() not in IMAGE_MIME_TYPES:
+        raise AttachmentExtractionError("This image format is not supported.")
+    if len(data) > MAX_DECODED_BYTES:
+        raise AttachmentExtractionError("The decoded image exceeds the 4 MB per-file limit.")
+    try:
+        from PIL import Image, ImageOps, UnidentifiedImageError
+        with Image.open(io.BytesIO(data)) as source:
+            if getattr(source, "n_frames", 1) > 1:
+                source.seek(0)
+            source.load()
+            if source.width * source.height > 20_000_000:
+                raise AttachmentExtractionError("The image dimensions exceed the safe 20-megapixel limit.")
+            image = ImageOps.exif_transpose(source)
+            if image.mode not in ("RGB", "RGBA"):
+                image = image.convert("RGBA" if "transparency" in image.info else "RGB")
+            output = io.BytesIO()
+            if image.mode == "RGBA":
+                image.save(output, format="PNG", optimize=True)
+                result_mime = "image/png"
+            else:
+                image.save(output, format="JPEG", quality=88, optimize=True)
+                result_mime = "image/jpeg"
+            normalized = output.getvalue()
+            if len(normalized) > MAX_DECODED_BYTES:
+                image.thumbnail((2048, 2048))
+                output = io.BytesIO()
+                image.save(output, format="JPEG", quality=78, optimize=True)
+                normalized = output.getvalue()
+                result_mime = "image/jpeg"
+            if len(normalized) > MAX_DECODED_BYTES:
+                raise AttachmentExtractionError("The normalized image exceeds the 4 MB limit.")
+            return result_mime, normalized
+    except AttachmentExtractionError:
+        raise
+    except Exception as exc:
+        raise AttachmentExtractionError("The image could not be safely decoded.") from exc
 
 
 def decode_data_url(data_url: str, expected_mime: str = "") -> tuple[str, bytes]:
