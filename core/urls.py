@@ -5,7 +5,8 @@ from .views import strategy_builder_page
 from .settings_api import account_settings_api
 from .views_oauth import disconnect_deriv, refresh_deriv_token, deriv_account_status, reconnect_deriv
 
-urlpatterns = [\n    path("api/broker-integration-requests/", submit_broker_marketplace_request, name="submit_broker_marketplace_request"),
+urlpatterns = [
+    path("api/broker-integration-requests/", submit_broker_marketplace_request, name="submit_broker_marketplace_request"),
     path("connect-deriv/", deriv_login, name="connect_deriv"),
     path("callback/", callback, name="callback"),
     path("api/deriv/disconnect/", disconnect_deriv, name="deriv_disconnect"),
