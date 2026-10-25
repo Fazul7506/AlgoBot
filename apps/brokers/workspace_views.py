@@ -234,6 +234,7 @@ def broker_integration_assistant_chat(request):
     from .attachment_extraction import (
         AttachmentExtractionError, AUDIO_EXTENSIONS, IMAGE_MIME_TYPES, TEXT_EXTENSIONS,
         DOCUMENT_EXTENSIONS, decode_data_url, extract_document_text, transcribe_audio,
+        normalize_image_for_vision, VISION_MIME_TYPES,
     )
     supported_extensions = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS
     encoded_bytes_total = 0
@@ -243,16 +244,18 @@ def broker_integration_assistant_chat(request):
         name = str(item.get("name") or "attachment")[:180]
         extension = Path(name).suffix.lower()
         mime_type = str(item.get("type") or "").lower().split(";", 1)[0]
-        if extension in {".png", ".jpg", ".jpeg", ".webp"} or mime_type in IMAGE_MIME_TYPES:
+        if extension in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"} or mime_type in IMAGE_MIME_TYPES:
             if mime_type not in IMAGE_MIME_TYPES:
                 return JsonResponse({"reply": f"{name} has an unsupported image type."}, status=400)
             data_url = str(item.get("data_url") or "")
             try:
                 validated_mime, image_bytes = decode_data_url(data_url, mime_type)
+                normalized_mime, normalized_bytes = normalize_image_for_vision(image_bytes, validated_mime)
             except AttachmentExtractionError as exc:
                 return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
             encoded_bytes_total += len(image_bytes)
-            image_attachments.append({"name": name, "data_url": data_url})
+            normalized_url = f"data:{normalized_mime};base64," + __import__("base64").b64encode(normalized_bytes).decode("ascii")
+            image_attachments.append({"name": name, "data_url": normalized_url})
         elif extension in TEXT_EXTENSIONS and isinstance(item.get("text"), str):
             text_content = item["text"]
             if len(text_content.encode("utf-8", errors="replace")) > 200_000:
@@ -283,7 +286,7 @@ def broker_integration_assistant_chat(request):
             )
         else:
             return JsonResponse({
-                "reply": f"{name} has an unsupported format. Supported attachments include text/code, PDF, DOCX, PPTX, XLSX, ODT, ODS, EPUB, and PNG/JPEG/WebP images."
+                "reply": f"{name} has an unsupported format. Supported attachments include text/code, PDF, Office/OpenDocument files, EPUB, common still-image formats, audio, and video clips (video is sampled into key frames)."
             }, status=400)
         if encoded_bytes_total > 12 * 1024 * 1024:
             return JsonResponse({"reply": "Combined attachments exceed the 12 MB total limit. Send fewer or smaller files."}, status=400)
