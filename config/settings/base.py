@@ -144,6 +144,8 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
+# Bounded JSON assistant attachments may include base64-encoded documents/images.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/dashboard/"
 LOGOUT_REDIRECT_URL = "/"
