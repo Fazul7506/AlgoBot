@@ -48,3 +48,32 @@ class AttachmentExtractionTests(TestCase):
     def test_unknown_binary_format_is_rejected(self):
         with self.assertRaises(AttachmentExtractionError):
             extract_document_text(".exe", b"binary")
+
+    def test_legacy_office_format_rejects_malformed_ole_payload(self):
+        with self.assertRaises(AttachmentExtractionError):
+            extract_document_text(".doc", b"not an OLE compound document")
+
+    def test_zip_ignores_unsupported_binary_members_but_keeps_readable_text(self):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("notes.txt", "Readable content")
+            archive.writestr("program.exe", b"binary payload")
+        extracted = extract_document_text(".zip", output.getvalue())
+        self.assertIn("Readable content", extracted)
+        self.assertNotIn("binary payload", extracted)
+
+    def test_zip_attachment_extracts_text_files_without_executing_them(self):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("src/example.py", "print('safe text extraction only')")
+            archive.writestr("README.md", "# Project notes")
+        extracted = extract_document_text(".zip", output.getvalue())
+        self.assertIn("src/example.py", extracted)
+        self.assertIn("Project notes", extracted)
+
+    def test_zip_attachment_rejects_path_traversal(self):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("../outside.py", "should never be extracted")
+        with self.assertRaises(AttachmentExtractionError):
+            extract_document_text(".zip", output.getvalue())

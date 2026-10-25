@@ -15,11 +15,18 @@ MAX_EXTRACTED_CHARS = 200_000
 TEXT_EXTENSIONS = {
     ".txt", ".md", ".json", ".py", ".js", ".jsx", ".ts", ".tsx", ".html",
     ".css", ".scss", ".yaml", ".yml", ".toml", ".csv", ".tsv", ".log",
-    ".xml", ".sql", ".sh", ".ini", ".cfg", ".conf", ".rtf",
+    ".xml", ".svg", ".sql", ".sh", ".bash", ".ini", ".cfg", ".conf", ".rtf", ".ipynb",
+    ".go", ".rs", ".java", ".kt", ".kts", ".swift", ".c", ".h", ".cc", ".cpp", ".hpp",
+    ".cs", ".php", ".rb", ".r", ".scala", ".lua", ".pl", ".vue", ".svelte", ".astro",
+    ".mdx", ".graphql", ".gql", ".proto", ".prisma", ".tf", ".hcl", ".dockerfile", ".lock",
 }
-DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".xlsx", ".odt", ".ods", ".epub"}
-AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mpga", ".mpeg"}
-IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
+DOCUMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".odt", ".ods", ".epub", ".zip"}
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mpga", ".mpeg", ".mp4", ".webm", ".ogg", ".opus", ".flac", ".aac"}
+IMAGE_MIME_TYPES = {
+    "image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp",
+    "image/tiff", "image/x-ms-bmp",
+}
+VISION_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 
 class AttachmentExtractionError(ValueError):
@@ -52,6 +59,80 @@ def extract_document_text(extension: str, data: bytes) -> str:
             text = re.sub(r"\\[a-zA-Z]+-?\d* ?", " ", text)
             text = text.replace("{", " ").replace("}", " ")
         return _clean_text(text)
+    if extension in {".doc", ".xls", ".ppt"}:
+        # Legacy OLE Office containers are never opened by Office or executed. Recover
+        # readable ASCII/UTF-16 text from bounded streams; this is best-effort and
+        # cannot preserve layout, formulas, charts, or embedded objects.
+        try:
+            import olefile
+        except ImportError as exc:
+            raise AttachmentExtractionError(
+                "Legacy Office extraction requires olefile; this file was not processed."
+            ) from exc
+        if not olefile.isOleFile(io.BytesIO(data)):
+            raise AttachmentExtractionError("The legacy Office file is not a valid OLE document.")
+        chunks = []
+        try:
+            with olefile.OleFileIO(io.BytesIO(data)) as compound:
+                for stream_path in compound.listdir(streams=True, storages=False):
+                    stream_name = "/".join(stream_path)
+                    if stream_name.lower().endswith(("vbaproject.bin", "vba", "macros")):
+                        continue
+                    raw = compound.openstream(stream_path).read(MAX_DECODED_BYTES + 1)
+                    if len(raw) > MAX_DECODED_BYTES:
+                        continue
+                    ascii_runs = re.findall(rb"[\x20-\x7e]{4,}", raw)
+                    utf16_runs = re.findall(rb"(?:[\x20-\x7e]\x00){4,}", raw)
+                    for run in ascii_runs:
+                        chunks.append(run.decode("latin-1", errors="replace"))
+                    for run in utf16_runs:
+                        chunks.append(run.decode("utf-16le", errors="ignore"))
+                    if sum(map(len, chunks)) >= MAX_EXTRACTED_CHARS:
+                        break
+        except AttachmentExtractionError:
+            raise
+        except Exception as exc:
+            raise AttachmentExtractionError("The legacy Office file could not be safely inspected.") from exc
+        result = _clean_text("\n".join(chunks))
+        if not result.strip():
+            raise AttachmentExtractionError(
+                "No readable text could be recovered from this legacy Office file; convert it to DOCX/XLSX/PPTX for full extraction."
+            )
+        return result
+    if extension == ".zip":
+        chunks = []
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                entries = archive.infolist()
+                if len(entries) > 1000 or sum(entry.file_size for entry in entries) > 20 * 1024 * 1024:
+                    raise AttachmentExtractionError("The ZIP archive expands beyond the safe 20 MB / 1,000-file limit.")
+                for entry in entries:
+                    name = PurePosixPath(entry.filename)
+                    if name.is_absolute() or ".." in name.parts or entry.is_dir():
+                        if name.is_absolute() or ".." in name.parts:
+                            raise AttachmentExtractionError("The ZIP archive contains unsafe paths.")
+                        continue
+                    if entry.file_size > MAX_DECODED_BYTES:
+                        continue
+                    inner_ext = Path(name.name).suffix.lower()
+                    if inner_ext in TEXT_EXTENSIONS:
+                        raw = archive.read(entry)
+                        chunks.append(f"--- {entry.filename} ---\\n" + raw.decode("utf-8-sig", errors="replace"))
+                    elif inner_ext in DOCUMENT_EXTENSIONS - {".zip"}:
+                        try:
+                            extracted = extract_document_text(inner_ext, archive.read(entry))
+                        except AttachmentExtractionError:
+                            continue
+                        chunks.append(f"--- {entry.filename} ---\\n" + extracted)
+                    if sum(map(len, chunks)) >= MAX_EXTRACTED_CHARS:
+                        break
+        except AttachmentExtractionError:
+            raise
+        except (zipfile.BadZipFile, OSError, KeyError, RuntimeError) as exc:
+            raise AttachmentExtractionError("The ZIP archive is invalid or could not be read.") from exc
+        if not chunks:
+            raise AttachmentExtractionError("No readable text or supported documents were found in the ZIP archive.")
+        return _clean_text("\n".join(chunks))
     if extension == ".pdf":
         try:
             from pypdf import PdfReader
@@ -132,6 +213,47 @@ def transcribe_audio(data: bytes, filename: str) -> str:
     if not text:
         raise AttachmentExtractionError("No speech transcript was returned for this audio file.")
     return _clean_text(text)
+
+
+def normalize_image_for_vision(data: bytes, mime_type: str) -> tuple[str, bytes]:
+    """Decode common still-image formats and normalize them to model-supported PNG/JPEG/WebP."""
+    if mime_type.lower() not in IMAGE_MIME_TYPES:
+        raise AttachmentExtractionError("This image format is not supported.")
+    if len(data) > MAX_DECODED_BYTES:
+        raise AttachmentExtractionError("The decoded image exceeds the 4 MB per-file limit.")
+    try:
+        from PIL import Image, ImageOps, UnidentifiedImageError
+        with Image.open(io.BytesIO(data)) as source:
+            if getattr(source, "n_frames", 1) > 1:
+                source.seek(0)
+            source.load()
+            if source.width * source.height > 20_000_000:
+                raise AttachmentExtractionError("The image dimensions exceed the safe 20-megapixel limit.")
+            image = ImageOps.exif_transpose(source)
+            if image.mode not in ("RGB", "RGBA"):
+                image = image.convert("RGBA" if "transparency" in image.info else "RGB")
+            output = io.BytesIO()
+            if image.mode == "RGBA":
+                image.save(output, format="PNG", optimize=True)
+                result_mime = "image/png"
+            else:
+                image.save(output, format="JPEG", quality=88, optimize=True)
+                result_mime = "image/jpeg"
+            normalized = output.getvalue()
+            if len(normalized) > MAX_DECODED_BYTES:
+                image.thumbnail((2048, 2048))
+                image = image.convert("RGB")
+                output = io.BytesIO()
+                image.save(output, format="JPEG", quality=78, optimize=True)
+                normalized = output.getvalue()
+                result_mime = "image/jpeg"
+            if len(normalized) > MAX_DECODED_BYTES:
+                raise AttachmentExtractionError("The normalized image exceeds the 4 MB limit.")
+            return result_mime, normalized
+    except AttachmentExtractionError:
+        raise
+    except Exception as exc:
+        raise AttachmentExtractionError("The image could not be safely decoded.") from exc
 
 
 def decode_data_url(data_url: str, expected_mime: str = "") -> tuple[str, bytes]:

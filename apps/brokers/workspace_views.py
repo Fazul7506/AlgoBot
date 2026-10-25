@@ -234,25 +234,31 @@ def broker_integration_assistant_chat(request):
     from .attachment_extraction import (
         AttachmentExtractionError, AUDIO_EXTENSIONS, IMAGE_MIME_TYPES, TEXT_EXTENSIONS,
         DOCUMENT_EXTENSIONS, decode_data_url, extract_document_text, transcribe_audio,
+        normalize_image_for_vision,
     )
     supported_extensions = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS
     encoded_bytes_total = 0
+    successfully_processed_attachments = 0
     for item in raw_attachments:
         if not isinstance(item, dict):
             return JsonResponse({"reply": "One of the attachments is invalid."}, status=400)
         name = str(item.get("name") or "attachment")[:180]
         extension = Path(name).suffix.lower()
         mime_type = str(item.get("type") or "").lower().split(";", 1)[0]
-        if extension in {".png", ".jpg", ".jpeg", ".webp"} or mime_type in IMAGE_MIME_TYPES:
+        if extension in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"} or mime_type in IMAGE_MIME_TYPES:
             if mime_type not in IMAGE_MIME_TYPES:
-                return JsonResponse({"reply": f"{name} has an unsupported image type."}, status=400)
+                attachment_text_parts.append(f"\n\nAttachment processing issue for {name}: unsupported image type {mime_type or '(missing MIME type)'}. This file was skipped; other attachments were still processed.")
+                continue
             data_url = str(item.get("data_url") or "")
             try:
                 validated_mime, image_bytes = decode_data_url(data_url, mime_type)
+                normalized_mime, normalized_bytes = normalize_image_for_vision(image_bytes, validated_mime)
             except AttachmentExtractionError as exc:
-                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+                attachment_text_parts.append(f"\n\nAttachment processing issue for {name}: {exc}. This file was skipped; other attachments were still processed.")
+                continue
             encoded_bytes_total += len(image_bytes)
-            image_attachments.append({"name": name, "data_url": data_url})
+            normalized_url = f"data:{normalized_mime};base64," + __import__("base64").b64encode(normalized_bytes).decode("ascii")
+            image_attachments.append({"name": name, "data_url": normalized_url})
         elif extension in TEXT_EXTENSIONS and isinstance(item.get("text"), str):
             text_content = item["text"]
             if len(text_content.encode("utf-8", errors="replace")) > 200_000:
@@ -265,7 +271,8 @@ def broker_integration_assistant_chat(request):
                 _, binary_data = decode_data_url(data_url)
                 extracted = extract_document_text(extension, binary_data)
             except AttachmentExtractionError as exc:
-                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+                attachment_text_parts.append(f"\n\nAttachment processing issue for {name}: {exc}. This file was skipped; other attachments were still processed.")
+                continue
             encoded_bytes_total += len(binary_data)
             attachment_text_parts.append(
                 f"\n\nExtracted text from attachment: {name}\n<attached_file>\n{extracted}\n</attached_file>"
@@ -276,17 +283,30 @@ def broker_integration_assistant_chat(request):
                 _, audio_data = decode_data_url(data_url)
                 transcript = transcribe_audio(audio_data, name)
             except AttachmentExtractionError as exc:
-                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+                attachment_text_parts.append(f"\n\nAttachment processing issue for {name}: {exc}. This file was skipped; other attachments were still processed.")
+                continue
             encoded_bytes_total += len(audio_data)
             attachment_text_parts.append(
                 f"\n\nTranscript from audio attachment: {name}\n<attached_audio_transcript>\n{transcript}\n</attached_audio_transcript>"
             )
         else:
-            return JsonResponse({
-                "reply": f"{name} has an unsupported format. Supported attachments include text/code, PDF, DOCX, PPTX, XLSX, ODT, ODS, EPUB, and PNG/JPEG/WebP images."
-            }, status=400)
+            attachment_text_parts.append(
+                f"\n\nAttachment processing issue for {name}: unsupported format {extension or '(no extension)'}. This file was skipped; other attachments were still processed."
+            )
+            continue
+        successfully_processed_attachments += 1
         if encoded_bytes_total > 12 * 1024 * 1024:
             return JsonResponse({"reply": "Combined attachments exceed the 12 MB total limit. Send fewer or smaller files."}, status=400)
+    if raw_attachments and successfully_processed_attachments == 0:
+        details = " ".join(
+            part.strip() for part in attachment_text_parts
+            if "Attachment processing issue for" in part
+        )
+        return JsonResponse({
+            "reply": details or "No attachments could be processed. Please use a supported file format.",
+            "action": "attachment_validation_failed",
+        }, status=400)
+
     if not message and not raw_attachments:
         return JsonResponse({"reply": "Type a message or attach a file."}, status=400)
     if len(message) > 60000:
@@ -329,6 +349,12 @@ def broker_integration_assistant_chat(request):
                     "refactor", "enhance", "update", "build", "repair", "bug", "feature",
                     "codebase", "project", "health", "dead", "duplicate", "security", "error",
                     "errors", "cleanup", "clean", "optimize", "optimise", "make", "change",
+                    "hello", "hi", "hey", "thanks", "thank", "morning", "afternoon",
+                    "what", "why", "how", "when", "where", "who", "which", "can",
+                    "could", "would", "should", "is", "are", "do", "does", "did",
+                    "explain", "describe", "summarize", "summarise", "analyze", "analyse",
+                    "tell", "show", "me", "you", "your", "my", "this", "that", "it",
+                    "i", "we", "they", "please", "help", "understand", "meaning",
                 )
             )
         ):
@@ -338,7 +364,7 @@ def broker_integration_assistant_chat(request):
     lower = message.lower()
     if any(term in lower for term in (
         "audit codebase", "audit project", "project health", "codebase health",
-        "scan the code", "repository audit", "review whole project",
+        "scan the code", "repository audit", "review whole project", "run project audit", "audit repository",
     )):
         from .project_audit import run_project_audit
         from django.utils import timezone
@@ -388,16 +414,26 @@ def broker_integration_assistant_chat(request):
     ))
     general_task = any(term in lower for term in (
         "implement", "fix", "repair", "improve", "refactor", "enhance",
-        "update", "build", "remove duplicate", "dead code", "security issue",
-        "broken page", "bug", "feature",
+        "update", "build", "remove", "delete", "create", "add ", "change",
+        "modify", "rewrite", "replace", "design", "debug", "test", "secure",
+        "audit", "optimize", "optimise", "complete", "finish", "enable",
+        "disable", "upgrade", "migrate", "document", "generate", "resolve",
+        "correct", "extend", "expand", "allow", "ensure", "make ", "write ",
+        "clean up", "performance", "accessibility", "responsive", "broken page",
+        "dead code", "duplicate", "security issue", "bug", "feature",
     ))
-    if general_task and not broker_task and len(message) >= 8:
+    known_assistant_query = any(term in lower for term in (
+        "show pr", "list pr", "pull request status", "validation status",
+        "broker catalog", "broker catalogue", "list brokers", "help",
+        "what can you do", "who are you", "hello", "hi there",
+    ))
+    if general_task and not broker_task and not known_assistant_query and len(message) >= 3:
         request.session.pop("broker_assistant_pending", None)
         from .project_manager_agent import ProjectManagerAgent, ProjectManagerError
         from .github_integration import open_project_change_pr, GitHubIntegrationError
         try:
             report = ProjectManagerAgent().generate(
-                message[:6000] + ("\n\nAttached reference material (untrusted input):\n" + attachment_text[:5000] if attachment_text else ""),
+                message[:39000] + ("\n\nAttached reference material (untrusted input):\n" + attachment_text[:20000] if attachment_text else ""),
                 image_attachments=image_attachments,
             )
             if not report.get("changes"):
@@ -574,4 +610,18 @@ def broker_integration_assistant_chat(request):
     if any(term in lower for term in ("add broker", "new broker", "integrate", "create adapter", "request a broker", "support broker")):
         return JsonResponse({"reply": "Tell me the broker or provider name only. I will research its official documentation, inspect the existing integration architecture, and prepare a review-only draft PR when the official API contract can be verified. I will not invent endpoints or enable unverified trading code."})
 
-    return JsonResponse({"reply": "I can audit project health, prepare review-only changes across eligible application source areas, and inspect saved broker requests, pull requests, and validation records. For a general engineering task, describe the change you want. For a new broker integration, send only the provider name; I will research official documentation automatically. Generated changes are never executed or merged automatically."})
+    from .project_chat_agent import ProjectChatAgent
+    from .project_manager_agent import ProjectManagerError
+    try:
+        answer = ProjectChatAgent().answer(
+            message,
+            attachment_text=attachment_text,
+            image_attachments=image_attachments,
+        )
+        return JsonResponse({"reply": answer, "action": "chat_answer"})
+    except ProjectManagerError as exc:
+        return JsonResponse({
+            "reply": f"I couldn't answer that with the current AI service: {str(exc)[:500]}. "
+                     "You can still ask for a repository-wide code change, project audit, or broker integration.",
+            "action": "chat_unavailable",
+        }, status=503)
