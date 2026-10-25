@@ -97,3 +97,11 @@ def performance_center(request):
         "max_drawdown": max_drawdown,
         "has_trade_pnl": metrics["has_trade_pnl"],
     })
+
+@login_required
+def trade_postmortems(request):
+    trades = list(Order.objects.filter(user=request.user).select_related("broker_account").order_by("-created_at")[:100])
+    market_names = dict(MarketSymbol.objects.filter(symbol__in={trade.symbol for trade in trades if trade.symbol}).values_list("symbol", "display_name"))
+    for trade in trades:
+        trade.display_name = market_names.get(trade.symbol, "Market instrument") or "Market instrument"
+    return render(request, "core/trade_postmortems.html", {"trades": trades})
