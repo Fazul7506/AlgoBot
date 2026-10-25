@@ -343,7 +343,7 @@ def broker_integration_assistant_chat(request):
     provider_name = pending.get("provider_name")
     api_docs = pending.get("api_docs")
     attachment_text = pending.get("attachment_text", "")
-    if provider_name and not api_docs:
+    if provider_name and not api_docs and not attachment_text and not image_attachments:
         # Research the provider automatically; do not ask the user to assemble API docs.
         api_docs = _fetch_official_broker_documentation(provider_name)
         if api_docs:
