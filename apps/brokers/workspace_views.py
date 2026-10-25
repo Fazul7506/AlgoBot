@@ -82,7 +82,7 @@ def broker_integration_management_page(request):
     requests_qs = BrokerIntegrationRequest.objects.select_related("requested_by").all()[:30]
     runs = list(BrokerIntegrationRun.objects.all()[:20])
     # Attach only persisted PR metadata; never synthesize a PR number or readiness status.
-    runs_by_slug = {run.provider_slug.lower(): run for run in runs}
+    runs_by_slug = {}\n    for run in runs:\n        runs_by_slug.setdefault(run.provider_slug.lower(), run)
     for broker in brokers:
         key = slugify(broker.name).replace("-", "_")
         related_run = runs_by_slug.get(key)
