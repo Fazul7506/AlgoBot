@@ -29,7 +29,7 @@ class BrokerAdmin(admin.ModelAdmin):
     list_per_page = 50
 
     def get_urls(self):
-        custom = [path("integration-management/", self.admin_site.admin_view(self.integration_management), name="brokers_broker_integration_management")]
+        custom = [path("integration-management/", self.admin_site.admin_view(lambda request: redirect("broker_integration_management")), name="brokers_broker_integration_management")]
         return custom + super().get_urls()
 
     def integration_management(self, request):
