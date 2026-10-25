@@ -322,9 +322,14 @@ def broker_integration_assistant_chat(request):
             and not re.search(r"[?!\r\n]", message)
             and not any(
                 token in message.lower().split()
-                for token in ("check", "show", "list", "audit", "review", "fix", "help", "please",
-                              "status", "validation", "requests", "catalog", "broker", "integration",
-                              "request", "docs", "documentation", "add", "new")
+                for token in (
+                    "check", "show", "list", "audit", "review", "fix", "help", "please",
+                    "status", "validation", "requests", "catalog", "broker", "integration",
+                    "request", "docs", "documentation", "add", "new", "implement", "improve",
+                    "refactor", "enhance", "update", "build", "repair", "bug", "feature",
+                    "codebase", "project", "health", "dead", "duplicate", "security", "error",
+                    "errors", "cleanup", "clean", "optimize", "optimise", "make", "change",
+                )
             )
         ):
             # Any concise provider name can start research; it need not be in a hard-coded list.
