@@ -82,11 +82,11 @@ class BrokerIntegrationAgentFailoverTests(SimpleTestCase):
         with patch("apps.brokers.ai_provider_utils.requests.request") as post:
             post.side_effect = [
                 self.response(200, {"output_text": "not-json-secret"}),
-                self.response(503, text="private error body"),
-                self.response(503, text="private error body"),
-                self.response(503, text="private error body"),
-                self.response(503, text="private error body"),
-                self.response(503, text="private error body"),
+                self.response(401, text="private error body"),
+                self.response(401, text="private error body"),
+                self.response(401, text="private error body"),
+                self.response(401, text="private error body"),
+                self.response(401, text="private error body"),
             ]
             with self.assertRaises(BrokerIntegrationAgentError) as raised:
                 BrokerIntegrationAgent().generate(
