@@ -43,7 +43,7 @@ def broker_integration_management_page(request):
                 result = open_provider_draft_pr(
                     provider_name=provider_name, provider_slug=slug,
                     draft_files=draft.draft_files,
-                    summary="\n".join(draft.implementation_plan),
+                    summary="; ".join(draft.implementation_plan),
                 )
                 run.status = "pr_open"
                 run.pull_request_number = result["number"]
@@ -123,4 +123,3 @@ def broker_integration_management_page(request):
         "failed_runs": BrokerIntegrationRun.objects.filter(status="failed").count(),
     }
     return render(request, "brokers/integration_management.html", context)
-"
