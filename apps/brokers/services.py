@@ -66,10 +66,24 @@ class BrokerRegistry:
 class BrokerManager:
     broker_catalog = {'deriv': {'name': 'Deriv', 'status': 'active', 'websocket_endpoint': settings.DERIV_PUBLIC_WS_URL, 'supports_live': True, 'auth': 'oauth'}, 'binance': {'name': 'Binance', 'auth': 'api_key_secret'}, 'bybit': {'name': 'Bybit', 'auth': 'api_key_secret'}, 'oanda': {'name': 'OANDA', 'auth': 'api_token'}, 'interactive_brokers': {'name': 'Interactive Brokers', 'auth': 'session_gateway'}, 'metatrader_gateway': {'name': 'MetaTrader Gateway', 'auth': 'username_password'}, 'dxtrade': {'name': 'DXTrade', 'auth': 'session_token'}, 'ctrader': {'name': 'cTrader', 'auth': 'oauth'}, 'alpaca': {'name': 'Alpaca', 'auth': 'api_key_secret'}, 'forex_com': {'name': 'Forex.com', 'auth': 'username_password'}, 'pepperstone': {'name': 'Pepperstone', 'auth': 'metatrader_or_ctrader'}, 'ic_markets': {'name': 'IC Markets', 'auth': 'metatrader_or_ctrader'}, 'exness': {'name': 'Exness', 'auth': 'api_key_or_session'}}
     def ensure_defaults(self):
+        """Idempotently ensure every built-in broker is discoverable.
+
+        Existing rows are intentionally preserved: catalog seeding must never
+        reset admin-managed status, endpoints, metadata, or capability flags.
+        """
         for broker_type, data in self.broker_catalog.items():
-            defaults = {'status': data.get('status', 'coming_soon'), 'supports_live': data.get('supports_live', False), 'metadata': {'auth': data['auth'], 'adapter_state': 'production' if broker_type in c.PRODUCTION_BROKERS else 'scaffold'}}
-            if data.get('websocket_endpoint'): defaults['websocket_endpoint'] = data['websocket_endpoint']
-            Broker.objects.get_or_create(name=data['name'], broker_type=broker_type, defaults=defaults)
+            defaults = {
+                'name': data['name'],
+                'status': data.get('status', 'coming_soon'),
+                'supports_live': data.get('supports_live', False),
+                'metadata': {
+                    'auth': data['auth'],
+                    'adapter_state': 'production' if broker_type in c.PRODUCTION_BROKERS else 'scaffold',
+                },
+            }
+            if data.get('websocket_endpoint'):
+                defaults['websocket_endpoint'] = data['websocket_endpoint']
+            Broker.objects.get_or_create(broker_type=broker_type, defaults=defaults)
     def register_broker(self, broker_type, adapter_path, **metadata):
         """Persist a validated adapter path without enabling or promoting live trading."""
         if broker_type not in c.BROKER_TYPES:
