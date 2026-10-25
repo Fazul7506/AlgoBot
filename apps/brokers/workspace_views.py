@@ -234,7 +234,7 @@ def broker_integration_assistant_chat(request):
     from .attachment_extraction import (
         AttachmentExtractionError, AUDIO_EXTENSIONS, IMAGE_MIME_TYPES, TEXT_EXTENSIONS,
         DOCUMENT_EXTENSIONS, decode_data_url, extract_document_text, transcribe_audio,
-        normalize_image_for_vision, VISION_MIME_TYPES,
+        normalize_image_for_vision,
     )
     supported_extensions = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS
     encoded_bytes_total = 0
