@@ -246,13 +246,15 @@ def broker_integration_assistant_chat(request):
         mime_type = str(item.get("type") or "").lower().split(";", 1)[0]
         if extension in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"} or mime_type in IMAGE_MIME_TYPES:
             if mime_type not in IMAGE_MIME_TYPES:
-                return JsonResponse({"reply": f"{name} has an unsupported image type."}, status=400)
+                attachment_text_parts.append(f"\n\nAttachment processing issue for {name}: unsupported image type {mime_type or '(missing MIME type)'}. This file was skipped; other attachments were still processed.")
+                continue
             data_url = str(item.get("data_url") or "")
             try:
                 validated_mime, image_bytes = decode_data_url(data_url, mime_type)
                 normalized_mime, normalized_bytes = normalize_image_for_vision(image_bytes, validated_mime)
             except AttachmentExtractionError as exc:
-                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+                attachment_text_parts.append(f"\n\nAttachment processing issue for {name}: {exc}. This file was skipped; other attachments were still processed.")
+                continue
             encoded_bytes_total += len(image_bytes)
             normalized_url = f"data:{normalized_mime};base64," + __import__("base64").b64encode(normalized_bytes).decode("ascii")
             image_attachments.append({"name": name, "data_url": normalized_url})
@@ -268,7 +270,8 @@ def broker_integration_assistant_chat(request):
                 _, binary_data = decode_data_url(data_url)
                 extracted = extract_document_text(extension, binary_data)
             except AttachmentExtractionError as exc:
-                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+                attachment_text_parts.append(f"\n\nAttachment processing issue for {name}: {exc}. This file was skipped; other attachments were still processed.")
+                continue
             encoded_bytes_total += len(binary_data)
             attachment_text_parts.append(
                 f"\n\nExtracted text from attachment: {name}\n<attached_file>\n{extracted}\n</attached_file>"
@@ -279,15 +282,17 @@ def broker_integration_assistant_chat(request):
                 _, audio_data = decode_data_url(data_url)
                 transcript = transcribe_audio(audio_data, name)
             except AttachmentExtractionError as exc:
-                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+                attachment_text_parts.append(f"\n\nAttachment processing issue for {name}: {exc}. This file was skipped; other attachments were still processed.")
+                continue
             encoded_bytes_total += len(audio_data)
             attachment_text_parts.append(
                 f"\n\nTranscript from audio attachment: {name}\n<attached_audio_transcript>\n{transcript}\n</attached_audio_transcript>"
             )
         else:
-            return JsonResponse({
-                "reply": f"{name} has an unsupported format. Supported attachments include text/code, PDF, Office/OpenDocument files, EPUB, common still-image formats, audio, and video clips (video is sampled into key frames)."
-            }, status=400)
+            attachment_text_parts.append(
+                f"\n\nAttachment processing issue for {name}: unsupported format {extension or '(no extension)'}. This file was skipped; other attachments were still processed."
+            )
+            continue
         if encoded_bytes_total > 12 * 1024 * 1024:
             return JsonResponse({"reply": "Combined attachments exceed the 12 MB total limit. Send fewer or smaller files."}, status=400)
     if not message and not raw_attachments:
