@@ -30,13 +30,18 @@ class BrokerIntegrationManagementReferenceLayoutTests(SimpleTestCase):
             with self.subTest(heading=heading):
                 self.assertIn(heading, template)
         self.assertIn("<svg", template)
-        self.assertIn("https://deriv.com/favicon.ico", template)
-        self.assertIn("https://www.oanda.com/favicon.ico", template)
-        self.assertIn("https://www.interactivebrokers.com/favicon.ico", template)
-        self.assertIn("https://www.metatrader5.com/favicon.ico", template)
-        self.assertIn("https://www.binance.com/favicon.ico", template)
-        self.assertIn("https://www.kraken.com/favicon.ico", template)
-        self.assertIn("https://www.coinbase.com/favicon.ico", template)
-        self.assertIn("https://www.xtb.com/favicon.ico", template)
+        shared_logo = Path("templates/components/broker_logo.html").read_text(encoding="utf-8")
+        for official_asset in (
+            "https://deriv.com/favicon.ico",
+            "https://www.oanda.com/favicon.ico",
+            "https://www.interactivebrokers.com/favicon.ico",
+            "https://www.metatrader5.com/favicon.ico",
+            "https://www.binance.com/favicon.ico",
+            "https://www.kraken.com/favicon.ico",
+            "https://www.coinbase.com/favicon.ico",
+            "https://www.xtb.com/favicon.ico",
+        ):
+            with self.subTest(official_asset=official_asset):
+                self.assertIn(official_asset, shared_logo)
         self.assertIn("logoFallback", template)
         self.assertIn("grid-template-areas", template)
