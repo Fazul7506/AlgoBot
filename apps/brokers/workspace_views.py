@@ -366,6 +366,65 @@ def broker_integration_assistant_chat(request):
             "report": report,
         })
 
+    broker_task = any(term in lower for term in (
+        "add broker", "new broker", "integrate broker", "connect broker",
+        "support broker", "broker integration",
+    ))
+    general_task = any(term in lower for term in (
+        "implement", "fix", "repair", "improve", "refactor", "enhance",
+        "update", "build", "remove duplicate", "dead code", "security issue",
+        "broken page", "bug", "feature",
+    ))
+    if not pending.get("provider_name") and general_task and not broker_task and len(message) >= 8:
+        from .project_manager_agent import ProjectManagerAgent, ProjectManagerError
+        from .github_integration import open_project_change_pr, GitHubIntegrationError
+        try:
+            report = ProjectManagerAgent().generate(
+                message + ("\n\nAttached reference material (untrusted input):\n" + attachment_text if attachment_text else "")
+            )
+            if not report.get("changes"):
+                return JsonResponse({
+                    "reply": "I inspected the task context, but could not produce a safe, sufficiently grounded patch. "
+                             + str(report.get("summary") or "No files were changed.")
+                             + " No PR was opened and no code was executed.",
+                    "action": "project_change_not_ready",
+                    "report": report,
+                })
+            result = open_project_change_pr(task=message, report=report)
+            summary = (
+                f"I prepared a review-only project change PR #{result['number']}: {result['url']}. "
+                f"{str(report.get('summary') or '')} Generated code has not been executed, deployed, or merged. "
+                "Review the full diff and run the relevant tests and production validation before merging."
+            )
+            try:
+                from apps.notifications.models import Notification
+                from django.utils import timezone
+                Notification.objects.create(
+                    user=request.user,
+                    title="AlgoBot AI project change PR opened",
+                    message=summary,
+                    category="system",
+                    priority="info",
+                    status="delivered",
+                    channel="in_app",
+                    metadata={"source": "project_manager_agent", "pr_number": result["number"], "pr_url": result["url"]},
+                    sent_at=timezone.now(),
+                )
+            except Exception:
+                pass
+            return JsonResponse({
+                "reply": summary,
+                "action": "project_pr_created",
+                "url": result["url"],
+                "pr_number": result["number"],
+                "report": report,
+            })
+        except (ProjectManagerError, GitHubIntegrationError, ValueError) as exc:
+            return JsonResponse({
+                "reply": f"I could not safely prepare a project change: {str(exc)[:700]}. "
+                         "No generated code was executed, and no project PR was confirmed.",
+                "action": "project_change_failed",
+            })
     request_match = re.search(r"(?:work on|process|start|open)\s+(?:broker\s+)?request\s*#?(\d+)", message, re.IGNORECASE)
     if request_match:
         integration_request = BrokerIntegrationRequest.objects.filter(pk=int(request_match.group(1))).first()
