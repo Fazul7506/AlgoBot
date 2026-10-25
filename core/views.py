@@ -4,11 +4,12 @@ import logging
 from apps.market_data.models import MarketSymbol
 from urllib.parse import urlparse
 from django.conf import settings
-from django.http import Http404,HttpResponse
+from django.http import Http404,HttpResponse,JsonResponse
 from django.shortcuts import render,redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
-from apps.brokers.models import Broker,BrokerAccount
+from django.views.decorators.http import require_POST
+from apps.brokers.models import Broker,BrokerAccount,BrokerIntegrationRequest
 from core.services.oauth_service import DerivOAuthService
 logger=logging.getLogger(__name__)
 def _preferred_deriv_account(user):
@@ -185,6 +186,37 @@ def broker_marketplace_page(request):
         broker.user_accounts = connected_accounts.get(broker.broker_type, [])
     return render(request, 'core/broker_marketplace.html', {'brokers': brokers})
 @login_required
+
+@login_required
+@require_POST
+def submit_broker_marketplace_request(request):
+    """Persist a marketplace request for the broker integration team assistant."""
+    try:
+        payload = json.loads(request.body or b"{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"detail": "Invalid request payload."}, status=400)
+    provider_name = str(payload.get("provider_name") or "").strip()[:120]
+    use_case = str(payload.get("use_case") or "").strip()[:4000]
+    provider_website = str(payload.get("provider_website") or "").strip()[:500]
+    if not provider_name or not use_case:
+        return JsonResponse({"detail": "Provider name and integration use case are required."}, status=400)
+    if provider_website and not provider_website.startswith(("https://", "http://")):
+        return JsonResponse({"detail": "Provider website must start with https:// or http://."}, status=400)
+    integration_request = BrokerIntegrationRequest.objects.create(
+        provider_name=provider_name,
+        provider_website=provider_website,
+        requested_by=request.user,
+        contact_email=(request.user.email or "")[:254],
+        use_case=use_case,
+        desired_capabilities=["marketplace_request"],
+    )
+    return JsonResponse({
+        "ok": True,
+        "request_id": integration_request.pk,
+        "status": integration_request.get_status_display(),
+        "message": "Your request was saved for the AlgoBot broker integration team.",
+    }, status=201)
+
 def strategy_builder_page(request): return render(request,'core/strategy_builder.html')
 @login_required
 def operations_module_page(request,module):
