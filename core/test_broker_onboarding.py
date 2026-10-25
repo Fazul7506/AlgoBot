@@ -153,7 +153,7 @@ class BrokerMarketplaceDirectoryUiTests(TestCase):
         self.assertContains(response, "Request a Broker")
         self.assertContains(response, 'data-broker-category=')
         self.assertContains(response, 'data-broker-no-connected')
-        self.assertContains(response, 'broker_marketplace.css?v=20261020-marketplace2')
+        self.assertContains(response, 'broker_marketplace.css?v=20261025-broker-name-only')
         css = (Path(__file__).resolve().parents[1] / "static" / "css" / "broker_marketplace.css").read_text(encoding="utf-8")
         self.assertIn("@media(max-width:1100px)", css)
         self.assertIn("@media(max-width:760px)", css)

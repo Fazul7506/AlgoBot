@@ -446,7 +446,7 @@ def broker_integration_assistant_chat(request):
                 })
             result = open_project_change_pr(task=message, report=report)
             summary = (
-                f"I prepared a review-only project change PR #{result['number']}: {result['url']}. "
+                f"I implemented the requested repository changes and opened PR #{result['number']}: {result['url']}. "
                 f"{str(report.get('summary') or '')} Generated code has not been executed, deployed, or merged. "
                 "Review the full diff and run the relevant tests and production validation before merging."
             )
@@ -499,7 +499,7 @@ def broker_integration_assistant_chat(request):
         if not saved_requests:
             return JsonResponse({"reply": "There are no saved broker integration requests to work on yet.", "action": "requests"})
         lines = [f"Request #{item.pk}: {item.provider_name} — {item.get_status_display()}" for item in saved_requests]
-        return JsonResponse({"reply": "Saved marketplace requests: " + "; ".join(lines) + ". Tell me to work on request #ID and I will research the provider documentation automatically, then track any review-only draft PR against that request. I will not ask you to paste API documentation.", "action": "requests"})
+        return JsonResponse({"reply": "Saved marketplace requests: " + "; ".join(lines) + ". Tell me to work on request #ID and I will research the provider documentation automatically, implement the integration draft, and track its draft PR. I will not ask you to paste API documentation.", "action": "requests"})
 
 
     if any(term in lower for term in ("check pr", "pull request status", "show prs", "pr status")):

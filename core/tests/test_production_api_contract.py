@@ -47,7 +47,7 @@ class ProductionApiContractTests(SimpleTestCase):
         self.assertIn('TELEGRAM_RETRY_MAX_ATTEMPTS = os.getenv("TELEGRAM_RETRY_MAX_ATTEMPTS", "6")', base)
         example = (ROOT / ".env.example").read_text(encoding="utf-8")
         self.assertNotIn("DERIV_API_TOKEN=", example)
-        self.assertNotIn("OPENAI_API_KEY=", example)
+        self.assertRegex(example, r"(?m)^OPENAI_API_KEY=$")
         self.assertNotIn("TELEGRAM_WEBHOOK_URL=", example)
 
     def test_redis_url_is_the_only_celery_broker_and_backend_configuration(self):

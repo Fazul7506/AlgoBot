@@ -6,7 +6,7 @@ from apps.brokers.project_chat_agent import ProjectChatAgent
 
 class ProjectChatAgentTests(TestCase):
     @patch("apps.brokers.project_chat_agent._inventory", return_value=(["apps/example.py"], [{"path": "apps/example.py", "content": "def hello(): return 'world'"}]))
-    @patch("apps.brokers.project_chat_agent.requests.post")
+    @patch("apps.brokers.ai_provider_utils.requests.request")
     def test_answers_repository_question_with_attachment_context(self, post, inventory):
         response = Mock()
         response.ok = True
@@ -24,7 +24,7 @@ class ProjectChatAgentTests(TestCase):
         inventory.assert_called_once()
 
     @patch("apps.brokers.project_chat_agent._inventory", return_value=([], []))
-    @patch("apps.brokers.project_chat_agent.requests.post")
+    @patch("apps.brokers.ai_provider_utils.requests.request")
     def test_forwards_supported_image_attachments(self, post, inventory):
         response = Mock()
         response.ok = True
@@ -39,3 +39,40 @@ class ProjectChatAgentTests(TestCase):
         self.assertIn("dashboard", answer)
         payload = post.call_args.kwargs["json"]["input"][0]["content"]
         self.assertEqual(payload[1]["type"], "input_image")
+    @patch.dict("os.environ", {"NVIDIA_API_KEY": "nvidia-test-key"})
+    @patch("apps.brokers.project_chat_agent._inventory", return_value=([], []))
+    @patch("apps.brokers.ai_provider_utils.requests.request")
+    def test_falls_back_when_openai_is_unavailable(self, post, inventory):
+        unavailable = Mock()
+        unavailable.ok = False
+        unavailable.status_code = 401
+        fallback = Mock()
+        fallback.ok = True
+        fallback.json.return_value = {"choices": [{"message": {"content": "Fallback answer."}}]}
+        post.side_effect = [unavailable, fallback]
+
+        answer = ProjectChatAgent(api_key="openai-test-key").answer("Help me debug this")
+
+        self.assertEqual(answer, "Fallback answer.")
+        self.assertEqual(post.call_count, 2)
+        self.assertIn("chat/completions", post.call_args.args[1])
+
+
+    @patch.dict("os.environ", {"NVIDIA_API_KEY": "nvidia-secret-marker", "GEMINI_API_KEY": "gemini-test-key", "CEREBRAS_API_KEY": "cerebras-test-key"}, clear=True)
+    @patch("apps.brokers.project_chat_agent._inventory", return_value=([], []))
+    @patch("apps.brokers.ai_provider_utils.requests.request")
+    def test_reports_total_provider_failure_without_exposing_credentials(self, request, inventory):
+        unavailable = Mock()
+        unavailable.ok = False
+        unavailable.status_code = 401
+        request.return_value = unavailable
+
+        with self.assertRaises(Exception) as caught:
+            ProjectChatAgent().answer("Explain this issue")
+
+        message = str(caught.exception)
+        self.assertIn("nvidia: HTTP 401", message)
+        self.assertIn("gemini: HTTP 401", message)
+        self.assertIn("cerebras: HTTP 401", message)
+        self.assertNotIn("nvidia-secret-marker", message)
+        self.assertGreaterEqual(request.call_count, 3)

@@ -196,10 +196,12 @@ def submit_broker_marketplace_request(request):
     except (json.JSONDecodeError, UnicodeDecodeError):
         return JsonResponse({"detail": "Invalid request payload."}, status=400)
     provider_name = str(payload.get("provider_name") or "").strip()[:120]
-    use_case = str(payload.get("use_case") or "").strip()[:4000]
+    # Marketplace requests intentionally collect only the broker name. Keep the
+    # richer fields optional for older clients and staff-created requests.
+    use_case = str(payload.get("use_case") or f"Marketplace request for broker integration: {provider_name}").strip()[:4000]
     provider_website = str(payload.get("provider_website") or "").strip()[:500]
-    if not provider_name or not use_case:
-        return JsonResponse({"detail": "Provider name and integration use case are required."}, status=400)
+    if not provider_name:
+        return JsonResponse({"detail": "Broker name is required."}, status=400)
     if provider_website and not provider_website.startswith(("https://", "http://")):
         return JsonResponse({"detail": "Provider website must start with https:// or http://."}, status=400)
     integration_request = BrokerIntegrationRequest.objects.create(

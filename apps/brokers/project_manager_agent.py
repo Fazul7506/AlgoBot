@@ -14,6 +14,8 @@ from typing import Any
 import requests
 from django.conf import settings
 
+from .ai_provider_utils import configured_providers, request_with_retry, safe_failure
+
 ROOT = Path(__file__).resolve().parents[2]
 MODEL = "gpt-4.1"
 SOURCE_SUFFIXES = {
@@ -169,8 +171,6 @@ class ProjectManagerAgent:
         task = str(task or "").strip()
         if len(task) < 1 or len(task) > 60000:
             raise ProjectManagerError("Describe the task in 1 to 60,000 characters.")
-        if not self.api_key:
-            raise ProjectManagerError("OPENAI_API_KEY is not configured for the project manager.")
         inventory, excerpts = _inventory(task)
         if not inventory:
             raise ProjectManagerError("No eligible source files were found to provide project context.")
@@ -200,39 +200,71 @@ class ProjectManagerAgent:
                 "never_execute_generated_code": True,
             },
         }
-        try:
-            response = requests.post(
-                "https://api.openai.com/v1/responses",
-                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                json={
-                    "model": self.model,
-                    "store": False,
-                    "instructions": instructions,
-                    "input": [{
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": json.dumps(user_input, ensure_ascii=False)},
-                            *[
-                                {"type": "input_image", "image_url": str(item.get("data_url") or ""), "detail": "high"}
-                                for item in (image_attachments or [])
-                                if str(item.get("data_url") or "").startswith((
-                                    "data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,"
-                                ))
+        # Providers are ordered and configured centrally; all keys come from
+        # deployment environment variables or Django settings, never source literals.
+        providers = configured_providers()
+        if self.api_key:
+            openai = next((p for p in providers if p["name"] == "openai"), None)
+            if openai:
+                openai["key"], openai["model"] = self.api_key, self.model
+            else:
+                providers.insert(0, {"name": "openai", "key": self.api_key, "base_url": "https://api.openai.com/v1", "url": "https://api.openai.com/v1/responses", "model": self.model, "api_style": "responses"})
+        if not providers:
+            raise ProjectManagerError("No AI provider is configured. Set OPENAI_API_KEY, NVIDIA_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY, or CEREBRAS_API_KEY in deployment secrets.")
+        failures = []
+        result = None
+        for provider in providers:
+            try:
+                if provider["name"] == "openai":
+                    payload = {
+                        "model": provider["model"], "store": False, "instructions": instructions,
+                        "input": [{
+                            "role": "user",
+                            "content": [
+                                {"type": "input_text", "text": json.dumps(user_input, ensure_ascii=False)},
+                                *[
+                                    {"type": "input_image", "image_url": str(item.get("data_url") or ""), "detail": "high"}
+                                    for item in (image_attachments or [])
+                                    if str(item.get("data_url") or "").startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,"))
+                                ],
                             ],
+                        }],
+                        "text": {"format": {"type": "json_schema", "name": "algobot_project_change", "strict": True, "schema": OUTPUT_SCHEMA}},
+                    }
+                else:
+                    user_content = [{"type": "text", "text": json.dumps(user_input, ensure_ascii=False)}]
+                    for item in (image_attachments or []):
+                        data_url = str(item.get("data_url") or "")
+                        if data_url.startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,")):
+                            user_content.append({"type": "image_url", "image_url": {"url": data_url, "detail": "high"}})
+                    payload = {
+                        "model": provider["model"],
+                        "messages": [
+                            {"role": "system", "content": instructions + "\nReturn only a JSON object with summary, rationale, validation_plan, and changes fields."},
+                            {"role": "user", "content": user_content if len(user_content) > 1 else json.dumps(user_input, ensure_ascii=False)},
                         ],
-                    }],
-                    "text": {"format": {"type": "json_schema", "name": "algobot_project_change", "strict": True, "schema": OUTPUT_SCHEMA}},
-                },
-                timeout=self.timeout,
-            )
-        except requests.RequestException as exc:
-            raise ProjectManagerError("The AI project manager could not reach its configured model provider.") from exc
-        if not response.ok:
-            raise ProjectManagerError(f"AI project planning failed with HTTP {response.status_code}.")
-        try:
-            result = json.loads(_extract_text(response.json()))
-        except (ValueError, TypeError) as exc:
-            raise ProjectManagerError("The AI provider returned invalid structured project output.") from exc
+                        "response_format": {"type": "json_object"},
+                        "temperature": 0.1,
+                    }
+                response = request_with_retry(
+                    "POST", provider["url"],
+                    headers={"Authorization": f"Bearer {provider['key']}", "Content-Type": "application/json"},
+                    json=payload, timeout=self.timeout,
+                )
+                if not response.ok:
+                    failures.append(safe_failure(provider["name"], response))
+                    continue
+                body = response.json()
+                output = _extract_text(body) if provider["name"] == "openai" else body["choices"][0]["message"]["content"]
+                candidate = json.loads(output)
+                if isinstance(candidate, dict):
+                    result = candidate
+                    break
+                failures.append(f"{provider['name']}: response was not a JSON object")
+            except (requests.RequestException, ValueError, TypeError, KeyError, IndexError) as exc:
+                failures.append(safe_failure(provider["name"], error=exc))
+        if result is None:
+            raise ProjectManagerError("All configured AI providers failed or exhausted quota (" + "; ".join(failures) + "). Configure a working provider key, model, and quota.")
         changes = result.get("changes")
         if not isinstance(changes, list):
             raise ProjectManagerError("The AI provider returned a malformed change set.")
