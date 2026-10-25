@@ -19,11 +19,11 @@ MODEL = "gpt-4.1"
 SOURCE_SUFFIXES = {".py", ".html", ".js", ".jsx", ".ts", ".tsx", ".css", ".scss", ".md", ".json", ".yml", ".yaml", ".toml"}
 EXCLUDED_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", "staticfiles", "media", "dist", "build", "coverage"}
 DENIED_PATH_PARTS = {
-    ".github", "migrations", "secrets", "credentials", "private", "vendor", "node_modules",
+    ".github", "migrations", "secrets", "credentials", "private", "keys", "tokens", "passwords", "vendor", "node_modules",
 }
 DENIED_FILENAMES = {
     "settings.py", "manage.py", "wsgi.py", "asgi.py", "requirements.txt", "pyproject.toml",
-    "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock",
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "secrets.json", "credentials.json",
 }
 SECRET_PATTERNS = (
     re.compile(r"(?i)(api[_-]?key|secret|password|access[_-]?token)\s*[:=]\s*['\"][^'\"]{12,}['\"]"),
