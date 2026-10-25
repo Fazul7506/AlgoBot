@@ -241,7 +241,7 @@ class OrderManagementSystem:
         if requested and requested != verified:
             raise BrokerRoutingError(f'Execution environment mismatch: selected account is {verified}, request asked for {requested}.')
         if verified == 'real':
-            if not bool(getattr(account.broker, 'supports_live', False)):
+            if not bool(getattr(account.broker, 'is_live_trading_supported', False)):
                 raise BrokerRoutingError('The selected broker account is real-money but this broker is not live-trading capable.')
             if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)):
                 raise BrokerRoutingError('Live-money trading is disabled by platform configuration.')
@@ -355,7 +355,7 @@ class ExecutionEngine:
         if requested_environment and requested_environment != verified_environment:
             raise BrokerRoutingError(f'Execution environment mismatch: selected account is {verified_environment}, request asked for {requested_environment}.')
         if verified_environment == 'real':
-            if not bool(getattr(account.broker, 'supports_live', False)):
+            if not bool(getattr(account.broker, 'is_live_trading_supported', False)):
                 raise BrokerRoutingError('The selected broker account is real-money but this broker is not live-trading capable.')
             if not bool(getattr(settings, 'ALLOW_LIVE_TRADING', False)):
                 raise BrokerRoutingError('Live-money trading is disabled by platform configuration.')
