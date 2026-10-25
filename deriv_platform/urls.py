@@ -43,7 +43,7 @@ from core.settings_api import account_settings_api
 from core.views_oauth import disconnect_deriv, refresh_deriv_token, deriv_account_status, reconnect_deriv
 from apps.developer import views as developer_views
 from apps.notifications.channel_views import notification_channels_page
-from apps.brokers.workspace_views import broker_integration_management_page
+from apps.brokers.workspace_views import broker_integration_management_page, broker_integration_assistant_chat
 
 from core.views_profile import profile_page, profile_picture
 
@@ -121,6 +121,7 @@ urlpatterns = [
     path("operations/security/", login_required(lambda request: operations_center(request, "security")), name="security_center"),
     path("operations/candle-backfill/", market_data_views.initial_candle_backfill, name="initial_candle_backfill"),
     path("operations/broker-integrations/", broker_integration_management_page, name="broker_integration_management"),
+    path("operations/broker-integrations/assistant/", broker_integration_assistant_chat, name="broker_integration_assistant_chat"),
     path("operations/candle-backfill/control/", market_data_views.candle_backfill_control, name="candle_backfill_control"),
     path("operations/<str:module>/", login_required(operations_module_page), name="operations_module"),
     path("brokers/connect/", broker_connect_page, name="broker_connect_page"),
