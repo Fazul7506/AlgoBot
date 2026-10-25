@@ -193,7 +193,7 @@
      const initials=label.split(/\\s+/).filter(Boolean).slice(0,2).map(part=>part[0]).join("").toUpperCase()||"BR";
      const fallback=document.createElement("span");fallback.className="broker-logo-fallback";fallback.setAttribute("role","img");fallback.setAttribute("aria-label",label+" logo unavailable; text mark shown");fallback.textContent=initials;
      img.replaceWith(fallback);
-   },{once:true});
+   });
  });
  document.addEventListener("submit",async function(event){
    const form=event.target.closest("[data-broker-disconnect]");if(!form||!root.contains(form))return;
