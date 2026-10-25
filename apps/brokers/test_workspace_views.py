@@ -48,7 +48,7 @@ class BrokerIntegrationManagementPageTests(TestCase):
         self.assertContains(response, "Validation Pipeline")
         self.assertContains(response, "AlgoBot Assistant")
         self.assertContains(response, 'id="bi-assistant-files"')
-        self.assertContains(response, 'components/broker_logo.html')
+        self.assertContains(response, "bi-logo--provider")
         self.assertContains(response, "Live setup required")
         self.assertNotContains(response, "No live")
         self.assertEqual(response.context["total_brokers"], 1)
