@@ -38,5 +38,5 @@ class BrokerIntegrationManagementReferenceLayoutTests(SimpleTestCase):
         self.assertIn("https://www.kraken.com/favicon.ico", template)
         self.assertIn("https://www.coinbase.com/favicon.ico", template)
         self.assertIn("https://www.xtb.com/favicon.ico", template)
-        self.assertIn("data-logo-fallback", template)
+        self.assertIn("logoFallback", template)
         self.assertIn("grid-template-areas", template)
