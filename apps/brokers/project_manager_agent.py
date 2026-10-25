@@ -131,21 +131,17 @@ def _inventory(task: str = "") -> tuple[list[str], list[dict[str, str]]]:
                 score += sum(1 for word in words if word in lowered)
             ranked.append((score, {"path": relative, "content": source[:5000]}))
             count += 1
-            if count >= 3000:
-                break
-        if count >= 3000:
-            break
     ranked.sort(key=lambda item: (item[0], item[1]["path"]), reverse=True)
     selected = []
     total_chars = 0
     for _, excerpt in ranked:
-        if len(selected) >= 30:
+        if len(selected) >= 60:
             break
         content = excerpt["content"]
         allowance = 18_000 if excerpt["path"] == "docs/ALGOBOT_AI_PROJECT_BLUEPRINT.md" else 5000
         content = content[:allowance]
-        if total_chars + len(content) > 125_000:
-            content = content[:max(0, 125_000 - total_chars)]
+        if total_chars + len(content) > 250_000:
+            content = content[:max(0, 250_000 - total_chars)]
         if not content:
             continue
         selected.append({"path": excerpt["path"], "content": content})
@@ -200,7 +196,7 @@ class ProjectManagerAgent:
             "source_inventory": inventory,
             "source_excerpts": excerpts,
             "change_limits": {
-                "max_files": 20,
+                "max_files": "limited by model context and output capacity, not an arbitrary file-count cap",
                 "max_file_chars": 200000,
                 "new_files_allowed_in_any_non-sensitive_repository_path": True,
                 "never_execute_generated_code": True,
@@ -240,8 +236,8 @@ class ProjectManagerAgent:
         except (ValueError, TypeError) as exc:
             raise ProjectManagerError("The AI provider returned invalid structured project output.") from exc
         changes = result.get("changes")
-        if not isinstance(changes, list) or len(changes) > 20:
-            raise ProjectManagerError("The generated change set exceeded the 20-file request limit.")
+        if not isinstance(changes, list):
+            raise ProjectManagerError("The AI provider returned a malformed change set.")
         known = set(inventory)
         seen = set()
         validated = []
