@@ -42,3 +42,13 @@ class BrokerOfficialDocumentationResearchTests(SimpleTestCase):
     def test_unknown_provider_does_not_fetch_a_user_controlled_url(self, get):
         self.assertEqual(_fetch_official_broker_documentation("https://attacker.invalid"), "")
         get.assert_not_called()
+
+    @patch("requests.get")
+    def test_research_rejects_redirect_outside_official_host(self, get):
+        response = Mock()
+        response.ok = True
+        response.content = b"API endpoint authentication authorization REST API documentation " * 4
+        response.text = response.content.decode()
+        response.url = "https://attacker.invalid/copied-docs"
+        get.return_value = response
+        self.assertEqual(_fetch_official_broker_documentation("OANDA"), "")
