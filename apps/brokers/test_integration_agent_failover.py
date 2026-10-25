@@ -79,7 +79,7 @@ class BrokerIntegrationAgentFailoverTests(SimpleTestCase):
         self.assertNotIn("openai-test-key", str(raised.exception))
 
     def test_malformed_provider_response_falls_through_without_leaking_body(self):
-        with patch("apps.brokers.integration_agent.requests.post") as post:
+        with patch("apps.brokers.ai_provider_utils.requests.request") as post:
             post.side_effect = [
                 self.response(200, {"output_text": "not-json-secret"}),
                 self.response(503, text="private error body"),
@@ -102,7 +102,7 @@ class BrokerIntegrationAgentFailoverTests(SimpleTestCase):
     def test_missing_all_provider_keys_reports_configuration_help(self):
         with patch.dict("os.environ", {}, clear=True):
             with self.assertRaisesRegex(
-                BrokerIntegrationAgentError, "no fallback AI provider is available"
+                BrokerIntegrationAgentError, "No AI provider is configured"
             ):
                 BrokerIntegrationAgent().generate(
                     broker_slug="test_broker",
