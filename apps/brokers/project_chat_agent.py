@@ -8,6 +8,7 @@ import requests
 from django.conf import settings
 
 from .project_manager_agent import MODEL, ProjectManagerError, _extract_text, _inventory
+from .ai_provider_utils import configured_providers, request_with_retry, safe_failure
 
 
 class ProjectChatAgent:
@@ -49,26 +50,17 @@ class ProjectChatAgent:
             data_url = str(item.get("data_url") or "")
             if data_url.startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,")):
                 content.append({"type": "input_image", "image_url": data_url, "detail": "high"})
-        # Prefer OpenAI, then fail over to any explicitly configured compatible
-        # provider. Credentials remain in deployment secrets, never in prompts.
-        providers = []
+        # Credentials come from deployment environment/settings. Injected OpenAI
+        # keys remain supported for deterministic tests and callers.
+        providers = configured_providers()
         if self.api_key:
-            providers.append({"name": "openai", "key": self.api_key, "url": "https://api.openai.com/v1/responses", "model": self.model})
-        fallback_specs = (
-            ("nvidia", "NVIDIA_API_KEY", "NVIDIA_BASE_URL", "NVIDIA_MODEL", "https://integrate.api.nvidia.com/v1", "meta/llama-3.3-70b-instruct"),
-            ("openrouter", "OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "OPENROUTER_MODEL", "https://openrouter.ai/api/v1", "openai/gpt-oss-20b"),
-            ("groq", "GROQ_API_KEY", "GROQ_BASE_URL", "GROQ_MODEL", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
-        )
-        for name, key_name, base_name, model_name, default_base, default_model in fallback_specs:
-            key = os.environ.get(key_name) or getattr(settings, key_name, "")
-            if key:
-                providers.append({
-                    "name": name, "key": key,
-                    "url": (os.environ.get(base_name) or getattr(settings, base_name, "") or default_base).rstrip("/") + "/chat/completions",
-                    "model": os.environ.get(model_name) or getattr(settings, model_name, "") or default_model,
-                })
+            openai = next((p for p in providers if p["name"] == "openai"), None)
+            if openai:
+                openai["key"], openai["model"] = self.api_key, self.model
+            else:
+                providers.insert(0, {"name": "openai", "key": self.api_key, "base_url": "https://api.openai.com/v1", "url": "https://api.openai.com/v1/responses", "model": self.model, "api_style": "responses"})
         if not providers:
-            raise ProjectManagerError("No AI provider is configured. Set OPENAI_API_KEY, NVIDIA_API_KEY, OPENROUTER_API_KEY, or GROQ_API_KEY in deployment secrets.")
+            raise ProjectManagerError("No AI provider is configured. Set OPENAI_API_KEY, NVIDIA_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY, or CEREBRAS_API_KEY in deployment secrets.")
         failures = []
         for provider in providers:
             try:
@@ -90,19 +82,19 @@ class ProjectChatAgent:
                             {"role": "user", "content": user_content if len(user_content) > 1 else json.dumps(user_input, ensure_ascii=False)},
                         ],
                     }
-                response = requests.post(
-                    provider["url"],
+                response = request_with_retry(
+                    "POST", provider["url"],
                     headers={"Authorization": f"Bearer {provider['key']}", "Content-Type": "application/json"},
                     json=payload, timeout=self.timeout,
                 )
                 if not response.ok:
-                    failures.append(f"{provider['name']}: HTTP {response.status_code}")
+                    failures.append(safe_failure(provider["name"], response))
                     continue
                 body = response.json()
                 answer = _extract_text(body) if provider["name"] == "openai" else str(body["choices"][0]["message"]["content"])
                 if answer.strip():
                     return answer.strip()
                 failures.append(f"{provider['name']}: empty response")
-            except (requests.RequestException, ValueError, TypeError, KeyError, IndexError):
-                failures.append(f"{provider['name']}: unavailable or invalid response")
+            except (requests.RequestException, ValueError, TypeError, KeyError, IndexError) as exc:
+                failures.append(safe_failure(provider["name"], error=exc))
         raise ProjectManagerError("All configured AI providers failed or exhausted quota (" + "; ".join(failures) + "). Configure a working provider key, model, and quota.")
