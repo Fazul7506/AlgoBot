@@ -22,10 +22,11 @@
   const strategyCategory = s => {const t=String(s.category||s.strategy_type||s.type||'').toLowerCase(),name=String(s.name||s.slug||'').toLowerCase(),tags=Array.isArray(s.tags)?s.tags.join(' ').toLowerCase():'';if(s.ai_powered||/ai|momentum|sentiment|machine/.test(`${t} ${name} ${tags}`))return 'ai';if(/mean|reversion|rsi/.test(`${t} ${name} ${tags}`))return 'mean';if(/scalp/.test(`${t} ${name} ${tags}`))return 'scalping';if(/trend|breakout/.test(`${t} ${name} ${tags}`))return 'trend';return 'other';};
 
   function counts(data, signals) {
-    $('[data-s-total]').textContent = strategies.length;
-    $('[data-s-enabled]').textContent = Number.isFinite(Number(data?.configured_count)) ? Number(data.configured_count) : strategies.filter(s => s.configured).length;
-    $('[data-s-running]').textContent = Number.isFinite(Number(data?.running_count)) ? Number(data.running_count) : strategies.filter(s => s.running).length;
-    $('[data-s-signals]').textContent = signals.length;
+    const total=$('[data-s-total]'),enabled=$('[data-s-enabled]'),running=$('[data-s-running]'),signalCount=$('[data-s-signals]');
+    if(total)total.textContent = strategies.length;
+    if(enabled)enabled.textContent = Number.isFinite(Number(data?.configured_count)) ? Number(data.configured_count) : strategies.filter(s => s.configured).length;
+    if(running)running.textContent = Number.isFinite(Number(data?.running_count)) ? Number(data.running_count) : strategies.filter(s => s.running).length;
+    if(signalCount)signalCount.textContent = signals.length;
   }
 
   function renderList() {
