@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" width="200" height="48" role="img" aria-label="Brand Logo">
+  <rect width="200" height="48" fill="none"/>
+  <!-- Replace this file with your brand logo (light theme) -->
+  <!-- Recommended: 200x48px, transparent background -->
+  <circle cx="24" cy="24" r="18" fill="#118e1c"/>
+  <text x="24" y="29" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">TP</text>
+  <text x="52" y="32" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#181c25">Trading Platform</text>
+</svg>
