@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Broker Integrations | AlgoBot{% endblock %}
 {% block mobile_title %}Broker Integrations{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/broker_marketplace.css' %}?v=20261020-marketplace2">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/broker_marketplace.css' %}?v=20261025-broker-request-ui">{% endblock %}
 {% block content %}
 <main class="broker-market" data-broker-marketplace>
   <header class="broker-hero">
@@ -68,7 +68,19 @@
         <div class="broker-empty"><span class="material-symbols-rounded" aria-hidden="true">hub</span><h2>No broker integrations registered</h2><p>An administrator must register a broker and configure its supported authorization flow before it can be connected.</p></div>
         {% endfor %}
         <article class="broker-card broker-request-card">
-          <div class="broker-request-icon material-symbols-rounded" aria-hidden="true">add</div><h2>Request a Broker</h2><p>Don't see the broker you need? Tell us which integration would help your workflow.</p><button class="broker-btn" type="button" data-request-broker>Request Broker</button><p class="broker-request-feedback" data-request-broker-feedback role="status" aria-live="polite"></p>
+          <div class="broker-request-icon material-symbols-rounded" aria-hidden="true">add</div><h2>Request a Broker</h2><p>Don't see the broker you need? Send the team a request from this page.</p>
+          <button class="broker-btn" type="button" data-request-broker aria-expanded="false" aria-controls="broker-request-form">Request Broker</button>
+          <form class="broker-request-form" id="broker-request-form" data-broker-request-form hidden>
+            {% csrf_token %}
+            <label for="broker-request-name">Broker name <span aria-hidden="true">*</span></label>
+            <input id="broker-request-name" name="provider_name" maxlength="120" required autocomplete="organization" placeholder="e.g. Interactive Brokers">
+            <label for="broker-request-use-case">What do you need it for? <span aria-hidden="true">*</span></label>
+            <textarea id="broker-request-use-case" name="use_case" maxlength="2000" required rows="3" placeholder="Markets, account connection, or capabilities you need"></textarea>
+            <label for="broker-request-website">Official website <span>(optional)</span></label>
+            <input id="broker-request-website" name="provider_website" type="url" maxlength="300" placeholder="https://example.com" inputmode="url">
+            <button class="broker-btn primary" type="submit" data-broker-request-submit>Submit request</button>
+          </form>
+          <p class="broker-request-feedback" data-request-broker-feedback role="status" aria-live="polite"></p>
         </article>
       </div>
       <div class="broker-no-results" data-broker-no-results hidden><h2>No matching brokers</h2><p>Try another search term or category.</p></div>
@@ -142,22 +154,46 @@
  categoryButtons.forEach(button=>button.addEventListener("click",()=>{activeCategory=button.dataset.brokerFilter;applyFilter();}));
  statusButtons.forEach(button=>button.addEventListener("click",()=>{activeStatus=button.dataset.brokerStatusFilter;applyFilter();}));
  applyFilter();
- const requestButton=root.querySelector("[data-request-broker]"),requestFeedback=root.querySelector("[data-request-broker-feedback]");
- if(requestButton)requestButton.addEventListener("click",async function(){
-   const provider=window.prompt("Which broker or provider should AlgoBot integrate?");
-   if(!provider||!provider.trim())return;
-   const useCase=window.prompt("What markets, account connection, or capabilities do you need?");
-   if(!useCase||!useCase.trim())return;
-   const website=window.prompt("Official provider website (optional, include https://):")||"";
-   const csrf=(document.cookie.split("; ").find(row=>row.startsWith("csrftoken="))||"").split("=").slice(1).join("=");
-   requestButton.disabled=true;requestFeedback.textContent="Submitting your broker request…";
-   try{
-     const response=await fetch("/api/broker-integration-requests/",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":decodeURIComponent(csrf),"Accept":"application/json"},body:JSON.stringify({provider_name:provider.trim(),use_case:useCase.trim(),provider_website:website.trim()})});
-     const data=await response.json().catch(()=>({}));
-     if(!response.ok)throw new Error(data.detail||"Unable to save the broker request.");
-     requestFeedback.textContent="Request #"+data.request_id+" saved ("+data.status+"). It is now available in Broker Integration Management for the AlgoBot team assistant to triage.";
-     requestButton.textContent="Request Submitted";
-   }catch(error){requestFeedback.textContent=error.message||"Unable to save the broker request.";requestButton.disabled=false;}
+ const requestButton=root.querySelector("[data-request-broker]"),requestForm=root.querySelector("[data-broker-request-form]"),requestFeedback=root.querySelector("[data-request-broker-feedback]"),requestName=root.querySelector("#broker-request-name");
+ if(requestButton&&requestForm){
+   requestButton.addEventListener("click",function(){
+     const open=requestForm.hidden;
+     requestForm.hidden=!open;requestButton.setAttribute("aria-expanded",String(open));
+     requestButton.textContent=open?"Cancel request":"Request Broker";
+     if(open)requestName.focus();
+   });
+   requestForm.addEventListener("submit",async function(event){
+     event.preventDefault();
+     if(!requestForm.reportValidity())return;
+     const submitButton=requestForm.querySelector("[data-broker-request-submit]");
+     const formData=new FormData(requestForm);
+     const csrf=formData.get("csrfmiddlewaretoken")||"";
+     const provider=String(formData.get("provider_name")||"").trim();
+     const useCase=String(formData.get("use_case")||"").trim();
+     const website=String(formData.get("provider_website")||"").trim();
+     if(!provider||!useCase){requestFeedback.textContent="Enter the broker name and explain what you need.";return;}
+     if(website){try{const parsed=new URL(website);if(parsed.protocol!=="https:"&&parsed.protocol!=="http:")throw new Error();}catch(_){requestFeedback.textContent="Enter a valid official website URL, including https://.";return;}}
+     submitButton.disabled=true;requestButton.disabled=true;submitButton.textContent="Submitting…";requestFeedback.textContent="Submitting your broker request securely…";
+     try{
+       const response=await fetch("/api/broker-integration-requests/",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrf,"Accept":"application/json"},body:JSON.stringify({provider_name:provider,use_case:useCase,provider_website:website})});
+       const data=await response.json().catch(()=>({}));
+       if(!response.ok)throw new Error(data.detail||data.message||"Unable to save the broker request.");
+       requestFeedback.textContent="Request #"+data.request_id+" submitted. The AlgoBot team can now review your broker request.";
+       requestFeedback.classList.add("is-success");requestForm.reset();requestForm.hidden=true;requestButton.setAttribute("aria-expanded","false");requestButton.textContent="Request Submitted";requestButton.disabled=true;
+     }catch(error){requestFeedback.textContent=error.message||"Unable to save the broker request. Please try again.";requestFeedback.classList.remove("is-success");}
+     finally{submitButton.disabled=false;submitButton.textContent="Submit request";if(!requestButton.disabled)requestButton.disabled=false;}
+   });
+ }
+ root.querySelectorAll(".broker-logo img").forEach(function(img){
+   img.addEventListener("error",function(){
+     if(img.dataset.fallbackTried!=="true"&&img.dataset.fallbackSrc){img.dataset.fallbackTried="true";img.src=img.dataset.fallbackSrc;return;}
+     const holder=img.closest(".broker-logo");if(!holder||holder.dataset.logoFallback==="true")return;
+     holder.dataset.logoFallback="true";
+     const label=(img.dataset.providerName||img.alt||"Broker").trim();
+     const initials=label.split(/\\s+/).filter(Boolean).slice(0,2).map(part=>part[0]).join("").toUpperCase()||"BR";
+     const fallback=document.createElement("span");fallback.className="broker-logo-fallback";fallback.setAttribute("role","img");fallback.setAttribute("aria-label",label+" logo unavailable; text mark shown");fallback.textContent=initials;
+     img.replaceWith(fallback);
+   },{once:true});
  });
  document.addEventListener("submit",async function(event){
    const form=event.target.closest("[data-broker-disconnect]");if(!form||!root.contains(form))return;
