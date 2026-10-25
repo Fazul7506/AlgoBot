@@ -95,7 +95,7 @@ def broker_integration_management_page(request):
     latest_validation = (latest_run.validation_results or {}) if latest_run else {}
     static_validation = latest_validation.get("static_validation", {})
     pipeline_steps = [
-        ("Code Generation", "Draft generator " + ("completed for latest run" if latest_run and latest_run.status != "failed" else "awaiting a successful run")),
+        ("Code Generation", "Completed for latest run" if latest_run and latest_run.status in {"pr_open", "validating", "merged"} else ("Failed for latest run" if latest_run and latest_run.status == "failed" else "Awaiting a successful run")),
         ("Static Analysis", "Passed for latest draft" if static_validation.get("passed") is True else "No passing static validation recorded"),
         ("Unit Tests", "Use the linked pull-request CI checks; not inferred from draft creation"),
         ("Sandbox Validation", "Provider sandbox validation requires an explicit recorded result"),
@@ -107,7 +107,7 @@ def broker_integration_management_page(request):
         "brokers": brokers, "total_brokers": len(brokers),
         "providers": sorted({broker.broker_type for broker in brokers}),
         "total_requests": BrokerIntegrationRequest.objects.count(),
-        "open_prs": sum(1 for run in runs if run.pull_request_number and run.status not in {"merged", "failed"}),
+        "open_prs": BrokerIntegrationRun.objects.filter(pull_request_number__isnull=False).exclude(status__in=["merged", "failed"]).count(),
         "completed_requests": BrokerIntegrationRequest.objects.filter(status="completed").count(),
         "in_progress_requests": BrokerIntegrationRequest.objects.filter(status="in_progress").count(),
         "pipeline_steps": pipeline_steps,
