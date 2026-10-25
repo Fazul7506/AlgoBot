@@ -341,7 +341,7 @@ def broker_integration_assistant_chat(request):
     lower = message.lower()
     if any(term in lower for term in (
         "audit codebase", "audit project", "project health", "codebase health",
-        "scan the code", "repository audit", "review whole project",
+        "scan the code", "repository audit", "review whole project", "run project audit", "audit repository",
     )):
         from .project_audit import run_project_audit
         from django.utils import timezone
