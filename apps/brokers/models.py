@@ -35,9 +35,10 @@ class Broker(models.Model):
 
     @property
     def live_capability_status(self):
+        from .constants import PRODUCTION_BROKERS
         if self.is_live_trading_supported:
             return "production_supported"
-        if self.broker_type not in __import__("apps.brokers.constants", fromlist=["PRODUCTION_BROKERS"]).PRODUCTION_BROKERS:
+        if self.broker_type not in PRODUCTION_BROKERS:
             return "setup_required"
         return "disabled"
 
