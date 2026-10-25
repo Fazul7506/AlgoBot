@@ -18,7 +18,7 @@ TEXT_EXTENSIONS = {
     ".xml", ".sql", ".sh", ".ini", ".cfg", ".conf", ".rtf",
 }
 DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".xlsx", ".odt", ".ods", ".epub"}
-AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mpga", ".mpeg", ".webm"}
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mpga", ".mpeg"}
 IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 
