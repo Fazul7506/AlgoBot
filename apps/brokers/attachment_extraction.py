@@ -81,8 +81,8 @@ def extract_document_text(extension: str, data: bytes) -> str:
                     raw = compound.openstream(stream_path).read(MAX_DECODED_BYTES + 1)
                     if len(raw) > MAX_DECODED_BYTES:
                         continue
-                    ascii_runs = re.findall(rb"[\\x20-\\x7e]{4,}", raw)
-                    utf16_runs = re.findall(rb"(?:[\\x20-\\x7e]\\x00){4,}", raw)
+                    ascii_runs = re.findall(rb"[\x20-\x7e]{4,}", raw)
+                    utf16_runs = re.findall(rb"(?:[\x20-\x7e]\x00){4,}", raw)
                     for run in ascii_runs:
                         chunks.append(run.decode("latin-1", errors="replace"))
                     for run in utf16_runs:
@@ -93,7 +93,7 @@ def extract_document_text(extension: str, data: bytes) -> str:
             raise
         except Exception as exc:
             raise AttachmentExtractionError("The legacy Office file could not be safely inspected.") from exc
-        result = _clean_text("\\n".join(chunks))
+        result = _clean_text("\n".join(chunks))
         if not result.strip():
             raise AttachmentExtractionError(
                 "No readable text could be recovered from this legacy Office file; convert it to DOCX/XLSX/PPTX for full extraction."
@@ -132,7 +132,7 @@ def extract_document_text(extension: str, data: bytes) -> str:
             raise AttachmentExtractionError("The ZIP archive is invalid or could not be read.") from exc
         if not chunks:
             raise AttachmentExtractionError("No readable text or supported documents were found in the ZIP archive.")
-        return _clean_text("\\n".join(chunks))
+        return _clean_text("\n".join(chunks))
     if extension == ".pdf":
         try:
             from pypdf import PdfReader
