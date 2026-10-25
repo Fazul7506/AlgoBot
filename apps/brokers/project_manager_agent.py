@@ -169,8 +169,6 @@ class ProjectManagerAgent:
         task = str(task or "").strip()
         if len(task) < 1 or len(task) > 60000:
             raise ProjectManagerError("Describe the task in 1 to 60,000 characters.")
-        if not self.api_key:
-            raise ProjectManagerError("OPENAI_API_KEY is not configured for the project manager.")
         inventory, excerpts = _inventory(task)
         if not inventory:
             raise ProjectManagerError("No eligible source files were found to provide project context.")
@@ -200,39 +198,80 @@ class ProjectManagerAgent:
                 "never_execute_generated_code": True,
             },
         }
-        try:
-            response = requests.post(
-                "https://api.openai.com/v1/responses",
-                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                json={
-                    "model": self.model,
-                    "store": False,
-                    "instructions": instructions,
-                    "input": [{
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": json.dumps(user_input, ensure_ascii=False)},
-                            *[
-                                {"type": "input_image", "image_url": str(item.get("data_url") or ""), "detail": "high"}
-                                for item in (image_attachments or [])
-                                if str(item.get("data_url") or "").startswith((
-                                    "data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,"
-                                ))
+        # Provider failover means a depleted OpenAI quota does not disable the
+        # assistant when another approved provider is configured.
+        providers = []
+        if self.api_key:
+            providers.append({"name": "openai", "key": self.api_key, "url": "https://api.openai.com/v1/responses", "model": self.model})
+        fallback_specs = (
+            ("nvidia", "NVIDIA_API_KEY", "NVIDIA_BASE_URL", "NVIDIA_MODEL", "https://integrate.api.nvidia.com/v1", "meta/llama-3.3-70b-instruct"),
+            ("openrouter", "OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "OPENROUTER_MODEL", "https://openrouter.ai/api/v1", "openai/gpt-oss-20b"),
+            ("groq", "GROQ_API_KEY", "GROQ_BASE_URL", "GROQ_MODEL", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
+        )
+        for name, key_name, base_name, model_name, default_base, default_model in fallback_specs:
+            key = os.environ.get(key_name) or getattr(settings, key_name, "")
+            if key:
+                providers.append({
+                    "name": name, "key": key,
+                    "url": (os.environ.get(base_name) or getattr(settings, base_name, "") or default_base).rstrip("/") + "/chat/completions",
+                    "model": os.environ.get(model_name) or getattr(settings, model_name, "") or default_model,
+                })
+        if not providers:
+            raise ProjectManagerError("No AI provider is configured. Set OPENAI_API_KEY, NVIDIA_API_KEY, OPENROUTER_API_KEY, or GROQ_API_KEY in deployment secrets.")
+        failures = []
+        result = None
+        for provider in providers:
+            try:
+                if provider["name"] == "openai":
+                    payload = {
+                        "model": provider["model"], "store": False, "instructions": instructions,
+                        "input": [{
+                            "role": "user",
+                            "content": [
+                                {"type": "input_text", "text": json.dumps(user_input, ensure_ascii=False)},
+                                *[
+                                    {"type": "input_image", "image_url": str(item.get("data_url") or ""), "detail": "high"}
+                                    for item in (image_attachments or [])
+                                    if str(item.get("data_url") or "").startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,"))
+                                ],
                             ],
+                        }],
+                        "text": {"format": {"type": "json_schema", "name": "algobot_project_change", "strict": True, "schema": OUTPUT_SCHEMA}},
+                    }
+                else:
+                    user_content = [{"type": "text", "text": json.dumps(user_input, ensure_ascii=False)}]
+                    for item in (image_attachments or []):
+                        data_url = str(item.get("data_url") or "")
+                        if data_url.startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,")):
+                            user_content.append({"type": "image_url", "image_url": {"url": data_url, "detail": "high"}})
+                    payload = {
+                        "model": provider["model"],
+                        "messages": [
+                            {"role": "system", "content": instructions + "\nReturn only a JSON object with summary, rationale, validation_plan, and changes fields."},
+                            {"role": "user", "content": user_content if len(user_content) > 1 else json.dumps(user_input, ensure_ascii=False)},
                         ],
-                    }],
-                    "text": {"format": {"type": "json_schema", "name": "algobot_project_change", "strict": True, "schema": OUTPUT_SCHEMA}},
-                },
-                timeout=self.timeout,
-            )
-        except requests.RequestException as exc:
-            raise ProjectManagerError("The AI project manager could not reach its configured model provider.") from exc
-        if not response.ok:
-            raise ProjectManagerError(f"AI project planning failed with HTTP {response.status_code}.")
-        try:
-            result = json.loads(_extract_text(response.json()))
-        except (ValueError, TypeError) as exc:
-            raise ProjectManagerError("The AI provider returned invalid structured project output.") from exc
+                        "response_format": {"type": "json_object"},
+                        "temperature": 0.1,
+                    }
+                response = requests.post(
+                    provider["url"],
+                    headers={"Authorization": f"Bearer {provider['key']}", "Content-Type": "application/json"},
+                    json=payload, timeout=self.timeout,
+                )
+                if not response.ok:
+                    failures.append(f"{provider['name']}: HTTP {response.status_code}")
+                    continue
+                body = response.json()
+                output = _extract_text(body) if provider["name"] == "openai" else body["choices"][0]["message"]["content"]
+                candidate = json.loads(output)
+                if isinstance(candidate, dict):
+                    result = candidate
+                    break
+                failures.append(f"{provider['name']}: response was not a JSON object")
+            except (requests.RequestException, ValueError, TypeError, KeyError, IndexError):
+                failures.append(f"{provider['name']}: unavailable or invalid response")
+        if result is None:
+            raise ProjectManagerError("All configured AI providers failed or exhausted quota (" + "; ".join(failures) + "). Configure a working provider key, model, and quota.")
         changes = result.get("changes")
         if not isinstance(changes, list):
             raise ProjectManagerError("The AI provider returned a malformed change set.")
