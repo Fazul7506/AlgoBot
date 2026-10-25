@@ -68,7 +68,14 @@ def _fetch_official_broker_documentation(provider_name):
         )
         if not response.ok or len(response.content) > 1_000_000:
             return ""
-        if urlparse(response.url).scheme != "https":
+        source_host = (urlparse(url).hostname or "").lower()
+        final_host = (urlparse(response.url).hostname or "").lower()
+        if (
+            urlparse(response.url).scheme != "https"
+            or not source_host
+            or not final_host
+            or not (final_host == source_host or final_host.endswith("." + source_host))
+        ):
             return ""
         parser = TextExtractor()
         parser.feed(response.text[:1_000_000])
