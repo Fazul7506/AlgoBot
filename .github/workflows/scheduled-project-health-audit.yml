@@ -29,24 +29,31 @@ jobs:
           scanned="$(python -c 'import json; print(json.load(open("project-audit-report.json"))["files_scanned"])')"
           echo "findings_count=$count" >> "$GITHUB_OUTPUT"
           echo "files_scanned=$scanned" >> "$GITHUB_OUTPUT"
+          hygiene_exit=0
+          python scripts/repository_hygiene.py > repository-hygiene-report.txt 2>&1 || hygiene_exit=$?
+          echo "hygiene_exit_code=$hygiene_exit" >> "$GITHUB_OUTPUT"
+          echo "Repository hygiene exit code: $hygiene_exit"
           echo "Scanned $scanned files; found $count review candidates."
       - name: Upload audit report
         uses: actions/upload-artifact@v4
         with:
           name: scheduled-project-audit
-          path: project-audit-report.json
+          path: |
+            project-audit-report.json
+            repository-hygiene-report.txt
           retention-days: 30
       - name: Notify repository maintainers when findings exist
-        if: steps.audit.outputs.findings_count != '0'
+        if: steps.audit.outputs.findings_count != '0' || steps.audit.outputs.hygiene_exit_code != '0'
         env:
           GH_TOKEN: ${{ github.token }}
           FINDINGS_COUNT: ${{ steps.audit.outputs.findings_count }}
           FILES_SCANNED: ${{ steps.audit.outputs.files_scanned }}
+          HYGIENE_EXIT_CODE: ${{ steps.audit.outputs.hygiene_exit_code }}
         shell: bash
         run: |
           title="[Scheduled Audit] AlgoBot source health review"
           existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title "[Scheduled Audit] AlgoBot source health review"' --json number --jq '.[0].number // empty')"
-          body="The scheduled read-only audit scanned $FILES_SCANNED source/document files and reported $FINDINGS_COUNT review candidates. These are static text matches, not confirmed defects. Download the scheduled-project-audit artifact from this workflow run for the full report. No files were changed and no code was executed.\n\nWorkflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          body="The scheduled read-only audit scanned $FILES_SCANNED source/document files and reported $FINDINGS_COUNT static review candidates. Repository hygiene exit code: $HYGIENE_EXIT_CODE (non-zero indicates duplicate/canonical violations; unreferenced code is reported as candidates only). These are static findings, not confirmed defects. Download the scheduled-project-audit artifact from this workflow run for both reports. No files were changed and no code was executed.\n\nWorkflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
           else
