@@ -165,6 +165,7 @@ def normalize_image_for_vision(data: bytes, mime_type: str) -> tuple[str, bytes]
             normalized = output.getvalue()
             if len(normalized) > MAX_DECODED_BYTES:
                 image.thumbnail((2048, 2048))
+                image = image.convert("RGB")
                 output = io.BytesIO()
                 image.save(output, format="JPEG", quality=78, optimize=True)
                 normalized = output.getvalue()
