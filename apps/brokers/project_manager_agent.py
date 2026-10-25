@@ -38,7 +38,6 @@ OUTPUT_SCHEMA = {
         "validation_plan": {"type": "array", "items": {"type": "string"}},
         "changes": {
             "type": "array",
-            "maxItems": 8,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
