@@ -15,7 +15,10 @@ MAX_EXTRACTED_CHARS = 200_000
 TEXT_EXTENSIONS = {
     ".txt", ".md", ".json", ".py", ".js", ".jsx", ".ts", ".tsx", ".html",
     ".css", ".scss", ".yaml", ".yml", ".toml", ".csv", ".tsv", ".log",
-    ".xml", ".sql", ".sh", ".ini", ".cfg", ".conf", ".rtf",
+    ".xml", ".sql", ".sh", ".bash", ".ini", ".cfg", ".conf", ".rtf", ".ipynb",
+    ".go", ".rs", ".java", ".kt", ".kts", ".swift", ".c", ".h", ".cc", ".cpp", ".hpp",
+    ".cs", ".php", ".rb", ".r", ".scala", ".lua", ".pl", ".vue", ".svelte", ".astro",
+    ".mdx", ".graphql", ".gql", ".proto", ".prisma", ".tf", ".hcl", ".dockerfile", ".lock",
 }
 DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".xlsx", ".odt", ".ods", ".epub"}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mpga", ".mpeg", ".mp4", ".webm", ".ogg", ".opus", ".flac", ".aac"}
