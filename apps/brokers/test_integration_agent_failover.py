@@ -45,15 +45,21 @@ class BrokerIntegrationAgentFailoverTests(SimpleTestCase):
         return response
 
     def test_quota_and_outage_errors_attempt_configured_providers_in_order(self):
-        with patch("apps.brokers.ai_provider_utils.requests.request") as post:
+        with patch("apps.brokers.ai_provider_utils.time.sleep"), patch("apps.brokers.ai_provider_utils.requests.request") as post:
             post.side_effect = [
                 self.response(429, text="private provider response"),
                 self.response(429, text="private provider response"),
                 self.response(429, text="private provider response"),
                 self.response(503, text="private provider response"),
+                self.response(503, text="private provider response"),
+                self.response(503, text="private provider response"),
                 self.response(401, text="private provider response"),
                 self.response(502, text="private provider response"),
+                self.response(502, text="private provider response"),
+                self.response(502, text="private provider response"),
                 self.response(410, text="private provider response"),
+                self.response(503, text="private provider response"),
+                self.response(503, text="private provider response"),
                 self.response(503, text="private provider response"),
             ]
             with self.assertRaises(BrokerIntegrationAgentError) as raised:
@@ -69,9 +75,15 @@ class BrokerIntegrationAgentFailoverTests(SimpleTestCase):
             "https://api.openai.com/v1/responses",
             "https://api.openai.com/v1/responses",
             "https://integrate.api.nvidia.com/v1/chat/completions",
+            "https://integrate.api.nvidia.com/v1/chat/completions",
+            "https://integrate.api.nvidia.com/v1/chat/completions",
             "https://openrouter.ai/api/v1/chat/completions",
             "https://api.groq.com/openai/v1/chat/completions",
+            "https://api.groq.com/openai/v1/chat/completions",
+            "https://api.groq.com/openai/v1/chat/completions",
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+            "https://api.cerebras.ai/v1/chat/completions",
+            "https://api.cerebras.ai/v1/chat/completions",
             "https://api.cerebras.ai/v1/chat/completions",
         ])
         self.assertIn("HTTP 429", str(raised.exception))
@@ -79,7 +91,7 @@ class BrokerIntegrationAgentFailoverTests(SimpleTestCase):
         self.assertNotIn("openai-test-key", str(raised.exception))
 
     def test_malformed_provider_response_falls_through_without_leaking_body(self):
-        with patch("apps.brokers.ai_provider_utils.requests.request") as post:
+        with patch("apps.brokers.ai_provider_utils.time.sleep"), patch("apps.brokers.ai_provider_utils.requests.request") as post:
             post.side_effect = [
                 self.response(200, {"output_text": "not-json-secret"}),
                 self.response(401, text="private error body"),
