@@ -98,9 +98,9 @@ def open_project_change_pr(*, task: str, report: dict) -> dict:
     for item in changes:
         relative = str(item.get("path") or "")
         content = item.get("content")
-        if not _is_allowed_path(relative, allow_new=True) or not isinstance(content, str):
-            raise GitHubIntegrationError(f"Project change failed the safe path/content gate: {relative[:160]}")
         local_path = ROOT / relative
+        if not _is_allowed_path(relative, allow_new=not local_path.exists()) or not isinstance(content, str):
+            raise GitHubIntegrationError(f"Project change failed the safe path/content gate: {relative[:160]}")
         remote = call("GET", f"contents/{relative}?ref={base}", expected=(200, 404))
         if remote:
             try:
