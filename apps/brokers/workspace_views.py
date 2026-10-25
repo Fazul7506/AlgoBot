@@ -391,7 +391,8 @@ def broker_integration_assistant_chat(request):
         "update", "build", "remove duplicate", "dead code", "security issue",
         "broken page", "bug", "feature",
     ))
-    if not pending.get("provider_name") and general_task and not broker_task and len(message) >= 8:
+    if general_task and not broker_task and len(message) >= 8:
+        request.session.pop("broker_assistant_pending", None)
         from .project_manager_agent import ProjectManagerAgent, ProjectManagerError
         from .github_integration import open_project_change_pr, GitHubIntegrationError
         try:
