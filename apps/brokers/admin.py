@@ -22,11 +22,15 @@ from .models import (
 
 @admin.register(Broker)
 class BrokerAdmin(admin.ModelAdmin):
-    list_display = ["name", "broker_type", "status", "supports_demo", "supports_live", "version"]
+    list_display = ["name", "broker_type", "status", "supports_demo", "live_readiness", "version"]
     list_filter = ["broker_type", "status", "supports_demo", "supports_live"]
     search_fields = ["name", "broker_type"]
-    readonly_fields = ["created_at"]
+    readonly_fields = ["created_at", "supports_live"]
     list_per_page = 50
+
+    @admin.display(description="Live readiness")
+    def live_readiness(self, obj):
+        return obj.live_capability_status
 
     def get_urls(self):
         custom = [path("integration-management/", self.admin_site.admin_view(lambda request: redirect("broker_integration_management")), name="brokers_broker_integration_management")]
