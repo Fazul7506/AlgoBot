@@ -294,6 +294,52 @@ def broker_integration_assistant_chat(request):
             pending["provider_name"] = message.strip()[:120]
 
     lower = message.lower()
+    if any(term in lower for term in (
+        "audit codebase", "audit project", "project health", "codebase health",
+        "scan the code", "repository audit", "review whole project",
+    )):
+        from .project_audit import run_project_audit
+        from django.utils import timezone
+        report = run_project_audit()
+        summary = (
+            f"Read-only project audit completed: {report['files_scanned']} source/document files scanned; "
+            f"{report['findings_count']} review candidates found."
+        )
+        candidates = report["findings"][:8]
+        if candidates:
+            summary += " Highest-priority review candidates: " + "; ".join(
+                f"{item['path']}:{item['line']} ({item['category']})"
+                for item in candidates
+            ) + "."
+        summary += " These are static matches, not confirmed defects. No files were changed and no code was executed."
+        try:
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                user=request.user,
+                title="AlgoBot project audit completed",
+                message=summary,
+                category="system",
+                priority="info",
+                status="delivered",
+                channel="in_app",
+                metadata={
+                    "source": "broker_assistant_project_audit",
+                    "files_scanned": report["files_scanned"],
+                    "findings_count": report["findings_count"],
+                    "mode": "read_only",
+                },
+                sent_at=timezone.now(),
+            )
+        except Exception:
+            # Audit output remains available in this response if notifications
+            # are temporarily unavailable; notification failures must not mask it.
+            pass
+        return JsonResponse({
+            "reply": summary,
+            "action": "project_audit",
+            "report": report,
+        })
+
     request_match = re.search(r"(?:work on|process|start|open)\s+(?:broker\s+)?request\s*#?(\d+)", message, re.IGNORECASE)
     if request_match:
         integration_request = BrokerIntegrationRequest.objects.filter(pk=int(request_match.group(1))).first()
