@@ -110,10 +110,10 @@ def broker_integration_management_page(request):
         if action == "generate_pr":
             from .integration_agent import BrokerIntegrationAgent, BrokerIntegrationAgentError
             from .github_integration import open_provider_draft_pr, GitHubIntegrationError
-            api_docs = request.POST.get("api_docs", "").strip()
+            api_docs = request.POST.get("api_docs", "").strip() or _fetch_official_broker_documentation(provider_name)
             slug = slugify(request.POST.get("provider_slug") or provider_name).replace("-", "_")
             if not provider_name or not slug or not api_docs:
-                messages.error(request, "Provider name and API documentation are required.")
+                messages.error(request, "Provider name is required. I could not verify readable API documentation from the provider's official source, so no speculative integration PR was opened.")
                 return redirect("broker_integration_management")
             run = BrokerIntegrationRun.objects.create(
                 provider_name=provider_name[:120], provider_slug=slug,
