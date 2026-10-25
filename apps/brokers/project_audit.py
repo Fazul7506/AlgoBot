@@ -18,7 +18,7 @@ SOURCE_SUFFIXES = {
     ".py", ".html", ".js", ".jsx", ".ts", ".tsx", ".css", ".scss",
     ".json", ".yml", ".yaml", ".toml", ".md", ".sh",
 }
-SECRET_NAME = re.compile(r"(^|/)(\.env[^/]*|[^/]*(secret|credential|private.key)[^/]*)$", re.I)
+SECRET_NAME = re.compile(r"(^|/)(\.env[^/]*|[^/]*(secret|credential|private.key|api[_-]?key|token|password)[^/]*)$", re.I)
 PATTERNS = (
     ("todo", re.compile(r"\b(?:TODO|FIXME|XXX)\b", re.I), "review", "Explicit TODO/FIXME marker"),
     ("stub", re.compile(r"\bNotImplementedError\b|\bIMPLEMENT_ME\b|\bYOUR_API_KEY_HERE\b", re.I), "review", "Potential incomplete implementation"),
