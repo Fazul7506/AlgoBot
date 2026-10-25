@@ -20,7 +20,7 @@ TEXT_EXTENSIONS = {
     ".cs", ".php", ".rb", ".r", ".scala", ".lua", ".pl", ".vue", ".svelte", ".astro",
     ".mdx", ".graphql", ".gql", ".proto", ".prisma", ".tf", ".hcl", ".dockerfile", ".lock",
 }
-DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".xlsx", ".odt", ".ods", ".epub"}
+DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".xlsx", ".odt", ".ods", ".epub", ".zip"}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mpga", ".mpeg", ".mp4", ".webm", ".ogg", ".opus", ".flac", ".aac"}
 IMAGE_MIME_TYPES = {
     "image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp",
@@ -59,6 +59,40 @@ def extract_document_text(extension: str, data: bytes) -> str:
             text = re.sub(r"\\[a-zA-Z]+-?\d* ?", " ", text)
             text = text.replace("{", " ").replace("}", " ")
         return _clean_text(text)
+    if extension == ".zip":
+        chunks = []
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                entries = archive.infolist()
+                if len(entries) > 1000 or sum(entry.file_size for entry in entries) > 20 * 1024 * 1024:
+                    raise AttachmentExtractionError("The ZIP archive expands beyond the safe 20 MB / 1,000-file limit.")
+                for entry in entries:
+                    name = PurePosixPath(entry.filename)
+                    if name.is_absolute() or ".." in name.parts or entry.is_dir():
+                        if name.is_absolute() or ".." in name.parts:
+                            raise AttachmentExtractionError("The ZIP archive contains unsafe paths.")
+                        continue
+                    if entry.file_size > MAX_DECODED_BYTES:
+                        continue
+                    inner_ext = Path(name.name).suffix.lower()
+                    if inner_ext in TEXT_EXTENSIONS:
+                        raw = archive.read(entry)
+                        chunks.append(f"--- {entry.filename} ---\\n" + raw.decode("utf-8-sig", errors="replace"))
+                    elif inner_ext in DOCUMENT_EXTENSIONS - {".zip"}:
+                        try:
+                            extracted = extract_document_text(inner_ext, archive.read(entry))
+                        except AttachmentExtractionError:
+                            continue
+                        chunks.append(f"--- {entry.filename} ---\\n" + extracted)
+                    if sum(map(len, chunks)) >= MAX_EXTRACTED_CHARS:
+                        break
+        except AttachmentExtractionError:
+            raise
+        except (zipfile.BadZipFile, OSError, KeyError, RuntimeError) as exc:
+            raise AttachmentExtractionError("The ZIP archive is invalid or could not be read.") from exc
+        if not chunks:
+            raise AttachmentExtractionError("No readable text or supported documents were found in the ZIP archive.")
+        return _clean_text("\\n".join(chunks))
     if extension == ".pdf":
         try:
             from pypdf import PdfReader
