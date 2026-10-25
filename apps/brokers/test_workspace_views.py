@@ -125,3 +125,14 @@ class BrokerIntegrationManagementPageTests(TestCase):
         self.assertEqual(second.json()["action"], "chat_answer")
         self.assertIn("I'm doing well", second.json()["reply"])
         self.assertNotIn("identified Forex", second.json()["reply"])
+
+
+    def test_assistant_template_handles_html_and_invalid_json_responses_safely(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "const responseText=await response.text()")
+        self.assertContains(response, "returned an HTML page instead of JSON")
+        self.assertContains(response, "Your session may have expired")
+        self.assertContains(response, "HTTP "+"\"+response.status+\""+" request failure")
+        self.assertNotContains(response, "const data=await response.json();")
