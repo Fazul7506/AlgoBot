@@ -1,4 +1,7 @@
-from django.test import SimpleTestCase
+import json
+
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase
 from django.urls import resolve, reverse
 
 
@@ -52,3 +55,42 @@ class BrokerOfficialDocumentationResearchTests(SimpleTestCase):
         response.url = "https://attacker.invalid/copied-docs"
         get.return_value = response
         self.assertEqual(_fetch_official_broker_documentation("OANDA"), "")
+
+
+
+class BrokerAssistantAttachmentValidationTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.admin = user_model.objects.create_user(
+            username="broker-assistant-attachment-admin",
+            password="test-only-password",
+            is_staff=True,
+        )
+        self.client.force_login(self.admin)
+        self.url = reverse("broker_integration_assistant_chat")
+
+    def test_rejects_unsupported_attachment_type(self):
+        response = self.client.post(
+            self.url,
+            data=json.dumps({
+                "message": "OANDA",
+                "attachments": [{"name": "payload.exe", "type": "application/octet-stream", "text": "not allowed"}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("unsupported format", response.json()["reply"])
+
+    @patch("apps.brokers.workspace_views._fetch_official_broker_documentation", return_value="")
+    def test_accepts_text_attachment_without_asking_for_a_documentation_form(self, fetch_docs):
+        response = self.client.post(
+            self.url,
+            data=json.dumps({
+                "message": "OANDA",
+                "attachments": [{"name": "api-notes.md", "type": "text/markdown", "text": "Official API authentication and REST endpoint notes for this provider."}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attempted to retrieve its documentation automatically", response.json()["reply"])
+        fetch_docs.assert_called_once_with("OANDA")
