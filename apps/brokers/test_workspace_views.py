@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from unittest.mock import patch
 
 from apps.brokers.models import Broker, BrokerIntegrationRequest, BrokerIntegrationRun
 
@@ -73,3 +74,19 @@ class BrokerIntegrationManagementPageTests(TestCase):
         self.assertEqual(saved.provider_name, "Example Provider")
         self.assertEqual(saved.requested_by, self.admin)
         self.assertEqual(saved.status, "pending")
+
+    @patch("apps.brokers.workspace_views._fetch_official_broker_documentation", return_value="")
+    def test_generate_pr_needs_only_provider_name_and_researches_docs_automatically(self, fetch_docs):
+        response = self.client.post(
+            self.url,
+            {
+                "action": "generate_pr",
+                "provider_name": "Example Provider",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        fetch_docs.assert_called_once_with("Example Provider")
+        messages = list(response.wsgi_request._messages)
+        self.assertTrue(any("could not verify readable API documentation" in str(message) for message in messages))
+        self.assertEqual(BrokerIntegrationRun.objects.count(), 0)
