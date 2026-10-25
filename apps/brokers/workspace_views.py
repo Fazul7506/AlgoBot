@@ -105,6 +105,7 @@ def broker_integration_management_page(request):
         "title": "Broker Integration Management",
         "brokers": brokers, "total_brokers": len(brokers),
         "providers": sorted({broker.broker_type for broker in brokers}),
+        "open_prs": sum(1 for run in runs if run.pull_request_number and run.status not in {"merged", "failed"}),
         "completed_requests": BrokerIntegrationRequest.objects.filter(status="completed").count(),
         "in_progress_requests": BrokerIntegrationRequest.objects.filter(status="in_progress").count(),
         "pipeline_steps": pipeline_steps,
