@@ -4,9 +4,10 @@ from __future__ import annotations
 import base64
 import binascii
 import io
+import os
 import re
 import zipfile
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from xml.etree import ElementTree
 
 MAX_DECODED_BYTES = 4 * 1024 * 1024
@@ -17,6 +18,7 @@ TEXT_EXTENSIONS = {
     ".xml", ".sql", ".sh", ".ini", ".cfg", ".conf", ".rtf",
 }
 DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".xlsx", ".odt", ".ods", ".epub"}
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mpga", ".mpeg", ".webm"}
 IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 
@@ -95,6 +97,41 @@ def extract_document_text(extension: str, data: bytes) -> str:
     if not extracted.strip():
         raise AttachmentExtractionError("No readable text was found in this document.")
     return _clean_text(extracted)
+
+
+def transcribe_audio(data: bytes, filename: str) -> str:
+    """Transcribe a small user-supplied audio file through the configured OpenAI API."""
+    if len(data) > MAX_DECODED_BYTES:
+        raise AttachmentExtractionError("The decoded audio exceeds the 4 MB per-file limit.")
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        try:
+            from django.conf import settings
+            api_key = getattr(settings, "OPENAI_API_KEY", "") or ""
+        except Exception:
+            api_key = ""
+    if not api_key:
+        raise AttachmentExtractionError("Audio transcription requires OPENAI_API_KEY; no audio was processed.")
+    import requests
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            files={"file": (Path(filename).name[:180] or "audio.bin", data, "application/octet-stream")},
+            data={"model": "whisper-1"},
+            timeout=(10, 90),
+        )
+    except requests.RequestException as exc:
+        raise AttachmentExtractionError("The audio transcription service could not be reached.") from exc
+    if not response.ok:
+        raise AttachmentExtractionError(f"Audio transcription failed with HTTP {response.status_code}.")
+    try:
+        text = str(response.json().get("text") or "").strip()
+    except (ValueError, TypeError):
+        text = ""
+    if not text:
+        raise AttachmentExtractionError("No speech transcript was returned for this audio file.")
+    return _clean_text(text)
 
 
 def decode_data_url(data_url: str, expected_mime: str = "") -> tuple[str, bytes]:
