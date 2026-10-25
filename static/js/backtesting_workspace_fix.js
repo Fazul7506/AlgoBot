@@ -31,15 +31,15 @@ function updateDashboard(data){
  const pct=(v)=>v===null?'—':fmt(Math.abs(v)<=1?v*100:v,'%');
  const set=(s,v)=>{const n=$(s);if(n)n.textContent=v};
  const latest=completed[0],result=latest?.result_snapshot?.result||latest?.result_snapshot||{},stats=latest?.statistics||result.statistics||{};
- const returns=completed.map(x=>get(x,'total_return_pct','return_pct','roi_pct','total_return')).filter(v=>v!==null);
+ const returns=completed.map(x=>get(x,'total_return_pct','return_pct','roi_pct')).filter(v=>v!==null);
  const wins=completed.map(x=>get(x,'win_rate','directional_hit_rate')).filter(v=>v!==null);
  const tradeCounts=completed.map(x=>get(x,'total_trades','persisted_trade_count')).filter(v=>v!==null);
- const dds=completed.map(x=>get(x,'max_drawdown_pct','max_drawdown','maximum_drawdown','drawdown')).filter(v=>v!==null);
- set('[data-bt-total-return]',returns.length?pct(returns.reduce((a,b)=>a+b,0)/returns.length):'—');
+ const dds=completed.map(x=>get(x,'max_drawdown_pct','drawdown_pct')).filter(v=>v!==null);
+ set('[data-bt-total-return]',latest&&get(latest,'total_return_pct','return_pct','roi_pct')!==null?pct(get(latest,'total_return_pct','return_pct','roi_pct')):'—');
  set('[data-bt-win-rate]',wins.length?pct(wins.reduce((a,b)=>a+b,0)/wins.length):'—');
  set('[data-bt-total-trades]',tradeCounts.length?fmt(tradeCounts.reduce((a,b)=>a+b,0)):'—');
- set('[data-bt-max-drawdown]',dds.length?pct(Math.max(...dds.map(Math.abs))):'—');
- set('[data-bt-summary-return]',returns.length?pct(returns.reduce((a,b)=>a+b,0)/returns.length):'—');
+ set('[data-bt-max-drawdown]',latest&&get(latest,'max_drawdown_pct','drawdown_pct')!==null?pct(Math.abs(get(latest,'max_drawdown_pct','drawdown_pct'))):'—');
+ set('[data-bt-summary-return]',latest&&get(latest,'total_return_pct','return_pct','roi_pct')!==null?pct(get(latest,'total_return_pct','return_pct','roi_pct')):'—');
  set('[data-bt-annualized]',fmt(get(latest,'annualized_return_pct','annualized_return'),'%'));
  set('[data-bt-sharpe]',fmt(get(latest,'sharpe_ratio')));
  set('[data-bt-sortino]',fmt(get(latest,'sortino_ratio')));
@@ -59,7 +59,7 @@ function updateDashboard(data){
  const draw=Array.isArray(result.drawdown_curve)?result.drawdown_curve:(Array.isArray(result.drawdown_series)?result.drawdown_series:[]);
  function chart(svgSel,emptySel,points,color,baseline=0){const svg=$(svgSel),empty=$(emptySel);if(!svg||!empty)return;const vals=points.map(p=>num(typeof p==='object'?(p.value??p.equity??p.balance??p.drawdown??p.y):p)).filter(v=>v!==null);if(vals.length<2){svg.hidden=true;empty.hidden=false;return}const min=Math.min(...vals,baseline),max=Math.max(...vals,baseline),span=max-min||1,w=800,h=170,pad=12;const coords=vals.map((v,i)=>[pad+i*(w-2*pad)/(vals.length-1),h-pad-(v-min)*(h-2*pad)/span]);const path=coords.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');const zeroY=h-pad-(baseline-min)*(h-2*pad)/span;svg.innerHTML='<path d="M'+pad+' '+zeroY+'H'+(w-pad)+'" stroke="#31516e" stroke-dasharray="4 5"/><path d="'+path+'" stroke="'+color+'" stroke-width="2.4" fill="none"/>';svg.hidden=false;empty.hidden=true}
  chart('[data-bt-equity-chart]','[data-bt-equity-empty]',curve,'#08d5a5',0);chart('[data-bt-drawdown-chart]','[data-bt-drawdown-empty]',draw,'#ff426b',0);
- set('[data-bt-drawdown-label]',dds.length?pct(Math.max(...dds.map(Math.abs))):'Unavailable');
+ set('[data-bt-drawdown-label]',latest&&get(latest,'max_drawdown_pct','drawdown_pct')!==null?pct(Math.abs(get(latest,'max_drawdown_pct','drawdown_pct'))):'Unavailable');
  const sparks=document.querySelectorAll('.bt-spark');sparks.forEach(s=>s.hidden=true);
 }
 function render(){const cols=[['strategy','Strategy'],['symbol','Market'],['timeframe','Timeframe'],['start_date','Start'],['end_date','End'],['status','Status'],['net_profit','Net profit'],['total_trades','Trades'],['research_score','Heuristic score'],['created_at','Created']];table.innerHTML=`<thead><tr>${cols.map(c=>`<th>${c[1]}</th>`).join('')}<th>Options</th></tr></thead><tbody>${rows.length?rows.map(i=>{const r=i.result_snapshot?.result||i.result_snapshot||{},st=String(i.status||'').toLowerCase();return`<tr data-search="${esc(`${i.strategy||''} ${marketMeta[String(i.symbol||'').toUpperCase()]?.display_name||''}`.toLowerCase())}">${cols.map(([k])=>`<td>${k==='symbol'?marketCell(i):esc(k==='net_profit'?(r.net_profit??r.total_profit??'—'):k==='total_trades'?(r.total_trades??(Array.isArray(r.trades)?r.trades.length:'—')):k==='research_score'?(r.research_score!=null?`${r.research_score}%`:'—'):(i[k]??'—'))}</td>`).join('')}<td class="backtest-actions"><button type="button" class="btn ghost" data-results="${esc(i.id)}">View Results</button>${st==='pending'?`<button type="button" class="btn ghost" data-edit="${esc(i.id)}">Edit</button>`:''}${['pending','running'].includes(st)?`<button type="button" class="btn ghost" data-cancel="${esc(i.id)}">Cancel</button>`:''}${['failed','cancelled'].includes(st)?`<button type="button" class="btn ghost" data-retry="${esc(i.id)}">Retry</button>`:''}<button type="button" class="btn danger" data-delete="${esc(i.id)}">Delete</button></td></tr>`}).join(''):'<tr><td colspan="11">No backtests yet. Configure a saved strategy and run your first research job.</td></tr>'}</tbody>`;const set=(s,v)=>{const n=$(s);if(n)n.textContent=v};set('[data-backtest-count]',rows.length);set('[data-backtest-completed]',rows.filter(x=>String(x.status).toLowerCase()==='completed').length);set('[data-backtest-running]',rows.filter(x=>['pending','running'].includes(String(x.status).toLowerCase())).length);set('[data-backtest-failed]',rows.filter(x=>['failed','cancelled'].includes(String(x.status).toLowerCase())).length);updateDashboard(rows)}
