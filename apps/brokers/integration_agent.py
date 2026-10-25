@@ -14,6 +14,8 @@ from typing import Any
 import requests
 from django.conf import settings
 
+from .ai_provider_utils import configured_providers, request_with_retry, safe_failure
+
 
 BROKER_SLUG_RE = re.compile(r"^[a-z][a-z0-9_]{1,47}$")
 ALLOWED_DRAFT_FILES = {"adapter.py", "test_adapter_contract.py", "README.md"}
@@ -201,27 +203,23 @@ class BrokerIntegrationAgent:
             "The existing adapter lives under apps/brokers/adapters/. Current source documents Deriv as the "
             "only production-supported adapter; all other broker names are scaffolds until independently verified."
         )
-        # Prefer OpenAI, then try explicitly configured compatible providers.
-        # This is failover, not a guarantee that third-party tiers remain free.
-        providers = []
+        # Share provider routing, model/base URL overrides, and bounded retries
+        # with the general repository assistant.
+        providers = configured_providers()
         if self.api_key:
-            providers.append({"name": "openai", "key": self.api_key, "url": OPENAI_RESPONSES_URL, "model": self.model})
-        fallback_specs = (
-            ("nvidia", "NVIDIA_API_KEY", "NVIDIA_BASE_URL", "NVIDIA_MODEL", "https://integrate.api.nvidia.com/v1", "meta/llama-3.3-70b-instruct"),
-            ("openrouter", "OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "OPENROUTER_MODEL", "https://openrouter.ai/api/v1", "openai/gpt-oss-20b"),
-            ("groq", "GROQ_API_KEY", "GROQ_BASE_URL", "GROQ_MODEL", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
-        )
-        for name, key_name, base_name, model_name, default_base, default_model in fallback_specs:
-            key = os.environ.get(key_name) or getattr(settings, key_name, "")
-            if key:
-                providers.append({"name": name, "key": key, "url": (os.environ.get(base_name) or default_base).rstrip("/") + "/chat/completions", "model": os.environ.get(model_name) or getattr(settings, model_name, default_model)})
+            openai = next((item for item in providers if item["name"] == "openai"), None)
+            if openai:
+                openai["model"] = self.model
+            else:
+                providers.insert(0, {"name": "openai", "key": self.api_key, "base_url": "https://api.openai.com/v1", "url": OPENAI_RESPONSES_URL, "model": self.model, "api_style": "responses"})
         if not providers:
-            raise BrokerIntegrationAgentError("OPENAI_API_KEY is not configured and no fallback AI provider is available. Set OPENAI_API_KEY, NVIDIA_API_KEY, OPENROUTER_API_KEY, or GROQ_API_KEY in deployment secrets.")
+            raise BrokerIntegrationAgentError("No AI provider is configured. Set OPENAI_API_KEY, NVIDIA_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY, or CEREBRAS_API_KEY in deployment secrets.")
         result = None
         provider_errors = []
         for provider in providers:
             try:
-                if provider["name"] == "openai":
+                is_responses = provider.get("api_style") == "responses" or provider["name"] == "openai"
+                if is_responses:
                     input_content = [{"type": "input_text", "text": user_input}]
                     for attachment in (image_attachments or [])[:4]:
                         image_url = str(attachment.get("data_url") or "")
@@ -234,20 +232,24 @@ class BrokerIntegrationAgent:
                         image_url = str(attachment.get("data_url") or "")
                         if image_url.startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,")):
                             user_content.append({"type": "image_url", "image_url": {"url": image_url, "detail": "high"}})
-                    payload = {"model": provider["model"], "messages": [{"role": "system", "content": instructions + "\nReturn one JSON object matching the requested schema."}, {"role": "user", "content": user_content if image_attachments else user_input}], "response_format": {"type": "json_object"}, "temperature": 0.1}
-                response = requests.post(provider["url"], headers={"Authorization": f"Bearer {provider['key']}", "Content-Type": "application/json"}, json=payload, timeout=self.timeout)
+                    payload = {"model": provider["model"], "messages": [{"role": "system", "content": instructions + "\nReturn one JSON object matching the requested schema."}, {"role": "user", "content": user_content if len(user_content) > 1 else user_input}], "response_format": {"type": "json_object"}, "temperature": 0.1}
+                response = request_with_retry(
+                    "POST", provider["url"],
+                    headers={"Authorization": "Bearer " + provider["key"], "Content-Type": "application/json"},
+                    json=payload, timeout=self.timeout,
+                )
                 if not response.ok:
-                    provider_errors.append(f"{provider['name']}: HTTP {response.status_code}")
+                    provider_errors.append(safe_failure(provider["name"], response))
                     continue
                 body = response.json()
-                output = self._extract_output_text(body) if provider["name"] == "openai" else body["choices"][0]["message"]["content"]
+                output = self._extract_output_text(body) if is_responses else body["choices"][0]["message"]["content"]
                 candidate = json.loads(output)
                 if isinstance(candidate, dict):
                     result = candidate
                     break
-                provider_errors.append(f"{provider['name']}: response was not a JSON object")
-            except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, BrokerIntegrationAgentError):
-                provider_errors.append(f"{provider['name']}: unavailable or invalid response")
+                provider_errors.append(provider["name"] + ": response was not a JSON object")
+            except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, BrokerIntegrationAgentError) as exc:
+                provider_errors.append(safe_failure(provider["name"], error=exc))
                 continue
         if result is None:
             raise BrokerIntegrationAgentError("All configured AI providers failed or exhausted quota (" + "; ".join(provider_errors) + "). Configure another provider/model or restore quota.")
