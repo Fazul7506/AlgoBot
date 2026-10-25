@@ -76,38 +76,59 @@ def _is_allowed_path(relative: str, allow_new: bool = False) -> bool:
     return True
 
 
-def _inventory() -> tuple[list[str], list[dict[str, str]]]:
+def _inventory(task: str = "") -> tuple[list[str], list[dict[str, str]]]:
+    """Build a path inventory and prioritize excerpts by lexical task relevance."""
     paths = []
-    excerpts = []
+    ranked = []
     blueprint = ROOT / "docs" / "ALGOBOT_AI_PROJECT_BLUEPRINT.md"
     if blueprint.is_file():
         try:
-            excerpts.append({"path": "docs/ALGOBOT_AI_PROJECT_BLUEPRINT.md", "content": blueprint.read_text(encoding="utf-8")[:18000]})
+            ranked.append((10_000, {"path": "docs/ALGOBOT_AI_PROJECT_BLUEPRINT.md", "content": blueprint.read_text(encoding="utf-8")[:18000]}))
         except (OSError, UnicodeError):
             pass
+    words = {word.lower() for word in re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", task)}
     count = 0
     for directory, subdirs, filenames in os.walk(ROOT):
-        subdirs[:] = sorted(d for name in subdirs if name not in EXCLUDED_DIRS for d in [name] if not d.startswith("."))
+        subdirs[:] = sorted(name for name in subdirs if name not in EXCLUDED_DIRS and not name.startswith("."))
         for filename in sorted(filenames):
             path = Path(directory) / filename
             relative = path.relative_to(ROOT).as_posix()
             if path.suffix.lower() not in SOURCE_SUFFIXES or not _is_allowed_path(relative):
                 continue
-            if path.stat().st_size > 180_000:
+            try:
+                if path.stat().st_size > 180_000:
+                    continue
+                source = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
                 continue
             paths.append(relative)
+            path_words = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", relative.lower()))
+            score = len(words & path_words) * 8
+            if words:
+                lowered = source.lower()
+                score += sum(1 for word in words if word in lowered)
+            ranked.append((score, {"path": relative, "content": source[:5000]}))
             count += 1
-            if len(excerpts) < 30:
-                try:
-                    source = path.read_text(encoding="utf-8")
-                except (OSError, UnicodeError):
-                    continue
-                excerpts.append({"path": relative, "content": source[:5000]})
             if count >= 3000:
                 break
         if count >= 3000:
             break
-    return paths, excerpts
+    ranked.sort(key=lambda item: (item[0], item[1]["path"]), reverse=True)
+    selected = []
+    total_chars = 0
+    for _, excerpt in ranked:
+        if len(selected) >= 30:
+            break
+        content = excerpt["content"]
+        allowance = 18_000 if excerpt["path"] == "docs/ALGOBOT_AI_PROJECT_BLUEPRINT.md" else 5000
+        content = content[:allowance]
+        if total_chars + len(content) > 125_000:
+            content = content[:max(0, 125_000 - total_chars)]
+        if not content:
+            continue
+        selected.append({"path": excerpt["path"], "content": content})
+        total_chars += len(content)
+    return paths, selected
 
 
 def _extract_text(payload: dict[str, Any]) -> str:
@@ -134,7 +155,7 @@ class ProjectManagerAgent:
             raise ProjectManagerError("Describe the project task in 8 to 12,000 characters.")
         if not self.api_key:
             raise ProjectManagerError("OPENAI_API_KEY is not configured for the project manager.")
-        inventory, excerpts = _inventory()
+        inventory, excerpts = _inventory(task)
         if not inventory:
             raise ProjectManagerError("No eligible source files were found to provide project context.")
         instructions = (
@@ -159,18 +180,21 @@ class ProjectManagerAgent:
                 "never_execute_generated_code": True,
             },
         }
-        response = requests.post(
-            "https://api.openai.com/v1/responses",
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-            json={
-                "model": self.model,
-                "store": False,
-                "instructions": instructions,
-                "input": json.dumps(user_input, ensure_ascii=False),
-                "text": {"format": {"type": "json_schema", "name": "algobot_project_change", "strict": True, "schema": OUTPUT_SCHEMA}},
-            },
-            timeout=self.timeout,
-        )
+        try:
+            response = requests.post(
+                "https://api.openai.com/v1/responses",
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": self.model,
+                    "store": False,
+                    "instructions": instructions,
+                    "input": json.dumps(user_input, ensure_ascii=False),
+                    "text": {"format": {"type": "json_schema", "name": "algobot_project_change", "strict": True, "schema": OUTPUT_SCHEMA}},
+                },
+                timeout=self.timeout,
+            )
+        except requests.RequestException as exc:
+            raise ProjectManagerError("The AI project manager could not reach its configured model provider.") from exc
         if not response.ok:
             raise ProjectManagerError(f"AI project planning failed with HTTP {response.status_code}.")
         try:
