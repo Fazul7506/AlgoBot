@@ -144,7 +144,7 @@ class BrokerMarketplaceDirectoryUiTests(TestCase):
         self.assertContains(response, 'data-broker-status-filter="available"')
         self.assertContains(response, 'data-broker-status-filter="unavailable"')
         self.assertContains(response, "https://deriv.com/favicon.ico")
-        self.assertContains(response, 'alt="Deriv icon"')
+        self.assertContains(response, 'alt="Deriv brand SVG"')
         self.assertContains(response, "Example Broker")
         self.assertContains(response, "Not supported yet")
         self.assertContains(response, "Connected Accounts")
