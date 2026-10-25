@@ -88,3 +88,17 @@ class BrokerIntegrationManagementPageTests(TestCase):
         self.assertEqual(response.status_code, 302)
         fetch_docs.assert_called_once_with("Example Provider")
         self.assertEqual(BrokerIntegrationRun.objects.count(), 0)
+
+    @patch("apps.brokers.workspace_views._fetch_official_broker_documentation", return_value="")
+    def test_chat_accepts_provider_name_alone_without_asking_for_docs(self, fetch_docs):
+        response = self.client.post(
+            reverse("broker_integration_assistant_chat"),
+            data='{"message":"Example Provider","attachments":[]}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("attempted to retrieve its documentation automatically", payload["reply"])
+        self.assertNotIn("paste", payload["reply"].lower())
+        fetch_docs.assert_called_once_with("Example Provider")
