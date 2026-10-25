@@ -232,8 +232,8 @@ def broker_integration_assistant_chat(request):
     attachment_text_parts = []
     image_attachments = []
     from .attachment_extraction import (
-        AttachmentExtractionError, IMAGE_MIME_TYPES, TEXT_EXTENSIONS,
-        DOCUMENT_EXTENSIONS, decode_data_url, extract_document_text,
+        AttachmentExtractionError, AUDIO_EXTENSIONS, IMAGE_MIME_TYPES, TEXT_EXTENSIONS,
+        DOCUMENT_EXTENSIONS, decode_data_url, extract_document_text, transcribe_audio,
     )
     supported_extensions = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS
     encoded_bytes_total = 0
@@ -269,6 +269,17 @@ def broker_integration_assistant_chat(request):
             encoded_bytes_total += len(binary_data)
             attachment_text_parts.append(
                 f"\n\nExtracted text from attachment: {name}\n<attached_file>\n{extracted}\n</attached_file>"
+            )
+        elif extension in AUDIO_EXTENSIONS:
+            data_url = str(item.get("data_url") or "")
+            try:
+                _, audio_data = decode_data_url(data_url)
+                transcript = transcribe_audio(audio_data, name)
+            except AttachmentExtractionError as exc:
+                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+            encoded_bytes_total += len(audio_data)
+            attachment_text_parts.append(
+                f"\n\nTranscript from audio attachment: {name}\n<attached_audio_transcript>\n{transcript}\n</attached_audio_transcript>"
             )
         else:
             return JsonResponse({
