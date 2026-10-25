@@ -238,6 +238,7 @@ def broker_integration_assistant_chat(request):
     )
     supported_extensions = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS
     encoded_bytes_total = 0
+    successfully_processed_attachments = 0
     for item in raw_attachments:
         if not isinstance(item, dict):
             return JsonResponse({"reply": "One of the attachments is invalid."}, status=400)
@@ -293,8 +294,19 @@ def broker_integration_assistant_chat(request):
                 f"\n\nAttachment processing issue for {name}: unsupported format {extension or '(no extension)'}. This file was skipped; other attachments were still processed."
             )
             continue
+        successfully_processed_attachments += 1
         if encoded_bytes_total > 12 * 1024 * 1024:
             return JsonResponse({"reply": "Combined attachments exceed the 12 MB total limit. Send fewer or smaller files."}, status=400)
+    if raw_attachments and successfully_processed_attachments == 0:
+        details = " ".join(
+            part.strip() for part in attachment_text_parts
+            if "Attachment processing issue for" in part
+        )
+        return JsonResponse({
+            "reply": details or "No attachments could be processed. Please use a supported file format.",
+            "action": "attachment_validation_failed",
+        }, status=400)
+
     if not message and not raw_attachments:
         return JsonResponse({"reply": "Type a message or attach a file."}, status=400)
     if len(message) > 60000:
