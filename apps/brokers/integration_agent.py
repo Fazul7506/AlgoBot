@@ -121,7 +121,7 @@ class BrokerIntegrationAgent:
                     return part["text"]
         raise BrokerIntegrationAgentError("OpenAI returned no structured output text.")
 
-    def generate(self, *, broker_slug: str, provider_name: str, api_docs: str) -> BrokerIntegrationDraft:
+    def generate(self, *, broker_slug: str, provider_name: str, api_docs: str, image_attachments: list[dict[str, str]] | None = None) -> BrokerIntegrationDraft:
         self._validate_request(broker_slug, provider_name, api_docs)
         # Documentation is treated as untrusted reference material, not instructions.
         instructions = (
@@ -180,9 +180,19 @@ class BrokerIntegrationAgent:
         for provider in providers:
             try:
                 if provider["name"] == "openai":
-                    payload = {"model": provider["model"], "store": False, "instructions": instructions, "input": user_input, "text": {"format": {"type": "json_schema", "name": "broker_integration_draft", "strict": True, "schema": OUTPUT_SCHEMA}}}
+                    input_content = [{"type": "input_text", "text": user_input}]
+                    for attachment in (image_attachments or [])[:4]:
+                        image_url = str(attachment.get("data_url") or "")
+                        if image_url.startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,")):
+                            input_content.append({"type": "input_image", "image_url": image_url, "detail": "high"})
+                    payload = {"model": provider["model"], "store": False, "instructions": instructions, "input": [{"role": "user", "content": input_content}], "text": {"format": {"type": "json_schema", "name": "broker_integration_draft", "strict": True, "schema": OUTPUT_SCHEMA}}}
                 else:
-                    payload = {"model": provider["model"], "messages": [{"role": "system", "content": instructions + "\nReturn one JSON object matching the requested schema."}, {"role": "user", "content": user_input}], "response_format": {"type": "json_object"}, "temperature": 0.1}
+                    user_content = [{"type": "text", "text": user_input}]
+                    for attachment in (image_attachments or [])[:4]:
+                        image_url = str(attachment.get("data_url") or "")
+                        if image_url.startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,")):
+                            user_content.append({"type": "image_url", "image_url": {"url": image_url, "detail": "high"}})
+                    payload = {"model": provider["model"], "messages": [{"role": "system", "content": instructions + "\nReturn one JSON object matching the requested schema."}, {"role": "user", "content": user_content if image_attachments else user_input}], "response_format": {"type": "json_object"}, "temperature": 0.1}
                 response = requests.post(provider["url"], headers={"Authorization": f"Bearer {provider['key']}", "Content-Type": "application/json"}, json=payload, timeout=self.timeout)
                 if not response.ok:
                     provider_errors.append(f"{provider['name']}: HTTP {response.status_code}")
