@@ -53,7 +53,7 @@ jobs:
         run: |
           title="[Scheduled Audit] AlgoBot source health review"
           existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title "[Scheduled Audit] AlgoBot source health review"' --json number --jq '.[0].number // empty')"
-          body="The scheduled read-only audit scanned $FILES_SCANNED source/document files and reported $FINDINGS_COUNT static review candidates. Repository hygiene exit code: $HYGIENE_EXIT_CODE (non-zero indicates duplicate/canonical violations; unreferenced code is reported as candidates only). These are static findings, not confirmed defects. Download the scheduled-project-audit artifact from this workflow run for both reports. No files were changed and no code was executed.\n\nWorkflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          body="$(printf 'The scheduled read-only audit scanned %s source/document files and reported %s static review candidates. Repository hygiene exit code: %s (non-zero indicates duplicate/canonical violations; unreferenced code is reported as candidates only). These are static findings, not confirmed defects. Download the scheduled-project-audit artifact from this workflow run for both reports. No files were changed and no code was executed.\n\nWorkflow run: %s' "$FILES_SCANNED" "$FINDINGS_COUNT" "$HYGIENE_EXIT_CODE" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")"
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
           else
