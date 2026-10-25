@@ -26,3 +26,12 @@ This document is a maintained orientation map for AI-assisted engineering. It is
 
 ## Current integration truth
 Deriv is the currently designated production-supported broker in the source configuration. Other catalog entries may be scaffolds or require implementation and validation. A brand icon, catalog row, or status badge is not evidence of a working live connection.
+
+## Repository inventory snapshot
+
+Generated from the repository Git tree at commit 5c28e4cee890b75c262ee14dcbb7edc953857011. This inventory gives the assistant an architecture index; it is not a replacement for inspecting current source files and tests before changes.
+
+- Top-level areas: .github, .vscode, apps, audit-output, bin, config, core, deploy, deriv_platform, docs, requirements, scripts, services, static, templates, tests, urls.
+- Django app packages: apps/__init__.py, apps/ai_engine, apps/analysis, apps/automation, apps/backtesting, apps/brokers, apps/copy_trading, apps/deployment, apps/developer, apps/enterprise, apps/execution, apps/feature_store, apps/health, apps/indicators, apps/market_data, apps/monitoring, apps/notifications, apps/observability, apps/optimization, apps/portfolio, apps/risk, apps/simulation, apps/smart_money, apps/strategies, apps/tenants, apps/trading, apps/training.
+- CI / validation workflows: broker-adapter-validation.yml, broker-onboarding-pipeline.yml, broker-production-readiness.yml, broker-proposal-pr.yml, deriv-demo-sandbox-verification.yml, frontend-hardening.yml, phase20-production.yml, rebuild-all-django-migrations.yml, template-validation.yml.
+- For repository-wide changes, query the current Git tree and inspect the relevant implementation, callers, configuration, tests, migrations, and CI workflows. Refresh this inventory when app packages or workflows change.
