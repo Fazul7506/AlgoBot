@@ -71,7 +71,7 @@
         <div class="broker-empty"><span class="material-symbols-rounded" aria-hidden="true">hub</span><h2>No broker integrations registered</h2><p>An administrator must register a broker and configure its supported authorization flow before it can be connected.</p></div>
         {% endfor %}
         <article class="broker-card broker-request-card">
-          <div class="broker-request-icon material-symbols-rounded" aria-hidden="true">add</div><h2>Request a Broker</h2><p>Don't see the broker you need? Tell us which integration would help your workflow.</p><a class="broker-btn" href="/contact/">Request Broker</a>
+          <div class="broker-request-icon material-symbols-rounded" aria-hidden="true">add</div><h2>Request a Broker</h2><p>Don't see the broker you need? Tell us which integration would help your workflow.</p><button class="broker-btn" type="button" data-request-broker>Request Broker</button><p class="broker-request-feedback" data-request-broker-feedback role="status" aria-live="polite"></p>
         </article>
       </div>
       <div class="broker-no-results" data-broker-no-results hidden><h2>No matching brokers</h2><p>Try another search term or category.</p></div>
@@ -145,6 +145,23 @@
  categoryButtons.forEach(button=>button.addEventListener("click",()=>{activeCategory=button.dataset.brokerFilter;applyFilter();}));
  statusButtons.forEach(button=>button.addEventListener("click",()=>{activeStatus=button.dataset.brokerStatusFilter;applyFilter();}));
  applyFilter();
+ const requestButton=root.querySelector("[data-request-broker]"),requestFeedback=root.querySelector("[data-request-broker-feedback]");
+ if(requestButton)requestButton.addEventListener("click",async function(){
+   const provider=window.prompt("Which broker or provider should AlgoBot integrate?");
+   if(!provider||!provider.trim())return;
+   const useCase=window.prompt("What markets, account connection, or capabilities do you need?");
+   if(!useCase||!useCase.trim())return;
+   const website=window.prompt("Official provider website (optional, include https://):")||"";
+   const csrf=(document.cookie.split("; ").find(row=>row.startsWith("csrftoken="))||"").split("=").slice(1).join("=");
+   requestButton.disabled=true;requestFeedback.textContent="Submitting your broker request…";
+   try{
+     const response=await fetch("/api/broker-integration-requests/",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":decodeURIComponent(csrf),"Accept":"application/json"},body:JSON.stringify({provider_name:provider.trim(),use_case:useCase.trim(),provider_website:website.trim()})});
+     const data=await response.json().catch(()=>({}));
+     if(!response.ok)throw new Error(data.detail||"Unable to save the broker request.");
+     requestFeedback.textContent="Request #"+data.request_id+" saved ("+data.status+"). It is now available in Broker Integration Management for the AlgoBot team assistant to triage.";
+     requestButton.textContent="Request Submitted";
+   }catch(error){requestFeedback.textContent=error.message||"Unable to save the broker request.";requestButton.disabled=false;}
+ });
  document.addEventListener("submit",async function(event){
    const form=event.target.closest("[data-broker-disconnect]");if(!form||!root.contains(form))return;
    event.preventDefault();const button=form.querySelector("button[type=submit]");
