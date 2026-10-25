@@ -253,7 +253,7 @@ def broker_integration_assistant_chat(request):
                 return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
             encoded_bytes_total += len(image_bytes)
             image_attachments.append({"name": name, "data_url": data_url})
-        elif extension in supported_extensions and isinstance(item.get("text"), str):
+        elif extension in TEXT_EXTENSIONS and isinstance(item.get("text"), str):
             text_content = item["text"]
             if len(text_content.encode("utf-8", errors="replace")) > 200_000:
                 return JsonResponse({"reply": f"{name} is too large to process as text (200 KB maximum)."}, status=400)
