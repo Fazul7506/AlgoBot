@@ -140,7 +140,7 @@ class StrategyExecutionService:
         if not allowed: return {'status': 'blocked', 'reason': 'ORDER_LIMIT_REACHED', 'used': used, 'limit': limit}
         environment = str(getattr(account, 'account_type', '') or '').lower().strip()
         if environment == 'real':
-            if not bool(getattr(account.broker, 'supports_live', False)):
+            if not bool(getattr(account.broker, 'is_live_trading_supported', False)):
                 return {'status': 'blocked', 'reason': 'BROKER_NOT_LIVE_CAPABLE'}
             allowed_live, used_live, limit_live = check_live_order(config.user)
             if not allowed_live: return {'status': 'blocked', 'reason': 'LIVE_ORDER_LIMIT_REACHED', 'used': used_live, 'limit': limit_live}
