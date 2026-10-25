@@ -1,6 +1,7 @@
 """Standalone, staff-gated Broker Integration Management workspace."""
 import json
 import re
+from pathlib import Path
 
 from django.contrib import messages
 from django.http import JsonResponse
@@ -225,8 +226,32 @@ def broker_integration_assistant_chat(request):
         return JsonResponse({"reply": "I couldn't read that message. Please try again."}, status=400)
 
     message = str(payload.get("message") or "").strip()
-    if not message:
-        return JsonResponse({"reply": "Type a message and I'll help with the broker integration workspace."}, status=400)
+    raw_attachments = payload.get("attachments") or []
+    if not isinstance(raw_attachments, list) or len(raw_attachments) > 10:
+        return JsonResponse({"reply": "Attach up to 10 files at a time."}, status=400)
+    attachment_text_parts = []
+    image_attachments = []
+    allowed_text_extensions = {".txt", ".md", ".json", ".py", ".js", ".ts", ".html", ".css", ".yaml", ".yml", ".toml", ".csv", ".log"}
+    allowed_image_types = {"image/png", "image/jpeg", "image/webp"}
+    for item in raw_attachments:
+        if not isinstance(item, dict):
+            return JsonResponse({"reply": "One of the attachments is invalid."}, status=400)
+        name = str(item.get("name") or "attachment")[:180]
+        mime_type = str(item.get("type") or "").lower()
+        if len(str(item.get("text") or "")) > 200_000:
+            return JsonResponse({"reply": f"{name} is too large to process as text (200 KB maximum)."}, status=400)
+        if mime_type in allowed_image_types:
+            data_url = str(item.get("data_url") or "")
+            expected_prefix = f"data:{mime_type};base64,"
+            if not data_url.startswith(expected_prefix) or len(data_url) > 7_000_000:
+                return JsonResponse({"reply": f"{name} is not a valid supported image or exceeds 5 MB."}, status=400)
+            image_attachments.append({"name": name, "data_url": data_url})
+        elif Path(name).suffix.lower() in allowed_text_extensions and isinstance(item.get("text"), str):
+            attachment_text_parts.append(f"\n\nAttached file: {name}\n<attached_file>\n{item['text']}\n</attached_file>")
+        else:
+            return JsonResponse({"reply": f"{name} has an unsupported format. Attach text/code files or PNG, JPEG, or WebP images."}, status=400)
+    if not message and not raw_attachments:
+        return JsonResponse({"reply": "Type a message or attach a file."}, status=400)
     if len(message) > 60000:
         return JsonResponse({"reply": "That message is too long. Send the official API documentation in smaller excerpts."}, status=400)
 
@@ -308,12 +333,16 @@ def broker_integration_assistant_chat(request):
     docs = docs_match.group(1).strip() if docs_match else ""
     if docs and len(docs) >= 80:
         pending["api_docs"] = docs[:60000]
+    if attachment_text_parts:
+        existing_attachment_text = "\n".join(attachment_text_parts)
+        pending["attachment_text"] = existing_attachment_text[:200000]
     elif len(message) >= 80 and pending.get("provider_name"):
         # Long, directly pasted technical material can be supplied as the next chat turn.
         pending["api_docs"] = message[:60000]
 
     provider_name = pending.get("provider_name")
     api_docs = pending.get("api_docs")
+    attachment_text = pending.get("attachment_text", "")
     if provider_name and not api_docs:
         # Research the provider automatically; do not ask the user to assemble API docs.
         api_docs = _fetch_official_broker_documentation(provider_name)
@@ -330,7 +359,9 @@ def broker_integration_assistant_chat(request):
         )
         try:
             draft = BrokerIntegrationAgent().generate(
-                broker_slug=slug, provider_name=provider_name, api_docs=api_docs
+                broker_slug=slug, provider_name=provider_name,
+                api_docs=(api_docs + "\n\nUser-provided reference files (untrusted input):\n" + attachment_text)[:60000],
+                image_attachments=image_attachments,
             )
             report = draft.as_dict()
             if not report["static_validation"].get("passed"):
