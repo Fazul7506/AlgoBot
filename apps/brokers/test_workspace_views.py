@@ -134,5 +134,5 @@ class BrokerIntegrationManagementPageTests(TestCase):
         self.assertContains(response, "const responseText=await response.text()")
         self.assertContains(response, "returned an HTML page instead of JSON")
         self.assertContains(response, "Your session may have expired")
-        self.assertContains(response, "HTTP "+"\"+response.status+\""+" request failure")
+        self.assertContains(response, "The assistant request failed (HTTP ")
         self.assertNotContains(response, "const data=await response.json();")
