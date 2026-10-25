@@ -70,6 +70,9 @@ def performance_center(request):
     for row in by_symbol:
         row["display_name"] = market_names.get(row["symbol"], "Market instrument") or "Market instrument"
     recent_trades = list(metrics["settled"].order_by("-settlement_time", "-broker_timestamp", "-id")[:8])
+    average_win = metrics["gross_profit"] / metrics["wins"] if metrics["wins"] else None
+    average_loss = metrics["gross_loss"] / metrics["losses"] if metrics["losses"] else None
+    max_drawdown = max((abs(item.drawdown) for item in performance), default=None)
     # Broker trade history does not have a canonical strategy association, so do
     # not infer strategy P/L from order counts or fabricate strategy attribution.
     return render(request, "core/performance_center.html", {
@@ -89,5 +92,8 @@ def performance_center(request):
         "gross_profit": metrics["gross_profit"],
         "gross_loss": metrics["gross_loss"],
         "profit_factor": metrics["profit_factor"],
+        "average_win": average_win,
+        "average_loss": average_loss,
+        "max_drawdown": max_drawdown,
         "has_trade_pnl": metrics["has_trade_pnl"],
     })
