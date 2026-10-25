@@ -26,12 +26,12 @@ class BrokerIntegrationAgentTests(SimpleTestCase):
             )
 
     def test_requires_api_key(self):
-        with self.assertRaisesMessage(BrokerIntegrationAgentError, "OPENAI_API_KEY is not configured"):
+        with self.assertRaisesMessage(BrokerIntegrationAgentError, "No AI provider is configured"):
             BrokerIntegrationAgent(api_key="").generate(
                 broker_slug="example", provider_name="Example", api_docs=VALID_DOCS
             )
 
-    @patch("apps.brokers.integration_agent.requests.post")
+    @patch("apps.brokers.ai_provider_utils.requests.request")
     def test_returns_review_only_draft_and_never_executes_it(self, post):
         model_output = {
             "broker_slug": "example",
@@ -68,7 +68,7 @@ class BrokerIntegrationAgentTests(SimpleTestCase):
         self.assertFalse(request_payload["store"])
         self.assertNotIn("not-a-real-key", json.dumps(request_payload))
 
-    @patch("apps.brokers.integration_agent.requests.post")
+    @patch("apps.brokers.ai_provider_utils.requests.request")
     def test_rejects_unapproved_output_path(self, post):
         model_output = {
             "broker_slug": "example",
@@ -90,7 +90,7 @@ class BrokerIntegrationAgentTests(SimpleTestCase):
                 broker_slug="example", provider_name="Example", api_docs=VALID_DOCS
             )
 
-    @patch("apps.brokers.integration_agent.requests.post")
+    @patch("apps.brokers.ai_provider_utils.requests.request")
     def test_api_error_does_not_echo_request_secrets(self, post):
         response = Mock()
         response.ok = False
