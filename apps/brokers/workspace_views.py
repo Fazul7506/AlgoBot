@@ -272,12 +272,26 @@ def broker_integration_assistant_chat(request):
             "exness": "Exness", "forex.com": "Forex.com", "forex_com": "Forex.com",
             "ic markets": "IC Markets", "ic_markets": "IC Markets",
             "interactive brokers": "Interactive Brokers", "interactive_brokers": "Interactive Brokers",
-            "metatrader gateway": "MetaTrader Gateway", "mt5": "MetaTrader 5",
+            "metatrader gateway": "MetaTrader Gateway", "metatrader 5": "MetaTrader 5", "mt5": "MetaTrader 5", "mt4": "MetaTrader 4",
             "oanda": "OANDA", "pepperstone": "Pepperstone", "kraken": "Kraken",
             "coinbase": "Coinbase", "xtb": "XTB",
         }
         if message.strip().lower() in known_names:
             pending["provider_name"] = known_names[message.strip().lower()]
+        elif (
+            message.strip()
+            and len(message.strip()) <= 120
+            and len(message.strip().split()) <= 5
+            and not re.search(r"[?!\\n]", message)
+            and not any(
+                token in message.lower().split()
+                for token in ("check", "show", "list", "audit", "review", "fix", "help", "please",
+                              "status", "validation", "requests", "catalog", "broker", "integration",
+                              "request", "docs", "documentation", "add", "new")
+            )
+        ):
+            # Any concise provider name can start research; it need not be in a hard-coded list.
+            pending["provider_name"] = message.strip()[:120]
 
     lower = message.lower()
     request_match = re.search(r"(?:work on|process|start|open)\s+(?:broker\s+)?request\s*#?(\d+)", message, re.IGNORECASE)
@@ -300,7 +314,7 @@ def broker_integration_assistant_chat(request):
         if not saved_requests:
             return JsonResponse({"reply": "There are no saved broker integration requests to work on yet.", "action": "requests"})
         lines = [f"Request #{item.pk}: {item.provider_name} — {item.get_status_display()}" for item in saved_requests]
-        return JsonResponse({"reply": "Saved marketplace requests: " + "; ".join(lines) + ". To start one, message me: work on request #ID. I'll then ask for official API documentation and track the draft PR against that request.", "action": "requests"})
+        return JsonResponse({"reply": "Saved marketplace requests: " + "; ".join(lines) + ". Tell me to work on request #ID and I will research the provider documentation automatically, then track any review-only draft PR against that request. I will not ask you to paste API documentation.", "action": "requests"})
 
 
     if any(term in lower for term in ("check pr", "pull request status", "show prs", "pr status")):
@@ -344,7 +358,7 @@ def broker_integration_assistant_chat(request):
     provider_name = pending.get("provider_name")
     api_docs = pending.get("api_docs")
     attachment_text = pending.get("attachment_text", "")
-    if provider_name and not api_docs and not attachment_text and not image_attachments:
+    if provider_name and not api_docs:
         # Research the provider automatically; do not ask the user to assemble API docs.
         api_docs = _fetch_official_broker_documentation(provider_name)
         if api_docs:
