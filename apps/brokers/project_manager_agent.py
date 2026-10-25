@@ -25,9 +25,13 @@ DENIED_FILENAMES = {
     "settings.py", "manage.py", "wsgi.py", "asgi.py", "requirements.txt", "pyproject.toml",
     "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "secrets.json", "credentials.json",
 }
+SENSITIVE_VALUE_PATTERN = re.compile(
+    r"(?i)((?:api[_-]?key|client[_-]?secret|password|access[_-]?token|refresh[_-]?token)['\"]?\s*[:=]\s*['\"])[^'\"]+(['\"])"
+)
 SECRET_PATTERNS = (
-    re.compile(r"(?i)(api[_-]?key|secret|password|access[_-]?token)\s*[:=]\s*['\"][^'\"]{12,}['\"]"),
+    re.compile(r"(?i)(?:api[_-]?key|client[_-]?secret|password|access[_-]?token|refresh[_-]?token)['\"]?\s*[:=]\s*['\"][^'\"]{8,}['\"]"),
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    re.compile(r"\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,})\b"),
 )
 OUTPUT_SCHEMA = {
     "type": "object",
@@ -100,6 +104,13 @@ def _inventory(task: str = "") -> tuple[list[str], list[dict[str, str]]]:
                 source = path.read_text(encoding="utf-8")
             except (OSError, UnicodeError):
                 continue
+            # Redact likely credentials before any source is sent to the model.
+            source = SENSITIVE_VALUE_PATTERN.sub(r"\1[REDACTED]\2", source)
+            source = re.sub(
+                r"(?is)(-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----).*?(-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)",
+                r"\1[REDACTED]\2",
+                source,
+            )
             paths.append(relative)
             path_words = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", relative.lower()))
             score = len(words & path_words) * 8
