@@ -391,16 +391,26 @@ def broker_integration_assistant_chat(request):
     ))
     general_task = any(term in lower for term in (
         "implement", "fix", "repair", "improve", "refactor", "enhance",
-        "update", "build", "remove duplicate", "dead code", "security issue",
-        "broken page", "bug", "feature",
+        "update", "build", "remove", "delete", "create", "add ", "change",
+        "modify", "rewrite", "replace", "design", "debug", "test", "secure",
+        "audit", "optimize", "optimise", "complete", "finish", "enable",
+        "disable", "upgrade", "migrate", "document", "generate", "resolve",
+        "correct", "extend", "expand", "allow", "ensure", "make ", "write ",
+        "clean up", "performance", "accessibility", "responsive", "broken page",
+        "dead code", "duplicate", "security issue", "bug", "feature",
     ))
-    if general_task and not broker_task and len(message) >= 8:
+    known_assistant_query = any(term in lower for term in (
+        "show pr", "list pr", "pull request status", "validation status",
+        "broker catalog", "broker catalogue", "list brokers", "help",
+        "what can you do", "who are you", "hello", "hi there",
+    ))
+    if general_task and not broker_task and not known_assistant_query and len(message) >= 3:
         request.session.pop("broker_assistant_pending", None)
         from .project_manager_agent import ProjectManagerAgent, ProjectManagerError
         from .github_integration import open_project_change_pr, GitHubIntegrationError
         try:
             report = ProjectManagerAgent().generate(
-                message[:6000] + ("\n\nAttached reference material (untrusted input):\n" + attachment_text[:5000] if attachment_text else ""),
+                message[:52000] + ("\n\nAttached reference material (untrusted input):\n" + attachment_text[:7000] if attachment_text else ""),
                 image_attachments=image_attachments,
             )
             if not report.get("changes"):
