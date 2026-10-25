@@ -601,11 +601,16 @@ def broker_integration_assistant_chat(request):
             run.status = "failed"
             run.failure_detail = str(exc)[:4000]
             run.save(update_fields=["status", "failure_detail", "updated_at"])
+            request.session.pop("broker_assistant_pending", None)
             return JsonResponse({"reply": f"I couldn't create a safe draft for {provider_name}: {str(exc)[:700]}. The failure is recorded; no generated code was enabled."})
 
-    request.session["broker_assistant_pending"] = pending
     if provider_name and not api_docs:
-        return JsonResponse({"reply": f"I identified {provider_name} and attempted to retrieve its documentation automatically, but the official source was unavailable or did not expose enough readable API details. I have not guessed the API contract or opened a speculative PR. You can retry later; no additional form is needed.", "action": "provider_research_unavailable"})
+        # A failed provider-research attempt must not hijack subsequent unrelated
+        # chat turns. The previous implementation kept this pending state forever,
+        # causing "How are you?" and other messages to replay the stale Forex reply.
+        request.session.pop("broker_assistant_pending", None)
+        return JsonResponse({"reply": f"I identified {provider_name} and attempted to retrieve its documentation automatically, but the official source was unavailable or did not expose enough readable API details. I have not guessed the API contract or opened a speculative PR. To retry, send the provider name again. You can also continue with any unrelated engineering question.", "action": "provider_research_unavailable"})
+    request.session["broker_assistant_pending"] = pending
 
     if any(term in lower for term in ("add broker", "new broker", "integrate", "create adapter", "request a broker", "support broker")):
         return JsonResponse({"reply": "Tell me the broker or provider name only. I will research its official documentation, inspect the existing integration architecture, and prepare a review-only draft PR when the official API contract can be verified. I will not invent endpoints or enable unverified trading code."})
