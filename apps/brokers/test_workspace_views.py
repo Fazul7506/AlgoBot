@@ -102,3 +102,26 @@ class BrokerIntegrationManagementPageTests(TestCase):
         self.assertIn("attempted to retrieve its documentation automatically", payload["reply"])
         self.assertNotIn("paste", payload["reply"].lower())
         fetch_docs.assert_called_once_with("Example Provider")
+
+    @patch("apps.brokers.workspace_views._fetch_official_broker_documentation", return_value="")
+    def test_unrelated_message_does_not_repeat_failed_provider_research_reply(self, fetch_docs):
+        chat_url = reverse("broker_integration_assistant_chat")
+        first = self.client.post(
+            chat_url,
+            data='{"message":"Forex","attachments":[]}',
+            content_type="application/json",
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()["action"], "provider_research_unavailable")
+
+        with patch("apps.brokers.project_chat_agent.ProjectChatAgent.answer", return_value="I'm doing well. What would you like to work on?"):
+            second = self.client.post(
+                chat_url,
+                data='{"message":"How are you","attachments":[]}',
+                content_type="application/json",
+            )
+
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json()["action"], "chat_answer")
+        self.assertIn("I'm doing well", second.json()["reply"])
+        self.assertNotIn("identified Forex", second.json()["reply"])
