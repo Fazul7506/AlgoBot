@@ -212,7 +212,7 @@ def broker_integration_assistant_chat(request):
     docs = docs_match.group(1).strip() if docs_match else ""
     if docs and len(docs) >= 80:
         pending["api_docs"] = docs[:60000]
-    elif len(message) >= 500 and pending.get("provider_name"):
+    elif len(message) >= 80 and pending.get("provider_name"):
         # Long, directly pasted technical material can be supplied as the next chat turn.
         pending["api_docs"] = message[:60000]
 
