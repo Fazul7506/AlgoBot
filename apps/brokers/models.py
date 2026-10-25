@@ -29,8 +29,9 @@ class Broker(models.Model):
         adapter_state = str(metadata.get("adapter_state") or "").lower()
         return bool(
             self.supports_live
+            and self.status == "active"
             and self.broker_type in PRODUCTION_BROKERS
-            and adapter_state not in {"scaffold", "draft", "unverified", "disabled"}
+            and adapter_state in {"", "production"}
         )
 
     @property
