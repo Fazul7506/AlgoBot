@@ -292,7 +292,8 @@ def broker_integration_assistant_chat(request):
         integration_request.status = "in_progress"
         integration_request.save(update_fields=["status", "updated_at"])
         request.session["broker_assistant_pending"] = pending
-        return JsonResponse({"reply": f"I'm working on marketplace request #{integration_request.pk} for {integration_request.provider_name}. Request details: {integration_request.use_case[:700]}. Please paste at least 80 characters of official provider API documentation in your next message so I can prepare a review-only adapter PR. The request is now marked In Progress.", "action": "request_selected", "request_id": integration_request.pk})
+        # Continue into the autonomous provider research and draft workflow below; never ask the user to paste API documentation.
+        lower = f"integrate {integration_request.provider_name}"
 
     if any(term in lower for term in ("pending requests", "list broker requests", "show broker requests", "integration requests", "marketplace requests")):
         saved_requests = list(BrokerIntegrationRequest.objects.exclude(status="rejected")[:10])
