@@ -33,14 +33,16 @@ class BrokerMarketplaceRequestTests(TestCase):
         self.assertEqual(saved.provider_website, "https://example.com")
         self.assertIn("request_id", response.json())
 
-    def test_marketplace_request_requires_provider_and_use_case(self):
+    def test_marketplace_request_needs_only_provider_name(self):
         response = self.client.post(
             reverse("submit_broker_marketplace_request"),
-            data=json.dumps({"provider_name": "Example Broker", "use_case": ""}),
+            data=json.dumps({"provider_name": "Example Broker"}),
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(BrokerIntegrationRequest.objects.count(), 0)
+        self.assertEqual(response.status_code, 201)
+        saved = BrokerIntegrationRequest.objects.get(provider_name="Example Broker")
+        self.assertIn("Example Broker", saved.use_case)
+        self.assertEqual(saved.provider_website, "")
 
     def test_marketplace_request_rejects_invalid_website_scheme(self):
         response = self.client.post(
