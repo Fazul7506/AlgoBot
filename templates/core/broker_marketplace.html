@@ -73,11 +73,7 @@
           <form class="broker-request-form" id="broker-request-form" data-broker-request-form hidden>
             {% csrf_token %}
             <label for="broker-request-name">Broker name <span aria-hidden="true">*</span></label>
-            <input id="broker-request-name" name="provider_name" maxlength="120" required autocomplete="organization" placeholder="e.g. Interactive Brokers">
-            <label for="broker-request-use-case">What do you need it for? <span aria-hidden="true">*</span></label>
-            <textarea id="broker-request-use-case" name="use_case" maxlength="2000" required rows="3" placeholder="Markets, account connection, or capabilities you need"></textarea>
-            <label for="broker-request-website">Official website <span>(optional)</span></label>
-            <input id="broker-request-website" name="provider_website" type="url" maxlength="300" placeholder="https://example.com" inputmode="url">
+            <input id="broker-request-name" name="provider_name" maxlength="120" required autocomplete="organization" placeholder="Enter broker name">
             <button class="broker-btn primary" type="submit" data-broker-request-submit>Submit request</button>
           </form>
           <p class="broker-request-feedback" data-request-broker-feedback role="status" aria-live="polite"></p>
@@ -169,16 +165,13 @@
      const formData=new FormData(requestForm);
      const csrf=formData.get("csrfmiddlewaretoken")||"";
      const provider=String(formData.get("provider_name")||"").trim();
-     const useCase=String(formData.get("use_case")||"").trim();
-     const website=String(formData.get("provider_website")||"").trim();
-     if(!provider||!useCase){requestFeedback.textContent="Enter the broker name and explain what you need.";return;}
-     if(website){try{const parsed=new URL(website);if(parsed.protocol!=="https:"&&parsed.protocol!=="http:")throw new Error();}catch(_){requestFeedback.textContent="Enter a valid official website URL, including https://.";return;}}
+     if(!provider){requestFeedback.textContent="Enter the broker name.";return;}
      submitButton.disabled=true;requestButton.disabled=true;submitButton.textContent="Submitting…";requestFeedback.textContent="Submitting your broker request securely…";
      try{
-       const response=await fetch("/api/broker-integration-requests/",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrf,"Accept":"application/json"},body:JSON.stringify({provider_name:provider,use_case:useCase,provider_website:website})});
+       const response=await fetch("/api/broker-integration-requests/",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrf,"Accept":"application/json"},body:JSON.stringify({provider_name:provider})});
        const data=await response.json().catch(()=>({}));
        if(!response.ok)throw new Error(data.detail||data.message||"Unable to save the broker request.");
-       requestFeedback.textContent="Request #"+data.request_id+" submitted. The AlgoBot team can now review your broker request.";
+       requestFeedback.textContent="Request #"+data.request_id+" submitted for "+provider+". The AlgoBot team can now review it.";
        requestFeedback.classList.add("is-success");requestForm.reset();requestForm.hidden=true;requestButton.setAttribute("aria-expanded","false");requestButton.textContent="Request Submitted";requestButton.disabled=true;
      }catch(error){requestFeedback.textContent=error.message||"Unable to save the broker request. Please try again.";requestFeedback.classList.remove("is-success");}
      finally{submitButton.disabled=false;submitButton.textContent="Submit request";if(!requestButton.disabled)requestButton.disabled=false;}
