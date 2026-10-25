@@ -1,6 +1,7 @@
 import io
 import zipfile
 from unittest import TestCase
+from unittest.mock import Mock, patch
 
 from apps.brokers.attachment_extraction import (
     AttachmentExtractionError,
@@ -28,6 +29,21 @@ class AttachmentExtractionTests(TestCase):
         extracted = extract_document_text(".docx", output.getvalue())
         self.assertIn("AlgoBot integration plan", extracted)
         self.assertNotIn("vbaProject", extracted)
+
+    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"})
+    @patch("requests.post")
+    def test_audio_transcription_returns_transcript_without_exposing_api_key(self, post):
+        from apps.brokers.attachment_extraction import transcribe_audio
+        response = Mock()
+        response.ok = True
+        response.json.return_value = {"text": "Turn left at the next street."}
+        post.return_value = response
+
+        transcript = transcribe_audio(b"audio bytes", "sample.wav")
+
+        self.assertEqual(transcript, "Turn left at the next street.")
+        self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Bearer test-key")
+        self.assertNotIn("test-key", transcript)
 
     def test_unknown_binary_format_is_rejected(self):
         with self.assertRaises(AttachmentExtractionError):
