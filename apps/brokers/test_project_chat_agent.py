@@ -39,3 +39,21 @@ class ProjectChatAgentTests(TestCase):
         self.assertIn("dashboard", answer)
         payload = post.call_args.kwargs["json"]["input"][0]["content"]
         self.assertEqual(payload[1]["type"], "input_image")
+    @patch.dict("os.environ", {"NVIDIA_API_KEY": "nvidia-test-key"})
+    @patch("apps.brokers.project_chat_agent._inventory", return_value=([], []))
+    @patch("apps.brokers.project_chat_agent.requests.post")
+    def test_falls_back_when_openai_is_unavailable(self, post, inventory):
+        unavailable = Mock()
+        unavailable.ok = False
+        unavailable.status_code = 429
+        fallback = Mock()
+        fallback.ok = True
+        fallback.json.return_value = {"choices": [{"message": {"content": "Fallback answer."}}]}
+        post.side_effect = [unavailable, fallback]
+
+        answer = ProjectChatAgent(api_key="openai-test-key").answer("Help me debug this")
+
+        self.assertEqual(answer, "Fallback answer.")
+        self.assertEqual(post.call_count, 2)
+        self.assertIn("chat/completions", post.call_args.kwargs.get("url", post.call_args.args[0]))
+
