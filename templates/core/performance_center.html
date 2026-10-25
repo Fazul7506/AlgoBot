@@ -84,7 +84,7 @@
     svg.setAttribute('aria-label',note.textContent);
   }
   buttons.forEach(function(button){button.addEventListener('click',function(){render(button.getAttribute('data-pf-view'))})});
-  var wins=Number({{ wins|default:0 }}),losses=Number({{ losses|default:0 }}),total=wins+losses, circumference=2*Math.PI*39;
+  var wins=Number({{ wins|default:0 }}),losses=Number({{ losses|default:0 }}),breakeven=Number({{ breakeven|default:0 }}),total=wins+losses+breakeven, circumference=2*Math.PI*39;
   var winArc=root.querySelector('[data-pf-donut-win]'),lossArc=root.querySelector('[data-pf-donut-loss]');
   if(total){var winLength=circumference*wins/total,lossLength=circumference*losses/total;winArc.setAttribute('stroke-dasharray',winLength+' '+(circumference-winLength));winArc.setAttribute('stroke-dashoffset','0');lossArc.setAttribute('stroke-dasharray',lossLength+' '+(circumference-lossLength));lossArc.setAttribute('stroke-dashoffset',String(-winLength))}
   render('cumulative');
