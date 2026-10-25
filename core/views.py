@@ -167,6 +167,11 @@ def broker_connect_page(request): return deriv_login(request)
 @login_required
 def broker_marketplace_page(request):
     from apps.brokers.models import BrokerConnection
+    # The marketplace must not depend on OAuth having run first or on a
+    # background ranking task having populated the catalog.
+    # get_or_create makes this safe to run repeatedly and preserves admin edits.
+    from apps.brokers.services import BrokerManager
+    BrokerManager().ensure_defaults()
     brokers = list(Broker.objects.all().order_by('name'))
     active_accounts = BrokerAccount.objects.filter(user=request.user, status='active', token_status='active').select_related('broker').prefetch_related('connections')
     connected_types = set()
