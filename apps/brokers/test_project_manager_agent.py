@@ -14,6 +14,7 @@ class ProjectManagerPathGuardTests(TestCase):
         self.assertFalse(_is_allowed_path("apps/accounts/migrations/0001_initial.py", allow_new=True))
         self.assertFalse(_is_allowed_path("apps/core/.env.production", allow_new=True))
         self.assertFalse(_is_allowed_path("requirements.txt", allow_new=True))
+        self.assertFalse(_is_allowed_path("config/settings/base.py", allow_new=False))
 
     def test_new_files_are_limited_to_application_source_areas(self):
         self.assertTrue(_is_allowed_path("apps/new_feature/service.py", allow_new=True))
