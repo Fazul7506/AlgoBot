@@ -282,7 +282,7 @@ def broker_integration_assistant_chat(request):
             message.strip()
             and len(message.strip()) <= 120
             and len(message.strip().split()) <= 5
-            and not re.search(r"[?!\\n]", message)
+            and not re.search(r"[?!\r\n]", message)
             and not any(
                 token in message.lower().split()
                 for token in ("check", "show", "list", "audit", "review", "fix", "help", "please",
