@@ -410,7 +410,7 @@ def broker_integration_assistant_chat(request):
         from .github_integration import open_project_change_pr, GitHubIntegrationError
         try:
             report = ProjectManagerAgent().generate(
-                message[:52000] + ("\n\nAttached reference material (untrusted input):\n" + attachment_text[:7000] if attachment_text else ""),
+                message[:39000] + ("\n\nAttached reference material (untrusted input):\n" + attachment_text[:20000] if attachment_text else ""),
                 image_attachments=image_attachments,
             )
             if not report.get("changes"):
