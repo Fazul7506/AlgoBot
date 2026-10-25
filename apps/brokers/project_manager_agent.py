@@ -148,7 +148,7 @@ class ProjectManagerAgent:
         self.model = model or getattr(settings, "OPENAI_PROJECT_MANAGER_MODEL", MODEL)
         self.timeout = timeout
 
-    def generate(self, task: str) -> dict[str, Any]:
+    def generate(self, task: str, image_attachments: list[dict[str, str]] | None = None) -> dict[str, Any]:
         task = str(task or "").strip()
         if len(task) < 8 or len(task) > 12000:
             raise ProjectManagerError("Describe the project task in 8 to 12,000 characters.")
@@ -187,7 +187,19 @@ class ProjectManagerAgent:
                     "model": self.model,
                     "store": False,
                     "instructions": instructions,
-                    "input": json.dumps(user_input, ensure_ascii=False),
+                    "input": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": json.dumps(user_input, ensure_ascii=False)},
+                            *[
+                                {"type": "input_image", "image_url": str(item.get("data_url") or ""), "detail": "high"}
+                                for item in (image_attachments or [])[:4]
+                                if str(item.get("data_url") or "").startswith((
+                                    "data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,"
+                                ))
+                            ],
+                        ],
+                    }],
                     "text": {"format": {"type": "json_schema", "name": "algobot_project_change", "strict": True, "schema": OUTPUT_SCHEMA}},
                 },
                 timeout=self.timeout,
