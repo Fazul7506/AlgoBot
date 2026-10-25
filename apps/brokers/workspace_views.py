@@ -1,6 +1,7 @@
 """Standalone, staff-gated Broker Integration Management workspace."""
 import json
 import re
+from pathlib import Path
 
 from django.contrib import messages
 from django.http import JsonResponse
@@ -8,6 +9,88 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.shortcuts import render, redirect
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods, require_POST
+
+# Provider documentation sources are fixed, official origins (never user-supplied URLs).
+_OFFICIAL_BROKER_DOCS = {
+    "alpaca": "https://docs.alpaca.markets/docs",
+    "binance": "https://developers.binance.com/docs/binance-spot-api-docs",
+    "bybit": "https://bybit-exchange.github.io/docs/v5/intro",
+    "ctrader": "https://help.ctrader.com/open-api/",
+    "deriv": "https://developers.deriv.com/docs/",
+    "dxtrade": "https://dx.trade/",
+    "exness": "https://get.exness.help/",
+    "forex_com": "https://www.forex.com/en-us/market-analysis/latest-research/",
+    "forexcom": "https://www.forex.com/en-us/market-analysis/latest-research/",
+    "ic_markets": "https://www.icmarkets.com/global/en/",
+    "interactive_brokers": "https://www.interactivebrokers.com/campus/ibkr-api-page/",
+    "metatrader_gateway": "https://www.metatrader5.com/en/terminal/help/algotrading",
+    "metatrader_5": "https://www.metatrader5.com/en/terminal/help/algotrading",
+    "mt5": "https://www.metatrader5.com/en/terminal/help/algotrading",
+    "oanda": "https://developer.oanda.com/rest-live-v20/introduction/",
+    "pepperstone": "https://pepperstone.com/",
+    "kraken": "https://docs.kraken.com/api/",
+    "coinbase": "https://docs.cdp.coinbase.com/",
+    "xtb": "https://www.xtb.com/",
+}
+
+
+def _fetch_official_broker_documentation(provider_name):
+    """Best-effort retrieval from a fixed provider documentation origin."""
+    from html.parser import HTMLParser
+    from urllib.parse import urlparse
+    import requests
+
+    class TextExtractor(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.parts = []
+            self.skip_depth = 0
+
+        def handle_starttag(self, tag, attrs):
+            if tag in {"script", "style", "noscript", "svg"}:
+                self.skip_depth += 1
+
+        def handle_endtag(self, tag):
+            if tag in {"script", "style", "noscript", "svg"} and self.skip_depth:
+                self.skip_depth -= 1
+
+        def handle_data(self, data):
+            if not self.skip_depth and data.strip():
+                self.parts.append(data.strip())
+
+    slug = slugify(provider_name).replace("-", "_")
+    url = _OFFICIAL_BROKER_DOCS.get(slug)
+    if not url or urlparse(url).scheme != "https":
+        return ""
+    try:
+        response = requests.get(
+            url, timeout=(4, 8), allow_redirects=True,
+            headers={"User-Agent": "AlgoBot-Broker-Integration-Research/1.0"},
+        )
+        if not response.ok or len(response.content) > 1_000_000:
+            return ""
+        source_host = (urlparse(url).hostname or "").lower()
+        final_host = (urlparse(response.url).hostname or "").lower()
+        if (
+            urlparse(response.url).scheme != "https"
+            or not source_host
+            or not final_host
+            or not (final_host == source_host or final_host.endswith("." + source_host))
+        ):
+            return ""
+        parser = TextExtractor()
+        parser.feed(response.text[:1_000_000])
+        extracted = " ".join(parser.parts)
+        if len(extracted) < 80 or not any(
+            marker in extracted.lower()
+            for marker in ("api", "endpoint", "authentication", "authorization", "websocket", "rest")
+        ):
+            return ""
+        return ("Official source: " + url + "\nRetrieved content: " + extracted)[:60000]
+    except (requests.RequestException, ValueError):
+        return ""
+
+
 
 from .models import Broker, BrokerIntegrationRequest, BrokerIntegrationRun
 
@@ -27,10 +110,10 @@ def broker_integration_management_page(request):
         if action == "generate_pr":
             from .integration_agent import BrokerIntegrationAgent, BrokerIntegrationAgentError
             from .github_integration import open_provider_draft_pr, GitHubIntegrationError
-            api_docs = request.POST.get("api_docs", "").strip()
+            api_docs = request.POST.get("api_docs", "").strip() or _fetch_official_broker_documentation(provider_name)
             slug = slugify(request.POST.get("provider_slug") or provider_name).replace("-", "_")
             if not provider_name or not slug or not api_docs:
-                messages.error(request, "Provider name and API documentation are required.")
+                messages.error(request, "Provider name is required. I could not verify readable API documentation from the provider's official source, so no speculative integration PR was opened.")
                 return redirect("broker_integration_management")
             run = BrokerIntegrationRun.objects.create(
                 provider_name=provider_name[:120], provider_slug=slug,
@@ -143,8 +226,69 @@ def broker_integration_assistant_chat(request):
         return JsonResponse({"reply": "I couldn't read that message. Please try again."}, status=400)
 
     message = str(payload.get("message") or "").strip()
-    if not message:
-        return JsonResponse({"reply": "Type a message and I'll help with the broker integration workspace."}, status=400)
+    raw_attachments = payload.get("attachments") or []
+    if not isinstance(raw_attachments, list) or len(raw_attachments) > 10:
+        return JsonResponse({"reply": "Attach up to 10 files at a time."}, status=400)
+    attachment_text_parts = []
+    image_attachments = []
+    from .attachment_extraction import (
+        AttachmentExtractionError, AUDIO_EXTENSIONS, IMAGE_MIME_TYPES, TEXT_EXTENSIONS,
+        DOCUMENT_EXTENSIONS, decode_data_url, extract_document_text, transcribe_audio,
+    )
+    supported_extensions = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS
+    encoded_bytes_total = 0
+    for item in raw_attachments:
+        if not isinstance(item, dict):
+            return JsonResponse({"reply": "One of the attachments is invalid."}, status=400)
+        name = str(item.get("name") or "attachment")[:180]
+        extension = Path(name).suffix.lower()
+        mime_type = str(item.get("type") or "").lower().split(";", 1)[0]
+        if extension in {".png", ".jpg", ".jpeg", ".webp"} or mime_type in IMAGE_MIME_TYPES:
+            if mime_type not in IMAGE_MIME_TYPES:
+                return JsonResponse({"reply": f"{name} has an unsupported image type."}, status=400)
+            data_url = str(item.get("data_url") or "")
+            try:
+                validated_mime, image_bytes = decode_data_url(data_url, mime_type)
+            except AttachmentExtractionError as exc:
+                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+            encoded_bytes_total += len(image_bytes)
+            image_attachments.append({"name": name, "data_url": data_url})
+        elif extension in TEXT_EXTENSIONS and isinstance(item.get("text"), str):
+            text_content = item["text"]
+            if len(text_content.encode("utf-8", errors="replace")) > 200_000:
+                return JsonResponse({"reply": f"{name} is too large to process as text (200 KB maximum)."}, status=400)
+            attachment_text_parts.append(f"\n\nAttached file: {name}\n<attached_file>\n{text_content}\n</attached_file>")
+            encoded_bytes_total += len(text_content.encode("utf-8", errors="replace"))
+        elif extension in DOCUMENT_EXTENSIONS:
+            data_url = str(item.get("data_url") or "")
+            try:
+                _, binary_data = decode_data_url(data_url)
+                extracted = extract_document_text(extension, binary_data)
+            except AttachmentExtractionError as exc:
+                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+            encoded_bytes_total += len(binary_data)
+            attachment_text_parts.append(
+                f"\n\nExtracted text from attachment: {name}\n<attached_file>\n{extracted}\n</attached_file>"
+            )
+        elif extension in AUDIO_EXTENSIONS:
+            data_url = str(item.get("data_url") or "")
+            try:
+                _, audio_data = decode_data_url(data_url)
+                transcript = transcribe_audio(audio_data, name)
+            except AttachmentExtractionError as exc:
+                return JsonResponse({"reply": f"{name}: {exc}"}, status=400)
+            encoded_bytes_total += len(audio_data)
+            attachment_text_parts.append(
+                f"\n\nTranscript from audio attachment: {name}\n<attached_audio_transcript>\n{transcript}\n</attached_audio_transcript>"
+            )
+        else:
+            return JsonResponse({
+                "reply": f"{name} has an unsupported format. Supported attachments include text/code, PDF, DOCX, PPTX, XLSX, ODT, ODS, EPUB, and PNG/JPEG/WebP images."
+            }, status=400)
+        if encoded_bytes_total > 12 * 1024 * 1024:
+            return JsonResponse({"reply": "Combined attachments exceed the 12 MB total limit. Send fewer or smaller files."}, status=400)
+    if not message and not raw_attachments:
+        return JsonResponse({"reply": "Type a message or attach a file."}, status=400)
     if len(message) > 60000:
         return JsonResponse({"reply": "That message is too long. Send the official API documentation in smaller excerpts."}, status=400)
 
@@ -157,8 +301,148 @@ def broker_integration_assistant_chat(request):
         candidate = provider_match.group(1).strip(" ._-")
         if candidate and candidate.lower() not in {"a broker", "broker", "integration", "support"}:
             pending["provider_name"] = candidate[:120]
+    elif not pending.get("provider_name"):
+        # A provider name by itself is enough to begin the autonomous workflow.
+        known_names = {
+            "alpaca": "Alpaca", "binance": "Binance", "bybit": "Bybit",
+            "ctrader": "cTrader", "deriv": "Deriv", "dxtrade": "DXTrade",
+            "exness": "Exness", "forex.com": "Forex.com", "forex_com": "Forex.com",
+            "ic markets": "IC Markets", "ic_markets": "IC Markets",
+            "interactive brokers": "Interactive Brokers", "interactive_brokers": "Interactive Brokers",
+            "metatrader gateway": "MetaTrader Gateway", "metatrader 5": "MetaTrader 5", "mt5": "MetaTrader 5", "mt4": "MetaTrader 4",
+            "oanda": "OANDA", "pepperstone": "Pepperstone", "kraken": "Kraken",
+            "coinbase": "Coinbase", "xtb": "XTB",
+        }
+        if message.strip().lower() in known_names:
+            pending["provider_name"] = known_names[message.strip().lower()]
+        elif (
+            message.strip()
+            and len(message.strip()) <= 120
+            and len(message.strip().split()) <= 5
+            and not re.search(r"[?!\r\n]", message)
+            and not any(
+                token in message.lower().split()
+                for token in (
+                    "check", "show", "list", "audit", "review", "fix", "help", "please",
+                    "status", "validation", "requests", "catalog", "broker", "integration",
+                    "request", "docs", "documentation", "add", "new", "implement", "improve",
+                    "refactor", "enhance", "update", "build", "repair", "bug", "feature",
+                    "codebase", "project", "health", "dead", "duplicate", "security", "error",
+                    "errors", "cleanup", "clean", "optimize", "optimise", "make", "change",
+                )
+            )
+        ):
+            # Any concise provider name can start research; it need not be in a hard-coded list.
+            pending["provider_name"] = message.strip()[:120]
 
     lower = message.lower()
+    if any(term in lower for term in (
+        "audit codebase", "audit project", "project health", "codebase health",
+        "scan the code", "repository audit", "review whole project",
+    )):
+        from .project_audit import run_project_audit
+        from django.utils import timezone
+        report = run_project_audit()
+        summary = (
+            f"Read-only project audit completed: {report['files_scanned']} source/document files scanned; "
+            f"{report['findings_count']} review candidates found."
+        )
+        candidates = report["findings"][:8]
+        if candidates:
+            summary += " Highest-priority review candidates: " + "; ".join(
+                f"{item['path']}:{item['line']} ({item['category']})"
+                for item in candidates
+            ) + "."
+        summary += " These are static matches, not confirmed defects. No files were changed and no code was executed."
+        try:
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                user=request.user,
+                title="AlgoBot project audit completed",
+                message=summary,
+                category="system",
+                priority="info",
+                status="delivered",
+                channel="in_app",
+                metadata={
+                    "source": "broker_assistant_project_audit",
+                    "files_scanned": report["files_scanned"],
+                    "findings_count": report["findings_count"],
+                    "mode": "read_only",
+                },
+                sent_at=timezone.now(),
+            )
+        except Exception:
+            # Audit output remains available in this response if notifications
+            # are temporarily unavailable; notification failures must not mask it.
+            pass
+        return JsonResponse({
+            "reply": summary,
+            "action": "project_audit",
+            "report": report,
+        })
+
+    broker_task = any(term in lower for term in (
+        "add broker", "new broker", "integrate broker", "connect broker",
+        "support broker", "broker integration",
+    ))
+    general_task = any(term in lower for term in (
+        "implement", "fix", "repair", "improve", "refactor", "enhance",
+        "update", "build", "remove duplicate", "dead code", "security issue",
+        "broken page", "bug", "feature",
+    ))
+    if general_task and not broker_task and len(message) >= 8:
+        request.session.pop("broker_assistant_pending", None)
+        from .project_manager_agent import ProjectManagerAgent, ProjectManagerError
+        from .github_integration import open_project_change_pr, GitHubIntegrationError
+        try:
+            report = ProjectManagerAgent().generate(
+                message[:6000] + ("\n\nAttached reference material (untrusted input):\n" + attachment_text[:5000] if attachment_text else ""),
+                image_attachments=image_attachments,
+            )
+            if not report.get("changes"):
+                return JsonResponse({
+                    "reply": "I inspected the task context, but could not produce a safe, sufficiently grounded patch. "
+                             + str(report.get("summary") or "No files were changed.")
+                             + " No PR was opened and no code was executed.",
+                    "action": "project_change_not_ready",
+                    "report": report,
+                })
+            result = open_project_change_pr(task=message, report=report)
+            summary = (
+                f"I prepared a review-only project change PR #{result['number']}: {result['url']}. "
+                f"{str(report.get('summary') or '')} Generated code has not been executed, deployed, or merged. "
+                "Review the full diff and run the relevant tests and production validation before merging."
+            )
+            try:
+                from apps.notifications.models import Notification
+                from django.utils import timezone
+                Notification.objects.create(
+                    user=request.user,
+                    title="AlgoBot AI project change PR opened",
+                    message=summary,
+                    category="system",
+                    priority="info",
+                    status="delivered",
+                    channel="in_app",
+                    metadata={"source": "project_manager_agent", "pr_number": result["number"], "pr_url": result["url"]},
+                    sent_at=timezone.now(),
+                )
+            except Exception:
+                pass
+            return JsonResponse({
+                "reply": summary,
+                "action": "project_pr_created",
+                "url": result["url"],
+                "pr_number": result["number"],
+                "report": report,
+            })
+        except (ProjectManagerError, GitHubIntegrationError, ValueError) as exc:
+            return JsonResponse({
+                "reply": f"I could not safely prepare a project change: {str(exc)[:700]}. "
+                         "No generated code was executed, and no project PR was confirmed.",
+                "action": "project_change_failed",
+            })
     request_match = re.search(r"(?:work on|process|start|open)\s+(?:broker\s+)?request\s*#?(\d+)", message, re.IGNORECASE)
     if request_match:
         integration_request = BrokerIntegrationRequest.objects.filter(pk=int(request_match.group(1))).first()
@@ -171,14 +455,15 @@ def broker_integration_assistant_chat(request):
         integration_request.status = "in_progress"
         integration_request.save(update_fields=["status", "updated_at"])
         request.session["broker_assistant_pending"] = pending
-        return JsonResponse({"reply": f"I'm working on marketplace request #{integration_request.pk} for {integration_request.provider_name}. Request details: {integration_request.use_case[:700]}. Please paste at least 80 characters of official provider API documentation in your next message so I can prepare a review-only adapter PR. The request is now marked In Progress.", "action": "request_selected", "request_id": integration_request.pk})
+        # Continue into the autonomous provider research and draft workflow below; never ask the user to paste API documentation.
+        lower = f"integrate {integration_request.provider_name}"
 
     if any(term in lower for term in ("pending requests", "list broker requests", "show broker requests", "integration requests", "marketplace requests")):
         saved_requests = list(BrokerIntegrationRequest.objects.exclude(status="rejected")[:10])
         if not saved_requests:
             return JsonResponse({"reply": "There are no saved broker integration requests to work on yet.", "action": "requests"})
         lines = [f"Request #{item.pk}: {item.provider_name} — {item.get_status_display()}" for item in saved_requests]
-        return JsonResponse({"reply": "Saved marketplace requests: " + "; ".join(lines) + ". To start one, message me: work on request #ID. I'll then ask for official API documentation and track the draft PR against that request.", "action": "requests"})
+        return JsonResponse({"reply": "Saved marketplace requests: " + "; ".join(lines) + ". Tell me to work on request #ID and I will research the provider documentation automatically, then track any review-only draft PR against that request. I will not ask you to paste API documentation.", "action": "requests"})
 
 
     if any(term in lower for term in ("check pr", "pull request status", "show prs", "pr status")):
@@ -212,12 +497,21 @@ def broker_integration_assistant_chat(request):
     docs = docs_match.group(1).strip() if docs_match else ""
     if docs and len(docs) >= 80:
         pending["api_docs"] = docs[:60000]
+    if attachment_text_parts:
+        existing_attachment_text = "\n".join(attachment_text_parts)
+        pending["attachment_text"] = existing_attachment_text[:200000]
     elif len(message) >= 80 and pending.get("provider_name"):
         # Long, directly pasted technical material can be supplied as the next chat turn.
         pending["api_docs"] = message[:60000]
 
     provider_name = pending.get("provider_name")
     api_docs = pending.get("api_docs")
+    attachment_text = pending.get("attachment_text", "")
+    if provider_name and not api_docs:
+        # Research the provider automatically; do not ask the user to assemble API docs.
+        api_docs = _fetch_official_broker_documentation(provider_name)
+        if api_docs:
+            pending["api_docs"] = api_docs
     if provider_name and api_docs and len(api_docs) >= 80:
         from .integration_agent import BrokerIntegrationAgent, BrokerIntegrationAgentError
         from .github_integration import open_provider_draft_pr, GitHubIntegrationError
@@ -229,7 +523,9 @@ def broker_integration_assistant_chat(request):
         )
         try:
             draft = BrokerIntegrationAgent().generate(
-                broker_slug=slug, provider_name=provider_name, api_docs=api_docs
+                broker_slug=slug, provider_name=provider_name,
+                api_docs=(api_docs + "\n\nUser-provided reference files (untrusted input):\n" + attachment_text)[:60000],
+                image_attachments=image_attachments,
             )
             report = draft.as_dict()
             if not report["static_validation"].get("passed"):
@@ -273,9 +569,9 @@ def broker_integration_assistant_chat(request):
 
     request.session["broker_assistant_pending"] = pending
     if provider_name and not api_docs:
-        return JsonResponse({"reply": f"I can start the {provider_name} integration directly from this chat. Please paste at least 80 characters of official {provider_name} API documentation into your next message (include the endpoint, authentication, and request/response details you have). I'll generate a review-only draft PR from it—no separate form is needed."})
+        return JsonResponse({"reply": f"I identified {provider_name} and attempted to retrieve its documentation automatically, but the official source was unavailable or did not expose enough readable API details. I have not guessed the API contract or opened a speculative PR. You can retry later; no additional form is needed.", "action": "provider_research_unavailable"})
 
     if any(term in lower for term in ("add broker", "new broker", "integrate", "create adapter", "request a broker", "support broker")):
-        return JsonResponse({"reply": "I can create a broker adapter draft directly from chat. Tell me the provider name and paste at least 80 characters of its official API documentation, including authentication and endpoint details. I'll validate the draft and open a review-only PR; I won't enable unverified trading code."})
+        return JsonResponse({"reply": "Tell me the broker or provider name only. I will research its official documentation, inspect the existing integration architecture, and prepare a review-only draft PR when the official API contract can be verified. I will not invent endpoints or enable unverified trading code."})
 
-    return JsonResponse({"reply": "I can check saved integration PRs and validation records, open the broker catalog, or prepare a new broker adapter. Tell me what you want to change; for a new adapter, include the provider name and official API documentation. I'll report only actions and statuses confirmed by AlgoBot."})
+    return JsonResponse({"reply": "I can audit project health, prepare review-only changes across eligible application source areas, and inspect saved broker requests, pull requests, and validation records. For a general engineering task, describe the change you want. For a new broker integration, send only the provider name; I will research official documentation automatically. Generated changes are never executed or merged automatically."})

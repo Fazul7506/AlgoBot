@@ -465,7 +465,7 @@ def _strategy_signals_impl(request):
     live_mode_ready = (
         account.account_type != "real"
         or (
-            bool(getattr(account.broker, "supports_live", False))
+            bool(getattr(account.broker, "is_live_trading_supported", False))
             and bool(getattr(settings, "ALLOW_LIVE_TRADING", False))
         )
     )

@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from unittest.mock import patch
 
 from apps.brokers.models import Broker, BrokerIntegrationRequest, BrokerIntegrationRun
 
@@ -47,6 +48,10 @@ class BrokerIntegrationManagementPageTests(TestCase):
         self.assertContains(response, "Recent Pull Requests")
         self.assertContains(response, "Validation Pipeline")
         self.assertContains(response, "AlgoBot Assistant")
+        self.assertContains(response, 'id="bi-assistant-files"')
+        self.assertContains(response, "bi-logo--provider")
+        self.assertContains(response, "Live setup required")
+        self.assertNotContains(response, "No live")
         self.assertEqual(response.context["total_brokers"], 1)
         self.assertEqual(response.context["open_prs"], 1)
         self.assertEqual(response.context["total_requests"], 1)
@@ -69,3 +74,31 @@ class BrokerIntegrationManagementPageTests(TestCase):
         self.assertEqual(saved.provider_name, "Example Provider")
         self.assertEqual(saved.requested_by, self.admin)
         self.assertEqual(saved.status, "pending")
+
+    @patch("apps.brokers.workspace_views._fetch_official_broker_documentation", return_value="")
+    def test_generate_pr_needs_only_provider_name_and_researches_docs_automatically(self, fetch_docs):
+        response = self.client.post(
+            self.url,
+            {
+                "action": "generate_pr",
+                "provider_name": "Example Provider",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        fetch_docs.assert_called_once_with("Example Provider")
+        self.assertEqual(BrokerIntegrationRun.objects.count(), 0)
+
+    @patch("apps.brokers.workspace_views._fetch_official_broker_documentation", return_value="")
+    def test_chat_accepts_provider_name_alone_without_asking_for_docs(self, fetch_docs):
+        response = self.client.post(
+            reverse("broker_integration_assistant_chat"),
+            data='{"message":"Example Provider","attachments":[]}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("attempted to retrieve its documentation automatically", payload["reply"])
+        self.assertNotIn("paste", payload["reply"].lower())
+        fetch_docs.assert_called_once_with("Example Provider")

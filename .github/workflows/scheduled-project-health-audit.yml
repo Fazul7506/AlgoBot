@@ -1,0 +1,61 @@
+name: Scheduled Project Health Audit
+
+on:
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run safe static audit
+        id: audit
+        shell: bash
+        run: |
+          python -c 'import json; from apps.brokers.project_audit import run_project_audit; print(json.dumps(run_project_audit(), indent=2, sort_keys=True))' > project-audit-report.json
+          count="$(python -c 'import json; print(json.load(open("project-audit-report.json"))["findings_count"])')"
+          scanned="$(python -c 'import json; print(json.load(open("project-audit-report.json"))["files_scanned"])')"
+          echo "findings_count=$count" >> "$GITHUB_OUTPUT"
+          echo "files_scanned=$scanned" >> "$GITHUB_OUTPUT"
+          hygiene_exit=0
+          python scripts/repository_hygiene.py > repository-hygiene-report.txt 2>&1 || hygiene_exit=$?
+          echo "hygiene_exit_code=$hygiene_exit" >> "$GITHUB_OUTPUT"
+          echo "Repository hygiene exit code: $hygiene_exit"
+          echo "Scanned $scanned files; found $count review candidates."
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-project-audit
+          path: |
+            project-audit-report.json
+            repository-hygiene-report.txt
+          retention-days: 30
+      - name: Notify repository maintainers when findings exist
+        if: steps.audit.outputs.findings_count != '0' || steps.audit.outputs.hygiene_exit_code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINDINGS_COUNT: ${{ steps.audit.outputs.findings_count }}
+          FILES_SCANNED: ${{ steps.audit.outputs.files_scanned }}
+          HYGIENE_EXIT_CODE: ${{ steps.audit.outputs.hygiene_exit_code }}
+        shell: bash
+        run: |
+          title="[Scheduled Audit] AlgoBot source health review"
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title "[Scheduled Audit] AlgoBot source health review"' --json number --jq '.[0].number // empty')"
+          body="$(printf 'The scheduled read-only audit scanned %s source/document files and reported %s static review candidates. Repository hygiene exit code: %s (non-zero indicates duplicate/canonical violations; unreferenced code is reported as candidates only). These are static findings, not confirmed defects. Download the scheduled-project-audit artifact from this workflow run for both reports. No files were changed and no code was executed.\n\nWorkflow run: %s' "$FILES_SCANNED" "$FINDINGS_COUNT" "$HYGIENE_EXIT_CODE" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

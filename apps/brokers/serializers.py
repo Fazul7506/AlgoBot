@@ -4,7 +4,18 @@ from . import constants as broker_constants
 from core.account_context import get_active_account
 
 class BrokerSerializer(serializers.ModelSerializer):
-    class Meta: model=Broker; fields='__all__'
+    supports_live = serializers.SerializerMethodField()
+    live_capability_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Broker
+        fields = "__all__"
+
+    def get_supports_live(self, obj):
+        return bool(obj.is_live_trading_supported)
+
+    def get_live_capability_status(self, obj):
+        return obj.live_capability_status
 
 class BrokerAccountSerializer(serializers.ModelSerializer):
     broker=serializers.SerializerMethodField(); broker_name=serializers.CharField(source='broker.name',read_only=True); broker_account_id=serializers.CharField(source='account_id',read_only=True); deriv_identity=serializers.SerializerMethodField(); account_type=serializers.SerializerMethodField(); avatar_url=serializers.SerializerMethodField(); display_name=serializers.SerializerMethodField(); branding=serializers.SerializerMethodField(); is_connected=serializers.SerializerMethodField(); credential_status=serializers.CharField(read_only=True); data_freshness=serializers.SerializerMethodField(); switch_enabled=serializers.SerializerMethodField(); equity=serializers.SerializerMethodField(); margin=serializers.SerializerMethodField(); free_margin=serializers.SerializerMethodField(); net_profit_loss=serializers.SerializerMethodField(); is_active=serializers.SerializerMethodField()
