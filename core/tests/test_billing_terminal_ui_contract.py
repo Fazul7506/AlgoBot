@@ -286,7 +286,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         postmortem_template = Path("templates/core/trade_postmortems.html").read_text(encoding="utf-8")
         self.assertIn('row["display_name"] = market_names.get', portfolio_views)
         self.assertIn('trade.display_name = market_names.get', portfolio_views)
-        self.assertIn("{{ row.display_name|default:'Market instrument' }}", performance_template)
+        self.assertIn('{{ trade.display_name|default:trade.symbol|default:"Market instrument" }}', performance_template)
         self.assertIn('{{ t.display_name|default:"Market instrument" }}', postmortem_template)
         self.assertNotIn('>{{ row.symbol }}<', performance_template)
         self.assertNotIn('>{{ t.symbol }}<', postmortem_template)
