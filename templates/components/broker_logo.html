@@ -1,5 +1,5 @@
 {% load static %}
-<div class="broker-logo{% if compact %} broker-logo--small{% endif %} broker-logo--{{ broker.broker_type|slugify }}">
+<div class="broker-logo bi-logo{% if compact %} broker-logo--small bi-logo--small{% endif %} broker-logo--{{ broker.broker_type|slugify }} bi-logo--{{ broker.broker_type|slugify }}">
   {% with provider=broker.broker_type|lower %}
     {% if provider == 'alpaca' %}<img src="https://cdn.simpleicons.org/alpaca" alt="Alpaca brand SVG" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'binance' %}<img src="https://cdn.simpleicons.org/binance" alt="Binance brand SVG" loading="lazy" referrerpolicy="no-referrer">
