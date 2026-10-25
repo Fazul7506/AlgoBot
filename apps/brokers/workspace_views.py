@@ -90,6 +90,7 @@ def broker_integration_management_page(request):
         related_run = runs_by_slug.get(key)
         broker.integration_pr_number = related_run.pull_request_number if related_run else None
         broker.integration_pr_url = related_run.pull_request_url if related_run else ""
+        broker.integration_updated_at = related_run.updated_at if related_run else broker.created_at
     latest_run = runs[0] if runs else None
     latest_validation = (latest_run.validation_results or {}) if latest_run else {}
     static_validation = latest_validation.get("static_validation", {})
@@ -105,6 +106,7 @@ def broker_integration_management_page(request):
         "title": "Broker Integration Management",
         "brokers": brokers, "total_brokers": len(brokers),
         "providers": sorted({broker.broker_type for broker in brokers}),
+        "total_requests": BrokerIntegrationRequest.objects.count(),
         "open_prs": sum(1 for run in runs if run.pull_request_number and run.status not in {"merged", "failed"}),
         "completed_requests": BrokerIntegrationRequest.objects.filter(status="completed").count(),
         "in_progress_requests": BrokerIntegrationRequest.objects.filter(status="in_progress").count(),
