@@ -2,10 +2,10 @@
 <div class="broker-logo bi-logo bi-logo--provider{% if compact %} broker-logo--small bi-logo--small{% endif %} broker-logo--{{ broker.broker_type|slugify }} bi-logo--{{ broker.broker_type|slugify }}">
   {% with provider=broker.broker_type|lower %}
     {% if provider == 'alpaca' %}<img src="https://alpaca.markets/img/newsroom/brand-assets/primary-alpaca-logo.png" data-fallback-src="https://alpaca.markets/favicon.ico" alt="Alpaca official brand logo" loading="lazy" referrerpolicy="no-referrer">
-    {% elif provider == 'binance' %}<img src="{% static 'icons/brokers/binance.svg' %}" alt="Binance brand SVG" loading="lazy" referrerpolicy="no-referrer">
+    {% elif provider == 'binance' %}<img src="{% static 'icons/brokers/binance.svg' %}" data-fallback-src="https://www.binance.com/favicon.ico" alt="Binance brand SVG" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'bybit' %}<img src="https://www.bybit.com/common-static/fht-static/cms/7ef736d3-a12d-4e27-9bc6-42b0b0b47d8a.png?format=webp&amp;quality=65&amp;width=512" data-fallback-src="https://www.bybit.com/favicon.ico" alt="Bybit official brand logo" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'ctrader' %}<img src="https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt3a4db3259d633e7d/6aa8abe5ca2a94302fe1269b/ctrader_logo.svg?branch=main" data-fallback-src="https://help.ctrader.com/favicon.ico" alt="cTrader official SVG logo" loading="lazy" referrerpolicy="no-referrer">
-    {% elif provider == 'deriv' %}<img src="{% static 'icons/brokers/deriv.svg' %}" alt="Deriv brand SVG" loading="lazy" referrerpolicy="no-referrer">
+    {% elif provider == 'deriv' %}<img src="{% static 'icons/brokers/deriv.svg' %}" data-fallback-src="https://deriv.com/favicon.ico" alt="Deriv brand SVG" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'dxtrade' %}<img src="https://cdn.simpleicons.org/dxtrade" data-fallback-src="https://dx.trade/favicon.ico" alt="DXtrade brand mark" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'exness' %}<img src="https://d33vw3iu5hs0zi.cloudfront.net/media/exness_logo_76096879aa.svg" data-fallback-src="https://www.exness.com/favicon.ico" alt="Exness official SVG brand mark" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'forex_com' or provider == 'forexcom' %}<img src="https://cdn.simpleicons.org/forexcom" data-fallback-src="https://www.forex.com/favicon.ico" alt="FOREX.com brand mark" loading="lazy" referrerpolicy="no-referrer">
@@ -16,7 +16,7 @@
     {% elif provider == 'oanda' %}<img src="https://www.oanda.com/assets/images/oanda-logo.370e04d3507d.svg" data-fallback-src="https://www.oanda.com/favicon.ico" alt="OANDA official brand SVG" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'pepperstone' %}<img src="https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt170ddde20eb927c5/6aa8ac0963177a84cc7771bb/Pepperstone_logo.svg?branch=main" data-fallback-src="https://www.pepperstone.com/favicon.ico" alt="Pepperstone official SVG logo" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'kraken' %}<img src="https://cdn.simpleicons.org/kraken" data-fallback-src="https://www.kraken.com/favicon.ico" alt="Kraken brand SVG" loading="lazy" referrerpolicy="no-referrer">
-    {% elif provider == 'coinbase' %}<img src="{% static 'icons/brokers/coinbase.svg' %}" alt="Coinbase brand SVG" loading="lazy" referrerpolicy="no-referrer">
+    {% elif provider == 'coinbase' %}<img src="{% static 'icons/brokers/coinbase.svg' %}" data-fallback-src="https://www.coinbase.com/favicon.ico" alt="Coinbase brand SVG" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'xtb' %}<img src="https://cdn.simpleicons.org/xtb" data-fallback-src="https://www.xtb.com/favicon.ico" alt="XTB brand SVG" loading="lazy" referrerpolicy="no-referrer">
     {% else %}<svg viewBox="0 0 32 32" width="26" height="26" fill="none" role="img" aria-label="Generic broker symbol"><path d="M16 3 28 10v12L16 29 4 22V10Z" fill="#0b4d86" stroke="#7acbff" stroke-width="1.5"/><path d="M10 16h12M16 10v12" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>{% endif %}
   {% endwith %}
