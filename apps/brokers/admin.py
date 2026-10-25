@@ -25,7 +25,8 @@ class BrokerAdmin(admin.ModelAdmin):
     list_display = ["name", "broker_type", "status", "supports_demo", "live_readiness", "version"]
     list_filter = ["broker_type", "status", "supports_demo", "supports_live"]
     search_fields = ["name", "broker_type"]
-    readonly_fields = ["created_at", "supports_live"]
+    readonly_fields = ["created_at", "live_readiness"]
+    exclude = ["supports_live"]
     list_per_page = 50
 
     @admin.display(description="Live readiness")
