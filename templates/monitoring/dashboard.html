@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Mission Control | AlgoBot{% endblock %}
-{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-mission-control">{% endblock %}
+{% block title %}Monitoring | AlgoBot{% endblock %}
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261021-mobile2">{% endblock %}
 {% block content %}
 <main id="main-content" class="monitoring-workspace" data-monitoring-dashboard>
   <header class="monitoring-hero">
     <div class="monitoring-hero-icon" aria-hidden="true"><svg viewBox="0 0 48 48" role="img"><path d="M4 25h10l5-15 9 29 6-19 4 5h6" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <div class="monitoring-hero-copy"><p class="eyebrow">MISSION CONTROL</p><h1>Mission Control</h1><p>Live operational view of AlgoBot services, broker connectivity and application events.</p><p class="monitoring-subtitle">Successes, warnings, failures and information from the running platform.</p></div>
+    <div class="monitoring-hero-copy"><p class="eyebrow">OPERATIONS</p><h1>Monitoring</h1><p>Real-time platform health, trading services and system performance.</p><p class="monitoring-subtitle">Stay informed about service status, connected channels and critical issues.</p></div>
     <div class="monitoring-system-state"><span class="monitoring-shield" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 20 5v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z" fill="currentColor"/><path d="m8 12 2.5 2.5L16 9" fill="none" stroke="#05264a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><strong data-system-status-text>{{ dashboard.overall_system_health|title }}</strong><small>Current system status</small></div></div>
   </header>
 
@@ -18,16 +18,6 @@
         <article class="monitoring-card monitoring-kpi"><span class="monitoring-kpi-icon teal"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h17M7 15l4-5 3 3 5-7"/></svg></span><div><p>Open Positions</p><h2 data-current-trades>{{ dashboard.current_trades }}</h2><span class="monitoring-muted">Current account</span></div></article>
         <article class="monitoring-card monitoring-kpi"><span class="monitoring-kpi-icon amber"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5m0 3h.01"/></svg></span><div><p>Active Alerts</p><h2 data-active-alerts>{{ dashboard.active_alerts }}</h2><span class="monitoring-muted">Unresolved alerts</span></div></article>
       </section>
-
-      {% if request.user.is_staff %}
-      <section class="monitoring-panel" aria-labelledby="mission-log-title">
-        <div class="monitoring-panel-heading"><div><h2 id="mission-log-title">Live activity log</h2><p>Latest application events, newest first. This feed refreshes automatically.</p></div><span class="monitoring-updated"><span data-mission-log-count>{{ recent_logs|length }}</span> events loaded</span></div>
-        <div class="monitoring-table-wrap"><table class="monitoring-table"><thead><tr><th scope="col">Time</th><th scope="col">Level</th><th scope="col">Area</th><th scope="col">Event / diagnostic</th></tr></thead><tbody data-mission-log-body>
-        {% for event in recent_logs %}<tr><td>{{ event.timestamp|date:"Y-m-d H:i:s" }}</td><td><span class="monitoring-badge status-{{ event.level|lower }}"><i></i>{{ event.level }}</span></td><td>{{ event.stream }}<small>{{ event.source }}</small></td><td>{{ event.message }}</td></tr>{% empty %}<tr><td colspan="4" class="monitoring-empty">No persisted application events yet. New INFO, WARNING and ERROR records will appear here as the application logs them.</td></tr>{% endfor %}
-        </tbody></table></div>
-        <p class="monitoring-footnote">Sensitive credentials and request bodies are not intentionally stored in this event feed. Logs are operational diagnostics, not a substitute for trade/account records.</p>
-      </section>
-      {% endif %}
 
       <section class="monitoring-panel monitoring-service-panel">
         <div class="monitoring-panel-heading"><div><h2>Service Health</h2><p>Live status of available core services</p></div><div class="monitoring-heading-actions"><span class="monitoring-updated">Updated <span data-monitoring-updated>just now</span></span><button class="monitoring-icon-button" type="button" data-monitoring-refresh aria-label="Refresh monitoring data" title="Refresh"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/></svg></button></div></div>
@@ -59,7 +49,7 @@
       <div class="monitoring-security-note"><span aria-hidden="true">✓</span><div><strong>Monitoring is account-scoped</strong><p>Service details and events are limited to the information your account is authorized to view.</p></div></div>
     </aside>
   </div>
-  <p class="monitoring-note">System summary refreshes on request. The staff activity stream refreshes every five seconds; it does not change trading settings.</p>
+  <p class="monitoring-note">Live status is refreshed on request. Automated refresh does not run background health checks or change trading settings.</p>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/monitoring_dashboard.js' %}?v=20261026-mission-control" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/monitoring_dashboard.js' %}" defer></script>{% endblock %}
