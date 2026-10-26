@@ -35,9 +35,9 @@ LOGGING = {
     "root": {"handlers": ["console", "django_file", "error_file", "mission_control_db"], "level": "INFO"},
     "loggers": {
         "django": {"handlers": ["console", "django_file", "error_file", "mission_control_db"], "level": "INFO", "propagate": False},
-        "django.server": {"handlers": ["console", "django_file", "error_file", "mission_control_db"], "level": "INFO", "propagate": False},
+        "django.server": {"handlers": ["console", "django_file", "error_file"], "level": "INFO", "propagate": False},
         "daphne": {"handlers": ["console", "django_file", "error_file", "mission_control_db"], "level": "INFO", "propagate": False},
-        "daphne.access": {"handlers": ["console", "django_file", "error_file", "mission_control_db"], "level": "INFO", "propagate": False},
+        "daphne.access": {"handlers": ["console", "django_file", "error_file"], "level": "INFO", "propagate": False},
         "oauth": {"handlers": ["oauth_file", "error_file"], "level": "INFO", "propagate": True},
         "broker": {"handlers": ["broker_file", "error_file"], "level": "INFO", "propagate": True},
         "market": {"handlers": ["trading_file"], "level": "INFO", "propagate": True},
