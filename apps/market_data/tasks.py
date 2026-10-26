@@ -1,13 +1,9 @@
+"""Small asynchronous helpers for live market-data processing."""
 import logging
-from datetime import timedelta, timezone as dt_timezone
-import socket
-from uuid import uuid4
 
 from celery import shared_task
-from celery.signals import task_received, task_unknown, task_rejected
 
-from django.utils import timezone
-
+logger = logging.getLogger(__name__)
 
 @shared_task
 def store_tick(data):
