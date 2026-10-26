@@ -1,5 +1,6 @@
 """Canonical URL configuration for the AlgoBot Django project."""
 from django.contrib import admin
+from django.contrib.admin.views.decorators import staff_member_required
 from django.urls import path, re_path, include
 from django.views.generic import RedirectView
 from rest_framework.routers import DefaultRouter
@@ -109,7 +110,7 @@ urlpatterns = [
     path("signals/", login_required(signals_page), name="signals_page"),
     path("portfolio/", login_required(portfolio_center), name="portfolio_page"),
     path("notifications/", notification_channels_page, name="notifications_page"),
-    path("operations/mission-control/", login_required(lambda request: monitoring_views.dashboard(request, template_name="monitoring/mission_control.html")), name="mission-control-page"),
+    path("operations/mission-control/", staff_member_required(lambda request: monitoring_views.dashboard(request, template_name="monitoring/mission_control.html")), name="mission-control-page"),
     path("monitoring/", include("apps.monitoring.urls")),
     path("api/monitoring/", include("apps.monitoring.urls")),
     path("api/security/sessions/", include("core.security_sessions_urls")),
