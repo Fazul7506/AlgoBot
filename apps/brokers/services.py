@@ -25,22 +25,21 @@ def _queue_automation_event(event_name, account, payload):
         from apps.automation.tasks import process_event
         process_event.delay(event_name, "broker", payload, account.user_id)
     except Exception as exc:
-        # Render deployments can temporarily lose their Redis/Celery broker.
-        # Do not turn an otherwise successful broker lifecycle operation into
-        # an unhandled error; process the automation event synchronously as a
-        # bounded fallback, and log if both paths fail.
+        # Never execute a Celery task inline in a broker request. The task
+        # performs database queries and can exhaust the web process's small
+        # PostgreSQL connection pool during broker outages. Losing an optional
+        # automation notification is safer than blocking broker lifecycle I/O;
+        # the queue failure is logged with enough context to diagnose it.
         logger.warning(
             "broker_automation_event_queue_unavailable",
-            extra={"event_name": event_name, "broker_account_id": account.pk, "user_id": account.user_id, "error_type": type(exc).__name__},
+            extra={
+                "event_name": event_name,
+                "broker_account_id": account.pk,
+                "user_id": account.user_id,
+                "error_type": type(exc).__name__,
+                "automation_event_dropped": True,
+            },
         )
-        try:
-            from apps.automation.tasks import process_event
-            process_event.apply(args=(event_name, "broker", payload, account.user_id), throw=True)
-        except Exception:
-            logger.exception(
-                "broker_automation_event_fallback_failed",
-                extra={"event_name": event_name, "broker_account_id": account.pk, "user_id": account.user_id},
-            )
 
 
 class BrokerRegistry:
