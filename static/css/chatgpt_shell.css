@@ -114,16 +114,6 @@
 }
 
 
-/* Backfill operator controls: keyboard/touch friendly across desktop and mobile. */
-.rb-operator-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0;padding:10px 12px;border:1px solid var(--line,rgba(148,163,184,.25));border-radius:14px;background:var(--panel,rgba(15,23,42,.35))}
-.rb-operator-controls button{min-height:40px;padding:8px 14px;border-radius:10px;border:1px solid var(--line,rgba(148,163,184,.3));background:var(--panel2,#182235);color:inherit;font:inherit;font-weight:650;cursor:pointer}
-.rb-operator-controls button:focus-visible{outline:2px solid var(--accent,#38bdf8);outline-offset:2px}
-.rb-operator-controls button:disabled{opacity:.55;cursor:wait}
-.rb-operator-controls [data-backfill-action="stop"]{border-color:rgba(248,113,113,.6);color:#fca5a5}
-.rb-operator-controls [data-control-feedback]{flex:1 1 100%;font-size:.875rem;opacity:.9}
-@media(max-width:600px){.rb-operator-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.rb-operator-controls button{padding:8px 4px;font-size:.875rem}.rb-operator-controls [data-control-feedback]{grid-column:1/-1}}
-
-
 /* Global overlays must sit above the mobile navigation drawer and its backdrop. */
 #logout-modal,
 .logout-modal,
