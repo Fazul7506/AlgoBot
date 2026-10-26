@@ -36,8 +36,6 @@ class MissionControlRequestLoggingMiddleware:
         path = getattr(request, "path_info", "/")
         if path not in _IGNORED_PATHS and not path.startswith(_IGNORED_PREFIXES):
             elapsed_ms = round((time.perf_counter() - request._mission_control_started) * 1000, 2)
-            user = getattr(request, "user", None)
-            user_id = getattr(user, "pk", None) if getattr(user, "is_authenticated", False) else None
             status_code = int(getattr(response, "status_code", 500) or 500)
             level = logging.ERROR if status_code >= 500 else logging.WARNING if status_code >= 400 else logging.INFO
             response_data = getattr(response, "data", None)
