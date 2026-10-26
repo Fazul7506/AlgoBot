@@ -2,6 +2,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from datetime import timedelta
 
+from django.db import DatabaseError
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -191,9 +192,16 @@ def mission_events(request):
             Q(context__status__icontains=search) | Q(context__operation_id__icontains=search)
         )
     # Fetch one extra row to signal whether another page exists without a costly count().
-    page = list(events.order_by("-timestamp", "-id").values(
-        "id", "stream", "level", "message", "source", "timestamp", "context"
-    )[offset:offset + limit + 1])
+    try:
+        page = list(events.order_by("-timestamp", "-id").values(
+            "id", "stream", "level", "message", "source", "timestamp", "context"
+        )[offset:offset + limit + 1])
+    except DatabaseError:
+        # Keep the console API response bounded and actionable during transient pool/database failures.
+        return Response(
+            {"detail": "Log storage is temporarily unavailable. Retry shortly.", "code": "MISSION_LOG_STORAGE_UNAVAILABLE"},
+            status=503,
+        )
     has_more = len(page) > limit
     page = page[:limit]
     for event in page:
