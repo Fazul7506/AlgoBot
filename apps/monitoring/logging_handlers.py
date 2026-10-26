@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
 
 _SECRET_PATTERNS = (
     re.compile(r"(?i)(authorization\s*[:=]\s*)(?:bearer\s+)?[^\s,;]+"),
@@ -40,6 +41,10 @@ class MissionControlDatabaseHandler(logging.Handler):
     """Persist safe INFO+ events without allowing telemetry failures to break requests."""
 
     def emit(self, record: logging.LogRecord) -> None:
+        # Keep the unit-test database isolated from telemetry writes; production
+        # workers and web processes still persist the full operational feed.
+        if "pytest" in sys.modules or "test" in sys.argv[1:]:
+            return
         if record.name.startswith(_IGNORED_LOGGERS):
             return
         try:
