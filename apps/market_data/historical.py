@@ -16,7 +16,7 @@ from .models import Candle, MarketSymbol, Tick
 logger = logging.getLogger(__name__)
 
 TIMEFRAME_ALIASES = {
-    "M1": "1m", "M2": "2m", "M5": "5m", "M10": "10m", "M15": "15m",
+    "M1": "1m", "M2": "2m", "M3": "3m", "M5": "5m", "M10": "10m", "M15": "15m",
     "M30": "30m", "H1": "1h", "H2": "2h", "H4": "4h", "H8": "8h", "D1": "1d",
 }
 
