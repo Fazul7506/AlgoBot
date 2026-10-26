@@ -16,7 +16,14 @@
       <span class="monitoring-updated" data-mission-log-count>0 lines</span>
     </div>
     <div class="rb-log-toolbar" aria-label="Log controls">
-      <label class="mc-select-wrap"><span class="sr-only">Log source</span><select data-mission-log-source aria-label="Log source"><option value="all">All logs</option><option value="application">Application logs</option></select></label>
+      <div class="mc-dropdown" data-mc-dropdown>
+        <button type="button" class="mc-dropdown-trigger" data-mc-dropdown-toggle aria-expanded="false" aria-haspopup="menu" aria-label="Log source"><span data-mc-source-label>All logs</span><span aria-hidden="true">⌄</span></button>
+        <div class="mc-dropdown-menu" role="menu" hidden>
+          <button type="button" role="menuitemradio" aria-checked="true" data-mc-source-option="all">All logs <span class="mc-option-check">✓</span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-source-option="application">Application logs <span class="mc-option-check"></span></button>
+        </div>
+        <select data-mission-log-source aria-label="Log source" class="mc-visually-hidden" tabindex="-1" aria-hidden="true"><option value="all">All logs</option><option value="application">Application logs</option></select>
+      </div>
       <button type="button" class="rb-log-control rb-tail-active" data-mission-log-tail aria-pressed="true"><span aria-hidden="true">ϟ</span> Live tail</button>
       <button type="button" class="rb-icon-btn" data-mission-log-expand aria-label="Expand logs"><span aria-hidden="true">⛶</span></button>
       <button type="button" class="rb-icon-btn" data-mission-menu-toggle aria-expanded="false" aria-controls="mission-log-menu" aria-label="More log options">•••</button>
@@ -33,7 +40,19 @@
     </div>
     <div class="mc-filterbar">
       <div class="rb-search"><span class="material-symbols-rounded" aria-hidden="true">search</span><input data-mission-log-search type="search" placeholder="Search logs" autocomplete="off" aria-label="Search logs"></div>
-      <label class="mc-range"><span class="sr-only">Log time range</span><select data-mission-range aria-label="Log time range"><option value="live">Live tail</option><option value="60">Last hour</option><option value="240">Last 4 hours</option><option value="1440">Last 24 hours</option><option value="2880">Last 2 days</option><option value="10080">Last 7 days</option><option value="custom">Custom range</option></select></label>
+      <div class="mc-dropdown mc-range-dropdown" data-mc-dropdown>
+        <button type="button" class="mc-dropdown-trigger" data-mc-dropdown-toggle aria-expanded="false" aria-haspopup="menu" aria-label="Log time range"><span data-mc-range-label>Live tail</span><span aria-hidden="true">⌄</span></button>
+        <div class="mc-dropdown-menu" role="menu" hidden>
+          <button type="button" role="menuitemradio" aria-checked="true" data-mc-range-option="live">ϟ　Live tail <span class="mc-option-check">✓</span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="60">◷　Last hour <span class="mc-option-check"></span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="240">◷　Last 4 hours <span class="mc-option-check"></span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="1440">◷　Last 24 hours <span class="mc-option-check"></span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="2880">◷　Last 2 days <span class="mc-option-check"></span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="10080">◷　Last 7 days <span class="mc-option-check"></span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="custom">◷　Custom <span class="mc-option-check"></span></button>
+        </div>
+        <select data-mission-range aria-label="Log time range" class="mc-visually-hidden" tabindex="-1" aria-hidden="true"><option value="live">Live tail</option><option value="60">Last hour</option><option value="240">Last 4 hours</option><option value="1440">Last 24 hours</option><option value="2880">Last 2 days</option><option value="10080">Last 7 days</option><option value="custom">Custom range</option></select>
+      </div>
       <span class="mc-timezone">GMT+3</span>
     </div>
     <div class="mc-custom-range" data-mission-custom-range hidden>
