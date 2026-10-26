@@ -147,8 +147,13 @@ def mission_events(request):
         since_minutes = min(max(since_minutes, 1), 43200)
     except (TypeError, ValueError):
         since_minutes = 60
-    if str(request.query_params.get("since_minutes") or "").strip().lower() not in {"all", "0"}:
+    since_value = str(request.query_params.get("since_minutes") or "").strip().lower()
+    if since_value not in {"all", "0"}:
         events = events.filter(timestamp__gte=timezone.now() - timedelta(minutes=since_minutes))
+    elif not request.query_params.get("start") and not request.query_params.get("end"):
+        # Never scan an unbounded event table for the live console. Explicit custom
+        # ranges are filtered below; "all" without a range means the supported 7-day window.
+        events = events.filter(timestamp__gte=timezone.now() - timedelta(days=7))
     # Optional explicit time window for Mission Control's custom range selector.
     start_value = str(request.query_params.get("start") or "").strip()
     end_value = str(request.query_params.get("end") or "").strip()
