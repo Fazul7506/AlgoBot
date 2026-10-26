@@ -129,3 +129,31 @@ class MonitoringSmokeTests(TestCase):
         self.assertContains(response, "Mission Control")
         monitoring = self.client.get(reverse("monitoring-dashboard-page"))
         self.assertContains(monitoring, "Monitoring")
+
+    def test_mission_control_dropdowns_use_anchored_menus_and_hidden_selects(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        response = self.client.get(reverse("mission-control"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-mc-dropdown-toggle")
+        self.assertContains(response, "data-mc-source-option")
+        self.assertContains(response, "data-mc-range-option")
+        self.assertContains(response, 'class="mc-visually-hidden"')
+        self.assertContains(response, "aria-expanded=\"false\"")
+
+    def test_mission_event_feed_filters_explicit_custom_range(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        now = timezone.now()
+        older = now - timedelta(hours=3)
+        newer = now - timedelta(minutes=10)
+        LogEntry.objects.create(stream="application", level="INFO", message="Before selected range", source="test", timestamp=older)
+        LogEntry.objects.create(stream="application", level="INFO", message="Inside selected range", source="test", timestamp=newer)
+        response = self.client.get(
+            "/api/monitoring/mission-events/",
+            {"since_minutes": "all", "start": (now - timedelta(hours=1)).isoformat(), "end": now.isoformat()},
+        )
+        self.assertEqual(response.status_code, 200)
+        messages = [event["message"] for event in response.json()["results"]]
+        self.assertIn("Inside selected range", messages)
+        self.assertNotIn("Before selected range", messages)
