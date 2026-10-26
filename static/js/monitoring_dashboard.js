@@ -54,6 +54,11 @@
   };
   const logBody = root.querySelector('[data-mission-log-body]');
   const logCount = root.querySelector('[data-mission-log-count]');
+  const logSearch = root.querySelector('[data-mission-log-search]');
+  const logLevel = root.querySelector('[data-mission-log-level]');
+  const logStream = root.querySelector('[data-mission-log-stream]');
+  const logRefresh = root.querySelector('[data-mission-log-refresh]');
+  const logStatus = root.querySelector('[data-mission-log-status]');
   const renderLogs = (events) => {
     if (!logBody || !Array.isArray(events)) return;
     logBody.replaceChildren();
@@ -76,18 +81,43 @@
     });
     if (logCount) logCount.textContent = String(events.length);
   };
+  let logRequest = null;
   const loadLogs = async () => {
     if (!logBody) return;
+    if (logRequest) logRequest.abort();
+    logRequest = new AbortController();
+    const params = new URLSearchParams({limit: '250'});
+    if (logSearch?.value.trim()) params.set('search', logSearch.value.trim());
+    if (logLevel?.value) params.set('level', logLevel.value);
+    if (logStream?.value) params.set('stream', logStream.value);
+    if (logStatus) logStatus.textContent = 'Refreshing…';
+    if (logRefresh) logRefresh.disabled = true;
     try {
-      if (!window.AlgoBotFrontendData || typeof window.AlgoBotFrontendData.request !== 'function') return;
-      const response = await window.AlgoBotFrontendData.request('/api/monitoring/mission-events/?limit=100', {}, 10000);
+      if (!window.AlgoBotFrontendData || typeof window.AlgoBotFrontendData.request !== 'function') {
+        throw new Error('Activity feed client is unavailable');
+      }
+      const response = await window.AlgoBotFrontendData.request('/api/monitoring/mission-events/?' + params.toString(), {}, 10000);
       const events = response?.data && Array.isArray(response.data) ? response.data : response;
+      if (!Array.isArray(events)) throw new Error('Activity feed returned an unexpected response');
       renderLogs(events);
-    } catch (_) {
-      // Keep the last successful feed visible when a refresh is temporarily unavailable.
+      if (logStatus) logStatus.textContent = 'Updated ' + new Date().toLocaleTimeString();
+      root.removeAttribute('data-log-error');
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        root.setAttribute('data-log-error', 'true');
+        if (logStatus) logStatus.textContent = 'Refresh failed — showing last available events';
+      }
+    } finally {
+      if (logRefresh) logRefresh.disabled = false;
     }
   };
   refresh?.addEventListener('click', load);
+  logRefresh?.addEventListener('click', loadLogs);
+  [logSearch, logLevel, logStream].forEach((control) => {
+    control?.addEventListener(control === logSearch ? 'input' : 'change', () => {
+      if (control !== logSearch || control.value.length === 0 || control.value.length >= 2) loadLogs();
+    });
+  });
   if (logBody) {
     loadLogs();
     window.setInterval(loadLogs, 5000);
