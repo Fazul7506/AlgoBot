@@ -44,7 +44,7 @@ class ResearchDataService:
         limit = min(max(int(limit), 1), 10000)
         qs = Candle.objects.filter(symbol=market, timeframe=canonical)
         if TIMEFRAMES[canonical] >= 60:
-            qs = qs.filter(source="deriv_candles")
+            qs = qs.filter(source__in=("deriv_candles", "connected_broker"))
         if start_epoch is not None:
             qs = qs.filter(epoch__gte=int(start_epoch))
         if end_epoch is not None:
@@ -88,7 +88,7 @@ class ResearchDataService:
             epoch__gt=int(after_epoch),
         )
         if TIMEFRAMES[canonical] >= 60:
-            qs = qs.filter(source="deriv_candles")
+            qs = qs.filter(source__in=("deriv_candles", "connected_broker"))
         return list(
             qs
             .order_by("epoch", "id")
@@ -112,7 +112,7 @@ class ResearchDataService:
             epoch__lt=int(before_epoch),
         )
         if TIMEFRAMES[canonical] >= 60:
-            qs = qs.filter(source="deriv_candles")
+            qs = qs.filter(source__in=("deriv_candles", "connected_broker"))
         rows = list(
             qs
             .order_by("-epoch", "-id")
@@ -132,7 +132,7 @@ class ResearchDataService:
         market = self.market(symbol)
         qs = Candle.objects.filter(symbol=market, timeframe=canonical)
         if TIMEFRAMES[canonical] >= 60:
-            qs = qs.filter(source="deriv_candles")
+            qs = qs.filter(source__in=("deriv_candles", "connected_broker"))
         if start_epoch is not None:
             qs = qs.filter(epoch__gte=int(start_epoch))
         if end_epoch is not None:
@@ -144,7 +144,7 @@ class ResearchDataService:
         market = self.market(symbol)
         qs = Candle.objects.filter(symbol=market, timeframe=canonical)
         if TIMEFRAMES[canonical] >= 60:
-            qs = qs.filter(source="deriv_candles")
+            qs = qs.filter(source__in=("deriv_candles", "connected_broker"))
         first = qs.order_by("epoch", "id").values_list("epoch", flat=True).first()
         last = qs.order_by("-epoch", "-id").values_list("epoch", flat=True).first()
         count = qs.count()
@@ -155,7 +155,7 @@ class ResearchDataService:
             "first_epoch": first,
             "last_epoch": last,
             "source": "market_data.Candle",
-            "candle_source": "deriv_candles" if TIMEFRAMES[canonical] >= 60 else "tick_stream",
+            "candle_source": "connected_broker" if TIMEFRAMES[canonical] >= 60 else "tick_stream",
             "ready": count > 0,
         }
 
