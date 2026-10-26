@@ -21,7 +21,14 @@
 
       {% if request.user.is_staff %}
       <section class="monitoring-panel" aria-labelledby="mission-log-title">
-        <div class="monitoring-panel-heading"><div><h2 id="mission-log-title">Live activity log</h2><p>Latest application events, newest first. This feed refreshes automatically.</p></div><span class="monitoring-updated"><span data-mission-log-count>{{ recent_logs|length }}</span> events loaded</span></div>
+        <div class="monitoring-panel-heading"><div><h2 id="mission-log-title">Live activity log</h2><p>Render-style operational events from the application, newest first. Updates automatically.</p></div><span class="monitoring-updated"><span data-mission-log-count>{{ recent_logs|length }}</span> events loaded</span></div>
+        <div class="mission-log-controls" role="search" aria-label="Filter activity logs">
+          <label>Search events <input type="search" data-mission-log-search placeholder="Search message, source or path"></label>
+          <label>Severity <select data-mission-log-level><option value="">All levels</option><option value="DEBUG">Debug</option><option value="INFO">Info</option><option value="WARNING">Warning</option><option value="ERROR">Error</option><option value="CRITICAL">Critical</option></select></label>
+          <label>Area <select data-mission-log-stream><option value="">All areas</option><option value="application">Application</option><option value="broker">Broker</option><option value="trading">Trading</option><option value="security">Security</option><option value="monitoring">Monitoring</option><option value="worker">Worker</option></select></label>
+          <button class="monitoring-icon-button" type="button" data-mission-log-refresh aria-label="Refresh activity log">Refresh logs</button>
+          <span data-mission-log-status role="status" aria-live="polite">Live feed</span>
+        </div>
         <div class="monitoring-table-wrap"><table class="monitoring-table"><thead><tr><th scope="col">Time</th><th scope="col">Level</th><th scope="col">Area</th><th scope="col">Event / diagnostic</th></tr></thead><tbody data-mission-log-body>
         {% for event in recent_logs %}<tr><td>{{ event.timestamp|date:"Y-m-d H:i:s" }}</td><td><span class="monitoring-badge status-{{ event.level|lower }}"><i></i>{{ event.level }}</span></td><td>{{ event.stream }}<small>{{ event.source }}</small></td><td>{{ event.message }}</td></tr>{% empty %}<tr><td colspan="4" class="monitoring-empty">No persisted application events yet. New INFO, WARNING and ERROR records will appear here as the application logs them.</td></tr>{% endfor %}
         </tbody></table></div>
