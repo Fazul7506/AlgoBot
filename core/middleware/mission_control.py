@@ -2,11 +2,26 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 
 logger = logging.getLogger("algobot.requests")
 _IGNORED_PREFIXES = ("/static/", "/media/", "/health/", "/api/monitoring/mission-events/")
 _IGNORED_PATHS = {"/favicon.ico"}
+_SECRET = re.compile(r"(?i)(authorization|access[_-]?token|refresh[_-]?token|password|client[_-]?secret|api[_-]?key|secret)(\\s*[:=]\\s*)(?:bearer\\s+)?[^\\s,;]+")
+
+
+def _response_detail(response):
+    data = getattr(response, "data", None)
+    if isinstance(data, dict):
+        value = data.get("user_message") or data.get("message") or data.get("detail") or data.get("error")
+        if value is None and int(getattr(response, "status_code", 200) or 200) == 400:
+            value = "; ".join(f"{key}: {str(item)[:180]}" for key, item in list(data.items())[:6] if key not in {"code", "error_code"})
+    elif isinstance(data, str):
+        value = data
+    else:
+        value = ""
+    return _SECRET.sub(r"\\1= [REDACTED]", str(value or ""))[:800]
 
 
 class MissionControlRequestLoggingMiddleware:
@@ -27,7 +42,7 @@ class MissionControlRequestLoggingMiddleware:
             level = logging.ERROR if status_code >= 500 else logging.WARNING if status_code >= 400 else logging.INFO
             logger.log(
                 level,
-                "HTTP_REQUEST_COMPLETED status=%s method=%s path=%s duration_ms=%s user_id=%s",
-                status_code, getattr(request, "method", "UNKNOWN"), path, elapsed_ms, user_id,
+                "HTTP_REQUEST_COMPLETED status=%s method=%s path=%s duration_ms=%s user_id=%s detail=%s",
+                status_code, getattr(request, "method", "UNKNOWN"), path, elapsed_ms, user_id, _response_detail(response),
             )
         return response
