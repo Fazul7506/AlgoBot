@@ -8,7 +8,7 @@ import time
 logger = logging.getLogger("algobot.requests")
 _IGNORED_PREFIXES = ("/static/", "/media/", "/health/", "/api/monitoring/mission-events/")
 _IGNORED_PATHS = {"/favicon.ico"}
-_SECRET = re.compile(r"(?i)(authorization|access[_-]?token|refresh[_-]?token|password|client[_-]?secret|api[_-]?key|secret)(\\s*[:=]\\s*)(?:bearer\\s+)?[^\\s,;]+")
+_SECRET = re.compile(r"(?i)(authorization|access[_-]?token|refresh[_-]?token|password|client[_-]?secret|api[_-]?key|secret)(\s*[:=]\s*)(?:bearer\s+)?[^\s,;]+")
 
 
 def _response_detail(response):
@@ -21,7 +21,7 @@ def _response_detail(response):
         value = data
     else:
         value = ""
-    return _SECRET.sub(r"\\1= [REDACTED]", str(value or ""))[:800]
+    return _SECRET.sub(r"\1= [REDACTED]", str(value or ""))[:800]
 
 
 class MissionControlRequestLoggingMiddleware:
