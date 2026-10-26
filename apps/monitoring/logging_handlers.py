@@ -22,7 +22,7 @@ def _stream_for(logger_name: str) -> str:
         return "security" if "security" in name else "authentication"
     if "broker" in name or "deriv" in name or "market" in name:
         return "broker"
-    if "trading" in name or "execution" in name or "order" in name:
+    if "trading" in name or "execution" in name or "order" in name or "backtest" in name:
         return "trading"
     if "risk" in name:
         return "risk"
