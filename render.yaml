@@ -12,7 +12,7 @@ services:
       # Romantic pre-home experience: all presentation code stays in GitHub;
       # Render environment variables control activation, timing and content.
       - key: ALGOBOT_SPLASH_ENABLED
-        value: "true"
+        value: "false"
       - key: ALGOBOT_SPLASH_PATHS_JSON
         value: '["/"]'
       - key: ALGOBOT_SPLASH_START_AT
