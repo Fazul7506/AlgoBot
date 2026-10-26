@@ -31,6 +31,12 @@ class MonitoringSmokeTests(TestCase):
         response = self.client.get(reverse("mission-control"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Mission Control")
+        self.assertContains(response, "data-mission-log-body")
+        self.assertEqual(response.content.decode().count("data-mission-log-body"), 1)
+        self.assertNotContains(response, "Service Health")
+        self.assertNotContains(response, "Performance History")
+        self.assertNotContains(response, "Recent System Events")
+        self.assertNotContains(response, "Candle Backfill")
         monitoring = self.client.get(reverse("monitoring-dashboard-page"))
         self.assertContains(monitoring, "Monitoring")
 
