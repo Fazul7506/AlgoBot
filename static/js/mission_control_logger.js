@@ -81,7 +81,7 @@
       if (source === "application") params.set("stream", "application");
       const client = window.AlgoBotFrontendData;
       if (!client || typeof client.request !== "function") throw new Error("Log feed client unavailable");
-      const response = await client.request("/api/monitoring/mission-events/?" + params.toString(), {}, 10000);
+      const response = await client.request("/api/monitoring/mission-events/?" + params.toString(), {}, 20000);
       const payload = response?.data && typeof response.data === "object" ? response.data : response;
       let events = Array.isArray(payload) ? payload : (payload.results || payload.events || payload.logs || []);
       if (!Array.isArray(events)) throw new Error("Unexpected log feed response");
@@ -96,8 +96,8 @@
       if (liveTail) body.scrollTop = body.scrollHeight;
     } catch (error) {
       const reason = error && error.message ? String(error.message).slice(0, 180) : "Unknown request error";
-      setStatus("Log feed unavailable — " + reason);
-      setConnection("Log feed unavailable");
+      setStatus(/timeout|timed out|abort/i.test(reason) ? "Request timed out · retrying automatically" : "Log feed unavailable · " + reason);
+      setConnection(/timeout|timed out|abort/i.test(reason) ? "Log request timed out" : "Log feed unavailable");
     } finally { busy = false; }
   };
 
@@ -226,7 +226,7 @@
   const topButton = panel.querySelector("[data-mission-log-top]");
   if (topButton) topButton.addEventListener("click", () => { body.scrollTop = body.scrollHeight; liveTail = true; tailButton.classList.add("rb-tail-active"); });
   refresh();
-  timer = window.setInterval(() => { if (liveTail) refresh(); }, 2500);
+  timer = window.setInterval(() => { if (liveTail) refresh(); }, 15000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
   window.addEventListener("pagehide", () => { if (timer) window.clearInterval(timer); });
 })();
