@@ -43,7 +43,7 @@ class MonitoringSmokeTests(TestCase):
             "/api/monitoring/mission-events/?level=ERROR&stream=broker&search=historical"
         )
         self.assertEqual(response.status_code, 200)
-        events = response.json()
+        events = response.json()["results"]
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["level"], "ERROR")
         self.assertEqual(events[0]["stream"], "broker")
@@ -64,16 +64,17 @@ class MonitoringSmokeTests(TestCase):
             "/api/monitoring/mission-events/?category=historical_data&status=failed&limit=1"
         )
         self.assertEqual(response.status_code, 200)
-        events = response.json()
+        payload = response.json()
+        events = payload["results"]
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["category"], "historical_data")
         self.assertEqual(events[0]["status"], "failed")
         self.assertEqual(events[0]["operation_id"], "op-1")
-        self.assertEqual(response["X-Has-More"], "false")
+        self.assertFalse(payload["has_more"])
 
     def test_mission_event_feed_clamps_invalid_pagination(self):
         self.user.is_staff = True
         self.user.save(update_fields=["is_staff"])
         response = self.client.get("/api/monitoring/mission-events/?offset=not-a-number&limit=999999")
         self.assertEqual(response.status_code, 200)
-        self.assertLessEqual(len(response.json()), 250)
+        self.assertLessEqual(len(response.json()["results"]), 250)
