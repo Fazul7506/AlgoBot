@@ -142,6 +142,18 @@ def persist_broker_tick_history(symbol: str, items: list[dict]) -> dict:
                 candle.low = min(candle.low, row.quote)
                 candle.close = row.quote
         Candle.objects.bulk_create(list(candle_by_epoch.values()), ignore_conflicts=True, batch_size=500)
+        stored_candles = list(Candle.objects.select_for_update().filter(
+            symbol=market_symbol, timeframe="tick", epoch__in=list(candle_by_epoch),
+        ))
+        for current in stored_candles:
+            incoming = candle_by_epoch[current.epoch]
+            current.open = incoming.open
+            current.high = incoming.high
+            current.low = incoming.low
+            current.close = incoming.close
+            current.source = "connected_broker"
+        if stored_candles:
+            Candle.objects.bulk_update(stored_candles, ["open", "high", "low", "close", "source"], batch_size=500)
     return {
         "status": "ok", "symbol": market_symbol.symbol, "timeframe": "tick",
         "source": "connected_broker", "received": len(items or []),
