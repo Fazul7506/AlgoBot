@@ -72,6 +72,10 @@ class MonitoringSmokeTests(TestCase):
         self.assertEqual(events[0]["operation_id"], "op-1")
         self.assertFalse(payload["has_more"])
 
+        correlated = self.client.get("/api/monitoring/mission-events/?operation_id=op-1")
+        self.assertEqual(correlated.status_code, 200)
+        self.assertEqual([event["operation_id"] for event in correlated.json()["results"]], ["op-1"])
+
     def test_mission_event_feed_clamps_invalid_pagination(self):
         self.user.is_staff = True
         self.user.save(update_fields=["is_staff"])
