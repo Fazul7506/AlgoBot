@@ -58,6 +58,8 @@
   const logLevel = root.querySelector('[data-mission-log-level]');
   const logWindow = root.querySelector('[data-mission-log-window]');
   const logStream = root.querySelector('[data-mission-log-stream]');
+  const logCategory = root.querySelector('[data-mission-log-category]');
+  const logStatusFilter = root.querySelector('[data-mission-log-status-filter]');
   const logRefresh = root.querySelector('[data-mission-log-refresh]');
   const logPause = root.querySelector('[data-mission-log-pause]');
   const logMore = root.querySelector('[data-mission-log-more]');
@@ -65,6 +67,7 @@
   let logOffset = 0;
   let logHasMore = false;
   let livePaused = false;
+  let logSequence = 0;
   const renderLogs = (events) => {
     if (!logBody || !Array.isArray(events)) return;
     logBody.replaceChildren();
@@ -112,12 +115,15 @@
     if (!logBody) return;
     if (logRequest) logRequest.abort();
     logRequest = new AbortController();
+    const sequence = ++logSequence;
     if (reset) logOffset = 0;
     const params = new URLSearchParams({limit: '100', offset: String(logOffset)});
     if (logWindow?.value && logWindow.value !== 'all') params.set('since_minutes', logWindow.value);
     if (logSearch?.value.trim()) params.set('search', logSearch.value.trim());
     if (logLevel?.value) params.set('level', logLevel.value);
     if (logStream?.value) params.set('stream', logStream.value);
+    if (logCategory?.value) params.set('category', logCategory.value);
+    if (logStatusFilter?.value) params.set('status', logStatusFilter.value);
     if (logStatus) logStatus.textContent = 'Refreshing…';
     if (logRefresh) logRefresh.disabled = true;
     try {
@@ -125,6 +131,7 @@
         throw new Error('Activity feed client is unavailable');
       }
       const response = await window.AlgoBotFrontendData.request('/api/monitoring/mission-events/?' + params.toString(), {signal: logRequest.signal}, 10000);
+      if (sequence !== logSequence) return;
       const payload = response?.data && typeof response.data === 'object' ? response.data : response;
       const events = Array.isArray(payload) ? payload : payload?.results;
       if (!Array.isArray(events)) throw new Error('Activity feed returned an unexpected response');
@@ -135,6 +142,7 @@
       if (logStatus) logStatus.textContent = 'Updated ' + new Date().toLocaleTimeString() + (livePaused ? ' · live updates paused' : '');
       root.removeAttribute('data-log-error');
     } catch (error) {
+      if (sequence !== logSequence) return;
       if (error?.name !== 'AbortError') {
         root.setAttribute('data-log-error', 'true');
         if (logStatus) logStatus.textContent = 'Refresh failed — showing last available events';
@@ -153,7 +161,7 @@
     if (!livePaused) loadLogs(false);
   });
   logMore?.addEventListener('click', () => { if (logHasMore) loadLogs(false); });
-  [logSearch, logLevel, logStream, logWindow].forEach((control) => {
+  [logSearch, logLevel, logStream, logCategory, logStatusFilter, logWindow].forEach((control) => {
     control?.addEventListener(control === logSearch ? 'input' : 'change', () => {
       if (control !== logSearch || control.value.length === 0 || control.value.length >= 2) loadLogs(true);
     });
