@@ -11,6 +11,7 @@
   const GENERIC = new Set([
     'failed to fetch',
     'the data connection is temporarily unavailable. please try again.',
+    'the data connection is temporarily unavailable. use retry when you want to try again.',
     'data connection issue',
     'data connection issue failed to fetch'
   ]);
