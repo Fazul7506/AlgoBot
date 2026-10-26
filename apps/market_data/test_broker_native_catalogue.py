@@ -64,6 +64,8 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
         self.assertIn("1m", response.json()["symbols"][0]["supported_timeframes"])
         self.assertEqual(response.json()["symbols"][0]["available_timeframes"], ["tick", "1m"])
         self.assertIn("1h", response.json()["supported_timeframes"])
+        self.assertNotIn("1s", response.json()["supported_timeframes"])
+        self.assertNotIn("5s", response.json()["supported_timeframes"])
 
     @patch(
         "apps.market_data.broker_native._public_deriv",
