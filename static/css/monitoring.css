@@ -42,3 +42,12 @@
  .monitoring-channel-logo{width:32px;height:32px;flex-basis:32px}
  .monitoring-channel .monitoring-badge{font-size:.62rem;padding:4px 6px}
 }
+
+/* Mission Control activity controls: compact desktop toolbar, stacked on phones. */
+.mission-log-controls{display:flex;align-items:end;gap:10px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--monitoring-border,rgba(120,160,210,.18))}
+.mission-log-controls label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1;font-size:.76rem;color:var(--monitoring-muted,#8ca6c9)}
+.mission-log-controls input,.mission-log-controls select{min-width:0;width:100%;min-height:38px;padding:8px 10px;border:1px solid var(--monitoring-border,rgba(120,160,210,.25));border-radius:8px;background:var(--monitoring-surface,#071b36);color:inherit}
+.mission-log-controls [data-mission-log-search]{flex:2;min-width:190px}
+.mission-log-controls [data-mission-log-status]{font-size:.75rem;color:var(--monitoring-muted,#8ca6c9);padding:8px 0}
+[data-log-error="true"] [data-mission-log-status]{color:#f59e0b}
+@media(max-width:640px){.mission-log-controls{align-items:stretch;display:grid;grid-template-columns:1fr 1fr}.mission-log-controls label{min-width:0}.mission-log-controls label:first-child{grid-column:1/-1}.mission-log-controls [data-mission-log-search]{min-width:0}.mission-log-controls [data-mission-log-status]{grid-column:1/-1}}
