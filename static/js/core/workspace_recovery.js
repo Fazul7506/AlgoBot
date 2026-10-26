@@ -9,6 +9,7 @@
   let hideTimer;
   let lastSignature = '';
   let dismissedSignature = '';
+  let lastDetail = null;
 
   function ensureRail() {
     if (rail) return rail;
@@ -18,7 +19,7 @@
     rail.hidden = true;
     rail.innerHTML = '<div class="algobot-recovery-icon" aria-hidden="true">!</div><div class="algobot-recovery-copy"><strong data-recovery-title>Data connection issue</strong><span data-recovery-message></span></div><button type="button" data-recovery-retry>Retry</button><button type="button" class="algobot-recovery-close" data-recovery-close aria-label="Dismiss">×</button>';
     document.body.appendChild(rail);
-    rail.querySelector('[data-recovery-close]').addEventListener('click', () => { dismissedSignature = lastSignature; rail.hidden = true; clearTimeout(hideTimer); });
+    rail.querySelector('[data-recovery-close]').addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); dismissedSignature = lastSignature; rail.hidden = true; rail.setAttribute('aria-hidden','true'); clearTimeout(hideTimer); });
     return rail;
   }
 
@@ -31,20 +32,24 @@
     const title = node.querySelector('[data-recovery-title]');
     const message = node.querySelector('[data-recovery-message]');
     const retry = node.querySelector('[data-recovery-retry]');
-    const signature = `${detail.code}|${detail.url}|${detail.status}`;
-    if (signature === lastSignature && (!node.hidden || dismissedSignature === signature)) return;
+    const url = String(detail.url || '').split('?')[0].split('#')[0];
+    const signature = `${String(detail.code || 'API_ERROR')}|${url}|${Number(detail.status || 0)}`;
+    if (signature === dismissedSignature) return;
+    if (signature === lastSignature && !node.hidden) return;
     if (signature !== lastSignature) dismissedSignature = '';
     lastSignature = signature;
+    lastDetail = detail;
     node.dataset.state = detail.edgeChallenge ? 'edge' : 'error';
     title.textContent = detail.edgeChallenge ? 'Production edge protection interrupted the request' : 'Data connection issue';
     message.textContent = detail.edgeChallenge
       ? 'No market or trading data was fabricated. Retry when the edge challenge clears.'
       : (detail.message || 'The backend did not return usable data.');
     retry.hidden = !detail.retryable;
-    retry.onclick = detail.retryable && typeof detail.retry === 'function' ? () => { dismissedSignature = ''; lastSignature = ''; node.hidden = true; detail.retry(); } : null;
+    retry.onclick = detail.retryable && typeof detail.retry === 'function' ? () => { dismissedSignature = ''; lastSignature = ''; node.hidden = true; node.setAttribute('aria-hidden','true'); clearTimeout(hideTimer); detail.retry(); } : null;
     node.hidden = false;
+    node.removeAttribute('aria-hidden');
     clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => { if (node) node.hidden = true; }, detail.edgeChallenge ? 12000 : 9000);
+    hideTimer = setTimeout(() => { if (node && dismissedSignature !== lastSignature) { node.hidden = true; node.setAttribute('aria-hidden','true'); } }, detail.edgeChallenge ? 12000 : 9000);
   }
 
   window.addEventListener('algobot:api-error', event => {
