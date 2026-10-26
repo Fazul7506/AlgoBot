@@ -98,7 +98,7 @@
       if (!window.AlgoBotFrontendData || typeof window.AlgoBotFrontendData.request !== 'function') {
         throw new Error('Activity feed client is unavailable');
       }
-      const response = await window.AlgoBotFrontendData.request('/api/monitoring/mission-events/?' + params.toString(), {}, 10000);
+      const response = await window.AlgoBotFrontendData.request('/api/monitoring/mission-events/?' + params.toString(), {signal: logRequest.signal}, 10000);
       const events = response?.data && Array.isArray(response.data) ? response.data : response;
       if (!Array.isArray(events)) throw new Error('Activity feed returned an unexpected response');
       renderLogs(events);
