@@ -125,6 +125,17 @@ def persist_broker_tick_history(symbol: str, items: list[dict]) -> dict:
     rows = list(rows_by_key.values())
     if rows:
         Tick.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
+        # The canonical research API reads Candle rows for every timeframe,
+        # including tick-mode backtests. Keep one tick candle per epoch, matching
+        # the model's unique (symbol, timeframe, epoch) boundary.
+        candle_by_epoch = {}
+        for row in rows:
+            candle_by_epoch[row.epoch] = Candle(
+                symbol=market_symbol, timeframe="tick", epoch=row.epoch,
+                open=row.quote, high=row.quote, low=row.quote, close=row.quote,
+                volume=Decimal("0"), source="connected_broker",
+            )
+        Candle.objects.bulk_create(list(candle_by_epoch.values()), ignore_conflicts=True, batch_size=500)
     return {
         "status": "ok", "symbol": market_symbol.symbol, "timeframe": "tick",
         "source": "connected_broker", "received": len(items or []),
