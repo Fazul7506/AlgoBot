@@ -105,6 +105,7 @@ def _cached_database_catalogue():
         }
         for row in rows
     ])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def catalogue(request):
     account = _account(request.user, request=request)
