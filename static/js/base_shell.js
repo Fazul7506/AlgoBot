@@ -7,7 +7,7 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const stack = () => $('#django-message-stack');
   const MESSAGE_LIMIT = 5;
-  const MESSAGE_TTL = 5000;
+  const MESSAGE_TTL = 6500;
   const SIDEBAR_SCROLL_KEY = 'algobot.sidebar.scroll.position';
 
   function setBrokerStateAttribute(event) {
@@ -27,7 +27,7 @@
 
   function removeToast(node) { if (!node || node.dataset.removing === 'true') return; node.dataset.removing='true'; node.classList.add('is-leaving'); window.setTimeout(() => node.remove(), 220); }
   function trimToastStack(target) { const nodes=[...target.querySelectorAll('.toast')]; while(nodes.length>MESSAGE_LIMIT) removeToast(nodes.shift()); }
-  function wireToast(node,lifetime=MESSAGE_TTL) { if(!node||node.dataset.toastBound==='true')return; node.dataset.toastBound='true'; node.querySelector('[data-toast-close]')?.addEventListener('click',event=>{event.preventDefault();removeToast(node);}); if(lifetime>0)window.setTimeout(()=>removeToast(node),lifetime); }
+  function wireToast(node,lifetime=MESSAGE_TTL) { if(!node||node.dataset.toastBound==='true')return; node.dataset.toastBound='true'; const close=node.querySelector('[data-toast-close]'); if(close){close.type='button';close.style.pointerEvents='auto';close.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();removeToast(node);});} if(lifetime>0)window.setTimeout(()=>removeToast(node),lifetime); }
   function ensureStack() { let target=stack(); if(target)return target; target=document.createElement('div'); target.id='django-message-stack'; target.className='toast-stack'; target.setAttribute('aria-live','polite'); target.setAttribute('aria-atomic','false'); document.body.appendChild(target); return target; }
   function showDjangoMessage(text,level='info') { if(!text||typeof text!=='string')return; let clean=text.replace(/\s+/g,' ').trim().slice(0,500); if(/^failed to fetch$/i.test(clean)||/^networkerror:?\s*failed to fetch$/i.test(clean))clean='The data connection is temporarily unavailable. Use Retry when you want to try again.'; if(!clean||/^\s*[[{]/.test(clean))return; const normalizedLevel=['success','warning','error','info'].includes(level)?level:'info'; const target=ensureStack(); const existing=[...target.querySelectorAll('.toast')].find(node=>node.dataset.messageText===clean&&node.dataset.toastLevel===normalizedLevel&&node.dataset.removing!=='true'); if(existing)return; const node=document.createElement('div'); node.className=`toast ${normalizedLevel}`; node.dataset.toastLevel=normalizedLevel; node.dataset.messageText=clean; node.setAttribute('role',normalizedLevel==='error'?'alert':'status'); const message=document.createElement('span'); message.className='toast-message'; message.textContent=clean; const button=document.createElement('button'); button.type='button'; button.className='toast-close'; button.dataset.toastClose='1'; button.setAttribute('aria-label','Close notification'); button.title='Close notification'; button.textContent='×'; node.append(message,button); target.appendChild(node); wireToast(node); trimToastStack(target); }
   window.AlgoBotMessage=showDjangoMessage;
@@ -38,7 +38,7 @@
   // useful by coalescing identical transport errors across overlapping page widgets.
   const recentApiErrors = new Map();
   const API_ERROR_DEDUPE_MS = 10000;
-  function bindApiMessages() { window.addEventListener('algobot:api-error',event=>{const detail=event.detail||{}; if(Number(detail.status)>=500)return; const signature=[detail.code||'',detail.status||0,detail.method||'GET',detail.url||'',detail.message||''].join('|'); const now=Date.now(); const previous=recentApiErrors.get(signature)||0; if(now-previous<API_ERROR_DEDUPE_MS)return; recentApiErrors.set(signature,now); if(recentApiErrors.size>100){for(const [key,at] of recentApiErrors)if(now-at>API_ERROR_DEDUPE_MS)recentApiErrors.delete(key);if(recentApiErrors.size>100)recentApiErrors.clear();} const level=Number(detail.status)>=500||['API_TIMEOUT','NETWORK_ERROR'].includes(detail.code)?'error':'warning'; showDjangoMessage(friendlyApiMessage(detail),level);}); }
+  function bindApiMessages() { window.addEventListener('algobot:api-error',event=>{const detail=event.detail||{}; if(Number(detail.status)>=500)return; if(['NETWORK_ERROR','API_TIMEOUT','SERVICE_TIMEOUT','EDGE_CHALLENGE'].includes(String(detail.code||'')))return; const signature=[detail.code||'',detail.status||0,detail.method||'GET',detail.url||'',detail.message||''].join('|'); const now=Date.now(); const previous=recentApiErrors.get(signature)||0; if(now-previous<API_ERROR_DEDUPE_MS)return; recentApiErrors.set(signature,now); if(recentApiErrors.size>100){for(const [key,at] of recentApiErrors)if(now-at>API_ERROR_DEDUPE_MS)recentApiErrors.delete(key);if(recentApiErrors.size>100)recentApiErrors.clear();} const level=Number(detail.status)>=500||['API_TIMEOUT','NETWORK_ERROR'].includes(detail.code)?'error':'warning'; showDjangoMessage(friendlyApiMessage(detail),level);}); }
 
   function currentPath() { return window.location.pathname.replace(/\/+$/,'')||'/'; }
   function navigationLinks() { return [...document.querySelectorAll('#app-sidebar nav a, #app-sidebar .sidebar-new-trade')]; }
