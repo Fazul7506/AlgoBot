@@ -85,3 +85,7 @@ class ResearchDataServiceTests(TestCase):
         rows = ResearchDataService().candles("R_100", "1m", limit=10)
         self.assertEqual([row["epoch"] for row in rows], [100, 160])
         self.assertEqual(ResearchDataService().count("R_100", "1m"), 2)
+
+    def test_three_minute_broker_timeframe_is_canonical(self):
+        service = ResearchDataService()
+        self.assertEqual(service.timeframe("M3"), "3m")
