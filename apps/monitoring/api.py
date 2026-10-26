@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 
@@ -148,6 +149,24 @@ def mission_events(request):
         since_minutes = 60
     if str(request.query_params.get("since_minutes") or "").strip().lower() not in {"all", "0"}:
         events = events.filter(timestamp__gte=timezone.now() - timedelta(minutes=since_minutes))
+    # Optional explicit time window for Mission Control's custom range selector.
+    start_value = str(request.query_params.get("start") or "").strip()
+    end_value = str(request.query_params.get("end") or "").strip()
+    if start_value or end_value:
+        start_dt = parse_datetime(start_value) if start_value else None
+        end_dt = parse_datetime(end_value) if end_value else None
+        if (start_value and start_dt is None) or (end_value and end_dt is None):
+            return Response({"detail": "Invalid start or end datetime."}, status=400)
+        if start_dt and timezone.is_naive(start_dt):
+            start_dt = timezone.make_aware(start_dt, timezone.get_current_timezone())
+        if end_dt and timezone.is_naive(end_dt):
+            end_dt = timezone.make_aware(end_dt, timezone.get_current_timezone())
+        if start_dt and end_dt and start_dt >= end_dt:
+            return Response({"detail": "Start datetime must be before end datetime."}, status=400)
+        if start_dt:
+            events = events.filter(timestamp__gte=start_dt)
+        if end_dt:
+            events = events.filter(timestamp__lte=end_dt)
     if level:
         events = events.filter(level__iexact=level)
     if stream:
