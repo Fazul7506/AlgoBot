@@ -130,11 +130,17 @@ def persist_broker_tick_history(symbol: str, items: list[dict]) -> dict:
         # the model's unique (symbol, timeframe, epoch) boundary.
         candle_by_epoch = {}
         for row in rows:
-            candle_by_epoch[row.epoch] = Candle(
-                symbol=market_symbol, timeframe="tick", epoch=row.epoch,
-                open=row.quote, high=row.quote, low=row.quote, close=row.quote,
-                volume=Decimal("0"), source="connected_broker",
-            )
+            candle = candle_by_epoch.get(row.epoch)
+            if candle is None:
+                candle_by_epoch[row.epoch] = Candle(
+                    symbol=market_symbol, timeframe="tick", epoch=row.epoch,
+                    open=row.quote, high=row.quote, low=row.quote, close=row.quote,
+                    volume=Decimal("0"), source="connected_broker",
+                )
+            else:
+                candle.high = max(candle.high, row.quote)
+                candle.low = min(candle.low, row.quote)
+                candle.close = row.quote
         Candle.objects.bulk_create(list(candle_by_epoch.values()), ignore_conflicts=True, batch_size=500)
     return {
         "status": "ok", "symbol": market_symbol.symbol, "timeframe": "tick",
