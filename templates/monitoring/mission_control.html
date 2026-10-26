@@ -22,7 +22,7 @@
           <button type="button" role="menuitemradio" aria-checked="true" data-mc-source-option="all">All logs <span class="mc-option-check">✓</span></button>
           <button type="button" role="menuitemradio" aria-checked="false" data-mc-source-option="application">Application logs <span class="mc-option-check"></span></button>
         </div>
-        <select data-mission-log-source aria-label="Log source" class="mc-visually-hidden" tabindex="-1" aria-hidden="true"><option value="all">All logs</option><option value="application">Application logs</option></select>
+        <select data-mission-log-source data-native-select="true" aria-label="Log source" class="mc-visually-hidden" tabindex="-1" aria-hidden="true"><option value="all">All logs</option><option value="application">Application logs</option></select>
       </div>
       <button type="button" class="rb-log-control rb-tail-active" data-mission-log-tail aria-pressed="true"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">bolt</span> Live tail</button>
       <button type="button" class="rb-icon-btn" data-mission-log-expand aria-label="Expand logs"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">open_in_full</span></button>
@@ -51,7 +51,7 @@
           <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="10080"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">schedule</span> Last 7 days <span class="mc-option-check"></span></button>
           <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="custom"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">schedule</span> Custom <span class="mc-option-check"></span></button>
         </div>
-        <select data-mission-range aria-label="Log time range" class="mc-visually-hidden" tabindex="-1" aria-hidden="true"><option value="live">Live tail</option><option value="60">Last hour</option><option value="240">Last 4 hours</option><option value="1440">Last 24 hours</option><option value="2880">Last 2 days</option><option value="10080">Last 7 days</option><option value="custom">Custom range</option></select>
+        <select data-mission-range data-native-select="true" aria-label="Log time range" class="mc-visually-hidden" tabindex="-1" aria-hidden="true"><option value="live">Live tail</option><option value="60">Last hour</option><option value="240">Last 4 hours</option><option value="1440">Last 24 hours</option><option value="2880">Last 2 days</option><option value="10080">Last 7 days</option><option value="custom">Custom range</option></select>
       </div>
       <span class="mc-timezone">GMT+3</span>
     </div>
