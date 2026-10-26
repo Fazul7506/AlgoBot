@@ -18,6 +18,7 @@ urlpatterns = [
     path("metrics/", api.metrics, name="metrics"),
     path("audit/", api.audit, name="audit"),
     path("logs/", api.logs, name="logs"),
+    path("mission-events/", api.mission_events, name="mission-events"),
     path("traces/", api.traces, name="traces"),
     path("reconcile/", reconcile_accounts, name="monitoring-reconcile"),
     path("ui/", views.dashboard, name="monitoring-ui"),
