@@ -166,8 +166,12 @@
       select.dataset.abRequired = 'true';
       select.required = false;
     }
+    const instrumentSelect = isInstrumentSelect(select);
+    if (instrumentSelect) {
+      select.parentElement?.querySelectorAll(':scope > .market-picker-icon, :scope > .terminal-selected-market-icon, :scope > .analysis-market-icon').forEach(icon => { icon.hidden = true; });
+    }
     const root = document.createElement('div');
-    root.className = 'ab-select-root' + (isInstrumentSelect(select) ? ' ab-select-root--instrument' : '');
+    root.className = 'ab-select-root' + (instrumentSelect ? ' ab-select-root--instrument' : '');
     root.dataset.abSelectRoot = '';
     const button = document.createElement('button');
     button.type = 'button';
@@ -208,6 +212,12 @@
     root.append(button, menu, select);
     select.__abSelectRoot = root;
     button.addEventListener('click', () => menu.hidden ? open(root) : close(root));
+    [...(select.labels || [])].forEach(label => label.addEventListener('click', event => {
+      if (event.target.closest('.ab-select-root')) return;
+      event.preventDefault();
+      button.focus();
+      open(root);
+    }));
     button.addEventListener('keydown', event => {
       if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
         event.preventDefault(); open(root);
