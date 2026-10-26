@@ -54,6 +54,20 @@
   };
   const logBody = root.querySelector('[data-mission-log-body]');
   const logCount = root.querySelector('[data-mission-log-count]');
+  const logSearch = root.querySelector('[data-mission-log-search]');
+  const logLevel = root.querySelector('[data-mission-log-level]');
+  const logWindow = root.querySelector('[data-mission-log-window]');
+  const logStream = root.querySelector('[data-mission-log-stream]');
+  const logCategory = root.querySelector('[data-mission-log-category]');
+  const logStatusFilter = root.querySelector('[data-mission-log-status-filter]');
+  const logRefresh = root.querySelector('[data-mission-log-refresh]');
+  const logPause = root.querySelector('[data-mission-log-pause]');
+  const logMore = root.querySelector('[data-mission-log-more]');
+  const logStatus = root.querySelector('[data-mission-log-status]');
+  let logOffset = 0;
+  let logHasMore = false;
+  let livePaused = false;
+  let logSequence = 0;
   const renderLogs = (events) => {
     if (!logBody || !Array.isArray(events)) return;
     logBody.replaceChildren();
@@ -71,25 +85,89 @@
       level.appendChild(badge);
       area.textContent = String(event.stream || 'application') + ' · ' + String(event.source || 'AlgoBot');
       message.textContent = String(event.message || '');
+      const details = event.details || event.error_category || event.resolution || event.operation_id;
+      if (details) {
+        const disclosure = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = 'View details';
+        const detailText = document.createElement('pre');
+        detailText.className = 'mission-log-details';
+        detailText.textContent = [
+          event.category ? 'Category: ' + event.category : '',
+          event.status ? 'Status: ' + event.status : '',
+          event.operation_id ? 'Operation: ' + event.operation_id : '',
+          event.duration_ms !== null && event.duration_ms !== undefined ? 'Duration: ' + event.duration_ms + ' ms' : '',
+          event.error_category ? 'Failure type: ' + event.error_category : '',
+          event.resolution ? 'Suggested action: ' + event.resolution : '',
+          details && typeof details === 'string' ? 'Details: ' + details : (details && typeof details === 'object' ? 'Details: ' + JSON.stringify(details, null, 2) : '')
+        ].filter(Boolean).join('\\n');
+        disclosure.append(summary, detailText);
+        message.appendChild(document.createTextNode(' '));
+        message.appendChild(disclosure);
+      }
       row.append(time, level, area, message);
       logBody.appendChild(row);
     });
     if (logCount) logCount.textContent = String(events.length);
   };
-  const loadLogs = async () => {
+  let logRequest = null;
+  const loadLogs = async (reset = true) => {
     if (!logBody) return;
+    if (logRequest) logRequest.abort();
+    logRequest = new AbortController();
+    const sequence = ++logSequence;
+    if (reset) logOffset = 0;
+    const params = new URLSearchParams({limit: '100', offset: String(logOffset)});
+    if (logWindow?.value && logWindow.value !== 'all') params.set('since_minutes', logWindow.value);
+    if (logSearch?.value.trim()) params.set('search', logSearch.value.trim());
+    if (logLevel?.value) params.set('level', logLevel.value);
+    if (logStream?.value) params.set('stream', logStream.value);
+    if (logCategory?.value) params.set('category', logCategory.value);
+    if (logStatusFilter?.value) params.set('status', logStatusFilter.value);
+    if (logStatus) logStatus.textContent = 'Refreshing…';
+    if (logRefresh) logRefresh.disabled = true;
     try {
-      if (!window.AlgoBotFrontendData || typeof window.AlgoBotFrontendData.request !== 'function') return;
-      const response = await window.AlgoBotFrontendData.request('/api/monitoring/mission-events/?limit=100', {}, 10000);
-      const events = response?.data && Array.isArray(response.data) ? response.data : response;
+      if (!window.AlgoBotFrontendData || typeof window.AlgoBotFrontendData.request !== 'function') {
+        throw new Error('Activity feed client is unavailable');
+      }
+      const response = await window.AlgoBotFrontendData.request('/api/monitoring/mission-events/?' + params.toString(), {signal: logRequest.signal}, 10000);
+      if (sequence !== logSequence) return;
+      const payload = response?.data && typeof response.data === 'object' ? response.data : response;
+      const events = Array.isArray(payload) ? payload : payload?.results;
+      if (!Array.isArray(events)) throw new Error('Activity feed returned an unexpected response');
+      logHasMore = Boolean(payload?.has_more);
+      if (payload && !Array.isArray(payload)) logOffset = Number(payload.next_offset || logOffset);
       renderLogs(events);
-    } catch (_) {
-      // Keep the last successful feed visible when a refresh is temporarily unavailable.
+      if (logMore) logMore.disabled = !logHasMore;
+      if (logStatus) logStatus.textContent = 'Updated ' + new Date().toLocaleTimeString() + (livePaused ? ' · live updates paused' : '');
+      root.removeAttribute('data-log-error');
+    } catch (error) {
+      if (sequence !== logSequence) return;
+      if (error?.name !== 'AbortError') {
+        root.setAttribute('data-log-error', 'true');
+        if (logStatus) logStatus.textContent = 'Refresh failed — showing last available events';
+      }
+    } finally {
+      if (logRefresh) logRefresh.disabled = false;
     }
   };
   refresh?.addEventListener('click', load);
+  logRefresh?.addEventListener('click', () => loadLogs(true));
+  logPause?.addEventListener('click', () => {
+    livePaused = !livePaused;
+    logPause.textContent = livePaused ? 'Resume live updates' : 'Pause live updates';
+    logPause.setAttribute('aria-pressed', String(livePaused));
+    if (logStatus) logStatus.textContent = livePaused ? 'Live updates paused' : 'Live updates resumed';
+    if (!livePaused) loadLogs(false);
+  });
+  logMore?.addEventListener('click', () => { if (logHasMore) loadLogs(false); });
+  [logSearch, logLevel, logStream, logCategory, logStatusFilter, logWindow].forEach((control) => {
+    control?.addEventListener(control === logSearch ? 'input' : 'change', () => {
+      if (control !== logSearch || control.value.length === 0 || control.value.length >= 2) loadLogs(true);
+    });
+  });
   if (logBody) {
-    loadLogs();
-    window.setInterval(loadLogs, 5000);
+    loadLogs(true);
+    window.setInterval(() => { if (!livePaused) loadLogs(false); }, 5000);
   }
 })();

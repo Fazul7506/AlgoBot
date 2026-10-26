@@ -23,6 +23,7 @@ class ResearchDataServiceTests(TestCase):
             close="102",
             volume="1",
             epoch=100,
+            source="connected_broker",
         )
         Candle.objects.create(
             symbol=self.symbol,
@@ -33,6 +34,7 @@ class ResearchDataServiceTests(TestCase):
             close="103",
             volume="2",
             epoch=160,
+            source="connected_broker",
         )
 
     def test_aliases_and_order_are_canonical(self):
@@ -67,3 +69,23 @@ class ResearchDataServiceTests(TestCase):
         self.assertEqual(coverage["last_epoch"], 160)
         self.assertEqual(coverage["source"], "market_data.Candle")
         self.assertTrue(coverage["ready"])
+
+    def test_research_excludes_non_broker_provenance(self):
+        Candle.objects.create(
+            symbol=self.symbol,
+            timeframe="1m",
+            open="100",
+            high="105",
+            low="98",
+            close="104",
+            volume="1",
+            epoch=220,
+            source="synthetic",
+        )
+        rows = ResearchDataService().candles("R_100", "1m", limit=10)
+        self.assertEqual([row["epoch"] for row in rows], [100, 160])
+        self.assertEqual(ResearchDataService().count("R_100", "1m"), 2)
+
+    def test_three_minute_broker_timeframe_is_canonical(self):
+        service = ResearchDataService()
+        self.assertEqual(service.timeframe("M3"), "3m")

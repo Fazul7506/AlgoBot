@@ -293,10 +293,10 @@ def execute_backtest(backtest_id):
             current = Backtest.objects.select_for_update().filter(pk=backtest_id).first()
             if current is not None and current.status == 'running' and current.result_version == claimed_version:
                 current.status = 'failed'
-                current.result_snapshot = {'status': 'failed', 'code': 'BACKTEST_EXECUTION_FAILED', 'error': f'{exc.__class__.__name__}: {exc}', 'start_date': current.start_date.isoformat(), 'end_date': current.end_date.isoformat()}
+                current.result_snapshot = {'status': 'failed', 'code': 'BACKTEST_EXECUTION_FAILED', 'error': 'AlgoBot could not complete this backtest. The failure has been recorded for investigation.', 'user_message': 'This backtest did not finish successfully. Your account and strategy settings were not changed.', 'failure_source': 'backtest_worker', 'suggested_action': 'Try again once. If it fails again, open Mission Control and share the failure time with an administrator.', 'start_date': current.start_date.isoformat(), 'end_date': current.end_date.isoformat()}
                 current.save(update_fields=['status', 'result_snapshot', 'updated_at'])
                 _cluster_update(backtest_id, status='failed', locked_at=None)
-        log.exception('Backtest worker failed', extra={'backtest_id': backtest_id})
+        log.exception('BACKTEST_WORKER_FAILED code=BACKTEST_EXECUTION_FAILED backtest_id=%s', backtest_id, extra={'backtest_id': backtest_id, 'failure_code': 'BACKTEST_EXECUTION_FAILED', 'failure_stage': 'backtest_worker', 'symbol': getattr(locals().get('current'), 'symbol', None), 'timeframe': getattr(locals().get('current'), 'timeframe', None), 'user_id': getattr(locals().get('current'), 'user_id', None)})
         raise
 
 

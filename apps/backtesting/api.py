@@ -1,4 +1,5 @@
 import logging
+import asyncio
 
 from django.conf import settings
 from django.db import transaction
@@ -15,6 +16,9 @@ from apps.market_data.models import MarketSymbol, Tick
 from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.broker_native import BACKTEST_TIMEFRAMES
 from apps.market_data.research_data import ResearchDataService
+from apps.market_data.historical import persist_broker_chart_history, persist_broker_tick_history
+from apps.brokers.services import BrokerRegistry
+from core.account_context import get_active_account
 from core.billing_entitlements import check, effective_plan
 
 log = logging.getLogger(__name__)
@@ -144,6 +148,41 @@ class BacktestViewSet(viewsets.ModelViewSet):
         start_epoch = int(start_date.timestamp())
         end_epoch = int(end_date.timestamp())
         min_history = 20
+        # Fetch the requested interval from the authenticated active broker before
+        # deciding that history is missing. Persist only validated broker-returned
+        # observations so the worker and UI share the same canonical dataset.
+        broker_history_error = None
+        account = get_active_account(self.request.user, request=self.request)
+        if account and str(account.broker.broker_type).lower() == str(market.broker).lower():
+            try:
+                adapter = BrokerRegistry().adapter(account.broker, account)
+                if hasattr(adapter, "get_chart_history"):
+                    history_start = max(0, start_epoch - (TIMEFRAMES.get(timeframe, 1) * (min_history + 2) if mode != "tick" else 86400))
+                    history = asyncio.run(adapter.get_chart_history(
+                        market.symbol,
+                        mode="ticks" if mode == "tick" else "candles",
+                        count=1000,
+                        granularity=None if mode == "tick" else TIMEFRAMES.get(timeframe),
+                        start=history_start,
+                        end=end_epoch,
+                    ))
+                    items = history.get("items", []) if isinstance(history, dict) else []
+                    if mode == "tick":
+                        persist_broker_tick_history(market.symbol, items)
+                    else:
+                        persist_broker_chart_history(market.symbol, timeframe, items)
+                else:
+                    broker_history_error = "The connected broker adapter does not support historical chart retrieval."
+            except Exception as exc:
+                broker_history_error = str(exc)[:240]
+                log.exception(
+                    "BACKTEST_BROKER_HISTORY_FETCH_FAILED symbol=%s timeframe=%s mode=%s start=%s end=%s",
+                    market.symbol, timeframe, mode, start_epoch, end_epoch,
+                    extra={"failure_code": "BROKER_HISTORY_FETCH_FAILED", "failure_stage": "broker_history_fetch"},
+                )
+        else:
+            broker_history_error = "No matching active broker account is available for the selected instrument."
+
         if mode == 'tick':
             warmup_count = Tick.objects.filter(
                 symbol=market, epoch__lt=start_epoch
@@ -151,26 +190,49 @@ class BacktestViewSet(viewsets.ModelViewSet):
             evaluation_count = Tick.objects.filter(
                 symbol=market, epoch__gte=start_epoch, epoch__lte=end_epoch
             ).count()
-            if warmup_count < min_history or evaluation_count < 2:
-                raise ValidationError({'date_range': f'Insufficient persisted tick history for this evaluation window. AlgoBot needs {min_history} earlier ticks for indicator warm-up and at least 2 ticks inside the selected interval; found {warmup_count} warm-up ticks and {evaluation_count} evaluation ticks.'})
         else:
             research_data = ResearchDataService()
             try:
                 warmup_count = research_data.count(
-                    market.symbol,
-                    timeframe,
-                    end_epoch=start_epoch - 1,
+                    market.symbol, timeframe, end_epoch=start_epoch - 1,
                 )
                 evaluation_count = research_data.count(
-                    market.symbol,
-                    timeframe,
-                    start_epoch=start_epoch,
-                    end_epoch=end_epoch,
+                    market.symbol, timeframe, start_epoch=start_epoch, end_epoch=end_epoch,
                 )
             except ValueError as exc:
-                raise ValidationError({'date_range': str(exc)}) from exc
-            if warmup_count < min_history or evaluation_count < 2:
-                raise ValidationError({'date_range': f'Insufficient persisted {timeframe} candle history for this evaluation window. AlgoBot needs {min_history} earlier candles for indicator warm-up and at least 2 candles inside the selected interval; found {warmup_count} warm-up candles and {evaluation_count} evaluation candles.'})
+                raise ValidationError({
+                    "code": "HISTORICAL_DATA_VALIDATION_FAILED",
+                    "user_message": "AlgoBot could not validate the historical data for this instrument and timeframe.",
+                    "failure_source": "research_history",
+                    "suggested_action": "Check the selected instrument and timeframe, then try again. If the problem continues, ask an administrator to inspect Mission Control.",
+                    "date_range": str(exc),
+                }) from exc
+
+        if warmup_count < min_history or evaluation_count < 2:
+            available_type = "ticks" if mode == "tick" else f"{timeframe} candles"
+            code = "INSUFFICIENT_BROKER_HISTORY" if broker_history_error else "INSUFFICIENT_HISTORICAL_DATA"
+            detail = (
+                f"AlgoBot could not find enough {available_type} from the connected broker for "
+                f"{market.display_name or market.symbol} between {start_date:%Y-%m-%d %H:%M} and "
+                f"{end_date:%Y-%m-%d %H:%M}. It found {warmup_count} earlier observations "
+                f"(needs {min_history}) and {evaluation_count} inside your selected dates (needs at least 2)."
+            )
+            if broker_history_error:
+                detail += f" Broker history request detail: {broker_history_error}"
+            log.warning(
+                "BACKTEST_REJECTED code=%s source=connected_broker_history symbol=%s timeframe=%s warmup=%s/%s evaluation=%s/%s broker_detail=%s",
+                code, market.symbol, timeframe, warmup_count, min_history, evaluation_count, 2,
+                broker_history_error or "none",
+                extra={"failure_code": code, "failure_stage": "historical_data_validation", "symbol": market.symbol, "timeframe": timeframe},
+            )
+            raise ValidationError({
+                "code": code,
+                "failure_source": "connected_broker_history",
+                "user_message": "This backtest cannot start because the connected broker did not provide enough historical data for the selected dates.",
+                "date_range": detail,
+                "suggested_action": "Choose a shorter or more recent date range, select a supported timeframe, or reconnect the selected broker account. If the broker reports an error, open Mission Control and share the matching event with support.",
+                "data_check": {"instrument": market.symbol, "timeframe": timeframe, "warmup_available": warmup_count, "warmup_required": min_history, "evaluation_available": evaluation_count, "evaluation_required": 2},
+            })
 
         with transaction.atomic():
             user_model = self.request.user.__class__

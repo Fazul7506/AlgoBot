@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
 from django.db import connection
 from django.db.models import Q
 from django.shortcuts import render
@@ -10,7 +11,7 @@ from .services import MonitoringEngine
 
 
 @login_required
-def dashboard(request):
+def dashboard(request, template_name="monitoring/dashboard.html"):
     """Render monitoring telemetry from live database/broker state.
 
     The previous implementation only returned MonitoringEngine.dashboard(),
@@ -120,7 +121,7 @@ def dashboard(request):
     metric_history = list(Metric.objects.filter(module="application").order_by("-timestamp").values(
         "metric_name", "value", "unit", "timestamp"
     )[:20])
-    return render(request, "monitoring/dashboard.html", {
+    return render(request, template_name, {
         "dashboard": dashboard,
         "service_rows": service_rows,
         "recent_events": recent_events,
@@ -128,3 +129,9 @@ def dashboard(request):
         "metric_history": metric_history,
         "recent_logs": recent_logs,
     })
+
+
+@staff_member_required(login_url="/login/")
+def mission_control(request):
+    """Render the separate, staff-only operational activity center."""
+    return dashboard(request, template_name="monitoring/mission_control.html")
