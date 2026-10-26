@@ -126,7 +126,17 @@ def mission_events(request):
         limit = min(max(int(request.query_params.get("limit", 100)), 1), 250)
     except (TypeError, ValueError):
         limit = 100
-    events = LogEntry.objects.order_by("-timestamp").values(
+    events = LogEntry.objects.all()
+    level = str(request.query_params.get("level") or "").strip().upper()
+    stream = str(request.query_params.get("stream") or "").strip().lower()
+    search = str(request.query_params.get("search") or "").strip()[:160]
+    if level:
+        events = events.filter(level__iexact=level)
+    if stream:
+        events = events.filter(stream__iexact=stream)
+    if search:
+        events = events.filter(Q(message__icontains=search) | Q(source__icontains=search) | Q(stream__icontains=search))
+    events = events.order_by("-timestamp").values(
         "id", "stream", "level", "message", "source", "timestamp"
     )[:limit]
     return Response(list(events))
