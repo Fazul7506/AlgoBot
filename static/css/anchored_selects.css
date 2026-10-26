@@ -71,6 +71,7 @@
   box-shadow: 0 16px 38px rgba(0,0,0,.42);
 }
 .ab-select-menu[hidden] { display: none !important; }
+.ab-select-menu.ab-select-menu--up { top: auto; bottom: calc(100% + 5px); }
 .ab-select-search { flex: 0 0 auto; width: auto; min-height: 42px; margin: 9px; padding: 9px 11px; border: 1px solid var(--ds-border, #354257); border-radius: 8px; background: var(--ds-surface-2, #101722); color: inherit; font: inherit; }
 .ab-select-search[hidden] { display: none !important; }
 .ab-select-options { overflow-y: auto; overscroll-behavior: contain; padding: 5px; }
