@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Mission Control | AlgoBot{% endblock %}
+{% block title %}Monitoring | AlgoBot{% endblock %}
 {% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-mission-control">{% endblock %}
 {% block content %}
 <main id="main-content" class="monitoring-workspace" data-monitoring-dashboard>
   <header class="monitoring-hero">
     <div class="monitoring-hero-icon" aria-hidden="true"><svg viewBox="0 0 48 48" role="img"><path d="M4 25h10l5-15 9 29 6-19 4 5h6" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <div class="monitoring-hero-copy"><p class="eyebrow">MISSION CONTROL</p><h1>Mission Control</h1><p>Live operational view of AlgoBot services, broker connectivity and application events.</p><p class="monitoring-subtitle">Successes, warnings, failures and information from the running platform.</p></div>
+    <div class="monitoring-hero-copy"><p class="eyebrow">MONITORING</p><h1>Monitoring</h1><p>Live operational view of AlgoBot services, broker connectivity and application events.</p><p class="monitoring-subtitle">Successes, warnings, failures and information from the running platform.</p></div>
     <div class="monitoring-system-state"><span class="monitoring-shield" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 20 5v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z" fill="currentColor"/><path d="m8 12 2.5 2.5L16 9" fill="none" stroke="#05264a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><strong data-system-status-text>{{ dashboard.overall_system_health|title }}</strong><small>Current system status</small></div></div>
   </header>
 
