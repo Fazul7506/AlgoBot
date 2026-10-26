@@ -40,7 +40,7 @@ class BrokerDataProvenanceTests(TestCase):
             }],
         )
         candle = Candle.objects.get(symbol=self.market, timeframe="1m", epoch=1900000020)
-        self.assertEqual(candle.source, "deriv_candles")
+        self.assertEqual(candle.source, "connected_broker")
         self.assertEqual(str(candle.close), "111.00000000")
         self.assertEqual(result["source"], "deriv_candles")
 
