@@ -198,11 +198,14 @@ class BacktestViewSet(viewsets.ModelViewSet):
             # Keep validation failures actionable in server logs without logging
             # the full request body (which may contain user strategy parameters).
             log.warning(
-                'Backtest request rejected during serializer validation',
+                'BACKTEST_REJECTED stage=serializer user_id=%s errors=%s',
+                getattr(request.user, 'pk', None),
+                exc.detail,
                 extra={
                     'user_id': getattr(request.user, 'pk', None),
                     'submitted_fields': sorted(str(key) for key in request.data.keys()) if hasattr(request.data, 'keys') else [],
                     'validation_errors': exc.detail,
+                    'failure_stage': 'serializer_validation',
                 },
             )
             raise
@@ -210,12 +213,17 @@ class BacktestViewSet(viewsets.ModelViewSet):
             self.perform_create(serializer)
         except ValidationError as exc:
             log.warning(
-                'Backtest request rejected during domain validation',
+                'BACKTEST_REJECTED stage=domain user_id=%s symbol=%s timeframe=%s errors=%s',
+                getattr(request.user, 'pk', None),
+                str(request.data.get('symbol', ''))[:64],
+                str(request.data.get('timeframe', ''))[:24],
+                exc.detail,
                 extra={
                     'user_id': getattr(request.user, 'pk', None),
                     'symbol': str(request.data.get('symbol', ''))[:64],
                     'timeframe': str(request.data.get('timeframe', ''))[:24],
                     'validation_errors': exc.detail,
+                    'failure_stage': 'domain_validation',
                 },
             )
             raise
