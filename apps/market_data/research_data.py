@@ -18,11 +18,10 @@ class ResearchDataService:
 
     @staticmethod
     def _broker_sourced(queryset, timeframe: str):
-        # tick_stream rows are generated from authenticated live broker ticks;
-        # deriv_candles and connected_broker are validated broker-history writes.
-        # Unknown/synthetic/imported sources must never leak into research.
-        sources = ("tick_stream", "connected_broker") if timeframe == "tick" else (
-            "tick_stream", "deriv_candles", "connected_broker"
+        # Research history must be broker-returned data, not candles inferred
+        # locally from live tick streams or any synthetic/imported source.
+        sources = ("connected_broker",) if timeframe == "tick" else (
+            "deriv_candles", "connected_broker"
         )
         return queryset.filter(source__in=sources)
 
