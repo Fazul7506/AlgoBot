@@ -83,3 +83,5 @@
 .monitoring-workspace [data-mission-log-body] details{margin-top:8px}
 .monitoring-workspace [data-mission-log-body] summary{display:inline-block;color:#7cb8ff;cursor:pointer;font:600 .72rem system-ui}
 @media(max-width:760px){.monitoring-workspace .mission-log-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.monitoring-workspace .mission-log-controls label{min-width:0}.monitoring-workspace .mission-log-controls [data-mission-log-status]{grid-column:1/-1}.monitoring-workspace [data-mission-log-body] td{padding:9px 8px}.monitoring-workspace [data-mission-log-body] td:first-child{white-space:normal;min-width:100px}.monitoring-workspace .mission-log-details{max-width:calc(100vw - 70px)}}
+
+.monitoring-workspace .mission-log-copy{display:inline-block;margin:4px 6px 4px 0;padding:4px 7px;border:1px solid #354354;border-radius:5px;background:#111a24;color:#9ac8ff;font-size:.68rem;cursor:pointer}.monitoring-workspace .mission-log-copy:hover{background:#1a2b3e}.monitoring-workspace .mission-log-copy:focus-visible{outline:2px solid #58a6ff;outline-offset:2px}
