@@ -120,5 +120,19 @@ def logs(request):
 
 @api_view(["GET"])
 @permission_classes([IsAdminUser])
+def mission_events(request):
+    """Safe, compact event stream for the staff Mission Control page."""
+    try:
+        limit = min(max(int(request.query_params.get("limit", 100)), 1), 250)
+    except (TypeError, ValueError):
+        limit = 100
+    events = LogEntry.objects.order_by("-timestamp").values(
+        "id", "stream", "level", "message", "source", "timestamp"
+    )[:limit]
+    return Response(list(events))
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
 def traces(request):
     return Response(TraceSpanSerializer(TraceSpan.objects.all()[:500], many=True).data)
