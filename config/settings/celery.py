@@ -53,21 +53,14 @@ CELERY_WORKER_ENABLE_REMOTE_CONTROL = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
 
-# Declare every production queue explicitly. This prevents a broker-side queue
-# from being created accidentally by a typo and makes the isolated market-data
-# consumer contract inspectable during worker preflight.
+# Declare only the general application queue; historical data is fetched on demand.
 CELERY_TASK_DEFAULT_QUEUE = "celery"
 CELERY_TASK_CREATE_MISSING_QUEUES = False
 CELERY_TASK_QUEUES = (
-    # Bind each named queue to its own routing key. Without an explicit key,
-    # Kombu can inherit the default ``celery`` routing key for both queues,
-    # causing market-data messages to be delivered to the general worker too.
     Queue("celery", routing_key="celery"),
 )
 
-# Explicit imports make the production worker deterministic even if Django's
-# autodiscovery behavior changes. This is especially important for the isolated
-# market_data worker, which must register the task before consuming its queue.
+# Explicit imports keep application task registration deterministic.
 CELERY_IMPORTS = (
     "apps.market_data.tasks",
 )
