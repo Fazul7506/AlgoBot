@@ -180,10 +180,12 @@ def mission_events(request):
         event["error_category"] = context.get("error_category")
         event["resolution"] = context.get("resolution")
         event["details"] = context.get("diagnostic_summary") or context.get("details")
-    response = Response(page)
-    response["X-Has-More"] = "true" if has_more else "false"
-    response["X-Next-Offset"] = str(offset + limit if has_more else "")
-    return response
+    return Response({
+        "results": page,
+        "has_more": has_more,
+        "next_offset": offset + limit if has_more else None,
+        "limit": limit,
+    })
 
 
 @api_view(["GET"])
