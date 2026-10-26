@@ -10,7 +10,7 @@ from .models import MarketSymbol, Tick, Candle, MarketSnapshot, MarketStatistics
 from .serializers import MarketSymbolSerializer, TickSerializer, CandleSerializer, MarketSnapshotSerializer, MarketStatisticsSerializer
 from .deriv_sync import fetch_tick, sync_active_symbols
 from .services import MarketDataService
-from .historical import persist_broker_chart_history
+from .historical import persist_broker_chart_history, persist_broker_tick_history
 from . import broker_native
 from .constants import TIMEFRAMES
 from apps.brokers.services import BrokerRegistry
@@ -220,8 +220,12 @@ def broker_chart_history(request):
                 timeframe = next((name for name, seconds in TIMEFRAMES.items() if seconds == granularity_seconds and name != "tick"), None)
                 if timeframe:
                     persistence = persist_broker_chart_history(symbol, timeframe, data["items"])
+                else:
+                    persistence = {"status": "not_persisted", "reason": "unsupported_granularity"}
             except (TypeError, ValueError):
                 persistence = {"status": "not_persisted", "reason": "invalid_granularity"}
+        else:
+            persistence = persist_broker_tick_history(symbol, data["items"])
 
         data.update({"broker": account.broker.name, "account_id": account.account_id, "source": "live_broker", "persistence": persistence})
         return Response(data)
