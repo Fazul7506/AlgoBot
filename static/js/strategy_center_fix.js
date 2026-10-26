@@ -90,15 +90,26 @@
 
   function renderPerformanceChart(p){
     const svg=$('[data-s-performance-chart]'),empty=$('[data-s-chart-empty]');if(!svg||!empty)return;
-    const keys=selectedRange==='90d'?['equity_90d','series_90d']:selectedRange==='1y'?['equity_1y','series_1y']:selectedRange==='all'?['equity_curve','equity_series','history']:['equity_30d','series_30d','equity_curve','equity_series'];
-    let series=null;for(const key of keys){if(Array.isArray(p?.[key])&&p[key].length>1){series=p[key];break;}}
-    if(!series){svg.hidden=true;empty.hidden=false;return;}
-    const values=series.map(x=>Number(typeof x==='object'?(x.value??x.equity??x.balance??x.return_pct??x.y):x)).filter(Number.isFinite);
+    const keys=selectedRange==='90d'?['equity_90d','series_90d','return_series_90d']:selectedRange==='1y'?['equity_1y','series_1y','return_series_1y']:selectedRange==='all'?['equity_curve','equity_series','history','return_series']:['equity_30d','series_30d','return_series_30d','equity_curve','equity_series'];
+    const findSeries=names=>{for(const key of names){if(Array.isArray(p?.[key])&&p[key].length>1)return p[key];}return null;};
+    const readValues=series=>Array.isArray(series)?series.map(x=>Number(typeof x==='object'?(x.value??x.equity??x.balance??x.return_pct??x.return??x.y):x)).filter(Number.isFinite):[];
+    const series=findSeries(keys),values=readValues(series);
     if(values.length<2){svg.hidden=true;empty.hidden=false;return;}
-    const min=Math.min(...values,0),max=Math.max(...values,0),span=max-min||1,w=480,h=170,pad=28,pw=w-pad-8,ph=h-26;let out='';
-    for(let i=0;i<=4;i++){const y=8+i*ph/4;out+=`<path d="M${pad} ${y}H${w-8}" stroke="#15385b" stroke-width="1"/><text x="${pad-6}" y="${y+3}" text-anchor="end" fill="#9db6d6" font-size="9">${(max-i*span/4).toFixed(0)}%</text>`;}
-    const points=values.map((v,i)=>[pad+i*pw/(values.length-1),8+(max-v)*ph/span]);const path=points.map((v,i)=>(i?'L':'M')+v[0].toFixed(1)+' '+v[1].toFixed(1)).join(' ');
-    out+=`<path d="${path}" fill="none" stroke="#08d4a4" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;svg.innerHTML=out;svg.hidden=false;empty.hidden=true;
+    const benchmarkSeries=findSeries(['benchmark_series','benchmark_equity_curve','benchmark_curve','benchmark_returns','benchmark_30d','benchmark_90d','benchmark_1y']);
+    const benchmark=readValues(benchmarkSeries);
+    const all=benchmark.length>1?[...values,...benchmark]:values;
+    const min=Math.min(...all,0),max=Math.max(...all,0),span=max-min||1,w=480,h=170,pad=36,right=8,top=8,bottom=25,pw=w-pad-right,ph=h-top-bottom;
+    const xFor=(i,n)=>pad+i*pw/Math.max(1,n-1),yFor=v=>top+(max-v)*ph/span;
+    let out='';
+    for(let i=0;i<=4;i++){const y=top+i*ph/4,val=max-i*span/4;out+=`<path d="M${pad} ${y}H${w-right}" stroke="#15385b" stroke-width="1"/><text x="${pad-6}" y="${y+3}" text-anchor="end" fill="#9db6d6" font-size="9">${val.toFixed(1)}%</text>`;}
+    const makePath=arr=>arr.map((v,i)=>(i?'L':'M')+xFor(i,arr.length).toFixed(1)+' '+yFor(v).toFixed(1)).join(' ');
+    if(benchmark.length>1)out+=`<path d="${makePath(benchmark)}" fill="none" stroke="#1685ff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+    out+=`<path d="${makePath(values)}" fill="none" stroke="#08d4a4" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const labels=Array.isArray(series)&&typeof series[0]==='object'?series.map(x=>x.date??x.timestamp??x.label??''):[],last=labels.length?labels[labels.length-1]:'';
+    if(last)out+=`<text x="${w-right}" y="${h-5}" text-anchor="end" fill="#9db6d6" font-size="9">${String(last).slice(0,16)}</text>`;
+    svg.innerHTML=out;svg.hidden=false;empty.hidden=true;
+    const legend=svg.closest('.strategy-overview-panel')?.querySelector('.strategy-chart-legend');
+    if(legend)legend.innerHTML='<span><i class="legend-dot strategy-dot"></i>Selected strategy</span>'+(benchmark.length>1?'<span><i class="legend-dot benchmark-dot"></i>Benchmark</span>':'');
   }
 
   async function load() {
