@@ -214,3 +214,19 @@
 [data-mission-logger] .mc-range-dropdown{flex:1;min-width:170px}
 [data-mission-logger] .mc-range-dropdown>.mc-dropdown-trigger{width:100%}
 @media(max-width:640px){[data-mission-logger] .rb-log-toolbar{flex-wrap:wrap}[data-mission-logger] .mc-dropdown-trigger{min-height:44px}[data-mission-logger] .mc-range-dropdown{flex:1 1 65%}[data-mission-logger] .mc-dropdown-menu{max-width:calc(100vw - 56px)}}
+
+/* Console dropdowns are anchored popovers, never mobile-native select sheets. */
+.render-console .mc-visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important;appearance:none!important;-webkit-appearance:none!important;pointer-events:none!important}
+.render-console .mc-dropdown{position:relative;min-width:0}
+.render-console .mc-dropdown-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:42px;padding:9px 12px;border:1px solid #414141;border-radius:4px;background:#111;color:#e6e6e6;font:inherit;font-size:.82rem;text-align:left;cursor:pointer;white-space:nowrap}
+.render-console .mc-dropdown-trigger:hover,.render-console .mc-dropdown-trigger[aria-expanded="true"]{background:#1b1b1b;border-color:#777}
+.render-console .mc-dropdown-trigger:focus-visible,.render-console .mc-dropdown-menu button:focus-visible{outline:2px solid #b58aff;outline-offset:2px}
+.render-console .mc-dropdown-menu{position:absolute;z-index:100;top:calc(100% + 5px);left:0;min-width:100%;width:max-content;max-width:min(320px,calc(100vw - 40px));padding:5px;background:#111;border:1px solid #383838;border-radius:4px;box-shadow:0 12px 32px #000b}
+.render-console .mc-dropdown-menu[hidden]{display:none!important}
+.render-console .mc-dropdown-menu button{display:flex;align-items:center;gap:10px;width:100%;min-height:42px;padding:10px 12px;border:0;border-radius:2px;background:transparent;color:#ddd;text-align:left;font:inherit;font-size:.82rem;white-space:nowrap;cursor:pointer}
+.render-console .mc-dropdown-menu button:hover,.render-console .mc-dropdown-menu button[aria-checked="true"]{background:#2a173f;color:#d8b4fe}
+.render-console .mc-option-check{margin-left:auto;padding-left:18px;color:#d8b4fe}
+.render-console .mc-range-dropdown{flex:1;min-width:0}
+.render-console .mc-range-dropdown .mc-dropdown-trigger{width:100%;min-width:0}
+.render-console .mc-range-dropdown .mc-dropdown-menu{max-height:min(60vh,420px);overflow-y:auto}
+@media(max-width:640px){.render-console .mc-dropdown-trigger{min-height:46px}.render-console .mc-dropdown-menu{max-width:calc(100vw - 40px)}.render-console .mc-range-dropdown{width:100%}}
