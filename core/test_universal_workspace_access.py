@@ -121,7 +121,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         css = self._css("runtime_recovery.css")
         self.assertLess(len(css.splitlines()), 500)
         self.assertEqual(css.count("!important"), 0)
-        self.assertEqual(css.count("@media"), 5)
+        self.assertEqual(css.count("@media"), 6)
         self.assertIn(".app-sidebar{", css)
         self.assertIn(".app-shell{", css)
         self.assertIn(".app-sidebar nav{", css)
@@ -219,7 +219,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             html.index("card_alignment.css"),
             html.index("platform_polish.css"),
             html.index("control_polish.css"),
-            html.index("runtime_recovery.css?v=20261008-css-recovery1"),
+            html.index("runtime_recovery.css?v=20261026-toast-severity1"),
         ]
         self.assertEqual(positions, sorted(positions))
 
@@ -242,7 +242,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         html = response.content.decode("utf-8")
-        self.assertIn("css/shared_components.css?v=20261008-components1", html)
+        self.assertIn("css/shared_components.css?v=20261026-toast-layout3", html)
         self.assertIn('href="#app-content"', html)
         self.assertNotIn('href="#main-content"', html)
 
@@ -273,7 +273,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertContains(response, "css/runtime_recovery.css?v=20261008-css-recovery1")
         self.assertContains(response, "css/sidebar_responsive_contract.css?v=20261013-shell2")
         self.assertContains(response, "js/sidebar_account_switch.js?v=20261013-samescope1")
-        self.assertContains(response, "js/base_shell.js?v=20261021-toast-dedupe2")
+        self.assertContains(response, "js/base_shell.js?v=20261026-toast-close-dedupe3")
         shell = (Path("static/js/base_shell.js")).read_text(encoding="utf-8")
         self.assertIn("function bindNavigationPrefetch(links)", shell)
         self.assertIn("prefetchedNavigation.size >= 5", shell)
