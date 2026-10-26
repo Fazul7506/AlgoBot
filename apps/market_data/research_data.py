@@ -16,6 +16,16 @@ from apps.market_data.models import Candle, MarketSymbol
 class ResearchDataService:
     """Read-only access to the persisted canonical research dataset."""
 
+    @staticmethod
+    def _broker_sourced(queryset, timeframe: str):
+        # tick_stream rows are generated from authenticated live broker ticks;
+        # deriv_candles and connected_broker are validated broker-history writes.
+        # Unknown/synthetic/imported sources must never leak into research.
+        sources = ("tick_stream", "connected_broker") if timeframe == "tick" else (
+            "tick_stream", "deriv_candles", "connected_broker"
+        )
+        return queryset.filter(source__in=sources)
+
     def market(self, symbol: str) -> MarketSymbol:
         value = str(symbol or "").strip().upper()
         market = MarketSymbol.objects.filter(
@@ -43,8 +53,7 @@ class ResearchDataService:
         market = self.market(symbol)
         limit = min(max(int(limit), 1), 10000)
         qs = Candle.objects.filter(symbol=market, timeframe=canonical)
-        if TIMEFRAMES[canonical] >= 60:
-            qs = qs.filter(source__in=("deriv_candles", "connected_broker"))
+        qs = self._broker_sourced(qs, canonical)
         if start_epoch is not None:
             qs = qs.filter(epoch__gte=int(start_epoch))
         if end_epoch is not None:
@@ -87,8 +96,7 @@ class ResearchDataService:
             timeframe=canonical,
             epoch__gt=int(after_epoch),
         )
-        if TIMEFRAMES[canonical] >= 60:
-            qs = qs.filter(source__in=("deriv_candles", "connected_broker"))
+        qs = self._broker_sourced(qs, canonical)
         return list(
             qs
             .order_by("epoch", "id")
@@ -111,8 +119,7 @@ class ResearchDataService:
             timeframe=canonical,
             epoch__lt=int(before_epoch),
         )
-        if TIMEFRAMES[canonical] >= 60:
-            qs = qs.filter(source__in=("deriv_candles", "connected_broker"))
+        qs = self._broker_sourced(qs, canonical)
         rows = list(
             qs
             .order_by("-epoch", "-id")
@@ -131,8 +138,7 @@ class ResearchDataService:
         canonical = self.timeframe(timeframe)
         market = self.market(symbol)
         qs = Candle.objects.filter(symbol=market, timeframe=canonical)
-        if TIMEFRAMES[canonical] >= 60:
-            qs = qs.filter(source__in=("deriv_candles", "connected_broker"))
+        qs = self._broker_sourced(qs, canonical)
         if start_epoch is not None:
             qs = qs.filter(epoch__gte=int(start_epoch))
         if end_epoch is not None:
@@ -143,8 +149,7 @@ class ResearchDataService:
         canonical = self.timeframe(timeframe)
         market = self.market(symbol)
         qs = Candle.objects.filter(symbol=market, timeframe=canonical)
-        if TIMEFRAMES[canonical] >= 60:
-            qs = qs.filter(source__in=("deriv_candles", "connected_broker"))
+        qs = self._broker_sourced(qs, canonical)
         first = qs.order_by("epoch", "id").values_list("epoch", flat=True).first()
         last = qs.order_by("-epoch", "-id").values_list("epoch", flat=True).first()
         count = qs.count()
