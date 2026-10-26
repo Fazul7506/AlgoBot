@@ -159,7 +159,7 @@ class ResearchDataService:
             "first_epoch": first,
             "last_epoch": last,
             "source": "market_data.Candle",
-            "candle_source": "connected_broker" if TIMEFRAMES[canonical] >= 60 else "tick_stream",
+            "candle_source": "connected_broker",
             "ready": count > 0,
         }
 
