@@ -10,7 +10,7 @@ from .services import MonitoringEngine
 
 
 @login_required
-def dashboard(request):
+def dashboard(request, template_name="monitoring/dashboard.html"):
     """Render monitoring telemetry from live database/broker state.
 
     The previous implementation only returned MonitoringEngine.dashboard(),
@@ -120,7 +120,7 @@ def dashboard(request):
     metric_history = list(Metric.objects.filter(module="application").order_by("-timestamp").values(
         "metric_name", "value", "unit", "timestamp"
     )[:20])
-    return render(request, "monitoring/dashboard.html", {
+    return render(request, template_name, {
         "dashboard": dashboard,
         "service_rows": service_rows,
         "recent_events": recent_events,
