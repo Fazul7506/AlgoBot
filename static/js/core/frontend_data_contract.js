@@ -68,7 +68,31 @@
   const isCloudflareChallenge=(response,text)=>{if(!response)return false;const mitigated=String(response.headers?.get('cf-mitigated')||'').toLowerCase();if(mitigated==='challenge')return true;if(!text)return false;const body=String(text).toLowerCase();return[400,403,429,503,520,521,522,524].includes(response.status)&&(body.includes('just a moment')||body.includes('challenge-platform')||body.includes('cf_chl_opt')||body.includes('cf_chl-')||body.includes('challenges.cloudflare.com')||body.includes('enable javascript and cookies to continue')||(body.includes('cloudflare')&&String(response.headers?.get('content-type')||'').toLowerCase().includes('text/html')))};
   const parseDjangoResponse=(response,text)=>{const ct=String(response?.headers?.get('content-type')||'').toLowerCase();if(!ct.includes('text/html')||!text)return null;try{const doc=new DOMParser().parseFromString(text,'text/html'),env=doc.querySelector('[data-django-response]');if(!env)return null;const payloadNode=doc.querySelector('#django-response-payload'),messageNode=doc.querySelector('[data-response-message], [data-django-message]');let payload={};if(payloadNode?.textContent)payload=JSON.parse(payloadNode.textContent);return{django:true,status:Number(env.dataset.status||response.status||200),kind:env.dataset.kind||'info',message:messageNode?.textContent?.trim()||'',payload}}catch(_){return null}};
   const parsePayload=(response,text)=>{const django=parseDjangoResponse(response,text);if(django)return django;try{return text?JSON.parse(text):{}}catch(_){if(isCloudflareChallenge(response,text))return{detail:'Dedicated API edge challenge encountered.',code:'EDGE_CHALLENGE'};const ct=String(response?.headers?.get('content-type')||'').toLowerCase();return{detail:ct.includes('text/html')?`API returned an unexpected HTML response (${response.status}).`:String(text||`HTTP ${response?.status||'unknown'} request failure`)}}};
-  const statusMessage=(status,payload)=>payload?.detail||payload?.message||({401:'Your session has expired. Sign in again.',403:'You are not authorized to perform this action.',404:'The requested API endpoint was not found.',405:'The API endpoint does not accept this HTTP method.',409:'The requested operation conflicts with the current account state.',429:'The request limit or plan quota has been reached.',500:'The server encountered an internal error.',502:'The broker/API gateway returned an invalid response.',503:'The backend service is temporarily unavailable.',504:'The backend service timed out.'}[status]||`HTTP ${status} request failure`);
+  const fieldLabel=(key)=>({
+    symbol:'Instrument', market:'Market', timeframe:'Timeframe', granularity:'Candle interval',
+    start_date:'Start date', end_date:'End date', date_range:'Date range', strategy:'Strategy',
+    strategy_id:'Strategy', mode:'Execution mode', account:'Broker account', amount:'Amount',
+    stake:'Stake', currency:'Currency', contract_type:'Contract type', order_type:'Order type',
+    email:'Email', password:'Password', code:'Code', detail:'Details'
+  }[String(key||'').toLowerCase()]||String(key||'Information').replace(/[_-]+/g,' ').replace(/^./,s=>s.toUpperCase()));
+  const validationMessage=(payload)=>{
+    if(payload?.user_message)return String(payload.user_message);
+    if(typeof payload?.detail==='string'&&payload.detail.trim())return payload.detail.trim();
+    if(typeof payload?.message==='string'&&payload.message.trim())return payload.message.trim();
+    const ignored=new Set(['code','status','error_code','suggested_action','failure_source','data_check','plan','used','limit']);
+    const entries=Object.entries(payload||{}).filter(([key,value])=>!ignored.has(key)&&value!==undefined&&value!==null);
+    const messages=entries.flatMap(([key,value])=>{
+      const values=Array.isArray(value)?value:[value];
+      return values.filter(v=>typeof v==='string'||typeof v==='number').map(v=>fieldLabel(key)+': '+String(v));
+    }).slice(0,5);
+    if(messages.length)return 'Please review the following information: '+messages.join(' ');
+    return '';
+  };
+  const statusMessage=(status,payload)=>{
+    const validation=validationMessage(payload);
+    if(validation)return validation;
+    return ({400:'Some information is missing or invalid. Review the form fields and try again.',401:'Your session has expired. Sign in again.',403:'You do not have permission to perform this action. Contact an administrator if you believe this is a mistake.',404:'The requested feature could not be found. Refresh the page and try again.',405:'This action is not available here. Refresh the page and try again.',409:'This action conflicts with the current account or operation state. Review the account status and try again.',422:'Some information could not be accepted. Review your selections and try again.',429:'The request limit has been reached. Wait before trying again or review your plan limits.',500:'AlgoBot encountered an unexpected problem. Try again later; if it continues, share the time of the failure with support.',502:'The connected service returned an invalid response. Check the connection and try again shortly.',503:'This service is temporarily unavailable. Try again shortly.',504:'The service took too long to respond. Check your connection and retry if the operation has not already completed.'}[status]||'AlgoBot could not complete this request. Try again, and contact support if the problem continues.');
+  };
   const notifyApiError=(options,detail)=>{if(options?.notifyOnError===false)return;window.dispatchEvent(new CustomEvent('algobot:api-error',{detail}))};
 
   async function fetchOnce(url,options,controller){
