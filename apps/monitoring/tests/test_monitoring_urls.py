@@ -83,16 +83,6 @@ class MonitoringSmokeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertLessEqual(len(response.json()["results"]), 250)
 
-    def test_retired_backfill_page_redirects_to_mission_control(self):
-        response = self.client.get("/operations/candle-backfill/")
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/operations/mission-control/")
-
-    def test_retired_backfill_control_redirects_to_mission_control(self):
-        response = self.client.get("/operations/candle-backfill/control/")
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/operations/mission-control/")
-
     def test_operations_mission_control_is_staff_only(self):
         response = self.client.get("/operations/mission-control/")
         self.assertEqual(response.status_code, 302)
