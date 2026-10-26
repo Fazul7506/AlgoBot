@@ -78,7 +78,7 @@ class Migration(migrations.Migration):
             name='Candle',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('timeframe', models.CharField(choices=[('tick', 'tick'), ('1s', '1s'), ('5s', '5s'), ('15s', '15s'), ('30s', '30s'), ('1m', '1m'), ('2m', '2m'), ('5m', '5m'), ('10m', '10m'), ('15m', '15m'), ('30m', '30m'), ('1h', '1h'), ('2h', '2h'), ('4h', '4h'), ('8h', '8h'), ('1d', '1d')], db_index=True, max_length=8)),
+                ('timeframe', models.CharField(choices=[('tick', 'tick'), ('1s', '1s'), ('5s', '5s'), ('15s', '15s'), ('30s', '30s'), ('1m', '1m'), ('2m', '2m'), ('3m', '3m'), ('5m', '5m'), ('10m', '10m'), ('15m', '15m'), ('30m', '30m'), ('1h', '1h'), ('2h', '2h'), ('4h', '4h'), ('8h', '8h'), ('1d', '1d')], db_index=True, max_length=8)),
                 ('open', models.DecimalField(decimal_places=8, max_digits=20)),
                 ('high', models.DecimalField(decimal_places=8, max_digits=20)),
                 ('low', models.DecimalField(decimal_places=8, max_digits=20)),
@@ -99,7 +99,7 @@ class Migration(migrations.Migration):
             name='Subscription',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('timeframe', models.CharField(choices=[('tick', 'tick'), ('1s', '1s'), ('5s', '5s'), ('15s', '15s'), ('30s', '30s'), ('1m', '1m'), ('2m', '2m'), ('5m', '5m'), ('10m', '10m'), ('15m', '15m'), ('30m', '30m'), ('1h', '1h'), ('2h', '2h'), ('4h', '4h'), ('8h', '8h'), ('1d', '1d')], default='tick', max_length=8)),
+                ('timeframe', models.CharField(choices=[('tick', 'tick'), ('1s', '1s'), ('5s', '5s'), ('15s', '15s'), ('30s', '30s'), ('1m', '1m'), ('2m', '2m'), ('3m', '3m'), ('5m', '5m'), ('10m', '10m'), ('15m', '15m'), ('30m', '30m'), ('1h', '1h'), ('2h', '2h'), ('4h', '4h'), ('8h', '8h'), ('1d', '1d')], default='tick', max_length=8)),
                 ('status', models.CharField(choices=[('active', 'Active'), ('paused', 'Paused'), ('cancelled', 'Cancelled')], db_index=True, default='active', max_length=20)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('symbol', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='subscriptions', to='market_data.marketsymbol')),
