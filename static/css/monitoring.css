@@ -230,3 +230,7 @@
 .render-console .mc-range-dropdown .mc-dropdown-trigger{width:100%;min-width:0}
 .render-console .mc-range-dropdown .mc-dropdown-menu{max-height:min(60vh,420px);overflow-y:auto}
 @media(max-width:640px){.render-console .mc-dropdown-trigger{min-height:46px}.render-console .mc-dropdown-menu{max-width:calc(100vw - 40px)}.render-console .mc-range-dropdown{width:100%}}
+
+[data-mission-logger] .mc-action-icon{display:inline-flex;align-items:center;justify-content:center;font-size:18px;line-height:1;flex:0 0 18px;vertical-align:middle}
+[data-mission-logger] .rb-log-control .mc-action-icon{margin-right:5px}
+[data-mission-logger] .mc-dropdown-menu .mc-action-icon{font-size:18px;line-height:1}
