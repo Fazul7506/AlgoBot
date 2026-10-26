@@ -1,6 +1,7 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from datetime import timedelta
+import logging
 
 from django.db import DatabaseError
 from django.db.models import Q
@@ -13,6 +14,8 @@ from .models import Alert, AuditLog, BrokerHealth, Incident, LogEntry, Metric, S
 from apps.brokers.models import BrokerAccount, BrokerConnection, Position
 from .serializers import AlertSerializer, AuditLogSerializer, BrokerHealthSerializer, IncidentSerializer, LogEntrySerializer, MetricSerializer, SystemHealthSerializer, TraceSpanSerializer
 from .services import MonitoringEngine
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(["GET"])
@@ -196,8 +199,10 @@ def mission_events(request):
         page = list(events.order_by("-timestamp", "-id").values(
             "id", "stream", "level", "message", "source", "timestamp", "context"
         )[offset:offset + limit + 1])
-    except DatabaseError:
-        # Keep the console API response bounded and actionable during transient pool/database failures.
+    except Exception as exc:
+        # The configured psycopg pool can raise PoolTimeout outside Django's DatabaseError
+        # hierarchy. Log the exception type server-side and keep the UI response safe.
+        logger.warning("Mission Control log query unavailable (%s)", type(exc).__name__)
         return Response(
             {"detail": "Log storage is temporarily unavailable. Retry shortly.", "code": "MISSION_LOG_STORAGE_UNAVAILABLE"},
             status=503,
