@@ -11,9 +11,14 @@ class MonitoringSmokeTests(TestCase):
     def test_monitoring_page_resolves(self):
         response = self.client.get(reverse("monitoring-dashboard-page"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "System Monitoring")
+        self.assertContains(response, "Mission Control")
 
     def test_monitoring_api_resolves(self):
         response = self.client.get(reverse("monitoring-dashboard"))
         self.assertEqual(response.status_code, 200)
         self.assertIn("overall_system_health", response.json())
+    def test_retired_backfill_page_redirects_to_mission_control(self):
+        response = self.client.get("/operations/candle-backfill/")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/monitoring/")
+

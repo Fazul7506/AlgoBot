@@ -1,36 +1,23 @@
-"""Broker historical OHLC/tick ingestion for durable research data."""
+"""Validated persistence for history returned by the user's connected broker.
+
+Historical data is requested on demand through the active broker adapter in the
+API layer. This module contains no autonomous ingestion scheduler or private staging lifecycle.
+"""
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
-import time
-from contextlib import contextmanager
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
-import websockets
-from django.conf import settings
 from django.db import transaction
 
 from .constants import TIMEFRAMES
-from .models import (
-    Candle, CandleBackfillRun, CandleBackfillStagedCandle,
-    CandleBackfillStagedTick, MarketSymbol, Tick,
-)
+from .models import Candle, MarketSymbol, Tick
 
 logger = logging.getLogger(__name__)
 
-# Deriv's native OHLC endpoint is used for minute-and-higher bars.  Sub-minute
-# research bars are built from persisted ticks because the broker does not
-# expose every sub-minute granularity in its candle catalogue.
-TIMEFRAME_GRANULARITY = {
-    timeframe: seconds
-    for timeframe, seconds in TIMEFRAMES.items()
-    if timeframe != "tick" and seconds >= 60
-}
 TIMEFRAME_ALIASES = {
     "M1": "1m", "M2": "2m", "M5": "5m", "M10": "10m", "M15": "15m",
-    "M30": "30m", "H1": "1h", "H4": "4h", "D1": "1d",
+    "M30": "30m", "H1": "1h", "H2": "2h", "H4": "4h", "H8": "8h", "D1": "1d",
 }
 
 
@@ -38,402 +25,138 @@ def normalize_timeframe(timeframe: str) -> str:
     value = str(timeframe or "1m").strip()
     canonical = TIMEFRAME_ALIASES.get(value.upper(), value.lower())
     if canonical not in TIMEFRAMES:
-        raise ValueError(f"Unsupported candle timeframe: {timeframe}")
+        raise ValueError(f"Unsupported timeframe '{timeframe}'. Choose a timeframe supported by the connected broker.")
     return canonical
-
-
-def _ws_url() -> str:
-    url = getattr(settings, "DERIV_PUBLIC_WS_URL", "")
-    if not url:
-        raise RuntimeError("DERIV_PUBLIC_WS_URL is not configured")
-    return url
-
-
-def _validate_history_count(count: int) -> int:
-    value = int(count)
-    if value < 1 or value > 5000:
-        raise ValueError("Historical Deriv requests must request between 1 and 5000 items per page")
-    return value
-
-
-async def _request(payload: dict) -> dict:
-    """Execute one bounded Deriv history request with safe transient retries."""
-    last_error = None
-    for attempt in range(2):
-        try:
-            async with websockets.connect(
-                _ws_url(), open_timeout=5, close_timeout=2,
-                ping_interval=20, ping_timeout=5
-            ) as ws:
-                await ws.send(json.dumps(payload))
-                raw = await asyncio.wait_for(ws.recv(), timeout=8)
-            response = json.loads(raw)
-            error = response.get("error")
-            if error:
-                code = str(error.get("code") or "").lower()
-                message = str(error.get("message") or "Deriv rejected historical market-data request")
-                if not any(marker in code or marker in message.lower()
-                           for marker in ("rate", "limit", "timeout", "temporarily", "busy", "server")):
-                    raise RuntimeError(message)
-                last_error = RuntimeError(message)
-            else:
-                return response
-        except (asyncio.TimeoutError, OSError, websockets.WebSocketException, json.JSONDecodeError) as exc:
-            last_error = RuntimeError("Deriv historical market-data request failed temporarily")
-            last_error.__cause__ = exc
-        if attempt < 1:
-            await asyncio.sleep(0.5)
-    raise last_error or RuntimeError("Deriv historical market-data request failed")
-
-
-async def _fetch_candles(symbol: str, count: int, granularity: int) -> list[dict]:
-    payload = {
-        "ticks_history": symbol,
-        "end": "latest",
-        "count": _validate_history_count(count),
-        "style": "candles",
-        "granularity": granularity,
-    }
-    return (await _request(payload)).get("candles", [])
-
-
-async def _fetch_ticks(symbol: str, count: int) -> list[dict]:
-    payload = {
-        "ticks_history": symbol,
-        "end": "latest",
-        "count": _validate_history_count(count),
-        "style": "ticks",
-    }
-    history = (await _request(payload)).get("history", {})
-    return [
-        {"epoch": epoch, "quote": quote}
-        for epoch, quote in zip(history.get("times", []), history.get("prices", []))
-    ]
 
 
 def _market_symbol(symbol: str) -> MarketSymbol:
     market_symbol = MarketSymbol.objects.filter(
-        symbol=symbol,
-        broker__iexact="deriv",
+        symbol=str(symbol or "").strip(),
         is_active=True,
         is_tradable=True,
     ).first()
-    if not market_symbol:
-        raise ValueError(f"Unknown active market symbol: {symbol}")
+    if market_symbol is None:
+        raise ValueError(f"Instrument '{symbol}' is not active or tradable in the broker catalogue.")
     return market_symbol
 
-@contextmanager
-def _backfill_write_guard(backfill_run_id: int | None):
-    """Serialize staged writes with Pause/Stop so stale workers cannot write after control is accepted."""
-    if not backfill_run_id:
-        with transaction.atomic():
-            yield
-        return
 
-    from .tasks import _honor_backfill_operator_command
-
-    while True:
-        # Wait outside the transaction while paused. Then lock the run row while
-        # writing so a concurrent Pause/Stop cannot commit ahead of this write.
-        _honor_backfill_operator_command(backfill_run_id)
-        with transaction.atomic():
-            run = CandleBackfillRun.objects.select_for_update().filter(pk=backfill_run_id).first()
-            if not run or run.status != "running":
-                raise RuntimeError("Backfill run is terminal or missing; refusing staged data writes.")
-            command = str((run.result or {}).get("operator_command", "")).lower()
-            if command == "stop":
-                raise RuntimeError("Backfill stopped by operator; refusing staged data writes.")
-            if command == "pause":
-                continue
-            yield
-            return
-
-
-def persist_candles(symbol: str, timeframe: str, items: list[dict], backfill_run_id: int | None = None) -> dict:
-    """Persist validated broker OHLC, isolating backfill rows until promotion."""
+def persist_candles(symbol: str, timeframe: str, items: list[dict]) -> dict:
+    """Validate and upsert candle records returned by a connected broker."""
     timeframe = normalize_timeframe(timeframe)
     market_symbol = _market_symbol(symbol)
-    run = CandleBackfillRun.objects.get(pk=backfill_run_id) if backfill_run_id else None
-    row_model = CandleBackfillStagedCandle if run else Candle
-    unique_items = {}
     seconds = TIMEFRAMES[timeframe]
-    for item in items:
+    incoming = {}
+    invalid = 0
+    for item in items or []:
         try:
             epoch = int(item["epoch"])
-            open_price = Decimal(str(item["open"]))
-            high_price = Decimal(str(item["high"]))
-            low_price = Decimal(str(item["low"]))
-            close_price = Decimal(str(item["close"]))
+            opening = Decimal(str(item["open"]))
+            high = Decimal(str(item["high"]))
+            low = Decimal(str(item["low"]))
+            close = Decimal(str(item["close"]))
             volume = Decimal(str(item.get("volume", 0) or 0))
-            if seconds and epoch % seconds != 0:
-                raise ValueError("candle epoch is not aligned to its timeframe boundary")
-            if high_price < max(open_price, close_price) or low_price > min(open_price, close_price):
-                raise ValueError("invalid OHLC relationship")
-            unique_items[epoch] = row_model(
-                **({"run": run} if run else {}),
+            if not all(value.is_finite() for value in (opening, high, low, close, volume)):
+                raise ValueError("non-finite OHLC value")
+            if seconds and epoch % seconds:
+                raise ValueError("candle timestamp does not align with timeframe")
+            if high < max(opening, close) or low > min(opening, close) or high < low or volume < 0:
+                raise ValueError("invalid OHLC or volume relationship")
+            incoming[epoch] = Candle(
                 symbol=market_symbol, timeframe=timeframe, epoch=epoch,
-                open=open_price, high=high_price, low=low_price, close=close_price,
-                volume=volume, source="deriv_candles",
+                open=opening, high=high, low=low, close=close,
+                volume=volume, source="connected_broker",
             )
-        except (KeyError, TypeError, ValueError, ArithmeticError):
+        except (KeyError, TypeError, ValueError, ArithmeticError, InvalidOperation):
+            invalid += 1
             logger.warning(
-                "Skipping malformed historical candle",
-                extra={"symbol": symbol, "timeframe": timeframe},
+                "BROKER_HISTORY_CANDLE_REJECTED symbol=%s timeframe=%s reason=invalid_ohlc_or_epoch",
+                str(symbol)[:40], timeframe,
             )
-    rows = list(unique_items.values())
-
+    rows = list(incoming.values())
     if rows:
-        # Backfill rows are run-scoped. Live ingestion retains the existing
-        # duplicate-safe canonical upsert path.
-        with _backfill_write_guard(backfill_run_id):
-            row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
-            stored = list(
-                row_model.objects.select_for_update().filter(
-                    **({"run": run} if run else {}),
-                    symbol=market_symbol, timeframe=timeframe,
-                    epoch__in=[row.epoch for row in rows],
-                )
-            )
-            by_epoch = {row.epoch: row for row in rows}
-            for current in stored:
-                incoming = by_epoch[current.epoch]
-                current.open = incoming.open
-                current.high = incoming.high
-                current.low = incoming.low
-                current.close = incoming.close
-                current.volume = incoming.volume
-                current.source = "deriv_candles"
+        with transaction.atomic():
+            Candle.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
+            stored = list(Candle.objects.select_for_update().filter(
+                symbol=market_symbol, timeframe=timeframe, epoch__in=list(incoming),
+            ))
+            for row in stored:
+                fresh = incoming[row.epoch]
+                row.open, row.high, row.low, row.close = fresh.open, fresh.high, fresh.low, fresh.close
+                row.volume, row.source = fresh.volume, "connected_broker"
             if stored:
-                row_model.objects.bulk_update(
+                Candle.objects.bulk_update(
                     stored, ["open", "high", "low", "close", "volume", "source"], batch_size=500,
                 )
-
     return {
-        "symbol": symbol,
+        "status": "ok",
+        "symbol": market_symbol.symbol,
         "timeframe": timeframe,
-        "received": len(items),
+        "source": "connected_broker",
+        "received": len(items or []),
         "valid": len(rows),
-        "min_epoch": min((row.epoch for row in rows), default=None),
-        "max_epoch": max((row.epoch for row in rows), default=None),
-        "stored_total": row_model.objects.filter(**({"run": run} if run else {}), symbol=market_symbol, timeframe=timeframe).count(),
-        "source": "deriv_candles",
+        "rejected": invalid,
+        "stored_total": Candle.objects.filter(symbol=market_symbol, timeframe=timeframe).count(),
+        "min_epoch": min(incoming, default=None),
+        "max_epoch": max(incoming, default=None),
     }
-
-
-def _aggregate_ticks_to_candles(symbol: str, ticks: list, timeframe: str, backfill_run_id: int | None = None) -> int:
-    """Create missing sub-minute/tick research candles from persisted ticks."""
-    timeframe = normalize_timeframe(timeframe)
-    seconds = TIMEFRAMES[timeframe]
-    market_symbol = _market_symbol(symbol)
-    run = CandleBackfillRun.objects.get(pk=backfill_run_id) if backfill_run_id else None
-    row_model = CandleBackfillStagedCandle if run else Candle
-    buckets: dict[int, dict[str, Decimal]] = {}
-
-    for tick in sorted(ticks, key=lambda value: value.epoch):
-        epoch = tick.epoch if seconds == 0 else tick.epoch - (tick.epoch % seconds)
-        quote = tick.quote
-        row = buckets.get(epoch)
-        if row is None:
-            buckets[epoch] = {
-                "open": quote,
-                "high": quote,
-                "low": quote,
-                "close": quote,
-                "volume": tick.volume,
-            }
-        else:
-            row["high"] = max(row["high"], quote)
-            row["low"] = min(row["low"], quote)
-            row["close"] = quote
-            row["volume"] += tick.volume
-
-    rows = [
-        row_model(
-            **({"run": run} if run else {}),
-            symbol=market_symbol,
-            timeframe=timeframe,
-            epoch=epoch,
-            open=row["open"],
-            high=row["high"],
-            low=row["low"],
-            close=row["close"],
-            volume=row["volume"],
-        )
-        for epoch, row in buckets.items()
-    ]
-    if rows:
-        # Repeated broker backfills must repair an existing derived bucket when
-        # newer ticks change its high/low/close. Ignore-conflicts alone would
-        # leave the first version permanently stale.
-        with _backfill_write_guard(backfill_run_id):
-            row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
-            stored = list(
-                row_model.objects.select_for_update().filter(
-                    **({"run": run} if run else {}),
-                    symbol=market_symbol, timeframe=timeframe,
-                    epoch__in=[row.epoch for row in rows],
-                )
-            )
-            incoming = {row.epoch: row for row in rows}
-            for current in stored:
-                row = incoming[current.epoch]
-                current.open = row.open
-                current.high = row.high
-                current.low = row.low
-                current.close = row.close
-                current.volume = row.volume
-                current.source = "tick_stream"
-            if stored:
-                row_model.objects.bulk_update(
-                    stored, ["open", "high", "low", "close", "volume", "source"], batch_size=500,
-                )
-    return len(rows)
 
 
 def persist_broker_chart_history(symbol: str, timeframe: str, items: list[dict]) -> dict:
-    """Persist a broker chart response so research pages share one DB source."""
+    """Persist candles returned by the authenticated connected-broker adapter."""
     return persist_candles(symbol, timeframe, items)
 
 
-def fetch_and_store(symbol: str, timeframe: str = "1m", count: int = 5000, backfill_run_id: int | None = None) -> dict:
-    timeframe = normalize_timeframe(timeframe)
-    if timeframe == "tick":
-        return fetch_and_store_ticks(symbol, count=count, backfill_run_id=backfill_run_id)
-    if timeframe not in TIMEFRAME_GRANULARITY:
-        raise ValueError(
-            f"{timeframe} is a tick-derived timeframe; persisted ticks are required to build it"
-        )
-    candles = asyncio.run(_fetch_candles(symbol, count, TIMEFRAME_GRANULARITY[timeframe]))
-    return persist_candles(symbol, timeframe, candles, backfill_run_id=backfill_run_id)
-
-
-def fetch_and_store_ticks(symbol: str, count: int = 5000, backfill_run_id: int | None = None) -> dict:
-    """Fetch broker ticks; backfills remain isolated until the run is promoted."""
+def persist_broker_tick_history(symbol: str, items: list[dict]) -> dict:
+    """Persist tick history returned by the authenticated connected-broker adapter."""
     market_symbol = _market_symbol(symbol)
-    run = CandleBackfillRun.objects.get(pk=backfill_run_id) if backfill_run_id else None
-    row_model = CandleBackfillStagedTick if run else Tick
-    items = asyncio.run(_fetch_ticks(symbol, count))
-    rows = []
-    for item in items:
+    rows_by_key = {}
+    rejected = 0
+    for item in items or []:
         try:
-            rows.append(
-                row_model(
-                    **({"run": run} if run else {}),
-                    symbol=market_symbol,
-                    quote=Decimal(str(item["quote"])),
-                    epoch=int(item["epoch"]),
-                    volume=Decimal("0"),
-                )
-            )
-        except (KeyError, TypeError, ValueError, ArithmeticError):
-            logger.warning("Skipping malformed historical tick", extra={"symbol": symbol})
-
-    if rows:
-        with _backfill_write_guard(backfill_run_id):
-            row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
-
-    # Aggregate from this run's ticks, never from previous canonical history.
-    persisted_ticks = list(
-        row_model.objects.filter(**({"run": run} if run else {}), symbol=market_symbol)
-        .order_by("epoch")
-        .filter(epoch__gte=min((row.epoch for row in rows), default=0))
-    ) if rows else []
-    built = {}
-    for timeframe in TIMEFRAMES:
-        if timeframe != "tick" and TIMEFRAMES[timeframe] < 60:
-            built[timeframe] = _aggregate_ticks_to_candles(symbol, persisted_ticks, timeframe, backfill_run_id=backfill_run_id)
-    built["tick"] = persist_tick_candles(symbol, items, backfill_run_id=backfill_run_id)
-    return {
-        "symbol": symbol,
-        "received": len(items),
-        "valid": len(rows),
-        "min_epoch": min((int(item["epoch"]) for item in items if "epoch" in item), default=None),
-        "max_epoch": max((int(item["epoch"]) for item in items if "epoch" in item), default=None),
-        "stored_ticks": row_model.objects.filter(**({"run": run} if run else {}), symbol=market_symbol).count(),
-        "built_candles": built,
-    }
-
-
-def persist_tick_candles(symbol: str, items: list[dict], backfill_run_id: int | None = None) -> int:
-    market_symbol = _market_symbol(symbol)
-    run = CandleBackfillRun.objects.get(pk=backfill_run_id) if backfill_run_id else None
-    row_model = CandleBackfillStagedCandle if run else Candle
-    rows = []
-    for item in items:
-        try:
+            epoch = int(item["epoch"])
             quote = Decimal(str(item["quote"]))
-            rows.append(
-                row_model(
-                    **({"run": run} if run else {}),
-                    symbol=market_symbol,
-                    timeframe="tick",
-                    epoch=int(item["epoch"]),
-                    open=quote,
-                    high=quote,
-                    low=quote,
-                    close=quote,
-                    volume=Decimal("0"),
-                )
+            if not quote.is_finite() or quote <= 0:
+                raise ValueError("invalid quote")
+            rows_by_key[(epoch, quote)] = Tick(
+                symbol=market_symbol, epoch=epoch, quote=quote, volume=Decimal("0"),
             )
-        except (KeyError, TypeError, ValueError, ArithmeticError):
-            continue
+        except (KeyError, TypeError, ValueError, ArithmeticError, InvalidOperation):
+            rejected += 1
+    rows = list(rows_by_key.values())
     if rows:
-        with _backfill_write_guard(backfill_run_id):
-            row_model.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
-    return len(rows)
-
-
-def fetch_and_store_all_timeframes(
-    symbol: str,
-    count: int = 5000,
-    request_interval: float = 0.30,
-    progress_callback=None,
-    backfill_run_id: int | None = None,
-) -> dict:
-    """Populate canonical broker history while pacing Deriv WebSocket calls.
-
-    The Deriv API groups market-data calls under a shared 220/minute budget.
-    A per-symbol pacing interval prevents a single warm-up job from producing
-    an unbounded request burst. The caller can tune the interval for scheduled
-    maintenance, but it must remain positive in production.
-    """
-    _market_symbol(symbol)
-    interval = float(request_interval)
-    if interval <= 0:
-        raise ValueError("request_interval must be greater than zero for production broker backfill")
-    results = {}
-    first_request = True
-
-    def pace():
-        nonlocal first_request
-        if not first_request and interval:
-            time.sleep(interval)
-        first_request = False
-
-    # Native broker bars provide authoritative OHLC for minute-and-higher data.
-    for timeframe in TIMEFRAME_GRANULARITY:
-        pace()
-        # Keep this checkpoint outside the request exception handler. A stop or
-        # terminal state must abort the task, not be recorded as a broker error.
-        if progress_callback:
-            progress_callback(timeframe, {"status": "started"})
-        try:
-            results[timeframe] = fetch_and_store(symbol, timeframe, count, backfill_run_id=backfill_run_id)
-        except Exception as exc:
-            results[timeframe] = {"status": "failed", "error": str(exc)}
-        finally:
-            if progress_callback:
-                progress_callback(timeframe, results[timeframe])
-
-    # Raw broker ticks are the source for tick, 1s, 5s, 15s and 30s research bars.
-    pace()
-    if progress_callback:
-        progress_callback("tick-derived", {"status": "started"})
-    try:
-        results["tick-derived"] = fetch_and_store_ticks(symbol, count=count, backfill_run_id=backfill_run_id)
-    except Exception as exc:
-        results["tick-derived"] = {"status": "failed", "error": str(exc)}
-    finally:
-        if progress_callback:
-            progress_callback("tick-derived", results["tick-derived"])
-    return {"symbol": symbol, "timeframes": results}
+        Tick.objects.bulk_create(rows, ignore_conflicts=True, batch_size=500)
+        # The canonical research API reads Candle rows for every timeframe,
+        # including tick-mode backtests. Keep one tick candle per epoch, matching
+        # the model's unique (symbol, timeframe, epoch) boundary.
+        candle_by_epoch = {}
+        for row in rows:
+            candle = candle_by_epoch.get(row.epoch)
+            if candle is None:
+                candle_by_epoch[row.epoch] = Candle(
+                    symbol=market_symbol, timeframe="tick", epoch=row.epoch,
+                    open=row.quote, high=row.quote, low=row.quote, close=row.quote,
+                    volume=Decimal("0"), source="connected_broker",
+                )
+            else:
+                candle.high = max(candle.high, row.quote)
+                candle.low = min(candle.low, row.quote)
+                candle.close = row.quote
+        Candle.objects.bulk_create(list(candle_by_epoch.values()), ignore_conflicts=True, batch_size=500)
+        stored_candles = list(Candle.objects.select_for_update().filter(
+            symbol=market_symbol, timeframe="tick", epoch__in=list(candle_by_epoch),
+        ))
+        for current in stored_candles:
+            incoming = candle_by_epoch[current.epoch]
+            current.open = incoming.open
+            current.high = incoming.high
+            current.low = incoming.low
+            current.close = incoming.close
+            current.source = "connected_broker"
+        if stored_candles:
+            Candle.objects.bulk_update(stored_candles, ["open", "high", "low", "close", "source"], batch_size=500)
+    return {
+        "status": "ok", "symbol": market_symbol.symbol, "timeframe": "tick",
+        "source": "connected_broker", "received": len(items or []),
+        "valid": len(rows), "rejected": rejected,
+        "stored_total": Tick.objects.filter(symbol=market_symbol).count(),
+    }

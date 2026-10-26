@@ -33,14 +33,6 @@ app.conf.beat_schedule = {
         "kwargs": {"limit": 100},
         "options": {"queue": "celery", "expires": 25},
     },
-    # Initial broker-history backfill is scheduled every 30 minutes, not every
-    # five minutes. The task's own persisted run/lock checks prevent overlap.
-    "initial-candle-backfill-automatic-every-30-minutes": {
-        "task": "apps.market_data.tasks.ensure_initial_candle_backfill",
-        "schedule": 1800.0,
-        "kwargs": {"count": 5000},
-        "options": {"queue": "celery", "expires": 1700},
-    },
     "execution-queue-recovery-every-30-seconds": {
         "task": "apps.execution.process_execution_queue",
         "schedule": 30.0,
@@ -60,20 +52,6 @@ app.conf.beat_schedule = {
         "task": "apps.ai_engine.tasks.resolve_prediction_outcomes",
         "schedule": crontab(minute="*/5"),
         "kwargs": {"timeframe": "M1", "horizon_candles": 1, "batch_size": 500},
-    },
-    # Completion-relative countdowns are primary. Five-minute Beat checks
-    # recover a lost countdown and reconcile stale deliveries with fewer poll jobs.
-    "research-candle-backfill-completion-relative-scheduler": {
-        "task": "apps.market_data.tasks.ensure_research_candle_backfill",
-        "schedule": 300.0,
-        "kwargs": {"count": 250},
-        "options": {"queue": "celery", "expires": 290},
-    },
-    "candle-backfill-recovery-every-five-minutes": {
-        "task": "apps.market_data.tasks.reconcile_candle_backfill_runs",
-        "schedule": 300.0,
-        "kwargs": {"max_age_seconds": 300},
-        "options": {"queue": "celery", "expires": 290},
     },
     "ai-training-every-6-hours": {
         "task": "apps.ai_engine.tasks.scheduled_ai_training",

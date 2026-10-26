@@ -5,7 +5,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
-from apps.market_data.models import MarketSymbol
+from apps.market_data.models import Candle, MarketSymbol, Tick
 
 
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
@@ -48,6 +48,12 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
         side_effect=RuntimeError("provider unavailable"),
     )
     def test_catalogue_serves_last_known_database_symbols_when_deriv_is_unavailable(self, _request):
+        market = MarketSymbol.objects.get(symbol="TEST")
+        Candle.objects.create(
+            symbol=market, timeframe="1m", open="1", high="2", low="1",
+            close="2", volume="1", epoch=1790000000, source="deriv_candles",
+        )
+        Tick.objects.create(symbol=market, quote="2", epoch=1790000060)
         response = self.client.get("/api/market/catalogue/")
 
         self.assertEqual(response.status_code, 200)
@@ -56,7 +62,10 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
         self.assertEqual(response.json()["account_id"], "VRTC-CATALOGUE")
         self.assertEqual(response.json()["symbols"][0]["symbol"], "TEST")
         self.assertIn("1m", response.json()["symbols"][0]["supported_timeframes"])
+        self.assertEqual(response.json()["symbols"][0]["available_timeframes"], ["tick", "1m"])
         self.assertIn("1h", response.json()["supported_timeframes"])
+        self.assertNotIn("1s", response.json()["supported_timeframes"])
+        self.assertNotIn("5s", response.json()["supported_timeframes"])
 
     @patch(
         "apps.market_data.broker_native._public_deriv",

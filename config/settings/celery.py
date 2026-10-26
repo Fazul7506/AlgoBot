@@ -44,8 +44,7 @@ CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
     "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "1"))),
 }
 
-# Long-running broker-data tasks expose STARTED state and are acknowledged only
-# after execution. Worker loss therefore allows Celery to redeliver them.
+# Expose task lifecycle events so Mission Control can observe background work.
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_SEND_SENT_EVENT = True
 CELERY_WORKER_SEND_TASK_EVENTS = True
@@ -53,53 +52,19 @@ CELERY_WORKER_ENABLE_REMOTE_CONTROL = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
 
-# Declare every production queue explicitly. This prevents a broker-side queue
-# from being created accidentally by a typo and makes the isolated market-data
-# consumer contract inspectable during worker preflight.
+# Declare only the general application queue; historical data is fetched on demand.
 CELERY_TASK_DEFAULT_QUEUE = "celery"
 CELERY_TASK_CREATE_MISSING_QUEUES = False
 CELERY_TASK_QUEUES = (
-    # Bind each named queue to its own routing key. Without an explicit key,
-    # Kombu can inherit the default ``celery`` routing key for both queues,
-    # causing market-data messages to be delivered to the general worker too.
     Queue("celery", routing_key="celery"),
-    Queue("market_data", routing_key="market_data"),
 )
 
-# Explicit imports make the production worker deterministic even if Django's
-# autodiscovery behavior changes. This is especially important for the isolated
-# market_data worker, which must register the task before consuming its queue.
+# Explicit imports keep application task registration deterministic.
 CELERY_IMPORTS = (
     "apps.market_data.tasks",
 )
 
 CELERY_TASK_ROUTES = {
-    "apps.market_data.tasks.backfill_research_candles": {"queue": "market_data"},
-    "apps.market_data.tasks.run_initial_candle_backfill": {"queue": "market_data"},
-    # Recovery/observability must not share the single-consumer market-data queue.
-    "apps.market_data.tasks.reconcile_candle_backfill_runs": {"queue": "celery"},
-    "apps.market_data.tasks.ensure_initial_candle_backfill": {"queue": "celery"},
-    "apps.market_data.tasks.ensure_research_candle_backfill": {"queue": "celery"},
 }
 
-CELERY_TASK_ANNOTATIONS = {
-    "apps.market_data.tasks.run_initial_candle_backfill": {
-        "ignore_result": True,
-        "acks_late": True,
-        "reject_on_worker_lost": True,
-        "track_started": True,
-        "soft_time_limit": 4 * 60 * 60,
-        "time_limit": 4 * 60 * 60 + 5 * 60,
-    },
-    "apps.market_data.tasks.backfill_research_candles": {
-        "ignore_result": True,
-        "acks_late": True,
-        "reject_on_worker_lost": True,
-        "track_started": True,
-        "soft_time_limit": 2 * 60 * 60,
-        "time_limit": 2 * 60 * 60 + 5 * 60,
-    },
-    "apps.market_data.tasks.reconcile_candle_backfill_runs": {
-        "track_started": True,
-    },
-}
+CELERY_TASK_ANNOTATIONS = {}

@@ -22,7 +22,7 @@ from core.account_context import get_active_account
 from apps.market_data.models import MarketSnapshot, MarketSymbol
 from apps.strategies.models import StrategySignal
 from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick
-from apps.market_data.historical import fetch_and_store, fetch_and_store_ticks
+from apps.market_data.historical import persist_broker_chart_history, persist_broker_tick_history
 from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.research_data import ResearchDataService
 from apps.ai_engine.services import PredictionService, RecommendationService
@@ -301,19 +301,63 @@ def analysis_data(request):
     live_tick = None
     if refresh_requested:
         try:
-            if canonical_timeframe == "tick" or TIMEFRAMES[canonical_timeframe] < 60:
-                refresh_result = fetch_and_store_ticks(market.symbol, count=min(max(limit, 50), 1000))
+            if active_account is None:
+                raise RuntimeError("Connect and select a broker account before refreshing historical data.")
+            broker_code = str(getattr(active_account.broker, "broker_type", "") or active_account.broker.name).strip().lower()
+            if str(market.broker).strip().lower() != broker_code:
+                raise RuntimeError("The selected instrument does not belong to your connected broker. Choose an instrument from that broker catalogue.")
+            adapter = BrokerRegistry().adapter(active_account.broker, active_account)
+            is_tick_history = canonical_timeframe == "tick"
+            granularity = None if is_tick_history else int(TIMEFRAMES[canonical_timeframe])
+            request = adapter.get_chart_history(
+                market.symbol,
+                mode="ticks" if is_tick_history else "candles",
+                count=min(max(limit, 50), 1000),
+                granularity=granularity,
+            )
+            broker_data = asyncio.run(asyncio.wait_for(request, timeout=8.0))
+            if not isinstance(broker_data, dict) or broker_data.get("symbol") != market.symbol or not isinstance(broker_data.get("items"), list):
+                raise RuntimeError("The connected broker returned an invalid historical-data response.")
+            if is_tick_history:
+                refresh_result = persist_broker_tick_history(market.symbol, broker_data["items"])
+                if broker_data["items"]:
+                    last = broker_data["items"][-1]
+                    live_tick = {"quote": last.get("quote"), "epoch": last.get("epoch"), "symbol": market.symbol}
             else:
-                refresh_result = fetch_and_store(market.symbol, canonical_timeframe, count=min(max(limit, 50), 1000))
-            live_tick = fetch_tick(market.symbol)
-            from apps.market_data.services import MarketDataService
-            MarketDataService().tick_service.ingest(live_tick)
+                refresh_result = persist_broker_chart_history(market.symbol, canonical_timeframe, broker_data["items"])
+                if broker_data["items"]:
+                    last = broker_data["items"][-1]
+                    live_tick = {"quote": last.get("close"), "epoch": last.get("epoch"), "symbol": market.symbol}
+            try:
+                latest = asyncio.run(asyncio.wait_for(adapter.get_live_signal_tick(market.symbol), timeout=5.0))
+                if latest and latest.get("price") is not None and latest.get("epoch") is not None:
+                    live_tick = {
+                        "symbol": market.symbol,
+                        "quote": latest.get("price"),
+                        "bid": latest.get("bid"),
+                        "ask": latest.get("ask"),
+                        "epoch": latest.get("epoch"),
+                    }
+                    from apps.market_data.services import MarketDataService
+                    MarketDataService().tick_service.ingest(live_tick)
+            except Exception:
+                logger.warning(
+                    "CONNECTED_BROKER_LIVE_QUOTE_UNAVAILABLE user_id=%s account_id=%s symbol=%s",
+                    request.user.pk, getattr(active_account, "pk", None), market.symbol,
+                    exc_info=True,
+                )
+            if live_tick:
+                live_tick["source"] = "connected_broker"
         except Exception as exc:
+            logger.exception(
+                "CONNECTED_BROKER_HISTORY_REFRESH_FAILED user_id=%s account_id=%s symbol=%s timeframe=%s",
+                request.user.pk, getattr(active_account, "pk", None), market.symbol, canonical_timeframe,
+            )
             return JsonResponse(
                 {
                     "status": "error",
                     "code": "BROKER_DATA_REFRESH_FAILED",
-                    "message": "Fresh Deriv market data could not be confirmed; stale research data was not substituted.",
+                    "message": "AlgoBot could not load fresh history from your selected broker. Check the broker connection, instrument support, and timeframe, then try again.",
                     "detail": str(exc),
                     "symbol": market.symbol,
                     "timeframe": canonical_timeframe,
@@ -565,7 +609,7 @@ def analysis_data(request):
         "last_epoch": latest_epoch,
         "age_seconds": age_seconds,
         "fresh": age_seconds <= max(120, TIMEFRAMES[canonical_timeframe] * 2),
-        "candle_source": "deriv_candles" if TIMEFRAMES[canonical_timeframe] >= 60 else "tick_stream",
+        "candle_source": "connected_broker" if TIMEFRAMES[canonical_timeframe] >= 60 else "tick_stream",
     }
     result["execution_gate"]["data_fresh"] = bool(
         result["data_provenance"]["age_seconds"] <= max(120, TIMEFRAMES[canonical_timeframe] * 2)
@@ -578,7 +622,7 @@ def analysis_data(request):
         "epoch": int(live_tick["epoch"]) if refresh_requested and live_tick and live_tick.get("epoch") is not None else None,
         "age_seconds": live_quote_age,
         "fresh": live_quote_age is not None and live_quote_age <= 5,
-        "source": "deriv_public_websocket" if live_tick else None,
+        "source": "connected_broker" if live_tick else None,
     }
     result["execution_gate"]["live_quote_confirmed"] = bool(
         refresh_requested and live_tick and live_tick.get("quote") is not None

@@ -18,7 +18,7 @@ from rest_framework import status
 
 from core.account_context import get_active_account
 from .deriv_sync import _request, sync_active_symbols
-from .models import MarketSymbol
+from .models import Candle, MarketSymbol, Tick
 from .constants import TIMEFRAMES
 
 CATALOGUE_CACHE = "algobot:broker:deriv:active-symbols"
@@ -26,7 +26,25 @@ CAPABILITIES_CACHE_PREFIX = "algobot:broker:deriv:contracts-for:"
 CAPABILITIES_STALE_PREFIX = "algobot:broker:deriv:contracts-for:stale:"
 CAPABILITIES_CACHE_SECONDS = 300
 CAPABILITIES_STALE_SECONDS = 86400
-BACKTEST_TIMEFRAMES = list(TIMEFRAMES.keys())
+BACKTEST_TIMEFRAMES = ["tick", "1m", "2m", "5m", "10m", "15m", "30m", "1h", "2h", "4h", "8h", "1d"]
+
+
+def _with_available_timeframes(items):
+    """Attach per-instrument intervals that actually exist in persisted history."""
+    symbols = [str(item.get("symbol") or "").strip().upper() for item in items]
+    symbols = [symbol for symbol in symbols if symbol]
+    if not symbols:
+        return items
+    available = {symbol: set() for symbol in symbols}
+    for row in Candle.objects.filter(symbol__symbol__in=symbols).values("symbol__symbol", "timeframe").distinct():
+        available.setdefault(row["symbol__symbol"], set()).add(row["timeframe"])
+    for symbol in Tick.objects.filter(symbol__symbol__in=symbols).values_list("symbol__symbol", flat=True).distinct():
+        available.setdefault(symbol, set()).add("tick")
+    order = {value: index for index, value in enumerate(BACKTEST_TIMEFRAMES)}
+    for item in items:
+        symbol = str(item.get("symbol") or "").strip().upper()
+        item["available_timeframes"] = sorted(available.get(symbol, set()), key=lambda value: order.get(value, len(order)))
+    return items
 
 
 def _account(user, request=None):
@@ -71,7 +89,7 @@ def _cached_database_catalogue():
     rows = MarketSymbol.objects.filter(
         broker="deriv", is_active=True, is_tradable=True
     ).order_by("market", "symbol")
-    return [
+    return _with_available_timeframes([
         {
             "symbol": row.symbol,
             "display_name": row.display_name,
@@ -86,9 +104,7 @@ def _cached_database_catalogue():
             "supported_timeframes": BACKTEST_TIMEFRAMES,
         }
         for row in rows
-    ]
-
-
+    ])
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def catalogue(request):
@@ -114,6 +130,7 @@ def catalogue(request):
             if payload:
                 cache.set(CATALOGUE_CACHE, payload, timeout=30)
         if payload:
+            payload = _with_available_timeframes(payload)
             if force_refresh:
                 payload = [
                     {

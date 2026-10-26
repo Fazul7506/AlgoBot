@@ -2,8 +2,7 @@
 """Run AlgoBot's existing background processes outside Render.
 
 This launcher starts the same canonical commands declared in render.yaml:
-general Celery worker, one Celery Beat scheduler, live market stream, and
-market-data worker. Secrets/configuration come only from the environment.
+general Celery worker, one Celery Beat scheduler, and live market stream. Secrets/configuration come only from the environment.
 """
 from __future__ import annotations
 
@@ -29,13 +28,7 @@ PROCESSES = {
     "live_market_stream": [
         sys.executable, "manage.py", "run_market_stream",
     ],
-    "market_data": [
-        sys.executable, "-m", "celery", "-A", "deriv_platform.celery",
-        "worker", "--loglevel=INFO", "--include=apps.market_data.tasks",
-        "--queues=market_data", "--concurrency=1",
-        "--prefetch-multiplier=1", "--max-tasks-per-child=20",
-        "--hostname=market-data@%h",
-    ],
+
 }
 
 def validate_environment() -> None:

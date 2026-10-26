@@ -10,7 +10,7 @@ from .models import MarketSymbol, Tick, Candle, MarketSnapshot, MarketStatistics
 from .serializers import MarketSymbolSerializer, TickSerializer, CandleSerializer, MarketSnapshotSerializer, MarketStatisticsSerializer
 from .deriv_sync import fetch_tick, sync_active_symbols
 from .services import MarketDataService
-from .historical import persist_broker_chart_history
+from .historical import persist_broker_chart_history, persist_broker_tick_history
 from . import broker_native
 from .constants import TIMEFRAMES
 from apps.brokers.services import BrokerRegistry
@@ -204,8 +204,9 @@ def broker_chart_history(request):
     if mode not in {"ticks", "candles"}: return Response({"detail":"mode must be ticks or candles"}, status=status.HTTP_400_BAD_REQUEST)
     account = _connected_account(request.user, request=request)
     if not account: return Response({"detail":"Connect a broker before loading live chart history."}, status=status.HTTP_409_CONFLICT)
-    market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True, is_tradable=True).first()
-    if not market_symbol: return Response({"detail":"The requested symbol is not in the active broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
+    broker_code = str(getattr(account.broker, "broker_type", "") or account.broker.name).strip().lower()
+    market_symbol = MarketSymbol.objects.filter(symbol=symbol, broker__iexact=broker_code, is_active=True, is_tradable=True).first()
+    if not market_symbol: return Response({"detail":"This instrument is not available or tradable through your selected broker account. Choose an instrument from that broker catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
         adapter = BrokerRegistry().adapter(account.broker, account)
         if not hasattr(adapter, "get_chart_history"): return Response({"status":"error","code":"BROKER_CHART_HISTORY_UNSUPPORTED","detail":"The connected broker adapter does not expose chart history."}, status=status.HTTP_409_CONFLICT)
@@ -220,8 +221,12 @@ def broker_chart_history(request):
                 timeframe = next((name for name, seconds in TIMEFRAMES.items() if seconds == granularity_seconds and name != "tick"), None)
                 if timeframe:
                     persistence = persist_broker_chart_history(symbol, timeframe, data["items"])
+                else:
+                    persistence = {"status": "not_persisted", "reason": "unsupported_granularity"}
             except (TypeError, ValueError):
                 persistence = {"status": "not_persisted", "reason": "invalid_granularity"}
+        else:
+            persistence = persist_broker_tick_history(symbol, data["items"])
 
         data.update({"broker": account.broker.name, "account_id": account.account_id, "source": "live_broker", "persistence": persistence})
         return Response(data)
