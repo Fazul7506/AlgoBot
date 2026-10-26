@@ -1,8 +1,7 @@
 """Validated persistence for history returned by the user's connected broker.
 
 Historical data is requested on demand through the active broker adapter in the
-API layer. This module intentionally contains no autonomous backfill scheduler,
-public broker WebSocket client, run state, staging, promotion, or retry system.
+API layer. This module contains no autonomous ingestion scheduler or private staging lifecycle.
 """
 from __future__ import annotations
 
