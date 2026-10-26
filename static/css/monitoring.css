@@ -200,3 +200,17 @@
 [data-mission-logger].is-fullscreen{position:fixed;inset:8px;z-index:10000;display:flex;flex-direction:column;margin:0;max-width:none;background:#0b0b0b;box-shadow:0 0 0 100vmax #000b}
 [data-mission-logger].is-fullscreen .rb-log-body{flex:1;height:auto;min-height:0;max-height:none}
 @media(max-width:640px){.mc-connection{width:100%;margin-left:0}.mc-filterbar{flex-wrap:wrap;padding-inline:8px}.mc-filterbar .rb-search{flex-basis:100%}.mc-range{flex:1;min-width:0}.mc-range select{width:100%}.mc-timezone{padding:11px 8px}[data-mission-logger] .rb-log-line{grid-template-columns:76px 58px minmax(0,1fr);gap:5px;padding-inline:7px;font-size:.69rem}.mc-custom-range label{flex:1 1 100%}.mc-apply-range{width:100%}.mc-log-footer{align-items:flex-start;flex-direction:column}}
+
+/* Render-style inline dropdowns: avoid platform-native select dialogs on mobile. */
+.mc-visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+[data-mission-logger] .mc-dropdown{position:relative;min-width:0}
+[data-mission-logger] .mc-dropdown-trigger{display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:44px;max-width:100%;padding:9px 13px;border:1px solid #414141;border-radius:4px;background:#111;color:#e6e6e6;font:inherit;font-size:.84rem;text-align:left;cursor:pointer}
+[data-mission-logger] .mc-dropdown-trigger:hover,[data-mission-logger] .mc-dropdown-trigger[aria-expanded=true]{background:#202020;border-color:#777}
+[data-mission-logger] .mc-dropdown-menu{position:absolute;z-index:100;left:0;top:calc(100% + 5px);min-width:100%;width:max-content;max-width:min(320px,calc(100vw - 48px));padding:5px;background:#111;border:1px solid #383838;border-radius:4px;box-shadow:0 12px 30px #000b}
+[data-mission-logger] .mc-dropdown-menu[hidden]{display:none!important}
+[data-mission-logger] .mc-dropdown-menu button{display:flex;align-items:center;justify-content:space-between;gap:18px;width:100%;min-height:42px;padding:9px 12px;border:0;border-radius:3px;background:transparent;color:#e5e5e5;font:inherit;font-size:.84rem;text-align:left;white-space:nowrap;cursor:pointer}
+[data-mission-logger] .mc-dropdown-menu button:hover,[data-mission-logger] .mc-dropdown-menu button[aria-checked=true]{background:#321052;color:#d9b8ff}
+[data-mission-logger] .mc-option-check{min-width:1em;text-align:right;color:#d9b8ff}
+[data-mission-logger] .mc-range-dropdown{flex:1;min-width:170px}
+[data-mission-logger] .mc-range-dropdown>.mc-dropdown-trigger{width:100%}
+@media(max-width:640px){[data-mission-logger] .rb-log-toolbar{flex-wrap:wrap}[data-mission-logger] .mc-dropdown-trigger{min-height:44px}[data-mission-logger] .mc-range-dropdown{flex:1 1 65%}[data-mission-logger] .mc-dropdown-menu{max-width:calc(100vw - 56px)}}
