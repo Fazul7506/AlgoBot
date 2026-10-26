@@ -609,7 +609,7 @@ def analysis_data(request):
         "last_epoch": latest_epoch,
         "age_seconds": age_seconds,
         "fresh": age_seconds <= max(120, TIMEFRAMES[canonical_timeframe] * 2),
-        "candle_source": "deriv_candles" if TIMEFRAMES[canonical_timeframe] >= 60 else "tick_stream",
+        "candle_source": "connected_broker" if TIMEFRAMES[canonical_timeframe] >= 60 else "tick_stream",
     }
     result["execution_gate"]["data_fresh"] = bool(
         result["data_provenance"]["age_seconds"] <= max(120, TIMEFRAMES[canonical_timeframe] * 2)
