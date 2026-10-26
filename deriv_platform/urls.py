@@ -16,6 +16,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from core.google_auth import google_login_start, google_login_callback
 from core.dashboard_api import DashboardViewSet
 from apps.market_data.web_views import market_catalogue
+from apps.monitoring import views as monitoring_views
 from apps.market_data.signal_views import strategy_signals
 from apps.market_data import views as market_data_views
 from core.views import (
@@ -110,6 +111,7 @@ urlpatterns = [
     path("portfolio/", login_required(portfolio_center), name="portfolio_page"),
     path("notifications/", notification_channels_page, name="notifications_page"),
     path("monitoring/", include("apps.monitoring.urls")),
+    path("mission-control/", monitoring_views.mission_control, name="mission-control"),
     path("api/monitoring/", include("apps.monitoring.urls")),
     path("api/security/sessions/", include("core.security_sessions_urls")),
     path("observability/", login_required(lambda request: render(request, "observability/control_center.html")), name="observability_control_center"),
@@ -120,10 +122,10 @@ urlpatterns = [
     path("automation/", login_required(lambda request: operations_center(request, "automation")), name="automation_page"),
     path("operations/audit/", login_required(lambda request: operations_center(request, "audit")), name="audit_center"),
     path("operations/security/", login_required(lambda request: operations_center(request, "security")), name="security_center"),
-    path("operations/candle-backfill/", RedirectView.as_view(url="/monitoring/", permanent=False), name="retired_candle_backfill_redirect"),
+    path("operations/candle-backfill/", RedirectView.as_view(url="/mission-control/", permanent=False), name="retired_candle_backfill_redirect"),
     path("operations/broker-integrations/", broker_integration_management_page, name="broker_integration_management"),
     path("operations/broker-integrations/assistant/", broker_integration_assistant_chat, name="broker_integration_assistant_chat"),
-    path("operations/candle-backfill/control/", RedirectView.as_view(url="/monitoring/", permanent=False), name="retired_candle_backfill_control_redirect"),
+    path("operations/candle-backfill/control/", RedirectView.as_view(url="/mission-control/", permanent=False), name="retired_candle_backfill_control_redirect"),
     path("operations/<str:module>/", login_required(operations_module_page), name="operations_module"),
     path("brokers/connect/", broker_connect_page, name="broker_connect_page"),
     path("brokers/marketplace/", broker_marketplace_page, name="broker_marketplace_page"),
