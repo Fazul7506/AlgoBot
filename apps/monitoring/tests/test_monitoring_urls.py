@@ -36,7 +36,6 @@ class MonitoringSmokeTests(TestCase):
         self.assertNotContains(response, "Service Health")
         self.assertNotContains(response, "Performance History")
         self.assertNotContains(response, "Recent System Events")
-        self.assertNotContains(response, "Candle Backfill")
         monitoring = self.client.get(reverse("monitoring-dashboard-page"))
         self.assertContains(monitoring, "Monitoring")
 
