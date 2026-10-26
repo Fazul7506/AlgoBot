@@ -28,6 +28,8 @@
           <label>Severity <select data-mission-log-level><option value="">All levels</option><option value="DEBUG">Debug</option><option value="INFO">Info</option><option value="WARNING">Warning</option><option value="ERROR">Error</option><option value="CRITICAL">Critical</option></select></label>
           <label>Area <select data-mission-log-stream><option value="">All areas</option><option value="application">Application</option><option value="broker">Broker</option><option value="trading">Trading</option><option value="security">Security</option><option value="monitoring">Monitoring</option><option value="celery">Background workers</option><option value="api">API</option><option value="database">Database</option><option value="infrastructure">Infrastructure</option><option value="system">System</option></select></label>
           <button class="monitoring-icon-button" type="button" data-mission-log-refresh aria-label="Refresh activity log">Refresh logs</button>
+          <button class="monitoring-icon-button" type="button" data-mission-log-pause aria-pressed="false">Pause live updates</button>
+          <button class="monitoring-icon-button" type="button" data-mission-log-more disabled>Load older events</button>
           <span data-mission-log-status role="status" aria-live="polite">Live feed</span>
         </div>
         <div class="monitoring-table-wrap"><table class="monitoring-table"><thead><tr><th scope="col">Time</th><th scope="col">Level</th><th scope="col">Area</th><th scope="col">Event / diagnostic</th></tr></thead><tbody data-mission-log-body>
