@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
 from django.db import connection
 from django.db.models import Q
 from django.shortcuts import render
@@ -128,9 +129,6 @@ def dashboard(request, template_name="monitoring/dashboard.html"):
         "metric_history": metric_history,
         "recent_logs": recent_logs,
     })
-
-
-from django.contrib.admin.views.decorators import staff_member_required
 
 
 @staff_member_required(login_url="/login/")
