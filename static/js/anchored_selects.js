@@ -21,7 +21,7 @@
     }
     return '<span class="ab-select-option-icon" aria-hidden="true"><span class="material-symbols-rounded">check</span></span>';
   };
-  const allSelects = 'select:not([multiple]):not([size]):not([data-native-select="true"]):not([data-ab-select-enhanced])';
+  const allSelects = 'select:not([multiple]):not([size]):not([data-native-select="true"]):not([data-ab-select-enhanced]),select[size="1"]:not([multiple]):not([data-native-select="true"]):not([data-ab-select-enhanced])';
   let openRoot = null;
 
   function close(root, restoreFocus = false) {
@@ -139,6 +139,11 @@
     const menu = root.querySelector('.ab-select-menu');
     const button = root.querySelector('.ab-select-trigger');
     if (!menu || !button) return;
+    menu.classList.remove('ab-select-menu--up');
+    const rect = root.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    if (spaceBelow < 260 && spaceAbove > spaceBelow) menu.classList.add('ab-select-menu--up');
     menu.hidden = false;
     root.classList.add('is-open');
     button.setAttribute('aria-expanded', 'true');
@@ -252,7 +257,10 @@
     const observer = new MutationObserver(records => {
       records.forEach(record => {
         record.addedNodes.forEach(node => { if (node.nodeType === 1) scan(node); });
-        if (record.type === 'childList' && record.target instanceof HTMLSelectElement) refresh(record.target);
+        if (record.type === 'childList') {
+          const select = record.target instanceof HTMLSelectElement ? record.target : record.target.closest?.('select');
+          if (select) refresh(select);
+        }
       });
     });
     observer.observe(document.getElementById('app-content') || document.body, {subtree:true,childList:true});
