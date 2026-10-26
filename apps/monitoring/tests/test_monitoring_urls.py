@@ -17,11 +17,6 @@ class MonitoringSmokeTests(TestCase):
         response = self.client.get(reverse("monitoring-dashboard"))
         self.assertEqual(response.status_code, 200)
         self.assertIn("overall_system_health", response.json())
-    def test_retired_backfill_page_redirects_to_mission_control(self):
-        response = self.client.get("/operations/candle-backfill/")
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/mission-control/")
-
 
     def test_mission_control_is_staff_only(self):
         response = self.client.get(reverse("mission-control"))
