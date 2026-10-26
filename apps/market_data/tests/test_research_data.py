@@ -23,6 +23,7 @@ class ResearchDataServiceTests(TestCase):
             close="102",
             volume="1",
             epoch=100,
+            source="connected_broker",
         )
         Candle.objects.create(
             symbol=self.symbol,
@@ -33,6 +34,7 @@ class ResearchDataServiceTests(TestCase):
             close="103",
             volume="2",
             epoch=160,
+            source="connected_broker",
         )
 
     def test_aliases_and_order_are_canonical(self):
