@@ -204,8 +204,9 @@ def broker_chart_history(request):
     if mode not in {"ticks", "candles"}: return Response({"detail":"mode must be ticks or candles"}, status=status.HTTP_400_BAD_REQUEST)
     account = _connected_account(request.user, request=request)
     if not account: return Response({"detail":"Connect a broker before loading live chart history."}, status=status.HTTP_409_CONFLICT)
-    market_symbol = MarketSymbol.objects.filter(symbol=symbol, is_active=True, is_tradable=True).first()
-    if not market_symbol: return Response({"detail":"The requested symbol is not in the active broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
+    broker_code = str(getattr(account.broker, "broker_type", "") or account.broker.name).strip().lower()
+    market_symbol = MarketSymbol.objects.filter(symbol=symbol, broker__iexact=broker_code, is_active=True, is_tradable=True).first()
+    if not market_symbol: return Response({"detail":"This instrument is not available or tradable through your selected broker account. Choose an instrument from that broker catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
         adapter = BrokerRegistry().adapter(account.broker, account)
         if not hasattr(adapter, "get_chart_history"): return Response({"status":"error","code":"BROKER_CHART_HISTORY_UNSUPPORTED","detail":"The connected broker adapter does not expose chart history."}, status=status.HTTP_409_CONFLICT)
