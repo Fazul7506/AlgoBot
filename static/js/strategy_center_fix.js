@@ -30,6 +30,27 @@
     if(signalCount)signalCount.textContent = signals.length;
   }
 
+  function performanceForStrategy(s) {
+    return performanceRows.find(x => String(x.strategy_id ?? x.strategyId ?? x.id ?? '') === String(s?.id))
+      || performanceRows.find(x => String(x.strategy_name || x.strategy || '').toLowerCase() === String(s?.name || s?.slug || '').toLowerCase())
+      || {};
+  }
+
+  function sparklineFor(s) {
+    const p = performanceForStrategy(s);
+    const rangeKeys = selectedRange === '90d' ? ['equity_90d','series_90d','return_series_90d']
+      : selectedRange === '1y' ? ['equity_1y','series_1y','return_series_1y']
+      : selectedRange === 'all' ? ['equity_curve','equity_series','history','return_series']
+      : ['equity_30d','series_30d','return_series_30d','equity_curve','equity_series'];
+    let series = null;
+    for (const key of rangeKeys) if (Array.isArray(p?.[key]) && p[key].length > 1) { series = p[key]; break; }
+    const values = Array.isArray(series) ? series.map(x => Number(typeof x === 'object' ? (x.value ?? x.equity ?? x.balance ?? x.return_pct ?? x.return ?? x.y) : x)).filter(Number.isFinite) : [];
+    if (values.length < 2) return '<span class="strategy-sparkline-empty" aria-label="No historical series available">—</span>';
+    const min = Math.min(...values), max = Math.max(...values), span = max - min || 1, w = 112, h = 42, pad = 3;
+    const path = values.map((v,i) => (i ? 'L' : 'M') + (pad + i * (w - pad * 2) / (values.length - 1)).toFixed(1) + ' ' + (h - pad - ((v - min) / span) * (h - pad * 2)).toFixed(1)).join(' ');
+    return '<svg class="strategy-card-sparkline" viewBox="0 0 112 42" role="img" aria-label="Historical strategy performance"><path d="' + path + '" fill="none" stroke="#08d4a4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+
   function renderList() {
     const q = String($('[data-s-search]')?.value || '').trim().toLowerCase();
     const visible = strategies.filter(s => {
@@ -57,6 +78,7 @@
         <span class="state-badge ${stateClass}">${state}</span><p class="strategy-card-description">${description}</p>
         <div class="strategy-tags">${(Array.isArray(s.tags)?s.tags:[]).slice(0,3).map(t=>'<span>'+esc(t)+'</span>').join('')||'<span>'+category+'</span>'}</div>
         <div class="strategy-card-metrics"><div><span>Win Rate</span><strong>${win}</strong><small>Saved metric</small></div><div><span>Total Trades</span><strong>${trades}</strong><small>Available records</small></div><div><span>Profit Factor</span><strong>${pf}</strong><small>Saved metric</small></div></div>
+        <div class="strategy-card-chart" aria-label="Strategy historical performance">${sparklineFor(s)}</div>
         <div class="strategy-actions-inline"><span class="strategy-active-indicator">${running?'● Running':paused?'● Paused':configured?'● Configured':'● Available'}</span><button class="btn small ghost" type="button" data-strategy-select="${esc(s.id)}">View Details</button>${action}${research}<a class="btn small ghost" href="${tradeUrl(s)}">Trade</a></div>
       </article>`;
     }).join('') : '<div class="empty-state">No strategies match this category or search.</div>';
