@@ -211,14 +211,22 @@ class DerivAdapter(BrokerAdapter):
         response = await self._request({"contracts_for": symbol}, authenticated=True); root = response.get("contracts_for") or {}; available = root.get("available") or []
         return [item for item in available if isinstance(item, dict) and item.get("contract_type")]
 
-    async def get_chart_history(self, symbol, mode="ticks", count=120, granularity=None):
+    async def get_chart_history(self, symbol, mode="ticks", count=120, granularity=None, start=None, end=None):
         count = max(1, min(int(count or 120), 1000))
+        # When a backtest specifies a historical interval, request that interval
+        # from Deriv rather than always asking for the latest records.
+        interval = start is not None and end is not None
+        end_value = int(end) if interval else "latest"
+        range_args = {"start": int(start)} if interval else {"count": count}
         if mode == "candles":
-            if not granularity: raise BrokerOrderError("A broker-supported candle granularity is required")
-            payload = {"ticks_history": symbol, "end": "latest", "count": count, "style": "candles", "granularity": int(granularity)}; candles = (await self._request(payload)).get("candles", [])
-            return {"mode": "candles", "symbol": symbol, "granularity": int(granularity), "items": candles}
-        payload = {"ticks_history": symbol, "end": "latest", "count": count, "style": "ticks"}; ticks = (await self._request(payload)).get("history", {})
-        return {"mode": "ticks", "symbol": symbol, "items": [{"epoch": e, "quote": q} for e, q in zip(ticks.get("times", []), ticks.get("prices", []))]}
+            if not granularity:
+                raise BrokerOrderError("A broker-supported candle granularity is required")
+            payload = {"ticks_history": symbol, "end": end_value, **range_args, "style": "candles", "granularity": int(granularity)}
+            candles = (await self._request(payload)).get("candles", [])
+            return {"mode": "candles", "symbol": symbol, "granularity": int(granularity), "items": candles, "source": "connected_broker"}
+        payload = {"ticks_history": symbol, "end": end_value, **range_args, "style": "ticks"}
+        ticks = (await self._request(payload)).get("history", {})
+        return {"mode": "ticks", "symbol": symbol, "items": [{"epoch": e, "quote": q} for e, q in zip(ticks.get("times", []), ticks.get("prices", []))], "source": "connected_broker"}
 
     async def get_chart_capabilities(self):
         return {"modes": ["ticks", "candles"], "timeframes": [{"label": "1m", "seconds": 60}, {"label": "2m", "seconds": 120}, {"label": "5m", "seconds": 300}, {"label": "10m", "seconds": 600}, {"label": "15m", "seconds": 900}, {"label": "30m", "seconds": 1800}, {"label": "1h", "seconds": 3600}, {"label": "2h", "seconds": 7200}, {"label": "4h", "seconds": 14400}, {"label": "8h", "seconds": 28800}, {"label": "1d", "seconds": 86400}], "granularity": {"minimum_seconds": 1, "type": "integer_seconds"}}
