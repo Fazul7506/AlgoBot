@@ -26,7 +26,7 @@ CAPABILITIES_CACHE_PREFIX = "algobot:broker:deriv:contracts-for:"
 CAPABILITIES_STALE_PREFIX = "algobot:broker:deriv:contracts-for:stale:"
 CAPABILITIES_CACHE_SECONDS = 300
 CAPABILITIES_STALE_SECONDS = 86400
-BACKTEST_TIMEFRAMES = list(TIMEFRAMES.keys())
+BACKTEST_TIMEFRAMES = ["tick", "1m", "2m", "5m", "10m", "15m", "30m", "1h", "2h", "4h", "8h", "1d"]
 
 
 def _with_available_timeframes(items):
