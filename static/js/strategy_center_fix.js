@@ -15,6 +15,11 @@
   let selectedStrategyId = null;
   let activeFilter = 'all';
   let selectedRange = '30d';
+  const notify = (message, level = 'info') => {
+    const text = String(message ?? '');
+    if (window.AlgoBotMessage) window.AlgoBotMessage(text, level);
+    else window.alert(text);
+  };
   const strategyMetrics = s => s?.metrics || s?.statistics || s?.performance || {};
   const metric = (s, ...keys) => { const perf=Array.isArray(performanceRows)?(performanceRows.find(x=>String(x.strategy_id??x.strategyId??'')===String(s?.id))||performanceRows.find(x=>String(x.strategy_name||x.strategy||'').toLowerCase()===String(s?.name||s?.slug||'').toLowerCase())):null; const sources=[s,strategyMetrics(s),activeState(s),activeState(s)?.metrics||{},perf]; for(const key of keys) for(const source of sources){const v=source?.[key];if(v!==null&&v!==undefined&&v!=='')return v;} return null; };
   const displayMetric = (v,suffix='') => v===null||v===undefined||v===''?'—':`${Number.isFinite(Number(v))?Number(v).toLocaleString(undefined,{maximumFractionDigits:2}):esc(v)}${suffix}`;
@@ -187,13 +192,13 @@
     const data = window.AlgoBotFrontendData;
     if (!data?.request) throw new Error('Strategy service is not ready.');
     const result = await data.request(path, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body || {})});
-    window.alert(result?.detail || result?.message || successMessage);
+    notify(result?.detail || result?.message || successMessage, 'success');
     await load();
     return result;
   }
-  async function useStrategy(id, configId) { try { await post(`/api/strategies/${encodeURIComponent(id)}/switch/`, configId ? {configuration_id:Number(configId)} : {}, 'Strategy is now the active configured strategy.'); } catch(e) { window.alert(e?.message || 'Unable to switch strategy.'); } }
-  async function disconnectStrategy(id, configId) { try { await post(`/api/strategies/${encodeURIComponent(id)}/disconnect/`, configId ? {configuration_id:Number(configId)} : {}, 'Strategy disconnected. Its configuration was preserved.'); } catch(e) { window.alert(e?.message || 'Unable to disconnect strategy.'); } }
-  async function action(path, requireBroker=false) { try { if(requireBroker) window.AlgoBotFrontendData.requireConnected('run executable strategies'); await post(path, {}, 'Strategy action completed.'); } catch(e) { window.alert(e?.message || 'Strategy action failed.'); } }
+  async function useStrategy(id, configId) { try { await post(`/api/strategies/${encodeURIComponent(id)}/switch/`, configId ? {configuration_id:Number(configId)} : {}, 'Strategy is now the active configured strategy.'); } catch(e) { notify(e?.message || 'Unable to switch strategy.', 'error'); } }
+  async function disconnectStrategy(id, configId) { try { await post(`/api/strategies/${encodeURIComponent(id)}/disconnect/`, configId ? {configuration_id:Number(configId)} : {}, 'Strategy disconnected. Its configuration was preserved.'); } catch(e) { notify(e?.message || 'Unable to disconnect strategy.', 'error'); } }
+  async function action(path, requireBroker=false) { try { if(requireBroker) window.AlgoBotFrontendData.requireConnected('run executable strategies'); await post(path, {}, 'Strategy action completed.'); } catch(e) { notify(e?.message || 'Strategy action failed.', 'error'); } }
 
   function boot() {
     document.querySelectorAll('[data-strategy-run]').forEach(b => b.addEventListener('click', () => action('/api/strategies/run/', true)));
