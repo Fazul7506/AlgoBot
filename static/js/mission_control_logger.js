@@ -81,7 +81,7 @@
       if (source === "application") params.set("stream", "application");
       const client = window.AlgoBotFrontendData;
       if (!client || typeof client.request !== "function") throw new Error("Log feed client unavailable");
-      const response = await client.request("/api/monitoring/mission-events/?" + params.toString(), {}, 20000);
+      const response = await client.request("/api/monitoring/mission-events/?" + params.toString(), {notifyOnError:false}, 25000);
       const payload = response?.data && typeof response.data === "object" ? response.data : response;
       let events = Array.isArray(payload) ? payload : (payload.results || payload.events || payload.logs || []);
       if (!Array.isArray(events)) throw new Error("Unexpected log feed response");
