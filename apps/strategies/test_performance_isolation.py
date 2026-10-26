@@ -13,12 +13,15 @@ from apps.strategies.views import StrategyViewSet
 @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class StrategyPerformanceIsolationTests(TestCase):
-    def test_global_strategy_performance_is_not_presented_as_personal_pnl(self):
+    def test_strategy_performance_is_available_without_exposing_global_pnl_as_personal(self):
         user = get_user_model().objects.create_user(username="strategy-user", password="test-password")
         request = APIRequestFactory().get("/api/strategies/performance/")
         force_authenticate(request, user=user)
         response = StrategyViewSet.as_view({"get": "performance"})(request)
-        self.assertEqual(response.status_code, 501)
-        self.assertEqual(response.data["code"], "ACCOUNT_PERFORMANCE_UNAVAILABLE")
-        self.assertNotIn("win_rate", response.data)
-        self.assertNotIn("net_profit", response.data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["scope"], "strategy_aggregate")
+        self.assertIn("not personal account P&L", response.data["detail"])
+        self.assertIsInstance(response.data["results"], list)
+        for row in response.data["results"]:
+            self.assertEqual(row["scope"], "strategy_aggregate")
+            self.assertNotIn("net_profit", row)
