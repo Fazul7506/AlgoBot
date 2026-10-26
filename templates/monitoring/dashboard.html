@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Mission Control | AlgoBot{% endblock %}
-{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261021-mobile2">{% endblock %}
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-mission-control">{% endblock %}
 {% block content %}
 <main id="main-content" class="monitoring-workspace" data-monitoring-dashboard>
   <header class="monitoring-hero">
@@ -59,7 +59,7 @@
       <div class="monitoring-security-note"><span aria-hidden="true">✓</span><div><strong>Monitoring is account-scoped</strong><p>Service details and events are limited to the information your account is authorized to view.</p></div></div>
     </aside>
   </div>
-  <p class="monitoring-note">Live status is refreshed on request. Automated refresh does not run background health checks or change trading settings.</p>
+  <p class="monitoring-note">System summary refreshes on request. The staff activity stream refreshes every five seconds; it does not change trading settings.</p>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/monitoring_dashboard.js' %}" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/monitoring_dashboard.js' %}?v=20261026-mission-control" defer></script>{% endblock %}
