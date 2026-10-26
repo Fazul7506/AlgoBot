@@ -490,3 +490,19 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertIn('src="https://framerusercontent.com/images/EW5SO1YUyLv7luuQQdXwh1wLKa4.svg', template)
         self.assertNotIn('aria-hidden="true">P</span>', template)
         self.assertNotIn('aria-hidden="true">S</span>', template)
+
+    def test_global_anchored_dropdowns_replace_native_select_dialogs(self):
+        from pathlib import Path
+        base = Path("templates/base.html").read_text(encoding="utf-8")
+        dropdowns = Path("static/js/anchored_selects.js").read_text(encoding="utf-8")
+        styles = Path("static/css/anchored_selects.css").read_text(encoding="utf-8")
+        self.assertIn("anchored_selects.js", base)
+        self.assertIn("anchored_selects.css", base)
+        self.assertIn("select:not([multiple]):not([size])", dropdowns)
+        self.assertIn("new Event('change', {bubbles:true})", dropdowns)
+        self.assertIn("AlgoBotMarketAssets?.renderIcon", dropdowns)
+        self.assertIn("role', 'combobox'", dropdowns)
+        self.assertIn("ArrowDown", dropdowns)
+        self.assertIn("Escape", dropdowns)
+        self.assertIn("position: absolute", styles)
+        self.assertIn(".ab-select-menu[hidden]", styles)

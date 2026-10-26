@@ -1,6 +1,7 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from datetime import timedelta
+import logging
 
 from django.db.models import Q
 from django.utils import timezone
@@ -12,6 +13,8 @@ from .models import Alert, AuditLog, BrokerHealth, Incident, LogEntry, Metric, S
 from apps.brokers.models import BrokerAccount, BrokerConnection, Position
 from .serializers import AlertSerializer, AuditLogSerializer, BrokerHealthSerializer, IncidentSerializer, LogEntrySerializer, MetricSerializer, SystemHealthSerializer, TraceSpanSerializer
 from .services import MonitoringEngine
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(["GET"])
@@ -147,8 +150,13 @@ def mission_events(request):
         since_minutes = min(max(since_minutes, 1), 43200)
     except (TypeError, ValueError):
         since_minutes = 60
-    if str(request.query_params.get("since_minutes") or "").strip().lower() not in {"all", "0"}:
+    since_value = str(request.query_params.get("since_minutes") or "").strip().lower()
+    if since_value not in {"all", "0"}:
         events = events.filter(timestamp__gte=timezone.now() - timedelta(minutes=since_minutes))
+    elif not request.query_params.get("start") and not request.query_params.get("end"):
+        # Never scan an unbounded event table for the live console. Explicit custom
+        # ranges are filtered below; "all" without a range means the supported 7-day window.
+        events = events.filter(timestamp__gte=timezone.now() - timedelta(days=7))
     # Optional explicit time window for Mission Control's custom range selector.
     start_value = str(request.query_params.get("start") or "").strip()
     end_value = str(request.query_params.get("end") or "").strip()
@@ -186,9 +194,18 @@ def mission_events(request):
             Q(context__status__icontains=search) | Q(context__operation_id__icontains=search)
         )
     # Fetch one extra row to signal whether another page exists without a costly count().
-    page = list(events.order_by("-timestamp", "-id").values(
-        "id", "stream", "level", "message", "source", "timestamp", "context"
-    )[offset:offset + limit + 1])
+    try:
+        page = list(events.order_by("-timestamp", "-id").values(
+            "id", "stream", "level", "message", "source", "timestamp", "context"
+        )[offset:offset + limit + 1])
+    except Exception as exc:
+        # The configured psycopg pool can raise PoolTimeout outside Django's DatabaseError
+        # hierarchy. Log the exception type server-side and keep the UI response safe.
+        logger.warning("Mission Control log query unavailable (%s)", type(exc).__name__)
+        return Response(
+            {"detail": "Log storage is temporarily unavailable. Retry shortly.", "code": "MISSION_LOG_STORAGE_UNAVAILABLE"},
+            status=503,
+        )
     has_more = len(page) > limit
     page = page[:limit]
     for event in page:

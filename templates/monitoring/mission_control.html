@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Mission Control | AlgoBot{% endblock %}
-{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-render-console1">{% endblock %}
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-render-console4">{% endblock %}
 {% block content %}
 <main id="main-content" class="monitoring-workspace mission-control-logger-only render-console" data-monitoring-dashboard>
   <header class="monitoring-hero">
@@ -16,24 +16,43 @@
       <span class="monitoring-updated" data-mission-log-count>0 lines</span>
     </div>
     <div class="rb-log-toolbar" aria-label="Log controls">
-      <label class="mc-select-wrap"><span class="sr-only">Log source</span><select data-mission-log-source aria-label="Log source"><option value="all">All logs</option><option value="application">Application logs</option></select></label>
-      <button type="button" class="rb-log-control rb-tail-active" data-mission-log-tail aria-pressed="true"><span aria-hidden="true">ϟ</span> Live tail</button>
-      <button type="button" class="rb-icon-btn" data-mission-log-expand aria-label="Expand logs"><span aria-hidden="true">⛶</span></button>
-      <button type="button" class="rb-icon-btn" data-mission-menu-toggle aria-expanded="false" aria-controls="mission-log-menu" aria-label="More log options">•••</button>
+      <div class="mc-dropdown" data-mc-dropdown>
+        <button type="button" class="mc-dropdown-trigger" data-mc-dropdown-toggle aria-expanded="false" aria-haspopup="menu" aria-label="Log source"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">tune</span><span data-mc-source-label>All logs</span><span class="material-symbols-rounded mc-chevron" aria-hidden="true">expand_more</span></button>
+        <div class="mc-dropdown-menu" role="menu" hidden>
+          <button type="button" role="menuitemradio" aria-checked="true" data-mc-source-option="all">All logs <span class="mc-option-check">✓</span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-source-option="application">Application logs <span class="mc-option-check"></span></button>
+        </div>
+        <select data-mission-log-source data-native-select="true" aria-label="Log source" class="mc-visually-hidden" tabindex="-1" aria-hidden="true"><option value="all">All logs</option><option value="application">Application logs</option></select>
+      </div>
+      <button type="button" class="rb-log-control rb-tail-active" data-mission-log-tail aria-pressed="true"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">bolt</span> Live tail</button>
+      <button type="button" class="rb-icon-btn" data-mission-log-expand aria-label="Expand logs"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">open_in_full</span></button>
+      <button type="button" class="rb-icon-btn" data-mission-menu-toggle aria-expanded="false" aria-controls="mission-log-menu" aria-label="More log options"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">more_horiz</span></button>
       <div class="mc-menu" id="mission-log-menu" data-mission-log-menu hidden>
-        <button type="button" data-mission-log-copy>▣　Copy visible logs <kbd>Ctrl C</kbd></button>
-        <button type="button" data-mission-log-download>⇩　Download logs</button>
+        <button type="button" data-mission-log-copy><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">content_copy</span> Copy visible logs <kbd>Ctrl C</kbd></button>
+        <button type="button" data-mission-log-download><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">download</span> Download logs</button>
         <div class="mc-menu-divider"></div><p>ORDER BY</p>
-        <button type="button" data-mission-order="asc">↑　Ascending <span data-order-check="asc"></span></button>
-        <button type="button" data-mission-order="desc" class="is-selected">↓　Descending <span data-order-check="desc">✓</span></button>
+        <button type="button" data-mission-order="asc"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">north</span> Ascending <span data-order-check="asc"></span></button>
+        <button type="button" data-mission-order="desc" class="is-selected"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">south</span> Descending <span data-order-check="desc">✓</span></button>
         <div class="mc-menu-divider"></div><p>DISPLAY</p>
-        <button type="button" data-mission-display>▤　Display: <strong data-mission-display-label>Compact</strong>　›</button>
-        <button type="button" data-mission-theme>⚙　Theme settings <span data-mission-theme-label>Dark</span></button>
+        <button type="button" data-mission-display><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">density_small</span> Display: <strong data-mission-display-label>Compact</strong>　›</button>
+        <button type="button" data-mission-theme><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">settings</span> Theme settings <span data-mission-theme-label>Dark</span></button>
       </div>
     </div>
     <div class="mc-filterbar">
       <div class="rb-search"><span class="material-symbols-rounded" aria-hidden="true">search</span><input data-mission-log-search type="search" placeholder="Search logs" autocomplete="off" aria-label="Search logs"></div>
-      <label class="mc-range"><span class="sr-only">Log time range</span><select data-mission-range aria-label="Log time range"><option value="live">Live tail</option><option value="60">Last hour</option><option value="240">Last 4 hours</option><option value="1440">Last 24 hours</option><option value="2880">Last 2 days</option><option value="10080">Last 7 days</option><option value="custom">Custom range</option></select></label>
+      <div class="mc-dropdown mc-range-dropdown" data-mc-dropdown>
+        <button type="button" class="mc-dropdown-trigger" data-mc-dropdown-toggle aria-expanded="false" aria-haspopup="menu" aria-label="Log time range"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">schedule</span><span data-mc-range-label>Live tail</span><span class="material-symbols-rounded mc-chevron" aria-hidden="true">expand_more</span></button>
+        <div class="mc-dropdown-menu" role="menu" hidden>
+          <button type="button" role="menuitemradio" aria-checked="true" data-mc-range-option="live"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">bolt</span> Live tail <span class="mc-option-check">✓</span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="60"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">schedule</span> Last hour <span class="mc-option-check"></span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="240"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">schedule</span> Last 4 hours <span class="mc-option-check"></span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="1440"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">schedule</span> Last 24 hours <span class="mc-option-check"></span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="2880"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">schedule</span> Last 2 days <span class="mc-option-check"></span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="10080"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">schedule</span> Last 7 days <span class="mc-option-check"></span></button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-mc-range-option="custom"><span class="material-symbols-rounded mc-action-icon" aria-hidden="true">schedule</span> Custom <span class="mc-option-check"></span></button>
+        </div>
+        <select data-mission-range data-native-select="true" aria-label="Log time range" class="mc-visually-hidden" tabindex="-1" aria-hidden="true"><option value="live">Live tail</option><option value="60">Last hour</option><option value="240">Last 4 hours</option><option value="1440">Last 24 hours</option><option value="2880">Last 2 days</option><option value="10080">Last 7 days</option><option value="custom">Custom range</option></select>
+      </div>
       <span class="mc-timezone">GMT+3</span>
     </div>
     <div class="mc-custom-range" data-mission-custom-range hidden>
@@ -48,4 +67,4 @@
   </section>
 </main>
 {% endblock %}
-{% block extra_js %}{{ block.super }}<script src="{% static 'js/mission_control_logger.js' %}?v=20261026-render-console1" defer></script>{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'js/mission_control_logger.js' %}?v=20261026-render-console5" defer></script>{% endblock %}
