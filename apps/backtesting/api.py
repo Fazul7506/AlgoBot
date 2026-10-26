@@ -152,7 +152,15 @@ class BacktestViewSet(viewsets.ModelViewSet):
                 symbol=market, epoch__gte=start_epoch, epoch__lte=end_epoch
             ).count()
             if warmup_count < min_history or evaluation_count < 2:
-                raise ValidationError({'date_range': f'Insufficient persisted tick history for this evaluation window. AlgoBot needs {min_history} earlier ticks for indicator warm-up and at least 2 ticks inside the selected interval; found {warmup_count} warm-up ticks and {evaluation_count} evaluation ticks.'})
+                log.warning("BACKTEST_REJECTED code=INSUFFICIENT_HISTORICAL_DATA source=connected_broker_history symbol=%s timeframe=tick warmup=%s/%s evaluation=%s/%s", market.symbol, warmup_count, min_history, evaluation_count, 2, extra={"failure_stage": "historical_data_validation", "failure_code": "INSUFFICIENT_HISTORICAL_DATA", "symbol": market.symbol, "timeframe": "tick", "warmup_available": warmup_count, "warmup_required": min_history, "evaluation_available": evaluation_count, "evaluation_required": 2})
+                raise ValidationError({
+                    "code": "INSUFFICIENT_HISTORICAL_DATA",
+                    "failure_source": "connected_broker_history",
+                    "date_range": f"Not enough historical tick data for {market.display_name or market.symbol}. AlgoBot found {warmup_count} earlier ticks (needs {min_history}) and {evaluation_count} ticks in your selected dates (needs at least 2).",
+                    "user_message": "This backtest cannot run because the broker history available to AlgoBot does not cover the selected dates.",
+                    "suggested_action": "Choose a date range with more available history, select a timeframe with sufficient data, or reconnect the broker and check its history availability.",
+                    "data_check": {"instrument": market.symbol, "timeframe": "tick", "warmup_available": warmup_count, "warmup_required": min_history, "evaluation_available": evaluation_count, "evaluation_required": 2},
+                })
         else:
             research_data = ResearchDataService()
             try:
@@ -170,7 +178,15 @@ class BacktestViewSet(viewsets.ModelViewSet):
             except ValueError as exc:
                 raise ValidationError({'date_range': str(exc)}) from exc
             if warmup_count < min_history or evaluation_count < 2:
-                raise ValidationError({'date_range': f'Insufficient persisted {timeframe} candle history for this evaluation window. AlgoBot needs {min_history} earlier candles for indicator warm-up and at least 2 candles inside the selected interval; found {warmup_count} warm-up candles and {evaluation_count} evaluation candles.'})
+                log.warning("BACKTEST_REJECTED code=INSUFFICIENT_HISTORICAL_DATA source=research_history symbol=%s timeframe=%s warmup=%s/%s evaluation=%s/%s", market.symbol, timeframe, warmup_count, min_history, evaluation_count, 2, extra={"failure_stage": "historical_data_validation", "failure_code": "INSUFFICIENT_HISTORICAL_DATA", "symbol": market.symbol, "timeframe": timeframe, "warmup_available": warmup_count, "warmup_required": min_history, "evaluation_available": evaluation_count, "evaluation_required": 2})
+                raise ValidationError({
+                    "code": "INSUFFICIENT_HISTORICAL_DATA",
+                    "failure_source": "research_history",
+                    "date_range": f"Not enough historical {timeframe} candle data for {market.display_name or market.symbol}. AlgoBot found {warmup_count} earlier candles (needs {min_history}) and {evaluation_count} candles in your selected dates (needs at least 2).",
+                    "user_message": "This backtest cannot run because the available historical candles do not cover the selected dates.",
+                    "suggested_action": "Choose a date range with more available history, select a timeframe with sufficient data, or refresh the connected broker's historical data.",
+                    "data_check": {"instrument": market.symbol, "timeframe": timeframe, "warmup_available": warmup_count, "warmup_required": min_history, "evaluation_available": evaluation_count, "evaluation_required": 2},
+                })
 
         with transaction.atomic():
             user_model = self.request.user.__class__
