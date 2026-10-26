@@ -31,7 +31,13 @@ def _queue_automation_event(event_name, account, payload):
         # automation notification is safer than blocking broker lifecycle I/O;
         # the queue failure is logged with enough context to diagnose it.
         logger.warning(
-            "broker_automation_event_queue_unavailable",
+            "broker_automation_event_queue_unavailable "
+            "event_name=%s broker_account_id=%s user_id=%s error_type=%s "
+            "automation_event_dropped=true",
+            event_name,
+            account.pk,
+            account.user_id,
+            type(exc).__name__,
             extra={
                 "event_name": event_name,
                 "broker_account_id": account.pk,
