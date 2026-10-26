@@ -85,3 +85,33 @@
 @media(max-width:760px){.monitoring-workspace .mission-log-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.monitoring-workspace .mission-log-controls label{min-width:0}.monitoring-workspace .mission-log-controls [data-mission-log-status]{grid-column:1/-1}.monitoring-workspace [data-mission-log-body] td{padding:9px 8px}.monitoring-workspace [data-mission-log-body] td:first-child{white-space:normal;min-width:100px}.monitoring-workspace .mission-log-details{max-width:calc(100vw - 70px)}}
 
 .monitoring-workspace .mission-log-copy{display:inline-block;margin:4px 6px 4px 0;padding:4px 7px;border:1px solid #354354;border-radius:5px;background:#111a24;color:#9ac8ff;font-size:.68rem;cursor:pointer}.monitoring-workspace .mission-log-copy:hover{background:#1a2b3e}.monitoring-workspace .mission-log-copy:focus-visible{outline:2px solid #58a6ff;outline-offset:2px}
+
+
+/* Mission Control is intentionally a single, read-only log console. */
+.mission-control-logger-only{max-width:1600px;margin-inline:auto}
+.mission-control-logger-only .monitoring-hero{padding:16px 20px}
+.mission-control-logger-only .monitoring-hero-icon{width:54px;height:54px;flex-basis:54px;border-radius:15px}
+.mission-control-logger-only .monitoring-hero-icon svg{width:36px;height:36px}
+.rb-log-panel{overflow:hidden}
+.rb-log-toolbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;padding:14px 16px;border-bottom:1px solid #123c6a}
+.rb-log-toolbar label{display:flex;flex-direction:column;gap:5px;min-width:0;color:#a9c6e9;font-size:.72rem;font-weight:650}
+.rb-log-toolbar input,.rb-log-toolbar select{box-sizing:border-box;width:100%;min-width:0;min-height:38px;padding:8px 10px;border:1px solid #1b4b7d;border-radius:8px;background:#061b38;color:#edf5ff;font:inherit}
+.rb-log-toolbar input::placeholder{color:#7898bf}
+.rb-log-actions{display:flex;align-items:end;gap:8px;flex-wrap:wrap}
+.rb-log-action{width:auto;min-height:38px;padding:7px 10px;display:inline-flex;align-items:center;justify-content:center;font-size:.74rem;white-space:nowrap}
+.rb-log-status{grid-column:1/-1;color:#8fb5df;font-size:.75rem}
+.rb-log-body-wrap{padding:0 12px 12px}
+.rb-log-scroll{max-height:min(68vh,820px);overflow:auto;border:1px solid #12365e;border-radius:9px;background:#04152b}
+.rb-log-table{min-width:700px}
+.rb-log-table thead{position:sticky;top:0;z-index:1}
+.rb-log-table th{background:#082348}
+.rb-log-table td{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.76rem;vertical-align:top}
+.rb-log-table td:nth-child(1){white-space:nowrap;color:#9ab8df}
+.rb-log-table td:nth-child(4){white-space:pre-wrap;overflow-wrap:anywhere;min-width:240px}
+.rb-log-table td:nth-child(3) small{display:block;margin-top:4px;color:#8eadd5}
+.rb-log-table .mission-log-copy{display:inline-block;margin:6px 0 0;padding:4px 7px;border:1px solid #1b4b7d;border-radius:6px;background:#0a315f;color:#a8d6ff;font:inherit;font-size:.68rem;cursor:pointer}
+.rb-log-table details{margin-top:6px}
+.rb-log-table details summary{color:#79cfff;cursor:pointer}
+.rb-log-table .mission-log-details{max-width:min(75vw,700px);overflow:auto;padding:9px;border:1px solid #174477;border-radius:7px;background:#031226;color:#c9def7;font-size:.72rem;white-space:pre-wrap}
+.mission-control-logger-only .monitoring-footnote{padding-top:0}
+@media(max-width:640px){.mission-control-logger-only .monitoring-hero{padding:14px}.mission-control-logger-only .monitoring-hero-icon{display:none}.rb-log-toolbar{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}.rb-log-actions{grid-column:1/-1}.rb-log-action{flex:1}.rb-log-body-wrap{padding:0 7px 8px}.rb-log-table{min-width:640px}}
