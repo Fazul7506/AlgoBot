@@ -36,12 +36,16 @@ class ConnectedBrokerHistoryPersistenceTests(TestCase):
     def test_broker_ticks_are_deduplicated_and_persisted(self):
         result = persist_broker_tick_history(
             self.symbol.symbol,
-            [{"epoch": 100, "quote": "100.5"}, {"epoch": 100, "quote": "100.5"}, {"epoch": 101, "quote": "-1"}],
+            [{"epoch": 100, "quote": "100.5"}, {"epoch": 100, "quote": "100.5"}, {"epoch": 100, "quote": "101.5"}, {"epoch": 101, "quote": "-1"}],
         )
 
         self.assertEqual(result["source"], "connected_broker")
-        self.assertEqual(result["valid"], 1)
+        self.assertEqual(result["valid"], 2)
         self.assertEqual(result["rejected"], 1)
-        self.assertEqual(Tick.objects.filter(symbol=self.symbol).count(), 1)
+        self.assertEqual(Tick.objects.filter(symbol=self.symbol).count(), 2)
         self.assertEqual(Candle.objects.filter(symbol=self.symbol, timeframe="tick").count(), 1)
-        self.assertEqual(Candle.objects.get(symbol=self.symbol, timeframe="tick").source, "connected_broker")
+        tick_candle = Candle.objects.get(symbol=self.symbol, timeframe="tick")
+        self.assertEqual(tick_candle.source, "connected_broker")
+        self.assertEqual(str(tick_candle.high), "101.50000000")
+        self.assertEqual(str(tick_candle.low), "100.50000000")
+        self.assertEqual(str(tick_candle.close), "101.50000000")
