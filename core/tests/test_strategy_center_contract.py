@@ -31,5 +31,8 @@ class StrategyCenterContractTests(TestCase):
         strategy_css = Path("static/css/strategy_center.css").read_text(encoding="utf-8")
         self.assertIn("if (data?.request) return data.request(path)", strategy_js)
         self.assertIn("credentials: 'same-origin'", strategy_js)
+        self.assertIn("function sparklineFor(s)", strategy_js)
+        self.assertIn("strategy-card-sparkline", strategy_js)
+        self.assertIn("strategy-card-sparkline", strategy_css)
         self.assertIn("@media(max-width:850px)", strategy_css)
         self.assertIn("@media(max-width:580px)", strategy_css)
