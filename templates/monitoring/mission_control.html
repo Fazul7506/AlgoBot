@@ -1,29 +1,51 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Mission Control | AlgoBot{% endblock %}
-{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-logger-only1">{% endblock %}
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-render-console1">{% endblock %}
 {% block content %}
-<main id="main-content" class="monitoring-workspace mission-control-logger-only" data-monitoring-dashboard>
+<main id="main-content" class="monitoring-workspace mission-control-logger-only render-console" data-monitoring-dashboard>
   <header class="monitoring-hero">
     <div class="monitoring-hero-icon" aria-hidden="true"><svg viewBox="0 0 48 48" role="img"><path d="M4 25h10l5-15 9 29 6-19 4 5h6" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <div class="monitoring-hero-copy"><p class="eyebrow">MISSION CONTROL</p><h1>Mission Control</h1><p>Application log stream</p><p class="monitoring-subtitle">Live operational events recorded by AlgoBot.</p></div>
+    <div class="monitoring-hero-copy"><p class="eyebrow">MISSION CONTROL</p><h1>Mission Control</h1><p>Application log stream</p><p class="monitoring-subtitle">Search, filter, inspect and export AlgoBot operational logs.</p></div>
+    <div class="mc-connection" role="status"><span class="mc-live-dot"></span><span data-mission-connection>Connecting to log stream…</span></div>
   </header>
 
   <section class="monitoring-panel rb-log-panel" data-mission-logger aria-labelledby="mission-log-title">
     <div class="monitoring-panel-heading">
-      <div><h2 id="mission-log-title">Operation logs</h2><p>Live application log stream.</p></div>
+      <div><h2 id="mission-log-title">Logs</h2><p>Application events recorded by AlgoBot.</p></div>
       <span class="monitoring-updated" data-mission-log-count>0 lines</span>
     </div>
-    <div class="rb-log-toolbar" role="search" aria-label="Search operation logs">
-      <div class="rb-log-select" aria-hidden="true">All logs</div>
-      <button type="button" class="rb-log-control rb-tail-active" data-mission-log-tail aria-pressed="true">Live tail</button>
-      <button type="button" class="rb-icon-btn" data-mission-log-expand aria-label="Expand logs">Expand</button>
-      <button type="button" class="rb-icon-btn" data-mission-log-copy aria-label="Copy visible logs">Copy</button>
+    <div class="rb-log-toolbar" aria-label="Log controls">
+      <label class="mc-select-wrap"><span class="sr-only">Log source</span><select data-mission-log-source aria-label="Log source"><option value="all">All logs</option><option value="application">Application logs</option></select></label>
+      <button type="button" class="rb-log-control rb-tail-active" data-mission-log-tail aria-pressed="true"><span aria-hidden="true">ϟ</span> Live tail</button>
+      <button type="button" class="rb-icon-btn" data-mission-log-expand aria-label="Expand logs"><span aria-hidden="true">⛶</span></button>
+      <button type="button" class="rb-icon-btn" data-mission-menu-toggle aria-expanded="false" aria-controls="mission-log-menu" aria-label="More log options">•••</button>
+      <div class="mc-menu" id="mission-log-menu" data-mission-log-menu hidden>
+        <button type="button" data-mission-log-copy>▣　Copy visible logs <kbd>Ctrl C</kbd></button>
+        <button type="button" data-mission-log-download>⇩　Download logs</button>
+        <div class="mc-menu-divider"></div><p>ORDER BY</p>
+        <button type="button" data-mission-order="asc">↑　Ascending <span data-order-check="asc"></span></button>
+        <button type="button" data-mission-order="desc" class="is-selected">↓　Descending <span data-order-check="desc">✓</span></button>
+        <div class="mc-menu-divider"></div><p>DISPLAY</p>
+        <button type="button" data-mission-display>▤　Display: <strong data-mission-display-label>Compact</strong>　›</button>
+        <button type="button" data-mission-theme>⚙　Theme settings <span data-mission-theme-label>Dark</span></button>
+      </div>
     </div>
-    <div class="rb-search"><span class="material-symbols-rounded" aria-hidden="true">search</span><input data-mission-log-search type="search" placeholder="Search logs" autocomplete="off" aria-label="Search logs"></div>
-    <div class="rb-log-head"><span>Operation logs</span><span data-mission-log-status role="status" aria-live="polite">Connecting…</span></div>
+    <div class="mc-filterbar">
+      <div class="rb-search"><span class="material-symbols-rounded" aria-hidden="true">search</span><input data-mission-log-search type="search" placeholder="Search logs" autocomplete="off" aria-label="Search logs"></div>
+      <label class="mc-range"><span class="sr-only">Log time range</span><select data-mission-range aria-label="Log time range"><option value="live">Live tail</option><option value="60">Last hour</option><option value="240">Last 4 hours</option><option value="1440">Last 24 hours</option><option value="2880">Last 2 days</option><option value="10080">Last 7 days</option><option value="custom">Custom range</option></select></label>
+      <span class="mc-timezone">GMT+3</span>
+    </div>
+    <div class="mc-custom-range" data-mission-custom-range hidden>
+      <label>Start (local time)<input type="datetime-local" data-mission-start></label>
+      <label>End (local time)<input type="datetime-local" data-mission-end></label>
+      <button type="button" class="mc-apply-range" data-mission-apply-range>Apply custom range</button>
+      <p data-mission-range-error role="status"></p>
+    </div>
+    <div class="rb-log-head"><span>Application logs</span><span data-mission-log-status role="status" aria-live="polite">Connecting…</span></div>
     <div class="rb-log-body" data-mission-log-body aria-live="polite"></div>
+    <div class="mc-log-footer"><span>Up to 7 days of recent application logs are available on this deployment.</span><button type="button" data-mission-log-top>↑ Back to latest</button></div>
   </section>
 </main>
 {% endblock %}
-{% block extra_js %}{{ block.super }}<script src="{% static 'js/mission_control_logger.js' %}?v=20261026-logger-original-style2" defer></script>{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'js/mission_control_logger.js' %}?v=20261026-render-console1" defer></script>{% endblock %}
