@@ -9,33 +9,20 @@
     <div class="monitoring-hero-copy"><p class="eyebrow">MISSION CONTROL</p><h1>Mission Control</h1><p>Application log stream</p><p class="monitoring-subtitle">Live operational events recorded by AlgoBot.</p></div>
   </header>
 
-  <section class="monitoring-panel rb-log-panel" aria-labelledby="mission-log-title">
+  <section class="monitoring-panel rb-log-panel" data-mission-logger aria-labelledby="mission-log-title">
     <div class="monitoring-panel-heading">
-      <div><h2 id="mission-log-title">Operation logs</h2><p>Persisted application events, newest first. Live refresh runs every 15 seconds while this page is visible.</p></div>
-      <span class="monitoring-updated"><span data-mission-log-count>{{ recent_logs|length }}</span> lines</span>
+      <div><h2 id="mission-log-title">Operation logs</h2><p>Live application log stream.</p></div>
+      <span class="monitoring-updated" data-mission-log-count>0 lines</span>
     </div>
-    <div class="mission-log-controls rb-log-toolbar" role="search" aria-label="Filter operation logs">
-      <label>Search logs <input type="search" data-mission-log-search placeholder="Search logs" autocomplete="off"></label>
-      <label>Source <input type="search" data-mission-log-source placeholder="Source or module" autocomplete="off"></label>
-      <label>Operation ID <input type="search" data-mission-log-operation placeholder="Correlation ID" autocomplete="off"></label>
-      <label>Time window <select data-mission-log-window><option value="15">15 minutes</option><option value="60" selected>60 minutes</option><option value="360">6 hours</option><option value="1440">24 hours</option><option value="all">All retained logs</option></select></label>
-      <label>Severity <select data-mission-log-level><option value="">All logs</option><option value="DEBUG">Debug</option><option value="INFO">Info</option><option value="WARNING">Warning</option><option value="ERROR">Error</option><option value="CRITICAL">Critical</option></select></label>
-      <label>Area <select data-mission-log-stream><option value="">All areas</option><option value="application">Application</option><option value="broker">Broker</option><option value="trading">Trading</option><option value="security">Security</option><option value="monitoring">Monitoring</option><option value="celery">Background workers</option><option value="api">API</option><option value="database">Database</option><option value="infrastructure">Infrastructure</option><option value="system">System</option></select></label>
-      <label>Category <select data-mission-log-category><option value="">All categories</option><option value="historical_data">Historical data</option><option value="backtesting">Backtesting</option><option value="broker">Broker</option><option value="authentication">Authentication</option><option value="trading">Trading</option><option value="system">System</option></select></label>
-      <label>Outcome <select data-mission-log-status-filter><option value="">All outcomes</option><option value="completed">Completed</option><option value="recorded">Recorded</option><option value="warning">Warning</option><option value="failed">Failed</option><option value="running">Running</option></select></label>
-      <div class="rb-log-actions">
-        <button class="monitoring-icon-button rb-log-action" type="button" data-mission-log-refresh aria-label="Refresh operation logs">Refresh</button>
-        <button class="monitoring-icon-button rb-log-action" type="button" data-mission-log-pause aria-pressed="false">Pause live updates</button>
-        <button class="monitoring-icon-button rb-log-action" type="button" data-mission-log-more disabled>Load older</button>
-      </div>
-      <span class="rb-log-status" data-mission-log-status role="status" aria-live="polite">Connecting to live feed…</span>
+    <div class="rb-log-toolbar" role="search" aria-label="Search operation logs">
+      <div class="rb-log-select" aria-hidden="true">All logs</div>
+      <button type="button" class="rb-log-control rb-tail-active" data-mission-log-tail aria-pressed="true">Live tail</button>
+      <button type="button" class="rb-icon-btn" data-mission-log-expand aria-label="Expand logs">Expand</button>
+      <button type="button" class="rb-icon-btn" data-mission-log-copy aria-label="Copy visible logs">Copy</button>
     </div>
-    <div class="rb-log-body-wrap">
-      <div class="monitoring-table-wrap rb-log-scroll"><table class="monitoring-table rb-log-table"><thead><tr><th scope="col">Timestamp</th><th scope="col">Severity</th><th scope="col">Area / source</th><th scope="col">Log entry</th></tr></thead><tbody data-mission-log-body>
-      {% for event in recent_logs %}<tr><td>{{ event.timestamp|date:"Y-m-d H:i:s" }}</td><td><span class="monitoring-badge status-{{ event.level|lower }}"><i></i>{{ event.level }}</span></td><td>{{ event.stream }}<small>{{ event.source }}</small></td><td>{{ event.message }}</td></tr>{% empty %}<tr><td colspan="4" class="monitoring-empty">No persisted application events are available for this view yet.</td></tr>{% endfor %}
-      </tbody></table></div>
-    </div>
-    <p class="monitoring-footnote">Log entries are loaded from the existing application event store. This page is read-only and does not start or control background jobs.</p>
+    <div class="rb-search"><span class="material-symbols-rounded" aria-hidden="true">search</span><input data-mission-log-search type="search" placeholder="Search logs" autocomplete="off" aria-label="Search logs"></div>
+    <div class="rb-log-head"><span>Operation logs</span><span data-mission-log-status role="status" aria-live="polite">Connecting…</span></div>
+    <div class="rb-log-body" data-mission-log-body aria-live="polite"></div>
   </section>
 </main>
 {% endblock %}
