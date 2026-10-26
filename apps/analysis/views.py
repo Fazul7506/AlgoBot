@@ -328,6 +328,24 @@ def analysis_data(request):
                 if broker_data["items"]:
                     last = broker_data["items"][-1]
                     live_tick = {"quote": last.get("close"), "epoch": last.get("epoch"), "symbol": market.symbol}
+            try:
+                latest = asyncio.run(asyncio.wait_for(adapter.get_live_signal_tick(market.symbol), timeout=5.0))
+                if latest and latest.get("price") is not None and latest.get("epoch") is not None:
+                    live_tick = {
+                        "symbol": market.symbol,
+                        "quote": latest.get("price"),
+                        "bid": latest.get("bid"),
+                        "ask": latest.get("ask"),
+                        "epoch": latest.get("epoch"),
+                    }
+                    from apps.market_data.services import MarketDataService
+                    MarketDataService().tick_service.ingest(live_tick)
+            except Exception:
+                logger.warning(
+                    "CONNECTED_BROKER_LIVE_QUOTE_UNAVAILABLE user_id=%s account_id=%s symbol=%s",
+                    request.user.pk, getattr(active_account, "pk", None), market.symbol,
+                    exc_info=True,
+                )
             if live_tick:
                 live_tick["source"] = "connected_broker"
         except Exception as exc:
