@@ -8,8 +8,6 @@ from django.urls import reverse
 @patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class StrategyCenterContractTests(TestCase):
     def test_strategy_center_starts_from_broker_connection_state(self):
         user = get_user_model().objects.create_user("strategy-owner", "strategy@example.com", "pass")
@@ -25,7 +23,7 @@ class StrategyCenterContractTests(TestCase):
         self.assertIn("benchmark-dot", content)
         self.assertIn("data-s-performance-chart", content)
         self.assertIn("data-s-comparison", content)
-        self.assertIn("data-strategy-filter=\\"ai\\"", content)
+        self.assertIn('data-strategy-filter="ai"', content)
         self.assertIn("data-s-selected-deploy", content)
 
     def test_strategy_dashboard_has_transport_fallback_and_responsive_reference_styles(self):
