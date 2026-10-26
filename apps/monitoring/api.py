@@ -1,6 +1,9 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from datetime import timedelta
+
 from django.db.models import Q
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 
@@ -130,6 +133,13 @@ def mission_events(request):
     level = str(request.query_params.get("level") or "").strip().upper()
     stream = str(request.query_params.get("stream") or "").strip().lower()
     search = str(request.query_params.get("search") or "").strip()[:160]
+    try:
+        since_minutes = int(request.query_params.get("since_minutes", 60))
+        since_minutes = min(max(since_minutes, 1), 43200)
+    except (TypeError, ValueError):
+        since_minutes = 60
+    if str(request.query_params.get("since_minutes") or "").strip().lower() not in {"all", "0"}:
+        events = events.filter(timestamp__gte=timezone.now() - timedelta(minutes=since_minutes))
     if level:
         events = events.filter(level__iexact=level)
     if stream:
