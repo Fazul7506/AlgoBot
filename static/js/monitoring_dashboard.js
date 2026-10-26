@@ -92,6 +92,20 @@
       level.appendChild(badge);
       area.textContent = String(event.stream || 'application') + ' · ' + String(event.source || 'AlgoBot');
       message.textContent = String(event.message || '');
+      const copyMessage = document.createElement('button');
+      copyMessage.type = 'button';
+      copyMessage.className = 'mission-log-copy';
+      copyMessage.textContent = 'Copy message';
+      copyMessage.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(String(event.message || ''));
+          copyMessage.textContent = 'Copied';
+        } catch (_) {
+          copyMessage.textContent = 'Copy unavailable';
+          copyMessage.title = 'Clipboard access is unavailable in this browser context';
+        }
+      });
+      message.appendChild(copyMessage);
       const details = event.details || event.error_category || event.resolution || event.operation_id;
       if (details) {
         const disclosure = document.createElement('details');
@@ -108,7 +122,20 @@
           event.resolution ? 'Suggested action: ' + event.resolution : '',
           details && typeof details === 'string' ? 'Details: ' + details : (details && typeof details === 'object' ? 'Details: ' + JSON.stringify(details, null, 2) : '')
         ].filter(Boolean).join('\\n');
-        disclosure.append(summary, detailText);
+        const copyDetails = document.createElement('button');
+        copyDetails.type = 'button';
+        copyDetails.className = 'mission-log-copy';
+        copyDetails.textContent = 'Copy details';
+        copyDetails.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(detailText.textContent);
+            copyDetails.textContent = 'Copied';
+          } catch (_) {
+            copyDetails.textContent = 'Copy unavailable';
+            copyDetails.title = 'Clipboard access is unavailable in this browser context';
+          }
+        });
+        disclosure.append(summary, copyDetails, detailText);
         message.appendChild(document.createTextNode(' '));
         message.appendChild(disclosure);
       }
