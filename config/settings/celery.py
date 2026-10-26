@@ -63,7 +63,6 @@ CELERY_TASK_QUEUES = (
     # Kombu can inherit the default ``celery`` routing key for both queues,
     # causing market-data messages to be delivered to the general worker too.
     Queue("celery", routing_key="celery"),
-    Queue("market_data", routing_key="market_data"),
 )
 
 # Explicit imports make the production worker deterministic even if Django's
@@ -74,32 +73,6 @@ CELERY_IMPORTS = (
 )
 
 CELERY_TASK_ROUTES = {
-    "apps.market_data.tasks.backfill_research_candles": {"queue": "market_data"},
-    "apps.market_data.tasks.run_initial_candle_backfill": {"queue": "market_data"},
-    # Recovery/observability must not share the single-consumer market-data queue.
-    "apps.market_data.tasks.reconcile_candle_backfill_runs": {"queue": "celery"},
-    "apps.market_data.tasks.ensure_initial_candle_backfill": {"queue": "celery"},
-    "apps.market_data.tasks.ensure_research_candle_backfill": {"queue": "celery"},
 }
 
-CELERY_TASK_ANNOTATIONS = {
-    "apps.market_data.tasks.run_initial_candle_backfill": {
-        "ignore_result": True,
-        "acks_late": True,
-        "reject_on_worker_lost": True,
-        "track_started": True,
-        "soft_time_limit": 4 * 60 * 60,
-        "time_limit": 4 * 60 * 60 + 5 * 60,
-    },
-    "apps.market_data.tasks.backfill_research_candles": {
-        "ignore_result": True,
-        "acks_late": True,
-        "reject_on_worker_lost": True,
-        "track_started": True,
-        "soft_time_limit": 2 * 60 * 60,
-        "time_limit": 2 * 60 * 60 + 5 * 60,
-    },
-    "apps.market_data.tasks.reconcile_candle_backfill_runs": {
-        "track_started": True,
-    },
-}
+CELERY_TASK_ANNOTATIONS = {}
