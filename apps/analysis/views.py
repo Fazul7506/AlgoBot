@@ -307,7 +307,7 @@ def analysis_data(request):
             if str(market.broker).strip().lower() != broker_code:
                 raise RuntimeError("The selected instrument does not belong to your connected broker. Choose an instrument from that broker catalogue.")
             adapter = BrokerRegistry().adapter(active_account.broker, active_account)
-            is_tick_history = canonical_timeframe == "tick" or TIMEFRAMES[canonical_timeframe] < 60
+            is_tick_history = canonical_timeframe == "tick"
             granularity = None if is_tick_history else int(TIMEFRAMES[canonical_timeframe])
             request = adapter.get_chart_history(
                 market.symbol,
