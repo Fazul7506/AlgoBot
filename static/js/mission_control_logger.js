@@ -109,13 +109,13 @@
     liveTail = !liveTail;
     tailButton.classList.toggle("rb-tail-active", liveTail);
     tailButton.setAttribute("aria-pressed", String(liveTail));
-    tailButton.innerHTML = (liveTail ? "ϟ Live tail" : "Ⅱ Paused");
+    tailButton.innerHTML = (liveTail ? '<span class="material-symbols-rounded mc-action-icon" aria-hidden="true">bolt</span> Live tail' : '<span class="material-symbols-rounded mc-action-icon" aria-hidden="true">pause</span> Paused');
     if (liveTail) { refresh(); body.scrollTop = body.scrollHeight; }
   });
   if (expandButton) expandButton.addEventListener("click", () => {
     const isFull = panel.classList.toggle("is-fullscreen");
     expandButton.setAttribute("aria-label", isFull ? "Close expanded logs" : "Expand logs");
-    expandButton.textContent = isFull ? "✕" : "⛶";
+    expandButton.innerHTML = isFull ? '<span class="material-symbols-rounded mc-action-icon" aria-hidden="true">close_fullscreen</span>' : '<span class="material-symbols-rounded mc-action-icon" aria-hidden="true">open_in_full</span>';
   });
   if (menuToggle) menuToggle.addEventListener("click", () => setMenuOpen(menu && menu.hidden));
   if (menu) menu.addEventListener("click", async (event) => {
