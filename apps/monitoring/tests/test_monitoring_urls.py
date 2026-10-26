@@ -11,7 +11,7 @@ class MonitoringSmokeTests(TestCase):
     def test_monitoring_page_resolves(self):
         response = self.client.get(reverse("monitoring-dashboard-page"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Mission Control")
+        self.assertContains(response, "Monitoring")
 
     def test_monitoring_api_resolves(self):
         response = self.client.get(reverse("monitoring-dashboard"))
@@ -20,5 +20,10 @@ class MonitoringSmokeTests(TestCase):
     def test_retired_backfill_page_redirects_to_mission_control(self):
         response = self.client.get("/operations/candle-backfill/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/monitoring/")
+        self.assertEqual(response["Location"], "/operations/mission-control/")
 
+
+    def test_mission_control_has_its_own_route(self):
+        response = self.client.get("/operations/mission-control/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Mission Control")
