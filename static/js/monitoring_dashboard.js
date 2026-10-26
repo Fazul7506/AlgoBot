@@ -56,6 +56,7 @@
   const logCount = root.querySelector('[data-mission-log-count]');
   const logSearch = root.querySelector('[data-mission-log-search]');
   const logLevel = root.querySelector('[data-mission-log-level]');
+  const logWindow = root.querySelector('[data-mission-log-window]');
   const logStream = root.querySelector('[data-mission-log-stream]');
   const logRefresh = root.querySelector('[data-mission-log-refresh]');
   const logStatus = root.querySelector('[data-mission-log-status]');
@@ -87,6 +88,7 @@
     if (logRequest) logRequest.abort();
     logRequest = new AbortController();
     const params = new URLSearchParams({limit: '250'});
+    if (logWindow?.value && logWindow.value !== 'all') params.set('since_minutes', logWindow.value);
     if (logSearch?.value.trim()) params.set('search', logSearch.value.trim());
     if (logLevel?.value) params.set('level', logLevel.value);
     if (logStream?.value) params.set('stream', logStream.value);
@@ -113,7 +115,7 @@
   };
   refresh?.addEventListener('click', load);
   logRefresh?.addEventListener('click', loadLogs);
-  [logSearch, logLevel, logStream].forEach((control) => {
+  [logSearch, logLevel, logStream, logWindow].forEach((control) => {
     control?.addEventListener(control === logSearch ? 'input' : 'change', () => {
       if (control !== logSearch || control.value.length === 0 || control.value.length >= 2) loadLogs();
     });
