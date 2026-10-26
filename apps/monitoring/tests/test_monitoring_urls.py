@@ -24,6 +24,9 @@ class MonitoringSmokeTests(TestCase):
 
 
     def test_mission_control_has_its_own_route(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        self.client.force_login(self.user)
         response = self.client.get("/operations/mission-control/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Mission Control")
