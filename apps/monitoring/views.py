@@ -4,7 +4,7 @@ from django.db.models import Q
 from django.shortcuts import render
 
 from apps.brokers.models import BrokerAccount, BrokerConnection, Position, Order
-from .models import Alert, Incident, Metric, SystemHealth
+from .models import Alert, Incident, LogEntry, Metric, SystemHealth
 from apps.notifications.models import NotificationChannelConnection
 from .services import MonitoringEngine
 
@@ -116,6 +116,7 @@ def dashboard(request):
         for provider, label in (("gmail", "Gmail notifications"), ("telegram", "Telegram notifications")):
             service_rows.append({"name": label, "status": "healthy" if provider in connected_channels else "not_connected", "response_time": None})
 
+    recent_logs = list(LogEntry.objects.order_by("-timestamp").values("id", "stream", "level", "message", "source", "timestamp")[:250]) if request.user.is_staff else []
     metric_history = list(Metric.objects.filter(module="application").order_by("-timestamp").values(
         "metric_name", "value", "unit", "timestamp"
     )[:20])
@@ -125,4 +126,5 @@ def dashboard(request):
         "recent_events": recent_events,
         "connected_channels": connected_channels,
         "metric_history": metric_history,
+        "recent_logs": recent_logs,
     })
