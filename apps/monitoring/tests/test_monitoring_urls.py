@@ -48,3 +48,32 @@ class MonitoringSmokeTests(TestCase):
         self.assertEqual(events[0]["level"], "ERROR")
         self.assertEqual(events[0]["stream"], "broker")
         self.assertIn("Historical", events[0]["message"])
+
+    def test_mission_event_feed_supports_category_status_and_offset_pagination(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        LogEntry.objects.create(
+            stream="broker", level="ERROR", message="Historical request failed",
+            source="deriv", context={"category": "historical_data", "status": "failed", "operation_id": "op-1"},
+        )
+        LogEntry.objects.create(
+            stream="application", level="INFO", message="Settings saved",
+            source="settings", context={"category": "configuration", "status": "completed"},
+        )
+        response = self.client.get(
+            "/api/monitoring/mission-events/?category=historical_data&status=failed&limit=1"
+        )
+        self.assertEqual(response.status_code, 200)
+        events = response.json()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["category"], "historical_data")
+        self.assertEqual(events[0]["status"], "failed")
+        self.assertEqual(events[0]["operation_id"], "op-1")
+        self.assertEqual(response["X-Has-More"], "false")
+
+    def test_mission_event_feed_clamps_invalid_pagination(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        response = self.client.get("/api/monitoring/mission-events/?offset=not-a-number&limit=999999")
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(response.json()), 250)
