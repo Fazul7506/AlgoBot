@@ -1,5 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
+from datetime import timedelta
 from django.urls import reverse
 
 from apps.monitoring.models import LogEntry
@@ -36,6 +38,9 @@ class MonitoringSmokeTests(TestCase):
         self.assertContains(response, "data-mission-log-search")
         self.assertContains(response, "data-mission-log-tail")
         self.assertContains(response, "data-mission-log-expand")
+        self.assertContains(response, "data-mc-dropdown-toggle")
+        self.assertContains(response, "data-mc-source-option")
+        self.assertContains(response, "data-mc-range-option")
         self.assertContains(response, "data-mission-log-copy")
         self.assertNotContains(response, "Load older")
         self.assertNotContains(response, "data-mission-log-more")
@@ -93,6 +98,23 @@ class MonitoringSmokeTests(TestCase):
         response = self.client.get("/api/monitoring/mission-events/?offset=not-a-number&limit=999999")
         self.assertEqual(response.status_code, 200)
         self.assertLessEqual(len(response.json()["results"]), 250)
+
+    def test_mission_event_feed_all_is_bounded_to_seven_days(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        LogEntry.objects.create(
+            stream="application", level="INFO", message="Recent event", source="test",
+            timestamp=timezone.now() - timedelta(days=2),
+        )
+        LogEntry.objects.create(
+            stream="application", level="INFO", message="Old event", source="test",
+            timestamp=timezone.now() - timedelta(days=8),
+        )
+        response = self.client.get("/api/monitoring/mission-events/?since_minutes=all")
+        self.assertEqual(response.status_code, 200)
+        messages = [event["message"] for event in response.json()["results"]]
+        self.assertIn("Recent event", messages)
+        self.assertNotIn("Old event", messages)
 
     def test_operations_mission_control_is_staff_only(self):
         response = self.client.get("/operations/mission-control/")
