@@ -114,13 +114,24 @@
 
   async function load() {
     const data = window.AlgoBotFrontendData;
-    if (!data?.request) return;
+    // Keep the page usable during bootstrap races or if the shared transport
+    // registry fails to initialize. All fallback requests stay same-origin.
+    const request = async path => {
+      if (data?.request) return data.request(path);
+      const response = await fetch(path, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const raw = await response.text();
+      let payload = {};
+      try { payload = raw ? JSON.parse(raw) : {}; }
+      catch (_) { payload = { detail: raw || `Request failed (${response.status})` }; }
+      if (!response.ok) throw new Error(payload.detail || payload.message || `Request failed (${response.status})`);
+      return payload;
+    };
     $('[data-s-list]').innerHTML = '<div class="empty-state">Loading strategy control plane…</div>';
     try {
       const [sr, sig, perf] = await Promise.allSettled([
-        data.request('/api/strategies/available/'),
-        data.request('/api/strategies/signals/'),
-        data.request('/api/strategies/performance/')
+        request('/api/strategies/available/'),
+        request('/api/strategies/signals/'),
+        request('/api/strategies/performance/')
       ]);
       if (sr.status === 'rejected') throw sr.reason;
       const payload = sr.value || {};
