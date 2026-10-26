@@ -3,7 +3,6 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from datetime import timedelta
 import logging
 
-from django.db import DatabaseError
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
