@@ -1,13 +1,7 @@
 from django.contrib.auth.decorators import login_required
-import logging
-from django.http import JsonResponse
 from django.shortcuts import render
 
-logger = logging.getLogger(__name__)
-
 from .models import MarketSymbol
-
-BACKFILL_COUNT = 5000
 
 
 def dashboard(request):
