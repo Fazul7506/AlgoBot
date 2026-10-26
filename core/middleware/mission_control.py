@@ -40,9 +40,26 @@ class MissionControlRequestLoggingMiddleware:
             user_id = getattr(user, "pk", None) if getattr(user, "is_authenticated", False) else None
             status_code = int(getattr(response, "status_code", 500) or 500)
             level = logging.ERROR if status_code >= 500 else logging.WARNING if status_code >= 400 else logging.INFO
+            response_data = getattr(response, "data", None)
+            response_data = response_data if isinstance(response_data, dict) else {}
+            request_id = str(
+                getattr(request, "request_id", "") or request.headers.get("X-Request-ID", "")
+            )[:100]
+            error_code = str(response_data.get("code") or response_data.get("error_code") or "")[:100]
+            suggested_action = str(response_data.get("suggested_action") or "")[:500]
+            category = "api_request"
+            outcome = "failed" if status_code >= 400 else "completed"
             logger.log(
                 level,
-                "HTTP_REQUEST_COMPLETED status=%s method=%s path=%s duration_ms=%s user_id=%s detail=%s",
-                status_code, getattr(request, "method", "UNKNOWN"), path, elapsed_ms, user_id, _response_detail(response),
+                "HTTP_REQUEST_COMPLETED status=%s method=%s path=%s duration_ms=%s request_id=%s detail=%s",
+                status_code, getattr(request, "method", "UNKNOWN"), path, elapsed_ms, request_id, _response_detail(response),
+                extra={
+                    "category": category,
+                    "status": outcome,
+                    "operation_id": request_id or None,
+                    "duration_ms": elapsed_ms,
+                    "error_category": error_code or (f"http_{status_code}" if status_code >= 400 else None),
+                    "resolution": suggested_action or None,
+                },
             )
         return response
