@@ -234,13 +234,31 @@ class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
 
     @decorators.action(detail=False, methods=['get'])
     def performance(self, request):
-        # StrategyPerformance is one global row per catalog strategy and is
-        # currently aggregated across users. It is not valid account-level P&L.
+        # This table is catalog-wide, not user/account P&L. Expose only
+        # strategy-level aggregate metrics and explicitly label their scope.
+        # Never return net_profit here: it must not be mistaken for the
+        # authenticated user's realized broker profit or loss.
+        from .models import StrategyPerformance
+        rows = StrategyPerformance.objects.filter(strategy__enabled=True).select_related('strategy').order_by('strategy__name')
+        payload = [{
+            'strategy_id': row.strategy_id,
+            'strategy_name': row.strategy.name,
+            'scope': 'strategy_aggregate',
+            'total_trades': row.total_trades,
+            'wins': row.wins,
+            'losses': row.losses,
+            'win_rate': row.win_rate,
+            'profit_factor': row.profit_factor,
+            'drawdown': row.drawdown,
+            'sharpe_ratio': row.sharpe_ratio,
+            'last_updated': row.last_updated,
+        } for row in rows]
         return response.Response({
-            'status': 'unavailable',
-            'code': 'ACCOUNT_PERFORMANCE_UNAVAILABLE',
-            'detail': 'Account-level strategy performance requires strategy executions to be reconciled with this user’s settled broker trades.',
-        }, status=status.HTTP_501_NOT_IMPLEMENTED)
+            'status': 'success',
+            'scope': 'strategy_aggregate',
+            'detail': 'These are catalog-wide strategy metrics, not personal account P&L.',
+            'results': payload,
+        })
 
     @decorators.action(detail=False, methods=['get'])
     def signals(self, request):

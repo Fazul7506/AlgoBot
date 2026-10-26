@@ -58,3 +58,11 @@
 
 /* Global icon typography shared by the application shell. */
 .material-symbols-rounded{font-family:'Material Symbols Rounded';font-weight:normal;font-style:normal;font-size:24px;line-height:1;letter-spacing:normal;text-transform:uppercase;display:inline-block;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-feature-settings:'liga';-webkit-font-smoothing:antialiased;font-feature-settings:'liga';font-variation-settings:'FILL' 0,'GRAD' 0,'opsz' 24}.material-symbols-rounded{width:1em;min-width:1em;height:1em;overflow:hidden;vertical-align:middle}.brand-favicon{width:28px;height:28px;display:block;object-fit:contain;border-radius:8px}
+
+/* Recovery rail must respect the native hidden state; an explicit display:grid
+   otherwise overrides the browser's [hidden] rule and makes the close control lie. */
+.algobot-recovery-rail[hidden]{display:none!important;visibility:hidden!important;pointer-events:none!important}
+.algobot-recovery-rail:not([hidden]){display:grid;pointer-events:auto;isolation:isolate}
+.algobot-recovery-rail button{position:relative;z-index:1;min-width:30px;min-height:30px;touch-action:manipulation}
+.algobot-recovery-rail .algobot-recovery-close{font-size:22px;line-height:1;cursor:pointer}
+@media(max-width:600px){.algobot-recovery-rail{right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));left:max(10px,env(safe-area-inset-left));max-width:none;grid-template-columns:auto minmax(0,1fr) auto auto;gap:7px;padding:10px}.algobot-recovery-rail button{padding:7px 8px}}

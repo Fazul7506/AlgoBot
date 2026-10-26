@@ -325,3 +325,63 @@ body.sidebar-collapsed .app-shell{margin-left:var(--algobot-shell-collapsed);}
   .toast.is-leaving{animation:none;}
   .mobile-menu-button{transition:none;}
 }
+
+
+/* Unified Django + client toast severity system: icon, color, contrast and touch targets. */
+#django-message-stack.toast-stack .toast{
+  grid-template-columns:28px minmax(0,1fr) 28px;
+  align-items:start;
+  gap:9px;
+  max-height:min(30vh,180px);
+  overflow:auto;
+  border-width:1px;
+  border-left-width:4px;
+  backdrop-filter:blur(14px);
+}
+#django-message-stack.toast-stack .toast::before{
+  content:"i";
+  width:25px;height:25px;display:grid;place-items:center;
+  border-radius:50%;font-size:14px;font-weight:900;line-height:1;
+  color:#fff;background:#1677ff;margin-top:1px;
+}
+#django-message-stack.toast-stack .toast.info{
+  color:#dbeafe;background:linear-gradient(135deg,rgba(12,48,88,.98),rgba(10,28,52,.98));
+  border-color:rgba(59,130,246,.55);border-left-color:#3b82f6;
+}
+#django-message-stack.toast-stack .toast.info::before{content:"i";background:#1677ff}
+#django-message-stack.toast-stack .toast.success{
+  color:#dcfce7;background:linear-gradient(135deg,rgba(8,57,43,.98),rgba(8,35,31,.98));
+  border-color:rgba(34,197,94,.48);border-left-color:#22c55e;
+}
+#django-message-stack.toast-stack .toast.success::before{content:"✓";background:#16a34a}
+#django-message-stack.toast-stack .toast.warning{
+  color:#fef3c7;background:linear-gradient(135deg,rgba(73,48,8,.98),rgba(42,31,13,.98));
+  border-color:rgba(245,158,11,.55);border-left-color:#f59e0b;
+}
+#django-message-stack.toast-stack .toast.warning::before{content:"!";background:#d97706}
+#django-message-stack.toast-stack .toast.error,
+#django-message-stack.toast-stack .toast.danger{
+  color:#fee2e2;background:linear-gradient(135deg,rgba(78,20,28,.98),rgba(43,16,25,.98));
+  border-color:rgba(239,68,68,.58);border-left-color:#ef4444;
+}
+#django-message-stack.toast-stack .toast.error::before,
+#django-message-stack.toast-stack .toast.danger::before{content:"×";background:#dc2626;font-size:19px}
+#django-message-stack.toast-stack .toast .toast-message{min-width:0;line-height:1.5;overflow-wrap:anywhere}
+#django-message-stack.toast-stack .toast .toast-close{
+  position:sticky;top:0;z-index:2;align-self:start;
+  width:28px;height:28px;min-width:28px;min-height:28px;
+  padding:0;border:1px solid transparent;border-radius:8px;
+  display:grid;place-items:center;background:rgba(148,163,184,.10);
+  color:inherit;opacity:.9;pointer-events:auto;touch-action:manipulation;
+}
+#django-message-stack.toast-stack .toast .toast-close:hover,
+#django-message-stack.toast-stack .toast .toast-close:focus-visible{
+  opacity:1;background:rgba(148,163,184,.24);border-color:currentColor;outline:2px solid transparent;
+}
+#django-message-stack.toast-stack .toast[role="alert"]{box-shadow:0 14px 34px rgba(127,29,29,.25)}
+#django-message-stack.toast-stack .toast[hidden],
+#django-message-stack.toast-stack[hidden]{display:none}
+@media(max-width:600px){
+  #django-message-stack.toast-stack{max-height:55vh;overflow:visible}
+  #django-message-stack.toast-stack .toast{max-height:24vh;padding:10px;grid-template-columns:25px minmax(0,1fr) 28px;gap:7px}
+}

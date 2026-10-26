@@ -192,8 +192,33 @@ class BacktestViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except ValidationError as exc:
+            # Keep validation failures actionable in server logs without logging
+            # the full request body (which may contain user strategy parameters).
+            log.warning(
+                'Backtest request rejected during serializer validation',
+                extra={
+                    'user_id': getattr(request.user, 'pk', None),
+                    'submitted_fields': sorted(str(key) for key in request.data.keys()) if hasattr(request.data, 'keys') else [],
+                    'validation_errors': exc.detail,
+                },
+            )
+            raise
+        try:
+            self.perform_create(serializer)
+        except ValidationError as exc:
+            log.warning(
+                'Backtest request rejected during domain validation',
+                extra={
+                    'user_id': getattr(request.user, 'pk', None),
+                    'symbol': str(request.data.get('symbol', ''))[:64],
+                    'timeframe': str(request.data.get('timeframe', ''))[:24],
+                    'validation_errors': exc.detail,
+                },
+            )
+            raise
         instance = self.get_queryset().get(pk=serializer.instance.pk)
         return response.Response(self.get_serializer(instance).data, status=status.HTTP_202_ACCEPTED, headers=self.get_success_headers(serializer.data))
 

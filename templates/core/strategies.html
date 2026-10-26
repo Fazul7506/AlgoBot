@@ -2,11 +2,11 @@
 {% load static %}
 {% block title %}Strategies | AlgoBot{% endblock %}
 {% block mobile_title %}Strategies{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/strategy_center.css' %}?v=20261026-reference1">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/strategy_center.css' %}?v=20261026-reference4">{% endblock %}
 {% block content %}
 <section class="strategy-center strategy-reference" data-strategy-center>
   <header class="enterprise-hero strategy-hero">
-    <div class="strategy-title-wrap"><span class="strategy-hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v.5a4 4 0 0 0-3 3.8A3.5 3.5 0 0 0 5.5 17H6a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3h.5a3.5 3.5 0 0 0-.5-6.7 4 4 0 0 0-3-3.8V6a3 3 0 0 0-3-3Z"/><path d="M9 10h.01M15 10h.01M9 15c1.8 1.4 4.2 1.4 6 0M12 7v10"/></svg></span><div><p class="eyebrow">Broker-aware quant engine</p><h1>Strategies</h1><p class="hero-copy">Browse, analyze and configure trading strategies. Review live strategy signals and performance from your account data.</p></div></div>
+    <div class="strategy-title-wrap"><span class="strategy-hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v.5a4 4 0 0 0-3 3.8A3.5 3.5 0 0 0 5.5 17H6a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3h.5a3.5 3.5 0 0 0-.5-6.7 4 4 0 0 0-3-3.8V6a3 3 0 0 0-3-3Z"/><path d="M9 10h.01M15 10h.01M9 15c1.8 1.4 4.2 1.4 6 0M12 7v10"/></svg></span><div><p class="eyebrow">Broker-aware quant engine</p><h1>Strategies</h1><p class="hero-copy">Browse, analyze and deploy proven trading strategies or create your own.</p></div></div>
     <div class="hero-actions"><a class="btn primary" href="/strategies/builder/"><span aria-hidden="true">＋</span> Create Strategy</a></div>
   </header>
 
@@ -30,7 +30,7 @@
 
     <aside class="strategy-detail-column">
       <section class="panel strategy-detail-panel" aria-live="polite" data-s-selected-panel>
-        <div class="strategy-detail-loading"><span class="strategy-detail-icon">✧</span><h2 data-s-selected-name>Strategy overview</h2><p data-s-selected-description>Select a strategy card to inspect its saved configuration and available actions.</p><span class="state-badge available">Waiting for strategy data</span></div>
+        <div class="strategy-detail-loading"><span class="strategy-detail-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v.5a4 4 0 0 0-3 3.8A3.5 3.5 0 0 0 5.5 17H6a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3h.5a3.5 3.5 0 0 0-.5-6.7 4 4 0 0 0-3-3.8V6a3 3 0 0 0-3-3Z"/><path d="M9 10h.01M15 10h.01M9 15c1.8 1.4 4.2 1.4 6 0M12 7v10"/></svg></span><h2 data-s-selected-name>Strategy overview</h2><p data-s-selected-description>Select a strategy card to inspect its saved configuration and available actions.</p><span class="state-badge available">Waiting for strategy data</span></div>
         <div class="strategy-detail-stats">
           <div><span>Win Rate</span><strong data-s-selected-win>—</strong><small data-s-selected-win-change>From saved data</small></div>
           <div><span>Profit Factor</span><strong data-s-selected-pf>—</strong><small>From saved data</small></div>
@@ -41,7 +41,7 @@
 
       <section class="panel strategy-overview-panel">
         <div class="panel-head"><h2>Performance Overview</h2><div class="strategy-range-tabs" role="group" aria-label="Performance period"><button type="button" class="is-active" data-s-range="30d">30D</button><button type="button" data-s-range="90d">90D</button><button type="button" data-s-range="1y">1Y</button><button type="button" data-s-range="all">ALL</button></div></div>
-        <div class="strategy-chart-legend"><span><i class="legend-dot strategy-dot"></i>Selected strategy</span></div>
+        <div class="strategy-chart-legend"><span><i class="legend-dot strategy-dot"></i>Strategy</span><span><i class="legend-dot benchmark-dot"></i>Benchmark</span></div>
         <div class="strategy-chart-area"><svg data-s-performance-chart viewBox="0 0 480 170" role="img" aria-label="Selected strategy historical performance chart" hidden></svg><div class="strategy-chart-empty" data-s-chart-empty>Historical performance series are not available for this selection yet. No synthetic chart data is displayed.</div></div>
         <div class="strategy-recent-performance"><h3>Recent Performance</h3><div class="strategy-recent-row"><span>Last 7 Days</span><strong data-s-period-7>—</strong></div><div class="strategy-recent-row"><span>Last 30 Days</span><strong data-s-period-30>—</strong></div><div class="strategy-recent-row"><span>Last 90 Days</span><strong data-s-period-90>—</strong></div><div class="strategy-recent-row"><span>Max Drawdown</span><strong data-s-max-drawdown>—</strong></div></div>
       </section>
@@ -55,4 +55,4 @@
   </div>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/strategy_center_fix.js' %}?v=20261026-reference1" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/strategy_center_fix.js' %}?v=20261026-reference4" defer></script>{% endblock %}

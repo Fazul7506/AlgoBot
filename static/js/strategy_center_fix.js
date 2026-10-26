@@ -15,11 +15,16 @@
   let selectedStrategyId = null;
   let activeFilter = 'all';
   let selectedRange = '30d';
+  const notify = (message, level = 'info') => {
+    const text = String(message ?? '');
+    if (window.AlgoBotMessage) window.AlgoBotMessage(text, level);
+    else window.alert(text);
+  };
   const strategyMetrics = s => s?.metrics || s?.statistics || s?.performance || {};
-  const metric = (s, ...keys) => { const sources=[s,strategyMetrics(s),activeState(s),activeState(s)?.metrics||{}]; for(const key of keys) for(const source of sources){const v=source?.[key];if(v!==null&&v!==undefined&&v!=='')return v;} return null; };
+  const metric = (s, ...keys) => { const perf=Array.isArray(performanceRows)?(performanceRows.find(x=>String(x.strategy_id??x.strategyId??'')===String(s?.id))||performanceRows.find(x=>String(x.strategy_name||x.strategy||'').toLowerCase()===String(s?.name||s?.slug||'').toLowerCase())):null; const sources=[s,strategyMetrics(s),activeState(s),activeState(s)?.metrics||{},perf]; for(const key of keys) for(const source of sources){const v=source?.[key];if(v!==null&&v!==undefined&&v!=='')return v;} return null; };
   const displayMetric = (v,suffix='') => v===null||v===undefined||v===''?'—':`${Number.isFinite(Number(v))?Number(v).toLocaleString(undefined,{maximumFractionDigits:2}):esc(v)}${suffix}`;
   const percentMetric = v => {if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?`${(Math.abs(n)<=1?n*100:n).toFixed(1)}%`:esc(v);};
-  const strategyIcon = s => { const cat=strategyCategory(s); const paths={ai:'<path d="M12 3a3 3 0 0 0-3 3v.5a4 4 0 0 0-3 3.8A3.5 3.5 0 0 0 5.5 17H6a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3h.5a3.5 3.5 0 0 0-.5-6.7 4 4 0 0 0-3-3.8V6a3 3 0 0 0-3-3Z"/><path d="M9 10h.01M15 10h.01M9 15c1.8 1.4 4.2 1.4 6 0M12 7v10"/>',trend:'<path d="M3 17 9 11l4 3 8-9"/><path d="M15 5h6v6"/>',mean:'<path d="M4 7h16M4 17h16"/><path d="m8 4-4 3 4 3m8 4 4 3-4 3"/>',scalping:'<circle cx="12" cy="12" r="8"/><path d="m12 7 2.5 5-2.5 5-2.5-5 2.5-5Z"/>',other:'<path d="M4 18V6m0 12h16"/><path d="m7 14 4-4 3 2 5-6"/>'}; return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'+(paths[cat]||paths.other)+'</svg>'; };
+  const strategyIcon = s => { const cat=strategyCategory(s); const name=String(s.name||s.slug||'').toLowerCase(); const paths={ai:'<path d="M12 3a3 3 0 0 0-3 3v.5a4 4 0 0 0-3 3.8A3.5 3.5 0 0 0 5.5 17H6a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3h.5a3.5 3.5 0 0 0-.5-6.7 4 4 0 0 0-3-3.8V6a3 3 0 0 0-3-3Z"/><path d="M9 10h.01M15 10h.01M9 15c1.8 1.4 4.2 1.4 6 0M12 7v10M7 7l2 2m8-2-2 2"/>',trend:'<path d="M3 17 9 11l4 3 8-9"/><path d="M15 5h6v6"/>',mean:'<path d="M4 7h16M4 17h16"/><path d="m8 4-4 3 4 3m8 4 4 3-4 3"/><circle cx="12" cy="12" r="2"/>',scalping:'<circle cx="12" cy="12" r="8"/><path d="m12 7 2.5 5-2.5 5-2.5-5 2.5-5Z"/><path d="M3 12h3m12 0h3"/>',other:'<circle cx="12" cy="12" r="8"/><path d="M12 7v10m-5-5h10"/>'}; if(/volatility|breakout/.test(name))paths.other='<circle cx="12" cy="12" r="8"/><path d="m12 4 2 5 5-2-2 5 3 3-6 1-2 4-2-5-5-1 4-4Z"/>'; if(/sentiment/.test(name))paths.other='<path d="M12 3a9 9 0 1 0 9 9h-9Z"/><path d="M14 3.5A9 9 0 0 1 20.5 10H14Z"/>'; return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'+(paths[cat]||paths.other)+'</svg>'; };
   const strategyCategory = s => {const t=String(s.category||s.strategy_type||s.type||'').toLowerCase(),name=String(s.name||s.slug||'').toLowerCase(),tags=Array.isArray(s.tags)?s.tags.join(' ').toLowerCase():'';const aiLabel=/^(ai|ai powered|ai strategy|machine learning|artificial intelligence)$/.test(t)||/(^|[^a-z])(ai powered|ai strategy|artificial intelligence|machine learning)([^a-z]|$)/.test(`${name} ${tags}`)||/(^|[\s_-])ai([\s_-]|$)/.test(`${name} ${tags}`);if(s.ai_powered===true||s.is_ai_powered===true||aiLabel)return 'ai';if(/mean|reversion|rsi/.test(`${t} ${name} ${tags}`))return 'mean';if(/scalp/.test(`${t} ${name} ${tags}`))return 'scalping';if(/trend|breakout/.test(`${t} ${name} ${tags}`))return 'trend';return 'other';};
 
   function counts(data, signals) {
@@ -28,6 +33,27 @@
     if(enabled)enabled.textContent = Number.isFinite(Number(data?.configured_count)) ? Number(data.configured_count) : strategies.filter(s => s.configured).length;
     if(running)running.textContent = Number.isFinite(Number(data?.running_count)) ? Number(data.running_count) : strategies.filter(s => s.running).length;
     if(signalCount)signalCount.textContent = signals.length;
+  }
+
+  function performanceForStrategy(s) {
+    return performanceRows.find(x => String(x.strategy_id ?? x.strategyId ?? x.id ?? '') === String(s?.id))
+      || performanceRows.find(x => String(x.strategy_name || x.strategy || '').toLowerCase() === String(s?.name || s?.slug || '').toLowerCase())
+      || {};
+  }
+
+  function sparklineFor(s) {
+    const p = performanceForStrategy(s);
+    const rangeKeys = selectedRange === '90d' ? ['equity_90d','series_90d','return_series_90d']
+      : selectedRange === '1y' ? ['equity_1y','series_1y','return_series_1y']
+      : selectedRange === 'all' ? ['equity_curve','equity_series','history','return_series']
+      : ['equity_30d','series_30d','return_series_30d','equity_curve','equity_series'];
+    let series = null;
+    for (const key of rangeKeys) if (Array.isArray(p?.[key]) && p[key].length > 1) { series = p[key]; break; }
+    const values = Array.isArray(series) ? series.map(x => Number(typeof x === 'object' ? (x.value ?? x.equity ?? x.balance ?? x.return_pct ?? x.return ?? x.y) : x)).filter(Number.isFinite) : [];
+    if (values.length < 2) return '<span class="strategy-sparkline-empty" aria-label="No historical series available">—</span>';
+    const min = Math.min(...values), max = Math.max(...values), span = max - min || 1, w = 112, h = 42, pad = 3;
+    const path = values.map((v,i) => (i ? 'L' : 'M') + (pad + i * (w - pad * 2) / (values.length - 1)).toFixed(1) + ' ' + (h - pad - ((v - min) / span) * (h - pad * 2)).toFixed(1)).join(' ');
+    return '<svg class="strategy-card-sparkline" viewBox="0 0 112 42" role="img" aria-label="Historical strategy performance"><path d="' + path + '" fill="none" stroke="#08d4a4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   }
 
   function renderList() {
@@ -57,6 +83,7 @@
         <span class="state-badge ${stateClass}">${state}</span><p class="strategy-card-description">${description}</p>
         <div class="strategy-tags">${(Array.isArray(s.tags)?s.tags:[]).slice(0,3).map(t=>'<span>'+esc(t)+'</span>').join('')||'<span>'+category+'</span>'}</div>
         <div class="strategy-card-metrics"><div><span>Win Rate</span><strong>${win}</strong><small>Saved metric</small></div><div><span>Total Trades</span><strong>${trades}</strong><small>Available records</small></div><div><span>Profit Factor</span><strong>${pf}</strong><small>Saved metric</small></div></div>
+        <div class="strategy-card-chart" aria-label="Strategy historical performance">${sparklineFor(s)}</div>
         <div class="strategy-actions-inline"><span class="strategy-active-indicator">${running?'● Running':paused?'● Paused':configured?'● Configured':'● Available'}</span><button class="btn small ghost" type="button" data-strategy-select="${esc(s.id)}">View Details</button>${action}${research}<a class="btn small ghost" href="${tradeUrl(s)}">Trade</a></div>
       </article>`;
     }).join('') : '<div class="empty-state">No strategies match this category or search.</div>';
@@ -103,8 +130,13 @@
     let out='';
     for(let i=0;i<=4;i++){const y=top+i*ph/4,val=max-i*span/4;out+=`<path d="M${pad} ${y}H${w-right}" stroke="#15385b" stroke-width="1"/><text x="${pad-6}" y="${y+3}" text-anchor="end" fill="#9db6d6" font-size="9">${val.toFixed(1)}%</text>`;}
     const makePath=arr=>arr.map((v,i)=>(i?'L':'M')+xFor(i,arr.length).toFixed(1)+' '+yFor(v).toFixed(1)).join(' ');
+    const strategyPath=makePath(values);
+    const baseline=yFor(Math.max(min,Math.min(max,0)));
+    const areaPath=strategyPath+` L${xFor(values.length-1,values.length).toFixed(1)} ${baseline.toFixed(1)} L${xFor(0,values.length).toFixed(1)} ${baseline.toFixed(1)} Z`;
+    out+='<defs><linearGradient id="strategyEquityFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#08d4a4" stop-opacity=".30"/><stop offset="100%" stop-color="#08d4a4" stop-opacity=".015"/></linearGradient></defs>';
+    out+=`<path d="${areaPath}" fill="url(#strategyEquityFill)" stroke="none"/>`;
     if(benchmark.length>1)out+=`<path d="${makePath(benchmark)}" fill="none" stroke="#1685ff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
-    out+=`<path d="${makePath(values)}" fill="none" stroke="#08d4a4" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    out+=`<path d="${strategyPath}" fill="none" stroke="#08d4a4" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
     const labels=Array.isArray(series)&&typeof series[0]==='object'?series.map(x=>x.date??x.timestamp??x.label??''):[],last=labels.length?labels[labels.length-1]:'';
     if(last)out+=`<text x="${w-right}" y="${h-5}" text-anchor="end" fill="#9db6d6" font-size="9">${String(last).slice(0,16)}</text>`;
     svg.innerHTML=out;svg.hidden=false;empty.hidden=true;
@@ -114,13 +146,24 @@
 
   async function load() {
     const data = window.AlgoBotFrontendData;
-    if (!data?.request) return;
+    // Keep the page usable during bootstrap races or if the shared transport
+    // registry fails to initialize. All fallback requests stay same-origin.
+    const request = async path => {
+      if (data?.request) return data.request(path);
+      const response = await fetch(path, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const raw = await response.text();
+      let payload = {};
+      try { payload = raw ? JSON.parse(raw) : {}; }
+      catch (_) { payload = { detail: raw || `Request failed (${response.status})` }; }
+      if (!response.ok) throw new Error(payload.detail || payload.message || `Request failed (${response.status})`);
+      return payload;
+    };
     $('[data-s-list]').innerHTML = '<div class="empty-state">Loading strategy control plane…</div>';
     try {
       const [sr, sig, perf] = await Promise.allSettled([
-        data.request('/api/strategies/available/'),
-        data.request('/api/strategies/signals/'),
-        data.request('/api/strategies/performance/')
+        request('/api/strategies/available/'),
+        request('/api/strategies/signals/'),
+        request('/api/strategies/performance/')
       ]);
       if (sr.status === 'rejected') throw sr.reason;
       const payload = sr.value || {};
@@ -149,13 +192,13 @@
     const data = window.AlgoBotFrontendData;
     if (!data?.request) throw new Error('Strategy service is not ready.');
     const result = await data.request(path, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body || {})});
-    window.alert(result?.detail || result?.message || successMessage);
+    notify(result?.detail || result?.message || successMessage, 'success');
     await load();
     return result;
   }
-  async function useStrategy(id, configId) { try { await post(`/api/strategies/${encodeURIComponent(id)}/switch/`, configId ? {configuration_id:Number(configId)} : {}, 'Strategy is now the active configured strategy.'); } catch(e) { window.alert(e?.message || 'Unable to switch strategy.'); } }
-  async function disconnectStrategy(id, configId) { try { await post(`/api/strategies/${encodeURIComponent(id)}/disconnect/`, configId ? {configuration_id:Number(configId)} : {}, 'Strategy disconnected. Its configuration was preserved.'); } catch(e) { window.alert(e?.message || 'Unable to disconnect strategy.'); } }
-  async function action(path, requireBroker=false) { try { if(requireBroker) window.AlgoBotFrontendData.requireConnected('run executable strategies'); await post(path, {}, 'Strategy action completed.'); } catch(e) { window.alert(e?.message || 'Strategy action failed.'); } }
+  async function useStrategy(id, configId) { try { await post(`/api/strategies/${encodeURIComponent(id)}/switch/`, configId ? {configuration_id:Number(configId)} : {}, 'Strategy is now the active configured strategy.'); } catch(e) { notify(e?.message || 'Unable to switch strategy.', 'error'); } }
+  async function disconnectStrategy(id, configId) { try { await post(`/api/strategies/${encodeURIComponent(id)}/disconnect/`, configId ? {configuration_id:Number(configId)} : {}, 'Strategy disconnected. Its configuration was preserved.'); } catch(e) { notify(e?.message || 'Unable to disconnect strategy.', 'error'); } }
+  async function action(path, requireBroker=false) { try { if(requireBroker) window.AlgoBotFrontendData.requireConnected('run executable strategies'); await post(path, {}, 'Strategy action completed.'); } catch(e) { notify(e?.message || 'Strategy action failed.', 'error'); } }
 
   function boot() {
     document.querySelectorAll('[data-strategy-run]').forEach(b => b.addEventListener('click', () => action('/api/strategies/run/', true)));

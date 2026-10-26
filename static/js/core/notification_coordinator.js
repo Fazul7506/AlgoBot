@@ -11,6 +11,7 @@
   const GENERIC = new Set([
     'failed to fetch',
     'the data connection is temporarily unavailable. please try again.',
+    'the data connection is temporarily unavailable. use retry when you want to try again.',
     'data connection issue',
     'data connection issue failed to fetch'
   ]);
@@ -28,8 +29,10 @@
     const nodes = [...(root.querySelectorAll?.('.toast-stack .toast, #django-message-stack .toast') || [])];
     const seen = new Set();
     nodes.forEach(node => {
-      const text = normalize(node.textContent);
+      const text = normalize(node.querySelector('.toast-message')?.textContent || node.textContent.replace(/×/g, ''));
       if (isGeneric(text)) {
+        // Keep the recoverable-error rail as the sole owner of generic network
+        // failures; remove duplicate toast copies without re-triggering observers.
         node.remove();
         return;
       }
