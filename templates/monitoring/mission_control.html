@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Mission Control | AlgoBot{% endblock %}
-{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-mission-control-logger3">{% endblock %}
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-mission-control-logger5">{% endblock %}
 {% block content %}
 <main id="main-content" class="monitoring-workspace" data-monitoring-dashboard>
   <header class="monitoring-hero">
@@ -21,9 +21,11 @@
 
       {% if request.user.is_staff %}
       <section class="monitoring-panel" aria-labelledby="mission-log-title">
-        <div class="monitoring-panel-heading"><div><h2 id="mission-log-title">Live activity log</h2><p>Render-style operational events from the application, newest first. Updates automatically.</p></div><span class="monitoring-updated"><span data-mission-log-count>{{ recent_logs|length }}</span> events loaded</span></div>
+        <div class="monitoring-panel-heading"><div><h2 id="mission-log-title">Live activity log</h2><p>Render-style operational events from the application, newest first. Refreshes every 15 seconds while this page is visible.</p></div><span class="monitoring-updated"><span data-mission-log-count>{{ recent_logs|length }}</span> events loaded</span></div>
         <div class="mission-log-controls" role="search" aria-label="Filter activity logs">
-          <label>Search events <input type="search" data-mission-log-search placeholder="Search message, source or path"></label>
+          <label>Search events <input type="search" data-mission-log-search placeholder="Search message or category" autocomplete="off"></label>
+          <label>Source / module <input type="search" data-mission-log-source placeholder="e.g. broker, backtesting" autocomplete="off"></label>
+          <label>Request / operation ID <input type="search" data-mission-log-operation placeholder="Correlation ID" autocomplete="off"></label>
           <label>Time window <select data-mission-log-window><option value="15">Last 15 minutes</option><option value="60" selected>Last 60 minutes</option><option value="360">Last 6 hours</option><option value="1440">Last 24 hours</option><option value="all">All retained logs</option></select></label>
           <label>Severity <select data-mission-log-level><option value="">All levels</option><option value="DEBUG">Debug</option><option value="INFO">Info</option><option value="WARNING">Warning</option><option value="ERROR">Error</option><option value="CRITICAL">Critical</option></select></label>
           <label>Area <select data-mission-log-stream><option value="">All areas</option><option value="application">Application</option><option value="broker">Broker</option><option value="trading">Trading</option><option value="security">Security</option><option value="monitoring">Monitoring</option><option value="celery">Background workers</option><option value="api">API</option><option value="database">Database</option><option value="infrastructure">Infrastructure</option><option value="system">System</option></select></label>
@@ -71,7 +73,7 @@
       <div class="monitoring-security-note"><span aria-hidden="true">✓</span><div><strong>Monitoring is account-scoped</strong><p>Service details and events are limited to the information your account is authorized to view.</p></div></div>
     </aside>
   </div>
-  <p class="monitoring-note">System summary refreshes on request. The staff activity stream refreshes every five seconds; it does not change trading settings.</p>
+  <p class="monitoring-note">System summary refreshes on request. The staff activity stream refreshes every 15 seconds while visible; viewing older events pauses automatic refresh. It does not change trading settings.</p>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/monitoring_dashboard.js' %}?v=20261026-mission-control-logger3" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/monitoring_dashboard.js' %}?v=20261026-mission-control-logger5" defer></script>{% endblock %}

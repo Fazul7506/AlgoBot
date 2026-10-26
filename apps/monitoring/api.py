@@ -135,6 +135,7 @@ def mission_events(request):
     status = str(request.query_params.get("status") or "").strip().lower()
     category = str(request.query_params.get("category") or "").strip().lower()
     source = str(request.query_params.get("source") or "").strip()[:120]
+    operation_id = str(request.query_params.get("operation_id") or "").strip()[:100]
     search = str(request.query_params.get("search") or "").strip()[:160]
     try:
         offset = min(max(int(request.query_params.get("offset", 0)), 0), 100000)
@@ -153,6 +154,8 @@ def mission_events(request):
         events = events.filter(stream__iexact=stream)
     if source:
         events = events.filter(source__icontains=source)
+    if operation_id:
+        events = events.filter(context__operation_id__icontains=operation_id)
     if category:
         events = events.filter(context__category__iexact=category)
     if status:
