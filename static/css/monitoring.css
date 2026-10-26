@@ -115,3 +115,25 @@
 .rb-log-table .mission-log-details{max-width:min(75vw,700px);overflow:auto;padding:9px;border:1px solid #174477;border-radius:7px;background:#031226;color:#c9def7;font-size:.72rem;white-space:pre-wrap}
 .mission-control-logger-only .monitoring-footnote{padding-top:0}
 @media(max-width:640px){.mission-control-logger-only .monitoring-hero{padding:14px}.mission-control-logger-only .monitoring-hero-icon{display:none}.rb-log-toolbar{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}.rb-log-actions{grid-column:1/-1}.rb-log-action{flex:1}.rb-log-body-wrap{padding:0 7px 8px}.rb-log-table{min-width:640px}}
+
+
+/* Original-style Mission Control log stream; intentionally no paging controls. */
+[data-mission-logger] .rb-log-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px}
+[data-mission-logger] .rb-log-select{margin-right:auto;color:var(--text-primary,#e6edf3);font-size:.84rem}
+[data-mission-logger] .rb-log-control,[data-mission-logger] .rb-icon-btn{min-height:34px;padding:6px 11px;border:1px solid var(--line,rgba(148,163,184,.28));border-radius:8px;background:var(--panel2,#182235);color:inherit;font:inherit;font-size:.78rem;cursor:pointer}
+[data-mission-logger] .rb-log-control.rb-tail-active{border-color:var(--accent,#38bdf8);color:var(--accent,#7dd3fc)}
+[data-mission-logger] .rb-search{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--line,rgba(148,163,184,.2));border-bottom:1px solid var(--line,rgba(148,163,184,.2))}
+[data-mission-logger] .rb-search input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line,rgba(148,163,184,.28));border-radius:7px;background:var(--panel2,#101923);color:inherit;font:inherit}
+[data-mission-logger] .rb-log-head{display:flex;justify-content:space-between;gap:12px;padding:9px 14px;color:var(--muted,#9aa9b9);font-size:.75rem}
+[data-mission-logger] .rb-log-body{max-height:min(68vh,820px);overflow:auto;padding:6px 0;background:var(--surface,#0b1118);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.78rem}
+[data-mission-logger] .rb-log-line{display:grid;grid-template-columns:94px 76px minmax(0,1fr);gap:10px;padding:6px 14px;line-height:1.5;border-bottom:1px solid rgba(148,163,184,.07)}
+[data-mission-logger] .rb-log-time{color:#8b9bb0;white-space:nowrap}
+[data-mission-logger] .rb-log-level{font-weight:700;color:#93c5fd;text-transform:lowercase}
+[data-mission-logger] .rb-log-level.warning{color:#fbbf24}
+[data-mission-logger] .rb-log-level.error,[data-mission-logger] .rb-log-level.critical{color:#f87171}
+[data-mission-logger] .rb-log-level.debug{color:#a1a1aa}
+[data-mission-logger] .rb-log-message{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap;color:var(--text-primary,#e6edf3)}
+[data-mission-logger] .rb-log-meta{display:block;margin-top:2px;color:#8293a8;font-size:.72rem}
+[data-mission-logger].is-fullscreen{position:fixed;inset:12px;z-index:10000;display:flex;flex-direction:column;margin:0;max-width:none;background:var(--surface,#0b1118);box-shadow:0 0 0 100vmax rgba(0,0,0,.72)}
+[data-mission-logger].is-fullscreen .rb-log-body{flex:1;max-height:none}
+@media(max-width:640px){[data-mission-logger] .rb-log-line{grid-template-columns:72px 62px minmax(0,1fr);gap:6px;padding-inline:8px;font-size:.72rem}[data-mission-logger] .rb-log-toolbar{padding:8px}[data-mission-logger] .rb-log-select{flex-basis:100%}}
