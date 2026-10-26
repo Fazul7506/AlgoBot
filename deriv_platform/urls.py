@@ -1,5 +1,6 @@
 """Canonical URL configuration for the AlgoBot Django project."""
 from django.contrib import admin
+from django.contrib.admin.views.decorators import staff_member_required
 from django.urls import path, re_path, include
 from django.views.generic import RedirectView
 from rest_framework.routers import DefaultRouter
@@ -112,6 +113,7 @@ urlpatterns = [
     path("notifications/", notification_channels_page, name="notifications_page"),
     path("monitoring/", include("apps.monitoring.urls")),
     path("mission-control/", monitoring_views.mission_control, name="mission-control"),
+    path("operations/mission-control/", staff_member_required(monitoring_views.mission_control), name="mission-control-page"),
     path("api/monitoring/", include("apps.monitoring.urls")),
     path("api/security/sessions/", include("core.security_sessions_urls")),
     path("observability/", login_required(lambda request: render(request, "observability/control_center.html")), name="observability_control_center"),
@@ -122,6 +124,8 @@ urlpatterns = [
     path("automation/", login_required(lambda request: operations_center(request, "automation")), name="automation_page"),
     path("operations/audit/", login_required(lambda request: operations_center(request, "audit")), name="audit_center"),
     path("operations/security/", login_required(lambda request: operations_center(request, "security")), name="security_center"),
+    path("operations/candle-backfill/", RedirectView.as_view(url="/operations/mission-control/", permanent=False), name="retired_candle_backfill_redirect"),
+    path("operations/candle-backfill/control/", RedirectView.as_view(url="/operations/mission-control/", permanent=False), name="retired_candle_backfill_control_redirect"),
     path("operations/broker-integrations/", broker_integration_management_page, name="broker_integration_management"),
     path("operations/broker-integrations/assistant/", broker_integration_assistant_chat, name="broker_integration_assistant_chat"),
     path("operations/<str:module>/", login_required(operations_module_page), name="operations_module"),
