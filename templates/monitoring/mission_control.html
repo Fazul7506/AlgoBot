@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Mission Control | AlgoBot{% endblock %}
-{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-render-console1">{% endblock %}
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-render-console2">{% endblock %}
 {% block content %}
 <main id="main-content" class="monitoring-workspace mission-control-logger-only render-console" data-monitoring-dashboard>
   <header class="monitoring-hero">
@@ -67,4 +67,4 @@
   </section>
 </main>
 {% endblock %}
-{% block extra_js %}{{ block.super }}<script src="{% static 'js/mission_control_logger.js' %}?v=20261026-render-console1" defer></script>{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'js/mission_control_logger.js' %}?v=20261026-render-console2" defer></script>{% endblock %}
