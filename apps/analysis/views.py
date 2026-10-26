@@ -303,6 +303,9 @@ def analysis_data(request):
         try:
             if active_account is None:
                 raise RuntimeError("Connect and select a broker account before refreshing historical data.")
+            broker_code = str(getattr(active_account.broker, "broker_type", "") or active_account.broker.name).strip().lower()
+            if str(market.broker).strip().lower() != broker_code:
+                raise RuntimeError("The selected instrument does not belong to your connected broker. Choose an instrument from that broker catalogue.")
             adapter = BrokerRegistry().adapter(active_account.broker, active_account)
             is_tick_history = canonical_timeframe == "tick" or TIMEFRAMES[canonical_timeframe] < 60
             granularity = None if is_tick_history else int(TIMEFRAMES[canonical_timeframe])
