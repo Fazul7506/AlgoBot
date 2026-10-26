@@ -11,35 +11,105 @@
   const backtestUrl = s => { const c = activeState(s); const q = new URLSearchParams({strategy_id:String(s.id || ''),strategy:String(s.slug || s.name || '')}); if(c?.symbol) q.set('symbol', c.symbol); if(c?.timeframe) q.set('timeframe', c.timeframe); return `/backtesting/?${q.toString()}`; };
   const builderUrl = s => `/strategies/builder/?strategy=${encodeURIComponent(s.slug || '')}`;
   let strategies = [];
+  let performanceRows = [];
+  let selectedStrategyId = null;
+  let activeFilter = 'all';
+  let selectedRange = '30d';
+  const strategyMetrics = s => s?.metrics || s?.statistics || s?.performance || {};
+  const metric = (s, ...keys) => { const sources=[s,strategyMetrics(s),activeState(s),activeState(s)?.metrics||{}]; for(const key of keys) for(const source of sources){const v=source?.[key];if(v!==null&&v!==undefined&&v!=='')return v;} return null; };
+  const displayMetric = (v,suffix='') => v===null||v===undefined||v===''?'—':`${Number.isFinite(Number(v))?Number(v).toLocaleString(undefined,{maximumFractionDigits:2}):esc(v)}${suffix}`;
+  const percentMetric = v => {if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?`${(Math.abs(n)<=1?n*100:n).toFixed(1)}%`:esc(v);};
+  const strategyIcon = s => { const cat=strategyCategory(s); const paths={ai:'<path d="M12 3a3 3 0 0 0-3 3v.5a4 4 0 0 0-3 3.8A3.5 3.5 0 0 0 5.5 17H6a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3h.5a3.5 3.5 0 0 0-.5-6.7 4 4 0 0 0-3-3.8V6a3 3 0 0 0-3-3Z"/><path d="M9 10h.01M15 10h.01M9 15c1.8 1.4 4.2 1.4 6 0M12 7v10"/>',trend:'<path d="M3 17 9 11l4 3 8-9"/><path d="M15 5h6v6"/>',mean:'<path d="M4 7h16M4 17h16"/><path d="m8 4-4 3 4 3m8 4 4 3-4 3"/>',scalping:'<circle cx="12" cy="12" r="8"/><path d="m12 7 2.5 5-2.5 5-2.5-5 2.5-5Z"/>',other:'<path d="M4 18V6m0 12h16"/><path d="m7 14 4-4 3 2 5-6"/>'}; return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'+(paths[cat]||paths.other)+'</svg>'; };
+  const strategyCategory = s => {const t=String(s.category||s.strategy_type||s.type||'').toLowerCase(),name=String(s.name||s.slug||'').toLowerCase(),tags=Array.isArray(s.tags)?s.tags.join(' ').toLowerCase():'';const aiLabel=/^(ai|ai powered|ai strategy|machine learning|artificial intelligence)$/.test(t)||/(^|[^a-z])(ai powered|ai strategy|artificial intelligence|machine learning)([^a-z]|$)/.test(`${name} ${tags}`)||/(^|[\s_-])ai([\s_-]|$)/.test(`${name} ${tags}`);if(s.ai_powered===true||s.is_ai_powered===true||aiLabel)return 'ai';if(/mean|reversion|rsi/.test(`${t} ${name} ${tags}`))return 'mean';if(/scalp/.test(`${t} ${name} ${tags}`))return 'scalping';if(/trend|breakout/.test(`${t} ${name} ${tags}`))return 'trend';return 'other';};
 
   function counts(data, signals) {
-    $('[data-s-total]').textContent = strategies.length;
-    $('[data-s-enabled]').textContent = Number.isFinite(Number(data?.configured_count)) ? Number(data.configured_count) : strategies.filter(s => s.configured).length;
-    $('[data-s-running]').textContent = Number.isFinite(Number(data?.running_count)) ? Number(data.running_count) : strategies.filter(s => s.running).length;
-    $('[data-s-signals]').textContent = signals.length;
+    const total=$('[data-s-total]'),enabled=$('[data-s-enabled]'),running=$('[data-s-running]'),signalCount=$('[data-s-signals]');
+    if(total)total.textContent = strategies.length;
+    if(enabled)enabled.textContent = Number.isFinite(Number(data?.configured_count)) ? Number(data.configured_count) : strategies.filter(s => s.configured).length;
+    if(running)running.textContent = Number.isFinite(Number(data?.running_count)) ? Number(data.running_count) : strategies.filter(s => s.running).length;
+    if(signalCount)signalCount.textContent = signals.length;
   }
 
   function renderList() {
     const q = String($('[data-s-search]')?.value || '').trim().toLowerCase();
-    const visible = strategies.filter(s => String(s.name || s.slug || '').toLowerCase().includes(q));
+    const visible = strategies.filter(s => {
+      const text = `${s.name||s.slug||''} ${s.description||''} ${s.category||''} ${(s.tags||[]).join?.(' ')||''}`.toLowerCase();
+      return text.includes(q) && (activeFilter==='all'||strategyCategory(s)===activeFilter);
+    });
+    const categoryCounts={all:strategies.length,ai:0,trend:0,mean:0,scalping:0};
+    strategies.forEach(s=>{const cat=strategyCategory(s);if(Object.prototype.hasOwnProperty.call(categoryCounts,cat))categoryCounts[cat]++;});
+    Object.entries(categoryCounts).forEach(([k,v])=>{const n=$(`[data-filter-count="${k}"]`);if(n)n.textContent=v;});
     $('[data-s-list]').innerHTML = visible.length ? visible.map(s => {
-      const configs = Array.isArray(s.configurations) ? s.configurations : [];
-      const active = activeState(s);
-      const connected = Boolean(s.connected || active);
-      const running = Boolean(s.running || (active && active.enabled));
-      const paused = Boolean(s.paused || (connected && !running));
-      const configured = Boolean(s.configured || configs.length);
-      const state = running ? 'RUNNING' : paused ? 'PAUSED' : configured ? 'CONFIGURED' : 'AVAILABLE';
-      const stateClass = running ? 'active' : (paused ? 'paused' : (configured ? 'configured' : 'available'));
-      const detail = active ? `${esc(window.AlgoBotMarketPicker?.marketName({value:active.symbol||'',textContent:active.display_name||active.symbol||''})||active.display_name||'Market instrument')} · ${esc(active.timeframe || '—')}` : (configured ? `${configs.length} saved configuration${configs.length === 1 ? '' : 's'}` : 'Not configured');
-      const action = connected
-        ? `<button class="btn small ghost" type="button" data-strategy-disconnect data-strategy-id="${esc(s.id)}" data-config-id="${esc(active?.id || '')}">Disconnect</button>`
-        : configured
-          ? `<button class="btn small primary" type="button" data-strategy-switch data-strategy-id="${esc(s.id)}" data-config-id="${esc((configs.find(c => c.enabled) || configs[0])?.id || '')}">Use strategy</button>`
-          : `<a class="btn small ghost" href="${builderUrl(s)}">Configure</a>`;
-      const research = configured ? `<a class="btn small ghost" href="${backtestUrl(s)}">Backtest</a>` : '';
-      return `<article class="strategy-row strategy-control-row"><div class="strategy-row-main"><strong>${esc(s.name || s.slug || 'Strategy')}</strong><small>${esc(s.category || 'Strategy')} · v${esc(s.version || '1.0.0')}</small><small class="strategy-config-detail">${detail}</small></div><span class="state-badge ${stateClass}">${state}</span><div class="strategy-actions-inline">${action}${research}<a class="btn small ghost" href="${tradeUrl(s)}">Trade</a></div></article>`;
-    }).join('') : '<div class="empty-state">No strategies match your search.</div>';
+      const configs=Array.isArray(s.configurations)?s.configurations:[],active=activeState(s);
+      const connected=Boolean(s.connected||active),running=Boolean(s.running||(active&&active.enabled)),paused=Boolean(s.paused||(connected&&!running)),configured=Boolean(s.configured||configs.length);
+      const state=running?'RUNNING':paused?'PAUSED':configured?'CONFIGURED':'AVAILABLE';
+      const stateClass=running?'active':paused?'paused':configured?'configured':'available';
+      const category=esc(s.category||s.strategy_type||'Strategy');
+      const icon=strategyIcon(s);
+      const description=esc(s.description||s.summary||'Configure this strategy to inspect supported markets, execution settings and available metrics.');
+      const detail=active?`${esc(window.AlgoBotMarketPicker?.marketName({value:active.symbol||'',textContent:active.display_name||active.symbol||''})||active.display_name||active.symbol||'Market instrument')} · ${esc(active.timeframe||'Timeframe not set')}`:configured?`${configs.length} saved configuration${configs.length===1?'':'s'}`:'Not configured';
+      const win=percentMetric(metric(s,'win_rate','winRate')),trades=displayMetric(metric(s,'total_trades','trade_count','trades_count')),pf=displayMetric(metric(s,'profit_factor','profitFactor'));
+      const selected=String(s.id)===String(selectedStrategyId);
+      const action=connected?`<button class="btn small ghost" type="button" data-strategy-disconnect data-strategy-id="${esc(s.id)}" data-config-id="${esc(active?.id||'')}">Disconnect</button>`:configured?`<button class="btn small primary" type="button" data-strategy-switch data-strategy-id="${esc(s.id)}" data-config-id="${esc((configs.find(c=>c.enabled)||configs[0])?.id||'')}">Use strategy</button>`:`<a class="btn small ghost" href="${builderUrl(s)}">Configure</a>`;
+      const research=configured?`<a class="btn small ghost" href="${backtestUrl(s)}">Backtest</a>`:'';
+      return `<article class="strategy-control-row ${selected?'is-selected':''}" data-strategy-card data-strategy-id="${esc(s.id)}">
+        <div class="strategy-card-heading"><span class="strategy-card-icon strategy-icon-${strategyCategory(s)}">${icon}</span><div class="strategy-row-main"><strong>${esc(s.name||s.slug||'Strategy')}</strong><small>${category}${s.version?' · v'+esc(s.version):''}</small><small class="strategy-config-detail">${detail}</small></div></div>
+        <span class="state-badge ${stateClass}">${state}</span><p class="strategy-card-description">${description}</p>
+        <div class="strategy-tags">${(Array.isArray(s.tags)?s.tags:[]).slice(0,3).map(t=>'<span>'+esc(t)+'</span>').join('')||'<span>'+category+'</span>'}</div>
+        <div class="strategy-card-metrics"><div><span>Win Rate</span><strong>${win}</strong><small>Saved metric</small></div><div><span>Total Trades</span><strong>${trades}</strong><small>Available records</small></div><div><span>Profit Factor</span><strong>${pf}</strong><small>Saved metric</small></div></div>
+        <div class="strategy-actions-inline"><span class="strategy-active-indicator">${running?'● Running':paused?'● Paused':configured?'● Configured':'● Available'}</span><button class="btn small ghost" type="button" data-strategy-select="${esc(s.id)}">View Details</button>${action}${research}<a class="btn small ghost" href="${tradeUrl(s)}">Trade</a></div>
+      </article>`;
+    }).join('') : '<div class="empty-state">No strategies match this category or search.</div>';
+    renderComparison();
+    const selected=strategies.find(s=>String(s.id)===String(selectedStrategyId))||visible[0]||strategies[0]||null;
+    if(selected && String(selected.id)!==String(selectedStrategyId)) selectedStrategyId=selected.id;
+    renderSelected(selected);
+  }
+
+  function renderComparison(){
+    const body=$('[data-s-comparison]');if(!body)return;
+    body.innerHTML=strategies.slice(0,12).map(s=>{
+      const running=Boolean(s.running||(activeState(s)&&activeState(s).enabled)),configured=Boolean(s.configured||(s.configurations||[]).length);
+      return `<tr><td>${esc(s.name||s.slug||'Strategy')}</td><td>${percentMetric(metric(s,'win_rate','winRate'))}</td><td>${displayMetric(metric(s,'profit_factor','profitFactor'))}</td><td>${displayMetric(metric(s,'total_trades','trade_count','trades_count'))}</td><td>${percentMetric(metric(s,'total_return_pct','total_return','return_pct'))}</td><td><span class="comparison-status">${running?'Running':configured?'Configured':'Available'}</span></td><td><button class="btn small ghost" type="button" data-strategy-select="${esc(s.id)}">Details</button></td></tr>`;
+    }).join('')||'<tr><td class="empty-cell" colspan="7">No strategy records are available.</td></tr>';
+  }
+
+  function renderSelected(s){
+    const panel=$('[data-s-selected-panel]');if(!panel)return;
+    const set=(selector,value)=>{const n=$(selector);if(n)n.textContent=value;};
+    if(!s){set('[data-s-selected-name]','No strategy selected');set('[data-s-selected-description]','Strategy information will appear when the registry is available.');return;}
+    const active=activeState(s),configs=Array.isArray(s.configurations)?s.configurations:[],connected=Boolean(s.connected||active),configured=Boolean(s.configured||configs.length);
+    set('[data-s-selected-name]',s.name||s.slug||'Strategy');set('[data-s-selected-description]',s.description||s.summary||'No strategy description is available.');
+    set('[data-s-selected-win]',percentMetric(metric(s,'win_rate','winRate')));set('[data-s-selected-pf]',displayMetric(metric(s,'profit_factor','profitFactor')));set('[data-s-selected-trades]',displayMetric(metric(s,'total_trades','trade_count','trades_count')));set('[data-s-selected-win-change]','Saved strategy metric');
+    const deploy=$('[data-s-selected-deploy]');if(deploy){deploy.disabled=!configured;deploy.dataset.strategyId=s.id;deploy.dataset.configId=(configs.find(c=>c.enabled)||configs[0])?.id||'';deploy.textContent=connected?'Strategy Connected':'Use Strategy';}
+    const edit=$('[data-s-selected-edit]');if(edit)edit.href=builderUrl(s);
+    set('[data-s-setting-timeframe]',active?.timeframe||'Not configured');set('[data-s-setting-markets]',active?.display_name||active?.symbol||'All supported');set('[data-s-setting-risk]',active?.risk_per_trade!=null?displayMetric(active.risk_per_trade,'%'):'Not configured');set('[data-s-setting-stop]',active?.stop_loss!=null?displayMetric(active.stop_loss,'%'):'Not configured');set('[data-s-setting-take]',active?.take_profit!=null?displayMetric(active.take_profit,'%'):'Not configured');
+    const p=performanceRows.find(x=>String(x.strategy_id??x.strategyId??x.id??'')===String(s.id))||performanceRows.find(x=>String(x.strategy_name||x.strategy||'').toLowerCase()===String(s.name||s.slug||'').toLowerCase())||{};
+    set('[data-s-period-7]',percentMetric(p.last_7_days_return??p.return_7d??p.period_7d));set('[data-s-period-30]',percentMetric(p.last_30_days_return??p.return_30d??p.period_30d));set('[data-s-period-90]',percentMetric(p.last_90_days_return??p.return_90d??p.period_90d));set('[data-s-max-drawdown]',percentMetric(p.max_drawdown_pct??p.max_drawdown));renderPerformanceChart(p);
+  }
+
+  function renderPerformanceChart(p){
+    const svg=$('[data-s-performance-chart]'),empty=$('[data-s-chart-empty]');if(!svg||!empty)return;
+    const keys=selectedRange==='90d'?['equity_90d','series_90d','return_series_90d']:selectedRange==='1y'?['equity_1y','series_1y','return_series_1y']:selectedRange==='all'?['equity_curve','equity_series','history','return_series']:['equity_30d','series_30d','return_series_30d','equity_curve','equity_series'];
+    const findSeries=names=>{for(const key of names){if(Array.isArray(p?.[key])&&p[key].length>1)return p[key];}return null;};
+    const readValues=series=>Array.isArray(series)?series.map(x=>Number(typeof x==='object'?(x.value??x.equity??x.balance??x.return_pct??x.return??x.y):x)).filter(Number.isFinite):[];
+    const series=findSeries(keys),values=readValues(series);
+    if(values.length<2){svg.hidden=true;empty.hidden=false;return;}
+    const benchmarkSeries=findSeries(['benchmark_series','benchmark_equity_curve','benchmark_curve','benchmark_returns','benchmark_30d','benchmark_90d','benchmark_1y']);
+    const benchmark=readValues(benchmarkSeries);
+    const all=benchmark.length>1?[...values,...benchmark]:values;
+    const min=Math.min(...all,0),max=Math.max(...all,0),span=max-min||1,w=480,h=170,pad=36,right=8,top=8,bottom=25,pw=w-pad-right,ph=h-top-bottom;
+    const xFor=(i,n)=>pad+i*pw/Math.max(1,n-1),yFor=v=>top+(max-v)*ph/span;
+    let out='';
+    for(let i=0;i<=4;i++){const y=top+i*ph/4,val=max-i*span/4;out+=`<path d="M${pad} ${y}H${w-right}" stroke="#15385b" stroke-width="1"/><text x="${pad-6}" y="${y+3}" text-anchor="end" fill="#9db6d6" font-size="9">${val.toFixed(1)}%</text>`;}
+    const makePath=arr=>arr.map((v,i)=>(i?'L':'M')+xFor(i,arr.length).toFixed(1)+' '+yFor(v).toFixed(1)).join(' ');
+    if(benchmark.length>1)out+=`<path d="${makePath(benchmark)}" fill="none" stroke="#1685ff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+    out+=`<path d="${makePath(values)}" fill="none" stroke="#08d4a4" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const labels=Array.isArray(series)&&typeof series[0]==='object'?series.map(x=>x.date??x.timestamp??x.label??''):[],last=labels.length?labels[labels.length-1]:'';
+    if(last)out+=`<text x="${w-right}" y="${h-5}" text-anchor="end" fill="#9db6d6" font-size="9">${String(last).slice(0,16)}</text>`;
+    svg.innerHTML=out;svg.hidden=false;empty.hidden=true;
+    const legend=svg.closest('.strategy-overview-panel')?.querySelector('.strategy-chart-legend');
+    if(legend)legend.innerHTML='<span><i class="legend-dot strategy-dot"></i>Selected strategy</span>'+(benchmark.length>1?'<span><i class="legend-dot benchmark-dot"></i>Benchmark</span>':'');
   }
 
   async function load() {
@@ -57,7 +127,9 @@
       strategies = list(payload.strategies || payload);
       const signals = sig.status === 'fulfilled' ? list(sig.value) : [];
       const performance = perf.status === 'fulfilled' ? list(perf.value) : null;
+      performanceRows = Array.isArray(performance) ? performance : [];
       counts(payload, signals);
+      selectedStrategyId = selectedStrategyId ?? strategies[0]?.id ?? null;
       renderList();
       $('[data-s-strategy-signals]').innerHTML = signals.length ? signals.slice(0,8).map(s => `<div class="signal-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(s)||''}<strong>${esc(window.AlgoBotMarketPicker?.marketName({value:s.symbol||'',textContent:s.display_name||s.symbol||''})||s.display_name||'Market instrument')}</strong></span><span>${esc(s.signal || 'HOLD')}</span><b>${s.confidence != null ? Number(s.confidence).toFixed(0) + '%' : '—'}</b></div>`).join('') : '<div class="empty-state">No strategy signals have been generated yet.</div>';
       $('[data-s-performance]').innerHTML = performance === null
@@ -90,6 +162,10 @@
     $('[data-strategy-pause]')?.addEventListener('click', () => action('/api/strategies/pause/'));
     $('[data-strategy-stop]')?.addEventListener('click', () => { if(confirm('Stop and disconnect the currently connected strategies? Saved configurations will remain available.')) action('/api/strategies/stop/'); });
     $('[data-s-search]')?.addEventListener('input', renderList);
+    document.querySelectorAll('[data-strategy-filter]').forEach(b=>b.addEventListener('click',()=>{activeFilter=b.dataset.strategyFilter;document.querySelectorAll('[data-strategy-filter]').forEach(x=>x.classList.toggle('is-active',x===b));renderList();}));
+    document.querySelectorAll('[data-s-range]').forEach(b=>b.addEventListener('click',()=>{selectedRange=b.dataset.sRange;document.querySelectorAll('[data-s-range]').forEach(x=>x.classList.toggle('is-active',x===b));const s=strategies.find(x=>String(x.id)===String(selectedStrategyId));const p=performanceRows.find(x=>String(x.strategy_id??x.strategyId??x.id??'')===String(s?.id))||{};renderPerformanceChart(p);}));
+    $('[data-s-list]')?.addEventListener('click',e=>{const card=e.target.closest('[data-strategy-card]');if(!card||e.target.closest('button,a'))return;selectedStrategyId=card.dataset.strategyId;renderList();});
+    document.addEventListener('click',e=>{const select=e.target.closest('[data-strategy-select]');if(select){selectedStrategyId=select.dataset.strategySelect;renderList();}const deploy=e.target.closest('[data-s-selected-deploy]');if(deploy&&!deploy.disabled)useStrategy(deploy.dataset.strategyId,deploy.dataset.configId);});
     $('[data-s-list]')?.addEventListener('click', e => { const sw=e.target.closest('[data-strategy-switch]'),dc=e.target.closest('[data-strategy-disconnect]'); if(sw)useStrategy(sw.dataset.strategyId,sw.dataset.configId); if(dc&&confirm('Disconnect this strategy? Its saved configuration will remain available for later use.'))disconnectStrategy(dc.dataset.strategyId,dc.dataset.configId); });
     load();
   }
