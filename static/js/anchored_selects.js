@@ -273,7 +273,10 @@
         }
       });
     });
-    observer.observe(document.getElementById('app-content') || document.body, {subtree:true,childList:true});
+    observer.observe(document.getElementById('app-content') || document.body, {
+      subtree:true, childList:true, attributes:true,
+      attributeFilter:['disabled','required','aria-label','data-placeholder','hidden','label','value']
+    });
     document.querySelectorAll('form').forEach(form => form.addEventListener('reset', () => setTimeout(() => form.querySelectorAll('select[data-ab-select-enhanced="true"]').forEach(refresh), 0)));
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once:true}); else start();
