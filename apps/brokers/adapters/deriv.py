@@ -222,10 +222,10 @@ class DerivAdapter(BrokerAdapter):
             if not granularity:
                 raise BrokerOrderError("A broker-supported candle granularity is required")
             payload = {"ticks_history": symbol, "end": end_value, **range_args, "style": "candles", "granularity": int(granularity)}
-            candles = (await self._request(payload)).get("candles", [])
+            candles = (await self._request(payload, authenticated=True)).get("candles", [])
             return {"mode": "candles", "symbol": symbol, "granularity": int(granularity), "items": candles, "source": "connected_broker"}
         payload = {"ticks_history": symbol, "end": end_value, **range_args, "style": "ticks"}
-        ticks = (await self._request(payload)).get("history", {})
+        ticks = (await self._request(payload, authenticated=True)).get("history", {})
         return {"mode": "ticks", "symbol": symbol, "items": [{"epoch": e, "quote": q} for e, q in zip(ticks.get("times", []), ticks.get("prices", []))], "source": "connected_broker"}
 
     async def get_chart_capabilities(self):
