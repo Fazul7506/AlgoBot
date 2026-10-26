@@ -34,3 +34,7 @@
 @media(max-width:580px){.strategy-reference .strategy-card-icon{width:42px;height:42px;flex-basis:42px}.strategy-reference .strategy-card-icon svg{width:23px;height:23px}}
 
 .strategy-reference .strategy-chart-legend{display:flex;gap:14px;flex-wrap:wrap}.strategy-reference .benchmark-dot{background:#1685ff}.strategy-reference [data-s-performance-chart]{width:100%;height:auto;min-height:140px;overflow:visible}.strategy-reference [data-s-performance-chart] text{font-family:inherit}
+
+/* Data-backed mini performance charts inside strategy cards. */
+.strategy-reference .strategy-card-chart{display:flex;justify-content:flex-end;align-items:center;min-height:36px;margin:0 0 3px;overflow:hidden}.strategy-reference .strategy-card-sparkline{display:block;width:112px;max-width:42%;height:auto;opacity:.95}.strategy-reference .strategy-sparkline-empty{display:block;color:#56799e;font-size:.7rem;padding:8px 12px}.strategy-reference .strategy-card-heading{padding-right:82px}.strategy-reference .strategy-card-heading .strategy-card-icon{position:static;flex:0 0 48px}.strategy-reference .strategy-card-heading .strategy-row-main{padding-left:0}
+@media(max-width:580px){.strategy-reference .strategy-card-heading{padding-right:58px}.strategy-reference .strategy-card-chart{min-height:30px}.strategy-reference .strategy-card-sparkline{width:94px}}
