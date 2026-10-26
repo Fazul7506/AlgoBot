@@ -44,8 +44,7 @@ CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
     "max_connections": max(1, int(os.environ.get("CELERY_REDIS_MAX_CONNECTIONS", "1"))),
 }
 
-# Long-running broker-data tasks expose STARTED state and are acknowledged only
-# after execution. Worker loss therefore allows Celery to redeliver them.
+# Expose task lifecycle events so Mission Control can observe background work.
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_SEND_SENT_EVENT = True
 CELERY_WORKER_SEND_TASK_EVENTS = True
