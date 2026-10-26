@@ -215,4 +215,15 @@ const baseTemplate = fs.readFileSync('templates/base.html','utf8');
 assert(baseTemplate.includes('market_picker_enhancement.js'), 'the shared picker enhancement is installed across AlgoBot pages');
 const analysisTemplate = fs.readFileSync('templates/core/analysis.html','utf8');
 assert(analysisTemplate.includes('analysis-markets-data') && analysisTemplate.includes('analysisMarketIcon'), 'Analysis bootstraps its market catalogue and selected SVG without a second blocking catalogue request');
-console.log('official Deriv market SVG registry contract tests passed');
+
+const anchoredSelects = fs.readFileSync('static/js/anchored_selects.js','utf8');
+const anchoredSelectCss = fs.readFileSync('static/css/anchored_selects.css','utf8');
+assert(baseTemplate.includes('anchored_selects.js') && baseTemplate.includes('anchored_selects.css'), 'global anchored select menus are loaded from the shared base template');
+assert(anchoredSelects.includes("select:not([multiple]):not([size])"), 'global select enhancement covers standard single-select controls across pages');
+assert(anchoredSelects.includes("role', 'combobox'") && anchoredSelects.includes("setAttribute('role', 'listbox')"), 'custom dropdowns expose accessible combobox and listbox semantics');
+assert(anchoredSelects.includes("AlgoBotMarketAssets?.renderIcon"), 'instrument options use the official Deriv SVG registry');
+assert(anchoredSelects.includes("new Event('change', {bubbles:true})"), 'select choices dispatch native change events so existing page logic stays connected');
+assert(anchoredSelects.includes("ArrowDown") && anchoredSelects.includes("Escape"), 'anchored dropdowns support keyboard navigation and dismissal');
+assert(anchoredSelectCss.includes('.ab-select-menu[hidden]') && anchoredSelectCss.includes('position: absolute'), 'menus are anchored popovers, not platform modal selectors');
+
+console.log('official Deriv market SVG registry and global anchored-select contract tests passed');
