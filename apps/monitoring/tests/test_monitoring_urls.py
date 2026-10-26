@@ -31,6 +31,17 @@ class MonitoringSmokeTests(TestCase):
         response = self.client.get(reverse("mission-control"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Mission Control")
+        self.assertContains(response, "data-mission-log-body")
+        self.assertEqual(response.content.decode().count("data-mission-log-body"), 1)
+        self.assertContains(response, "data-mission-log-search")
+        self.assertContains(response, "data-mission-log-tail")
+        self.assertContains(response, "data-mission-log-expand")
+        self.assertContains(response, "data-mission-log-copy")
+        self.assertNotContains(response, "Load older")
+        self.assertNotContains(response, "data-mission-log-more")
+        self.assertNotContains(response, "Service Health")
+        self.assertNotContains(response, "Performance History")
+        self.assertNotContains(response, "Recent System Events")
         monitoring = self.client.get(reverse("monitoring-dashboard-page"))
         self.assertContains(monitoring, "Monitoring")
 
@@ -82,16 +93,6 @@ class MonitoringSmokeTests(TestCase):
         response = self.client.get("/api/monitoring/mission-events/?offset=not-a-number&limit=999999")
         self.assertEqual(response.status_code, 200)
         self.assertLessEqual(len(response.json()["results"]), 250)
-
-    def test_retired_backfill_page_redirects_to_mission_control(self):
-        response = self.client.get("/operations/candle-backfill/")
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/operations/mission-control/")
-
-    def test_retired_backfill_control_redirects_to_mission_control(self):
-        response = self.client.get("/operations/candle-backfill/control/")
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/operations/mission-control/")
 
     def test_operations_mission_control_is_staff_only(self):
         response = self.client.get("/operations/mission-control/")

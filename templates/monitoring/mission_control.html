@@ -1,79 +1,29 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Mission Control | AlgoBot{% endblock %}
-{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-mission-control-logger5">{% endblock %}
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/05-enterprise-shell.css' %}"><link rel="stylesheet" href="{% static 'css/monitoring.css' %}?v=20261026-logger-only1">{% endblock %}
 {% block content %}
-<main id="main-content" class="monitoring-workspace" data-monitoring-dashboard>
+<main id="main-content" class="monitoring-workspace mission-control-logger-only" data-monitoring-dashboard>
   <header class="monitoring-hero">
     <div class="monitoring-hero-icon" aria-hidden="true"><svg viewBox="0 0 48 48" role="img"><path d="M4 25h10l5-15 9 29 6-19 4 5h6" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <div class="monitoring-hero-copy"><p class="eyebrow">MISSION CONTROL</p><h1>Mission Control</h1><p>Live operational view of AlgoBot services, broker connectivity and application events.</p><p class="monitoring-subtitle">Successes, warnings, failures and information from the running platform.</p></div>
-    <div class="monitoring-system-state"><span class="monitoring-shield" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 20 5v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z" fill="currentColor"/><path d="m8 12 2.5 2.5L16 9" fill="none" stroke="#05264a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><strong data-system-status-text>{{ dashboard.overall_system_health|title }}</strong><small>Current system status</small></div></div>
+    <div class="monitoring-hero-copy"><p class="eyebrow">MISSION CONTROL</p><h1>Mission Control</h1><p>Application log stream</p><p class="monitoring-subtitle">Live operational events recorded by AlgoBot.</p></div>
   </header>
 
-  <div class="monitoring-layout">
-    <div class="monitoring-main-column">
-      <section class="monitoring-kpis" aria-label="Live monitoring metrics">
-        <article class="monitoring-card monitoring-kpi"><span class="monitoring-kpi-icon blue"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="5" rx="1"/><rect x="4" y="11" width="16" height="4" rx="1"/><rect x="4" y="17" width="16" height="3" rx="1"/></svg></span><div><p>System Status</p><h2 data-system-status-text>{{ dashboard.overall_system_health|title }}</h2><span class="monitoring-status-label"><i class="monitoring-dot"></i>Live check</span></div></article>
-        <article class="monitoring-card monitoring-kpi"><span class="monitoring-kpi-icon cyan"><svg viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="5"/></svg></span><div><p>Broker Connection</p><h2 data-broker-status-text>{{ dashboard.broker_status|title }}</h2><span class="monitoring-muted">Your active account</span></div></article>
-        <article class="monitoring-card monitoring-kpi"><span class="monitoring-kpi-icon teal"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h17M7 15l4-5 3 3 5-7"/></svg></span><div><p>Open Positions</p><h2 data-current-trades>{{ dashboard.current_trades }}</h2><span class="monitoring-muted">Current account</span></div></article>
-        <article class="monitoring-card monitoring-kpi"><span class="monitoring-kpi-icon amber"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5m0 3h.01"/></svg></span><div><p>Active Alerts</p><h2 data-active-alerts>{{ dashboard.active_alerts }}</h2><span class="monitoring-muted">Unresolved alerts</span></div></article>
-      </section>
-
-      {% if request.user.is_staff %}
-      <section class="monitoring-panel" aria-labelledby="mission-log-title">
-        <div class="monitoring-panel-heading"><div><h2 id="mission-log-title">Live activity log</h2><p>Render-style operational events from the application, newest first. Refreshes every 15 seconds while this page is visible.</p></div><span class="monitoring-updated"><span data-mission-log-count>{{ recent_logs|length }}</span> events loaded</span></div>
-        <div class="mission-log-controls" role="search" aria-label="Filter activity logs">
-          <label>Search events <input type="search" data-mission-log-search placeholder="Search message or category" autocomplete="off"></label>
-          <label>Source / module <input type="search" data-mission-log-source placeholder="e.g. broker, backtesting" autocomplete="off"></label>
-          <label>Request / operation ID <input type="search" data-mission-log-operation placeholder="Correlation ID" autocomplete="off"></label>
-          <label>Time window <select data-mission-log-window><option value="15">Last 15 minutes</option><option value="60" selected>Last 60 minutes</option><option value="360">Last 6 hours</option><option value="1440">Last 24 hours</option><option value="all">All retained logs</option></select></label>
-          <label>Severity <select data-mission-log-level><option value="">All levels</option><option value="DEBUG">Debug</option><option value="INFO">Info</option><option value="WARNING">Warning</option><option value="ERROR">Error</option><option value="CRITICAL">Critical</option></select></label>
-          <label>Area <select data-mission-log-stream><option value="">All areas</option><option value="application">Application</option><option value="broker">Broker</option><option value="trading">Trading</option><option value="security">Security</option><option value="monitoring">Monitoring</option><option value="celery">Background workers</option><option value="api">API</option><option value="database">Database</option><option value="infrastructure">Infrastructure</option><option value="system">System</option></select></label>
-          <label>Category <select data-mission-log-category><option value="">All categories</option><option value="historical_data">Historical data</option><option value="backtesting">Backtesting</option><option value="broker">Broker</option><option value="authentication">Authentication</option><option value="trading">Trading</option><option value="system">System</option></select></label>
-          <label>Outcome <select data-mission-log-status-filter><option value="">All outcomes</option><option value="completed">Completed</option><option value="recorded">Recorded</option><option value="warning">Warning</option><option value="failed">Failed</option><option value="running">Running</option></select></label>
-          <button class="monitoring-icon-button" type="button" data-mission-log-refresh aria-label="Refresh activity log">Refresh logs</button>
-          <button class="monitoring-icon-button" type="button" data-mission-log-pause aria-pressed="false">Pause live updates</button>
-          <button class="monitoring-icon-button" type="button" data-mission-log-more disabled>Load older events</button>
-          <span data-mission-log-status role="status" aria-live="polite">Live feed</span>
-        </div>
-        <div class="monitoring-table-wrap"><table class="monitoring-table"><thead><tr><th scope="col">Time</th><th scope="col">Level</th><th scope="col">Area</th><th scope="col">Event / diagnostic</th></tr></thead><tbody data-mission-log-body>
-        {% for event in recent_logs %}<tr><td>{{ event.timestamp|date:"Y-m-d H:i:s" }}</td><td><span class="monitoring-badge status-{{ event.level|lower }}"><i></i>{{ event.level }}</span></td><td>{{ event.stream }}<small>{{ event.source }}</small></td><td>{{ event.message }}</td></tr>{% empty %}<tr><td colspan="4" class="monitoring-empty">No persisted application events yet. New INFO, WARNING and ERROR records will appear here as the application logs them.</td></tr>{% endfor %}
-        </tbody></table></div>
-        <p class="monitoring-footnote">Sensitive credentials and request bodies are not intentionally stored in this event feed. Logs are operational diagnostics, not a substitute for trade/account records.</p>
-      </section>
-      {% endif %}
-
-      <section class="monitoring-panel monitoring-service-panel">
-        <div class="monitoring-panel-heading"><div><h2>Service Health</h2><p>Live status of available core services</p></div><div class="monitoring-heading-actions"><span class="monitoring-updated">Updated <span data-monitoring-updated>just now</span></span><button class="monitoring-icon-button" type="button" data-monitoring-refresh aria-label="Refresh monitoring data" title="Refresh"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/></svg></button></div></div>
-        <div class="monitoring-table-wrap"><table class="monitoring-table"><thead><tr><th scope="col">Service</th><th scope="col">Status</th><th scope="col">Response time</th><th scope="col">Details</th></tr></thead><tbody>
-          {% for service in service_rows %}<tr><td><span class="monitoring-service-name"><span class="monitoring-service-icon" aria-hidden="true">{% if 'Database' in service.name %}▤{% elif 'Trading' in service.name %}⌁{% elif 'Cache' in service.name %}▦{% elif 'Gmail' in service.name %}✉{% elif 'Telegram' in service.name %}➤{% else %}◈{% endif %}</span><span><strong>{{ service.name }}</strong><small>Service availability</small></span></span></td><td><span class="monitoring-badge status-{{ service.status|lower|slugify }}"><i></i>{{ service.status|title|default:"Unknown" }}</span></td><td>{% if service.response_time != None %}{{ service.response_time|floatformat:0 }} ms{% else %}<span class="monitoring-muted">Not measured</span>{% endif %}</td><td><span class="monitoring-muted">{% if service.status == "healthy" or service.status == "connected" %}Operational{% elif service.status == "not_connected" %}Not connected{% else %}Status reported by service{% endif %}</span></td></tr>{% empty %}<tr><td colspan="4" class="monitoring-empty">No service health checks have been recorded yet.</td></tr>{% endfor %}
-        </tbody></table></div>
-        <p class="monitoring-footnote">Health indicators reflect recorded checks and your account's connected services. Unmeasured values are shown as unavailable rather than estimated.</p>
-      </section>
-
-      <section class="monitoring-panel">
-        <div class="monitoring-panel-heading"><div><h2>Performance History</h2><p>Recent application metrics collected by AlgoBot</p></div><span class="monitoring-range-label">Latest records</span></div>
-        {% if metric_history %}<div class="monitoring-metric-history">{% for metric in metric_history %}<div class="monitoring-metric-row"><span class="monitoring-metric-dot"></span><span class="monitoring-metric-name"><strong>{{ metric.metric_name|title }}</strong><small>{{ metric.timestamp|date:"H:i:s · d M Y" }}</small></span><strong class="monitoring-metric-value">{{ metric.value|floatformat:2 }} {{ metric.unit }}</strong></div>{% endfor %}</div>{% else %}<div class="monitoring-empty-state"><span class="monitoring-empty-icon">⌁</span><strong>Performance history is waiting for data</strong><p>Once application metrics are collected, the latest measurements will appear here.</p></div>{% endif %}
-      </section>
+  <section class="monitoring-panel rb-log-panel" data-mission-logger aria-labelledby="mission-log-title">
+    <div class="monitoring-panel-heading">
+      <div><h2 id="mission-log-title">Operation logs</h2><p>Live application log stream.</p></div>
+      <span class="monitoring-updated" data-mission-log-count>0 lines</span>
     </div>
-
-    <aside class="monitoring-sidebar">
-      <section class="monitoring-panel monitoring-events-panel"><div class="monitoring-panel-heading"><div><h2>Recent System Events</h2><p>Latest alerts visible to your account</p></div><a href="{% if request.user.is_staff %}/api/monitoring/alerts/{% else %}/notifications/{% endif %}" class="monitoring-text-link">View all</a></div>
-        <div class="monitoring-events">{% for event in recent_events %}<article class="monitoring-event"><span class="monitoring-event-icon severity-{{ event.severity|lower|slugify }}" aria-hidden="true">{% if event.severity == "CRITICAL" or event.severity == "EMERGENCY" %}!{% elif event.severity == "HIGH" %}▲{% else %}✓{% endif %}</span><div class="monitoring-event-copy"><strong>{{ event.title }}</strong><p>{{ event.message|truncatechars:90 }}</p><small>{{ event.created_at|timesince }} ago</small></div><span class="monitoring-badge severity-label-{{ event.severity|lower|slugify }}">{{ event.severity|title }}</span></article>{% empty %}<div class="monitoring-empty-state compact"><span class="monitoring-empty-icon">✓</span><strong>No recent alerts</strong><p>No alert events are currently available for this account.</p></div>{% endfor %}</div>
-      </section>
-
-      <section class="monitoring-panel"><div class="monitoring-panel-heading"><div><h2>Connected Channels</h2><p>Notification integrations</p></div><a href="/notifications/" class="monitoring-text-link">Manage</a></div>
-        <div class="monitoring-channels">
-          <div class="monitoring-channel"><span class="monitoring-channel-logo gmail-logo" aria-label="Gmail"><svg viewBox="0 0 48 36"><path fill="#4285F4" d="M4 8v24h7V13z"/><path fill="#34A853" d="M37 13v19h7V8z"/><path fill="#EA4335" d="M4 8 24 23 44 8 39 3 24 14 9 3z"/><path fill="#C5221F" d="M4 8v6l7 5v-6z"/><path fill="#FBBC04" d="M37 13v6l7-5V8z"/></svg></span><div class="monitoring-channel-copy"><strong>Gmail</strong><small>{% if connected_channels.gmail %}{{ connected_channels.gmail.address|default:"Connected account" }}{% else %}Not connected{% endif %}</small></div><span class="monitoring-badge {% if connected_channels.gmail %}status-healthy{% else %}status-not-connected{% endif %}"><i></i>{% if connected_channels.gmail %}Connected{% else %}Not connected{% endif %}</span></div>
-          <div class="monitoring-channel"><span class="monitoring-channel-logo telegram-logo" aria-label="Telegram"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="#229ED9"/><path d="m10 23 27-10-5 25-9-7-5 4 1-8 14-10-18 8z" fill="#fff"/></svg></span><div class="monitoring-channel-copy"><strong>Telegram</strong><small>{% if connected_channels.telegram %}{{ connected_channels.telegram.address|default:connected_channels.telegram.external_id|default:"Connected account" }}{% else %}Not connected{% endif %}</small></div><span class="monitoring-badge {% if connected_channels.telegram %}status-healthy{% else %}status-not-connected{% endif %}"><i></i>{% if connected_channels.telegram %}Connected{% else %}Not connected{% endif %}</span></div>
-        </div>
-      </section>
-
-      <section class="monitoring-panel monitoring-quick-actions"><div class="monitoring-panel-heading"><div><h2>Quick Actions</h2><p>Useful operations shortcuts</p></div></div><a href="{% if request.user.is_staff %}/api/monitoring/alerts/{% else %}/notifications/{% endif %}"><span>▤</span>View System Events <b>›</b></a><a href="/operations/audit/"><span>◇</span>View Audit Log <b>›</b></a><a href="/notifications/"><span>♧</span>Manage Notifications <b>›</b></a><a href="/operations/security/"><span>⬡</span>Security Center <b>›</b></a></section>
-      <div class="monitoring-security-note"><span aria-hidden="true">✓</span><div><strong>Monitoring is account-scoped</strong><p>Service details and events are limited to the information your account is authorized to view.</p></div></div>
-    </aside>
-  </div>
-  <p class="monitoring-note">System summary refreshes on request. The staff activity stream refreshes every 15 seconds while visible; viewing older events pauses automatic refresh. It does not change trading settings.</p>
+    <div class="rb-log-toolbar" role="search" aria-label="Search operation logs">
+      <div class="rb-log-select" aria-hidden="true">All logs</div>
+      <button type="button" class="rb-log-control rb-tail-active" data-mission-log-tail aria-pressed="true">Live tail</button>
+      <button type="button" class="rb-icon-btn" data-mission-log-expand aria-label="Expand logs">Expand</button>
+      <button type="button" class="rb-icon-btn" data-mission-log-copy aria-label="Copy visible logs">Copy</button>
+    </div>
+    <div class="rb-search"><span class="material-symbols-rounded" aria-hidden="true">search</span><input data-mission-log-search type="search" placeholder="Search logs" autocomplete="off" aria-label="Search logs"></div>
+    <div class="rb-log-head"><span>Operation logs</span><span data-mission-log-status role="status" aria-live="polite">Connecting…</span></div>
+    <div class="rb-log-body" data-mission-log-body aria-live="polite"></div>
+  </section>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/monitoring_dashboard.js' %}?v=20261026-mission-control-logger5" defer></script>{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'js/mission_control_logger.js' %}?v=20261026-logger-original-style2" defer></script>{% endblock %}
