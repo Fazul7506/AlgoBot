@@ -56,3 +56,30 @@
 .monitoring-table td details summary{cursor:pointer;color:var(--monitoring-accent,#45b9ff);font-size:.78rem;margin-top:5px}
 .mission-log-controls button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:640px){.monitoring-panel:has([data-mission-log-body]) .monitoring-table{min-width:680px}.mission-log-controls button{width:100%;min-height:40px}.mission-log-controls [data-mission-log-status]{overflow-wrap:anywhere}}
+
+
+/* Mission Control log-explorer refinements: Render-inspired, high-density and mobile-safe. */
+.monitoring-workspace [data-mission-log-body] td:last-child{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.78rem;line-height:1.55;overflow-wrap:anywhere;white-space:pre-wrap}
+.monitoring-workspace [data-mission-log-body] tr{background:#080b10}
+.monitoring-workspace [data-mission-log-body] tr:nth-child(even){background:#0b1017}
+.monitoring-workspace [data-mission-log-body] tr:hover{background:#111b27}
+.monitoring-workspace [data-mission-log-body] td{border-top-color:#202b38;color:#d9e2ec;vertical-align:top}
+.monitoring-workspace [data-mission-log-body] td:first-child{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#8ea1b5;font-size:.72rem;white-space:nowrap}
+.monitoring-workspace [data-mission-log-body] td:nth-child(2){white-space:nowrap}
+.monitoring-workspace [data-mission-log-body] td:nth-child(3){font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.73rem;color:#9eb1c5;max-width:210px;overflow-wrap:anywhere}
+.monitoring-workspace .monitoring-panel:has([data-mission-log-body]){background:#080b10;border-color:#283341}
+.monitoring-workspace .monitoring-panel:has([data-mission-log-body]) .monitoring-panel-heading{background:#0c121a;border-bottom-color:#283341}
+.monitoring-workspace .monitoring-panel:has([data-mission-log-body]) .monitoring-panel-heading h2{color:#f1f5f9}
+.monitoring-workspace .mission-log-controls{background:#0c121a;padding:14px;gap:10px;border-bottom:1px solid #283341}
+.monitoring-workspace .mission-log-controls label{color:#aebdcd;font-size:.72rem;min-width:140px;flex:1}
+.monitoring-workspace .mission-log-controls input,.monitoring-workspace .mission-log-controls select{display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:5px;padding:9px 10px;background:#080d13;border:1px solid #354354;border-radius:6px;color:#e5edf5;font:inherit}
+.monitoring-workspace .mission-log-controls input:focus-visible,.monitoring-workspace .mission-log-controls select:focus-visible,.monitoring-workspace .mission-log-controls button:focus-visible{outline:2px solid #58a6ff;outline-offset:2px}
+.monitoring-workspace .mission-log-controls [data-mission-log-status]{color:#9aadc0;font-size:.72rem}
+.monitoring-workspace .monitoring-badge.status-error,.monitoring-workspace .monitoring-badge.status-critical{background:#411c23;color:#ff9b9b}
+.monitoring-workspace .monitoring-badge.status-warning{background:#3c2e12;color:#f7ce76}
+.monitoring-workspace .monitoring-badge.status-info{background:#172b40;color:#9ac8ff}
+.monitoring-workspace .monitoring-badge.status-debug{background:#252a32;color:#b5c0cd}
+.monitoring-workspace .mission-log-details{max-width:min(70vw,900px);max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:#05080c;border:1px solid #263342;border-radius:6px;color:#b9cadb;font-size:.72rem}
+.monitoring-workspace [data-mission-log-body] details{margin-top:8px}
+.monitoring-workspace [data-mission-log-body] summary{display:inline-block;color:#7cb8ff;cursor:pointer;font:600 .72rem system-ui}
+@media(max-width:760px){.monitoring-workspace .mission-log-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.monitoring-workspace .mission-log-controls label{min-width:0}.monitoring-workspace .mission-log-controls [data-mission-log-status]{grid-column:1/-1}.monitoring-workspace [data-mission-log-body] td{padding:9px 8px}.monitoring-workspace [data-mission-log-body] td:first-child{white-space:normal;min-width:100px}.monitoring-workspace .mission-log-details{max-width:calc(100vw - 70px)}}
