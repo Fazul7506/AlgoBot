@@ -270,7 +270,7 @@ class UniversalWorkspaceAccessTests(TestCase):
     def test_frontend_static_asset_contract_remains_present(self):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "css/runtime_recovery.css?v=20261008-css-recovery1")
+        self.assertContains(response, "css/runtime_recovery.css?v=20261026-toast-severity1")
         self.assertContains(response, "css/sidebar_responsive_contract.css?v=20261013-shell2")
         self.assertContains(response, "js/sidebar_account_switch.js?v=20261013-samescope1")
         self.assertContains(response, "js/base_shell.js?v=20261026-toast-close-dedupe3")
