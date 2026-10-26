@@ -380,7 +380,7 @@ body.sidebar-collapsed .app-shell{margin-left:var(--algobot-shell-collapsed);}
 }
 #django-message-stack.toast-stack .toast[role="alert"]{box-shadow:0 14px 34px rgba(127,29,29,.25)}
 #django-message-stack.toast-stack .toast[hidden],
-#django-message-stack.toast-stack[hidden]{display:none!important}
+#django-message-stack.toast-stack[hidden]{display:none}
 @media(max-width:600px){
   #django-message-stack.toast-stack{max-height:55vh;overflow:visible}
   #django-message-stack.toast-stack .toast{max-height:24vh;padding:10px;grid-template-columns:25px minmax(0,1fr) 28px;gap:7px}
