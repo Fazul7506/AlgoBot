@@ -30,10 +30,15 @@ def _database_conn_max_age(database_url):
             raise ValueError("DB_CONN_MAX_AGE must be >= 0.")
         return value
 
-    # ASGI deployments should promptly release request connections when using
-    # an external pooler; psycopg's pool handles connection reuse.
+    # Django persistent connections are a poor fit for ASGI's request/thread
+    # lifecycle: a connection can remain checked out by an idle sync worker and
+    # exhaust the small per-process psycopg pool under concurrent requests.
+    # Production web and worker processes already reuse physical connections
+    # through psycopg_pool, so close Django's request-scoped handle promptly.
     hostname = (urlparse(database_url).hostname or "").lower()
     if hostname.endswith(".pooler.supabase.com"):
+        return 0
+    if os.getenv("DJANGO_ENV", "").strip().lower() == "production" or os.getenv("RENDER", "").strip().lower() == "true":
         return 0
 
     return 600
