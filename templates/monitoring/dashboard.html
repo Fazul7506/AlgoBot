@@ -21,8 +21,8 @@
 
       {% if request.user.is_staff %}
       <section class="monitoring-panel" aria-labelledby="mission-log-title">
-        <div class="monitoring-panel-heading"><div><h2 id="mission-log-title">Live activity log</h2><p>Latest application events, newest first. Refresh the page to load current entries.</p></div><span class="monitoring-updated">{{ recent_logs|length }} events loaded</span></div>
-        <div class="monitoring-table-wrap"><table class="monitoring-table"><thead><tr><th scope="col">Time</th><th scope="col">Level</th><th scope="col">Area</th><th scope="col">Event / diagnostic</th></tr></thead><tbody>
+        <div class="monitoring-panel-heading"><div><h2 id="mission-log-title">Live activity log</h2><p>Latest application events, newest first. This feed refreshes automatically.</p></div><span class="monitoring-updated"><span data-mission-log-count>{{ recent_logs|length }}</span> events loaded</span></div>
+        <div class="monitoring-table-wrap"><table class="monitoring-table"><thead><tr><th scope="col">Time</th><th scope="col">Level</th><th scope="col">Area</th><th scope="col">Event / diagnostic</th></tr></thead><tbody data-mission-log-body>
         {% for event in recent_logs %}<tr><td>{{ event.timestamp|date:"Y-m-d H:i:s" }}</td><td><span class="monitoring-badge status-{{ event.level|lower }}"><i></i>{{ event.level }}</span></td><td>{{ event.stream }}<small>{{ event.source }}</small></td><td>{{ event.message }}</td></tr>{% empty %}<tr><td colspan="4" class="monitoring-empty">No persisted application events yet. New INFO, WARNING and ERROR records will appear here as the application logs them.</td></tr>{% endfor %}
         </tbody></table></div>
         <p class="monitoring-footnote">Sensitive credentials and request bodies are not intentionally stored in this event feed. Logs are operational diagnostics, not a substitute for trade/account records.</p>
