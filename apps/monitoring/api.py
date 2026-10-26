@@ -132,7 +132,14 @@ def mission_events(request):
     events = LogEntry.objects.all()
     level = str(request.query_params.get("level") or "").strip().upper()
     stream = str(request.query_params.get("stream") or "").strip().lower()
+    status = str(request.query_params.get("status") or "").strip().lower()
+    category = str(request.query_params.get("category") or "").strip().lower()
+    source = str(request.query_params.get("source") or "").strip()[:120]
     search = str(request.query_params.get("search") or "").strip()[:160]
+    try:
+        offset = min(max(int(request.query_params.get("offset", 0)), 0), 100000)
+    except (TypeError, ValueError):
+        offset = 0
     try:
         since_minutes = int(request.query_params.get("since_minutes", 60))
         since_minutes = min(max(since_minutes, 1), 43200)
@@ -144,12 +151,39 @@ def mission_events(request):
         events = events.filter(level__iexact=level)
     if stream:
         events = events.filter(stream__iexact=stream)
+    if source:
+        events = events.filter(source__icontains=source)
+    if category:
+        events = events.filter(context__category__iexact=category)
+    if status:
+        events = events.filter(context__status__iexact=status)
     if search:
-        events = events.filter(Q(message__icontains=search) | Q(source__icontains=search) | Q(stream__icontains=search))
-    events = events.order_by("-timestamp").values(
-        "id", "stream", "level", "message", "source", "timestamp"
-    )[:limit]
-    return Response(list(events))
+        events = events.filter(
+            Q(message__icontains=search) | Q(source__icontains=search) |
+            Q(stream__icontains=search) | Q(context__category__icontains=search) |
+            Q(context__status__icontains=search) | Q(context__operation_id__icontains=search)
+        )
+    # Fetch one extra row to signal whether another page exists without a costly count().
+    page = list(events.order_by("-timestamp", "-id").values(
+        "id", "stream", "level", "message", "source", "timestamp", "context"
+    )[offset:offset + limit + 1])
+    has_more = len(page) > limit
+    page = page[:limit]
+    for event in page:
+        context = event.pop("context", {}) or {}
+        # This endpoint is staff-only; expose structured diagnostic context, but never
+        # serialize arbitrary request headers, credentials, or raw request bodies.
+        event["category"] = str(context.get("category") or event["stream"])
+        event["status"] = str(context.get("status") or ("failed" if event["level"] in {"ERROR", "CRITICAL"} else "recorded"))
+        event["operation_id"] = context.get("operation_id")
+        event["duration_ms"] = context.get("duration_ms")
+        event["error_category"] = context.get("error_category")
+        event["resolution"] = context.get("resolution")
+        event["details"] = context.get("diagnostic_summary") or context.get("details")
+    response = Response(page)
+    response["X-Has-More"] = "true" if has_more else "false"
+    response["X-Next-Offset"] = str(offset + limit if has_more else "")
+    return response
 
 
 @api_view(["GET"])
