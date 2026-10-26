@@ -18,4 +18,4 @@ class BrokerAutomationQueueFailureTests(SimpleTestCase):
 
         delay.assert_called_once_with("BrokerConnected", "broker", {"broker_type": "deriv"}, 7)
         apply.assert_not_called()
-        self.assertIn("automation_event_dropped", captured.output[0])
+        self.assertTrue(captured.records[0].automation_event_dropped)
