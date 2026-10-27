@@ -285,6 +285,11 @@ def google_login_callback(request):
         # Do not establish an authenticated Django session until the second
         # factor succeeds, including for users signing in through Google.
         request.session["algobot_pending_2fa_user_id"] = user.pk
+        # Preserve the correct post-MFA destination without authenticating before
+        # the second factor has been verified.
+        request.session["algobot_google_post_2fa_destination"] = (
+            "profile" if is_new_google_user else "dashboard"
+        )
         request.session.pop("broker_onboarding_next", None)
         return redirect("two_factor_challenge_page")
 
