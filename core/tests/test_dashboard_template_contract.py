@@ -39,7 +39,14 @@ class DashboardTemplateContractTests(TestCase):
             "dashboard-needs-broker", "needs-broker@example.com", "pass",
             first_name="Dashboard", last_name="Broker",
         )
-        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
+        UserProfile.objects.update_or_create(
+            user=user,
+            defaults={
+                "email_verified": True,
+                "email_verified_at": timezone.now(),
+                "terms_accepted_at": timezone.now(),
+            },
+        )
         self.client.force_login(user)
         response = self.client.get(reverse("dashboard_page"))
         self.assertEqual(response.status_code, 302)
