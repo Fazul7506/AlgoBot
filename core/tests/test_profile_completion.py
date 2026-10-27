@@ -87,7 +87,7 @@ class ProfileCompletionTests(TestCase):
         self.assertFalse(self.client.session.get("google_profile_completion_pending"))
 
     @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
-    def test_profile_persistence_failure_does_not_mark_profile_complete(self):
+    def test_profile_persistence_failure_does_not_mark_profile_complete(self, _connected):
         from django.db import DatabaseError
         from core.profile_completion import profile_is_complete
 
@@ -113,6 +113,7 @@ class ProfileCompletionTests(TestCase):
         self.assertIsNone(profile.terms_accepted_at)
         self.assertFalse(profile_is_complete(self.user))
 
+    @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
     def test_saving_profile_still_returns_to_marketplace_when_connected(self, _connected):
         self.client.force_login(self.user)
         response = self.client.post(
