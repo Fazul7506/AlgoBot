@@ -509,3 +509,31 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertIn("Escape", dropdowns)
         self.assertIn("position: absolute", styles)
         self.assertIn(".ab-select-menu[hidden]", styles)
+
+class ProductionReliabilityFrontendContractTests(SimpleTestCase):
+    def test_backtesting_workspace_initialization_is_idempotent_and_retryable(self):
+        from pathlib import Path
+
+        script = Path("static/js/backtesting_workspace_fix.js").read_text(encoding="utf-8")
+        self.assertIn("__algobotBacktestingWorkspaceFix", script)
+        self.assertIn("focus to retry", script)
+        self.assertIn("timeout=25000", script)
+        self.assertIn("result[2].value===null", script)
+
+    def test_frontend_contract_coalesces_repeated_catalog_and_account_reads(self):
+        from pathlib import Path
+
+        client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
+        self.assertIn("if(inflight.has(key))return inflight.get(key)", client)
+        self.assertIn("getCacheTtl(url)", client)
+        self.assertIn("market\\/broker-catalogue", client)
+
+    def test_ai_api_tries_bearer_jwt_before_csrf_protected_session_auth(self):
+        from pathlib import Path
+
+        views = Path("apps/ai_engine/views.py").read_text(encoding="utf-8")
+        self.assertIn(
+            "@decorators.authentication_classes([JWTAuthentication, SessionAuthentication])",
+            views,
+        )
+
