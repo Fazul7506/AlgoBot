@@ -22,7 +22,9 @@ HIGH_CONFIDENCE_THRESHOLD = Decimal("70")
 
 
 def _metadata(row):
-    return row.metadata if isinstance(row.metadata, dict) else {}
+    if isinstance(row, dict):
+        return row.get("metadata", row)
+    return row.metadata if isinstance(getattr(row, "metadata", None), dict) else {}
 
 
 def _classification(row):
@@ -145,6 +147,9 @@ def signals_workspace_api(request):
     category = str(request.GET.get("category") or "all").strip().lower()
     if symbol:
         base = base.filter(symbol=symbol)
+    search = str(request.GET.get("q") or "").strip()[:100]
+    if search:
+        base = base.filter(Q(symbol__icontains=search) | Q(strategy__name__icontains=search) | Q(strategy__category__icontains=search) | Q(metadata__display_name__icontains=search))
     if market:
         matching_symbols = MarketSymbol.objects.filter(is_active=True, market__iexact=market).values_list("symbol", flat=True)
         base = base.filter(Q(symbol__in=matching_symbols) | Q(metadata__market_type__iexact=market) | Q(metadata__market__iexact=market))
@@ -191,13 +196,14 @@ def signals_workspace_api(request):
     except Exception:
         log.exception("Unable to load Signals filter catalog")
         assets, markets = sorted({r.symbol for r in all_rows}), sorted({str(_metadata(r).get("market_type") or "Unclassified") for r in all_rows})
-    recent = sorted(all_rows, key=lambda r: (r.timestamp, r.pk), reverse=True)[:5]
+    recent = list(base.select_related("strategy").order_by("-timestamp", "-pk")[:5])
+    recent_lookup = {m.symbol: m for m in MarketSymbol.objects.filter(symbol__in=[r.symbol for r in recent]).only("symbol", "display_name", "market")}
     return JsonResponse({
         "status": "success", "signals": [_serialize(r, market_lookup) for r in page_rows],
         "count": total, "total_unfiltered": len(all_rows), "page": page, "page_size": page_size, "pages": pages,
         "start": start + 1 if total else 0, "end": min(start + len(page_rows), total),
         "category_counts": category_counts, "metrics": metrics, "performance": performance,
-        "recent": [_serialize(r, {r.symbol: MarketSymbol.objects.filter(symbol=r.symbol).only("symbol", "display_name", "market").first()}) for r in recent],
+        "recent": [_serialize(r, recent_lookup) for r in recent],
         "assets": assets, "markets": [m for m in markets if m],
         "sentiment": {"status": "unavailable", "reason": "No authoritative account-scoped market-sentiment source is currently wired to this workspace."},
         "account": {"broker": account.broker.name, "account_id": account.account_id, "environment": account.account_type, "currency": account.currency},
