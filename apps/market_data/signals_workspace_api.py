@@ -182,7 +182,7 @@ def signals_workspace_api(request):
         "active_signals_change": sum(1 for r in last_week if _lifecycle(r) in active_states) - sum(1 for r in prior_week if _lifecycle(r) in active_states),
         "high_confidence_threshold": str(HIGH_CONFIDENCE_THRESHOLD),
         "win_rate": None, "win_rate_change": None, "profit_factor": None, "profit_factor_change": None,
-        "trend": {"daily_counts": [sum(1 for r in all_rows if (now.date() - r.timestamp.date()).days == day) for day in range(6, -1, -1)]},
+        "trend": {"daily_counts": [sum(1 for r in all_rows if (now.date() - r.timestamp.date()).days == day) for day in range(6, -1, -1)], "daily_active_counts": [sum(1 for r in all_rows if (now.date() - r.timestamp.date()).days == day and _lifecycle(r) in {"active", "actionable", "open", "live", "confirmed"}) for day in range(6, -1, -1)], "daily_win_rates": [_outcome_stats([r for r in all_rows if (now.date() - r.timestamp.date()).days == day])["win_rate"] for day in range(6, -1, -1)], "daily_profit_factors": [_outcome_stats([r for r in all_rows if (now.date() - r.timestamp.date()).days == day])["profit_factor"] for day in range(6, -1, -1)]},
         "last_updated": max((r.timestamp for r in all_rows), default=None).isoformat() if all_rows else None,
         "service_state": "available" if all_rows else "empty",
     }
