@@ -1,5 +1,6 @@
 import io
 import json
+import re
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock, patch
@@ -107,6 +108,13 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(picture_response.content, bytes(profile.profile_picture_data))
         self.assertEqual(picture_response["X-Content-Type-Options"], "nosniff")
 
+        # Both shared-shell avatars and the profile-page avatar must point to
+        # the same authenticated, persisted picture endpoint after a fresh GET.
+        page_response = self.client.get(reverse("profile_page"))
+        self.assertEqual(page_response.status_code, 200)
+        html = page_response.content.decode("utf-8")
+        self.assertGreaterEqual(html.count(f'src="{reverse("profile_picture")}?v='), 3)
+
     def test_profile_update_rolls_back_identity_if_profile_persistence_fails(self):
         original_first_name = self.user.first_name
         original_last_name = self.user.last_name
@@ -168,8 +176,12 @@ class AccountSettingsPagesTests(TestCase):
                 self.assertContains(response, "Account Settings")
                 self.assertContains(response, "data-account-settings")
                 self.assertContains(response, "Login &amp; Identity")
-                self.assertContains(response, "aria-current=\"page\"")
-                self.assertContains(response, "reference-unified1")
+                html = response.content.decode("utf-8")
+                self.assertIn("reference-unified1", html)
+                nav_match = re.search(r'<nav class="account-nav"[^>]*>(.*?)</nav>', html, re.DOTALL)
+                self.assertIsNotNone(nav_match, "Account Settings navigation must render")
+                active_links = re.findall(r'<a href="([^"]+)" aria-current="page">', nav_match.group(1))
+                self.assertEqual(active_links, [url], "Only the current subpage should be active")
 
     def test_settings_api_rejects_non_object_payload(self):
         response = self.client.patch(
