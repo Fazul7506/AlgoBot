@@ -360,3 +360,6 @@
 .topbar-profile-menu form button{min-height:40px;font-size:12px}
 .topbar-profile-avatar img{display:block;object-fit:cover;border-radius:50%}
 @media(max-width:700px){.topbar-profile-menu{right:8px;width:min(330px,calc(100vw - 16px));padding:8px}.topbar-profile-identity{padding:12px}.topbar-profile-menu__section a{min-height:44px}}
+
+.topbar-profile-unverified{display:inline-flex;align-items:center;gap:4px;width:max-content;max-width:100%;padding:3px 7px;border:1px solid #795b2b;border-radius:6px;background:#3b2b16;color:#ffd27a;font-size:9px;font-weight:800}
+.topbar-profile-unverified .material-symbols-rounded{font-size:12px;color:inherit}
