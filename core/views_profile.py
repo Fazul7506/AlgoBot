@@ -9,6 +9,7 @@ from django.views.decorators.http import require_http_methods
 from zoneinfo import available_timezones
 from PIL import Image, UnidentifiedImageError
 from django.conf import settings
+from django.db import transaction
 
 from core.models import UserProfile
 
@@ -94,12 +95,16 @@ def profile_page(request):
                 profile.profile_picture_content_type = picture_content_type
                 profile.avatar_url = ""
 
-            request.user.save(update_fields=["first_name", "last_name"])
-            profile.save(update_fields=[
-                "country", "timezone", "phone", "bio",
-                "avatar_url", "profile_picture_data",
-                "profile_picture_content_type", "updated_at",
-            ])
+            # Keep the auth identity and extended profile in one transaction. A
+            # failed profile/avatar write must not leave half of the submitted form
+            # persisted.
+            with transaction.atomic():
+                request.user.save(update_fields=["first_name", "last_name"])
+                profile.save(update_fields=[
+                    "country", "timezone", "phone", "bio",
+                    "avatar_url", "profile_picture_data",
+                    "profile_picture_content_type", "updated_at",
+                ])
             messages.success(request, "Your profile has been saved.")
             return redirect("profile_page")
 
