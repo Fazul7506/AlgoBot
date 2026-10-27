@@ -222,8 +222,10 @@ def signals_workspace_api(request):
     metrics = {
         "total_signals": category_counts["all"],
         "total_signals_change": last_week_count - prior_week_count,
+        "total_signals_change_pct": ((last_week_count - prior_week_count) * 100 / prior_week_count) if prior_week_count else None,
         "active_signals": active_count,
         "active_signals_change": active_recent - active_prior,
+        "active_signals_change_pct": ((active_recent - active_prior) * 100 / active_prior) if active_prior else None,
         "high_confidence_threshold": str(HIGH_CONFIDENCE_THRESHOLD),
         "win_rate": outcomes["win_rate"],
         "win_rate_change": (current_outcomes["win_rate"] - prior_outcomes["win_rate"]) if current_outcomes["win_rate"] is not None and prior_outcomes["win_rate"] is not None else None,
