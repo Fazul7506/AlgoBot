@@ -87,8 +87,10 @@
     $("signalsRows").querySelectorAll("[data-signal-id]").forEach(button => button.addEventListener("click",()=> {
       const row = state.rows.find(item => String(item.id) === button.dataset.signalId);
       if (!row) return;
-      const detail = "/analysis/?signal_id="+encodeURIComponent(row.id);
-      window.location.assign(detail);
+      const dialog = $("signalsDetailDialog");
+      const fields = [["Signal ID",row.id],["Asset",row.symbol],["Direction",row.direction],["Strategy",row.strategy],["Timeframe",row.timeframe],["Confidence",row.confidence == null ? "Unavailable" : row.confidence + "%"],["Created",row.created_at],["Lifecycle",row.lifecycle],["Execution",row.execution_state],["Settlement",row.settlement_state],["Broker order",row.broker_order_id],["Position contract",row.contract_id]];
+      $("signalsDetailContent").innerHTML = fields.map(([label,value]) => "<div><dt>"+esc(label)+"</dt><dd>"+esc(value == null || value === "" ? "Unavailable" : value)+"</dd></div>").join("");
+      if (typeof dialog.showModal === "function") dialog.showModal();
     }));
   };
   const renderFeed = () => {
@@ -138,5 +140,7 @@
   $("signalsNext").addEventListener("click",()=>{state.page+=1;renderTable()});
   $("signalsPageNumbers").addEventListener("click",event=>{const button=event.target.closest("[data-page]");if(button){state.page=Number(button.dataset.page);renderTable()}});
   $("signalsRefresh").addEventListener("click",refresh);
+  $("signalsDetailClose").addEventListener("click",()=> $("signalsDetailDialog").close());
+  $("signalsDetailDialog").addEventListener("click",event=>{if(event.target === $("signalsDetailDialog")) $("signalsDetailDialog").close();});
   refresh();
 })();
