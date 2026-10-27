@@ -19,8 +19,10 @@ class BrokerOnboardingGateTests(TestCase):
             username="onboarding-user",
             email="onboarding@example.test",
             password="A-secure-test-password-123!",
+            first_name="Onboarding",
+            last_name="User",
         )
-        UserProfile.objects.update_or_create(user=self.user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
+        UserProfile.objects.update_or_create(user=self.user, defaults={"email_verified": True, "email_verified_at": timezone.now(), "terms_accepted_at": timezone.now()})
         self.broker = Broker.objects.create(
             name="Deriv",
             broker_type="deriv",
@@ -43,7 +45,11 @@ class BrokerOnboardingGateTests(TestCase):
     def test_broker_marketplace_remains_accessible_during_onboarding(self):
         self.client.force_login(self.user)
         response = self.client.get("/brokers/marketplace/")
-        self.assertNotEqual(response.status_code, 302)
+        self.assertRedirects(
+            response,
+            reverse("profile_completion_page"),
+            fetch_redirect_response=False,
+        )
 
     def test_automation_workspaces_are_available_but_wait_for_broker_before_execution(self):
         self.client.force_login(self.user)
