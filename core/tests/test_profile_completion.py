@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from unittest.mock import patch
 
 from core.models import UserProfile
@@ -19,7 +20,7 @@ class ProfileCompletionTests(TestCase):
             user=self.user,
             defaults={
                 "email_verified": True,
-                "email_verified_at": __import__("django.utils.timezone", fromlist=["now"]).now(),
+                "email_verified_at": timezone.now(),
             },
         )
 
