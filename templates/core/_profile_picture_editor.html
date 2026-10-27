@@ -1,0 +1,23 @@
+{% load static %}
+<div class="profile-picture-editor" data-profile-picture-editor hidden>
+  <div class="profile-picture-editor__backdrop" data-picture-cancel></div>
+  <section class="profile-picture-editor__dialog" role="dialog" aria-modal="true" aria-labelledby="profile-picture-editor-title" aria-describedby="profile-picture-editor-help" tabindex="-1">
+    <header class="profile-picture-editor__header">
+      <div><p class="account-kicker">PROFILE PHOTO</p><h2 id="profile-picture-editor-title">Adjust your picture</h2></div>
+      <button type="button" class="profile-picture-editor__close" data-picture-cancel aria-label="Cancel image editing">×</button>
+    </header>
+    <p id="profile-picture-editor-help" class="account-help">Drag the image to reposition it. Use the zoom slider to frame your face, then save the crop.</p>
+    <div class="profile-picture-editor__stage" data-picture-stage>
+      <canvas data-picture-canvas width="320" height="320" aria-label="Profile picture crop preview"></canvas>
+      <div class="profile-picture-editor__stage-hint">Square crop</div>
+    </div>
+    <label class="profile-picture-editor__zoom" for="profile-picture-zoom">Zoom <input id="profile-picture-zoom" data-picture-zoom type="range" min="1" max="3" step="0.01" value="1"></label>
+    <p class="profile-picture-editor__error" data-picture-error role="alert" hidden></p>
+    <footer class="profile-picture-editor__actions">
+      <button type="button" class="account-btn" data-picture-cancel>Cancel</button>
+      <button type="button" class="account-btn account-btn--primary" data-picture-save>Use this picture</button>
+    </footer>
+  </section>
+</div>
+<link rel="stylesheet" href="{% static 'css/profile_picture_editor.css' %}?v=20261027-1">
+<script src="{% static 'js/profile_picture_editor.js' %}?v=20261027-1" defer></script>
