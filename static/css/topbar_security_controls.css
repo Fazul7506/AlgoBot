@@ -337,3 +337,26 @@
   .topbar-notification-menu,.topbar-profile-menu,.topbar-account-menu { top:calc(env(safe-area-inset-top,0px) + 66px); }
   .topbar-profile-identity__avatar { flex-basis:50px; width:50px; height:50px; }
 }
+
+
+/* Profile menu parity with the reference: identity card, clear navigation rows,
+   consistent avatar rendering, and responsive right-anchored overlay. */
+.topbar-profile-identity{display:flex;align-items:center;gap:11px;padding:13px 12px 14px;margin:0 0 7px;border-bottom:1px solid #29405b}
+.topbar-profile-identity__avatar{display:grid;place-items:center;flex:0 0 48px;width:48px;height:48px;overflow:hidden;border:2px solid #8ab9e9;border-radius:50%;background:#173957;color:#d9ebff}
+.topbar-profile-identity__avatar img{display:block;width:100%;height:100%;object-fit:cover;border-radius:50%}
+.topbar-profile-identity__avatar>.material-symbols-rounded{font-size:29px}
+.topbar-profile-identity__copy{display:grid;gap:4px;min-width:0;flex:1}
+.topbar-profile-identity__copy strong{font-size:13px;line-height:1.35}
+.topbar-profile-identity__copy small{font-size:11px;color:#9ab0ca;overflow-wrap:anywhere}
+.topbar-profile-verified{display:inline-flex;align-items:center;gap:4px;width:max-content;padding:3px 7px;border-radius:6px;background:#0d473f;color:#54e1b0;font-size:9px;font-weight:800}
+.topbar-profile-verified .material-symbols-rounded{font-size:12px;color:inherit}
+.topbar-profile-menu__section{display:grid;gap:2px;padding:2px 0 7px}
+.topbar-profile-menu__section a{display:flex;align-items:center;gap:11px;min-height:41px;padding:9px 10px}
+.topbar-profile-menu__section a>.material-symbols-rounded:first-child{flex:0 0 20px}
+.topbar-profile-menu__label{flex:1;font-size:12px}
+.topbar-profile-menu__section .topbar-profile-menu__chevron{font-size:17px;color:#7896b9}
+.topbar-profile-menu__section a:hover{background:#102d4b}
+.topbar-profile-menu form{margin-top:2px;padding-top:6px}
+.topbar-profile-menu form button{min-height:40px;font-size:12px}
+.topbar-profile-avatar img{display:block;object-fit:cover;border-radius:50%}
+@media(max-width:700px){.topbar-profile-menu{right:8px;width:min(330px,calc(100vw - 16px));padding:8px}.topbar-profile-identity{padding:12px}.topbar-profile-menu__section a{min-height:44px}}
