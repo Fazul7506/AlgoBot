@@ -142,6 +142,12 @@ def profile_completion_page(request):
         "country": request.POST.get("country", profile.country),
         "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
         "bio": request.POST.get("bio", profile.bio),
+        "profile": profile,
+        "profile_initials": (
+            (request.user.first_name[:1] + request.user.last_name[:1]).upper()
+            if request.user.first_name and request.user.last_name
+            else request.user.username[:2].upper()
+        ),
     })
 def terms_page(request): return render(request,'core/terms.html')
 def privacy_page(request): return render(request,'core/privacy.html')
