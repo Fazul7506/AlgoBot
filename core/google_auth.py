@@ -281,6 +281,26 @@ def google_login_callback(request):
             return redirect("account_identity_page" if request.user.is_authenticated else "login_page")
 
     profile = UserProfile.objects.filter(user=user).first()
+    # Prefill DOB/gender only if verified Google claims actually include them.
+    # Google's standard openid/email/profile scopes usually do not provide either.
+    if profile:
+        from datetime import date
+        profile_updates = []
+        birthdate_claim = str(identity.get("birthdate") or identity.get("date_of_birth") or "").strip()
+        if not profile.date_of_birth and birthdate_claim:
+            try:
+                parsed_birthdate = date.fromisoformat(birthdate_claim)
+                if parsed_birthdate <= date.today():
+                    profile.date_of_birth = parsed_birthdate
+                    profile_updates.append("date_of_birth")
+            except ValueError:
+                pass
+        gender_claim = str(identity.get("gender") or "").strip().lower()
+        if not profile.gender and gender_claim in {"female", "male", "non_binary", "prefer_not_to_say", "self_described"}:
+            profile.gender = gender_claim
+            profile_updates.append("gender")
+        if profile_updates:
+            profile.save(update_fields=profile_updates + ["updated_at"])
     if profile and profile.two_factor_enabled:
         # Do not establish an authenticated Django session until the second
         # factor succeeds, including for users signing in through Google.
