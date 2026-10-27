@@ -102,6 +102,11 @@ class ProfileCompletionTests(TestCase):
     def test_incomplete_profile_cannot_reach_dashboard_or_marketplace_after_logout_and_login(self):
         from core.profile_completion import profile_is_complete
 
+        profile = UserProfile.objects.get(user=self.user)
+        from django.utils import timezone
+        profile.email_verified = True
+        profile.email_verified_at = timezone.now()
+        profile.save(update_fields=["email_verified", "email_verified_at"])
         self.client.force_login(self.user)
         for target in (reverse("dashboard_page"), reverse("broker_marketplace_page")):
             response = self.client.get(target)
