@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Profile | AlgoBot{% endblock %}
+{% block title %}Profile | AlgoBot{% include 'core/_profile_picture_editor.html' %}
+{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">{% endblock %}
 {% block content %}
 <main class="account-page" data-profile-page>
   <header class="account-hero">
     <div class="account-hero__identity">
-      <label class="account-profile-avatar account-profile-avatar--editable" data-avatar-preview for="profile-picture" title="Add or change profile picture" aria-label="Add or change profile picture">{% if profile.profile_picture_data %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U' }}" alt="">{% else %}<span>{{ profile_initials }}</span>{% endif %}<span class="account-avatar-edit" aria-hidden="true">✎</span><input id="profile-picture" name="profile_picture" type="file" accept="image/jpeg,image/png,image/webp,image/gif" autocomplete="off" aria-label="Choose profile picture" hidden></label>
+      <label class="account-profile-avatar account-profile-avatar--editable" data-avatar-preview for="profile-picture" title="Add or change profile picture" aria-label="Add or change profile picture">{% if profile.profile_picture_data %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U' }}" alt="">{% else %}<span>{{ profile_initials }}</span>{% endif %}<span class="account-avatar-edit" aria-hidden="true">✎</span><input id="profile-picture" name="profile_picture" form="profile-edit-form" data-profile-picture-input type="file" accept="image/jpeg,image/png,image/webp,image/gif" autocomplete="off" aria-label="Choose profile picture" hidden></label>
       <div><p class="account-kicker">Your account</p><h1>Profile</h1></div>
     </div>
     <span class="account-state {% if profile.email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if profile.email_verified %}Email verified{% else %}Email verification pending{% endif %}</span>
@@ -15,7 +16,7 @@
     <nav class="account-nav" aria-label="Account settings">
       <a href="{% url 'profile_page' %}" aria-current="page">Profile</a><a href="{% url 'settings_page' %}">Preferences</a><a href="{% url 'account_identity_page' %}">Login &amp; identity</a><a href="{% url 'security_center' %}">Security</a>
     </nav>
-    <form class="account-content" method="post" enctype="multipart/form-data" action="{% url 'profile_page' %}">
+    <form id="profile-edit-form" class="account-content" method="post" enctype="multipart/form-data" action="{% url 'profile_page' %}">
       {% csrf_token %}
       {% for message in messages %}<p class="account-alert {% if message.tags == 'error' %}account-alert--error{% elif message.tags == 'success' %}account-alert--success{% endif %}" role="status">{{ message }}</p>{% endfor %}
       <section class="account-card">
@@ -47,23 +48,6 @@
 <script>
 (() => {
   const initialize = () => {
-    const avatarInput = document.querySelector('#profile-picture');
-    const avatar = document.querySelector('[data-avatar-preview]');
-    if (avatarInput && avatar) avatarInput.addEventListener('change', () => {
-      const file = avatarInput.files && avatarInput.files[0];
-      if (!file) return;
-      if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 5 * 1024 * 1024) {
-        avatarInput.value = '';
-        return;
-      }
-      const previewUrl = URL.createObjectURL(file);
-      let image = avatar.querySelector('img');
-      if (!image) { image = document.createElement('img'); image.alt = ''; const initials = avatar.querySelector(':scope > span:not(.account-avatar-edit)'); if (initials) initials.remove(); avatar.insertBefore(image, avatar.querySelector('.account-avatar-edit')); }
-      const oldUrl = image.dataset.previewUrl;
-      image.src = previewUrl;
-      image.dataset.previewUrl = previewUrl;
-      if (oldUrl) URL.revokeObjectURL(oldUrl);
-    });
     const select = document.querySelector('[data-country-select]');
     if (!select) return;
     const current = select.dataset.currentCountry || '';
