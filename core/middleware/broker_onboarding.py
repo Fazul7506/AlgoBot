@@ -16,7 +16,7 @@ class BrokerOnboardingMiddleware:
         "/login/", "/register/", "/logout/", "/accounts/login/",
         "/verify-email/", "/forgot-password/", "/reset-password/",
         "/account/identity/", "/account/google/unlink/", "/auth/google/",
-        "/brokers/connect/", "/callback/", "/webhooks/", "/payments/",
+        "/callback/", "/webhooks/", "/payments/",
         "/profile/complete/", "/profile/picture/",
         "/billing/", "/saas/", "/developer/", "/api/",
     )
