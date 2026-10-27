@@ -24,7 +24,19 @@
 .profile-onboarding__cardhead p{color:var(--text-secondary,#a7b5ca);margin:0}
 .profile-onboarding__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.2rem}
 .profile-onboarding__field{display:flex;flex-direction:column;gap:.5rem;min-width:0}
-.profile-onboarding__field label{font-weight:650;font-size:.92rem}
+.profile-onboarding__field label{font-weight:650;font-size:.92rem;display:flex;align-items:center;gap:.5rem}
+.profile-onboarding__field label svg{width:17px;height:17px;flex:0 0 17px;color:#55cfc8}
+.profile-onboarding__badge{display:inline-flex;align-items:center;gap:.4rem;padding:.28rem .6rem;border-radius:999px;border:1px solid rgba(69,205,177,.34);background:rgba(22,125,104,.14);color:#8ce6ce;font-size:.75rem;font-weight:750;letter-spacing:.02em}
+.profile-onboarding__badge svg{width:14px;height:14px}
+.profile-onboarding__connected{position:relative}
+.profile-onboarding__connected .profile-onboarding__badge{margin-left:auto;white-space:nowrap}
+.profile-onboarding__submit{display:inline-flex;align-items:center;justify-content:center;gap:.65rem}
+.profile-onboarding__submit svg{width:19px;height:19px}
+.profile-onboarding__field select{appearance:none}
+.profile-onboarding__section-icon{display:inline-flex;vertical-align:middle;margin-right:.45rem;color:#55cfc8}
+.profile-onboarding__section-icon svg{width:20px;height:20px}
+@media(min-width:641px) and (max-width:980px){.profile-onboarding{max-width:900px}.profile-onboarding__grid{gap:1rem}.profile-onboarding__card{padding:1.5rem}}
+@media(prefers-reduced-motion:no-preference){.profile-onboarding__submit{transition:filter .15s ease,transform .15s ease}.profile-onboarding__submit:hover{transform:translateY(-1px)}}
 .profile-onboarding__field input,.profile-onboarding__field select,.profile-onboarding__field textarea{width:100%;min-height:48px;border:1px solid var(--border-color,#3a4a63);border-radius:11px;background:var(--surface-input,#08111f);color:var(--text-primary,#eef3fb);padding:.75rem .85rem;font:inherit;box-sizing:border-box}
 .profile-onboarding__field textarea{min-height:104px;resize:vertical}
 .profile-onboarding__field input:focus,.profile-onboarding__field select:focus,.profile-onboarding__field textarea:focus{outline:2px solid #16a7b0;outline-offset:2px}
@@ -48,8 +60,9 @@
   </header>
 
   <div class="profile-onboarding__connected" role="status">
-    <span class="profile-onboarding__check" aria-hidden="true">✓</span>
-    <span><strong>Google account connected</strong><small>Finish the details below, then continue to the broker marketplace.</small></span>
+    <span class="profile-onboarding__check" aria-hidden="true"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></span>
+    <span><strong>Google account connected</strong><small>Finish the required details below, then choose a broker connection.</small></span>
+    <span class="profile-onboarding__badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg> Verified sign-in</span>
   </div>
 
   <nav class="profile-onboarding__steps" aria-label="Signup progress">
@@ -63,42 +76,42 @@
   <form method="post" class="profile-onboarding__card" autocomplete="on">
     {% csrf_token %}
     <div class="profile-onboarding__cardhead">
-      <h2>Personal information</h2>
-      <p>Fields marked * are required. Google-provided names are prefilled when available.</p>
+      <h2><span class="profile-onboarding__section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>Personal information</h2>
+      <p>Only the details needed to set up your AlgoBot account. Google-provided names are prefilled when available.</p>
     </div>
     {% for message in messages %}
       <p class="alert alert-{{ message.tags }}" role="alert">{{ message }}</p>
     {% endfor %}
     <div class="profile-onboarding__grid">
       <div class="profile-onboarding__field">
-        <label for="first_name">First name <span aria-hidden="true">*</span></label>
+        <label for="first_name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>First name <span aria-hidden="true">*</span></label>
         <input id="first_name" name="first_name" type="text" maxlength="150" autocomplete="given-name" value="{{ first_name }}" required>
       </div>
       <div class="profile-onboarding__field">
-        <label for="last_name">Last name <span aria-hidden="true">*</span></label>
+        <label for="last_name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Last name <span aria-hidden="true">*</span></label>
         <input id="last_name" name="last_name" type="text" maxlength="150" autocomplete="family-name" value="{{ last_name }}" required>
       </div>
       <div class="profile-onboarding__field">
-        <label for="phone">Phone number <span class="profile-onboarding__hint">(optional)</span></label>
+        <label for="phone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 3h4l2 5-3 2a15 15 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2Z"/></svg>Phone number <span class="profile-onboarding__hint">(optional)</span></label>
         <input id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" value="{{ phone }}" placeholder="+254 7XX XXX XXX">
         <span class="profile-onboarding__hint">Include your country code if you provide a number.</span>
       </div>
       <div class="profile-onboarding__field">
-        <label for="country">Country / region <span class="profile-onboarding__hint">(optional)</span></label>
+        <label for="country"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>Country / region <span class="profile-onboarding__hint">(optional)</span></label>
         <input id="country" name="country" type="text" maxlength="100" autocomplete="country-name" value="{{ country }}" placeholder="e.g. Kenya">
       </div>
       <div class="profile-onboarding__field">
-        <label for="timezone">Time zone</label>
+        <label for="timezone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Time zone</label>
         <input id="timezone" name="timezone" type="text" maxlength="100" value="{{ timezone_value|default:'UTC' }}" placeholder="e.g. Africa/Nairobi">
         <span class="profile-onboarding__hint">Use an IANA time zone such as Africa/Nairobi or UTC.</span>
       </div>
       <div class="profile-onboarding__field">
-        <label for="bio">About you <span class="profile-onboarding__hint">(optional)</span></label>
-        <textarea id="bio" name="bio" rows="3" maxlength="1000" placeholder="Tell us a little about your trading or research goals.">{{ bio }}</textarea>
+        <label for="bio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>Trading or research focus <span class="profile-onboarding__hint">(optional)</span></label>
+        <textarea id="bio" name="bio" rows="3" maxlength="1000" placeholder="Optional: describe your trading or research focus.">{{ bio }}</textarea>
       </div>
     </div>
     <div class="profile-onboarding__actions">
-      <button type="submit" class="profile-onboarding__submit">Save profile and continue <span aria-hidden="true">→</span></button>
+      <button type="submit" class="profile-onboarding__submit">Save profile and continue <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
     </div>
   </form>
 
