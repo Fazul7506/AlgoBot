@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Profile | AlgoBot{% include 'core/_profile_picture_editor.html' %}
-{% endblock %}
+{% block title %}Profile | AlgoBot{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">{% endblock %}
 {% block content %}
 <main class="account-page" data-profile-page>
@@ -100,4 +99,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, {once:true}); else initialize();
 })();
 </script>
+{% include 'core/_profile_picture_editor.html' %}
 {% endblock %}
