@@ -125,6 +125,41 @@ class ProfileCompletionTests(TestCase):
         )
 
 
+    @patch("core.browser_auth._send_verification", return_value=True)
+    def test_form_registration_requires_profile_completion_after_verified_login(self, _send_verification):
+        response = self.client.post(
+            reverse("register_page"),
+            {
+                "username": "new-form-user",
+                "first_name": "Taylor",
+                "last_name": "Example",
+                "email": "new-form-user@example.test",
+                "password": "A-secure-registration-password-123!",
+                "password_confirm": "A-secure-registration-password-123!",
+            },
+        )
+        self.assertRedirects(
+            response, reverse("verify_email_page"), fetch_redirect_response=False
+        )
+        user = get_user_model().objects.get(username="new-form-user")
+        profile = UserProfile.objects.get(user=user)
+        self.assertIsNone(profile.terms_accepted_at)
+
+        from django.utils import timezone
+        profile.email_verified = True
+        profile.email_verified_at = timezone.now()
+        profile.save(update_fields=["email_verified", "email_verified_at"])
+        response = self.client.post(
+            reverse("login_page"),
+            {
+                "identifier": user.username,
+                "password": "A-secure-registration-password-123!",
+            },
+        )
+        self.assertRedirects(
+            response, reverse("profile_completion_page"), fetch_redirect_response=False
+        )
+
     def test_incomplete_profile_cannot_reach_dashboard_or_marketplace_after_logout_and_login(self):
         from core.profile_completion import profile_is_complete
 
