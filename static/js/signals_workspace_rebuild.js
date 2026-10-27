@@ -87,7 +87,28 @@
   let searchTimer=null; $('signals-search').addEventListener('input',e=>{state.search=e.target.value.trim();state.page=1;clearTimeout(searchTimer);searchTimer=setTimeout(load,250);});
   $('signals-prev').addEventListener('click',()=>{if(state.page>1){state.page--;load();}});
   $('signals-next').addEventListener('click',()=>{state.page++;load();});
-  $('signals-refresh').addEventListener('click',load);
+  async function refreshNow(){
+    if(state.loading)return;
+    const button=$('signals-refresh');button.disabled=true;
+    $('signals-live-label').textContent='Refreshing live market data';$('signals-live-dot').className='signals-live-dot is-stale';
+    try{
+      const response=await fetch('/api/strategy-signals/?limit=40&timeframe=M1',{credentials:'same-origin',headers:{Accept:'application/json'}});
+      const live=await response.json();
+      if(!response.ok||live.status!=='ok')throw new Error(live.message||'Live signal service did not confirm a successful refresh.');
+      await load();
+      const checkedAt=new Date();
+      const hasLiveQuotes=Number(live.live_data_available_count||0)>0;
+      $('signals-live-label').textContent=hasLiveQuotes?'Live market scan completed':'Scan completed; live quotes unavailable';
+      $('signals-live-dot').className='signals-live-dot'+(hasLiveQuotes?' is-live':' is-stale');
+      $('signals-updated').textContent='Live scan checked '+checkedAt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    }catch(error){
+      await load();
+      $('signals-live-label').textContent='Live refresh unavailable';$('signals-live-dot').className='signals-live-dot is-stale';
+      $('signals-updated').textContent='Showing persisted records; live scan failed';
+      $('signals-error').textContent=error.message||'Live market refresh failed.';$('signals-error').hidden=false;
+    }finally{button.disabled=false;}
+  }
+  $('signals-refresh').addEventListener('click',refreshNow);
   async function openSignalDetail(id){const dialog=$('signal-detail-dialog');if(!dialog)return; $('signal-detail-title').textContent='Signal details';$('signal-detail-status').textContent='Loading authorized signal details…';$('signal-detail-fields').innerHTML='';if(!dialog.open)dialog.showModal();try{const response=await fetch('/api/signals/workspace/?detail_id='+encodeURIComponent(id),{credentials:'same-origin',headers:{Accept:'application/json'}});const data=await response.json();if(!response.ok)throw new Error(data.message||'Signal details unavailable.');const r=data.detail; $('signal-detail-title').textContent=(r.symbol||'Signal')+' · '+(r.direction||'Direction unavailable');$('signal-detail-status').textContent='Persisted signal facts · '+(r.created_at?new Date(r.created_at).toLocaleString():'timestamp unavailable');const fields=[['Market',r.market],['Strategy',r.strategy],['Classification',title(r.strategy_category)],['Entry price',r.entry_price],['Take profit',r.take_profit],['Stop loss',r.stop_loss],['Confidence',r.confidence==null?'Unavailable':r.confidence+'%'],['Lifecycle',title(r.status)],['Outcome',r.metadata_outcome||'Not recorded']];$('signal-detail-fields').innerHTML=fields.map(([label,value])=>'<div><dt>'+esc(label)+'</dt><dd>'+esc(value==null||value===''?'Unavailable':value)+'</dd></div>').join('');}catch(error){$('signal-detail-status').textContent=error.message||'Signal details unavailable.';}}
   document.addEventListener('click',event=>{const button=event.target.closest('[data-open-signal]');if(button)openSignalDetail(button.dataset.openSignal);});
   $('signal-detail-close')?.addEventListener('click',()=>$('signal-detail-dialog').close());
