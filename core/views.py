@@ -152,8 +152,8 @@ def profile_completion_page(request):
             else:
                 try:
                     image = Image.open(avatar_file)
-                    if image.format not in {"JPEG", "PNG", "WEBP", "GIF"}:
-                        errors.append("Profile picture must be JPEG, PNG, WEBP, or GIF.")
+                    if image.format not in {"JPEG", "PNG", "WEBP"}:
+                        errors.append("Profile picture must be JPEG, PNG, or WEBP.")
                     elif image.width * image.height > 25_000_000:
                         errors.append("Profile picture dimensions must not exceed 25 megapixels.")
                     else:
@@ -168,7 +168,7 @@ def profile_completion_page(request):
                         normalized.save(buffer, format="WEBP", quality=85, method=6)
                         picture_data = buffer.getvalue()
                 except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
-                    errors.append("Upload a valid image file (JPEG, PNG, WEBP, or GIF).")
+                    errors.append("Upload a valid image file (JPEG, PNG, or WEBP).")
                 finally:
                     avatar_file.seek(0)
         if new_password or confirm_password:
@@ -242,7 +242,7 @@ def profile_completion_page(request):
         "bio": request.POST.get("bio", profile.bio),
         "profile_picture_url": (
             reverse("profile_picture") + "?v=" + str(int(profile.updated_at.timestamp()))
-            if profile.profile_picture_data else ""
+            if profile.profile_picture_data or profile.avatar_url else ""
         ),
     })
 def terms_page(request): return render(request,'core/terms.html')
