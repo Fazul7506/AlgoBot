@@ -94,3 +94,94 @@ class ProfileCompletionTests(TestCase):
         self.assertRedirects(
             response, reverse("dashboard_page"), fetch_redirect_response=False
         )
+
+    def test_profile_picture_is_persisted_and_served_after_refresh(self):
+        import io
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        image_buffer = io.BytesIO()
+        Image.new("RGB", (64, 64), (20, 120, 180)).save(image_buffer, format="PNG")
+        upload = SimpleUploadedFile(
+            "avatar.png", image_buffer.getvalue(), content_type="image/png"
+        )
+        self.client.force_login(self.user)
+        with patch("core.broker_onboarding.has_authorized_broker_connection", return_value=False):
+            response = self.client.post(
+                reverse("profile_completion_page"),
+                {
+                    "first_name": "Taylor",
+                    "last_name": "Example",
+                    "username": self.user.username,
+                    "timezone": "Africa/Nairobi",
+                    "profile_picture": upload,
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertTrue(profile.profile_picture_data)
+        self.assertEqual(profile.profile_picture_content_type, "image/webp")
+        self.assertEqual(profile.avatar_url, "")
+        photo_response = self.client.get(reverse("profile_picture"))
+        self.assertEqual(photo_response.status_code, 200)
+        self.assertEqual(photo_response["Content-Type"], "image/webp")
+        self.assertEqual(photo_response.content, bytes(profile.profile_picture_data))
+
+    def test_optional_password_can_be_set_without_losing_browser_session(self):
+        self.client.force_login(self.user)
+        new_password = "Distinct-Strong-Password!824"
+        with patch("core.broker_onboarding.has_authorized_broker_connection", return_value=False):
+            response = self.client.post(
+                reverse("profile_completion_page"),
+                {
+                    "first_name": "Taylor",
+                    "last_name": "Example",
+                    "username": self.user.username,
+                    "new_password": new_password,
+                    "confirm_password": new_password,
+                    "timezone": "Africa/Nairobi",
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(new_password))
+        self.assertEqual(
+            self.client.get(reverse("profile_completion_page")).status_code, 200
+        )
+
+    def test_username_collision_is_rejected(self):
+        other = get_user_model().objects.create_user(
+            username="already-taken", email="other-profile@example.test"
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_completion_page"),
+            {
+                "first_name": "Taylor",
+                "last_name": "Example",
+                "username": other.username,
+                "timezone": "Africa/Nairobi",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "That username is already in use.")
+        self.user.refresh_from_db()
+        self.assertNotEqual(self.user.username, other.username)
+
+    def test_optional_date_of_birth_and_gender_are_saved(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_completion_page"),
+            {
+                "first_name": "Taylor",
+                "last_name": "Example",
+                "username": self.user.username,
+                "timezone": "Africa/Nairobi",
+                "date_of_birth": "1998-04-12",
+                "gender": "prefer_not_to_say",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(str(profile.date_of_birth), "1998-04-12")
+        self.assertEqual(profile.gender, "prefer_not_to_say")
