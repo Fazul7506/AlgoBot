@@ -268,7 +268,7 @@
   </div>
 
   <section class="profile-onboarding__next" aria-label="Next steps">
-    <article><strong>Next: broker marketplace</strong><p>After saving your profile, choose a supported broker connection. AlgoBot will not create a broker connection without your action.</p></article>
+    <article><strong>Next: Broker marketplace</strong><p>After saving your profile, choose a supported broker connection. AlgoBot will not create a broker connection without your action.</p></article>
     <article><strong>Your account, your control</strong><p>Your AlgoBot profile details are separate from your broker credentials and account balances.</p></article>
   </section>
   <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js" defer></script>
@@ -382,12 +382,16 @@
       if (selectedPhoneOption) phoneCode.selectedIndex = phoneOptions.indexOf(selectedPhoneOption);
       let syncing = false;
       const refreshSelect = select => select.dispatchEvent(new Event("change", { bubbles: true }));
+      function syncCallingCode(countryOption) {
+        const iso = countryOption?.dataset.iso;
+        const match = phoneOptions.findIndex(option => option.dataset.iso === iso);
+        if (match >= 0) phoneCode.selectedIndex = match;
+        return match >= 0;
+      }
       const syncFromCountry = () => {
         if (syncing) return;
         syncing = true;
-        const iso = countryInput.selectedOptions[0]?.dataset.iso;
-        const match = phoneOptions.findIndex(option => option.dataset.iso === iso);
-        if (match >= 0) phoneCode.selectedIndex = match;
+        syncCallingCode(countryInput.selectedOptions[0]);
         refreshSelect(phoneCode);
         syncing = false;
       };
