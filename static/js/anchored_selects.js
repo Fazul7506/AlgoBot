@@ -8,7 +8,10 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const MARKET_SELECTOR = 'select#symbol,select[name="symbol"],select[data-symbol],select[data-ai-symbol],select#symbolFilter,select[data-instrument-symbol],select[data-market-symbol],select[data-history-symbol],select[data-scanner-market],select[data-market-filter],select[data-market]';
   const instrumentValue = value => /^(?:R_\d+|1HZ\d+V|BOOM\d+|CRASH\d+|JD\d+|STP\d+|STPRNG\d*|FRX[A-Z]{6}|[A-Z]{3}[A-Z]{3}|[A-Z]{1,6}\.[A-Z]{1,3}|CRY[A-Z0-9]+|BTCUSD|ETHUSD|XAUUSD|XAGUSD)$/i.test(String(value || '').trim());
-  const isInstrumentSelect = select => select.matches(MARKET_SELECTOR) || [...select.options].some(option => option.value && instrumentValue(option.value));
+  // Instrument detection must be based on explicit market-control semantics, not option values.
+  // Country codes (e.g. EUR, GBP, XAU-like codes) can resemble symbols and must never
+  // cause country/profile dropdowns to inherit market search placeholders or ticker badges.
+  const isInstrumentSelect = select => select.matches(MARKET_SELECTOR) || select.dataset.abSelectType === 'instrument';
   const optionLabel = option => String(option?.textContent || option?.label || option?.value || '').replace(/\s+/g, ' ').trim();
   const iconFor = (select, option) => {
     if (!option || !option.value) return '<span class="ab-select-option-icon ab-select-option-icon--empty" aria-hidden="true"><span class="material-symbols-rounded">list</span></span>';
@@ -16,8 +19,9 @@
       const row = {symbol: option.value, display_name: optionLabel(option) || option.value};
       const official = window.AlgoBotMarketAssets?.renderIcon?.(row);
       if (official) return '<span class="ab-select-option-icon ab-select-option-icon--market" aria-hidden="true">' + official + '</span>';
-      const fallback = String(option.value).slice(0, 2).toUpperCase();
-      return '<span class="ab-select-option-icon ab-select-option-icon--fallback" aria-hidden="true">' + esc(fallback) + '</span>';
+      // Never render ticker initials as icon badges: they become misleading "B"/"BB"
+      // tiles in country selectors on mobile and when an instrument asset is unavailable.
+      return '<span class="ab-select-option-icon ab-select-option-icon--market-fallback" aria-hidden="true"><span class="material-symbols-rounded">show_chart</span></span>';
     }
     return '<span class="ab-select-option-icon" aria-hidden="true"><span class="material-symbols-rounded">check</span></span>';
   };
