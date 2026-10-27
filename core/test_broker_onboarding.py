@@ -42,14 +42,10 @@ class BrokerOnboardingGateTests(TestCase):
                 response = self.client.get(path)
                 self.assertNotEqual(response.status_code, 302)
 
-    def test_broker_marketplace_remains_accessible_during_onboarding(self):
+    def test_broker_marketplace_remains_accessible_after_required_profile_completion(self):
         self.client.force_login(self.user)
         response = self.client.get("/brokers/marketplace/")
-        self.assertRedirects(
-            response,
-            reverse("profile_completion_page"),
-            fetch_redirect_response=False,
-        )
+        self.assertEqual(response.status_code, 200)
 
     def test_automation_workspaces_are_available_but_wait_for_broker_before_execution(self):
         self.client.force_login(self.user)
