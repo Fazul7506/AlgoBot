@@ -1,36 +1,35 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Complete your profile | AlgoBot{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account4">{% endblock %}
 {% block content %}
-<main class="container" id="main-content">
-  <section class="page-header">
-    <p class="eyebrow">ACCOUNT SETUP</p>
-    <h1>Complete your profile</h1>
-    <p>Finish setting up your AlgoBot account before entering your trading workspace.</p>
-  </section>
-
-  <form method="post" class="card profile-completion-form">
-    {% csrf_token %}
-    <div class="form-grid">
-      <label for="first_name">First name <span aria-hidden="true">*</span>
-        <input id="first_name" name="first_name" type="text" maxlength="150" autocomplete="given-name" value="{{ first_name }}" required>
+<main class="account-page profile-completion-page" id="main-content">
+  <header class="account-hero">
+    <div class="account-hero__identity">
+      <label class="account-profile-avatar account-profile-avatar--editable" data-avatar-preview for="profile-picture" title="Add or change profile picture" aria-label="Add or change profile picture">
+        {% if profile.profile_picture_data %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U' }}" alt="Current profile picture">{% else %}<span>{{ profile_initials }}</span>{% endif %}
+        <span class="account-avatar-edit" aria-hidden="true">✎</span>
+        <input id="profile-picture" name="profile_picture" form="profile-completion-form" data-profile-picture-input type="file" accept="image/jpeg,image/png,image/webp,image/gif" autocomplete="off" aria-label="Choose profile picture" hidden>
       </label>
-      <label for="last_name">Last name <span aria-hidden="true">*</span>
-        <input id="last_name" name="last_name" type="text" maxlength="150" autocomplete="family-name" value="{{ last_name }}" required>
-      </label>
-      <label for="phone">Phone (optional)
-        <input id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel" value="{{ phone }}">
-      </label>
-      <label for="country">Country (optional)
-        <input id="country" name="country" type="text" maxlength="100" autocomplete="country-name" value="{{ country }}">
-      </label>
-      <label for="timezone">Timezone
-        <input id="timezone" name="timezone" type="text" maxlength="100" value="{{ timezone_value|default:'UTC' }}">
-      </label>
-      <label for="bio">About you (optional)
-        <textarea id="bio" name="bio" rows="3">{{ bio }}</textarea>
-      </label>
+      <div><p class="account-kicker">ACCOUNT SETUP</p><h1>Complete your profile</h1><p class="account-subtitle">Finish setting up your AlgoBot account before entering your trading workspace.</p></div>
     </div>
-    <button type="submit" class="btn btn-primary">Save profile and continue</button>
+  </header>
+  <form id="profile-completion-form" class="account-content" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% for message in messages %}<p class="account-alert {% if message.tags == 'error' %}account-alert--error{% elif message.tags == 'success' %}account-alert--success{% endif %}" role="status">{{ message }}</p>{% endfor %}
+    <section class="account-card">
+      <div class="account-card__header"><div><h2>Personal information</h2><p class="account-card__hint">Add your details and choose a profile picture. You can crop and preview it before saving.</p></div><span class="account-state">Private</span></div>
+      <div class="account-fields">
+        <div class="account-field"><label for="first_name">First name <span aria-hidden="true">*</span></label><input id="first_name" name="first_name" type="text" maxlength="150" autocomplete="given-name" value="{{ first_name }}" required></div>
+        <div class="account-field"><label for="last_name">Last name <span aria-hidden="true">*</span></label><input id="last_name" name="last_name" type="text" maxlength="150" autocomplete="family-name" value="{{ last_name }}" required></div>
+        <div class="account-field"><label for="phone">Phone (optional)</label><input id="phone" name="phone" type="tel" maxlength="32" autocomplete="tel" value="{{ phone }}"></div>
+        <div class="account-field"><label for="country">Country (optional)</label><input id="country" name="country" type="text" maxlength="100" autocomplete="country-name" value="{{ country }}"></div>
+        <div class="account-field"><label for="timezone">Timezone</label><input id="timezone" name="timezone" type="text" maxlength="100" value="{{ timezone_value|default:'UTC' }}"></div>
+        <div class="account-field account-field--full"><label for="bio">About you (optional)</label><textarea id="bio" name="bio" rows="3" maxlength="5000">{{ bio }}</textarea></div>
+      </div>
+      <div class="account-actions"><button type="submit" class="account-btn account-btn--primary">Save profile and continue</button></div>
+    </section>
   </form>
 </main>
+{% include 'core/_profile_picture_editor.html' %}
 {% endblock %}
