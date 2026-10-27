@@ -78,7 +78,7 @@
     <span class="profile-onboarding__step"><b>3</b> Trading workspace</span>
   </nav>
 
-  <form method="post" class="profile-onboarding__card" autocomplete="on">
+  <form method="post" enctype="multipart/form-data" class="profile-onboarding__card" autocomplete="on">
     {% csrf_token %}
     <div class="profile-onboarding__cardhead">
       <h2><span class="profile-onboarding__section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>Personal information</h2>
@@ -88,6 +88,12 @@
       <p class="alert alert-{{ message.tags }}" role="alert">{{ message }}</p>
     {% endfor %}
     <div class="profile-onboarding__grid">
+      <div class="profile-onboarding__field">
+        <label for="profile_picture">Profile picture <span class="profile-onboarding__hint">(optional)</span></label>
+        {% if profile_picture_url %}<img id="profile-picture-preview" src="{{ profile_picture_url }}" alt="Current profile picture" style="width:76px;height:76px;border-radius:50%;object-fit:cover">{% else %}<img id="profile-picture-preview" alt="Profile picture preview" hidden style="width:76px;height:76px;border-radius:50%;object-fit:cover">{% endif %}
+        <input id="profile_picture" name="profile_picture" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+        <span class="profile-onboarding__hint">JPEG, PNG, WEBP or GIF; maximum 5 MB. Reuses your account profile picture.</span>
+      </div>
       <div class="profile-onboarding__field">
         <label for="first_name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>First name <span aria-hidden="true">*</span></label>
         <input id="first_name" name="first_name" type="text" maxlength="150" autocomplete="given-name" value="{{ first_name }}" required>
@@ -165,6 +171,21 @@
     <article><strong>Your account, your control</strong><p>Your AlgoBot profile details are separate from your broker credentials and account balances.</p></article>
   </section>
   <script>
+    const avatarInput = document.getElementById("profile_picture");
+    const avatarPreview = document.getElementById("profile-picture-preview");
+    if (avatarInput && avatarPreview) {
+      avatarInput.addEventListener("change", function () {
+        const file = avatarInput.files && avatarInput.files[0];
+        if (!file) return;
+        if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+          avatarInput.value = "";
+          avatarPreview.hidden = true;
+          return;
+        }
+        avatarPreview.src = URL.createObjectURL(file);
+        avatarPreview.hidden = false;
+      });
+    }
     document.querySelectorAll("[data-password-toggle]").forEach(function (button) {
       button.addEventListener("click", function () {
         const input = document.getElementById(button.dataset.passwordToggle);
