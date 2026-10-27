@@ -164,57 +164,84 @@ def signals_workspace_api(request):
         detail_market = MarketSymbol.objects.filter(symbol=detail_row.symbol).only("symbol", "display_name", "market").first()
         return JsonResponse({"status": "success", "detail": _serialize(detail_row, {detail_row.symbol: detail_market} if detail_market else {})})
 
-    # Aggregate in SQL where possible; the account scope is applied before any data is read.
-    recent_start = now - timedelta(days=7)
-    prior_start = now - timedelta(days=14)
-    all_rows = list(base.order_by("-timestamp", "-pk"))
-    filtered = [row for row in all_rows if _matches_category(row, category)]
-    total = len(filtered)
+    # Keep table rows paginated in SQL and compute counts without materializing the
+    # full signal queryset. Legacy outcome metadata is streamed in bounded chunks.
+    def category_queryset(key):
+        if key == "all":
+            return base
+        if key == "high_confidence":
+            return base.filter(confidence__gte=HIGH_CONFIDENCE_THRESHOLD)
+        if key == "scalping":
+            return base.filter(Q(strategy__category__icontains="scalping") | Q(metadata__strategy_category__icontains="scalp") | Q(metadata__classification__icontains="scalp"))
+        if key == "swing":
+            return base.filter(Q(strategy__category__icontains="swing") | Q(metadata__strategy_category__icontains="swing") | Q(metadata__classification__icontains="swing"))
+        if key == "intraday":
+            return base.filter(Q(metadata__strategy_category__icontains="intraday") | Q(metadata__classification__icontains="intraday"))
+        return base.none()
+
+    category_counts = {key: category_queryset(key).count() for key in ("all", "high_confidence", "scalping", "intraday", "swing")}
+    filtered_qs = category_queryset(category if category in category_counts else "all")
+    total = filtered_qs.count()
     pages = (total + page_size - 1) // page_size
     if pages and page > pages:
         page = pages
     start = (page - 1) * page_size
-    page_rows = filtered[start:start + page_size]
+    page_rows = list(filtered_qs.select_related("strategy", "configuration").order_by("-timestamp", "-pk")[start:start + page_size])
     market_lookup = {m.symbol: m for m in MarketSymbol.objects.filter(symbol__in=[r.symbol for r in page_rows]).only("symbol", "display_name", "market")}
 
-    category_counts = {"all": len(all_rows), "high_confidence": sum(1 for row in all_rows if _matches_category(row, "high_confidence")),
-                       "scalping": sum(1 for row in all_rows if _matches_category(row, "scalping")),
-                       "intraday": sum(1 for row in all_rows if _matches_category(row, "intraday")),
-                       "swing": sum(1 for row in all_rows if _matches_category(row, "swing"))}
-    last_week = [r for r in all_rows if r.timestamp >= recent_start]
-    prior_week = [r for r in all_rows if prior_start <= r.timestamp < recent_start]
-    active_states = {"active", "actionable", "open", "live", "confirmed"}
-    active_count = sum(1 for row in all_rows if _lifecycle(row) in active_states)
+    recent_start = now - timedelta(days=7)
+    prior_start = now - timedelta(days=14)
+    active_states = ["active", "actionable", "open", "live", "confirmed"]
+    active_q = (Q(metadata__lifecycle__in=active_states) | Q(metadata__lifecycle_state__in=active_states) | Q(metadata__status__in=active_states))
+    active_count = base.filter(active_q).count()
+    active_recent = base.filter(timestamp__gte=recent_start).filter(active_q).count()
+    active_prior = base.filter(timestamp__gte=prior_start, timestamp__lt=recent_start).filter(active_q).count()
+    last_week_count = base.filter(timestamp__gte=recent_start).count()
+    prior_week_count = base.filter(timestamp__gte=prior_start, timestamp__lt=recent_start).count()
+    trend_counts = [base.filter(timestamp__date=(now.date() - timedelta(days=day))).count() for day in range(6, -1, -1)]
+    trend_active = [base.filter(timestamp__date=(now.date() - timedelta(days=day))).filter(active_q).count() for day in range(6, -1, -1)]
+
+    def outcomes_for(queryset):
+        rows = ({"metadata": meta} for meta in queryset.values_list("metadata", flat=True).iterator(chunk_size=500))
+        return _outcome_stats(rows)
+
+    outcomes = outcomes_for(base)
+    current_outcomes = outcomes_for(base.filter(timestamp__gte=recent_start))
+    prior_outcomes = outcomes_for(base.filter(timestamp__gte=prior_start, timestamp__lt=recent_start))
+    daily_win_rates = []
+    daily_profit_factors = []
+    for day in range(6, -1, -1):
+        day_qs = base.filter(timestamp__date=(now.date() - timedelta(days=day)))
+        daily = outcomes_for(day_qs)
+        daily_win_rates.append(daily["win_rate"])
+        daily_profit_factors.append(daily["profit_factor"])
+    latest = base.order_by("-timestamp", "-pk").values_list("timestamp", flat=True).first()
     metrics = {
-        "total_signals": len(all_rows),
-        "total_signals_change": len(last_week) - len(prior_week),
+        "total_signals": category_counts["all"],
+        "total_signals_change": last_week_count - prior_week_count,
         "active_signals": active_count,
-        "active_signals_change": sum(1 for r in last_week if _lifecycle(r) in active_states) - sum(1 for r in prior_week if _lifecycle(r) in active_states),
+        "active_signals_change": active_recent - active_prior,
         "high_confidence_threshold": str(HIGH_CONFIDENCE_THRESHOLD),
-        "win_rate": None, "win_rate_change": None, "profit_factor": None, "profit_factor_change": None,
-        "trend": {"daily_counts": [sum(1 for r in all_rows if (now.date() - r.timestamp.date()).days == day) for day in range(6, -1, -1)], "daily_active_counts": [sum(1 for r in all_rows if (now.date() - r.timestamp.date()).days == day and _lifecycle(r) in {"active", "actionable", "open", "live", "confirmed"}) for day in range(6, -1, -1)], "daily_win_rates": [_outcome_stats([r for r in all_rows if (now.date() - r.timestamp.date()).days == day])["win_rate"] for day in range(6, -1, -1)], "daily_profit_factors": [_outcome_stats([r for r in all_rows if (now.date() - r.timestamp.date()).days == day])["profit_factor"] for day in range(6, -1, -1)]},
-        "last_updated": max((r.timestamp for r in all_rows), default=None).isoformat() if all_rows else None,
-        "service_state": "available" if all_rows else "empty",
+        "win_rate": outcomes["win_rate"],
+        "win_rate_change": (current_outcomes["win_rate"] - prior_outcomes["win_rate"]) if current_outcomes["win_rate"] is not None and prior_outcomes["win_rate"] is not None else None,
+        "profit_factor": outcomes["profit_factor"],
+        "profit_factor_change": (float(current_outcomes["profit_factor"]) - float(prior_outcomes["profit_factor"])) if current_outcomes["profit_factor"] is not None and prior_outcomes["profit_factor"] is not None else None,
+        "trend": {"daily_counts": trend_counts, "daily_active_counts": trend_active, "daily_win_rates": daily_win_rates, "daily_profit_factors": daily_profit_factors},
+        "last_updated": latest.isoformat() if latest else None,
+        "service_state": "available" if category_counts["all"] else "empty",
     }
-    outcomes = _outcome_stats(all_rows)
-    metrics["win_rate"] = outcomes["win_rate"]
-    metrics["profit_factor"] = outcomes["profit_factor"]
-    current_outcomes = _outcome_stats([r for r in all_rows if r.timestamp >= recent_start])
-    prior_outcomes = _outcome_stats([r for r in all_rows if prior_start <= r.timestamp < recent_start])
-    metrics["win_rate_change"] = (current_outcomes["win_rate"] - prior_outcomes["win_rate"]) if current_outcomes["win_rate"] is not None and prior_outcomes["win_rate"] is not None else None
-    metrics["profit_factor_change"] = (float(current_outcomes["profit_factor"]) - float(prior_outcomes["profit_factor"])) if current_outcomes["profit_factor"] is not None and prior_outcomes["profit_factor"] is not None else None
     performance = outcomes
     try:
         assets = list(MarketSymbol.objects.filter(is_active=True, is_tradable=True, symbol__in=base.values("symbol")).values_list("symbol", flat=True).distinct().order_by("symbol")[:500])
         markets = list(MarketSymbol.objects.filter(is_active=True, is_tradable=True, symbol__in=base.values("symbol")).values_list("market", flat=True).distinct().order_by("market"))
     except Exception:
         log.exception("Unable to load Signals filter catalog")
-        assets, markets = sorted({r.symbol for r in all_rows}), sorted({str(_metadata(r).get("market_type") or "Unclassified") for r in all_rows})
-    recent = list(base.select_related("strategy").order_by("-timestamp", "-pk")[:5])
-    recent_lookup = {m.symbol: m for m in MarketSymbol.objects.filter(symbol__in=[r.symbol for r in recent]).only("symbol", "display_name", "market")}
+        assets, markets = list(base.values_list("symbol", flat=True).distinct()[:500]), []
+    recent_rows = list(base.select_related("strategy", "configuration").order_by("-timestamp", "-pk")[:5])
+    recent_lookup = {m.symbol: m for m in MarketSymbol.objects.filter(symbol__in=[r.symbol for r in recent_rows]).only("symbol", "display_name", "market")}
     return JsonResponse({
         "status": "success", "signals": [_serialize(r, market_lookup) for r in page_rows],
-        "count": total, "total_unfiltered": len(all_rows), "page": page, "page_size": page_size, "pages": pages,
+        "count": total, "total_unfiltered": category_counts["all"], "page": page, "page_size": page_size, "pages": pages,
         "start": start + 1 if total else 0, "end": min(start + len(page_rows), total),
         "category_counts": category_counts, "metrics": metrics, "performance": performance,
         "recent": [_serialize(r, recent_lookup) for r in recent],
