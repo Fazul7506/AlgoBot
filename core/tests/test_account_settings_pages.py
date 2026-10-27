@@ -56,46 +56,34 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(other_profile.phone, "")
         self.assertEqual(other_profile.bio, "")
 
-    @override_settings(CLOUDINARY_URL="cloudinary://test:test@demo")
     def test_profile_page_accepts_device_uploaded_image_and_persists_it(self):
         buffer = io.BytesIO()
         Image.new("RGB", (2, 2), color=(30, 90, 160)).save(buffer, format="PNG")
-        upload = SimpleUploadedFile("avatar.png", buffer.getvalue(), content_type="image/png")
-        avatar_url = f"https://res.cloudinary.com/demo/image/upload/algobot/profile-pictures/user-{self.user.pk}.webp"
-
-        # Cloudinary is an optional deployment integration and is not installed
-        # in the minimal CI test environment. Stub its modules at the import
-        # boundary so this test verifies our contract without network access.
-        cloudinary_module = ModuleType("cloudinary")
-        cloudinary_module.config = MagicMock()
-        uploader_module = ModuleType("cloudinary.uploader")
-        uploader_module.upload = MagicMock(return_value={"secure_url": avatar_url})
-        cloudinary_module.uploader = uploader_module
-
-        with patch.dict(sys.modules, {
-            "cloudinary": cloudinary_module,
-            "cloudinary.uploader": uploader_module,
-        }):
-            response = self.client.post(reverse("profile_page"), {
-                "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
-                "timezone": "Africa/Nairobi", "phone": "+254700000000", "bio": "Quant researcher",
-                "profile_picture": upload,
-            })
-
-        self.assertRedirects(response, reverse("profile_page"), fetch_redirect_response=False)
-        cloudinary_module.config.assert_called_once_with(
-            cloudinary_url="cloudinary://test:test@demo", secure=True
+        upload = SimpleUploadedFile(
+            "avatar.png", buffer.getvalue(), content_type="image/png"
         )
-        uploader_module.upload.assert_called_once()
-        self.assertEqual(uploader_module.upload.call_args.kwargs["resource_type"], "image")
-        self.assertEqual(uploader_module.upload.call_args.kwargs["format"], "webp")
+
+        response = self.client.post(reverse("profile_page"), {
+            "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
+            "timezone": "Africa/Nairobi", "phone": "+254700000000",
+            "bio": "Quant researcher", "profile_picture": upload,
+        })
+
+        self.assertRedirects(
+            response, reverse("profile_page"), fetch_redirect_response=False
+        )
         profile = UserProfile.objects.get(user=self.user)
-        self.assertEqual(profile.avatar_url, avatar_url)
+        self.assertTrue(profile.profile_picture_data)
+        self.assertEqual(profile.profile_picture_content_type, "image/webp")
+        self.assertEqual(profile.avatar_url, "")
         self.assertEqual(profile.country, "Kenya")
         self.assertEqual(profile.bio, "Quant researcher")
+
+        # The saved bytes must be served after a fresh request, not just previewed.
         picture_response = self.client.get(reverse("profile_picture"))
-        self.assertEqual(picture_response.status_code, 302)
-        self.assertEqual(picture_response["Location"], avatar_url)
+        self.assertEqual(picture_response.status_code, 200)
+        self.assertEqual(picture_response["Content-Type"], "image/webp")
+        self.assertEqual(picture_response.content, bytes(profile.profile_picture_data))
         self.assertEqual(picture_response["X-Content-Type-Options"], "nosniff")
 
     def test_profile_page_rejects_invalid_timezone_without_persisting(self):
