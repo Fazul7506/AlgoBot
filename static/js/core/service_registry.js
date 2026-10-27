@@ -10,7 +10,7 @@
     orders: { paths: ['/orders/'], module: 'orders.js' },
     'trade-history': { paths: ['/trade-history/'], module: 'trade_history.js' },
     positions: { paths: ['/positions/'], module: 'positions.js' },
-    signals: { paths: ['/signals/'], module: 'signals.js' },
+    signals: { paths: ['/signals/'], module: 'signals_workspace_rebuild.js' },
     strategies: { paths: ['/strategies/'], module: 'strategy_builder.js' },
     backtesting: { paths: ['/backtesting/'], module: 'backtesting_workspace_fix.js' },
     predictions: { paths: ['/predictions/', '/analysis/'], module: 'predictions_workspace_fix.js' },
