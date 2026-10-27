@@ -98,19 +98,66 @@ def profile_completion_page(request):
 
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     if request.method == "POST":
+        from datetime import date
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        from django.contrib.auth import password_validation
+
         first_name = str(request.POST.get("first_name") or "").strip()
         last_name = str(request.POST.get("last_name") or "").strip()
+        username = str(request.POST.get("username") or request.user.username).strip()
+        new_password = str(request.POST.get("new_password") or "")
+        confirm_password = str(request.POST.get("confirm_password") or "")
+        dob_raw = str(request.POST.get("date_of_birth") or "").strip()
+        gender = str(request.POST.get("gender") or "").strip()
+        errors = []
         if not first_name or not last_name:
-            messages.error(request, "Enter your first and last name to complete your profile.")
+            errors.append("Enter your first and last name to complete your profile.")
+        if not username or len(username) > 150:
+            errors.append("Enter a valid username (150 characters or fewer).")
+        elif UserProfile.user.field.related_model.objects.filter(username__iexact=username).exclude(pk=request.user.pk).exists():
+            errors.append("That username is already in use.")
+        dob = None
+        if dob_raw:
+            try:
+                dob = date.fromisoformat(dob_raw)
+                if dob > date.today():
+                    errors.append("Date of birth cannot be in the future.")
+            except ValueError:
+                errors.append("Enter a valid date of birth.")
+        if gender and gender not in {"female", "male", "non_binary", "prefer_not_to_say", "self_described"}:
+            errors.append("Choose a valid gender option.")
+        if new_password or confirm_password:
+            if not new_password or new_password != confirm_password:
+                errors.append("Enter matching passwords in both password fields.")
+            else:
+                try:
+                    validate_password(new_password, user=request.user)
+                except ValidationError as exc:
+                    errors.extend(exc.messages)
+        if errors:
+            for error in errors:
+                messages.error(request, error)
         else:
             request.user.first_name = first_name[:150]
             request.user.last_name = last_name[:150]
-            request.user.save(update_fields=["first_name", "last_name"])
-            profile.phone = str(request.POST.get("phone") or "").strip()[:20]
+            request.user.username = username
+            user_fields = ["first_name", "last_name", "username"]
+            if new_password:
+                request.user.set_password(new_password)
+                user_fields.append("password")
+            request.user.save(update_fields=user_fields)
+            if new_password:
+                # Keep the current browser session valid after an explicit password set.
+                from django.contrib.auth import update_session_auth_hash
+                update_session_auth_hash(request, request.user)
+            profile.phone = str(request.POST.get("phone") or "").strip()[:32]
             profile.country = str(request.POST.get("country") or "").strip()[:100]
             profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
-            profile.bio = str(request.POST.get("bio") or "").strip()
-            profile.save(update_fields=["phone", "country", "timezone", "bio", "updated_at"])
+            profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
+            profile.date_of_birth = dob
+            profile.gender = gender
+            profile.save(update_fields=["phone", "country", "timezone", "bio", "date_of_birth", "gender", "updated_at"])
             messages.success(request, "Your AlgoBot profile is complete.")
             # New Google signups must visit the broker marketplace after profile
             # completion, regardless of any pre-existing account-side connection.
@@ -123,6 +170,9 @@ def profile_completion_page(request):
     return render(request, "core/profile_completion.html", {
         "first_name": request.POST.get("first_name", request.user.first_name),
         "last_name": request.POST.get("last_name", request.user.last_name),
+        "username": request.POST.get("username", request.user.username),
+        "date_of_birth": request.POST.get("date_of_birth", profile.date_of_birth.isoformat() if profile.date_of_birth else ""),
+        "gender": request.POST.get("gender", profile.gender),
         "phone": request.POST.get("phone", profile.phone),
         "country": request.POST.get("country", profile.country),
         "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
