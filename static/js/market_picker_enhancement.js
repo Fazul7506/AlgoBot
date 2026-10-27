@@ -32,7 +32,7 @@
   const renderIcon = (select, name) => {
     const symbol = select.value;
     const row = {symbol, display_name: name};
-    return window.AlgoBotMarketAssets?.renderIcon?.(row) || '<span class="market-avatar market-avatar-unmapped" aria-hidden="true">•</span>';
+    return window.AlgoBotMarketAssets?.renderIcon?.(row) || '<span class="market-avatar market-avatar-unmapped" aria-hidden="true"><span class="material-symbols-rounded">show_chart</span></span>';
   };
   const marketIcon = item => {
     const symbol = String((typeof item?.symbol === 'object' ? item.symbol.symbol : item?.symbol) || item?.underlying_symbol || item?.code || '');
