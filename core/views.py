@@ -103,6 +103,7 @@ def profile_completion_page(request):
     if request.method == "POST":
         from datetime import date
         from django.contrib.auth.password_validation import validate_password
+        from django.contrib.auth.validators import UnicodeUsernameValidator
         from django.core.exceptions import ValidationError
         from django.contrib.auth import password_validation
 
@@ -120,8 +121,13 @@ def profile_completion_page(request):
             errors.append("Enter your first and last name to complete your profile.")
         if not username or len(username) > 150:
             errors.append("Enter a valid username (150 characters or fewer).")
-        elif UserProfile.user.field.related_model.objects.filter(username__iexact=username).exclude(pk=request.user.pk).exists():
-            errors.append("That username is already in use.")
+        else:
+            try:
+                UnicodeUsernameValidator()(username)
+            except ValidationError as exc:
+                errors.extend(exc.messages)
+            if UserProfile.user.field.related_model.objects.filter(username__iexact=username).exclude(pk=request.user.pk).exists():
+                errors.append("That username is already in use.")
         dob = None
         if dob_raw:
             try:
@@ -222,7 +228,10 @@ def profile_completion_page(request):
         "country": request.POST.get("country", profile.country),
         "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
         "bio": request.POST.get("bio", profile.bio),
-        "profile_picture_url": reverse("profile_picture") if profile.profile_picture_data else "",
+        "profile_picture_url": (
+            reverse("profile_picture") + "?v=" + str(int(profile.updated_at.timestamp()))
+            if profile.profile_picture_data else ""
+        ),
     })
 def terms_page(request): return render(request,'core/terms.html')
 def privacy_page(request): return render(request,'core/privacy.html')
