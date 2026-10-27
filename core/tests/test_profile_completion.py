@@ -310,3 +310,13 @@ class ProfileCompletionTests(TestCase):
         self.assertIn("Get Started with AlgoBot", template)
         self.assertIn("Personalized recommendations", template)
         self.assertIn("Secure account verification", template)
+
+
+    def test_country_selectors_use_full_existing_country_dataset_and_iso_sync(self):
+        from pathlib import Path
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        self.assertIn("intlTelInput.getCountryData()", template)
+        self.assertIn("const phoneOptions = data.map", template)
+        self.assertIn("const syncFromCountry", template)
+        self.assertIn("const syncFromPhone", template)
+        self.assertIn("anchored_selects.js", Path("templates/base.html").read_text(encoding="utf-8"))
