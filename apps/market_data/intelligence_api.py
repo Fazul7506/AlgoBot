@@ -1,4 +1,5 @@
 from collections import Counter
+from datetime import timedelta
 from decimal import Decimal
 
 from django.utils import timezone
@@ -228,7 +229,7 @@ def signal_lifecycle(request):
         "page_size": page_size,
         "pages": (total + page_size - 1) // page_size,
         "category_counts": category_counts,
-        "active_count": filtered_qs.filter(timestamp__gte=now - timezone.timedelta(seconds=SIGNAL_ACTIVE_SECONDS)).count(),
+        "active_count": filtered_qs.filter(timestamp__gte=now - timedelta(seconds=SIGNAL_ACTIVE_SECONDS)).count(),
         "asset_options": list(filtered_qs.values_list("symbol", flat=True).distinct().order_by("symbol")),
         "signals": data,
     })
