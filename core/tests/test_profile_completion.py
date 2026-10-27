@@ -47,6 +47,35 @@ class ProfileCompletionTests(TestCase):
         self.assertEqual(self.user.last_name, "")
 
 
+
+    def test_profile_page_renders_crop_editor_and_form_owns_picture_input(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("profile_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-profile-picture-editor")
+        self.assertContains(response, 'id="profile-edit-form"')
+        self.assertContains(response, 'form="profile-edit-form"')
+        self.assertContains(response, 'enctype="multipart/form-data"')
+
+    def test_profile_page_persists_cropped_picture_upload(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_page"),
+            {
+                "first_name": "Taylor",
+                "last_name": "Example",
+                "country": "Kenya",
+                "timezone": "Africa/Nairobi",
+                "phone": "+254700000000",
+                "bio": "Profile picture test",
+                "profile_picture": self._png_upload(),
+            },
+        )
+        self.assertRedirects(response, reverse("profile_page"), fetch_redirect_response=False)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertTrue(profile.profile_picture_data)
+        self.assertEqual(profile.profile_picture_content_type, "image/webp")
+
     def _png_upload(self, name="profile.png"):
         image = Image.new("RGB", (64, 64), (25, 120, 180))
         buffer = io.BytesIO()
