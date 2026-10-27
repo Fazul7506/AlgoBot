@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Security Center | AlgoBot
+{% block title %}Account Settings | AlgoBot
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account4"><link rel="stylesheet" href="{% static 'css/security_center.css' %}?v=20261020-security1">{% endblock %}
 {% block content %}
@@ -8,7 +8,7 @@
   <header class="account-hero">
     <div>
       <p class="account-kicker">ACCOUNT PROTECTION</p>
-      <h1><span class="material-symbols-rounded security-title-icon" aria-hidden="true">shield_lock</span>Security Center</h1>
+      <h1><span class="material-symbols-rounded security-title-icon" aria-hidden="true">shield_lock</span>Account Settings</h1>
       <p class="account-subtitle">Manage account security, review recorded activity and strengthen your AlgoBot sign-in.</p>
     </div>
     <span class="account-state {% if checks_ok %}account-state--good{% else %}account-state--warn{% endif %}">{% if checks_ok %}Account checks passed{% else %}Review security checks{% endif %}</span>
