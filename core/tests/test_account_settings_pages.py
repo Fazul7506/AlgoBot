@@ -33,6 +33,19 @@ class AccountSettingsPagesTests(TestCase):
         self.assertContains(response, "Personal information")
         self.assertContains(response, 'name="first_name"')
         self.assertContains(response, "Login &amp; identity")
+        self.assertContains(response, 'id="profile-edit-form"')
+        self.assertContains(response, 'form="profile-edit-form"')
+        self.assertContains(response, "data-avatar-editor")
+
+
+    def test_complete_profile_has_crop_editor_before_image_submission(self):
+        response = self.client.get(reverse("profile_completion_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="profile_picture"')
+        self.assertContains(response, "data-avatar-editor")
+        self.assertContains(response, "data-avatar-crop-image")
+        self.assertContains(response, "Use this picture")
+        self.assertContains(response, 'enctype="multipart/form-data"')
 
     def test_profile_page_persists_only_signed_in_users_details(self):
         response = self.client.post(reverse("profile_page"), {
