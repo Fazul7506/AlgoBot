@@ -95,6 +95,9 @@ def profile_completion_page(request):
     from django.contrib import messages
     from core.broker_onboarding import has_authorized_broker_connection
     from core.models import UserProfile
+    from django.conf import settings
+    import io
+    from PIL import Image, UnidentifiedImageError
 
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     if request.method == "POST":
@@ -110,6 +113,8 @@ def profile_completion_page(request):
         confirm_password = str(request.POST.get("confirm_password") or "")
         dob_raw = str(request.POST.get("date_of_birth") or "").strip()
         gender = str(request.POST.get("gender") or "").strip()
+        avatar_file = request.FILES.get("profile_picture")
+        picture_data = None
         errors = []
         if not first_name or not last_name:
             errors.append("Enter your first and last name to complete your profile.")
@@ -127,6 +132,31 @@ def profile_completion_page(request):
                 errors.append("Enter a valid date of birth.")
         if gender and gender not in {"female", "male", "non_binary", "prefer_not_to_say", "self_described"}:
             errors.append("Choose a valid gender option.")
+        if avatar_file:
+            if avatar_file.size > 5 * 1024 * 1024:
+                errors.append("Profile picture must be 5 MB or smaller.")
+            else:
+                try:
+                    image = Image.open(avatar_file)
+                    if image.format not in {"JPEG", "PNG", "WEBP", "GIF"}:
+                        errors.append("Profile picture must be JPEG, PNG, WEBP, or GIF.")
+                    elif image.width * image.height > 25_000_000:
+                        errors.append("Profile picture dimensions must not exceed 25 megapixels.")
+                    else:
+                        image.verify()
+                        avatar_file.seek(0)
+                        image = Image.open(avatar_file)
+                        image.load()
+                        has_alpha = image.mode in {"RGBA", "LA"} or "transparency" in image.info
+                        normalized = image.convert("RGBA" if has_alpha else "RGB")
+                        normalized.thumbnail((512, 512), Image.Resampling.LANCZOS)
+                        buffer = io.BytesIO()
+                        normalized.save(buffer, format="WEBP", quality=85, method=6)
+                        picture_data = buffer.getvalue()
+                except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
+                    errors.append("Upload a valid image file (JPEG, PNG, WEBP, or GIF).")
+                finally:
+                    avatar_file.seek(0)
         if new_password or confirm_password:
             if not new_password or new_password != confirm_password:
                 errors.append("Enter matching passwords in both password fields.")
@@ -157,7 +187,30 @@ def profile_completion_page(request):
             profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
             profile.date_of_birth = dob
             profile.gender = gender
-            profile.save(update_fields=["phone", "country", "timezone", "bio", "date_of_birth", "gender", "updated_at"])
+            if picture_data is not None:
+                cloudinary_url = str(getattr(settings, "CLOUDINARY_URL", "") or "").strip()
+                if not cloudinary_url:
+                    messages.error(request, "Profile picture storage is not configured. Other profile details were not changed.")
+                    return redirect("profile_completion_page")
+                try:
+                    from cloudinary import config as cloudinary_config
+                    from cloudinary.uploader import upload as cloudinary_upload
+                    cloudinary_config(cloudinary_url=cloudinary_url, secure=True)
+                    result = cloudinary_upload(
+                        picture_data, resource_type="image",
+                        folder="algobot/profile-pictures",
+                        public_id=f"user-{request.user.pk}",
+                        overwrite=True, invalidate=True, format="webp",
+                    )
+                    uploaded_url = str(result.get("secure_url") or "")
+                    if not uploaded_url.startswith("https://res.cloudinary.com/"):
+                        raise ValueError("Untrusted profile picture URL.")
+                    profile.avatar_url = uploaded_url
+                except Exception:
+                    logger.exception("profile_onboarding_avatar_upload_failed")
+                    messages.error(request, "The profile picture could not be saved. Other profile details were not changed.")
+                    return redirect("profile_completion_page")
+            profile.save(update_fields=["phone", "country", "timezone", "bio", "date_of_birth", "gender", "avatar_url", "updated_at"])
             messages.success(request, "Your AlgoBot profile is complete.")
             # New Google signups must visit the broker marketplace after profile
             # completion, regardless of any pre-existing account-side connection.
