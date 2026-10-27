@@ -42,6 +42,16 @@ class BrokerOnboardingMiddleware:
         if not user or not user.is_authenticated:
             return self.get_response(request)
 
+        # Verify email before profile completion on protected trading routes.
+        # This preserves the account-verification sequence for legacy sessions
+        # while still preventing incomplete profiles from reaching the funnel.
+        from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
+        protected_workspace = any(
+            path.startswith(prefix) for prefix in self.PROTECTED_BROWSER_PREFIXES
+        )
+        if protected_workspace and not has_verified_account_email(user):
+            return redirect("verify_email_page")
+
         # Enforce mandatory profile completion at the funnel destinations that
         # must never be skipped: dashboard and broker onboarding. Do not turn
         # this into a global account lock; settings, recovery, notifications,
@@ -55,13 +65,8 @@ class BrokerOnboardingMiddleware:
             from core.profile_completion import profile_is_complete
             if not profile_is_complete(user):
                 return redirect("profile_completion_page")
-        if not any(path.startswith(prefix) for prefix in self.PROTECTED_BROWSER_PREFIXES):
+        if not protected_workspace:
             return self.get_response(request)
-
-        # Import lazily to avoid app-loading and middleware import cycles.
-        from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
-        if not has_verified_account_email(user):
-            return redirect("verify_email_page")
         if has_authorized_broker_connection(user):
             return self.get_response(request)
 
