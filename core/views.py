@@ -37,10 +37,8 @@ def dashboard_page(request):
         from django.contrib import messages
         messages.info(request, 'Verify your AlgoBot email before opening the dashboard.')
         return redirect('verify_email_page')
-    # A returning Google login gets one dashboard landing even if broker setup is
-    # incomplete. Trading/API execution remains independently broker-gated.
-    returning_google_login = bool(request.session.pop("google_existing_login_dashboard", False))
-    if not returning_google_login and not has_authorized_broker_connection(request.user):
+    # Broker onboarding is persisted account state; no session flag may bypass it.
+    if not has_authorized_broker_connection(request.user):
         from django.contrib import messages
         messages.info(request, 'Connect and verify your Deriv account before opening trading features.')
         return redirect('broker_marketplace_page')
