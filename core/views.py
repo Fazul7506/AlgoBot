@@ -241,11 +241,11 @@ def profile_completion_page(request):
                     from django.contrib.auth import update_session_auth_hash
                     update_session_auth_hash(request, request.user)
                 messages.success(request, "Your AlgoBot profile is complete.")
-            # Profile completion always advances to the marketplace. Broker
-            # connection remains an explicit user action; the marketplace itself
-            # must not be mistaken for a connected broker.
-            request.session.pop("google_profile_completion_pending", None)
-            return redirect("broker_marketplace_page")
+                # Profile completion always advances to the marketplace. Broker
+                # connection remains an explicit user action; the marketplace itself
+                # must not be mistaken for a connected broker.
+                request.session.pop("google_profile_completion_pending", None)
+                return redirect("broker_marketplace_page")
 
     return render(request, "core/profile_completion.html", {
         "first_name": request.POST.get("first_name", request.user.first_name),
