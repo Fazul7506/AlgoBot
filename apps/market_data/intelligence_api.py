@@ -153,6 +153,14 @@ def signal_lifecycle(request):
         # never from ticker-prefix guesses in the browser.
         market_symbols = MarketSymbol.objects.filter(is_active=True, market__iexact=market).values_list("symbol", flat=True)
         qs = qs.filter(symbol__in=market_symbols)
+    filtered_qs = qs
+    category_counts = {
+        "all": filtered_qs.count(),
+        "high": filtered_qs.filter(confidence__gte=70).count(),
+        "scalping": filtered_qs.filter(Q(strategy__name__icontains="scalp") | Q(configuration__timeframe__in=["M1", "M5"])).count(),
+        "swing": filtered_qs.filter(Q(strategy__name__icontains="swing") | Q(configuration__timeframe__in=["H4", "D1"])).count(),
+        "intraday": filtered_qs.filter(Q(strategy__name__icontains="intraday") | Q(configuration__timeframe__in=["M1", "M5", "M15", "M30", "H1"])).count(),
+    }
     if category == "high":
         qs = qs.filter(confidence__gte=70)
     elif category == "scalping":
@@ -219,5 +227,6 @@ def signal_lifecycle(request):
         "page": page,
         "page_size": page_size,
         "pages": (total + page_size - 1) // page_size,
+        "category_counts": category_counts,
         "signals": data,
     })
