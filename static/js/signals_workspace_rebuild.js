@@ -22,10 +22,12 @@
       const data=await response.json();
       if(!response.ok)throw new Error(data.message||data.detail||'Signals could not be loaded ('+response.status+').');
       state.lastData=data; render(data);
-      const generated=data.generated_at?new Date(data.generated_at):null;
-      $('signals-live-label').textContent=data.metrics?.service_state==='available'?'Account data available':data.metrics?.service_state==='empty'?'No signal records':'Signal service status unknown';
-      $('signals-live-dot').className='signals-live-dot'+(data.metrics?.service_state==='available'?' is-live':' is-stale');
-      $('signals-updated').textContent=generated&&!Number.isNaN(generated.getTime())?'Updated '+generated.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}):'Update timestamp unavailable';
+      const generated=data.metrics?.last_updated?new Date(data.metrics.last_updated):null;
+      const signalAge=generated&&!Number.isNaN(generated.getTime())?Date.now()-generated.getTime():null;
+      const stale=signalAge==null||signalAge>15*60*1000;
+      $('signals-live-label').textContent=data.metrics?.service_state==='empty'?'No signal records':data.metrics?.service_state==='available'?(stale?'Latest signal is stale':'Recent signal data available'):'Signal service status unknown';
+      $('signals-live-dot').className='signals-live-dot'+(data.metrics?.service_state==='available'&&!stale?' is-live':' is-stale');
+      $('signals-updated').textContent=generated&&!Number.isNaN(generated.getTime())?'Latest signal '+generated.toLocaleString([], {dateStyle:'short',timeStyle:'short'})+(stale?' · stale':''):'No signal timestamp available';
       $('signals-error').hidden=true;
     } catch(error) {
       $('signals-error').textContent=error.message||'Signal service unavailable. Retry to load current data.'; $('signals-error').hidden=false;
