@@ -140,7 +140,13 @@ def profile_picture(request):
     # Preserve compatibility with legacy Cloudinary avatars already saved.
     url = str(getattr(profile, "avatar_url", "") or "").strip() if profile else ""
     parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.hostname != "res.cloudinary.com":
+    hostname = (parsed.hostname or "").lower()
+    trusted_avatar_host = (
+        hostname == "res.cloudinary.com"
+        or hostname == "googleusercontent.com"
+        or hostname.endswith(".googleusercontent.com")
+    )
+    if parsed.scheme != "https" or not trusted_avatar_host:
         raise Http404("Profile picture not found.")
     response = redirect(url)
     response["X-Content-Type-Options"] = "nosniff"

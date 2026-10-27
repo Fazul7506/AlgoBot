@@ -51,6 +51,7 @@ class ProfileCompletionTests(TestCase):
             reverse("profile_completion_page"),
             {
                 "first_name": "Taylor",
+                "terms_accepted": "on",
                 "last_name": "Example",
                 "phone": "+254700000000",
                 "country": "Kenya",
@@ -76,7 +77,8 @@ class ProfileCompletionTests(TestCase):
 
         response = self.client.post(
             reverse("profile_completion_page"),
-            {"first_name": "Taylor", "last_name": "Example", "timezone": "Africa/Nairobi"},
+            {"first_name": "Taylor",
+                "terms_accepted": "on", "last_name": "Example", "timezone": "Africa/Nairobi"},
         )
 
         self.assertRedirects(
@@ -89,7 +91,8 @@ class ProfileCompletionTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse("profile_completion_page"),
-            {"first_name": "Taylor", "last_name": "Example"},
+            {"first_name": "Taylor",
+                "terms_accepted": "on", "last_name": "Example"},
         )
         self.assertRedirects(
             response, reverse("dashboard_page"), fetch_redirect_response=False
@@ -111,6 +114,7 @@ class ProfileCompletionTests(TestCase):
                 reverse("profile_completion_page"),
                 {
                     "first_name": "Taylor",
+                "terms_accepted": "on",
                     "last_name": "Example",
                     "username": self.user.username,
                     "timezone": "Africa/Nairobi",
@@ -135,6 +139,7 @@ class ProfileCompletionTests(TestCase):
                 reverse("profile_completion_page"),
                 {
                     "first_name": "Taylor",
+                "terms_accepted": "on",
                     "last_name": "Example",
                     "username": self.user.username,
                     "new_password": new_password,
@@ -158,6 +163,7 @@ class ProfileCompletionTests(TestCase):
             reverse("profile_completion_page"),
             {
                 "first_name": "Taylor",
+                "terms_accepted": "on",
                 "last_name": "Example",
                 "username": other.username,
                 "timezone": "Africa/Nairobi",
@@ -183,6 +189,7 @@ class ProfileCompletionTests(TestCase):
             reverse("profile_page"),
             {
                 "first_name": "Taylor",
+                "terms_accepted": "on",
                 "last_name": "Example",
                 "country": "Kenya",
                 "timezone": "Africa/Nairobi",
@@ -204,6 +211,7 @@ class ProfileCompletionTests(TestCase):
             reverse("profile_completion_page"),
             {
                 "first_name": "Taylor",
+                "terms_accepted": "on",
                 "last_name": "Example",
                 "username": self.user.username,
                 "timezone": "Africa/Nairobi",
@@ -215,3 +223,123 @@ class ProfileCompletionTests(TestCase):
         profile = UserProfile.objects.get(user=self.user)
         self.assertEqual(str(profile.date_of_birth), "1998-04-12")
         self.assertEqual(profile.gender, "prefer_not_to_say")
+
+
+    def test_reference_onboarding_avatar_is_the_upload_control(self):
+        from pathlib import Path
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        self.assertIn('class="profile-onboarding__avatar-upload"', template)
+        self.assertIn('for="profile_picture"', template)
+        self.assertIn('id="profile-picture-preview-small"', template)
+        self.assertIn('image/jpeg,image/png,image/webp', template)
+        self.assertIn('event.dataTransfer', template)
+        self.assertNotIn('type="file" accept="image/jpeg,image/png,image/webp"\n', template)
+
+    def test_reference_progress_and_country_code_selectors_use_shared_anchored_selects(self):
+        from pathlib import Path
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        base = Path("templates/base.html").read_text(encoding="utf-8")
+        self.assertIn("Profile Details", template)
+        self.assertIn("Additional Info", template)
+        self.assertIn("Preferences", template)
+        self.assertIn('id="phone_country_code"', template)
+        self.assertIn('id="country" name="country"', template)
+        self.assertIn("anchored_selects.js", base)
+        self.assertIn("anchored_selects.css", base)
+
+
+    def test_invalid_international_phone_is_rejected_server_side(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_completion_page"),
+            {
+                "first_name": "Taylor",
+                "terms_accepted": "on",
+                "last_name": "Example",
+                "phone": "not-a-phone",
+                "country": "Kenya",
+                "timezone": "UTC",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enter a valid international phone number")
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.phone, "")
+
+    def test_blank_optional_country_and_phone_do_not_erase_saved_values(self):
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.phone = "+254712345678"
+        profile.country = "Kenya"
+        profile.save(update_fields=["phone", "country", "updated_at"])
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_completion_page"),
+            {
+                "first_name": "Taylor",
+                "terms_accepted": "on",
+                "last_name": "Example",
+                "phone": "",
+                "country": "",
+                "timezone": "UTC",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        profile.refresh_from_db()
+        self.assertEqual(profile.phone, "+254712345678")
+        self.assertEqual(profile.country, "Kenya")
+
+    def test_country_and_phone_dropdowns_have_searchable_country_metadata(self):
+        from pathlib import Path
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        self.assertIn('id="country"', template)
+        self.assertIn('id="phone_country_code"', template)
+        self.assertIn('data-iso="KE"', template)
+        self.assertIn('data-dial-code="+254"', template)
+        self.assertIn('data-iso="GB"', template)
+        self.assertIn('data-iso="JP"', template)
+        self.assertIn("syncCallingCode", template)
+
+
+    def test_google_avatar_url_is_served_only_from_allowlisted_https_host(self):
+        self.client.force_login(self.user)
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.avatar_url = "https://lh3.googleusercontent.com/a/test-avatar"
+        profile.save(update_fields=["avatar_url", "updated_at"])
+        response = self.client.get(reverse("profile_picture"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], profile.avatar_url)
+        profile.avatar_url = "https://googleusercontent.com.evil.example/avatar.png"
+        profile.save(update_fields=["avatar_url", "updated_at"])
+        response = self.client.get(reverse("profile_picture"))
+        self.assertEqual(response.status_code, 404)
+
+    def test_reference_layout_includes_desktop_benefits_panel(self):
+        from pathlib import Path
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        self.assertIn('class="profile-onboarding__content-grid"', template)
+        self.assertIn("Get Started with AlgoBot", template)
+        self.assertIn("Personalized recommendations", template)
+        self.assertIn("Secure account verification", template)
+
+
+    def test_country_selectors_use_full_existing_country_dataset_and_iso_sync(self):
+        from pathlib import Path
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        self.assertIn("intlTelInput.getCountryData()", template)
+        self.assertIn("const phoneOptions = data.map", template)
+        self.assertIn("const syncFromCountry", template)
+        self.assertIn("const syncFromPhone", template)
+        self.assertIn("anchored_selects.js", Path("templates/base.html").read_text(encoding="utf-8"))
+
+
+    def test_terms_acceptance_is_required_and_persisted(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("profile_completion_page"), {"first_name": "Taylor", "last_name": "Example", "timezone": "UTC"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please accept the Terms of Service and Privacy Policy")
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertIsNone(profile.terms_accepted_at)
+        response = self.client.post(reverse("profile_completion_page"), {"first_name": "Taylor", "last_name": "Example", "timezone": "UTC", "terms_accepted": "on"})
+        self.assertEqual(response.status_code, 302)
+        profile.refresh_from_db()
+        self.assertIsNotNone(profile.terms_accepted_at)

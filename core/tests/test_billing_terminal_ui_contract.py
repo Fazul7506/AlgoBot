@@ -173,7 +173,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         template = Path("templates/base.html").read_text(encoding="utf-8")
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("ensureApiAccessToken", client)
-        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20261017-bearer-csrf1", template)
+        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20261027-canonical-transport1", template)
         self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260929-bearerauth2", template)
         self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260913-sameorigin1", template)
 
@@ -509,3 +509,43 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
         self.assertIn("Escape", dropdowns)
         self.assertIn("position: absolute", styles)
         self.assertIn(".ab-select-menu[hidden]", styles)
+
+class ProductionReliabilityFrontendContractTests(SimpleTestCase):
+    def test_backtesting_workspace_initialization_is_idempotent_and_retryable(self):
+        from pathlib import Path
+
+        script = Path("static/js/backtesting_workspace_fix.js").read_text(encoding="utf-8")
+        self.assertIn("__algobotBacktestingWorkspaceFix", script)
+        self.assertIn("focus to retry", script)
+        self.assertIn("timeout=25000", script)
+        self.assertIn("result[2].value===null", script)
+        template = Path("templates/core/backtesting.html").read_text(encoding="utf-8")
+        self.assertIn("v=20261027-reliability1", template)
+
+    def test_frontend_contract_coalesces_repeated_catalog_and_account_reads(self):
+        from pathlib import Path
+
+        client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
+        self.assertIn("if(inflight.has(key))return inflight.get(key)", client)
+        self.assertIn("getCacheTtl(url)", client)
+        self.assertIn("market\\/broker-catalogue", client)
+
+    def test_service_runtime_uses_canonical_bearer_authenticated_transport_first(self):
+        from pathlib import Path
+
+        runtime = Path("static/js/core/service_runtime.js").read_text(encoding="utf-8")
+        self.assertIn("const canonical=window.AlgoBotFrontendData?.request", runtime)
+        self.assertLess(
+            runtime.index("const canonical=window.AlgoBotFrontendData?.request"),
+            runtime.index("const client=window.AlgoBotAPI?.apiClient"),
+        )
+
+    def test_ai_api_tries_bearer_jwt_before_csrf_protected_session_auth(self):
+        from pathlib import Path
+
+        views = Path("apps/ai_engine/views.py").read_text(encoding="utf-8")
+        self.assertIn(
+            "@decorators.authentication_classes([JWTAuthentication, SessionAuthentication])",
+            views,
+        )
+

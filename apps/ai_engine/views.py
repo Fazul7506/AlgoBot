@@ -97,7 +97,7 @@ class TrainingJobViewSet(viewsets.ReadOnlyModelViewSet):
 
 @decorators.api_view(["GET"])
 @decorators.permission_classes([StaffOnlyPermission])
-@decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
+@decorators.authentication_classes([JWTAuthentication, SessionAuthentication])
 def model_governance(request):
     model_id = request.query_params.get("model_id")
     versions = ModelVersion.objects.select_related("model")
@@ -154,7 +154,7 @@ def model_governance(request):
 
 @decorators.api_view(["POST"])
 @decorators.permission_classes([StaffOnlyPermission])
-@decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
+@decorators.authentication_classes([JWTAuthentication, SessionAuthentication])
 def train(request):
     try:
         job = TrainingService().train(mode=request.data.get("mode", "manual"))
@@ -235,7 +235,7 @@ def _broker_market_context(account, symbol):
 
 @decorators.api_view(["POST"])
 @decorators.permission_classes([JWTAuthenticatedPermission, BrokerOnboardingRequired])
-@decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
+@decorators.authentication_classes([JWTAuthentication, SessionAuthentication])
 def predict(request):
     if not isinstance(request.data, dict):
         return response.Response({"detail": "A JSON object is required.", "code": "AI_CONTEXT_INVALID"}, status=status.HTTP_400_BAD_REQUEST)
@@ -275,7 +275,7 @@ def predict(request):
 
 @decorators.api_view(["GET"])
 @decorators.permission_classes([JWTAuthenticatedPermission, BrokerOnboardingRequired])
-@decorators.authentication_classes([SessionAuthentication, JWTAuthentication])
+@decorators.authentication_classes([JWTAuthentication, SessionAuthentication])
 def explain(request):
     symbol = str(request.query_params.get("symbol") or "").strip()
     timeframe = str(request.query_params.get("timeframe") or "M1").upper()

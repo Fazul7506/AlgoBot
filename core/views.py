@@ -114,11 +114,14 @@ def profile_completion_page(request):
         confirm_password = str(request.POST.get("confirm_password") or "")
         dob_raw = str(request.POST.get("date_of_birth") or "").strip()
         gender = str(request.POST.get("gender") or "").strip()
+        terms_accepted = request.POST.get("terms_accepted") in {"on", "true", "1"}
         avatar_file = request.FILES.get("profile_picture")
         picture_data = None
         errors = []
         if not first_name or not last_name:
             errors.append("Enter your first and last name to complete your profile.")
+        if not profile.terms_accepted_at and not terms_accepted:
+            errors.append("Please accept the Terms of Service and Privacy Policy to continue.")
         if not username or len(username) > 150:
             errors.append("Enter a valid username (150 characters or fewer).")
         else:
@@ -138,14 +141,22 @@ def profile_completion_page(request):
                 errors.append("Enter a valid date of birth.")
         if gender and gender not in {"female", "male", "non_binary", "prefer_not_to_say", "self_described"}:
             errors.append("Choose a valid gender option.")
+        phone_raw = str(request.POST.get("phone") or "").strip()
+        if phone_raw:
+            # The form submits an international number; validate it server-side too.
+            phone_compact = "".join(character for character in phone_raw if character not in " ()-")
+            if not phone_compact.startswith("+") or not phone_compact[1:].isdigit() or not 7 <= len(phone_compact[1:]) <= 15 or phone_compact[1:].startswith("0"):
+                errors.append("Enter a valid international phone number including its country calling code.")
+            else:
+                phone_raw = phone_compact
         if avatar_file:
             if avatar_file.size > 5 * 1024 * 1024:
                 errors.append("Profile picture must be 5 MB or smaller.")
             else:
                 try:
                     image = Image.open(avatar_file)
-                    if image.format not in {"JPEG", "PNG", "WEBP", "GIF"}:
-                        errors.append("Profile picture must be JPEG, PNG, WEBP, or GIF.")
+                    if image.format not in {"JPEG", "PNG", "WEBP"}:
+                        errors.append("Profile picture must be JPEG, PNG, or WEBP.")
                     elif image.width * image.height > 25_000_000:
                         errors.append("Profile picture dimensions must not exceed 25 megapixels.")
                     else:
@@ -160,7 +171,7 @@ def profile_completion_page(request):
                         normalized.save(buffer, format="WEBP", quality=85, method=6)
                         picture_data = buffer.getvalue()
                 except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
-                    errors.append("Upload a valid image file (JPEG, PNG, WEBP, or GIF).")
+                    errors.append("Upload a valid image file (JPEG, PNG, or WEBP).")
                 finally:
                     avatar_file.seek(0)
         if new_password or confirm_password:
@@ -187,8 +198,12 @@ def profile_completion_page(request):
                 # Keep the current browser session valid after an explicit password set.
                 from django.contrib.auth import update_session_auth_hash
                 update_session_auth_hash(request, request.user)
-            profile.phone = str(request.POST.get("phone") or "").strip()[:32]
-            profile.country = str(request.POST.get("country") or "").strip()[:100]
+            # Empty optional inputs must not erase previously saved profile data.
+            if phone_raw:
+                profile.phone = phone_raw[:32]
+            submitted_country = str(request.POST.get("country") or "").strip()
+            if submitted_country:
+                profile.country = submitted_country[:100]
             profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
             profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
             # Blank optional fields must not erase values previously provided
@@ -197,6 +212,9 @@ def profile_completion_page(request):
                 profile.date_of_birth = dob
             if gender:
                 profile.gender = gender
+            if terms_accepted and not profile.terms_accepted_at:
+                from django.utils import timezone
+                profile.terms_accepted_at = timezone.now()
             if picture_data is not None:
                 # Use the same durable profile-row storage as the Security Center
                 # editor. A browser preview is not considered saved until these
@@ -207,7 +225,7 @@ def profile_completion_page(request):
             profile.save(update_fields=[
                 "phone", "country", "timezone", "bio", "date_of_birth", "gender",
                 "avatar_url", "profile_picture_data", "profile_picture_content_type",
-                "updated_at",
+                "terms_accepted_at", "updated_at",
             ])
             messages.success(request, "Your AlgoBot profile is complete.")
             # New Google signups must visit the broker marketplace after profile
@@ -228,9 +246,11 @@ def profile_completion_page(request):
         "country": request.POST.get("country", profile.country),
         "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
         "bio": request.POST.get("bio", profile.bio),
+        "terms_accepted": bool(profile.terms_accepted_at) or request.POST.get("terms_accepted") in {"on", "true", "1"},
+        "terms_already_accepted": bool(profile.terms_accepted_at),
         "profile_picture_url": (
             reverse("profile_picture") + "?v=" + str(int(profile.updated_at.timestamp()))
-            if profile.profile_picture_data else ""
+            if profile.profile_picture_data or profile.avatar_url else ""
         ),
     })
 def terms_page(request): return render(request,'core/terms.html')

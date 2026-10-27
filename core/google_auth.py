@@ -285,7 +285,18 @@ def google_login_callback(request):
     # Google's standard openid/email/profile scopes usually do not provide either.
     if profile:
         from datetime import date
+        from urllib.parse import urlparse
         profile_updates = []
+        # Prefill Google-hosted avatar only when no saved picture already exists.
+        picture_claim = str(identity.get("picture") or "").strip()
+        picture_parts = urlparse(picture_claim)
+        picture_host = (picture_parts.hostname or "").lower()
+        if (not profile.profile_picture_data and not profile.avatar_url
+                and picture_parts.scheme == "https"
+                and len(picture_claim) <= 200
+                and (picture_host == "googleusercontent.com" or picture_host.endswith(".googleusercontent.com"))):
+            profile.avatar_url = picture_claim
+            profile_updates.append("avatar_url")
         birthdate_claim = str(identity.get("birthdate") or identity.get("date_of_birth") or identity.get("birthday") or "").strip()
         if not profile.date_of_birth and birthdate_claim:
             try:
