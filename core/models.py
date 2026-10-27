@@ -37,6 +37,7 @@ class UserProfile(models.Model):
     avatar_url = models.URLField(blank=True)  # Legacy external avatar, retained for backwards compatibility.
     profile_picture_data = models.BinaryField(blank=True, default=bytes)
     profile_picture_content_type = models.CharField(max_length=32, blank=True)
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
