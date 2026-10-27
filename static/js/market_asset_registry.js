@@ -117,12 +117,12 @@
     const resolved = resolve(raw);
     const label = resolved.displayName || resolved.symbol || 'Unknown instrument';
     if (resolved.status === 'verified' && resolved.asset?.src) {
-      return '<img class="market-asset-verified" data-remote-market-asset data-symbol-fallback="' +
-        escapeHtml(String(resolved.symbol || '?').slice(0, 2)) + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" src="' +
+      return '<img class="market-asset-verified" data-remote-market-asset loading="lazy" decoding="async" referrerpolicy="no-referrer" src="' +
         escapeHtml(resolved.asset.src) + '" alt="' + escapeHtml(label) + '">';
     }
-    const initials = String(label || resolved.symbol).split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase();
-    return '<span class="market-avatar market-avatar-unmapped" aria-hidden="true">' + escapeHtml(initials) + '</span>';
+    // Never synthesize letter/initial badges for missing assets. Use the same
+    // neutral icon globally in every market picker, dropdown, and market card.
+    return '<span class="market-avatar market-avatar-unmapped" aria-hidden="true"><span class="material-symbols-rounded">show_chart</span></span>';
   };
   const coverage = instruments => {
     const rows = Array.from(instruments || [], resolve);
@@ -145,7 +145,10 @@
       const fallback = document.createElement('span');
       fallback.className = 'market-avatar market-avatar-unmapped';
       fallback.setAttribute('aria-hidden', 'true');
-      fallback.textContent = image.getAttribute('data-symbol-fallback') || String(image.alt || '?').trim().slice(0, 2) || '?';
+      const icon = document.createElement('span');
+      icon.className = 'material-symbols-rounded';
+      icon.textContent = 'show_chart';
+      fallback.appendChild(icon);
       image.replaceWith(fallback);
     }, true);
   }
