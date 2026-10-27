@@ -487,6 +487,10 @@ class ProfileCompletionTests(TestCase):
         self.assertIn("ab-select-option-icon--market-fallback", stylesheet)
         self.assertIn("select.dataset.abSearchable === 'true'", script)
         self.assertIn("select.id === 'phone_country_code'", script)
+        self.assertIn("const isCountryOrPhoneSelect", script)
+        self.assertIn("const hasSearch = !isCountryOrPhoneSelect(select)", script)
+        self.assertIn("if (isCountryOrPhoneSelect(select)) return", script)
+        self.assertIn("(flag ? flag + ' ' : '') + current.value", script)
 
     def test_profile_edit_action_uses_a_dismissible_modal(self):
         from pathlib import Path
