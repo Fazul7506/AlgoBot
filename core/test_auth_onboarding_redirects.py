@@ -14,10 +14,12 @@ class DerivOnboardingRedirectTests(TestCase):
             username="deriv-next-user",
             email="deriv-next@example.test",
             password="Test-password-123!secure",
+            first_name="Deriv",
+            last_name="User",
         )
         UserProfile.objects.update_or_create(
             user=self.user,
-            defaults={"email_verified": True, "email_verified_at": timezone.now()},
+            defaults={"email_verified": True, "email_verified_at": timezone.now(), "terms_accepted_at": timezone.now()},
         )
 
     @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=False)

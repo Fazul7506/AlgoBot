@@ -62,7 +62,7 @@ class GoogleLoginSecurityTests(TestCase):
 
     @patch("google.oauth2.id_token.verify_oauth2_token")
     @patch("core.google_auth.requests.post")
-    def test_returning_google_user_goes_to_dashboard_not_onboarding(self, token_exchange, verify_id_token):
+    def test_returning_google_user_with_complete_profile_goes_to_dashboard(self, token_exchange, verify_id_token):
         from core.models import GoogleIdentity, UserProfile
 
         user = User.objects.create_user(
@@ -75,7 +75,8 @@ class GoogleLoginSecurityTests(TestCase):
         profile, _ = UserProfile.objects.get_or_create(user=user)
         profile.email_verified = True
         profile.email_verified_at = timezone.now()
-        profile.save(update_fields=["email_verified", "email_verified_at"])
+        profile.terms_accepted_at = timezone.now()
+        profile.save(update_fields=["email_verified", "email_verified_at", "terms_accepted_at"])
         GoogleIdentity.objects.create(
             user=user, provider="google", subject="stable-returning-subject",
             email="returning-google@example.test",
@@ -106,7 +107,7 @@ class GoogleLoginSecurityTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, "/dashboard/")
         self.assertEqual(self.client.session.get("_auth_user_id"), str(user.pk))
-        self.assertTrue(self.client.session.get("google_existing_login_dashboard"))
+        self.assertFalse(self.client.session.get("google_existing_login_dashboard"))
         self.assertFalse(self.client.session.get("google_profile_completion_pending"))
 
     @patch("google.oauth2.id_token.verify_oauth2_token")

@@ -1,14 +1,15 @@
 from unittest.mock import patch
 
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 from core.models import UserProfile
 
 
 class BrokerOAuthCanonicalizationTests(TestCase):
     def _login_verified_user(self):
-        user = get_user_model().objects.create_user(username="oauth-canonical-user", email="oauth-canonical@example.test", password="pass12345")
-        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True})
+        user = get_user_model().objects.create_user(username="oauth-canonical-user", email="oauth-canonical@example.test", password="pass12345", first_name="OAuth", last_name="Canonical")
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "terms_accepted_at": timezone.now()})
         self.client.force_login(user)
 
     @override_settings(

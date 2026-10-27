@@ -37,10 +37,8 @@ def dashboard_page(request):
         from django.contrib import messages
         messages.info(request, 'Verify your AlgoBot email before opening the dashboard.')
         return redirect('verify_email_page')
-    # A returning Google login gets one dashboard landing even if broker setup is
-    # incomplete. Trading/API execution remains independently broker-gated.
-    returning_google_login = bool(request.session.pop("google_existing_login_dashboard", False))
-    if not returning_google_login and not has_authorized_broker_connection(request.user):
+    # Broker onboarding is persisted account state; no session flag may bypass it.
+    if not has_authorized_broker_connection(request.user):
         from django.contrib import messages
         messages.info(request, 'Connect and verify your Deriv account before opening trading features.')
         return redirect('broker_marketplace_page')
@@ -186,55 +184,68 @@ def profile_completion_page(request):
             for error in errors:
                 messages.error(request, error)
         else:
-            request.user.first_name = first_name[:150]
-            request.user.last_name = last_name[:150]
-            request.user.username = username
-            user_fields = ["first_name", "last_name", "username"]
-            if new_password:
-                request.user.set_password(new_password)
-                user_fields.append("password")
-            request.user.save(update_fields=user_fields)
-            if new_password:
-                # Keep the current browser session valid after an explicit password set.
-                from django.contrib.auth import update_session_auth_hash
-                update_session_auth_hash(request, request.user)
-            # Empty optional inputs must not erase previously saved profile data.
-            if phone_raw:
-                profile.phone = phone_raw[:32]
-            submitted_country = str(request.POST.get("country") or "").strip()
-            if submitted_country:
-                profile.country = submitted_country[:100]
-            profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
-            profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
-            # Blank optional fields must not erase values previously provided
-            # by the user or a verified identity claim.
-            if dob_raw:
-                profile.date_of_birth = dob
-            if gender:
-                profile.gender = gender
-            if terms_accepted and not profile.terms_accepted_at:
-                from django.utils import timezone
-                profile.terms_accepted_at = timezone.now()
-            if picture_data is not None:
-                # Use the same durable profile-row storage as the Security Center
-                # editor. A browser preview is not considered saved until these
-                # bytes and the content type are persisted.
-                profile.profile_picture_data = picture_data
-                profile.profile_picture_content_type = "image/webp"
-                profile.avatar_url = ""
-            profile.save(update_fields=[
-                "phone", "country", "timezone", "bio", "date_of_birth", "gender",
-                "avatar_url", "profile_picture_data", "profile_picture_content_type",
-                "terms_accepted_at", "updated_at",
-            ])
-            messages.success(request, "Your AlgoBot profile is complete.")
-            # New Google signups must visit the broker marketplace after profile
-            # completion, regardless of any pre-existing account-side connection.
-            if request.session.pop("google_profile_completion_pending", False):
+            from django.db import DatabaseError, transaction
+
+            try:
+                # User identity and required profile completion data commit together.
+                # A database failure must not leave the account half-completed.
+                with transaction.atomic():
+                    request.user.first_name = first_name[:150]
+                    request.user.last_name = last_name[:150]
+                    request.user.username = username
+                    user_fields = ["first_name", "last_name", "username"]
+                    if new_password:
+                        request.user.set_password(new_password)
+                        user_fields.append("password")
+                    request.user.save(update_fields=user_fields)
+
+                    # Empty optional inputs must not erase previously saved profile data.
+                    if phone_raw:
+                        profile.phone = phone_raw[:32]
+                    submitted_country = str(request.POST.get("country") or "").strip()
+                    if submitted_country:
+                        profile.country = submitted_country[:100]
+                    profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
+                    profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
+                    # Blank optional fields must not erase values previously provided
+                    # by the user or a verified identity claim.
+                    if dob_raw:
+                        profile.date_of_birth = dob
+                    if gender:
+                        profile.gender = gender
+                    if terms_accepted and not profile.terms_accepted_at:
+                        from django.utils import timezone
+                        profile.terms_accepted_at = timezone.now()
+                    if picture_data is not None:
+                        # A browser preview is not saved until its bytes and content type persist.
+                        profile.profile_picture_data = picture_data
+                        profile.profile_picture_content_type = "image/webp"
+                        profile.avatar_url = ""
+                    profile.save(update_fields=[
+                        "phone", "country", "timezone", "bio", "date_of_birth", "gender",
+                        "avatar_url", "profile_picture_data", "profile_picture_content_type",
+                        "terms_accepted_at", "updated_at",
+                    ])
+            except DatabaseError:
+                # Restore in-memory state after rollback and let the user retry safely.
+                request.user.refresh_from_db()
+                profile.refresh_from_db()
+                messages.error(
+                    request,
+                    "We couldn't save your profile because of a temporary storage problem. "
+                    "Your changes were not applied; please try again.",
+                )
+            else:
+                if new_password:
+                    # Preserve the current session only after the transaction commits.
+                    from django.contrib.auth import update_session_auth_hash
+                    update_session_auth_hash(request, request.user)
+                messages.success(request, "Your AlgoBot profile is complete.")
+                # Profile completion always advances to the marketplace. Broker
+                # connection remains an explicit user action; the marketplace itself
+                # must not be mistaken for a connected broker.
+                request.session.pop("google_profile_completion_pending", None)
                 return redirect("broker_marketplace_page")
-            if has_authorized_broker_connection(request.user):
-                return redirect("dashboard_page")
-            return redirect("broker_marketplace_page")
 
     return render(request, "core/profile_completion.html", {
         "first_name": request.POST.get("first_name", request.user.first_name),

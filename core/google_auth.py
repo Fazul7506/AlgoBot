@@ -335,12 +335,10 @@ def google_login_callback(request):
 
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     UserProfile.objects.filter(user=user).update(last_login_at=timezone.now())
-    # First-time Google signup must finish the local profile before broker setup.
-    # A returning Google identity goes directly to the dashboard; never send an
-    # existing user through signup/profile completion or broker marketplace again.
+    # Every Google login resumes from persisted onboarding state. Session flags
+    # must never decide whether an incomplete profile can enter the application.
     request.session.pop("broker_onboarding_next", None)
-    if is_new_google_user:
-        request.session["google_profile_completion_pending"] = True
+    from core.profile_completion import profile_is_complete
+    if not profile_is_complete(user):
         return redirect("profile_completion_page")
-    request.session["google_existing_login_dashboard"] = True
     return redirect("dashboard_page")

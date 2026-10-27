@@ -16,7 +16,8 @@ class BrokerOnboardingMiddleware:
         "/login/", "/register/", "/logout/", "/accounts/login/",
         "/verify-email/", "/forgot-password/", "/reset-password/",
         "/account/identity/", "/account/google/unlink/", "/auth/google/",
-        "/brokers/marketplace/", "/brokers/connect/", "/callback/", "/webhooks/", "/payments/",
+        "/callback/", "/webhooks/", "/payments/",
+        "/profile/complete/", "/profile/picture/",
         "/billing/", "/saas/", "/developer/", "/api/",
     )
 
@@ -40,19 +41,32 @@ class BrokerOnboardingMiddleware:
         user = getattr(request, "user", None)
         if not user or not user.is_authenticated:
             return self.get_response(request)
-        if not any(path.startswith(prefix) for prefix in self.PROTECTED_BROWSER_PREFIXES):
-            return self.get_response(request)
 
-        # A returning Google login is allowed one dashboard landing before the
-        # normal broker-onboarding gate redirects trading navigation. The view
-        # consumes this one-time session flag; execution endpoints stay gated.
-        if path == "/dashboard/" and request.session.get("google_existing_login_dashboard"):
-            return self.get_response(request)
-
-        # Import lazily to avoid app-loading and middleware import cycles.
+        # Verify email before profile completion on protected trading routes.
+        # This preserves the account-verification sequence for legacy sessions
+        # while still preventing incomplete profiles from reaching the funnel.
         from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
-        if not has_verified_account_email(user):
+        protected_workspace = any(
+            path.startswith(prefix) for prefix in self.PROTECTED_BROWSER_PREFIXES
+        )
+        if protected_workspace and not has_verified_account_email(user):
             return redirect("verify_email_page")
+
+        # Enforce mandatory profile completion at the funnel destinations that
+        # must never be skipped: dashboard and broker onboarding. Do not turn
+        # this into a global account lock; settings, recovery, notifications,
+        # and non-trading operational pages must remain reachable.
+        profile_required_prefixes = (
+            "/dashboard/",
+            "/brokers/marketplace/",
+            "/brokers/connect/",
+        )
+        if any(path.startswith(prefix) for prefix in profile_required_prefixes):
+            from core.profile_completion import profile_is_complete
+            if not profile_is_complete(user):
+                return redirect("profile_completion_page")
+        if not protected_workspace:
+            return self.get_response(request)
         if has_authorized_broker_connection(user):
             return self.get_response(request)
 

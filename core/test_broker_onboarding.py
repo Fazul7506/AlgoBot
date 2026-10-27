@@ -19,8 +19,10 @@ class BrokerOnboardingGateTests(TestCase):
             username="onboarding-user",
             email="onboarding@example.test",
             password="A-secure-test-password-123!",
+            first_name="Onboarding",
+            last_name="User",
         )
-        UserProfile.objects.update_or_create(user=self.user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
+        UserProfile.objects.update_or_create(user=self.user, defaults={"email_verified": True, "email_verified_at": timezone.now(), "terms_accepted_at": timezone.now()})
         self.broker = Broker.objects.create(
             name="Deriv",
             broker_type="deriv",
@@ -40,10 +42,10 @@ class BrokerOnboardingGateTests(TestCase):
                 response = self.client.get(path)
                 self.assertNotEqual(response.status_code, 302)
 
-    def test_broker_marketplace_remains_accessible_during_onboarding(self):
+    def test_broker_marketplace_remains_accessible_after_required_profile_completion(self):
         self.client.force_login(self.user)
         response = self.client.get("/brokers/marketplace/")
-        self.assertNotEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
 
     def test_automation_workspaces_are_available_but_wait_for_broker_before_execution(self):
         self.client.force_login(self.user)
@@ -116,10 +118,16 @@ class BrokerMarketplaceDirectoryUiTests(TestCase):
             username="marketplace-directory-user",
             email="marketplace-directory@example.test",
             password="A-secure-test-password-123!",
+            first_name="Marketplace",
+            last_name="Directory",
         )
         UserProfile.objects.update_or_create(
             user=self.user,
-            defaults={"email_verified": True, "email_verified_at": timezone.now()},
+            defaults={
+                "email_verified": True,
+                "email_verified_at": timezone.now(),
+                "terms_accepted_at": timezone.now(),
+            },
         )
         self.deriv = Broker.objects.create(
             name="Deriv",
