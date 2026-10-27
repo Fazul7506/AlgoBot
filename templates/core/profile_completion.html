@@ -94,6 +94,7 @@
 .profile-onboarding__actions{margin-top:1.1rem}
 @media(max-width:640px){.profile-onboarding{margin:.7rem auto;padding:0 .75rem 1.5rem}.profile-onboarding__steps{gap:.25rem}.profile-onboarding__step{font-size:.63rem;white-space:normal;flex:1}.profile-onboarding__rule{min-width:5px;margin-bottom:1rem}.profile-onboarding__avatar-layout{grid-template-columns:68px minmax(0,1fr)}.profile-onboarding__avatar-upload{width:64px;height:64px}.profile-onboarding__avatar-preview{grid-column:1/-1;border-left:0;border-top:1px solid #17365c;padding:.65rem 0 0;flex-direction:row;justify-content:flex-end}.profile-onboarding__avatar-preview img{width:36px;height:36px}.profile-onboarding__avatar-field{padding:.75rem}.profile-onboarding__grid{gap:.85rem}}
 
+.profile-onboarding__phone-control{display:grid;grid-template-columns:minmax(104px,.38fr) minmax(0,1fr);gap:.45rem;align-items:center}.profile-onboarding__phone-code-label{display:none!important}.profile-onboarding__avatar-upload.is-dragging{box-shadow:0 0 0 5px rgba(28,128,255,.3);transform:scale(1.03)}.profile-onboarding__avatar-upload img[hidden]{display:none!important}@media(max-width:420px){.profile-onboarding__phone-control{grid-template-columns:100px minmax(0,1fr)}}
 </style>
 {% endblock %}
 {% block content %}
@@ -111,11 +112,10 @@
   </div>
 
   <nav class="profile-onboarding__steps" aria-label="Signup progress">
-    <span class="profile-onboarding__step is-active"><b>1</b> Your profile</span>
-    <span class="profile-onboarding__rule" aria-hidden="true"></span>
-    <span class="profile-onboarding__step"><b>2</b> Broker marketplace</span>
-    <span class="profile-onboarding__rule" aria-hidden="true"></span>
-    <span class="profile-onboarding__step"><b>3</b> Trading workspace</span>
+    <span class="profile-onboarding__step is-active" aria-current="step"><b>1</b><span>Profile Details</span></span><span class="profile-onboarding__rule" aria-hidden="true"></span>
+    <span class="profile-onboarding__step"><b>2</b><span>Additional Info</span></span><span class="profile-onboarding__rule" aria-hidden="true"></span>
+    <span class="profile-onboarding__step"><b>3</b><span>Preferences</span></span><span class="profile-onboarding__rule" aria-hidden="true"></span>
+    <span class="profile-onboarding__step"><b>4</b><span>Complete</span></span>
   </nav>
 
   <form method="post" enctype="multipart/form-data" class="profile-onboarding__card" autocomplete="on">
@@ -190,8 +190,14 @@
       </div>
       <div class="profile-onboarding__field">
         <label for="phone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 3h4l2 5-3 2a15 15 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2Z"/></svg>Phone number <span class="profile-onboarding__hint">(optional)</span></label>
-        <input id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" value="{{ phone }}" placeholder="+254 7XX XXX XXX">
-        <span class="profile-onboarding__hint">Include your country code if you provide a number.</span>
+        <div class="profile-onboarding__phone-control">
+          <label class="profile-onboarding__phone-code-label" for="phone_country_code">Country code</label>
+          <select id="phone_country_code" aria-label="Phone country calling code">
+            <option value="+254" data-flag="🇰🇪">🇰🇪 +254</option><option value="+256" data-flag="🇺🇬">🇺🇬 +256</option><option value="+255" data-flag="🇹🇿">🇹🇿 +255</option><option value="+250" data-flag="🇷🇼">🇷🇼 +250</option><option value="+1" data-flag="🇺🇸">🇺🇸 +1</option><option value="+44" data-flag="🇬🇧">🇬🇧 +44</option><option value="+91" data-flag="🇮🇳">🇮🇳 +91</option><option value="+27" data-flag="🇿🇦">🇿🇦 +27</option><option value="+234" data-flag="🇳🇬">🇳🇬 +234</option><option value="+233" data-flag="🇬🇭">🇬🇭 +233</option>
+          </select>
+          <input id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel-national" inputmode="tel" value="{{ phone }}" placeholder="712 345 678">
+        </div>
+        <span class="profile-onboarding__hint">Choose your calling code; enter the number without the country code.</span>
       </div>
       <div class="profile-onboarding__field">
         <label for="country"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>Country / region <span class="profile-onboarding__hint">(optional)</span></label>
@@ -269,9 +275,28 @@
       if (password && confirm && password.value !== confirm.value) {
         event.preventDefault(); confirm.setCustomValidity("Passwords do not match."); confirm.reportValidity(); confirm.focus();
       } else if (confirm) confirm.setCustomValidity("");
+      if (phoneInput && phoneInput.value.trim()) {
+        const entered = phoneInput.value.trim();
+        if (!entered.startsWith("+")) phoneInput.value = phoneCode.value + entered.replace(/^0+/, "");
+      }
       const submit = profileForm.querySelector('button[type="submit"]');
       if (!event.defaultPrevented && submit) { submit.disabled = true; submit.setAttribute("aria-busy", "true"); submit.dataset.originalText = submit.textContent.trim(); submit.textContent = "Saving profile…"; }
     });
+    const phoneCode = document.getElementById("phone_country_code");
+    const phoneInput = document.getElementById("phone");
+    const countryInput = document.getElementById("country");
+    const countryDialCodes = {"Kenya":"+254","Uganda":"+256","Tanzania":"+255","Rwanda":"+250","United States":"+1","United Kingdom":"+44","India":"+91","South Africa":"+27","Nigeria":"+234","Ghana":"+233"};
+    if (countryInput && phoneCode) {
+      countryInput.addEventListener("change", function () {
+        const dial = countryDialCodes[countryInput.value];
+        if (dial) phoneCode.value = dial;
+      });
+    }
+    if (phoneInput && phoneCode) {
+      const existingPhone = phoneInput.value.trim();
+      const matchingCode = [...phoneCode.options].map(option => option.value).sort((a,b) => b.length-a.length).find(code => existingPhone.startsWith(code));
+      if (matchingCode) { phoneCode.value = matchingCode; phoneInput.value = existingPhone.slice(matchingCode.length).trim(); }
+    }
     document.getElementById("new_password")?.addEventListener("input", function () {
       document.getElementById("confirm_password")?.setCustomValidity("");
     });
