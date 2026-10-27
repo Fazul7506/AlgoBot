@@ -13,9 +13,10 @@ class AuthenticatedLoginRedirectTests(TestCase):
         self.factory = RequestFactory()
         self.user = SimpleNamespace(is_authenticated=True, pk=42)
 
+    @patch("core.profile_completion.profile_is_complete", return_value=True)
     @patch("core.broker_onboarding.has_verified_account_email", return_value=True)
     @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
-    def test_authenticated_user_is_sent_to_safe_next_destination(self, _broker, _verified):
+    def test_authenticated_user_is_sent_to_safe_next_destination(self, _broker, _verified, _complete):
         request = self.factory.get("/login/?next=%2Ftrading%2F")
         request.user = self.user
         request.session = {}
@@ -23,9 +24,10 @@ class AuthenticatedLoginRedirectTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/trading/")
 
+    @patch("core.profile_completion.profile_is_complete", return_value=True)
     @patch("core.broker_onboarding.has_verified_account_email", return_value=True)
     @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
-    def test_authenticated_user_cannot_redirect_to_external_host(self, _broker, _verified):
+    def test_authenticated_user_cannot_redirect_to_external_host(self, _broker, _verified, _complete):
         request = self.factory.get("/login/?next=https%3A%2F%2Fevil.example%2Fsteal")
         request.user = self.user
         request.session = {}
