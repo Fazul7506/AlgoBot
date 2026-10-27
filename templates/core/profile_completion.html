@@ -55,6 +55,25 @@
 .profile-onboarding__next p{margin:0;color:var(--text-secondary,#a7b5ca);font-size:.9rem;line-height:1.5}
 @media(max-width:640px){.profile-onboarding__grid,.profile-onboarding__next{grid-template-columns:1fr}.profile-onboarding__rule{display:none}.profile-onboarding__actions{display:block}.profile-onboarding__submit{width:100%}.profile-onboarding__connected{align-items:flex-start}}
 
+/* Desktop reference layout: form and onboarding benefits panel */
+.profile-onboarding__content-grid{display:grid;grid-template-columns:minmax(0,1fr) 245px;gap:1.2rem;align-items:start}
+.profile-onboarding__content-grid>.profile-onboarding__card{min-width:0}
+.profile-onboarding__benefits{display:block;min-width:0;border:1px solid #183b68;border-radius:10px;background:linear-gradient(160deg,rgba(7,24,48,.98),rgba(5,17,35,.98));padding:1rem;box-shadow:0 14px 36px rgba(0,0,0,.16)}
+.profile-onboarding__benefits-head{padding-bottom:1rem;border-bottom:1px solid #183b68}
+.profile-onboarding__benefits-rocket{display:grid;place-items:center;width:42px;height:42px;border-radius:10px;background:#102b51;color:#6ab9ff;margin-bottom:.75rem}
+.profile-onboarding__benefits-rocket svg{width:29px;height:29px}
+.profile-onboarding__benefits h2{font-size:1rem;line-height:1.35;margin:0 0 .4rem}
+.profile-onboarding__benefits-head p{font-size:.78rem;line-height:1.5;color:#9bb3d5;margin:0}
+.profile-onboarding__benefit-list{list-style:none;padding:1rem 0;margin:0;display:grid;gap:.85rem}
+.profile-onboarding__benefit-list li{display:flex;align-items:center;gap:.55rem;font-size:.76rem;line-height:1.4;color:#d9e8ff}
+.profile-onboarding__benefit-list li>span{display:grid;place-items:center;flex:0 0 20px;width:20px;height:20px;border-radius:50%;background:#08a879;color:#fff}
+.profile-onboarding__benefit-list svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.profile-onboarding__benefits-quote{border-top:1px solid #183b68;padding-top:1rem}
+.profile-onboarding__benefits-quote p{font-size:.75rem;line-height:1.5;color:#d6e7ff;margin:0 0 .75rem;text-align:center}
+.profile-onboarding__benefits-quote strong{display:flex;align-items:center;justify-content:center;gap:.5rem;font-size:.85rem}
+.profile-onboarding__benefits-quote strong span{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:#092d52;color:#52c8ff}
+.profile-onboarding__benefits-quote strong svg{width:22px;height:22px}
+@media(max-width:980px){.profile-onboarding__content-grid{grid-template-columns:minmax(0,1fr)}.profile-onboarding__benefits{display:none}}
 /* Reference-aligned Google profile onboarding */
 .profile-onboarding{max-width:1180px;margin:1.2rem auto;padding:0 1rem 2.5rem}
 .profile-onboarding__hero h1{font-size:clamp(1.55rem,2vw,2.15rem);margin-bottom:.35rem}
@@ -118,6 +137,7 @@
     <span class="profile-onboarding__step"><b>4</b><span>Complete</span></span>
   </nav>
 
+  <div class="profile-onboarding__content-grid">
   <form method="post" enctype="multipart/form-data" class="profile-onboarding__card" autocomplete="on">
     {% csrf_token %}
     <div class="profile-onboarding__cardhead">
@@ -220,6 +240,23 @@
       <button type="submit" class="profile-onboarding__submit">Complete Profile <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
     </div>
   </form>
+
+  <aside class="profile-onboarding__benefits" aria-labelledby="profile-benefits-title">
+    <div class="profile-onboarding__benefits-head">
+      <span class="profile-onboarding__benefits-rocket" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 4c2.8-2 5.8-2 6-2 .1.2 0 3.2-2 6l-6 6-4-4 6-6Z"/><path d="m8 10-4 1-2 5 6-2M14 16l-1 4-5 2 2-6"/><circle cx="15.5" cy="6.5" r="1.2"/></svg></span>
+      <h2 id="profile-benefits-title">Get Started with AlgoBot</h2>
+      <p>Complete your profile to unlock the full trading experience.</p>
+    </div>
+    <ul class="profile-onboarding__benefit-list">
+      <li><span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>Access all trading features</li>
+      <li><span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>Personalized recommendations</li>
+      <li><span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>Secure account verification</li>
+      <li><span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>Connect your broker</li>
+      <li><span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>Start trading with confidence</li>
+    </ul>
+    <div class="profile-onboarding__benefits-quote"><p>“Better tools. Smarter decisions. Greater opportunities.”</p><strong><span aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6l-8-4Z"/><path d="m8 12 2.5 2.5L16 9"/></svg></span> AlgoBot</strong></div>
+  </aside>
+  </div>
 
   <section class="profile-onboarding__next" aria-label="Next steps">
     <article><strong>Next: broker marketplace</strong><p>After saving your profile, choose a supported broker connection. AlgoBot will not create a broker connection without your action.</p></article>
