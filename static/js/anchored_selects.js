@@ -51,8 +51,16 @@
     const current = selectedOption(select);
     const label = root.querySelector('.ab-select-value');
     const icon = root.querySelector('.ab-select-current-icon');
-    if (label) label.textContent = current ? optionLabel(current) : (select.dataset.placeholder || 'Select an option');
-    if (icon) icon.innerHTML = iconFor(select, current);
+    if (label) {
+      if (select.id === 'phone_country_code' && current) {
+        const iso = current.dataset.iso || '';
+        const flag = iso ? String.fromCodePoint(...iso.toUpperCase().split('').map(ch => 127397 + ch.charCodeAt(0))) : '';
+        label.textContent = (flag ? flag + ' ' : '') + current.value;
+      } else {
+        label.textContent = current ? optionLabel(current) : (select.dataset.placeholder || 'Select an option');
+      }
+    }
+    if (icon) icon.innerHTML = select.id === 'phone_country_code' ? '' : iconFor(select, current);
     if (button) {
       button.disabled = select.disabled;
       button.setAttribute('aria-expanded', String(!root.querySelector('.ab-select-menu').hidden));
@@ -65,7 +73,10 @@
     const keepSearch = search?.value || '';
     if (!menu) return;
     const options = [...select.options];
-    const hasSearch = options.filter(option => option.value && !option.hidden).length >= 12;
+    // Search is opt-in, not automatically injected into every long dropdown.
+    // Keep it for instruments and explicitly searchable country/phone selectors.
+    const hasSearch = select.dataset.abSearchable === 'true' || isInstrumentSelect(select) ||
+      select.id === 'country' || select.id === 'profile-country' || select.id === 'phone_country_code';
     if (search) {
       search.hidden = !hasSearch;
       if (!hasSearch) search.value = '';
@@ -201,7 +212,8 @@
     const search = document.createElement('input');
     search.type = 'search';
     search.className = 'ab-select-search';
-    search.placeholder = isInstrumentSelect(select) ? 'Search instruments…' : 'Search options…';
+    search.placeholder = isInstrumentSelect(select) ? 'Search instruments…' :
+      (select.id === 'phone_country_code' ? 'Search countries or calling codes…' : 'Search countries…');
     search.setAttribute('aria-label', search.placeholder);
     search.hidden = true;
     const list = document.createElement('div');
