@@ -16,7 +16,8 @@ class BrokerOnboardingMiddleware:
         "/login/", "/register/", "/logout/", "/accounts/login/",
         "/verify-email/", "/forgot-password/", "/reset-password/",
         "/account/identity/", "/account/google/unlink/", "/auth/google/",
-        "/brokers/marketplace/", "/brokers/connect/", "/callback/", "/webhooks/", "/payments/",
+        "/brokers/connect/", "/callback/", "/webhooks/", "/payments/",
+        "/profile/complete/", "/profile/picture/",
         "/billing/", "/saas/", "/developer/", "/api/",
     )
 
@@ -40,13 +41,13 @@ class BrokerOnboardingMiddleware:
         user = getattr(request, "user", None)
         if not user or not user.is_authenticated:
             return self.get_response(request)
-        if not any(path.startswith(prefix) for prefix in self.PROTECTED_BROWSER_PREFIXES):
-            return self.get_response(request)
 
-        # A returning Google login is allowed one dashboard landing before the
-        # normal broker-onboarding gate redirects trading navigation. The view
-        # consumes this one-time session flag; execution endpoints stay gated.
-        if path == "/dashboard/" and request.session.get("google_existing_login_dashboard"):
+        # Onboarding completion is derived from persisted account/profile fields,
+        # not the OAuth callback, session flags, or a user-controlled redirect.
+        from core.profile_completion import profile_is_complete
+        if not profile_is_complete(user):
+            return redirect("profile_completion_page")
+        if not any(path.startswith(prefix) for prefix in self.PROTECTED_BROWSER_PREFIXES):
             return self.get_response(request)
 
         # Import lazily to avoid app-loading and middleware import cycles.
