@@ -1,4 +1,5 @@
 import io
+import json
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock, patch
@@ -199,6 +200,28 @@ class AccountSettingsPagesTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+
+    def test_settings_api_does_not_write_unchanged_preferences(self):
+        profile = UserProfile.objects.get(user=self.user)
+        original_updated_at = profile.updated_at
+        payload = {
+            "profile": {
+                "notifications_enabled": profile.notifications_enabled,
+                "email_notifications_enabled": profile.email_notifications_enabled,
+                "telegram_notifications_enabled": profile.telegram_notifications_enabled,
+            }
+        }
+
+        response = self.client.patch(
+            reverse("account_settings_api"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["changed"])
+        profile.refresh_from_db()
+        self.assertEqual(profile.updated_at, original_updated_at)
 
     def test_account_identity_changes_password_and_keeps_session_authenticated(self):
         response = self.client.post(reverse("account_identity_page"), {
