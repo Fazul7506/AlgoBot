@@ -121,7 +121,11 @@
           let preview=avatar.querySelector('img'); if(!preview){preview=document.createElement('img');preview.alt='';const initials=avatar.querySelector(':scope > span:not(.account-avatar-edit)');if(initials)initials.remove();avatar.insertBefore(preview,avatar.querySelector('.account-avatar-edit'));}
           const previewUrl=URL.createObjectURL(blob); const oldUrl=preview.dataset.previewUrl; preview.src=previewUrl;preview.dataset.previewUrl=previewUrl;if(oldUrl)URL.revokeObjectURL(oldUrl);
           editor.hidden=true; if(sourceUrl)URL.revokeObjectURL(sourceUrl);sourceUrl='';error.textContent='';
-          if(profileForm){ profileForm.requestSubmit(); }
+          // The avatar picker is in the page header while the edit form lives in
+          // a separate modal. Reveal that form before native validation/submission.
+          const profileModal = document.querySelector('[data-profile-edit-modal]');
+          if (profileModal && profileModal.hidden) profileModal.hidden = false;
+          if (profileForm) profileForm.requestSubmit();
         },'image/webp',0.9);
       });
       window.addEventListener('resize', () => { if(!editor.hidden)drawPreview(); });
