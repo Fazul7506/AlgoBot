@@ -154,15 +154,30 @@ class BrokerManager:
 class BrokerConnectionService:
     async def connect(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        adapter = BrokerRegistry().adapter(broker, account); verification = await adapter.connect(); latency = await adapter.ping()
-        if verification.get('account_id') and verification['account_id'] != account.account_id: account.account_id = str(verification['account_id'])
+        adapter = BrokerRegistry().adapter(broker, account)
+        verification = await adapter.connect()
+        verified_account_id = str(verification.get('account_id') or '').strip()
+        # Never silently rewrite the user's selected account to a different
+        # provider account returned by a shared OAuth token.
+        if broker.broker_type == 'deriv':
+            if not verified_account_id or verified_account_id != str(account.account_id):
+                raise BrokerAuthenticationError('Deriv verified a different account than the one selected. Reconnect that specific account.')
+            configured_type = str(account.account_type or '').lower().strip()
+            provider_virtual = verification.get('is_virtual')
+            provider_type = 'demo' if provider_virtual is True else 'real' if provider_virtual is False else ''
+            if configured_type in {'demo', 'real'} and provider_type and configured_type != provider_type:
+                raise BrokerAuthenticationError('Deriv account type verification did not match the selected demo/real account.')
+        latency = await adapter.ping()
         if verification.get('balance') is not None: account.balance = verification['balance']
         if verification.get('currency'): account.currency = verification['currency']
-        account_type = verification.get('is_virtual'); avatar_url = verification.get('avatar_url'); credentials = dict(account.credentials or {})
+        account_type = verification.get('is_virtual')
+        avatar_url = verification.get('avatar_url')
+        credentials = dict(account.credentials or {})
         if account_type is not None: credentials['account_type'] = 'demo' if account_type else 'real'
+        credentials['connection_health'] = 'verified'
         if avatar_url: credentials['avatar_url'] = str(avatar_url)
         account.credentials = credentials; account.status = 'active'; account.last_synced_at = timezone.now()
-        await sync_to_async(account.save)(update_fields=['account_id', 'balance', 'currency', 'credentials', 'status', 'last_synced_at'])
+        await sync_to_async(account.save)(update_fields=['balance', 'currency', 'credentials', 'status', 'last_synced_at'])
         connection, _ = await sync_to_async(BrokerConnection.objects.update_or_create)(broker_account=account, defaults={'broker': broker, 'status': 'connected', 'latency': latency, 'last_ping': timezone.now(), 'connected_at': timezone.now()})
         await sync_to_async(_queue_automation_event, thread_sensitive=False)(
             "BrokerConnected", account,
