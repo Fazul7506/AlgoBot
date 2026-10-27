@@ -185,8 +185,12 @@ def profile_completion_page(request):
             profile.country = str(request.POST.get("country") or "").strip()[:100]
             profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
             profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
-            profile.date_of_birth = dob
-            profile.gender = gender
+            # Blank optional fields must not erase values previously provided
+            # by the user or a verified identity claim.
+            if dob_raw:
+                profile.date_of_birth = dob
+            if gender:
+                profile.gender = gender
             if picture_data is not None:
                 # Use the same durable profile-row storage as the Security Center
                 # editor. A browser preview is not considered saved until these
