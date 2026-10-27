@@ -29,6 +29,8 @@ class ProfileCompletionTests(TestCase):
         self.assertContains(response, "Complete your profile")
         self.assertContains(response, "First name")
         self.assertContains(response, "Last name")
+        self.assertContains(response, "Google account connected")
+        self.assertContains(response, "Broker marketplace")
 
     def test_required_names_are_validated(self):
         self.client.force_login(self.user)
@@ -64,6 +66,23 @@ class ProfileCompletionTests(TestCase):
         profile = UserProfile.objects.get(user=self.user)
         self.assertEqual(profile.country, "Kenya")
         self.assertEqual(profile.timezone, "Africa/Nairobi")
+
+    @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
+    def test_new_google_signup_always_goes_to_broker_marketplace_after_profile(self, _connected):
+        self.client.force_login(self.user)
+        session = self.client.session
+        session["google_profile_completion_pending"] = True
+        session.save()
+
+        response = self.client.post(
+            reverse("profile_completion_page"),
+            {"first_name": "Taylor", "last_name": "Example", "timezone": "Africa/Nairobi"},
+        )
+
+        self.assertRedirects(
+            response, reverse("broker_marketplace_page"), fetch_redirect_response=False
+        )
+        self.assertFalse(self.client.session.get("google_profile_completion_pending"))
 
     @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
     def test_saving_profile_returns_to_dashboard_when_connected(self, _connected):
