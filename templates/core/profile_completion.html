@@ -119,7 +119,7 @@
 @media(max-width:640px){.profile-onboarding{margin:.7rem auto;padding:0 .75rem 1.5rem}.profile-onboarding__steps{gap:.25rem}.profile-onboarding__step{font-size:.63rem;white-space:normal;flex:1}.profile-onboarding__rule{min-width:5px;margin-bottom:1rem}.profile-onboarding__avatar-layout{grid-template-columns:68px minmax(0,1fr)}.profile-onboarding__avatar-upload{width:64px;height:64px}.profile-onboarding__avatar-preview{grid-column:1/-1;border-left:0;border-top:1px solid #17365c;padding:.65rem 0 0;flex-direction:row;justify-content:flex-end}.profile-onboarding__avatar-preview img{width:36px;height:36px}.profile-onboarding__avatar-field{padding:.75rem}.profile-onboarding__grid{gap:.85rem}}
 
 .profile-onboarding__phone-control{display:grid;grid-template-columns:minmax(104px,.38fr) minmax(0,1fr);gap:.45rem;align-items:center}.profile-onboarding__phone-code-label{display:none!important}.profile-onboarding__avatar-upload.is-dragging{box-shadow:0 0 0 5px rgba(28,128,255,.3);transform:scale(1.03)}.profile-onboarding__avatar-upload img[hidden]{display:none!important}@media(max-width:420px){.profile-onboarding__phone-control{grid-template-columns:100px minmax(0,1fr)}}
-</style>
+.avatar-editor[hidden]{display:none}.avatar-editor{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(2,8,20,.82);backdrop-filter:blur(8px)}.avatar-editor__panel{width:min(100%,460px);max-height:94dvh;overflow:auto;padding:clamp(18px,4vw,26px);border:1px solid #263a55;border-radius:22px;background:linear-gradient(155deg,#102542,#071426 70%);color:#e8effa;box-shadow:0 24px 80px #0008}.avatar-editor__panel h2{margin:0 0 8px}.avatar-editor__stage{position:relative;width:min(100%,320px);aspect-ratio:1;margin:20px auto;overflow:hidden;border:1px solid #2d4d70;border-radius:50%;background:#07111f;touch-action:none;cursor:grab}.avatar-editor__stage:active{cursor:grabbing}.avatar-editor__stage img{position:absolute;max-width:none;user-select:none;pointer-events:none}.avatar-editor__zoom{display:flex;align-items:center;gap:14px}.avatar-editor__zoom input{min-width:0;flex:1;accent-color:#22b8e6}.avatar-editor__actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:18px}.avatar-editor__actions .account-btn{min-width:100px}.avatar-editor__actions [data-avatar-save]:disabled{opacity:.55}@media(max-width:420px){.avatar-editor__panel{padding:18px}.avatar-editor__stage{width:min(100%,280px)}.avatar-editor__actions{display:grid;grid-template-columns:1fr 1fr}}</style>
 {% endblock %}
 {% block content %}
 <main class="profile-onboarding" id="main-content">
@@ -207,7 +207,7 @@
             {% if profile_picture_url %}<img id="profile-picture-preview" src="{{ profile_picture_url }}" alt="Your profile picture">{% else %}<span id="profile-picture-placeholder" class="profile-onboarding__avatar-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><img id="profile-picture-preview" alt="Selected profile picture preview" hidden>{% endif %}
             <span class="profile-onboarding__avatar-edit" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m14 5 5 5M4 20l4-.8L20 7a2.1 2.1 0 0 0-3-3L5 16Z"/></svg></span>
           </label>
-          <input id="profile_picture" name="profile_picture" type="file" accept="image/jpeg,image/png,image/webp" hidden aria-label="Choose profile picture">
+          <input id="profile_picture" name="profile_picture" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden aria-label="Choose profile picture">
           <p class="profile-onboarding__hint">Click the photo or pencil to upload, or drag and drop an image here.</p>
           <div class="profile-onboarding__avatar-preview"><span>Preview</span>{% if profile_picture_url %}<img id="profile-picture-preview-small" src="{{ profile_picture_url }}" alt="Profile picture preview">{% else %}<img id="profile-picture-preview-small" alt="Profile picture preview" hidden>{% endif %}</div>
         </div>
@@ -271,6 +271,16 @@
     <article><strong>Next: Broker marketplace</strong><p>After saving your profile, choose a supported broker connection. AlgoBot will not create a broker connection without your action.</p></article>
     <article><strong>Your account, your control</strong><p>Your AlgoBot profile details are separate from your broker credentials and account balances.</p></article>
   </section>
+  <div class="avatar-editor" data-avatar-editor hidden role="dialog" aria-modal="true" aria-labelledby="avatar-editor-title">
+    <div class="avatar-editor__panel">
+      <h2 id="avatar-editor-title">Edit profile photo</h2>
+      <p class="profile-onboarding__hint">Drag the photo to position it, then adjust the zoom. Your cropped copy will be prepared before upload.</p>
+      <div class="avatar-editor__stage" data-avatar-stage><img data-avatar-crop-image alt="Photo crop preview" draggable="false"></div>
+      <label class="avatar-editor__zoom" for="avatar-zoom">Zoom <input id="avatar-zoom" type="range" min="1" max="3" step="0.01" value="1" data-avatar-zoom></label>
+      <p class="account-help" data-avatar-editor-error role="status" aria-live="polite"></p>
+      <div class="account-actions avatar-editor__actions"><button type="button" class="account-btn" data-avatar-cancel>Cancel</button><button type="button" class="account-btn account-btn--primary" data-avatar-save>Use this picture</button></div>
+    </div>
+  </div>
   <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js" defer></script>
   <script>
     const avatarInput = document.getElementById("profile_picture");
@@ -288,32 +298,115 @@
       if (avatarPlaceholder) avatarPlaceholder.hidden = true;
     }
     if (avatarInput && avatarPreview) {
-      avatarHolder?.addEventListener("keydown", function (event) {
+      const editor = document.querySelector("[data-avatar-editor]");
+      const stage = document.querySelector("[data-avatar-stage]");
+      const cropImage = document.querySelector("[data-avatar-crop-image]");
+      const zoom = document.querySelector("[data-avatar-zoom]");
+      const cancel = document.querySelector("[data-avatar-cancel]");
+      const save = document.querySelector("[data-avatar-save]");
+      const error = document.querySelector("[data-avatar-editor-error]");
+      const onboardingForm = avatarInput.closest("form");
+      let sourceUrl = "", imageWidth = 0, imageHeight = 0, scale = 1, offsetX = 0, offsetY = 0, drag = null;
+      const stageSize = () => stage.getBoundingClientRect().width;
+      const drawPreview = () => {
+        const size = stageSize(); if (!size || !imageWidth || !imageHeight) return;
+        const base = Math.max(size / imageWidth, size / imageHeight) * scale;
+        const width = imageWidth * base, height = imageHeight * base;
+        offsetX = Math.min(0, Math.max(size - width, offsetX));
+        offsetY = Math.min(0, Math.max(size - height, offsetY));
+        cropImage.style.width = width + "px"; cropImage.style.height = height + "px";
+        cropImage.style.left = offsetX + "px"; cropImage.style.top = offsetY + "px";
+      };
+      const closeEditor = (discard) => {
+        editor.hidden = true;
+        if (discard) avatarInput.value = "";
+        if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+        sourceUrl = ""; cropImage.removeAttribute("src"); error.textContent = "";
+      };
+      avatarHolder?.addEventListener("keydown", event => {
         if (event.key === "Enter" || event.key === " ") { event.preventDefault(); avatarInput.click(); }
       });
-      ["dragenter", "dragover"].forEach(function (name) {
-        avatarHolder?.addEventListener(name, function (event) { event.preventDefault(); avatarHolder.classList.add("is-dragging"); });
-      });
-      ["dragleave", "drop"].forEach(function (name) {
-        avatarHolder?.addEventListener(name, function (event) { event.preventDefault(); avatarHolder.classList.remove("is-dragging"); });
-      });
-      avatarHolder?.addEventListener("drop", function (event) {
-        const file = event.dataTransfer?.files?.[0];
-        if (!file) return;
+      ["dragenter", "dragover"].forEach(name => avatarHolder?.addEventListener(name, event => {
+        event.preventDefault(); avatarHolder.classList.add("is-dragging");
+      }));
+      ["dragleave", "drop"].forEach(name => avatarHolder?.addEventListener(name, event => {
+        event.preventDefault(); avatarHolder.classList.remove("is-dragging");
+      }));
+      avatarHolder?.addEventListener("drop", event => {
+        const file = event.dataTransfer?.files?.[0]; if (!file) return;
         const transfer = new DataTransfer(); transfer.items.add(file); avatarInput.files = transfer.files;
-        avatarInput.dispatchEvent(new Event("change", {bubbles:true}));
+        avatarInput.dispatchEvent(new Event("change", { bubbles: true }));
       });
-      avatarInput.addEventListener("change", function () {
-        const file = avatarInput.files && avatarInput.files[0];
-        if (!file) return;
-        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
-          avatarInput.value = "";
-          if (avatarHint) avatarHint.textContent = "Choose a JPG, PNG, or WebP image no larger than 5 MB.";
-          return;
+      avatarInput.addEventListener("change", () => {
+        const file = avatarInput.files && avatarInput.files[0]; if (!file) return;
+        if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+          avatarInput.value = ""; if (avatarHint) avatarHint.textContent = "Choose a JPEG, PNG, WEBP or GIF image no larger than 5 MB."; return;
         }
-        if (avatarHint) avatarHint.textContent = file.name + " — ready to save with your profile.";
-        setAvatarPreview(URL.createObjectURL(file));
+        if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+        sourceUrl = URL.createObjectURL(file);
+        cropImage.onload = () => {
+          imageWidth = cropImage.naturalWidth; imageHeight = cropImage.naturalHeight;
+          if (!imageWidth || !imageHeight || imageWidth * imageHeight > 25000000) {
+            error.textContent = "Choose an image with 25 megapixels or fewer."; closeEditor(true); return;
+          }
+          scale = 1; zoom.value = "1"; editor.hidden = false;
+          const size = stageSize(); const base = Math.max(size / imageWidth, size / imageHeight);
+          offsetX = (size - imageWidth * base) / 2; offsetY = (size - imageHeight * base) / 2;
+          drawPreview(); save.disabled = false; error.textContent = ""; save.focus();
+        };
+        cropImage.onerror = () => { error.textContent = "This image could not be opened. Choose another photo."; closeEditor(true); };
+        cropImage.src = sourceUrl;
       });
+      zoom.addEventListener("input", () => {
+        if (!imageWidth || !imageHeight) return;
+        const size = stageSize(), oldBase = Math.max(size / imageWidth, size / imageHeight) * scale;
+        const centerX = (size / 2 - offsetX) / oldBase, centerY = (size / 2 - offsetY) / oldBase;
+        scale = Number(zoom.value);
+        const newBase = Math.max(size / imageWidth, size / imageHeight) * scale;
+        offsetX = size / 2 - centerX * newBase; offsetY = size / 2 - centerY * newBase; drawPreview();
+      });
+      stage.addEventListener("pointerdown", event => {
+        if (editor.hidden) return;
+        drag = { x: event.clientX, y: event.clientY, left: offsetX, top: offsetY };
+        stage.setPointerCapture(event.pointerId);
+      });
+      stage.addEventListener("pointermove", event => {
+        if (!drag) return;
+        offsetX = drag.left + event.clientX - drag.x; offsetY = drag.top + event.clientY - drag.y; drawPreview();
+      });
+      ["pointerup", "pointercancel", "lostpointercapture"].forEach(name => stage.addEventListener(name, () => { drag = null; }));
+      cancel.addEventListener("click", () => closeEditor(true));
+      editor.addEventListener("click", event => { if (event.target === editor) closeEditor(true); });
+      document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && !editor.hidden) closeEditor(true);
+      });
+      save.addEventListener("click", () => {
+        if (!imageWidth || !imageHeight) return;
+        save.disabled = true; error.textContent = "Preparing photo…";
+        const size = stageSize(), base = Math.max(size / imageWidth, size / imageHeight) * scale;
+        const sx = Math.max(0, Math.min(imageWidth - size / base, -offsetX / base));
+        const sy = Math.max(0, Math.min(imageHeight - size / base, -offsetY / base));
+        const sw = Math.min(imageWidth, size / base), sh = Math.min(imageHeight, size / base);
+        const canvas = document.createElement("canvas"); canvas.width = 512; canvas.height = 512;
+        const context = canvas.getContext("2d");
+        if (!context) { save.disabled = false; error.textContent = "Photo editing is not supported by this browser."; return; }
+        context.drawImage(cropImage, sx, sy, sw, sh, 0, 0, 512, 512);
+        canvas.toBlob(blob => {
+          if (!blob) { save.disabled = false; error.textContent = "Could not prepare this photo. Please try again."; return; }
+          try {
+            const cropped = new File([blob], "profile-photo.webp", { type: "image/webp", lastModified: Date.now() });
+            const transfer = new DataTransfer(); transfer.items.add(cropped); avatarInput.files = transfer.files;
+            setAvatarPreview(URL.createObjectURL(blob));
+            if (avatarHint) avatarHint.textContent = "Edited photo ready to save.";
+            closeEditor(false);
+            // Keep the edited image attached to the onboarding form and let the user
+            // submit the whole form; never upload the original picker-backed file.
+          } catch (_) {
+            save.disabled = false; error.textContent = "Your browser could not prepare the edited photo. Please try again.";
+          }
+        }, "image/webp", 0.9);
+      });
+      window.addEventListener("resize", () => { if (!editor.hidden) drawPreview(); });
     }
     const profileForm = document.querySelector(".profile-onboarding__card");
     profileForm?.addEventListener("submit", function (event) {
