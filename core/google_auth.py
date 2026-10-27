@@ -286,7 +286,7 @@ def google_login_callback(request):
     if profile:
         from datetime import date
         profile_updates = []
-        birthdate_claim = str(identity.get("birthdate") or identity.get("date_of_birth") or "").strip()
+        birthdate_claim = str(identity.get("birthdate") or identity.get("date_of_birth") or identity.get("birthday") or "").strip()
         if not profile.date_of_birth and birthdate_claim:
             try:
                 parsed_birthdate = date.fromisoformat(birthdate_claim)
@@ -296,8 +296,17 @@ def google_login_callback(request):
             except ValueError:
                 pass
         gender_claim = str(identity.get("gender") or "").strip().lower()
-        if not profile.gender and gender_claim in {"female", "male", "non_binary", "prefer_not_to_say", "self_described"}:
-            profile.gender = gender_claim
+        gender_map = {
+            "female": "female",
+            "male": "male",
+            "non_binary": "non_binary",
+            "other": "self_described",
+            "self_described": "self_described",
+            "prefer_not_to_say": "prefer_not_to_say",
+            "unknown": "prefer_not_to_say",
+        }
+        if not profile.gender and gender_claim in gender_map:
+            profile.gender = gender_map[gender_claim]
             profile_updates.append("gender")
         if profile_updates:
             profile.save(update_fields=profile_updates + ["updated_at"])
