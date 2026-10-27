@@ -10,6 +10,8 @@
   isolation: isolate;
 }
 .ab-select-root > .ab-select-native {
+  /* It remains the form/API value source; never render or open the platform-native picker. */
+  display: none !important;
   position: absolute !important;
   width: 1px !important;
   height: 1px !important;
