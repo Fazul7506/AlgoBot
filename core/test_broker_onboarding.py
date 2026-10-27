@@ -118,10 +118,16 @@ class BrokerMarketplaceDirectoryUiTests(TestCase):
             username="marketplace-directory-user",
             email="marketplace-directory@example.test",
             password="A-secure-test-password-123!",
+            first_name="Marketplace",
+            last_name="Directory",
         )
         UserProfile.objects.update_or_create(
             user=self.user,
-            defaults={"email_verified": True, "email_verified_at": timezone.now()},
+            defaults={
+                "email_verified": True,
+                "email_verified_at": timezone.now(),
+                "terms_accepted_at": timezone.now(),
+            },
         )
         self.deriv = Broker.objects.create(
             name="Deriv",
