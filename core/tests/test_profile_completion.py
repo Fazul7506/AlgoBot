@@ -87,6 +87,32 @@ class ProfileCompletionTests(TestCase):
         self.assertFalse(self.client.session.get("google_profile_completion_pending"))
 
     @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
+    def test_profile_persistence_failure_does_not_mark_profile_complete(self):
+        from django.db import DatabaseError
+        from core.profile_completion import profile_is_complete
+
+        UserProfile.objects.get_or_create(user=self.user)
+        self.client.force_login(self.user)
+        with patch("core.models.UserProfile.save", side_effect=DatabaseError("simulated storage failure")):
+            response = self.client.post(
+                reverse("profile_completion_page"),
+                {
+                    "first_name": "Taylor",
+                    "last_name": "Example",
+                    "terms_accepted": "on",
+                    "timezone": "UTC",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "temporary storage problem")
+        self.user.refresh_from_db()
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(self.user.first_name, "")
+        self.assertEqual(self.user.last_name, "")
+        self.assertIsNone(profile.terms_accepted_at)
+        self.assertFalse(profile_is_complete(self.user))
+
     def test_saving_profile_still_returns_to_marketplace_when_connected(self, _connected):
         self.client.force_login(self.user)
         response = self.client.post(
