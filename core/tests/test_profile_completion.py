@@ -114,7 +114,7 @@ class ProfileCompletionTests(TestCase):
                 response, reverse("profile_completion_page"), fetch_redirect_response=False
             )
 
-        self.client.post(reverse("logout_page"))
+        self.client.post(reverse("logout"))
         logged_in = self.client.post(
             reverse("login_page"),
             {"identifier": self.user.username, "password": "A-secure-test-password-123!"},
