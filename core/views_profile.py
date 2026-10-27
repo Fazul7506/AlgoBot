@@ -1,4 +1,6 @@
 """Authenticated browser views for the user's own AlgoBot profile."""
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
@@ -9,8 +11,11 @@ from django.views.decorators.http import require_http_methods
 from zoneinfo import available_timezones
 from PIL import Image, UnidentifiedImageError
 from django.conf import settings
+from django.db import DatabaseError, transaction
 
 from core.models import UserProfile
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -94,14 +99,35 @@ def profile_page(request):
                 profile.profile_picture_content_type = picture_content_type
                 profile.avatar_url = ""
 
-            request.user.save(update_fields=["first_name", "last_name"])
-            profile.save(update_fields=[
-                "country", "timezone", "phone", "bio",
-                "avatar_url", "profile_picture_data",
-                "profile_picture_content_type", "updated_at",
-            ])
-            messages.success(request, "Your profile has been saved.")
-            return redirect("profile_page")
+            # Keep the auth identity and extended profile in one transaction. A
+            # failed profile/avatar write must not leave half of the submitted form
+            # persisted.
+            try:
+                with transaction.atomic():
+                    request.user.save(update_fields=["first_name", "last_name"])
+                    # The profile row is normally created by the user signal, but
+                    # support older/imported accounts that do not have one yet.
+                    if profile.pk is None:
+                        profile.save()
+                    profile.save(update_fields=[
+                        "country", "timezone", "phone", "bio",
+                        "avatar_url", "profile_picture_data",
+                        "profile_picture_content_type", "updated_at",
+                    ])
+            except DatabaseError:
+                # Roll back and refresh both in-memory objects so a failed write
+                # cannot leak partially updated identity/avatar state into rendering.
+                logger.exception("Failed to persist profile changes for user_id=%s", request.user.pk)
+                request.user.refresh_from_db()
+                profile = UserProfile.objects.filter(user=request.user).first() or UserProfile(user=request.user)
+                messages.error(
+                    request,
+                    "We couldn't save your profile because of a temporary storage problem. "
+                    "Your changes were not applied; please try again.",
+                )
+            else:
+                messages.success(request, "Your profile has been saved.")
+                return redirect("profile_page")
 
     return render(request, "core/profile.html", {
         "profile": profile,

@@ -2,9 +2,9 @@
 {% load static %}
 {% block title %}Account Settings | AlgoBot
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account4"><link rel="stylesheet" href="{% static 'css/security_center.css' %}?v=20261020-security1">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1"><link rel="stylesheet" href="{% static 'css/security_center.css' %}?v=20261020-security1">{% endblock %}
 {% block content %}
-<main class="account-page" data-security-page>
+<main class="account-page" data-account-settings data-security-page>
   <header class="account-hero">
     <div>
       <p class="account-kicker">ACCOUNT PROTECTION</p>
@@ -18,7 +18,7 @@
     <nav class="account-nav" aria-label="Account settings">
       <a href="{% url 'profile_page' %}">Profile</a>
       <a href="{% url 'settings_page' %}">Preferences</a>
-      <a href="{% url 'account_identity_page' %}">Login & identity</a>
+      <a href="{% url 'account_identity_page' %}">Login &amp; Identity</a>
       <a href="{% url 'security_center' %}" aria-current="page">Security</a>
     </nav>
 

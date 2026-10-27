@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Preferences | AlgoBot{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account4">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1">{% endblock %}
 {% block content %}
-<main class="account-page" data-settings-page>
+<main class="account-page" data-account-settings data-settings-page>
   <header class="account-hero">
     <div>
-      <p class="account-kicker">Personalize your workspace</p>
-      <h1>Preferences</h1>
-      <p class="account-subtitle">Control your AlgoBot workspace and notification preferences. Changes are saved to your signed-in account.</p>
+      <p class="account-kicker">ACCOUNT MANAGEMENT</p>
+      <h1>Account Settings</h1>
+      <p class="account-subtitle">Manage your account settings, security, and preferences. Keep your account safe and personalized.</p>
     </div>
     <span class="account-state" data-settings-status role="status" aria-live="polite">Loading settings…</span>
   </header>
@@ -17,7 +17,7 @@
     <nav class="account-nav" aria-label="Account settings">
       <a href="{% url 'profile_page' %}">Profile</a>
       <a href="{% url 'settings_page' %}" aria-current="page">Preferences</a>
-      <a href="{% url 'account_identity_page' %}">Login & identity</a>
+      <a href="{% url 'account_identity_page' %}">Login &amp; Identity</a>
       <a href="{% url 'security_center' %}">Security</a>
     </nav>
 
@@ -29,7 +29,7 @@
           <div class="account-field"><label for="settings-username">Username</label><input id="settings-username" name="username" readonly aria-readonly="true"></div>
           <div class="account-field"><label for="settings-email">Login email</label><input id="settings-email" name="email" type="email" readonly aria-readonly="true"></div>
         </div>
-        <p class="account-help" style="margin-top:12px">To change your username or email, open Login & identity. Email changes require verification.</p>
+        <p class="account-help" style="margin-top:12px">To change your username or email, open Login &amp; Identity. Email changes require verification.</p>
       </section>
 
       <section class="account-card" id="notifications">

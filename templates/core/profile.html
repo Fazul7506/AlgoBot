@@ -1,19 +1,19 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Profile | AlgoBot{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261019-account4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">{% endblock %}
 {% block content %}
-<main class="account-page" data-profile-page>
+<main class="account-page" data-account-settings data-profile-page>
   <header class="account-hero">
     <div class="account-hero__identity">
-      <label class="account-profile-avatar account-profile-avatar--editable" data-avatar-preview for="profile-picture" title="Add or change profile picture" aria-label="Add or change profile picture">{% if profile.profile_picture_data or profile.avatar_url %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U' }}" alt="">{% else %}<span>{{ profile_initials }}</span>{% endif %}<span class="account-avatar-edit" aria-hidden="true">✎</span><input id="profile-picture" name="profile_picture" form="profile-edit-form" type="file" accept="image/jpeg,image/png,image/webp,image/gif" autocomplete="off" aria-label="Choose profile picture" hidden></label>
-      <div><p class="account-kicker">Your account</p><h1>Profile</h1></div>
+      <label class="account-profile-avatar account-profile-avatar--editable" data-avatar-preview for="profile-picture" title="Add or change profile picture" aria-label="Add or change profile picture">{% if profile.profile_picture_data or profile.avatar_url %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U.u' }}" alt="">{% else %}<span>{{ profile_initials }}</span>{% endif %}<span class="account-avatar-edit" aria-hidden="true">✎</span><input id="profile-picture" name="profile_picture" form="profile-edit-form" type="file" accept="image/jpeg,image/png,image/webp,image/gif" autocomplete="off" aria-label="Choose profile picture" hidden></label>
+      <div><p class="account-kicker">ACCOUNT MANAGEMENT</p><h1>Account Settings</h1><p class="account-subtitle">Manage your account settings, security, and preferences. Keep your account safe and personalized.</p></div>
     </div>
     <span class="account-state {% if profile.email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if profile.email_verified %}Email verified{% else %}Email verification pending{% endif %}</span>
   </header>
   <div class="account-layout">
     <nav class="account-nav" aria-label="Account settings">
-      <a href="{% url 'profile_page' %}" aria-current="page">Profile</a><a href="{% url 'settings_page' %}">Preferences</a><a href="{% url 'account_identity_page' %}">Login &amp; identity</a><a href="{% url 'security_center' %}">Security</a>
+      <a href="{% url 'profile_page' %}" aria-current="page">Profile</a><a href="{% url 'settings_page' %}">Preferences</a><a href="{% url 'account_identity_page' %}">Login &amp; Identity</a><a href="{% url 'security_center' %}">Security</a>
     </nav>
     <div class="account-content"><section class="account-card profile-edit-launch"><div class="account-card__header"><div><h2>Personal information</h2><p class="account-card__hint">Review your profile details and open the editor to make changes.</p></div><button type="button" class="account-btn account-btn--primary" data-profile-edit-open>Edit profile</button></div><p class="account-help">Your personal details are private to your AlgoBot account. Login identity and broker settings remain managed separately.</p></section><div class="profile-edit-modal" data-profile-edit-modal hidden role="dialog" aria-modal="true" aria-labelledby="profile-edit-title"><div class="profile-edit-modal__panel"><div class="profile-edit-modal__heading"><div><p class="account-kicker">ACCOUNT PROFILE</p><h2 id="profile-edit-title">Edit profile</h2><p class="account-help">Update your personal information below.</p></div><button type="button" class="account-btn" data-profile-edit-close aria-label="Close profile editor">Close</button></div><form id="profile-edit-form" class="account-content profile-edit-modal__form" method="post" enctype="multipart/form-data" action="{% url 'profile_page' %}">
       {% csrf_token %}
@@ -23,7 +23,7 @@
         <div class="account-fields">
           <div class="account-field"><label for="profile-first-name">First name</label><input id="profile-first-name" name="first_name" value="{{ first_name }}" maxlength="150" autocomplete="given-name" required></div>
           <div class="account-field"><label for="profile-last-name">Last name</label><input id="profile-last-name" name="last_name" value="{{ last_name }}" maxlength="150" autocomplete="family-name" required></div>
-          <div class="account-field"><label for="profile-username">Username</label><input id="profile-username" value="{{ request.user.username }}" readonly aria-readonly="true"><span class="account-help">Change username from Login &amp; identity.</span></div>
+          <div class="account-field"><label for="profile-username">Username</label><input id="profile-username" value="{{ request.user.username }}" readonly aria-readonly="true"><span class="account-help">Change username from Login &amp; Identity.</span></div>
           <div class="account-field"><label for="profile-email">Login email</label><input id="profile-email" value="{{ request.user.email }}" readonly aria-readonly="true"><span class="account-help">Email changes require verification.</span></div>
           
           <div class="account-field"><label for="profile-country">Country</label><select id="profile-country" name="country" autocomplete="country-name" data-country-select data-current-country="{{ country|escape }}" required><option value="">Choose your country</option></select><span class="account-help">Select a country; flags and names are generated from standard region codes.</span></div>

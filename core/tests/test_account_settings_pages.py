@@ -1,4 +1,6 @@
 import io
+import json
+import re
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock, patch
@@ -27,12 +29,19 @@ class AccountSettingsPagesTests(TestCase):
         )
         self.client.force_login(self.user)
 
+    def test_profile_menu_does_not_label_unverified_email_as_verified(self):
+        response = self.client.get(reverse("profile_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Email not verified")
+        self.assertContains(response, "topbar-profile-unverified")
+        self.assertNotContains(response, "AlgoBot account</span>")
+
     def test_profile_page_renders_editable_fields_and_settings_navigation(self):
         response = self.client.get(reverse("profile_page"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Personal information")
         self.assertContains(response, 'name="first_name"')
-        self.assertContains(response, "Login &amp; identity")
+        self.assertContains(response, "Login &amp; Identity")
         self.assertContains(response, 'id="profile-edit-form"')
         self.assertContains(response, 'form="profile-edit-form"')
         self.assertContains(response, "data-avatar-editor")
@@ -99,6 +108,53 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(picture_response.content, bytes(profile.profile_picture_data))
         self.assertEqual(picture_response["X-Content-Type-Options"], "nosniff")
 
+        # Both shared-shell avatars and the profile-page avatar must point to
+        # the same authenticated, persisted picture endpoint after a fresh GET.
+        page_response = self.client.get(reverse("profile_page"))
+        self.assertEqual(page_response.status_code, 200)
+        html = page_response.content.decode("utf-8")
+        self.assertGreaterEqual(html.count(f'src="{reverse("profile_picture")}?v='), 3)
+
+    def test_profile_update_rolls_back_identity_if_profile_persistence_fails(self):
+        original_first_name = self.user.first_name
+        original_last_name = self.user.last_name
+
+        with patch.object(UserProfile, "save", side_effect=RuntimeError("simulated profile write failure")):
+            with self.assertRaises(RuntimeError):
+                self.client.post(reverse("profile_page"), {
+                    "first_name": "Changed",
+                    "last_name": "Identity",
+                    "country": "Kenya",
+                    "timezone": "Africa/Nairobi",
+                    "phone": "",
+                    "bio": "",
+                })
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, original_first_name)
+        self.assertEqual(self.user.last_name, original_last_name)
+
+    def test_profile_database_failure_returns_error_without_partial_identity_write(self):
+        from django.db import DatabaseError
+
+        original_first_name = self.user.first_name
+        original_last_name = self.user.last_name
+        with patch.object(UserProfile, "save", side_effect=DatabaseError("simulated database outage")):
+            response = self.client.post(reverse("profile_page"), {
+                "first_name": "Changed",
+                "last_name": "Identity",
+                "country": "Kenya",
+                "timezone": "Africa/Nairobi",
+                "phone": "",
+                "bio": "",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "temporary storage problem")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, original_first_name)
+        self.assertEqual(self.user.last_name, original_last_name)
+
     def test_profile_page_rejects_invalid_timezone_without_persisting(self):
         response = self.client.post(reverse("profile_page"), {
             "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
@@ -126,6 +182,27 @@ class AccountSettingsPagesTests(TestCase):
         self.assertContains(settings_response, "Workspace preferences")
         self.assertContains(settings_response, "Notifications")
         self.assertContains(security_response, "Protection checks")
+
+    def test_all_account_settings_pages_share_reference_header_and_four_tab_navigation(self):
+        urls = (
+            reverse("profile_page"),
+            reverse("settings_page"),
+            reverse("account_identity_page"),
+            reverse("security_center"),
+        )
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "Account Settings")
+                self.assertContains(response, "data-account-settings")
+                self.assertContains(response, "Login &amp; Identity")
+                html = response.content.decode("utf-8")
+                self.assertIn("reference-unified1", html)
+                nav_match = re.search(r'<nav class="account-nav"[^>]*>(.*?)</nav>', html, re.DOTALL)
+                self.assertIsNotNone(nav_match, "Account Settings navigation must render")
+                active_links = re.findall(r'<a href="([^"]+)" aria-current="page">', nav_match.group(1))
+                self.assertEqual(active_links, [url], "Only the current subpage should be active")
 
     def test_settings_api_rejects_non_object_payload(self):
         response = self.client.patch(
@@ -156,6 +233,28 @@ class AccountSettingsPagesTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+
+    def test_settings_api_does_not_write_unchanged_preferences(self):
+        profile = UserProfile.objects.get(user=self.user)
+        original_updated_at = profile.updated_at
+        payload = {
+            "profile": {
+                "notifications_enabled": profile.notifications_enabled,
+                "email_notifications_enabled": profile.email_notifications_enabled,
+                "telegram_notifications_enabled": profile.telegram_notifications_enabled,
+            }
+        }
+
+        response = self.client.patch(
+            reverse("account_settings_api"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["changed"])
+        profile.refresh_from_db()
+        self.assertEqual(profile.updated_at, original_updated_at)
 
     def test_account_identity_changes_password_and_keeps_session_authenticated(self):
         response = self.client.post(reverse("account_identity_page"), {

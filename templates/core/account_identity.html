@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261020-google-identity1"><script>
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1"><script>
 document.addEventListener("click", event => { const button = event.target.closest("[data-password-toggle]"); if (!button) return; const input = button.closest(".account-password-control")?.querySelector("[data-password-field]"); if (!input) return; const show = input.type === "password"; input.type = show ? "text" : "password"; button.textContent = show ? "Hide" : "Show"; button.setAttribute("aria-label", show ? "Hide password" : "Show password"); });
 
 document.addEventListener("submit", event => {
@@ -16,18 +16,19 @@ document.addEventListener("submit", event => {
 {% endblock %}
 {% block title %}Account Identity | AlgoBot{% endblock %}
 {% block content %}
-<main class="account-page" data-account-identity>
+<main class="account-page" data-account-settings data-account-identity>
   <header class="account-hero">
     <div>
-      <p class="account-kicker">ACCOUNT SECURITY</p>
-      <h1>Account identity</h1>
+      <p class="account-kicker">ACCOUNT MANAGEMENT</p>
+      <h1>Account Settings</h1>
+      <p class="account-subtitle">Manage your account settings, security, and preferences. Keep your account safe and personalized.</p>
       
     </div>
     <span class="account-state {% if email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if email_verified %}Email verified{% else %}Email not verified{% endif %}</span>
   </header>
 
   <div class="account-layout">
-    <nav class="account-nav" aria-label="Account settings"><a href="{% url 'profile_page' %}">Profile</a><a href="{% url 'settings_page' %}">Preferences</a><a href="{% url 'account_identity_page' %}" aria-current="page">Login &amp; identity</a><a href="{% url 'security_center' %}">Security</a></nav>
+    <nav class="account-nav" aria-label="Account settings"><a href="{% url 'profile_page' %}">Profile</a><a href="{% url 'settings_page' %}">Preferences</a><a href="{% url 'account_identity_page' %}" aria-current="page">Login &amp; Identity</a><a href="{% url 'security_center' %}">Security</a></nav>
     <div class="account-content">
     <form class="account-card" method="post" action="{% url 'account_identity_page' %}">
       {% csrf_token %}
