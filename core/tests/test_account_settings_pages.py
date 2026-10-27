@@ -27,6 +27,13 @@ class AccountSettingsPagesTests(TestCase):
         )
         self.client.force_login(self.user)
 
+    def test_profile_menu_does_not_label_unverified_email_as_verified(self):
+        response = self.client.get(reverse("profile_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Email not verified")
+        self.assertContains(response, "topbar-profile-unverified")
+        self.assertNotContains(response, "AlgoBot account</span>")
+
     def test_profile_page_renders_editable_fields_and_settings_navigation(self):
         response = self.client.get(reverse("profile_page"))
         self.assertEqual(response.status_code, 200)
