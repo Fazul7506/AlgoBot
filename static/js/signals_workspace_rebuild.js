@@ -16,7 +16,7 @@
     state.loading=true; $('signals-refresh').disabled=true; $('signals-loading').hidden=false; $('signals-error').hidden=true;
     $('signals-live-label').textContent='Loading signals'; $('signals-live-dot').className='signals-live-dot';
     const query=new URLSearchParams({category:state.category,page:String(state.page),page_size:String(state.pageSize)});
-    if(state.market)query.set('market',state.market);if(state.asset)query.set('asset',state.asset);
+    if(state.market)query.set('market',state.market);if(state.asset)query.set('asset',state.asset);if(state.search)query.set('q',state.search);
     try {
       const response=await fetch('/api/signals/workspace/?'+query.toString(),{credentials:'same-origin',headers:{Accept:'application/json'}});
       const data=await response.json();
@@ -82,7 +82,7 @@
   document.querySelectorAll('[data-category]').forEach(button=>button.addEventListener('click',()=>{state.category=button.dataset.category;state.page=1;document.querySelectorAll('[data-category]').forEach(b=>{const active=b===button;b.classList.toggle('is-active',active);b.setAttribute('aria-selected',String(active));});load();}));
   $('signals-market').addEventListener('change',e=>{state.market=e.target.value;state.page=1;load();});
   $('signals-asset').addEventListener('change',e=>{state.asset=e.target.value;state.page=1;load();});
-  $('signals-search').addEventListener('input',e=>{state.search=e.target.value.toLowerCase();document.querySelectorAll('#signals-rows tr').forEach(row=>row.hidden=state.search&&!row.textContent.toLowerCase().includes(state.search));});
+  let searchTimer=null; $('signals-search').addEventListener('input',e=>{state.search=e.target.value.trim();state.page=1;clearTimeout(searchTimer);searchTimer=setTimeout(load,250);});
   $('signals-prev').addEventListener('click',()=>{if(state.page>1){state.page--;load();}});
   $('signals-next').addEventListener('click',()=>{state.page++;load();});
   $('signals-refresh').addEventListener('click',load);
