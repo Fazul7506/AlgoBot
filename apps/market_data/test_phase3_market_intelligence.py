@@ -117,3 +117,37 @@ class Phase3MarketIntelligenceTests(TestCase):
         self.assertEqual(response.data["count"], 2)
         self.assertEqual(response.data["signals"][0]["lifecycle"], "active")
         self.assertEqual(response.data["signals"][1]["lifecycle"], "expired")
+
+
+    def test_signal_lifecycle_paginates_server_side_and_returns_price_levels(self):
+        strategy = self._strategy("Trend")
+        config = StrategyConfiguration.objects.create(
+            strategy=strategy, user=self.user, broker_account=self.account,
+            symbol="R_100", timeframe="M1",
+        )
+        for index in range(3):
+            StrategySignal.objects.create(
+                strategy=strategy, configuration=config, symbol="R_100",
+                signal="BUY", confidence=75 + index,
+                entry_price="100.00000000", take_profit="105.00000000",
+                stop_loss="98.00000000",
+                timestamp=timezone.now() - timedelta(seconds=index),
+            )
+        response = self.client.get("/api/market/signals/lifecycle/?page=2&page_size=2")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["total"], 3)
+        self.assertEqual(response.data["page"], 2)
+        self.assertEqual(response.data["page_size"], 2)
+        self.assertEqual(response.data["pages"], 2)
+        self.assertEqual(len(response.data["signals"]), 1)
+        row = response.data["signals"][0]
+        self.assertEqual(str(row["entry_price"]), "100.00000000")
+        self.assertEqual(str(row["take_profit"]), "105.00000000")
+        self.assertEqual(str(row["stop_loss"]), "98.00000000")
+        self.assertIn("R_100", response.data["asset_options"])
+
+    def test_signal_lifecycle_rejects_invalid_pagination_and_category(self):
+        bad_page = self.client.get("/api/market/signals/lifecycle/?page=not-a-number")
+        self.assertEqual(bad_page.status_code, 400)
+        bad_category = self.client.get("/api/market/signals/lifecycle/?category=made-up")
+        self.assertEqual(bad_category.status_code, 400)
