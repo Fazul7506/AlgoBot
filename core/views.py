@@ -36,9 +36,12 @@ def dashboard_page(request):
         from django.contrib import messages
         messages.info(request, 'Verify your AlgoBot email before opening the dashboard.')
         return redirect('verify_email_page')
-    if not has_authorized_broker_connection(request.user):
+    # A returning Google login gets one dashboard landing even if broker setup is
+    # incomplete. Trading/API execution remains independently broker-gated.
+    returning_google_login = bool(request.session.pop("google_existing_login_dashboard", False))
+    if not returning_google_login and not has_authorized_broker_connection(request.user):
         from django.contrib import messages
-        messages.info(request, 'Connect and verify your Deriv account before opening the dashboard.')
+        messages.info(request, 'Connect and verify your Deriv account before opening trading features.')
         return redirect('broker_marketplace_page')
     return render(request,'core/dashboard.html')
 @login_required
@@ -109,6 +112,10 @@ def profile_completion_page(request):
             profile.bio = str(request.POST.get("bio") or "").strip()
             profile.save(update_fields=["phone", "country", "timezone", "bio", "updated_at"])
             messages.success(request, "Your AlgoBot profile is complete.")
+            # New Google signups must visit the broker marketplace after profile
+            # completion, regardless of any pre-existing account-side connection.
+            if request.session.pop("google_profile_completion_pending", False):
+                return redirect("broker_marketplace_page")
             if has_authorized_broker_connection(request.user):
                 return redirect("dashboard_page")
             return redirect("broker_marketplace_page")
