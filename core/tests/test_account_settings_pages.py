@@ -134,6 +134,27 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(self.user.first_name, original_first_name)
         self.assertEqual(self.user.last_name, original_last_name)
 
+    def test_profile_database_failure_returns_error_without_partial_identity_write(self):
+        from django.db import DatabaseError
+
+        original_first_name = self.user.first_name
+        original_last_name = self.user.last_name
+        with patch.object(UserProfile, "save", side_effect=DatabaseError("simulated database outage")):
+            response = self.client.post(reverse("profile_page"), {
+                "first_name": "Changed",
+                "last_name": "Identity",
+                "country": "Kenya",
+                "timezone": "Africa/Nairobi",
+                "phone": "",
+                "bio": "",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "temporary storage problem")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, original_first_name)
+        self.assertEqual(self.user.last_name, original_last_name)
+
     def test_profile_page_rejects_invalid_timezone_without_persisting(self):
         response = self.client.post(reverse("profile_page"), {
             "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
