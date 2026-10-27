@@ -10,6 +10,8 @@
   isolation: isolate;
 }
 .ab-select-root > .ab-select-native {
+  /* It remains the form/API value source; never render or open the platform-native picker. */
+  display: none !important;
   position: absolute !important;
   width: 1px !important;
   height: 1px !important;
@@ -98,3 +100,10 @@
 
 .market-picker-control > .ab-select-root { flex: 1 1 auto; width: 100%; min-width: 0; }
 .terminal-toolbar .toolbar-symbol > .ab-select-root { grid-column: 1 / -1; width: 100%; min-width: 0; }
+
+/* Existing market-picker CSS declares display:flex on these icons; force hidden to win
+   so the shared anchored selector never displays a second symbol badge. */
+.market-picker-icon[hidden],
+.terminal-selected-market-icon[hidden],
+.analysis-market-icon[hidden] { display: none !important; }
+.market-picker-control:has(> .market-picker-icon[hidden]) { display: flex; width: 100%; }

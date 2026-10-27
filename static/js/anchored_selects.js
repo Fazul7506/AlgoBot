@@ -21,7 +21,12 @@
     }
     return '<span class="ab-select-option-icon" aria-hidden="true"><span class="material-symbols-rounded">check</span></span>';
   };
-  const allSelects = 'select:not([multiple]):not([size]):not([data-native-select="true"]):not([data-ab-select-enhanced]),select[size="1"]:not([multiple]):not([data-native-select="true"]):not([data-ab-select-enhanced])';
+  // Only leave intentionally hidden synchronization selects native; all visible single-selects
+  // use this anchored menu, including controls previously opted out with data-native-select.
+  const allSelects = 'select:not([multiple]):not([size]):not([hidden]):not([aria-hidden="true"]):not(.mc-visually-hidden):not([data-ab-select-enhanced]),select[size="1"]:not([multiple]):not([hidden]):not([aria-hidden="true"]):not(.mc-visually-hidden):not([data-ab-select-enhanced])';
+  const isHiddenSyncSelect = select => select.multiple || select.size > 1 || select.hidden ||
+    select.getAttribute('aria-hidden') === 'true' || select.classList.contains('mc-visually-hidden') ||
+    (select.dataset.nativeSelect === 'true' && (select.offsetParent === null || getComputedStyle(select).display === 'none'));
   let openRoot = null;
 
   function close(root, restoreFocus = false) {
@@ -159,8 +164,7 @@
   }
 
   function enhance(select) {
-    if (!select || select.dataset.abSelectEnhanced === 'true' || select.multiple || select.size > 1 ||
-        select.dataset.nativeSelect === 'true' || !select.parentNode) return;
+    if (!select || select.dataset.abSelectEnhanced === 'true' || isHiddenSyncSelect(select) || !select.parentNode) return;
     select.dataset.abSelectEnhanced = 'true';
     if (select.required) {
       select.dataset.abRequired = 'true';
