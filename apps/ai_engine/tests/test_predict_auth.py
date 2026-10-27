@@ -29,4 +29,5 @@ class AIPredictAuthenticationTests(APITestCase):
             format="json",
             HTTP_AUTHORIZATION=f"Bearer {access}",
         )
-        self.assertNotIn("CSRF", str(response.data))
+        self.assertNotEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertNotIn("CSRF token missing", str(response.data))
