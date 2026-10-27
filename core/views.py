@@ -114,11 +114,14 @@ def profile_completion_page(request):
         confirm_password = str(request.POST.get("confirm_password") or "")
         dob_raw = str(request.POST.get("date_of_birth") or "").strip()
         gender = str(request.POST.get("gender") or "").strip()
+        terms_accepted = request.POST.get("terms_accepted") in {"on", "true", "1"}
         avatar_file = request.FILES.get("profile_picture")
         picture_data = None
         errors = []
         if not first_name or not last_name:
             errors.append("Enter your first and last name to complete your profile.")
+        if not profile.terms_accepted_at and not terms_accepted:
+            errors.append("Please accept the Terms of Service and Privacy Policy to continue.")
         if not username or len(username) > 150:
             errors.append("Enter a valid username (150 characters or fewer).")
         else:
@@ -209,6 +212,9 @@ def profile_completion_page(request):
                 profile.date_of_birth = dob
             if gender:
                 profile.gender = gender
+            if terms_accepted and not profile.terms_accepted_at:
+                from django.utils import timezone
+                profile.terms_accepted_at = timezone.now()
             if picture_data is not None:
                 # Use the same durable profile-row storage as the Security Center
                 # editor. A browser preview is not considered saved until these
@@ -219,7 +225,7 @@ def profile_completion_page(request):
             profile.save(update_fields=[
                 "phone", "country", "timezone", "bio", "date_of_birth", "gender",
                 "avatar_url", "profile_picture_data", "profile_picture_content_type",
-                "updated_at",
+                "terms_accepted_at", "updated_at",
             ])
             messages.success(request, "Your AlgoBot profile is complete.")
             # New Google signups must visit the broker marketplace after profile
@@ -240,6 +246,7 @@ def profile_completion_page(request):
         "country": request.POST.get("country", profile.country),
         "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
         "bio": request.POST.get("bio", profile.bio),
+        "terms_accepted": bool(profile.terms_accepted_at) or request.POST.get("terms_accepted") in {"on", "true", "1"},
         "profile_picture_url": (
             reverse("profile_picture") + "?v=" + str(int(profile.updated_at.timestamp()))
             if profile.profile_picture_data or profile.avatar_url else ""
