@@ -262,6 +262,7 @@
     <article><strong>Next: broker marketplace</strong><p>After saving your profile, choose a supported broker connection. AlgoBot will not create a broker connection without your action.</p></article>
     <article><strong>Your account, your control</strong><p>Your AlgoBot profile details are separate from your broker credentials and account balances.</p></article>
   </section>
+  <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js" defer></script>
   <script>
     const avatarInput = document.getElementById("profile_picture");
     const avatarPreview = document.getElementById("profile-picture-preview");
@@ -322,21 +323,79 @@
     const phoneCode = document.getElementById("phone_country_code");
     const phoneInput = document.getElementById("phone");
     const countryInput = document.getElementById("country");
-    const countryDialCodes = {"Kenya":"+254","Uganda":"+256","Tanzania":"+255","Rwanda":"+250","United States":"+1","United Kingdom":"+44","India":"+91","South Africa":"+27","Nigeria":"+234","Ghana":"+233"};
-    if (countryInput && phoneCode) {
-      const syncCallingCode = function () {
-        const selectedCountry = countryInput.selectedOptions?.[0];
-        const dial = selectedCountry?.dataset.dialCode || countryDialCodes[countryInput.value];
-        if (dial && [...phoneCode.options].some(option => option.value === dial)) phoneCode.value = dial;
+    // Reuse AlgoBot's full country dataset; the shared anchored-select layer owns menus.
+    document.addEventListener("DOMContentLoaded", function () {
+      if (!window.intlTelInput?.getCountryData || !countryInput || !phoneCode) return;
+      const data = window.intlTelInput.getCountryData().filter(item => item.iso2 && item.name && item.dialCode);
+      if (!data.length) return;
+      const currentCountry = countryInput.value || "";
+      const existingPhone = (phoneInput?.value || "").trim();
+      const flagFor = iso => String.fromCodePoint(...String(iso || "").toUpperCase().split("").map(ch => 127397 + ch.charCodeAt(0)));
+      const countryOptions = data.map(item => {
+        const option = document.createElement("option");
+        option.value = item.name;
+        option.dataset.iso = item.iso2.toUpperCase();
+        option.dataset.dialCode = "+" + item.dialCode;
+        option.dataset.countryName = item.name;
+        option.textContent = flagFor(item.iso2) + " " + item.name + " · " + item.iso2.toUpperCase() + " (+" + item.dialCode + ")";
+        return option;
+      });
+      const phoneOptions = data.map(item => {
+        const option = document.createElement("option");
+        option.value = "+" + item.dialCode;
+        option.dataset.iso = item.iso2.toUpperCase();
+        option.dataset.countryName = item.name;
+        option.textContent = flagFor(item.iso2) + " " + item.name + " (+" + item.dialCode + ") · " + item.iso2.toUpperCase();
+        return option;
+      });
+      const countryPlaceholder = document.createElement("option");
+      countryPlaceholder.value = "";
+      countryPlaceholder.textContent = "Choose a country";
+      countryInput.replaceChildren(countryPlaceholder, ...countryOptions);
+      let selectedCountry = countryOptions.find(option => option.value.toLowerCase() === currentCountry.toLowerCase());
+      if (!selectedCountry && currentCountry) {
+        selectedCountry = document.createElement("option");
+        selectedCountry.value = currentCountry;
+        selectedCountry.textContent = currentCountry;
+        countryInput.add(selectedCountry, 1);
+      }
+      if (selectedCountry) countryInput.value = selectedCountry.value;
+      phoneCode.replaceChildren(...phoneOptions);
+      const selectedIso = countryInput.selectedOptions[0]?.dataset.iso;
+      let selectedPhoneOption = phoneOptions.find(option => option.dataset.iso === selectedIso);
+      if (existingPhone) {
+        const matchingOptions = phoneOptions.filter(option => existingPhone.startsWith(option.value)).sort((a, b) => b.value.length - a.value.length);
+        if (matchingOptions.length) {
+          selectedPhoneOption = matchingOptions.find(option => option.dataset.iso === selectedIso) || matchingOptions[0];
+          if (phoneInput) phoneInput.value = existingPhone.slice(selectedPhoneOption.value.length).trim();
+        }
+      }
+      if (selectedPhoneOption) phoneCode.selectedIndex = phoneOptions.indexOf(selectedPhoneOption);
+      let syncing = false;
+      const refreshSelect = select => select.dispatchEvent(new Event("change", { bubbles: true }));
+      const syncFromCountry = () => {
+        if (syncing) return;
+        syncing = true;
+        const iso = countryInput.selectedOptions[0]?.dataset.iso;
+        const match = phoneOptions.findIndex(option => option.dataset.iso === iso);
+        if (match >= 0) phoneCode.selectedIndex = match;
+        refreshSelect(phoneCode);
+        syncing = false;
       };
-      countryInput.addEventListener("change", syncCallingCode);
-      syncCallingCode();
-    }
-    if (phoneInput && phoneCode) {
-      const existingPhone = phoneInput.value.trim();
-      const matchingCode = [...phoneCode.options].map(option => option.value).sort((a,b) => b.length-a.length).find(code => existingPhone.startsWith(code));
-      if (matchingCode) { phoneCode.value = matchingCode; phoneInput.value = existingPhone.slice(matchingCode.length).trim(); }
-    }
+      const syncFromPhone = () => {
+        if (syncing) return;
+        syncing = true;
+        const iso = phoneCode.selectedOptions[0]?.dataset.iso;
+        const match = countryOptions.find(option => option.dataset.iso === iso);
+        if (match) countryInput.value = match.value;
+        refreshSelect(countryInput);
+        syncing = false;
+      };
+      countryInput.addEventListener("change", syncFromCountry);
+      phoneCode.addEventListener("change", syncFromPhone);
+      refreshSelect(countryInput);
+      refreshSelect(phoneCode);
+    });
     document.getElementById("new_password")?.addEventListener("input", function () {
       document.getElementById("confirm_password")?.setCustomValidity("");
     });
