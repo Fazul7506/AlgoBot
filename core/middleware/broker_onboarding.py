@@ -43,6 +43,12 @@ class BrokerOnboardingMiddleware:
         if not any(path.startswith(prefix) for prefix in self.PROTECTED_BROWSER_PREFIXES):
             return self.get_response(request)
 
+        # A returning Google login is allowed one dashboard landing before the
+        # normal broker-onboarding gate redirects trading navigation. The view
+        # consumes this one-time session flag; execution endpoints stay gated.
+        if path == "/dashboard/" and request.session.get("google_existing_login_dashboard"):
+            return self.get_response(request)
+
         # Import lazily to avoid app-loading and middleware import cycles.
         from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
         if not has_verified_account_email(user):
