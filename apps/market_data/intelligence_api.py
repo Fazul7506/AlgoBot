@@ -171,6 +171,9 @@ def signal_lifecycle(request):
     elif category == "intraday":
         qs = qs.filter(Q(strategy__name__icontains="intraday") | Q(configuration__timeframe__in=["M1", "M5", "M15", "M30", "H1"]))
 
+    asset_qs = (StrategySignal.objects.filter(configuration__user=request.user, configuration__broker_account=account, timestamp__lte=now) if account else StrategySignal.objects.none())
+    if market:
+        asset_qs = asset_qs.filter(symbol__in=MarketSymbol.objects.filter(is_active=True, market__iexact=market).values_list("symbol", flat=True))
     total = qs.count()
     start = (page - 1) * page_size
     records = list(qs[start:start + page_size])
@@ -231,6 +234,6 @@ def signal_lifecycle(request):
         "pages": (total + page_size - 1) // page_size,
         "category_counts": category_counts,
         "active_count": filtered_qs.filter(timestamp__gte=now - timedelta(seconds=SIGNAL_ACTIVE_SECONDS)).count(),
-        "asset_options": list(filtered_qs.values_list("symbol", flat=True).distinct().order_by("symbol")),
+        "asset_options": list(asset_qs.values_list("symbol", flat=True).distinct().order_by("symbol")),
         "signals": data,
     })
