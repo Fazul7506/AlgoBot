@@ -119,7 +119,7 @@
 @media(max-width:640px){.profile-onboarding{margin:.7rem auto;padding:0 .75rem 1.5rem}.profile-onboarding__steps{gap:.25rem}.profile-onboarding__step{font-size:.63rem;white-space:normal;flex:1}.profile-onboarding__rule{min-width:5px;margin-bottom:1rem}.profile-onboarding__avatar-layout{grid-template-columns:68px minmax(0,1fr)}.profile-onboarding__avatar-upload{width:64px;height:64px}.profile-onboarding__avatar-preview{grid-column:1/-1;border-left:0;border-top:1px solid #17365c;padding:.65rem 0 0;flex-direction:row;justify-content:flex-end}.profile-onboarding__avatar-preview img{width:36px;height:36px}.profile-onboarding__avatar-field{padding:.75rem}.profile-onboarding__grid{gap:.85rem}}
 
 .profile-onboarding__phone-control{display:grid;grid-template-columns:minmax(104px,.38fr) minmax(0,1fr);gap:.45rem;align-items:center}.profile-onboarding__phone-code-label{display:none!important}.profile-onboarding__avatar-upload.is-dragging{box-shadow:0 0 0 5px rgba(28,128,255,.3);transform:scale(1.03)}.profile-onboarding__avatar-upload img[hidden]{display:none!important}@media(max-width:420px){.profile-onboarding__phone-control{grid-template-columns:100px minmax(0,1fr)}}
-.avatar-editor[hidden]{display:none}.avatar-editor{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(2,8,20,.82);backdrop-filter:blur(8px)}.avatar-editor__panel{width:min(100%,460px);max-height:94dvh;overflow:auto;padding:clamp(18px,4vw,26px);border:1px solid #263a55;border-radius:22px;background:linear-gradient(155deg,#102542,#071426 70%);color:#e8effa;box-shadow:0 24px 80px #0008}.avatar-editor__panel h2{margin:0 0 8px}.avatar-editor__stage{position:relative;width:min(100%,320px);aspect-ratio:1;margin:20px auto;overflow:hidden;border:1px solid #2d4d70;border-radius:50%;background:#07111f;touch-action:none;cursor:grab}.avatar-editor__stage:active{cursor:grabbing}.avatar-editor__stage img{position:absolute;max-width:none;user-select:none;pointer-events:none}.avatar-editor__zoom{display:flex;align-items:center;gap:14px}.avatar-editor__zoom input{min-width:0;flex:1;accent-color:#22b8e6}.avatar-editor__actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:18px}.avatar-editor__actions .account-btn{min-width:100px}.avatar-editor__actions [data-avatar-save]:disabled{opacity:.55}@media(max-width:420px){.avatar-editor__panel{padding:18px}.avatar-editor__stage{width:min(100%,280px)}.avatar-editor__actions{display:grid;grid-template-columns:1fr 1fr}}</style>
+.avatar-editor[hidden]{display:none}.avatar-editor{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(2,8,20,.82);backdrop-filter:blur(8px)}.avatar-editor__panel{width:min(100%,460px);max-height:94dvh;overflow:auto;padding:clamp(18px,4vw,26px);border:1px solid #263a55;border-radius:22px;background:linear-gradient(155deg,#102542,#071426 70%);color:#e8effa;box-shadow:0 24px 80px #0008}.avatar-editor__panel h2{margin:0 0 8px}.avatar-editor__stage{position:relative;width:min(78vw,320px);aspect-ratio:1;margin:20px auto;overflow:hidden;border:2px solid #385b7e;border-radius:50%;background:#07111f;box-shadow:0 0 0 7px #132a43,0 14px 36px #0006;touch-action:none;cursor:move;user-select:none}.avatar-editor__stage:active{cursor:move}.avatar-editor__stage:after{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 1px #ffffff22;pointer-events:none}.avatar-editor__stage img{position:absolute;max-width:none;user-select:none;pointer-events:none}.avatar-editor__zoom{display:flex;align-items:center;gap:14px;color:#dce9f9;font-weight:700}.avatar-editor__zoom input{min-height:28px;cursor:pointer}.avatar-editor__panel .account-help{line-height:1.6}.avatar-editor__actions .account-btn{min-height:42px}.avatar-editor__zoom input{min-width:0;flex:1;accent-color:#22b8e6}.avatar-editor__actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:18px}.avatar-editor__actions .account-btn{min-width:100px}.avatar-editor__actions [data-avatar-save]:disabled{opacity:.55}@media(max-width:420px){.avatar-editor{padding:12px}.avatar-editor__panel{padding:18px}.avatar-editor__stage{width:min(76vw,280px);margin:18px auto}.avatar-editor__actions{display:grid;grid-template-columns:1fr 1fr}.avatar-editor__actions .account-btn{min-width:0}}</style>
 {% endblock %}
 {% block content %}
 <main class="profile-onboarding" id="main-content">
@@ -274,9 +274,9 @@
   <div class="avatar-editor" data-avatar-editor hidden role="dialog" aria-modal="true" aria-labelledby="avatar-editor-title">
     <div class="avatar-editor__panel">
       <h2 id="avatar-editor-title">Edit profile photo</h2>
-      <p class="profile-onboarding__hint">Drag the photo to position it, then adjust the zoom. Your cropped copy will be prepared before upload.</p>
+      <p class="profile-onboarding__hint">Pinch to zoom or move the photo inside the circle, just like WhatsApp. Use the slider for fine adjustments; your cropped copy is prepared before upload.</p>
       <div class="avatar-editor__stage" data-avatar-stage><img data-avatar-crop-image alt="Photo crop preview" draggable="false"></div>
-      <label class="avatar-editor__zoom" for="avatar-zoom">Zoom <input id="avatar-zoom" type="range" min="1" max="3" step="0.01" value="1" data-avatar-zoom></label>
+      <label class="avatar-editor__zoom" for="avatar-zoom">Zoom <input id="avatar-zoom" type="range" min="1" max="4" step="0.01" value="1" data-avatar-zoom></label>
       <p class="account-help" data-avatar-editor-error role="status" aria-live="polite"></p>
       <div class="account-actions avatar-editor__actions"><button type="button" class="account-btn" data-avatar-cancel>Cancel</button><button type="button" class="account-btn account-btn--primary" data-avatar-save>Use this picture</button></div>
     </div>
@@ -365,16 +365,23 @@
         const newBase = Math.max(size / imageWidth, size / imageHeight) * scale;
         offsetX = size / 2 - centerX * newBase; offsetY = size / 2 - centerY * newBase; drawPreview();
       });
+      const activePointers = new Map(); let pinchStart = null;
+      const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
       stage.addEventListener("pointerdown", event => {
         if (editor.hidden) return;
-        drag = { x: event.clientX, y: event.clientY, left: offsetX, top: offsetY };
-        stage.setPointerCapture(event.pointerId);
+        activePointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+        try { stage.setPointerCapture(event.pointerId); } catch (_) {}
+        if (activePointers.size === 2) { const pts=[...activePointers.values()]; pinchStart={distance:Math.max(1,distance(pts[0],pts[1])),scale,centerX:(pts[0].x+pts[1].x)/2,centerY:(pts[0].y+pts[1].y)/2,left:offsetX,top:offsetY}; drag=null; }
+        else drag={x:event.clientX,y:event.clientY,left:offsetX,top:offsetY};
       });
       stage.addEventListener("pointermove", event => {
-        if (!drag) return;
-        offsetX = drag.left + event.clientX - drag.x; offsetY = drag.top + event.clientY - drag.y; drawPreview();
+        if (!activePointers.has(event.pointerId)) return;
+        activePointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+        if (activePointers.size >= 2 && pinchStart) { const pts=[...activePointers.values()], d=distance(pts[0],pts[1]); const nextScale=Math.max(1,Math.min(4,pinchStart.scale*d/pinchStart.distance)); const rect=stage.getBoundingClientRect(), size=stageSize(), startBase=Math.max(size/imageWidth,size/imageHeight)*pinchStart.scale, cx=(pinchStart.centerX-rect.left-pinchStart.left)/startBase, cy=(pinchStart.centerY-rect.top-pinchStart.top)/startBase, centerX=(pts[0].x+pts[1].x)/2-rect.left, centerY=(pts[0].y+pts[1].y)/2-rect.top; scale=nextScale; zoom.value=String(scale); const nextBase=Math.max(size/imageWidth,size/imageHeight)*scale; offsetX=centerX-cx*nextBase; offsetY=centerY-cy*nextBase; drawPreview(); }
+        else if (drag) { offsetX=drag.left+event.clientX-drag.x; offsetY=drag.top+event.clientY-drag.y; drawPreview(); }
       });
-      ["pointerup", "pointercancel", "lostpointercapture"].forEach(name => stage.addEventListener(name, () => { drag = null; }));
+      const releasePointer = event => { activePointers.delete(event.pointerId); if(activePointers.size<2)pinchStart=null; if(activePointers.size===1){const p=[...activePointers.values()][0];drag={x:p.x,y:p.y,left:offsetX,top:offsetY};}else drag=null; };
+      ["pointerup","pointercancel","lostpointercapture"].forEach(name=>stage.addEventListener(name,releasePointer));
       cancel.addEventListener("click", () => closeEditor(true));
       editor.addEventListener("click", event => { if (event.target === editor) closeEditor(true); });
       document.addEventListener("keydown", event => {
