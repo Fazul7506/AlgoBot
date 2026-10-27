@@ -1,5 +1,121 @@
-{
-  "exit_code": 0,
-  "output": "{% extends \"base.html\" %}\n{% load static %}\n{% block title %}Preferences | AlgoBot{% endblock %}\n{% block extra_css %}<link rel=\"stylesheet\" href=\"{% static 'css/account_settings.css' %}?v=20261027-reference-unified1\">{% endblock %}\n{% block content %}\n<main class=\"account-page\" data-account-settings data-settings-page>\n  <header class=\"account-hero\">\n    <div>\n      <p class=\"account-kicker\">ACCOUNT MANAGEMENT</p>\n      <h1>Account Settings</h1>\n      <p class=\"account-subtitle\">Manage your account settings, security, and preferences. Keep your account safe and personalized.</p>\n    </div>\n    <span class=\"account-state\" data-settings-status role=\"status\" aria-live=\"polite\">Loading settings…</span>\n  </header>\n\n  <div class=\"account-layout\">\n    <nav class=\"account-nav\" aria-label=\"Account settings\">\n      <a href=\"{% url 'profile_page' %}\">Profile</a>\n      <a href=\"{% url 'settings_page' %}\" aria-current=\"page\">Preferences</a>\n      <a href=\"{% url 'account_identity_page' %}\">Login &amp; Identity</a>\n      <a href=\"{% url 'security_center' %}\">Security</a>\n    </nav>\n\n    <form class=\"account-content\" data-settings-form>\n      {% csrf_token %}\n      <section class=\"account-card\" id=\"workspace-preferences\">\n        <div class=\"account-card__header\"><div><h2>Workspace preferences</h2><p class=\"account-card__hint\">Your profile and login identity are managed separately.</p></div><a class=\"account-btn\" href=\"{% url 'profile_page' %}\">Edit profile</a></div>\n        <div class=\"account-fields\">\n          <div class=\"account-field\"><label for=\"settings-username\">Username</label><input id=\"settings-username\" name=\"username\" readonly aria-readonly=\"true\"></div>\n          <div class=\"account-field\"><label for=\"settings-email\">Login email</label><input id=\"settings-email\" name=\"email\" type=\"email\" readonly aria-readonly=\"true\"></div>\n        </div>\n        <p class=\"account-help\" style=\"margin-top:12px\">To change your username or email, open Login &amp; Identity. Email changes require verification.</p>\n      </section>\n\n      <section class=\"account-card\" id=\"notifications\">\n        <div class=\"account-card__header\"><div><h2>Notifications</h2><p class=\"account-card__hint\">Choose which account-level notification preferences are enabled.</p></div></div>\n        <div class=\"account-toggle-list\">\n          <label class=\"account-toggle\" for=\"pref-notifications\"><span><strong>In-app notifications</strong><p>Allow AlgoBot to show account and workspace notifications.</p></span><input id=\"pref-notifications\" name=\"notifications_enabled\" type=\"checkbox\"></label>\n          <label class=\"account-toggle\" for=\"pref-email\"><span><strong>Email notifications</strong><p>Allow notification emails according to your configured delivery channel.</p></span><input id=\"pref-email\" name=\"email_notifications_enabled\" type=\"checkbox\"></label>\n          <label class=\"account-toggle\" for=\"pref-telegram\"><span><strong>Telegram notifications</strong><p>Use Telegram when a Telegram channel is configured and connected.</p></span><input id=\"pref-telegram\" name=\"telegram_notifications_enabled\" type=\"checkbox\"></label>\n        </div>\n        <p class=\"account-help\">These preferences do not guarantee delivery. Manage channel connections and delivery status on the Notifications page.</p>\n        <div class=\"account-actions\"><a class=\"account-btn\" href=\"/notifications/\">Manage notification channels</a></div>\n      </section>\n\n      <div class=\"account-actions\">\n        <button type=\"submit\" class=\"account-btn account-btn--primary\" data-save-settings>Save preferences</button>\n        <span class=\"account-help\" role=\"status\" aria-live=\"polite\" data-settings-message></span>\n      </div>\n    </form>\n  </div>\n</main>\n<script>\n(() => {\n  const root = document.querySelector('[data-settings-page]');\n  if (!root) return;\n  const form = root.querySelector('[data-settings-form]');\n  const status = root.querySelector('[data-settings-status]');\n  const message = root.querySelector('[data-settings-message]');\n  const saveButton = root.querySelector('[data-save-settings]');\n  const csrf = form.querySelector('[name=csrfmiddlewaretoken]')?.value || '';\n  const field = name => form.elements.namedItem(name);\n  const set = (name, value) => { if (field(name)) field(name).value = value ?? ''; };\n  const check = (name, value) => { if (field(name)) field(name).checked = Boolean(value); };\n  const percent = value => Number(value || 0) * 100;\n  const request = async (method, body) => {\n    const response = await fetch('/api/settings/', {\n      method, credentials: 'same-origin',\n      headers: {'Accept':'application/json', ...(body ? {'Content-Type':'application/json','X-CSRFToken':csrf} : {})},\n      ...(body ? {body:JSON.stringify(body)} : {})\n    });\n    const data = await response.json().catch(() => ({}));\n    if (!response.ok) throw new Error(data.detail || data.message || 'Could not save settings. Please try again.');\n    return data;\n  };\n  async function load() {\n    status.textContent = 'Loading settings…';\n    const data = await request('GET');\n    set('username', data.user?.username); set('email', data.user?.email);\n    Object.entries(data.profile || {}).forEach(([key,value]) => {\n      if (['notifications_enabled','email_notifications_enabled','telegram_notifications_enabled'].includes(key)) check(key,value);\n    });\n    status.textContent = 'Preferences loaded';\n    status.classList.remove('account-state--warn','account-state--bad');\n    status.classList.add('account-state--good');\n  }\n  form.addEventListener('submit', async event => {\n    event.preventDefault();\n    if (!form.reportValidity()) return;\n    message.textContent = 'Saving…';\n    saveButton.disabled = true;\n    try {\n      const numeric = name => Number(field(name).value);\n      const profile = {\n        notifications_enabled: field('notifications_enabled').checked,\n        email_notifications_enabled: field('email_notifications_enabled').checked,\n        telegram_notifications_enabled: field('telegram_notifications_enabled').checked\n      };\n      const data = await request('PATCH', {profile});\n      message.textContent = data.message || 'Preferences saved.';\n      status.textContent = 'All preferences saved';\n      status.classList.remove('account-state--warn','account-state--bad');\n      status.classList.add('account-state--good');\n    } catch (error) {\n      message.textContent = error.message || 'Could not save settings.';\n      status.textContent = 'Save failed';\n      status.classList.remove('account-state--good');\n      status.classList.add('account-state--bad');\n    } finally {\n      saveButton.disabled = false;\n    }\n  });\n  load().catch(error => {\n    status.textContent = 'Could not load';\n    status.classList.add('account-state--bad');\n    message.textContent = error.message || 'Could not load settings. Refresh the page to retry.';\n    saveButton.disabled = true;\n  });\n})();\n</script>\n{% endblock %}\n",
-  "cpu_ns": 11938000
-}
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Preferences | AlgoBot{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1">{% endblock %}
+{% block content %}
+<main class="account-page" data-account-settings data-settings-page>
+  <header class="account-hero">
+    <div>
+      <p class="account-kicker">ACCOUNT MANAGEMENT</p>
+      <h1>Account Settings</h1>
+      <p class="account-subtitle">Manage your account settings, security, and preferences. Keep your account safe and personalized.</p>
+    </div>
+    <span class="account-state" data-settings-status role="status" aria-live="polite">Loading settings…</span>
+  </header>
+
+  <div class="account-layout">
+    <nav class="account-nav" aria-label="Account settings">
+      <a href="{% url 'profile_page' %}">Profile</a>
+      <a href="{% url 'settings_page' %}" aria-current="page">Preferences</a>
+      <a href="{% url 'account_identity_page' %}">Login &amp; Identity</a>
+      <a href="{% url 'security_center' %}">Security</a>
+    </nav>
+
+    <form class="account-content" data-settings-form>
+      {% csrf_token %}
+      <section class="account-card" id="workspace-preferences">
+        <div class="account-card__header"><div><h2>Workspace preferences</h2><p class="account-card__hint">Your profile and login identity are managed separately.</p></div><a class="account-btn" href="{% url 'profile_page' %}">Edit profile</a></div>
+        <div class="account-fields">
+          <div class="account-field"><label for="settings-username">Username</label><input id="settings-username" name="username" readonly aria-readonly="true"></div>
+          <div class="account-field"><label for="settings-email">Login email</label><input id="settings-email" name="email" type="email" readonly aria-readonly="true"></div>
+        </div>
+        <p class="account-help" style="margin-top:12px">To change your username or email, open Login &amp; Identity. Email changes require verification.</p>
+      </section>
+
+      <section class="account-card" id="notifications">
+        <div class="account-card__header"><div><h2>Notifications</h2><p class="account-card__hint">Choose which account-level notification preferences are enabled.</p></div></div>
+        <div class="account-toggle-list">
+          <label class="account-toggle" for="pref-notifications"><span><strong>In-app notifications</strong><p>Allow AlgoBot to show account and workspace notifications.</p></span><input id="pref-notifications" name="notifications_enabled" type="checkbox"></label>
+          <label class="account-toggle" for="pref-email"><span><strong>Email notifications</strong><p>Allow notification emails according to your configured delivery channel.</p></span><input id="pref-email" name="email_notifications_enabled" type="checkbox"></label>
+          <label class="account-toggle" for="pref-telegram"><span><strong>Telegram notifications</strong><p>Use Telegram when a Telegram channel is configured and connected.</p></span><input id="pref-telegram" name="telegram_notifications_enabled" type="checkbox"></label>
+        </div>
+        <p class="account-help">These preferences do not guarantee delivery. Manage channel connections and delivery status on the Notifications page.</p>
+        <div class="account-actions"><a class="account-btn" href="/notifications/">Manage notification channels</a></div>
+      </section>
+
+      <div class="account-actions">
+        <button type="submit" class="account-btn account-btn--primary" data-save-settings>Save preferences</button>
+        <span class="account-help" role="status" aria-live="polite" data-settings-message></span>
+      </div>
+    </form>
+  </div>
+</main>
+<script>
+(() => {
+  const root = document.querySelector('[data-settings-page]');
+  if (!root) return;
+  const form = root.querySelector('[data-settings-form]');
+  const status = root.querySelector('[data-settings-status]');
+  const message = root.querySelector('[data-settings-message]');
+  const saveButton = root.querySelector('[data-save-settings]');
+  const csrf = form.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+  const field = name => form.elements.namedItem(name);
+  const set = (name, value) => { if (field(name)) field(name).value = value ?? ''; };
+  const check = (name, value) => { if (field(name)) field(name).checked = Boolean(value); };
+  const percent = value => Number(value || 0) * 100;
+  const request = async (method, body) => {
+    const response = await fetch('/api/settings/', {
+      method, credentials: 'same-origin',
+      headers: {'Accept':'application/json', ...(body ? {'Content-Type':'application/json','X-CSRFToken':csrf} : {})},
+      ...(body ? {body:JSON.stringify(body)} : {})
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || data.message || 'Could not save settings. Please try again.');
+    return data;
+  };
+  async function load() {
+    status.textContent = 'Loading settings…';
+    const data = await request('GET');
+    set('username', data.user?.username); set('email', data.user?.email);
+    Object.entries(data.profile || {}).forEach(([key,value]) => {
+      if (['notifications_enabled','email_notifications_enabled','telegram_notifications_enabled'].includes(key)) check(key,value);
+    });
+    status.textContent = 'Preferences loaded';
+    status.classList.remove('account-state--warn','account-state--bad');
+    status.classList.add('account-state--good');
+  }
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    message.textContent = 'Saving…';
+    saveButton.disabled = true;
+    try {
+      const numeric = name => Number(field(name).value);
+      const profile = {
+        notifications_enabled: field('notifications_enabled').checked,
+        email_notifications_enabled: field('email_notifications_enabled').checked,
+        telegram_notifications_enabled: field('telegram_notifications_enabled').checked
+      };
+      const data = await request('PATCH', {profile});
+      message.textContent = data.message || 'Preferences saved.';
+      status.textContent = 'All preferences saved';
+      status.classList.remove('account-state--warn','account-state--bad');
+      status.classList.add('account-state--good');
+    } catch (error) {
+      message.textContent = error.message || 'Could not save settings.';
+      status.textContent = 'Save failed';
+      status.classList.remove('account-state--good');
+      status.classList.add('account-state--bad');
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+  load().catch(error => {
+    status.textContent = 'Could not load';
+    status.classList.add('account-state--bad');
+    message.textContent = error.message || 'Could not load settings. Refresh the page to retry.';
+    saveButton.disabled = true;
+  });
+})();
+</script>
+{% endblock %}
