@@ -19,6 +19,7 @@ from core.dashboard_api import DashboardViewSet
 from apps.market_data.web_views import market_catalogue
 from apps.monitoring import views as monitoring_views
 from apps.market_data.signal_views import strategy_signals
+from apps.market_data.signals_workspace_api import signals_workspace_api
 from apps.market_data import views as market_data_views
 from core.views import (
     broker_connect_page, broker_marketplace_page, submit_broker_marketplace_request, home, login_page,
@@ -189,6 +190,7 @@ urlpatterns = [
     path("api/deployment/", include("apps.deployment.urls")),
     path("api/", include("apps.deployment.urls")),
     path("api/strategy-signals/", strategy_signals, name="strategy_signals"),
+    path("api/signals/workspace/", signals_workspace_api, name="signals_workspace_api"),
     path("api/", include(router.urls)),
     path("webhooks/intasend/", intasend_webhook, name="intasend_webhook"),
     path("webhooks/pesapal/", pesapal_webhook, name="pesapal_webhook"),
