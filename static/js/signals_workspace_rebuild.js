@@ -1,0 +1,91 @@
+(() => {
+  'use strict';
+  if (window.__algoBotSignalsRebuild) return;
+  window.__algoBotSignalsRebuild = true;
+  const $ = id => document.getElementById(id);
+  const esc = value => String(value ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const state = {category:'all', market:'', asset:'', search:'', page:1, pageSize:10, loading:false, lastData:null};
+  const fmt = (v, digits=5) => v == null || v === '' || !Number.isFinite(Number(v)) ? '—' : Number(v).toLocaleString(undefined,{maximumFractionDigits:digits});
+  const pct = v => v == null || !Number.isFinite(Number(v)) ? 'Unavailable' : Number(v).toFixed(1)+'%';
+  const title = v => String(v || 'unknown').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+  const icon = () => '<span class="asset-neutral-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4a12 12 0 0 1 0 16M12 4a12 12 0 0 0 0 16"/></svg></span>';
+  const time = value => { if(!value) return ['—','']; const d=new Date(value); if(Number.isNaN(d.getTime())) return ['—','']; return [d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),d.toLocaleDateString([], {month:'short',day:'numeric',year:'numeric'})]; };
+  const relative = value => {const d=new Date(value);if(Number.isNaN(d.getTime()))return 'time unavailable';const seconds=Math.max(0,Math.floor((Date.now()-d.getTime())/1000));if(seconds<60)return 'just now';if(seconds<3600)return Math.floor(seconds/60)+'m ago';if(seconds<86400)return Math.floor(seconds/3600)+'h ago';return Math.floor(seconds/86400)+'d ago';};
+  async function load() {
+    if(state.loading) return;
+    state.loading=true; $('signals-refresh').disabled=true; $('signals-loading').hidden=false; $('signals-error').hidden=true;
+    $('signals-live-label').textContent='Loading signals'; $('signals-live-dot').className='signals-live-dot';
+    const query=new URLSearchParams({category:state.category,page:String(state.page),page_size:String(state.pageSize)});
+    if(state.market)query.set('market',state.market);if(state.asset)query.set('asset',state.asset);
+    try {
+      const response=await fetch('/api/signals/workspace/?'+query.toString(),{credentials:'same-origin',headers:{Accept:'application/json'}});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.message||data.detail||'Signals could not be loaded ('+response.status+').');
+      state.lastData=data; render(data);
+      const generated=data.generated_at?new Date(data.generated_at):null;
+      $('signals-live-label').textContent=data.metrics?.service_state==='available'?'Account data available':data.metrics?.service_state==='empty'?'No signal records':'Signal service status unknown';
+      $('signals-live-dot').className='signals-live-dot'+(data.metrics?.service_state==='available'?' is-live':' is-stale');
+      $('signals-updated').textContent=generated&&!Number.isNaN(generated.getTime())?'Updated '+generated.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}):'Update timestamp unavailable';
+      $('signals-error').hidden=true;
+    } catch(error) {
+      $('signals-error').textContent=error.message||'Signal service unavailable. Retry to load current data.'; $('signals-error').hidden=false;
+      $('signals-live-label').textContent='Signals unavailable';$('signals-live-dot').className='signals-live-dot is-stale';$('signals-updated').textContent='Last successful update is not confirmed';
+      if(!state.lastData){$('signals-rows').innerHTML='';$('signals-empty').hidden=true;$('signals-recent').innerHTML='<p class="panel-note">Recent signals unavailable.</p>';}
+    } finally {state.loading=false;$('signals-loading').hidden=true;$('signals-refresh').disabled=false;}
+  }
+  function render(data) {
+    const metrics=data.metrics||{}, performance=data.performance||{};
+    $('metric-total').textContent=fmt(metrics.total_signals,0);
+    $('metric-total-change').textContent=metrics.total_signals_change==null?'Comparison unavailable':(metrics.total_signals_change>0?'+':'')+fmt(metrics.total_signals_change,0)+' vs previous 7 days';
+    $('metric-winrate').textContent=pct(metrics.win_rate);
+    $('metric-winrate-change').textContent=metrics.win_rate_change==null?'Completed-outcome comparison unavailable':pct(metrics.win_rate_change)+' vs previous 7 days';
+    $('metric-active').textContent=fmt(metrics.active_signals,0);
+    $('metric-active-change').textContent=metrics.active_signals_change==null?'Comparison unavailable':(metrics.active_signals_change>0?'+':'')+fmt(metrics.active_signals_change,0)+' vs previous 7 days';
+    $('metric-profitfactor').textContent=metrics.profit_factor==null?'Unavailable':fmt(metrics.profit_factor,2);
+    $('metric-profitfactor-change').textContent=metrics.profit_factor_change==null?'Realized-loss comparison unavailable':'Compared with previous 7 days';
+    const trend=metrics.trend?.daily_counts||[];
+    ['total','active','winrate','profitfactor'].forEach(id=>{const el=$('trend-'+id);if(!el)return;const vals=trend.map(Number).filter(Number.isFinite);if(vals.length<2){el.innerHTML='';return;}const max=Math.max(...vals,1),min=Math.min(...vals,0),range=max-min||1;const points=vals.map((v,i)=>(i/(vals.length-1)*96+2)+','+(24-(v-min)/range*19)).join(' ');el.innerHTML='<polyline points="'+points+'"/>';});
+    Object.entries(data.category_counts||{}).forEach(([key,value])=>{const el=$('count-'+key);if(el)el.textContent=fmt(value,0);});
+    const ring=$('performance-ring'), winRate=performance.win_rate;
+    ring.style.setProperty('--win-angle',winRate==null?'0deg':(Math.max(0,Math.min(100,Number(winRate)))*3.6)+'deg');
+    ring.setAttribute('aria-label',winRate==null?'Win rate unavailable':('Win rate '+pct(winRate)));
+    $('performance-winrate').textContent=winRate==null?'—':pct(winRate);
+    $('performance-wins').textContent=fmt(performance.wins,0);$('performance-losses').textContent=fmt(performance.losses,0);$('performance-flat').textContent=fmt(performance.breakeven,0);
+    $('performance-pnl').textContent=performance.realized_pnl==null?'Unavailable':fmt(performance.realized_pnl,2)+(data.account?.currency?' '+esc(data.account.currency):'');
+    $('performance-average-profit').textContent=performance.average_profit==null?'Unavailable':fmt(performance.average_profit,2);
+    $('performance-average-loss').textContent=performance.average_loss==null?'Unavailable':fmt(performance.average_loss,2);
+    $('performance-note').textContent=performance.performance_available?'Calculated from persisted outcome/P&L metadata; open signals are not included.':'No persisted completed outcomes or realized P&L are available for this account.';
+    fillSelect($('signals-market'),data.markets||[],'All Markets',state.market);
+    fillSelect($('signals-asset'),data.assets||[],'All Assets',state.asset);
+    renderRows(data.signals||[]);
+    $('signals-result-summary').textContent=data.count?('Showing '+data.start+'–'+data.end+' of '+data.count+' signals'):'Showing 0 signals';
+    $('signals-prev').disabled=data.page<=1;$('signals-next').disabled=!data.pages||data.page>=data.pages;
+    const nums=$('signals-page-numbers');nums.innerHTML='';
+    const pages=Number(data.pages)||0;const chosen=Number(data.page)||1;const values=new Set([1,pages,chosen-1,chosen,chosen+1].filter(n=>n>=1&&n<=pages));
+    let prior=0;[...values].sort((a,b)=>a-b).forEach(n=>{if(prior&&n-prior>1){const ell=document.createElement('span');ell.className='signals-page-ellipsis';ell.textContent='…';nums.appendChild(ell);}const b=document.createElement('button');b.type='button';b.className='signals-page-number'+(n===chosen?' is-current':'');b.textContent=String(n);b.setAttribute('aria-label','Page '+n);if(n===chosen)b.setAttribute('aria-current','page');b.addEventListener('click',()=>{state.page=n;load();});nums.appendChild(b);prior=n;});
+    $('signals-empty').hidden=Boolean((data.signals||[]).length);$('signals-empty').textContent=data.count?'No signals are on this page.':'No signals match these filters.';
+    renderRecent(data.recent||[]);renderSentiment(data.sentiment||{status:'unavailable'});
+  }
+  function fillSelect(el,values,labelText,current){const prev=current;el.innerHTML='<option value="">'+labelText+'</option>'+[...new Set(values.filter(Boolean))].map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');if([...el.options].some(o=>o.value===prev))el.value=prev;}
+  function renderRows(rows) {
+    $('signals-rows').innerHTML=rows.map(r=>{
+      const [clock,date]=time(r.created_at);const entry=Number(r.entry_price),target=Number(r.take_profit),stop=Number(r.stop_loss);
+      const targetPct=r.entry_price!=null&&r.take_profit!=null&&entry!==0?((String(r.direction).toUpperCase()==='SELL'?(entry-target):(target-entry))/Math.abs(entry))*100:null;
+      const stopPct=r.entry_price!=null&&r.stop_loss!=null&&entry!==0?((String(r.direction).toUpperCase()==='SELL'?(entry-stop):(stop-entry))/Math.abs(entry))*100:null;
+      const direction=String(r.direction||'').toUpperCase(),dirClass=direction==='BUY'?'buy':direction==='SELL'?'sell':'unknown';
+      const conf=r.confidence==null?null:Math.max(0,Math.min(100,Number(r.confidence)));
+      return '<tr><td><span class="signal-time"><strong>'+esc(clock)+'</strong><small>'+esc(date)+'</small></span></td><td><span class="signal-asset">'+icon()+'<span><strong>'+esc(r.symbol)+'</strong><small>'+esc(r.market||'Unclassified')+'</small></span></span></td><td><span class="direction-badge '+dirClass+'">'+(direction==='BUY'?'↑ ':direction==='SELL'?'↓ ':'')+esc(direction||'Unavailable')+'</span></td><td><span class="signal-strategy"><strong>'+esc(r.strategy)+'</strong><small><span class="strategy-class">'+esc(title(r.strategy_category))+'</span></small></span></td><td>'+esc(fmt(r.entry_price))+'</td><td>'+esc(fmt(r.take_profit))+'<small class="sub-percentage">'+(targetPct==null?'':(targetPct>=0?'+':'')+targetPct.toFixed(2)+'%')+'</small></td><td>'+esc(fmt(r.stop_loss))+'<small class="sub-percentage">'+(stopPct==null?'':(stopPct>=0?'+':'')+stopPct.toFixed(2)+'%')+'</small></td><td class="confidence-cell"><strong>'+(conf==null?'—':conf.toFixed(1)+'%')+'</strong><div class="confidence-track" role="progressbar" aria-label="Confidence" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+(conf==null?'0':conf)+'"><span style="width:'+(conf==null?0:conf)+'%"></span></div></td><td><span class="status-badge '+esc(String(r.status||'').toLowerCase())+'">'+esc(title(r.status))+'</span></td><td><a class="signal-row-action" href="/signals/?signal='+encodeURIComponent(r.id)+'" aria-label="Open details for '+esc(r.symbol)+'" title="Open signal details">↗</a></td></tr>';
+    }).join('');
+  }
+  function renderRecent(rows){$('signals-recent').innerHTML=rows.length?rows.map(r=>'<a class="recent-entry" href="/signals/?signal='+encodeURIComponent(r.id)+'">'+icon()+'<span class="recent-entry-copy"><span class="recent-entry-top"><strong>'+esc(r.symbol)+'</strong><span class="direction-badge '+(String(r.direction).toUpperCase()==='BUY'?'buy':'sell')+'">'+esc(r.direction||'Unavailable')+'</span></span><small>'+esc(r.strategy)+' · '+esc(title(r.strategy_category))+'</small></span><time datetime="'+esc(r.created_at)+'">'+esc(relative(r.created_at))+'</time></a>').join(''):'<p class="panel-note">No recent signals are available.</p>';}
+  function renderSentiment(sentiment){$('signals-sentiment').innerHTML='<span class="sentiment-neutral-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 18V6m0 12h16M7 14l4-4 3 2 5-6"/></svg></span><div><strong>Sentiment unavailable</strong><p>'+esc(sentiment.reason||'No verified sentiment source is connected.')+'</p></div>';}
+  document.querySelectorAll('[data-category]').forEach(button=>button.addEventListener('click',()=>{state.category=button.dataset.category;state.page=1;document.querySelectorAll('[data-category]').forEach(b=>{const active=b===button;b.classList.toggle('is-active',active);b.setAttribute('aria-selected',String(active));});load();}));
+  $('signals-market').addEventListener('change',e=>{state.market=e.target.value;state.page=1;load();});
+  $('signals-asset').addEventListener('change',e=>{state.asset=e.target.value;state.page=1;load();});
+  $('signals-search').addEventListener('input',e=>{state.search=e.target.value.toLowerCase();document.querySelectorAll('#signals-rows tr').forEach(row=>row.hidden=state.search&&!row.textContent.toLowerCase().includes(state.search));});
+  $('signals-prev').addEventListener('click',()=>{if(state.page>1){state.page--;load();}});
+  $('signals-next').addEventListener('click',()=>{state.page++;load();});
+  $('signals-refresh').addEventListener('click',load);
+  const params=new URLSearchParams(location.search);if(params.get('signal')){ /* The query identifies a record; details remain server-authorized on the next implementation pass. */ }
+  load();
+})();
