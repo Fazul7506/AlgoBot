@@ -105,6 +105,10 @@ def profile_page(request):
             try:
                 with transaction.atomic():
                     request.user.save(update_fields=["first_name", "last_name"])
+                    # The profile row is normally created by the user signal, but
+                    # support older/imported accounts that do not have one yet.
+                    if profile.pk is None:
+                        profile.save()
                     profile.save(update_fields=[
                         "country", "timezone", "phone", "bio",
                         "avatar_url", "profile_picture_data",
