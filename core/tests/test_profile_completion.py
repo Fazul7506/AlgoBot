@@ -472,3 +472,28 @@ class ProfileCompletionTests(TestCase):
         self.assertEqual(response.status_code, 302)
         profile.refresh_from_db()
         self.assertIsNotNone(profile.terms_accepted_at)
+
+
+    def test_shared_anchored_selects_do_not_misclassify_country_codes_or_render_letter_badges(self):
+        from pathlib import Path
+
+        script = Path("static/js/anchored_selects.js").read_text(encoding="utf-8")
+        stylesheet = Path("static/css/anchored_selects.css").read_text(encoding="utf-8")
+        self.assertIn("select.dataset.abSelectType === 'instrument'", script)
+        self.assertNotIn("[...select.options].some(option => option.value && instrumentValue(option.value))", script)
+        self.assertNotIn("slice(0, 2).toUpperCase()", script)
+        self.assertNotIn(".ab-select-option-icon--fallback {", stylesheet)
+        self.assertIn("ab-select-option-icon--market-fallback", script)
+        self.assertIn("ab-select-option-icon--market-fallback", stylesheet)
+        self.assertIn("select.dataset.abSearchable === 'true'", script)
+        self.assertIn("select.id === 'phone_country_code'", script)
+
+    def test_profile_edit_action_uses_a_dismissible_modal(self):
+        from pathlib import Path
+
+        template = Path("templates/core/profile.html").read_text(encoding="utf-8")
+        self.assertIn('data-profile-edit-open', template)
+        self.assertIn('data-profile-edit-modal', template)
+        self.assertIn('data-profile-edit-close', template)
+        self.assertIn('aria-modal="true"', template)
+        self.assertIn("event.key === 'Escape'", template)
