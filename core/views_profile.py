@@ -4,11 +4,9 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.http import HttpResponse, Http404
 from django.views.decorators.http import require_GET
-import io
 from django.views.decorators.http import require_http_methods
 from zoneinfo import available_timezones
-from PIL import Image, UnidentifiedImageError
-
+from core.profile_picture import ProfilePictureError, normalize_profile_picture
 from core.models import UserProfile
 
 
@@ -46,32 +44,10 @@ def profile_page(request):
         if timezone_name not in available_timezones():
             errors.append("Choose a valid time zone.")
         if avatar_file:
-            if avatar_file.size > 5 * 1024 * 1024:
-                errors.append("Profile picture must be 5 MB or smaller.")
-            else:
-                try:
-                    image = Image.open(avatar_file)
-                    image_format = image.format
-                    if image_format not in {"JPEG", "PNG", "WEBP", "GIF"}:
-                        errors.append("Profile picture must be a JPEG, PNG, WEBP, or GIF image.")
-                    elif image.width * image.height > 25_000_000:
-                        errors.append("Profile picture dimensions must not exceed 25 megapixels.")
-                    else:
-                        image.verify()
-                        avatar_file.seek(0)
-                        image = Image.open(avatar_file)
-                        image.load()
-                        has_alpha = image.mode in {"RGBA", "LA"} or "transparency" in image.info
-                        normalized = image.convert("RGBA" if has_alpha else "RGB")
-                        normalized.thumbnail((512, 512), Image.Resampling.LANCZOS)
-                        buffer = io.BytesIO()
-                        normalized.save(buffer, format="WEBP", quality=85, method=6)
-                        picture_data = buffer.getvalue()
-                        picture_content_type = "image/webp"
-                    avatar_file.seek(0)
-                except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
-                    errors.append("Upload a valid image file (JPEG, PNG, WEBP, or GIF).")
-                    avatar_file.seek(0)
+            try:
+                picture_data, picture_content_type = normalize_profile_picture(avatar_file)
+            except ProfilePictureError as exc:
+                errors.append(str(exc))
         if len(bio) > 5000:
             errors.append("Bio must be 5,000 characters or fewer.")
 
