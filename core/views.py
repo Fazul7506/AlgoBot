@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.http import Http404,HttpResponse,JsonResponse
 from django.shortcuts import render,redirect
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
@@ -95,7 +96,6 @@ def profile_completion_page(request):
     from django.contrib import messages
     from core.broker_onboarding import has_authorized_broker_connection
     from core.models import UserProfile
-    from django.conf import settings
     import io
     from PIL import Image, UnidentifiedImageError
 
@@ -188,29 +188,17 @@ def profile_completion_page(request):
             profile.date_of_birth = dob
             profile.gender = gender
             if picture_data is not None:
-                cloudinary_url = str(getattr(settings, "CLOUDINARY_URL", "") or "").strip()
-                if not cloudinary_url:
-                    messages.error(request, "Profile picture storage is not configured. Other profile details were not changed.")
-                    return redirect("profile_completion_page")
-                try:
-                    from cloudinary import config as cloudinary_config
-                    from cloudinary.uploader import upload as cloudinary_upload
-                    cloudinary_config(cloudinary_url=cloudinary_url, secure=True)
-                    result = cloudinary_upload(
-                        picture_data, resource_type="image",
-                        folder="algobot/profile-pictures",
-                        public_id=f"user-{request.user.pk}",
-                        overwrite=True, invalidate=True, format="webp",
-                    )
-                    uploaded_url = str(result.get("secure_url") or "")
-                    if not uploaded_url.startswith("https://res.cloudinary.com/"):
-                        raise ValueError("Untrusted profile picture URL.")
-                    profile.avatar_url = uploaded_url
-                except Exception:
-                    logger.exception("profile_onboarding_avatar_upload_failed")
-                    messages.error(request, "The profile picture could not be saved. Other profile details were not changed.")
-                    return redirect("profile_completion_page")
-            profile.save(update_fields=["phone", "country", "timezone", "bio", "date_of_birth", "gender", "avatar_url", "updated_at"])
+                # Use the same durable profile-row storage as the Security Center
+                # editor. A browser preview is not considered saved until these
+                # bytes and the content type are persisted.
+                profile.profile_picture_data = picture_data
+                profile.profile_picture_content_type = "image/webp"
+                profile.avatar_url = ""
+            profile.save(update_fields=[
+                "phone", "country", "timezone", "bio", "date_of_birth", "gender",
+                "avatar_url", "profile_picture_data", "profile_picture_content_type",
+                "updated_at",
+            ])
             messages.success(request, "Your AlgoBot profile is complete.")
             # New Google signups must visit the broker marketplace after profile
             # completion, regardless of any pre-existing account-side connection.
@@ -230,6 +218,7 @@ def profile_completion_page(request):
         "country": request.POST.get("country", profile.country),
         "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
         "bio": request.POST.get("bio", profile.bio),
+        "profile_picture_url": reverse("profile_picture") if profile.profile_picture_data else "",
     })
 def terms_page(request): return render(request,'core/terms.html')
 def privacy_page(request): return render(request,'core/privacy.html')
