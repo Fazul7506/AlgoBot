@@ -27,6 +27,12 @@ class StrategyBuilderApiTests(APITestCase):
         self.assertTrue(response.data['strategies'])
         self.assertIn('configured', response.data['strategies'][0])
 
+    def test_available_does_not_resync_existing_strategy_catalog(self):
+        with patch.object(StrategyService, 'sync_catalog') as sync_catalog:
+            response = self.client.get('/api/strategies/available/')
+        self.assertEqual(response.status_code, 200)
+        sync_catalog.assert_not_called()
+
     def test_validate_config_rejects_bad_json_shape(self):
         response = self.client.post(
             f'/api/strategies/{self.strategy.pk}/validate_config/',
