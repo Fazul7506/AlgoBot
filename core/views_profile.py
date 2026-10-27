@@ -88,31 +88,17 @@ def profile_page(request):
             profile.phone = phone
             profile.bio = bio
             if picture_data is not None:
-                cloudinary_url = str(getattr(settings, "CLOUDINARY_URL", "") or "").strip()
-                if not cloudinary_url:
-                    messages.error(request, "Profile picture storage is not configured. Please try again later.")
-                    return redirect("profile_page")
-                try:
-                    from cloudinary import config as cloudinary_config
-                    from cloudinary.uploader import upload as cloudinary_upload
-                    cloudinary_config(cloudinary_url=cloudinary_url, secure=True)
-                    result = cloudinary_upload(
-                        picture_data, resource_type="image",
-                        folder="algobot/profile-pictures",
-                        public_id=f"user-{request.user.pk}",
-                        overwrite=True, invalidate=True, format="webp",
-                    )
-                    uploaded_url = str(result.get("secure_url") or "")
-                    if not uploaded_url.startswith("https://res.cloudinary.com/"):
-                        raise ValueError("Cloudinary did not return a trusted HTTPS URL.")
-                    profile.avatar_url = uploaded_url
-                except Exception:
-                    messages.error(request, "The profile picture could not be saved to Cloudinary. Other profile details were not changed.")
-                    return redirect("profile_page")
+                # Persist the normalized, cropped avatar in the profile row so it
+                # remains available after refresh even without external object storage.
+                profile.profile_picture_data = picture_data
+                profile.profile_picture_content_type = picture_content_type
+                profile.avatar_url = ""
+
             request.user.save(update_fields=["first_name", "last_name"])
             profile.save(update_fields=[
                 "country", "timezone", "phone", "bio",
-                "avatar_url", "updated_at",
+                "avatar_url", "profile_picture_data",
+                "profile_picture_content_type", "updated_at",
             ])
             messages.success(request, "Your profile has been saved.")
             return redirect("profile_page")
@@ -136,10 +122,22 @@ def profile_page(request):
 @login_required
 @require_GET
 def profile_picture(request):
-    """Redirect to the current user's validated HTTPS Cloudinary avatar."""
+    """Serve the authenticated user's persistent profile photo or a legacy avatar."""
     from urllib.parse import urlparse
 
-    profile = UserProfile.objects.filter(user=request.user).only("avatar_url").first()
+    profile = UserProfile.objects.filter(user=request.user).only(
+        "profile_picture_data", "profile_picture_content_type", "avatar_url"
+    ).first()
+    if profile and profile.profile_picture_data:
+        content_type = profile.profile_picture_content_type or "image/webp"
+        if content_type not in {"image/webp", "image/jpeg", "image/png", "image/gif"}:
+            raise Http404("Profile picture content type is invalid.")
+        response = HttpResponse(bytes(profile.profile_picture_data), content_type=content_type)
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, max-age=300"
+        return response
+
+    # Preserve compatibility with legacy Cloudinary avatars already saved.
     url = str(getattr(profile, "avatar_url", "") or "").strip() if profile else ""
     parsed = urlparse(url)
     if parsed.scheme != "https" or parsed.hostname != "res.cloudinary.com":
