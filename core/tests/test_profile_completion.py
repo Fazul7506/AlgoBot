@@ -288,3 +288,25 @@ class ProfileCompletionTests(TestCase):
         self.assertIn('data-iso="GB"', template)
         self.assertIn('data-iso="JP"', template)
         self.assertIn("syncCallingCode", template)
+
+
+    def test_google_avatar_url_is_served_only_from_allowlisted_https_host(self):
+        self.client.force_login(self.user)
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.avatar_url = "https://lh3.googleusercontent.com/a/test-avatar"
+        profile.save(update_fields=["avatar_url", "updated_at"])
+        response = self.client.get(reverse("profile_picture"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], profile.avatar_url)
+        profile.avatar_url = "https://googleusercontent.com.evil.example/avatar.png"
+        profile.save(update_fields=["avatar_url", "updated_at"])
+        response = self.client.get(reverse("profile_picture"))
+        self.assertEqual(response.status_code, 404)
+
+    def test_reference_layout_includes_desktop_benefits_panel(self):
+        from pathlib import Path
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        self.assertIn('class="profile-onboarding__content-grid"', template)
+        self.assertIn("Get Started with AlgoBot", template)
+        self.assertIn("Personalized recommendations", template)
+        self.assertIn("Secure account verification", template)
