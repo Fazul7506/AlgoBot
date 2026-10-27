@@ -154,6 +154,16 @@ def signals_workspace_api(request):
         matching_symbols = MarketSymbol.objects.filter(is_active=True, market__iexact=market).values_list("symbol", flat=True)
         base = base.filter(Q(symbol__in=matching_symbols) | Q(metadata__market_type__iexact=market) | Q(metadata__market__iexact=market))
 
+    detail_id = str(request.GET.get("detail_id") or "").strip()
+    if detail_id:
+        if not detail_id.isdigit():
+            return JsonResponse({"status": "error", "message": "Invalid signal identifier."}, status=400)
+        detail_row = base.filter(pk=int(detail_id)).select_related("strategy", "configuration").first()
+        if detail_row is None:
+            return JsonResponse({"status": "error", "message": "Signal not found for the selected authorized account."}, status=404)
+        detail_market = MarketSymbol.objects.filter(symbol=detail_row.symbol).only("symbol", "display_name", "market").first()
+        return JsonResponse({"status": "success", "detail": _serialize(detail_row, {detail_row.symbol: detail_market} if detail_market else {})})
+
     # Aggregate in SQL where possible; the account scope is applied before any data is read.
     recent_start = now - timedelta(days=7)
     prior_start = now - timedelta(days=14)
