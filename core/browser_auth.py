@@ -133,6 +133,9 @@ def login_page(request):
     )
     if request.user.is_authenticated:
         from core.broker_onboarding import has_authorized_broker_connection, has_verified_account_email
+        from core.profile_completion import profile_is_complete
+        if not profile_is_complete(request.user):
+            return redirect("profile_completion_page")
         if not has_verified_account_email(request.user):
             request.session[PENDING_VERIFICATION_EMAIL_SESSION_KEY] = request.user.email
             messages.info(request, "Verify your AlgoBot email before continuing.")
@@ -205,6 +208,9 @@ def login_page(request):
         if profile.two_factor_enabled:
             request.session["algobot_mfa_verified_user_id"] = user.pk
         UserProfile.objects.update_or_create(user=user, defaults={"last_login_at": timezone.now()})
+        from core.profile_completion import profile_is_complete
+        if not profile_is_complete(user):
+            return redirect("profile_completion_page")
         from core.broker_onboarding import has_authorized_broker_connection
         safe_destination = first_safe_auth_destination(
             request,
