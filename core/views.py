@@ -153,8 +153,8 @@ def profile_completion_page(request):
             else:
                 try:
                     image = Image.open(avatar_file)
-                    if image.format not in {"JPEG", "PNG", "WEBP"}:
-                        errors.append("Profile picture must be JPEG, PNG, or WEBP.")
+                    if image.format not in {"JPEG", "PNG", "WEBP", "GIF"}:
+                        errors.append("Profile picture must be JPEG, PNG, WEBP, or GIF.")
                     elif image.width * image.height > 25_000_000:
                         errors.append("Profile picture dimensions must not exceed 25 megapixels.")
                     else:
@@ -169,7 +169,7 @@ def profile_completion_page(request):
                         normalized.save(buffer, format="WEBP", quality=85, method=6)
                         picture_data = buffer.getvalue()
                 except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
-                    errors.append("Upload a valid image file (JPEG, PNG, or WEBP).")
+                    errors.append("Upload a valid image file (JPEG, PNG, WEBP, or GIF).")
                 finally:
                     avatar_file.seek(0)
         if new_password or confirm_password:
