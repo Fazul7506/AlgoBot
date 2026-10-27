@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from core.models import UserProfile
 
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 
 class DerivOAuthStartRegressionTests(TestCase):
@@ -19,7 +20,7 @@ class DerivOAuthStartRegressionTests(TestCase):
     )
     def test_broker_connect_persists_oauth_state_and_returns_redirect(self, create_authorization_url):
         user = get_user_model().objects.create_user(username="oauth-start-user", email="oauth-start@example.test", password="pass12345", first_name="OAuth", last_name="User")
-        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "terms_accepted_at": __import__("django.utils.timezone", fromlist=["now"]).now()})
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "terms_accepted_at": timezone.now()})
         self.client.force_login(user)
         response = self.client.get("/brokers/connect/?broker=deriv", HTTP_HOST="algobot.dpdns.org", secure=True)
 
