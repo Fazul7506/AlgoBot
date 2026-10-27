@@ -65,9 +65,10 @@
     return (pct>0?"+":"")+pct.toFixed(2)+"%";
   };
   const assetIcon = () => '<span class="signals-asset-icon" aria-hidden="true"><span class="material-symbols-rounded">show_chart</span></span>';
+  let activeCount = null;
   const renderMetrics = payload => {
     $("metricTotal").textContent=String(payload.category_counts?.all ?? payload.total);
-    $("metricActive").textContent=String(state.rows.filter(r=>r.lifecycle==="active").length);
+    $("metricActive").textContent=activeCount == null ? "—" : String(activeCount);
     $("countAll").textContent=String(state.counts.all ?? "—");
     $("countHigh").textContent=String(state.counts.high ?? "—");
     $("countScalping").textContent=String(state.counts.scalping ?? "—");
@@ -114,11 +115,11 @@
     state.loading=true; $("signalsRefresh").disabled=true; $("signalsServiceState").textContent="Loading signal data…"; $("signalsLiveDot").classList.remove("is-live"); $("signalsError").hidden=true;
     try{
       const payload=await request();
-      state.rows=payload.signals;state.total=Number(payload.total);state.pages=Math.max(1,Number(payload.pages)||1);state.page=Number(payload.page)||1;state.counts=payload.category_counts||{};
+      state.rows=payload.signals;state.total=Number(payload.total);state.pages=Math.max(1,Number(payload.pages)||1);state.page=Number(payload.page)||1;state.counts=payload.category_counts||{};activeCount=payload.active_count==null?null:Number(payload.active_count);
       $("signalsServiceState").textContent="Signal service connected";$("signalsLiveDot").classList.add("is-live");$("signalsUpdatedAt").textContent="Updated "+new Date().toLocaleString();
       const select=$("signalsAssetFilter"),current=select.value;
       // Build options from the authenticated account's available signals. Server filtering remains authoritative.
-      const symbols=[...new Set([...state.rows.map(r=>r.symbol).filter(Boolean),...(current?[current]:[])])].sort();
+      const symbols=[...new Set([...(payload.asset_options||[]),...(current?[current]:[])])].sort();
       select.innerHTML='<option value="">All Assets</option>'+symbols.map(s=>'<option value="'+esc(s)+'">'+esc(s)+'</option>').join("");
       if(symbols.includes(current))select.value=current;
       renderMetrics(payload);renderTable();renderFeed();
