@@ -93,22 +93,43 @@ def profile_completion_page(request):
     from django.contrib import messages
     from core.broker_onboarding import has_authorized_broker_connection
     from core.models import UserProfile
+    from core.profile_picture import ProfilePictureError, normalize_profile_picture
 
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     if request.method == "POST":
         first_name = str(request.POST.get("first_name") or "").strip()
         last_name = str(request.POST.get("last_name") or "").strip()
+        avatar_file = request.FILES.get("profile_picture")
+        picture_data = None
+        picture_content_type = ""
+        errors = []
         if not first_name or not last_name:
-            messages.error(request, "Enter your first and last name to complete your profile.")
+            errors.append("Enter your first and last name to complete your profile.")
+        if len(first_name) > 150 or len(last_name) > 150:
+            errors.append("Names must be 150 characters or fewer.")
+        if avatar_file:
+            try:
+                picture_data, picture_content_type = normalize_profile_picture(avatar_file)
+            except ProfilePictureError as exc:
+                errors.append(str(exc))
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
         else:
             request.user.first_name = first_name[:150]
             request.user.last_name = last_name[:150]
             request.user.save(update_fields=["first_name", "last_name"])
-            profile.phone = str(request.POST.get("phone") or "").strip()[:20]
+            profile.phone = str(request.POST.get("phone") or "").strip()[:32]
             profile.country = str(request.POST.get("country") or "").strip()[:100]
             profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
-            profile.bio = str(request.POST.get("bio") or "").strip()
-            profile.save(update_fields=["phone", "country", "timezone", "bio", "updated_at"])
+            profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
+            update_fields = ["phone", "country", "timezone", "bio", "updated_at"]
+            if picture_data is not None:
+                profile.profile_picture_data = picture_data
+                profile.profile_picture_content_type = picture_content_type
+                update_fields.extend(["profile_picture_data", "profile_picture_content_type"])
+            profile.save(update_fields=update_fields)
             messages.success(request, "Your AlgoBot profile is complete.")
             if has_authorized_broker_connection(request.user):
                 return redirect("dashboard_page")
