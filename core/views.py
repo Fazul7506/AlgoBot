@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.http import Http404,HttpResponse,JsonResponse
 from django.shortcuts import render,redirect
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
@@ -36,9 +37,12 @@ def dashboard_page(request):
         from django.contrib import messages
         messages.info(request, 'Verify your AlgoBot email before opening the dashboard.')
         return redirect('verify_email_page')
-    if not has_authorized_broker_connection(request.user):
+    # A returning Google login gets one dashboard landing even if broker setup is
+    # incomplete. Trading/API execution remains independently broker-gated.
+    returning_google_login = bool(request.session.pop("google_existing_login_dashboard", False))
+    if not returning_google_login and not has_authorized_broker_connection(request.user):
         from django.contrib import messages
-        messages.info(request, 'Connect and verify your Deriv account before opening the dashboard.')
+        messages.info(request, 'Connect and verify your Deriv account before opening trading features.')
         return redirect('broker_marketplace_page')
     return render(request,'core/dashboard.html')
 @login_required
@@ -92,23 +96,124 @@ def profile_completion_page(request):
     from django.contrib import messages
     from core.broker_onboarding import has_authorized_broker_connection
     from core.models import UserProfile
+    import io
+    from PIL import Image, UnidentifiedImageError
 
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     if request.method == "POST":
+        from datetime import date
+        from django.contrib.auth.password_validation import validate_password
+        from django.contrib.auth.validators import UnicodeUsernameValidator
+        from django.core.exceptions import ValidationError
+        from django.contrib.auth import password_validation
+
         first_name = str(request.POST.get("first_name") or "").strip()
         last_name = str(request.POST.get("last_name") or "").strip()
+        username = str(request.POST.get("username") or request.user.username).strip()
+        new_password = str(request.POST.get("new_password") or "")
+        confirm_password = str(request.POST.get("confirm_password") or "")
+        dob_raw = str(request.POST.get("date_of_birth") or "").strip()
+        gender = str(request.POST.get("gender") or "").strip()
+        avatar_file = request.FILES.get("profile_picture")
+        picture_data = None
+        errors = []
         if not first_name or not last_name:
-            messages.error(request, "Enter your first and last name to complete your profile.")
+            errors.append("Enter your first and last name to complete your profile.")
+        if not username or len(username) > 150:
+            errors.append("Enter a valid username (150 characters or fewer).")
+        else:
+            try:
+                UnicodeUsernameValidator()(username)
+            except ValidationError as exc:
+                errors.extend(exc.messages)
+            if UserProfile.user.field.related_model.objects.filter(username__iexact=username).exclude(pk=request.user.pk).exists():
+                errors.append("That username is already in use.")
+        dob = None
+        if dob_raw:
+            try:
+                dob = date.fromisoformat(dob_raw)
+                if dob > date.today():
+                    errors.append("Date of birth cannot be in the future.")
+            except ValueError:
+                errors.append("Enter a valid date of birth.")
+        if gender and gender not in {"female", "male", "non_binary", "prefer_not_to_say", "self_described"}:
+            errors.append("Choose a valid gender option.")
+        if avatar_file:
+            if avatar_file.size > 5 * 1024 * 1024:
+                errors.append("Profile picture must be 5 MB or smaller.")
+            else:
+                try:
+                    image = Image.open(avatar_file)
+                    if image.format not in {"JPEG", "PNG", "WEBP", "GIF"}:
+                        errors.append("Profile picture must be JPEG, PNG, WEBP, or GIF.")
+                    elif image.width * image.height > 25_000_000:
+                        errors.append("Profile picture dimensions must not exceed 25 megapixels.")
+                    else:
+                        image.verify()
+                        avatar_file.seek(0)
+                        image = Image.open(avatar_file)
+                        image.load()
+                        has_alpha = image.mode in {"RGBA", "LA"} or "transparency" in image.info
+                        normalized = image.convert("RGBA" if has_alpha else "RGB")
+                        normalized.thumbnail((512, 512), Image.Resampling.LANCZOS)
+                        buffer = io.BytesIO()
+                        normalized.save(buffer, format="WEBP", quality=85, method=6)
+                        picture_data = buffer.getvalue()
+                except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
+                    errors.append("Upload a valid image file (JPEG, PNG, WEBP, or GIF).")
+                finally:
+                    avatar_file.seek(0)
+        if new_password or confirm_password:
+            if not new_password or new_password != confirm_password:
+                errors.append("Enter matching passwords in both password fields.")
+            else:
+                try:
+                    validate_password(new_password, user=request.user)
+                except ValidationError as exc:
+                    errors.extend(exc.messages)
+        if errors:
+            for error in errors:
+                messages.error(request, error)
         else:
             request.user.first_name = first_name[:150]
             request.user.last_name = last_name[:150]
-            request.user.save(update_fields=["first_name", "last_name"])
-            profile.phone = str(request.POST.get("phone") or "").strip()[:20]
+            request.user.username = username
+            user_fields = ["first_name", "last_name", "username"]
+            if new_password:
+                request.user.set_password(new_password)
+                user_fields.append("password")
+            request.user.save(update_fields=user_fields)
+            if new_password:
+                # Keep the current browser session valid after an explicit password set.
+                from django.contrib.auth import update_session_auth_hash
+                update_session_auth_hash(request, request.user)
+            profile.phone = str(request.POST.get("phone") or "").strip()[:32]
             profile.country = str(request.POST.get("country") or "").strip()[:100]
             profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
-            profile.bio = str(request.POST.get("bio") or "").strip()
-            profile.save(update_fields=["phone", "country", "timezone", "bio", "updated_at"])
+            profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
+            # Blank optional fields must not erase values previously provided
+            # by the user or a verified identity claim.
+            if dob_raw:
+                profile.date_of_birth = dob
+            if gender:
+                profile.gender = gender
+            if picture_data is not None:
+                # Use the same durable profile-row storage as the Security Center
+                # editor. A browser preview is not considered saved until these
+                # bytes and the content type are persisted.
+                profile.profile_picture_data = picture_data
+                profile.profile_picture_content_type = "image/webp"
+                profile.avatar_url = ""
+            profile.save(update_fields=[
+                "phone", "country", "timezone", "bio", "date_of_birth", "gender",
+                "avatar_url", "profile_picture_data", "profile_picture_content_type",
+                "updated_at",
+            ])
             messages.success(request, "Your AlgoBot profile is complete.")
+            # New Google signups must visit the broker marketplace after profile
+            # completion, regardless of any pre-existing account-side connection.
+            if request.session.pop("google_profile_completion_pending", False):
+                return redirect("broker_marketplace_page")
             if has_authorized_broker_connection(request.user):
                 return redirect("dashboard_page")
             return redirect("broker_marketplace_page")
@@ -116,10 +221,17 @@ def profile_completion_page(request):
     return render(request, "core/profile_completion.html", {
         "first_name": request.POST.get("first_name", request.user.first_name),
         "last_name": request.POST.get("last_name", request.user.last_name),
+        "username": request.POST.get("username", request.user.username),
+        "date_of_birth": request.POST.get("date_of_birth", profile.date_of_birth.isoformat() if profile.date_of_birth else ""),
+        "gender": request.POST.get("gender", profile.gender),
         "phone": request.POST.get("phone", profile.phone),
         "country": request.POST.get("country", profile.country),
         "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
         "bio": request.POST.get("bio", profile.bio),
+        "profile_picture_url": (
+            reverse("profile_picture") + "?v=" + str(int(profile.updated_at.timestamp()))
+            if profile.profile_picture_data else ""
+        ),
     })
 def terms_page(request): return render(request,'core/terms.html')
 def privacy_page(request): return render(request,'core/privacy.html')

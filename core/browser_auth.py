@@ -642,5 +642,12 @@ def two_factor_challenge_page(request):
         request.session["algobot_mfa_verified_user_id"] = user.pk
         UserProfile.objects.filter(user=user).update(last_login_at=timezone.now())
         request.session.pop("broker_onboarding_next", None)
+        google_destination = request.session.pop("algobot_google_post_2fa_destination", None)
+        if google_destination == "profile":
+            request.session["google_profile_completion_pending"] = True
+            return redirect("profile_completion_page")
+        if google_destination == "dashboard":
+            request.session["google_existing_login_dashboard"] = True
+            return redirect("dashboard_page")
         return redirect("broker_marketplace_page")
     return render(request, "core/two_factor_challenge.html")

@@ -1,36 +1,201 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Complete your profile | AlgoBot{% endblock %}
+{% block extra_css %}
+<style>
+.profile-onboarding{max-width:1020px;margin:clamp(1rem,4vw,3rem) auto;padding:0 1rem 3rem;color:var(--text-primary,#eef3fb)}
+.profile-onboarding__hero{margin-bottom:1.5rem}
+.profile-onboarding__eyebrow{font-size:.76rem;letter-spacing:.14em;font-weight:800;color:#51d6c0;margin:0 0 .65rem}
+.profile-onboarding h1{font-size:clamp(2rem,5vw,3rem);line-height:1.1;margin:0 0 .75rem}
+.profile-onboarding__lead{max-width:680px;color:var(--text-secondary,#a7b5ca);line-height:1.65}
+.profile-onboarding__connected{display:flex;align-items:center;gap:.8rem;border:1px solid rgba(65,210,174,.35);background:rgba(19,119,102,.13);border-radius:14px;padding:1rem 1.15rem;margin:1.5rem 0}
+.profile-onboarding__check{display:grid;place-items:center;width:38px;height:38px;flex:0 0 38px;border-radius:50%;background:#126d60;color:#d7fff2;font-weight:900}
+.profile-onboarding__connected strong{display:block}
+.profile-onboarding__connected small{display:block;color:var(--text-secondary,#a7b5ca);margin-top:.2rem}
+.profile-onboarding__steps{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin:1.5rem 0}
+.profile-onboarding__step{display:flex;align-items:center;gap:.55rem;color:var(--text-secondary,#a7b5ca);font-size:.9rem}
+.profile-onboarding__step b{display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--border-color,#334155);border-radius:50%;font-size:.85rem}
+.profile-onboarding__step.is-active{color:var(--text-primary,#eef3fb);font-weight:700}
+.profile-onboarding__step.is-active b{background:#087f8c;border-color:#21c4bd;color:#fff}
+.profile-onboarding__rule{height:1px;flex:1;min-width:20px;background:var(--border-color,#334155)}
+.profile-onboarding__card{border:1px solid var(--border-color,#2c3a50);background:var(--surface-card,#0d1728);border-radius:20px;padding:clamp(1rem,3vw,2rem);box-shadow:0 16px 50px rgba(0,0,0,.16)}
+.profile-onboarding__cardhead{margin-bottom:1.5rem}
+.profile-onboarding__cardhead h2{font-size:1.35rem;margin:0 0 .4rem}
+.profile-onboarding__cardhead p{color:var(--text-secondary,#a7b5ca);margin:0}
+.profile-onboarding__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.2rem}
+.profile-onboarding__field{display:flex;flex-direction:column;gap:.5rem;min-width:0}
+.profile-onboarding__field label{font-weight:650;font-size:.92rem;display:flex;align-items:center;gap:.5rem}
+.profile-onboarding__field label svg{width:17px;height:17px;flex:0 0 17px;color:#55cfc8}
+.profile-onboarding__badge{display:inline-flex;align-items:center;gap:.4rem;padding:.28rem .6rem;border-radius:999px;border:1px solid rgba(69,205,177,.34);background:rgba(22,125,104,.14);color:#8ce6ce;font-size:.75rem;font-weight:750;letter-spacing:.02em}
+.profile-onboarding__badge svg{width:14px;height:14px}
+.profile-onboarding__connected{position:relative}
+.profile-onboarding__connected .profile-onboarding__badge{margin-left:auto;white-space:nowrap}
+.profile-onboarding__submit{display:inline-flex;align-items:center;justify-content:center;gap:.65rem}
+.profile-onboarding__submit svg{width:19px;height:19px}
+.profile-onboarding__field select{appearance:none}
+.profile-onboarding__section-icon{display:inline-flex;vertical-align:middle;margin-right:.45rem;color:#55cfc8}
+.profile-onboarding__section-icon svg{width:20px;height:20px}
+@media(min-width:641px) and (max-width:980px){.profile-onboarding{max-width:900px}.profile-onboarding__grid{gap:1rem}.profile-onboarding__card{padding:1.5rem}}
+@media(prefers-reduced-motion:no-preference){.profile-onboarding__submit{transition:filter .15s ease,transform .15s ease}.profile-onboarding__submit:hover{transform:translateY(-1px)}}
+.profile-onboarding__field input,.profile-onboarding__field select,.profile-onboarding__field textarea{width:100%;min-height:48px;border:1px solid var(--border-color,#3a4a63);border-radius:11px;background:var(--surface-input,#08111f);color:var(--text-primary,#eef3fb);padding:.75rem .85rem;font:inherit;box-sizing:border-box}
+.profile-onboarding__field textarea{min-height:104px;resize:vertical}
+.profile-onboarding__password{display:flex;position:relative;align-items:center}
+.profile-onboarding__password input{padding-right:3.25rem}
+.profile-onboarding__toggle{position:absolute;right:.45rem;display:grid;place-items:center;width:38px;height:38px;border:0;border-radius:8px;background:transparent;color:#8db8df;cursor:pointer}
+.profile-onboarding__toggle svg{width:20px;height:20px}
+.profile-onboarding__toggle:focus-visible{outline:2px solid #16a7b0;outline-offset:1px}
+.profile-onboarding__field input:focus,.profile-onboarding__field select:focus,.profile-onboarding__field textarea:focus{outline:2px solid #16a7b0;outline-offset:2px}
+.profile-onboarding__hint{color:var(--text-secondary,#a7b5ca);font-size:.8rem}
+.profile-onboarding__actions{margin-top:1.6rem;display:flex;justify-content:flex-end}
+.profile-onboarding__submit{min-height:50px;padding:.8rem 1.3rem;border:0;border-radius:12px;background:linear-gradient(100deg,#087f8c,#149eaa);color:#fff;font-weight:800;font-size:1rem;cursor:pointer}
+.profile-onboarding__submit:hover{filter:brightness(1.08)}
+.profile-onboarding__next{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1.25rem}
+.profile-onboarding__next article{border:1px solid var(--border-color,#2c3a50);border-radius:14px;padding:1rem;background:var(--surface-card,#0d1728)}
+.profile-onboarding__next strong{display:block;margin-bottom:.4rem}
+.profile-onboarding__next p{margin:0;color:var(--text-secondary,#a7b5ca);font-size:.9rem;line-height:1.5}
+@media(max-width:640px){.profile-onboarding__grid,.profile-onboarding__next{grid-template-columns:1fr}.profile-onboarding__rule{display:none}.profile-onboarding__actions{display:block}.profile-onboarding__submit{width:100%}.profile-onboarding__connected{align-items:flex-start}}
+</style>
+{% endblock %}
 {% block content %}
-<main class="container" id="main-content">
-  <section class="page-header">
-    <p class="eyebrow">ACCOUNT SETUP</p>
+<main class="profile-onboarding" id="main-content">
+  <header class="profile-onboarding__hero">
+    <p class="profile-onboarding__eyebrow">SECURE ACCOUNT SETUP</p>
     <h1>Complete your profile</h1>
-    <p>Finish setting up your AlgoBot account before entering your trading workspace.</p>
-  </section>
+    <p class="profile-onboarding__lead">Just a few details to personalize your AlgoBot workspace. Your Google account is connected; you control what profile information you share.</p>
+  </header>
 
-  <form method="post" class="card profile-completion-form">
+  <div class="profile-onboarding__connected" role="status">
+    <span class="profile-onboarding__check" aria-hidden="true"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></span>
+    <span><strong>Google account connected</strong><small>Finish the required details below, then choose a broker connection.</small></span>
+    <span class="profile-onboarding__badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg> Verified sign-in</span>
+  </div>
+
+  <nav class="profile-onboarding__steps" aria-label="Signup progress">
+    <span class="profile-onboarding__step is-active"><b>1</b> Your profile</span>
+    <span class="profile-onboarding__rule" aria-hidden="true"></span>
+    <span class="profile-onboarding__step"><b>2</b> Broker marketplace</span>
+    <span class="profile-onboarding__rule" aria-hidden="true"></span>
+    <span class="profile-onboarding__step"><b>3</b> Trading workspace</span>
+  </nav>
+
+  <form method="post" enctype="multipart/form-data" class="profile-onboarding__card" autocomplete="on">
     {% csrf_token %}
-    <div class="form-grid">
-      <label for="first_name">First name <span aria-hidden="true">*</span>
-        <input id="first_name" name="first_name" type="text" maxlength="150" autocomplete="given-name" value="{{ first_name }}" required>
-      </label>
-      <label for="last_name">Last name <span aria-hidden="true">*</span>
-        <input id="last_name" name="last_name" type="text" maxlength="150" autocomplete="family-name" value="{{ last_name }}" required>
-      </label>
-      <label for="phone">Phone (optional)
-        <input id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel" value="{{ phone }}">
-      </label>
-      <label for="country">Country (optional)
-        <input id="country" name="country" type="text" maxlength="100" autocomplete="country-name" value="{{ country }}">
-      </label>
-      <label for="timezone">Timezone
-        <input id="timezone" name="timezone" type="text" maxlength="100" value="{{ timezone_value|default:'UTC' }}">
-      </label>
-      <label for="bio">About you (optional)
-        <textarea id="bio" name="bio" rows="3">{{ bio }}</textarea>
-      </label>
+    <div class="profile-onboarding__cardhead">
+      <h2><span class="profile-onboarding__section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>Personal information</h2>
+      <p>Only the details needed to set up your AlgoBot account. Google-provided names are prefilled when available.</p>
     </div>
-    <button type="submit" class="btn btn-primary">Save profile and continue</button>
+    {% for message in messages %}
+      <p class="alert alert-{{ message.tags }}" role="alert">{{ message }}</p>
+    {% endfor %}
+    <div class="profile-onboarding__grid">
+      <div class="profile-onboarding__field">
+        <label for="profile_picture">Profile picture <span class="profile-onboarding__hint">(optional)</span></label>
+        {% if profile_picture_url %}<img id="profile-picture-preview" src="{{ profile_picture_url }}" alt="Current profile picture" style="width:76px;height:76px;border-radius:50%;object-fit:cover">{% else %}<img id="profile-picture-preview" alt="Profile picture preview" hidden style="width:76px;height:76px;border-radius:50%;object-fit:cover">{% endif %}
+        <input id="profile_picture" name="profile_picture" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+        <span class="profile-onboarding__hint">JPEG, PNG, WEBP or GIF; maximum 5 MB. Reuses your account profile picture.</span>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="first_name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>First name <span aria-hidden="true">*</span></label>
+        <input id="first_name" name="first_name" type="text" maxlength="150" autocomplete="given-name" value="{{ first_name }}" required>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="last_name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Last name <span aria-hidden="true">*</span></label>
+        <input id="last_name" name="last_name" type="text" maxlength="150" autocomplete="family-name" value="{{ last_name }}" required>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="username">Username <span aria-hidden="true">*</span></label>
+        <input id="username" name="username" type="text" maxlength="150" autocomplete="username" value="{{ username }}" required>
+        <span class="profile-onboarding__hint">Used to identify your AlgoBot account when signing in.</span>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="date_of_birth">Date of birth <span class="profile-onboarding__hint">(optional)</span></label>
+        <input id="date_of_birth" name="date_of_birth" type="date" autocomplete="bday" value="{{ date_of_birth }}">
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="gender">Gender <span class="profile-onboarding__hint">(optional)</span></label>
+        <select id="gender" name="gender">
+          <option value="">Prefer not to provide</option>
+          <option value="female" {% if gender == "female" %}selected{% endif %}>Female</option>
+          <option value="male" {% if gender == "male" %}selected{% endif %}>Male</option>
+          <option value="non_binary" {% if gender == "non_binary" %}selected{% endif %}>Non-binary</option>
+          <option value="self_described" {% if gender == "self_described" %}selected{% endif %}>Self-described</option>
+          <option value="prefer_not_to_say" {% if gender == "prefer_not_to_say" %}selected{% endif %}>Prefer not to say</option>
+        </select>
+        <span class="profile-onboarding__hint">Google sign-in does not normally provide DOB or gender; these remain optional.</span>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="new_password">Set a password <span class="profile-onboarding__hint">(optional)</span></label>
+        <div class="profile-onboarding__password">
+          <input id="new_password" name="new_password" type="password" autocomplete="new-password" aria-describedby="password-hint" placeholder="Create a password if desired">
+          <button type="button" class="profile-onboarding__toggle" data-password-toggle="new_password" aria-label="Show password" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <span id="password-hint" class="profile-onboarding__hint">Google sign-in continues to work. A password is saved only if you choose to set one.</span>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="confirm_password">Confirm password</label>
+        <div class="profile-onboarding__password">
+          <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" placeholder="Repeat the new password">
+          <button type="button" class="profile-onboarding__toggle" data-password-toggle="confirm_password" aria-label="Show password" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="phone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 3h4l2 5-3 2a15 15 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2Z"/></svg>Phone number <span class="profile-onboarding__hint">(optional)</span></label>
+        <input id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" value="{{ phone }}" placeholder="+254 7XX XXX XXX">
+        <span class="profile-onboarding__hint">Include your country code if you provide a number.</span>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="country"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>Country / region <span class="profile-onboarding__hint">(optional)</span></label>
+        <input id="country" name="country" type="text" maxlength="100" autocomplete="country-name" value="{{ country }}" placeholder="e.g. Kenya">
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="timezone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Time zone</label>
+        <input id="timezone" name="timezone" type="text" maxlength="100" value="{{ timezone_value|default:'UTC' }}" placeholder="e.g. Africa/Nairobi">
+        <span class="profile-onboarding__hint">Use an IANA time zone such as Africa/Nairobi or UTC.</span>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="bio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>Trading or research focus <span class="profile-onboarding__hint">(optional)</span></label>
+        <textarea id="bio" name="bio" rows="3" maxlength="1000" placeholder="Optional: describe your trading or research focus.">{{ bio }}</textarea>
+      </div>
+    </div>
+    <div class="profile-onboarding__actions">
+      <button type="submit" class="profile-onboarding__submit">Save profile and continue <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+    </div>
   </form>
+
+  <section class="profile-onboarding__next" aria-label="Next steps">
+    <article><strong>Next: broker marketplace</strong><p>After saving your profile, choose a supported broker connection. AlgoBot will not create a broker connection without your action.</p></article>
+    <article><strong>Your account, your control</strong><p>Your AlgoBot profile details are separate from your broker credentials and account balances.</p></article>
+  </section>
+  <script>
+    const avatarInput = document.getElementById("profile_picture");
+    const avatarPreview = document.getElementById("profile-picture-preview");
+    if (avatarInput && avatarPreview) {
+      avatarInput.addEventListener("change", function () {
+        const file = avatarInput.files && avatarInput.files[0];
+        if (!file) return;
+        if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+          avatarInput.value = "";
+          avatarPreview.hidden = true;
+          return;
+        }
+        avatarPreview.src = URL.createObjectURL(file);
+        avatarPreview.hidden = false;
+      });
+    }
+    document.querySelectorAll("[data-password-toggle]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        const input = document.getElementById(button.dataset.passwordToggle);
+        if (!input) return;
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        button.setAttribute("aria-label", show ? "Hide password" : "Show password");
+        button.setAttribute("aria-pressed", show ? "true" : "false");
+      });
+    });
+  </script>
 </main>
 {% endblock %}

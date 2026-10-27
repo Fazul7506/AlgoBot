@@ -173,6 +173,11 @@ def google_login_callback(request):
         return redirect("login_page")
 
     # Provider subject, not email or a derived username, is the durable identity key.
+    # Track first-time creation separately from returning Google sign-in: these have
+    # deliberately different post-authentication destinations.
+    is_new_google_user = False
+    request.session.pop("google_profile_completion_pending", None)
+    request.session.pop("google_existing_login_dashboard", None)
     try:
         with transaction.atomic():
             google_identity = (
@@ -251,6 +256,7 @@ def google_login_callback(request):
                     username=username, email=email, password=None,
                     first_name=first_name, last_name=last_name,
                 )
+                is_new_google_user = True
                 profile, _ = UserProfile.objects.get_or_create(user=user)
                 profile.email_verified = True
                 profile.email_verified_at = timezone.now()
@@ -275,16 +281,55 @@ def google_login_callback(request):
             return redirect("account_identity_page" if request.user.is_authenticated else "login_page")
 
     profile = UserProfile.objects.filter(user=user).first()
+    # Prefill DOB/gender only if verified Google claims actually include them.
+    # Google's standard openid/email/profile scopes usually do not provide either.
+    if profile:
+        from datetime import date
+        profile_updates = []
+        birthdate_claim = str(identity.get("birthdate") or identity.get("date_of_birth") or identity.get("birthday") or "").strip()
+        if not profile.date_of_birth and birthdate_claim:
+            try:
+                parsed_birthdate = date.fromisoformat(birthdate_claim)
+                if parsed_birthdate <= date.today():
+                    profile.date_of_birth = parsed_birthdate
+                    profile_updates.append("date_of_birth")
+            except ValueError:
+                pass
+        gender_claim = str(identity.get("gender") or "").strip().lower()
+        gender_map = {
+            "female": "female",
+            "male": "male",
+            "non_binary": "non_binary",
+            "other": "self_described",
+            "self_described": "self_described",
+            "prefer_not_to_say": "prefer_not_to_say",
+            "unknown": "prefer_not_to_say",
+        }
+        if not profile.gender and gender_claim in gender_map:
+            profile.gender = gender_map[gender_claim]
+            profile_updates.append("gender")
+        if profile_updates:
+            profile.save(update_fields=profile_updates + ["updated_at"])
     if profile and profile.two_factor_enabled:
         # Do not establish an authenticated Django session until the second
         # factor succeeds, including for users signing in through Google.
         request.session["algobot_pending_2fa_user_id"] = user.pk
+        # Preserve the correct post-MFA destination without authenticating before
+        # the second factor has been verified.
+        request.session["algobot_google_post_2fa_destination"] = (
+            "profile" if is_new_google_user else "dashboard"
+        )
         request.session.pop("broker_onboarding_next", None)
         return redirect("two_factor_challenge_page")
 
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     UserProfile.objects.filter(user=user).update(last_login_at=timezone.now())
-    # Both password and Google sign-in land on the same canonical onboarding
-    # route. Broker authorization remains an explicit user action there.
+    # First-time Google signup must finish the local profile before broker setup.
+    # A returning Google identity goes directly to the dashboard; never send an
+    # existing user through signup/profile completion or broker marketplace again.
     request.session.pop("broker_onboarding_next", None)
-    return redirect("broker_marketplace_page")
+    if is_new_google_user:
+        request.session["google_profile_completion_pending"] = True
+        return redirect("profile_completion_page")
+    request.session["google_existing_login_dashboard"] = True
+    return redirect("dashboard_page")

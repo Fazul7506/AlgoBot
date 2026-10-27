@@ -26,7 +26,7 @@ class GoogleLoginSecurityTests(TestCase):
 
     @patch("google.oauth2.id_token.verify_oauth2_token")
     @patch("core.google_auth.requests.post")
-    def test_valid_google_identity_still_requires_broker_setup(self, token_exchange, verify_id_token):
+    def test_new_google_signup_redirects_to_profile_completion_before_broker_setup(self, token_exchange, verify_id_token):
         session = self.client.session
         session["algobot_google_login_state"] = "expected-state"
         session["algobot_google_login_started"] = int(timezone.now().timestamp())
@@ -51,7 +51,7 @@ class GoogleLoginSecurityTests(TestCase):
         response = self.client.get("/auth/google/callback/?code=auth-code&state=expected-state")
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/brokers/marketplace/")
+        self.assertEqual(response.url, "/profile/complete/")
         user = User.objects.get(email="google-user@example.test")
         self.assertEqual(user.first_name, "Taylor")
         self.assertEqual(user.last_name, "Example")
@@ -59,6 +59,55 @@ class GoogleLoginSecurityTests(TestCase):
         self.assertEqual(self.client.session.get("_auth_user_id"), str(user.pk))
         verify_id_token.assert_called_once()
         self.assertEqual(token_exchange.call_args.kwargs["data"]["code_verifier"], "pkce-verifier")
+
+    @patch("google.oauth2.id_token.verify_oauth2_token")
+    @patch("core.google_auth.requests.post")
+    def test_returning_google_user_goes_to_dashboard_not_onboarding(self, token_exchange, verify_id_token):
+        from core.models import GoogleIdentity, UserProfile
+
+        user = User.objects.create_user(
+            username="returning-google-user",
+            email="returning-google@example.test",
+            password=None,
+            first_name="Taylor",
+            last_name="Example",
+        )
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.email_verified = True
+        profile.email_verified_at = timezone.now()
+        profile.save(update_fields=["email_verified", "email_verified_at"])
+        GoogleIdentity.objects.create(
+            user=user, provider="google", subject="stable-returning-subject",
+            email="returning-google@example.test",
+        )
+
+        session = self.client.session
+        session["algobot_google_login_state"] = "expected-state"
+        session["algobot_google_login_started"] = int(timezone.now().timestamp())
+        session["algobot_google_login_nonce"] = "expected-nonce"
+        session["algobot_google_login_pkce_verifier"] = "pkce-verifier"
+        session.save()
+
+        token_response = Mock()
+        token_response.raise_for_status.return_value = None
+        token_response.json.return_value = {"id_token": "signed-test-id-token"}
+        token_exchange.return_value = token_response
+        verify_id_token.return_value = {
+            "sub": "stable-returning-subject",
+            "email": "returning-google@example.test",
+            "email_verified": True,
+            "nonce": "expected-nonce",
+            "given_name": "Taylor",
+            "family_name": "Example",
+        }
+
+        response = self.client.get("/auth/google/callback/?code=auth-code&state=expected-state")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/dashboard/")
+        self.assertEqual(self.client.session.get("_auth_user_id"), str(user.pk))
+        self.assertTrue(self.client.session.get("google_existing_login_dashboard"))
+        self.assertFalse(self.client.session.get("google_profile_completion_pending"))
 
     @patch("google.oauth2.id_token.verify_oauth2_token")
     @patch("core.google_auth.requests.post")

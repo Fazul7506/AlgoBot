@@ -6,7 +6,7 @@
 <main class="account-page" data-profile-page>
   <header class="account-hero">
     <div class="account-hero__identity">
-      <label class="account-profile-avatar account-profile-avatar--editable" data-avatar-preview for="profile-picture" title="Add or change profile picture" aria-label="Add or change profile picture">{% if profile.profile_picture_data %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U' }}" alt="">{% else %}<span>{{ profile_initials }}</span>{% endif %}<span class="account-avatar-edit" aria-hidden="true">✎</span><input id="profile-picture" name="profile_picture" type="file" accept="image/jpeg,image/png,image/webp,image/gif" autocomplete="off" aria-label="Choose profile picture" hidden></label>
+      <label class="account-profile-avatar account-profile-avatar--editable" data-avatar-preview for="profile-picture" title="Add or change profile picture" aria-label="Add or change profile picture">{% if profile.profile_picture_data or profile.avatar_url %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U' }}" alt="">{% else %}<span>{{ profile_initials }}</span>{% endif %}<span class="account-avatar-edit" aria-hidden="true">✎</span><input id="profile-picture" name="profile_picture" type="file" accept="image/jpeg,image/png,image/webp,image/gif" autocomplete="off" aria-label="Choose profile picture" hidden></label>
       <div><p class="account-kicker">Your account</p><h1>Profile</h1></div>
     </div>
     <span class="account-state {% if profile.email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if profile.email_verified %}Email verified{% else %}Email verification pending{% endif %}</span>
