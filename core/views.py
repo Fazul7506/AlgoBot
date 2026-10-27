@@ -138,6 +138,14 @@ def profile_completion_page(request):
                 errors.append("Enter a valid date of birth.")
         if gender and gender not in {"female", "male", "non_binary", "prefer_not_to_say", "self_described"}:
             errors.append("Choose a valid gender option.")
+        phone_raw = str(request.POST.get("phone") or "").strip()
+        if phone_raw:
+            # The form submits an international number; validate it server-side too.
+            phone_compact = "".join(character for character in phone_raw if character not in " ()-")
+            if not phone_compact.startswith("+") or not phone_compact[1:].isdigit() or not 7 <= len(phone_compact[1:]) <= 15 or phone_compact[1:].startswith("0"):
+                errors.append("Enter a valid international phone number including its country calling code.")
+            else:
+                phone_raw = phone_compact
         if avatar_file:
             if avatar_file.size > 5 * 1024 * 1024:
                 errors.append("Profile picture must be 5 MB or smaller.")
@@ -187,8 +195,12 @@ def profile_completion_page(request):
                 # Keep the current browser session valid after an explicit password set.
                 from django.contrib.auth import update_session_auth_hash
                 update_session_auth_hash(request, request.user)
-            profile.phone = str(request.POST.get("phone") or "").strip()[:32]
-            profile.country = str(request.POST.get("country") or "").strip()[:100]
+            # Empty optional inputs must not erase previously saved profile data.
+            if phone_raw:
+                profile.phone = phone_raw[:32]
+            submitted_country = str(request.POST.get("country") or "").strip()
+            if submitted_country:
+                profile.country = submitted_country[:100]
             profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
             profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
             # Blank optional fields must not erase values previously provided
