@@ -174,6 +174,7 @@ def signal_lifecycle(request):
     total = qs.count()
     start = (page - 1) * page_size
     records = list(qs[start:start + page_size])
+    registry_markets = dict(MarketSymbol.objects.filter(symbol__in={row.symbol for row in records}, is_active=True).values_list("symbol", "market"))
     data = []
     for signal in records:
         age_seconds = max(0, int((now - signal.timestamp).total_seconds()))
@@ -204,7 +205,7 @@ def signal_lifecycle(request):
             "strategy": signal.strategy.name,
             "strategy_category": getattr(signal.strategy, "category", None),
             "timeframe": signal.configuration.timeframe if signal.configuration else "",
-            "market_type": metadata.get("market_type") or metadata.get("market") or metadata.get("asset_class"),
+            "market_type": registry_markets.get(signal.symbol) or metadata.get("market_type") or metadata.get("market") or metadata.get("asset_class"),
             "market_regime": metadata.get("market_regime"),
             "entry_price": signal.entry_price,
             "take_profit": signal.take_profit,
