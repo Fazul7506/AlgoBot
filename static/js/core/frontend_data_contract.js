@@ -6,6 +6,12 @@
   const brokerState=()=>window.AlgoBotBrokerState;
   const list=value=>Array.isArray(value)?value:(Array.isArray(value?.results)?value.results:(Array.isArray(value?.data)?value.data:(Array.isArray(value?.accounts)?value.accounts:[])));
   const inflight=new Map(),cache=new Map(),GET_CACHE_MS=1200;
+  const getCacheTtl=url=>{
+    const path=new URL(resolveUrl(url),window.location.origin).pathname;
+    if (/^\/api\/(?:strategies\/available|market\/broker-catalogue|market\/broker-capabilities)\/$/.test(path)) return 15000;
+    if (/^\/api\/brokers\/accounts\/$/.test(path)) return 2500;
+    return GET_CACHE_MS;
+  };
   const configuredApiBase=(document.querySelector('meta[name="algobot-api-base"]')?.content||'').trim();
   const productionApiBase='https://api.algobot.dpdns.org';
   // The web origin renders pages; the dedicated API origin owns all browser API traffic.
@@ -136,7 +142,7 @@
     const key=`${method} ${url} account=${selectedId}`;
     if(method==='GET'){
       if(inflight.has(key))return inflight.get(key);
-      const recent=cache.get(key);if(recent&&Date.now()-recent.at<=GET_CACHE_MS)return recent.payload;
+      const recent=cache.get(key);if(recent&&Date.now()-recent.at<=getCacheTtl(url))return recent.payload;
     }
     const retry=()=>request(rawUrl,{...options,notifyOnError:true},timeout);
     const sameOriginPath=sameOriginRetryPath(url,method,false);
