@@ -228,12 +228,10 @@ def profile_completion_page(request):
                 "terms_accepted_at", "updated_at",
             ])
             messages.success(request, "Your AlgoBot profile is complete.")
-            # New Google signups must visit the broker marketplace after profile
-            # completion, regardless of any pre-existing account-side connection.
-            if request.session.pop("google_profile_completion_pending", False):
-                return redirect("broker_marketplace_page")
-            if has_authorized_broker_connection(request.user):
-                return redirect("dashboard_page")
+            # Profile completion always advances to the marketplace. Broker
+            # connection remains an explicit user action; the marketplace itself
+            # must not be mistaken for a connected broker.
+            request.session.pop("google_profile_completion_pending", None)
             return redirect("broker_marketplace_page")
 
     return render(request, "core/profile_completion.html", {
