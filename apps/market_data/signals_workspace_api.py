@@ -189,6 +189,10 @@ def signals_workspace_api(request):
     outcomes = _outcome_stats(all_rows)
     metrics["win_rate"] = outcomes["win_rate"]
     metrics["profit_factor"] = outcomes["profit_factor"]
+    current_outcomes = _outcome_stats([r for r in all_rows if r.timestamp >= recent_start])
+    prior_outcomes = _outcome_stats([r for r in all_rows if prior_start <= r.timestamp < recent_start])
+    metrics["win_rate_change"] = (current_outcomes["win_rate"] - prior_outcomes["win_rate"]) if current_outcomes["win_rate"] is not None and prior_outcomes["win_rate"] is not None else None
+    metrics["profit_factor_change"] = (float(current_outcomes["profit_factor"]) - float(prior_outcomes["profit_factor"])) if current_outcomes["profit_factor"] is not None and prior_outcomes["profit_factor"] is not None else None
     performance = outcomes
     try:
         assets = list(MarketSymbol.objects.filter(is_active=True, is_tradable=True, symbol__in=base.values("symbol")).values_list("symbol", flat=True).distinct().order_by("symbol")[:500])
