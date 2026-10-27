@@ -402,8 +402,8 @@
       };
       countryInput.addEventListener("change", syncFromCountry);
       phoneCode.addEventListener("change", syncFromPhone);
-      refreshSelect(countryInput);
-      refreshSelect(phoneCode);
+      // The shared anchored-select enhancement reads the initial values after DOMContentLoaded;
+      // avoid firing sync events here so a saved phone country can differ from residence country.
     });
     document.getElementById("new_password")?.addEventListener("input", function () {
       document.getElementById("confirm_password")?.setCustomValidity("");
