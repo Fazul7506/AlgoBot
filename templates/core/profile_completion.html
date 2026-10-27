@@ -39,6 +39,11 @@
 @media(prefers-reduced-motion:no-preference){.profile-onboarding__submit{transition:filter .15s ease,transform .15s ease}.profile-onboarding__submit:hover{transform:translateY(-1px)}}
 .profile-onboarding__field input,.profile-onboarding__field select,.profile-onboarding__field textarea{width:100%;min-height:48px;border:1px solid var(--border-color,#3a4a63);border-radius:11px;background:var(--surface-input,#08111f);color:var(--text-primary,#eef3fb);padding:.75rem .85rem;font:inherit;box-sizing:border-box}
 .profile-onboarding__field textarea{min-height:104px;resize:vertical}
+.profile-onboarding__password{display:flex;position:relative;align-items:center}
+.profile-onboarding__password input{padding-right:3.25rem}
+.profile-onboarding__toggle{position:absolute;right:.45rem;display:grid;place-items:center;width:38px;height:38px;border:0;border-radius:8px;background:transparent;color:#8db8df;cursor:pointer}
+.profile-onboarding__toggle svg{width:20px;height:20px}
+.profile-onboarding__toggle:focus-visible{outline:2px solid #16a7b0;outline-offset:1px}
 .profile-onboarding__field input:focus,.profile-onboarding__field select:focus,.profile-onboarding__field textarea:focus{outline:2px solid #16a7b0;outline-offset:2px}
 .profile-onboarding__hint{color:var(--text-secondary,#a7b5ca);font-size:.8rem}
 .profile-onboarding__actions{margin-top:1.6rem;display:flex;justify-content:flex-end}
@@ -92,6 +97,46 @@
         <input id="last_name" name="last_name" type="text" maxlength="150" autocomplete="family-name" value="{{ last_name }}" required>
       </div>
       <div class="profile-onboarding__field">
+        <label for="username">Username <span aria-hidden="true">*</span></label>
+        <input id="username" name="username" type="text" maxlength="150" autocomplete="username" value="{{ username }}" required>
+        <span class="profile-onboarding__hint">Used to identify your AlgoBot account when signing in.</span>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="date_of_birth">Date of birth <span class="profile-onboarding__hint">(optional)</span></label>
+        <input id="date_of_birth" name="date_of_birth" type="date" autocomplete="bday" value="{{ date_of_birth }}">
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="gender">Gender <span class="profile-onboarding__hint">(optional)</span></label>
+        <select id="gender" name="gender">
+          <option value="">Prefer not to provide</option>
+          <option value="female" {% if gender == "female" %}selected{% endif %}>Female</option>
+          <option value="male" {% if gender == "male" %}selected{% endif %}>Male</option>
+          <option value="non_binary" {% if gender == "non_binary" %}selected{% endif %}>Non-binary</option>
+          <option value="self_described" {% if gender == "self_described" %}selected{% endif %}>Self-described</option>
+          <option value="prefer_not_to_say" {% if gender == "prefer_not_to_say" %}selected{% endif %}>Prefer not to say</option>
+        </select>
+        <span class="profile-onboarding__hint">Google sign-in does not normally provide DOB or gender; these remain optional.</span>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="new_password">Set a password <span class="profile-onboarding__hint">(optional)</span></label>
+        <div class="profile-onboarding__password">
+          <input id="new_password" name="new_password" type="password" autocomplete="new-password" aria-describedby="password-hint" placeholder="Create a password if desired">
+          <button type="button" class="profile-onboarding__toggle" data-password-toggle="new_password" aria-label="Show password" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <span id="password-hint" class="profile-onboarding__hint">Google sign-in continues to work. A password is saved only if you choose to set one.</span>
+      </div>
+      <div class="profile-onboarding__field">
+        <label for="confirm_password">Confirm password</label>
+        <div class="profile-onboarding__password">
+          <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" placeholder="Repeat the new password">
+          <button type="button" class="profile-onboarding__toggle" data-password-toggle="confirm_password" aria-label="Show password" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="profile-onboarding__field">
         <label for="phone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 3h4l2 5-3 2a15 15 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2Z"/></svg>Phone number <span class="profile-onboarding__hint">(optional)</span></label>
         <input id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" value="{{ phone }}" placeholder="+254 7XX XXX XXX">
         <span class="profile-onboarding__hint">Include your country code if you provide a number.</span>
@@ -119,5 +164,17 @@
     <article><strong>Next: broker marketplace</strong><p>After saving your profile, choose a supported broker connection. AlgoBot will not create a broker connection without your action.</p></article>
     <article><strong>Your account, your control</strong><p>Your AlgoBot profile details are separate from your broker credentials and account balances.</p></article>
   </section>
+  <script>
+    document.querySelectorAll("[data-password-toggle]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        const input = document.getElementById(button.dataset.passwordToggle);
+        if (!input) return;
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        button.setAttribute("aria-label", show ? "Hide password" : "Show password");
+        button.setAttribute("aria-pressed", show ? "true" : "false");
+      });
+    });
+  </script>
 </main>
 {% endblock %}
