@@ -115,16 +115,26 @@ def account_settings_api(request):
             return JsonResponse({"detail": "max_concurrent_trades must be a whole number between 1 and 1000."}, status=400)
         trading_updates["max_concurrent_trades"] = value
 
-    # Validate all fields before persisting either record, so a bad value cannot
-    # leave profile preferences saved while trading preferences fail.
-    with transaction.atomic():
-        for field, value in profile_updates.items():
-            setattr(profile, field, value)
-        for field, value in trading_updates.items():
-            setattr(bot, field, value)
-        if profile_updates:
-            profile.save(update_fields=[*profile_updates.keys(), "updated_at"])
-        if trading_updates:
-            bot.save(update_fields=[*trading_updates.keys(), "updated_at"])
+    # Validate every supplied field before writes, then persist only actual changes.
+    # This avoids touching auto_now timestamps or issuing redundant UPDATEs when
+    # a browser resubmits settings that are already current.
+    changed_profile = {
+        field: value for field, value in profile_updates.items()
+        if getattr(profile, field) != value
+    }
+    changed_trading = {
+        field: value for field, value in trading_updates.items()
+        if getattr(bot, field) != value
+    }
 
-    return JsonResponse({"ok": True, "message": "Settings saved."})
+    with transaction.atomic():
+        for field, value in changed_profile.items():
+            setattr(profile, field, value)
+        for field, value in changed_trading.items():
+            setattr(bot, field, value)
+        if changed_profile:
+            profile.save(update_fields=[*changed_profile.keys(), "updated_at"])
+        if changed_trading:
+            bot.save(update_fields=[*changed_trading.keys(), "updated_at"])
+
+    return JsonResponse({"ok": True, "message": "Settings saved.", "changed": bool(changed_profile or changed_trading)})
