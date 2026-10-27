@@ -31,7 +31,12 @@ class StrategyViewSet(viewsets.ReadOnlyModelViewSet):
 
     @decorators.action(detail=False, methods=['get'])
     def available(self, request):
-        StrategyService().sync_catalog()
+        # The catalog is seeded by deployment/management tasks. Do not rewrite every
+        # strategy row on each GET: multiple workspace widgets request this endpoint,
+        # and a sync-on-read creates avoidable database writes and latency. Bootstrap
+        # only when the enabled catalog is genuinely empty.
+        if not Strategy.objects.filter(enabled=True).exists():
+            StrategyService().sync_catalog()
         configs = self._user_configs().filter(strategy__enabled=True).order_by('-is_active', '-updated_at')
         by_strategy = {}
         for cfg in configs:
