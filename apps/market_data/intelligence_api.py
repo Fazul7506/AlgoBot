@@ -160,7 +160,7 @@ def signal_lifecycle(request):
         "high": filtered_qs.filter(confidence__gte=70).count(),
         "scalping": filtered_qs.filter(Q(strategy__name__icontains="scalp") | Q(configuration__timeframe__in=["M1", "M5"])).count(),
         "swing": filtered_qs.filter(Q(strategy__name__icontains="swing") | Q(configuration__timeframe__in=["H4", "D1"])).count(),
-        "intraday": filtered_qs.filter(Q(strategy__name__icontains="intraday") | Q(configuration__timeframe__in=["M1", "M5", "M15", "M30", "H1"])).count(),
+        "intraday": filtered_qs.filter(Q(strategy__name__icontains="intraday") | Q(configuration__timeframe__in=["M15", "M30", "H1"])).count(),
     }
     if category == "high":
         qs = qs.filter(confidence__gte=70)
@@ -169,7 +169,7 @@ def signal_lifecycle(request):
     elif category == "swing":
         qs = qs.filter(Q(strategy__name__icontains="swing") | Q(configuration__timeframe__in=["H4", "D1"]))
     elif category == "intraday":
-        qs = qs.filter(Q(strategy__name__icontains="intraday") | Q(configuration__timeframe__in=["M1", "M5", "M15", "M30", "H1"]))
+        qs = qs.filter(Q(strategy__name__icontains="intraday") | Q(configuration__timeframe__in=["M15", "M30", "H1"]))
 
     asset_qs = (StrategySignal.objects.filter(configuration__user=request.user, configuration__broker_account=account, timestamp__lte=now) if account else StrategySignal.objects.none())
     if market:
