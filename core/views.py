@@ -247,6 +247,7 @@ def profile_completion_page(request):
         "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
         "bio": request.POST.get("bio", profile.bio),
         "terms_accepted": bool(profile.terms_accepted_at) or request.POST.get("terms_accepted") in {"on", "true", "1"},
+        "terms_already_accepted": bool(profile.terms_accepted_at),
         "profile_picture_url": (
             reverse("profile_picture") + "?v=" + str(int(profile.updated_at.timestamp()))
             if profile.profile_picture_data or profile.avatar_url else ""
