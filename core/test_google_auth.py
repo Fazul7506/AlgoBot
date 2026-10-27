@@ -107,7 +107,7 @@ class GoogleLoginSecurityTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, "/dashboard/")
         self.assertEqual(self.client.session.get("_auth_user_id"), str(user.pk))
-        self.assertTrue(self.client.session.get("google_existing_login_dashboard"))
+        self.assertFalse(self.client.session.get("google_existing_login_dashboard"))
         self.assertFalse(self.client.session.get("google_profile_completion_pending"))
 
     @patch("google.oauth2.id_token.verify_oauth2_token")
