@@ -38,11 +38,11 @@
   function render(data) {
     const metrics=data.metrics||{}, performance=data.performance||{};
     $('metric-total').textContent=fmt(metrics.total_signals,0);
-    $('metric-total-change').textContent=metrics.total_signals_change==null?'Comparison unavailable':(metrics.total_signals_change>0?'+':'')+fmt(metrics.total_signals_change,0)+' vs previous 7 days';
+    $('metric-total-change').textContent=metrics.total_signals_change_pct==null?'No prior-period baseline':(metrics.total_signals_change>0?'+':'')+fmt(metrics.total_signals_change,0)+' ('+(metrics.total_signals_change_pct>0?'+':'')+Number(metrics.total_signals_change_pct).toFixed(1)+'%) vs previous 7 days';
     $('metric-winrate').textContent=pct(metrics.win_rate);
     $('metric-winrate-change').textContent=metrics.win_rate_change==null?'Completed-outcome comparison unavailable':(metrics.win_rate_change>0?'+':'')+Number(metrics.win_rate_change).toFixed(1)+' pp vs previous 7 days';
     $('metric-active').textContent=fmt(metrics.active_signals,0);
-    $('metric-active-change').textContent=metrics.active_signals_change==null?'Comparison unavailable':(metrics.active_signals_change>0?'+':'')+fmt(metrics.active_signals_change,0)+' vs previous 7 days';
+    $('metric-active-change').textContent=metrics.active_signals_change_pct==null?'No prior-period baseline':(metrics.active_signals_change>0?'+':'')+fmt(metrics.active_signals_change,0)+' ('+(metrics.active_signals_change_pct>0?'+':'')+Number(metrics.active_signals_change_pct).toFixed(1)+'%) vs previous 7 days';
     $('metric-profitfactor').textContent=metrics.profit_factor==null?'Unavailable':fmt(metrics.profit_factor,2);
     $('metric-profitfactor-change').textContent=metrics.profit_factor_change==null?'Realized-loss comparison unavailable':(metrics.profit_factor_change>0?'+':'')+Number(metrics.profit_factor_change).toFixed(2)+' vs previous 7 days';
     const trendSeries={total:metrics.trend?.daily_counts,active:metrics.trend?.daily_active_counts,winrate:metrics.trend?.daily_win_rates,profitfactor:metrics.trend?.daily_profit_factors};
