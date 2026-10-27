@@ -238,3 +238,53 @@ class ProfileCompletionTests(TestCase):
         self.assertIn('id="country" name="country"', template)
         self.assertIn("anchored_selects.js", base)
         self.assertIn("anchored_selects.css", base)
+
+
+    def test_invalid_international_phone_is_rejected_server_side(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_completion_page"),
+            {
+                "first_name": "Taylor",
+                "last_name": "Example",
+                "phone": "not-a-phone",
+                "country": "Kenya",
+                "timezone": "UTC",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enter a valid international phone number")
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.phone, "")
+
+    def test_blank_optional_country_and_phone_do_not_erase_saved_values(self):
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.phone = "+254712345678"
+        profile.country = "Kenya"
+        profile.save(update_fields=["phone", "country", "updated_at"])
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_completion_page"),
+            {
+                "first_name": "Taylor",
+                "last_name": "Example",
+                "phone": "",
+                "country": "",
+                "timezone": "UTC",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        profile.refresh_from_db()
+        self.assertEqual(profile.phone, "+254712345678")
+        self.assertEqual(profile.country, "Kenya")
+
+    def test_country_and_phone_dropdowns_have_searchable_country_metadata(self):
+        from pathlib import Path
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        self.assertIn('id="country"', template)
+        self.assertIn('id="phone_country_code"', template)
+        self.assertIn('data-iso="KE"', template)
+        self.assertIn('data-dial-code="+254"', template)
+        self.assertIn('data-iso="GB"', template)
+        self.assertIn('data-iso="JP"', template)
+        self.assertIn("syncCallingCode", template)
