@@ -215,3 +215,26 @@ class ProfileCompletionTests(TestCase):
         profile = UserProfile.objects.get(user=self.user)
         self.assertEqual(str(profile.date_of_birth), "1998-04-12")
         self.assertEqual(profile.gender, "prefer_not_to_say")
+
+
+    def test_reference_onboarding_avatar_is_the_upload_control(self):
+        from pathlib import Path
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        self.assertIn('class="profile-onboarding__avatar-upload"', template)
+        self.assertIn('for="profile_picture"', template)
+        self.assertIn('id="profile-picture-preview-small"', template)
+        self.assertIn('image/jpeg,image/png,image/webp', template)
+        self.assertIn('event.dataTransfer', template)
+        self.assertNotIn('type="file" accept="image/jpeg,image/png,image/webp"\n', template)
+
+    def test_reference_progress_and_country_code_selectors_use_shared_anchored_selects(self):
+        from pathlib import Path
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        base = Path("templates/base.html").read_text(encoding="utf-8")
+        self.assertIn("Profile Details", template)
+        self.assertIn("Additional Info", template)
+        self.assertIn("Preferences", template)
+        self.assertIn('id="phone_country_code"', template)
+        self.assertIn('id="country" name="country"', template)
+        self.assertIn("anchored_selects.js", base)
+        self.assertIn("anchored_selects.css", base)
