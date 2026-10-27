@@ -229,4 +229,12 @@ assert(anchoredSelects.includes("new Event('change', {bubbles:true})"), 'select 
 assert(anchoredSelects.includes("ArrowDown") && anchoredSelects.includes("Escape"), 'anchored dropdowns support keyboard navigation and dismissal');
 assert(anchoredSelectCss.includes('.ab-select-menu[hidden]') && anchoredSelectCss.includes('position: absolute'), 'menus are anchored popovers, not platform modal selectors');
 
+const marketRegistry = fs.readFileSync('static/js/market_asset_registry.js','utf8');
+const marketPicker = fs.readFileSync('static/js/market_picker_enhancement.js','utf8');
+assert(!marketRegistry.includes('const initials ='), 'global market asset fallbacks never generate letter-based initials');
+assert(!marketRegistry.includes('data-symbol-fallback'), 'remote SVG failures never substitute ticker letters');
+assert(marketRegistry.includes('material-symbols-rounded">show_chart'), 'missing or failed market artwork uses a neutral chart icon globally');
+assert(!marketPicker.includes('market-avatar market-avatar-unmapped" aria-hidden="true">•'), 'market picker fallback never renders a text glyph instead of an icon');
+assert(marketPicker.includes('material-symbols-rounded">show_chart'), 'all market picker fallback branches use the neutral chart icon');
+
 console.log('official Deriv market SVG registry and global anchored-select contract tests passed');

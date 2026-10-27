@@ -32,13 +32,13 @@
   const renderIcon = (select, name) => {
     const symbol = select.value;
     const row = {symbol, display_name: name};
-    return window.AlgoBotMarketAssets?.renderIcon?.(row) || '<span class="market-avatar market-avatar-unmapped" aria-hidden="true">•</span>';
+    return window.AlgoBotMarketAssets?.renderIcon?.(row) || '<span class="market-avatar market-avatar-unmapped" aria-hidden="true"><span class="material-symbols-rounded">show_chart</span></span>';
   };
   const marketIcon = item => {
     const symbol = String((typeof item?.symbol === 'object' ? item.symbol.symbol : item?.symbol) || item?.underlying_symbol || item?.code || '');
     const supplied = String(item?.display_name || (typeof item?.symbol === 'object' ? item.symbol.display_name : '') || item?.name || '');
     const name = marketName({value:symbol,textContent:supplied || symbol});
-    return window.AlgoBotMarketAssets?.renderIcon?.({...item,symbol,display_name:name}) || '<span class="market-avatar market-avatar-unmapped" aria-hidden="true">•</span>';
+    return window.AlgoBotMarketAssets?.renderIcon?.({...item,symbol,display_name:name}) || '<span class="market-avatar market-avatar-unmapped" aria-hidden="true"><span class="material-symbols-rounded">show_chart</span></span>';
   };
   const ensureIcon = select => {
     let icon = select.parentElement?.querySelector(':scope > .analysis-market-icon, :scope > .terminal-selected-market-icon, :scope > .market-picker-icon');

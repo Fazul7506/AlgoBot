@@ -7,17 +7,21 @@
 
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const MARKET_SELECTOR = 'select#symbol,select[name="symbol"],select[data-symbol],select[data-ai-symbol],select#symbolFilter,select[data-instrument-symbol],select[data-market-symbol],select[data-history-symbol],select[data-scanner-market],select[data-market-filter],select[data-market]';
-  const instrumentValue = value => /^(?:R_\d+|1HZ\d+V|BOOM\d+|CRASH\d+|JD\d+|STP\d+|STPRNG\d*|FRX[A-Z]{6}|[A-Z]{3}[A-Z]{3}|[A-Z]{1,6}\.[A-Z]{1,3}|CRY[A-Z0-9]+|BTCUSD|ETHUSD|XAUUSD|XAGUSD)$/i.test(String(value || '').trim());
-  const isInstrumentSelect = select => select.matches(MARKET_SELECTOR) || [...select.options].some(option => option.value && instrumentValue(option.value));
+  // Instrument detection must be based on explicit market-control semantics, not option values.
+  // Country codes (e.g. EUR, GBP, XAU-like codes) can resemble symbols and must never
+  // cause country/profile dropdowns to inherit market search placeholders or ticker badges.
+  const isCountryOrPhoneSelect = select => select.id === 'phone_country_code' || select.matches('[data-country-select],#country,#profile-country,[autocomplete="country-name"]');
+  const isInstrumentSelect = select => !isCountryOrPhoneSelect(select) && (select.matches(MARKET_SELECTOR) || select.dataset.abSelectType === 'instrument');
   const optionLabel = option => String(option?.textContent || option?.label || option?.value || '').replace(/\s+/g, ' ').trim();
   const iconFor = (select, option) => {
-    if (!option || !option.value) return '<span class="ab-select-option-icon ab-select-option-icon--empty" aria-hidden="true"><span class="material-symbols-rounded">list</span></span>';
+    if (!option || !option.value) return '<span class="ab-select-option-icon ab-select-option-icon--empty" aria-hidden="true"></span>';
+    if (isCountryOrPhoneSelect(select)) return '<span class="ab-select-option-icon ab-select-option-icon--country" aria-hidden="true"></span>';
     if (isInstrumentSelect(select)) {
       const row = {symbol: option.value, display_name: optionLabel(option) || option.value};
       const official = window.AlgoBotMarketAssets?.renderIcon?.(row);
       if (official) return '<span class="ab-select-option-icon ab-select-option-icon--market" aria-hidden="true">' + official + '</span>';
-      const fallback = String(option.value).slice(0, 2).toUpperCase();
-      return '<span class="ab-select-option-icon ab-select-option-icon--fallback" aria-hidden="true">' + esc(fallback) + '</span>';
+      // Missing market artwork must never become a generated ticker-letter badge.
+      return '<span class="ab-select-option-icon ab-select-option-icon--market-fallback" aria-hidden="true"><span class="material-symbols-rounded">show_chart</span></span>';
     }
     return '<span class="ab-select-option-icon" aria-hidden="true"><span class="material-symbols-rounded">check</span></span>';
   };
@@ -51,8 +55,16 @@
     const current = selectedOption(select);
     const label = root.querySelector('.ab-select-value');
     const icon = root.querySelector('.ab-select-current-icon');
-    if (label) label.textContent = current ? optionLabel(current) : (select.dataset.placeholder || 'Select an option');
-    if (icon) icon.innerHTML = iconFor(select, current);
+    if (label) {
+      if (select.id === 'phone_country_code' && current) {
+        const iso = current.dataset.iso || '';
+        const flag = iso ? String.fromCodePoint(...iso.toUpperCase().split('').map(ch => 127397 + ch.charCodeAt(0))) : '';
+        label.textContent = (flag ? flag + ' ' : '') + current.value;
+      } else {
+        label.textContent = current ? optionLabel(current) : (select.dataset.placeholder || 'Select an option');
+      }
+    }
+    if (icon) icon.innerHTML = select.id === 'phone_country_code' ? '' : iconFor(select, current);
     if (button) {
       button.disabled = select.disabled;
       button.setAttribute('aria-expanded', String(!root.querySelector('.ab-select-menu').hidden));
@@ -65,7 +77,9 @@
     const keepSearch = search?.value || '';
     if (!menu) return;
     const options = [...select.options];
-    const hasSearch = options.filter(option => option.value && !option.hidden).length >= 12;
+    // Search is opt-in, not automatically injected into every long dropdown.
+    // Keep it for instruments and explicitly searchable country/phone selectors.
+    const hasSearch = !isCountryOrPhoneSelect(select) && (select.dataset.abSearchable === 'true' || isInstrumentSelect(select));
     if (search) {
       search.hidden = !hasSearch;
       if (!hasSearch) search.value = '';
@@ -201,7 +215,7 @@
     const search = document.createElement('input');
     search.type = 'search';
     search.className = 'ab-select-search';
-    search.placeholder = isInstrumentSelect(select) ? 'Search instruments…' : 'Search options…';
+    search.placeholder = 'Search instruments…';
     search.setAttribute('aria-label', search.placeholder);
     search.hidden = true;
     const list = document.createElement('div');

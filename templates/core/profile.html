@@ -15,7 +15,7 @@
     <nav class="account-nav" aria-label="Account settings">
       <a href="{% url 'profile_page' %}" aria-current="page">Profile</a><a href="{% url 'settings_page' %}">Preferences</a><a href="{% url 'account_identity_page' %}">Login &amp; identity</a><a href="{% url 'security_center' %}">Security</a>
     </nav>
-    <form class="account-content" method="post" enctype="multipart/form-data" action="{% url 'profile_page' %}">
+    <div class="account-content"><section class="account-card profile-edit-launch"><div class="account-card__header"><div><h2>Personal information</h2><p class="account-card__hint">Review your profile details and open the editor to make changes.</p></div><button type="button" class="account-btn account-btn--primary" data-profile-edit-open>Edit profile</button></div><p class="account-help">Your personal details are private to your AlgoBot account. Login identity and broker settings remain managed separately.</p></section><div class="profile-edit-modal" data-profile-edit-modal hidden role="dialog" aria-modal="true" aria-labelledby="profile-edit-title"><div class="profile-edit-modal__panel"><div class="profile-edit-modal__heading"><div><p class="account-kicker">ACCOUNT PROFILE</p><h2 id="profile-edit-title">Edit profile</h2><p class="account-help">Update your personal information below.</p></div><button type="button" class="account-btn" data-profile-edit-close aria-label="Close profile editor">Close</button></div><form class="account-content profile-edit-modal__form" method="post" enctype="multipart/form-data" action="{% url 'profile_page' %}">
       {% csrf_token %}
       {% for message in messages %}<p class="account-alert {% if message.tags == 'error' %}account-alert--error{% elif message.tags == 'success' %}account-alert--success{% endif %}" role="status">{{ message }}</p>{% endfor %}
       <section class="account-card">
@@ -40,7 +40,7 @@
           <div class="account-toggle"><div><strong>Notifications</strong><p>Configure delivery channels and notification preferences.</p></div><a class="account-btn" href="/notifications/">Manage</a></div>
         </div>
       </section>
-    </form>
+    </form></div></div>
   </div>
 
 <div class="avatar-editor" data-avatar-editor hidden role="dialog" aria-modal="true" aria-labelledby="avatar-editor-title">
@@ -54,6 +54,7 @@
   </div>
 </div>
 <style>
+.profile-edit-modal[hidden]{display:none}.profile-edit-modal{position:fixed;inset:0;z-index:9990;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(2,8,20,.82);backdrop-filter:blur(8px)}.profile-edit-modal__panel{width:min(100%,900px);max-height:min(92vh,900px);overflow:auto;border:1px solid #263a55;border-radius:20px;background:#0b1729;color:#e8effa;box-shadow:0 24px 80px #0008;padding:clamp(16px,3vw,28px)}.profile-edit-modal__heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px}.profile-edit-modal__heading h2{margin:0}.profile-edit-modal__form{padding:0}.profile-edit-modal__form .account-card{box-shadow:none}@media(max-width:600px){.profile-edit-modal{padding:8px}.profile-edit-modal__panel{max-height:96vh;border-radius:14px}.profile-edit-modal__heading{gap:8px}}
 .avatar-editor[hidden]{display:none}.avatar-editor{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(2,8,20,.82);backdrop-filter:blur(8px)}.avatar-editor__panel{width:min(100%,440px);padding:24px;border:1px solid #263a55;border-radius:22px;background:#0d1b2e;color:#e8effa;box-shadow:0 24px 80px #0008}.avatar-editor__panel h2{margin:0 0 8px}.avatar-editor__stage{position:relative;width:min(100%,320px);aspect-ratio:1;margin:22px auto;overflow:hidden;border-radius:50%;background:#07111f;touch-action:none;cursor:grab}.avatar-editor__stage:active{cursor:grabbing}.avatar-editor__stage img{position:absolute;max-width:none;user-select:none;pointer-events:none}.avatar-editor__zoom{display:flex;align-items:center;gap:14px}.avatar-editor__zoom input{flex:1;accent-color:#22b8e6}.avatar-editor__actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.avatar-editor__actions .account-btn{min-width:100px}.avatar-editor__actions [data-avatar-save]:disabled{opacity:.55}@media(max-width:420px){.avatar-editor__panel{padding:18px}.avatar-editor__stage{width:min(100%,280px)}}
 </style>
 </main>
@@ -61,6 +62,14 @@
 <script>
 (() => {
   const initialize = () => {
+    const profileModal = document.querySelector('[data-profile-edit-modal]');
+    const profileOpen = document.querySelector('[data-profile-edit-open]');
+    const profileClose = document.querySelector('[data-profile-edit-close]');
+    const closeProfileModal = () => { if (profileModal) profileModal.hidden = true; };
+    profileOpen?.addEventListener('click', () => { if (profileModal) { profileModal.hidden = false; profileClose?.focus(); } });
+    profileClose?.addEventListener('click', closeProfileModal);
+    profileModal?.addEventListener('click', event => { if (event.target === profileModal) closeProfileModal(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && profileModal && !profileModal.hidden) { closeProfileModal(); profileOpen?.focus(); } });
     const avatarInput = document.querySelector('#profile-picture');
     const avatar = document.querySelector('[data-avatar-preview]');
     if (avatarInput && avatar) {
