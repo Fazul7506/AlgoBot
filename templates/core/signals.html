@@ -38,6 +38,7 @@
       <section class="signals-panel signals-side-panel"><div class="signals-side-title"><h2><span class="material-symbols-rounded" aria-hidden="true">monitoring</span>Market Sentiment</h2><a href="/analysis/">View All →</a></div><p class="signals-data-note">Sentiment source is not exposed by the current signal lifecycle API.</p><div class="signals-sentiment-unavailable"><span class="material-symbols-rounded" aria-hidden="true">query_stats</span><span>Sentiment data unavailable</span></div></section>
     </aside>
   </div>
+  <dialog id="signalsDetailDialog" class="signals-detail-dialog" aria-labelledby="signalsDetailTitle"><div class="signals-detail-head"><h2 id="signalsDetailTitle">Signal details</h2><button type="button" id="signalsDetailClose" class="signals-icon-button" aria-label="Close signal details">✕</button></div><dl id="signalsDetailContent" class="signals-detail-content"></dl></dialog>
   <p id="signalsError" class="signals-error" role="alert" hidden></p>
 </main>
 {% endblock %}
