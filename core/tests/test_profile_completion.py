@@ -13,6 +13,15 @@ class ProfileCompletionTests(TestCase):
             email="profile-completion@example.test",
             password="A-secure-test-password-123!",
         )
+        # The profile-gate tests need a verified account so the assertions
+        # exercise profile completion rather than the earlier email-verification gate.
+        UserProfile.objects.update_or_create(
+            user=self.user,
+            defaults={
+                "email_verified": True,
+                "email_verified_at": __import__("django.utils.timezone", fromlist=["now"]).now(),
+            },
+        )
 
     def test_page_requires_local_login(self):
         response = self.client.get(reverse("profile_completion_page"))
