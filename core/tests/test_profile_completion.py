@@ -87,7 +87,7 @@ class ProfileCompletionTests(TestCase):
         self.assertFalse(self.client.session.get("google_profile_completion_pending"))
 
     @patch("core.broker_onboarding.has_authorized_broker_connection", return_value=True)
-    def test_saving_profile_returns_to_dashboard_when_connected(self, _connected):
+    def test_saving_profile_still_returns_to_marketplace_when_connected(self, _connected):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse("profile_completion_page"),
@@ -95,7 +95,36 @@ class ProfileCompletionTests(TestCase):
                 "terms_accepted": "on", "last_name": "Example"},
         )
         self.assertRedirects(
-            response, reverse("dashboard_page"), fetch_redirect_response=False
+            response, reverse("broker_marketplace_page"), fetch_redirect_response=False
+        )
+
+
+    def test_incomplete_profile_cannot_reach_dashboard_or_marketplace_after_logout_and_login(self):
+        from core.profile_completion import profile_is_complete
+
+        self.client.force_login(self.user)
+        for target in (reverse("dashboard_page"), reverse("broker_marketplace_page")):
+            response = self.client.get(target)
+            self.assertRedirects(
+                response, reverse("profile_completion_page"), fetch_redirect_response=False
+            )
+
+        self.client.post(reverse("logout_page"))
+        logged_in = self.client.post(
+            reverse("login_page"),
+            {"identifier": self.user.username, "password": "A-secure-test-password-123!"},
+        )
+        self.assertEqual(logged_in.status_code, 302)
+        self.assertEqual(logged_in.url, reverse("profile_completion_page"))
+        self.assertFalse(profile_is_complete(self.user))
+
+    def test_profile_gate_ignores_manipulated_next_parameter(self):
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("dashboard_page") + "?next=https://evil.example/steal"
+        )
+        self.assertRedirects(
+            response, reverse("profile_completion_page"), fetch_redirect_response=False
         )
 
     def test_profile_picture_is_persisted_and_served_after_refresh(self):
