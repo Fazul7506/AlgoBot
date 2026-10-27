@@ -16,8 +16,10 @@ class BrokerOnboardingMiddlewareTests(TestCase):
             username="middleware-user",
             email="middleware@example.test",
             password="Test-password-123!secure",
+            first_name="Middleware",
+            last_name="User",
         )
-        UserProfile.objects.update_or_create(user=self.user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
+        UserProfile.objects.update_or_create(user=self.user, defaults={"email_verified": True, "email_verified_at": timezone.now(), "terms_accepted_at": timezone.now()})
         self.client.force_login(self.user)
 
     def test_unverified_legacy_session_is_sent_to_email_verification(self):
