@@ -12,6 +12,8 @@ class UserProfile(models.Model):
     bio = models.TextField(blank=True)
     phone = models.CharField(max_length=32, blank=True)
     country = models.CharField(max_length=100, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=32, blank=True)
     timezone = models.CharField(max_length=100, default='UTC')
     email_verified = models.BooleanField(default=False)
     email_verification_token = models.CharField(max_length=255, blank=True)
