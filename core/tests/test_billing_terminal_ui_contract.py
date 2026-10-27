@@ -528,6 +528,16 @@ class ProductionReliabilityFrontendContractTests(SimpleTestCase):
         self.assertIn("getCacheTtl(url)", client)
         self.assertIn("market\\/broker-catalogue", client)
 
+    def test_service_runtime_uses_canonical_bearer_authenticated_transport_first(self):
+        from pathlib import Path
+
+        runtime = Path("static/js/core/service_runtime.js").read_text(encoding="utf-8")
+        self.assertIn("const canonical=window.AlgoBotFrontendData?.request", runtime)
+        self.assertLess(
+            runtime.index("const canonical=window.AlgoBotFrontendData?.request"),
+            runtime.index("const client=window.AlgoBotAPI?.apiClient"),
+        )
+
     def test_ai_api_tries_bearer_jwt_before_csrf_protected_session_auth(self):
         from pathlib import Path
 
