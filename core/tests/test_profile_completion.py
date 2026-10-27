@@ -51,6 +51,7 @@ class ProfileCompletionTests(TestCase):
             reverse("profile_completion_page"),
             {
                 "first_name": "Taylor",
+                "terms_accepted": "on",
                 "last_name": "Example",
                 "phone": "+254700000000",
                 "country": "Kenya",
@@ -76,7 +77,8 @@ class ProfileCompletionTests(TestCase):
 
         response = self.client.post(
             reverse("profile_completion_page"),
-            {"first_name": "Taylor", "last_name": "Example", "timezone": "Africa/Nairobi"},
+            {"first_name": "Taylor",
+                "terms_accepted": "on", "last_name": "Example", "timezone": "Africa/Nairobi"},
         )
 
         self.assertRedirects(
@@ -89,7 +91,8 @@ class ProfileCompletionTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse("profile_completion_page"),
-            {"first_name": "Taylor", "last_name": "Example"},
+            {"first_name": "Taylor",
+                "terms_accepted": "on", "last_name": "Example"},
         )
         self.assertRedirects(
             response, reverse("dashboard_page"), fetch_redirect_response=False
@@ -111,6 +114,7 @@ class ProfileCompletionTests(TestCase):
                 reverse("profile_completion_page"),
                 {
                     "first_name": "Taylor",
+                "terms_accepted": "on",
                     "last_name": "Example",
                     "username": self.user.username,
                     "timezone": "Africa/Nairobi",
@@ -135,6 +139,7 @@ class ProfileCompletionTests(TestCase):
                 reverse("profile_completion_page"),
                 {
                     "first_name": "Taylor",
+                "terms_accepted": "on",
                     "last_name": "Example",
                     "username": self.user.username,
                     "new_password": new_password,
@@ -158,6 +163,7 @@ class ProfileCompletionTests(TestCase):
             reverse("profile_completion_page"),
             {
                 "first_name": "Taylor",
+                "terms_accepted": "on",
                 "last_name": "Example",
                 "username": other.username,
                 "timezone": "Africa/Nairobi",
@@ -183,6 +189,7 @@ class ProfileCompletionTests(TestCase):
             reverse("profile_page"),
             {
                 "first_name": "Taylor",
+                "terms_accepted": "on",
                 "last_name": "Example",
                 "country": "Kenya",
                 "timezone": "Africa/Nairobi",
@@ -204,6 +211,7 @@ class ProfileCompletionTests(TestCase):
             reverse("profile_completion_page"),
             {
                 "first_name": "Taylor",
+                "terms_accepted": "on",
                 "last_name": "Example",
                 "username": self.user.username,
                 "timezone": "Africa/Nairobi",
@@ -246,6 +254,7 @@ class ProfileCompletionTests(TestCase):
             reverse("profile_completion_page"),
             {
                 "first_name": "Taylor",
+                "terms_accepted": "on",
                 "last_name": "Example",
                 "phone": "not-a-phone",
                 "country": "Kenya",
@@ -267,6 +276,7 @@ class ProfileCompletionTests(TestCase):
             reverse("profile_completion_page"),
             {
                 "first_name": "Taylor",
+                "terms_accepted": "on",
                 "last_name": "Example",
                 "phone": "",
                 "country": "",
@@ -320,3 +330,16 @@ class ProfileCompletionTests(TestCase):
         self.assertIn("const syncFromCountry", template)
         self.assertIn("const syncFromPhone", template)
         self.assertIn("anchored_selects.js", Path("templates/base.html").read_text(encoding="utf-8"))
+
+
+    def test_terms_acceptance_is_required_and_persisted(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("profile_completion_page"), {"first_name": "Taylor", "last_name": "Example", "timezone": "UTC"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please accept the Terms of Service and Privacy Policy")
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertIsNone(profile.terms_accepted_at)
+        response = self.client.post(reverse("profile_completion_page"), {"first_name": "Taylor", "last_name": "Example", "timezone": "UTC", "terms_accepted": "on"})
+        self.assertEqual(response.status_code, 302)
+        profile.refresh_from_db()
+        self.assertIsNotNone(profile.terms_accepted_at)
