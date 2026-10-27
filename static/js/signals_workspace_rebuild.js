@@ -43,8 +43,8 @@
     $('metric-active-change').textContent=metrics.active_signals_change==null?'Comparison unavailable':(metrics.active_signals_change>0?'+':'')+fmt(metrics.active_signals_change,0)+' vs previous 7 days';
     $('metric-profitfactor').textContent=metrics.profit_factor==null?'Unavailable':fmt(metrics.profit_factor,2);
     $('metric-profitfactor-change').textContent=metrics.profit_factor_change==null?'Realized-loss comparison unavailable':'Compared with previous 7 days';
-    const trend=metrics.trend?.daily_counts||[];
-    ['total','active','winrate','profitfactor'].forEach(id=>{const el=$('trend-'+id);if(!el)return;const vals=trend.map(Number).filter(Number.isFinite);if(vals.length<2){el.innerHTML='';return;}const max=Math.max(...vals,1),min=Math.min(...vals,0),range=max-min||1;const points=vals.map((v,i)=>(i/(vals.length-1)*96+2)+','+(24-(v-min)/range*19)).join(' ');el.innerHTML='<polyline points="'+points+'"/>';});
+    const trendSeries={total:metrics.trend?.daily_counts,active:metrics.trend?.daily_active_counts,winrate:metrics.trend?.daily_win_rates,profitfactor:metrics.trend?.daily_profit_factors};
+    ['total','active','winrate','profitfactor'].forEach(id=>{const el=$('trend-'+id);if(!el)return;const vals=(trendSeries[id]||[]).map(v=>v==null?NaN:Number(v)).filter(Number.isFinite);if(vals.length<2){el.innerHTML='';return;}const max=Math.max(...vals,1),min=Math.min(...vals,0),range=max-min||1;const points=vals.map((v,i)=>(i/(vals.length-1)*96+2)+','+(24-(v-min)/range*19)).join(' ');el.innerHTML='<polyline points="'+points+'"/>';});
     Object.entries(data.category_counts||{}).forEach(([key,value])=>{const el=$('count-'+key);if(el)el.textContent=fmt(value,0);});
     const ring=$('performance-ring'), winRate=performance.win_rate;
     ring.style.setProperty('--win-angle',winRate==null?'0deg':(Math.max(0,Math.min(100,Number(winRate)))*3.6)+'deg');
