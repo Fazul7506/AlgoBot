@@ -18,7 +18,14 @@ class UniversalWorkspaceAccessTests(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(
-            username="free-workspace-user", password="pass12345"
+            username="free-workspace-user", password="pass12345",
+            first_name="Workspace", last_name="User",
+        )
+        from django.utils import timezone
+        from core.models import UserProfile
+        UserProfile.objects.update_or_create(
+            user=self.user,
+            defaults={"terms_accepted_at": timezone.now(), "email_verified": True, "email_verified_at": timezone.now()},
         )
         self.client.force_login(self.user)
         broker = Broker.objects.create(name="Deriv Test", broker_type="deriv", status="active")
