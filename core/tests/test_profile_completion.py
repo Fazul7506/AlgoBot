@@ -123,6 +123,29 @@ class ProfileCompletionTests(TestCase):
         self.assertEqual(logged_in.url, reverse("profile_completion_page"))
         self.assertFalse(profile_is_complete(self.user))
 
+    def test_legacy_google_session_flag_cannot_bypass_broker_onboarding(self):
+        from django.utils import timezone
+
+        self.user.first_name = "Taylor"
+        self.user.last_name = "Example"
+        self.user.save(update_fields=["first_name", "last_name"])
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.terms_accepted_at = timezone.now()
+        profile.email_verified = True
+        profile.email_verified_at = timezone.now()
+        profile.save(update_fields=["terms_accepted_at", "email_verified", "email_verified_at"])
+        self.client.force_login(self.user)
+        session = self.client.session
+        session["google_existing_login_dashboard"] = True
+        session.save()
+
+        with patch("core.broker_onboarding.has_authorized_broker_connection", return_value=False):
+            response = self.client.get(reverse("dashboard_page"))
+
+        self.assertRedirects(
+            response, reverse("broker_marketplace_page"), fetch_redirect_response=False
+        )
+
     def test_profile_gate_ignores_manipulated_next_parameter(self):
         self.client.force_login(self.user)
         response = self.client.get(
