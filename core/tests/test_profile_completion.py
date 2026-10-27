@@ -168,6 +168,36 @@ class ProfileCompletionTests(TestCase):
         self.user.refresh_from_db()
         self.assertNotEqual(self.user.username, other.username)
 
+    def test_security_center_profile_picture_survives_refresh(self):
+        import io
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        image_buffer = io.BytesIO()
+        Image.new("RGB", (80, 80), (80, 40, 180)).save(image_buffer, format="PNG")
+        upload = SimpleUploadedFile(
+            "security-avatar.png", image_buffer.getvalue(), content_type="image/png"
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_page"),
+            {
+                "first_name": "Taylor",
+                "last_name": "Example",
+                "country": "Kenya",
+                "timezone": "Africa/Nairobi",
+                "phone": "",
+                "bio": "",
+                "profile_picture": upload,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertTrue(profile.profile_picture_data)
+        photo_response = self.client.get(reverse("profile_picture"))
+        self.assertEqual(photo_response.status_code, 200)
+        self.assertEqual(photo_response.content, bytes(profile.profile_picture_data))
+
     def test_optional_date_of_birth_and_gender_are_saved(self):
         self.client.force_login(self.user)
         response = self.client.post(
