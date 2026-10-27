@@ -90,6 +90,9 @@ def _outcome_stats(rows):
     for row in rows:
         meta = _metadata(row)
         outcome = str(meta.get("outcome") or meta.get("result") or "").strip().lower()
+        lifecycle = str(meta.get("lifecycle") or meta.get("lifecycle_state") or meta.get("status") or "").strip().lower()
+        if lifecycle in {"active", "open", "pending", "live", "actionable", "created", "validated", "waiting"} or outcome in {"active", "open", "pending", "live", "actionable"}:
+            continue
         pnl = _decimal(meta.get("realized_pnl", meta.get("pnl")))
         if outcome in {"win", "won", "winning", "take_profit"} or (pnl is not None and pnl > 0):
             wins += 1
@@ -108,8 +111,8 @@ def _outcome_stats(rows):
         "completed": completed,
         "win_rate": round(wins * 100 / completed, 2) if completed else None,
         "realized_pnl": str(sum(realized, Decimal("0"))) if realized else None,
-        "average_profit": str(gross_profit / wins) if wins and gross_profit else None,
-        "average_loss": str(gross_loss / losses) if losses and gross_loss else None,
+        "average_profit": str(gross_profit / sum(1 for value in realized if value > 0)) if any(value > 0 for value in realized) else None,
+        "average_loss": str(gross_loss / sum(1 for value in realized if value < 0)) if any(value < 0 for value in realized) else None,
         "profit_factor": str(profit_factor) if profit_factor is not None else None,
         "performance_available": bool(realized or completed),
     }
