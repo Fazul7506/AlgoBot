@@ -7,7 +7,6 @@
 
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const MARKET_SELECTOR = 'select#symbol,select[name="symbol"],select[data-symbol],select[data-ai-symbol],select#symbolFilter,select[data-instrument-symbol],select[data-market-symbol],select[data-history-symbol],select[data-scanner-market],select[data-market-filter],select[data-market]';
-  const instrumentValue = value => /^(?:R_\d+|1HZ\d+V|BOOM\d+|CRASH\d+|JD\d+|STP\d+|STPRNG\d*|FRX[A-Z]{6}|[A-Z]{3}[A-Z]{3}|[A-Z]{1,6}\.[A-Z]{1,3}|CRY[A-Z0-9]+|BTCUSD|ETHUSD|XAUUSD|XAGUSD)$/i.test(String(value || '').trim());
   // Instrument detection must be based on explicit market-control semantics, not option values.
   // Country codes (e.g. EUR, GBP, XAU-like codes) can resemble symbols and must never
   // cause country/profile dropdowns to inherit market search placeholders or ticker badges.
