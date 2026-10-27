@@ -179,10 +179,9 @@ def callback(request):
             if current_id == selected_account_id:
                 return _fail(request, "That Deriv account is already connected to another AlgoBot user. Your dashboard was not opened.", "deriv_oauth_account_ownership_conflict")
             continue
-        # Only mark the selected account connected when the OAuth token was also
-        # successfully authorized over Deriv WebSocket and the provider identity
-        # matches that exact account. OAuth REST verification alone is not a live
-        # WebSocket/session health check, so all other accounts remain degraded.
+        # Initially mark only the selected account as verified when the optional
+        # identity probe matches. The account-scoped adapter check below is the
+        # authoritative validation and can promote a valid demo or real account.
         identity_loginid = str(deriv_identity.get("loginid") or deriv_identity.get("account_id") or "").strip()
         websocket_health = (
             "verified"
