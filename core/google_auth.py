@@ -173,6 +173,11 @@ def google_login_callback(request):
         return redirect("login_page")
 
     # Provider subject, not email or a derived username, is the durable identity key.
+    # Track first-time creation separately from returning Google sign-in: these have
+    # deliberately different post-authentication destinations.
+    is_new_google_user = False
+    request.session.pop("google_profile_completion_pending", None)
+    request.session.pop("google_existing_login_dashboard", None)
     try:
         with transaction.atomic():
             google_identity = (
@@ -251,6 +256,7 @@ def google_login_callback(request):
                     username=username, email=email, password=None,
                     first_name=first_name, last_name=last_name,
                 )
+                is_new_google_user = True
                 profile, _ = UserProfile.objects.get_or_create(user=user)
                 profile.email_verified = True
                 profile.email_verified_at = timezone.now()
@@ -284,7 +290,12 @@ def google_login_callback(request):
 
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     UserProfile.objects.filter(user=user).update(last_login_at=timezone.now())
-    # Both password and Google sign-in land on the same canonical onboarding
-    # route. Broker authorization remains an explicit user action there.
+    # First-time Google signup must finish the local profile before broker setup.
+    # A returning Google identity goes directly to the dashboard; never send an
+    # existing user through signup/profile completion or broker marketplace again.
     request.session.pop("broker_onboarding_next", None)
-    return redirect("broker_marketplace_page")
+    if is_new_google_user:
+        request.session["google_profile_completion_pending"] = True
+        return redirect("profile_completion_page")
+    request.session["google_existing_login_dashboard"] = True
+    return redirect("dashboard_page")
