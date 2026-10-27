@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from unittest.mock import patch
 from django.urls import reverse
 
@@ -13,7 +14,7 @@ class DashboardTemplateContractTests(TestCase):
     @patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
     def test_authenticated_dashboard_does_not_embed_trading_values(self):
         user = get_user_model().objects.create_user("dashboard-owner", "dashboard@example.com", "pass", first_name="Dashboard", last_name="Owner")
-        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "terms_accepted_at": __import__("django.utils.timezone", fromlist=["now"]).now()})
+        UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "terms_accepted_at": timezone.now()})
         self.client.force_login(user)
         broker = Broker.objects.create(name="Deriv Dashboard Test", broker_type="deriv", status="active")
         account = BrokerAccount.objects.create(
