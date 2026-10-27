@@ -293,6 +293,7 @@ def google_login_callback(request):
         picture_host = (picture_parts.hostname or "").lower()
         if (not profile.profile_picture_data and not profile.avatar_url
                 and picture_parts.scheme == "https"
+                and len(picture_claim) <= 200
                 and (picture_host == "googleusercontent.com" or picture_host.endswith(".googleusercontent.com"))):
             profile.avatar_url = picture_claim
             profile_updates.append("avatar_url")
