@@ -129,17 +129,44 @@ def market_intelligence(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def signal_lifecycle(request):
-    """Expose deterministic signal lifecycle state from persisted strategy signals."""
+    """Return account-scoped signal lifecycle records with bounded server-side pagination."""
     symbol = str(request.query_params.get("symbol") or "").strip()
+    market = str(request.query_params.get("market") or "").strip().lower()
+    category = str(request.query_params.get("category") or "all").strip().lower()
     now = timezone.now()
+    try:
+        page = max(1, int(request.query_params.get("page", "1")))
+        page_size = max(1, min(int(request.query_params.get("page_size", request.query_params.get("limit", "10"))), 100))
+    except (TypeError, ValueError):
+        return Response({"detail": "page and page_size must be integers."}, status=400)
+    if category not in {"all", "high", "scalping", "intraday", "swing"}:
+        return Response({"detail": "Unsupported signal category."}, status=400)
+
     account = get_active_account(request.user, request=request)
     qs = (StrategySignal.objects.select_related("strategy", "configuration")
           .filter(configuration__user=request.user, configuration__broker_account=account, timestamp__lte=now)
-          .order_by("-timestamp")) if account else StrategySignal.objects.none()
+          .order_by("-timestamp", "-id")) if account else StrategySignal.objects.none()
     if symbol:
         qs = qs.filter(symbol=symbol)
+    if market:
+        # Market classifications come from the canonical active market registry,
+        # never from ticker-prefix guesses in the browser.
+        market_symbols = MarketSymbol.objects.filter(is_active=True, market__iexact=market).values_list("symbol", flat=True)
+        qs = qs.filter(symbol__in=market_symbols)
+    if category == "high":
+        qs = qs.filter(confidence__gte=70)
+    elif category == "scalping":
+        qs = qs.filter(Q(strategy__name__icontains="scalp") | Q(configuration__timeframe__in=["M1", "M5"]))
+    elif category == "swing":
+        qs = qs.filter(Q(strategy__name__icontains="swing") | Q(configuration__timeframe__in=["H4", "D1"]))
+    elif category == "intraday":
+        qs = qs.filter(Q(strategy__name__icontains="intraday") | Q(configuration__timeframe__in=["M1", "M5", "M15", "M30", "H1"]))
+
+    total = qs.count()
+    start = (page - 1) * page_size
+    records = list(qs[start:start + page_size])
     data = []
-    for signal in qs[:_limit(request, 100, 100)]:
+    for signal in records:
         age_seconds = max(0, int((now - signal.timestamp).total_seconds()))
         lifecycle = "active" if age_seconds <= SIGNAL_ACTIVE_SECONDS else "expired"
         order = Order.objects.filter(
@@ -147,12 +174,11 @@ def signal_lifecycle(request):
             user=request.user,
             account=account,
             symbol=signal.symbol,
-        ).order_by("-created_at").first()
+        ).order_by("-created_at").first() if account else None
         position = None
         if order is not None and order.broker_order_id:
             position = Position.objects.filter(
-                account=account,
-                broker_order_id=order.broker_order_id,
+                account=account, broker_order_id=order.broker_order_id,
             ).order_by("-broker_timestamp", "-id").first()
         execution_state = "not_executed"
         if order is not None:
@@ -160,14 +186,20 @@ def signal_lifecycle(request):
         settlement_state = None
         if position is not None:
             settlement_state = "settled" if position.settlement_time or position.closed_at else "open"
+        metadata = signal.metadata if isinstance(signal.metadata, dict) else {}
         data.append({
             "id": signal.id,
             "symbol": signal.symbol,
             "direction": _signal_direction(signal) or None,
             "confidence": signal.confidence,
             "strategy": signal.strategy.name,
+            "strategy_category": getattr(signal.strategy, "category", None),
             "timeframe": signal.configuration.timeframe if signal.configuration else "",
-            "market_regime": (signal.metadata or {}).get("market_regime") if isinstance(signal.metadata, dict) else None,
+            "market_type": metadata.get("market_type") or metadata.get("market") or metadata.get("asset_class"),
+            "market_regime": metadata.get("market_regime"),
+            "entry_price": signal.entry_price,
+            "take_profit": signal.take_profit,
+            "stop_loss": signal.stop_loss,
             "created_at": signal.timestamp.isoformat(),
             "age_seconds": age_seconds,
             "lifecycle": lifecycle,
@@ -182,6 +214,10 @@ def signal_lifecycle(request):
         "status": "ok",
         "source": "persisted_strategy_signals",
         "active_window_seconds": SIGNAL_ACTIVE_SECONDS,
-        "count": len(data),
+        "count": total,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size,
         "signals": data,
     })
