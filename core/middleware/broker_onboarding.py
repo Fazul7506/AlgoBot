@@ -42,11 +42,19 @@ class BrokerOnboardingMiddleware:
         if not user or not user.is_authenticated:
             return self.get_response(request)
 
-        # Onboarding completion is derived from persisted account/profile fields,
-        # not the OAuth callback, session flags, or a user-controlled redirect.
-        from core.profile_completion import profile_is_complete
-        if not profile_is_complete(user):
-            return redirect("profile_completion_page")
+        # Enforce mandatory profile completion at the funnel destinations that
+        # must never be skipped: dashboard and broker onboarding. Do not turn
+        # this into a global account lock; settings, recovery, notifications,
+        # and non-trading operational pages must remain reachable.
+        profile_required_prefixes = (
+            "/dashboard/",
+            "/brokers/marketplace/",
+            "/brokers/connect/",
+        )
+        if any(path.startswith(prefix) for prefix in profile_required_prefixes):
+            from core.profile_completion import profile_is_complete
+            if not profile_is_complete(user):
+                return redirect("profile_completion_page")
         if not any(path.startswith(prefix) for prefix in self.PROTECTED_BROWSER_PREFIXES):
             return self.get_response(request)
 
