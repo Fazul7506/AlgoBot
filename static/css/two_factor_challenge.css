@@ -1,0 +1,20 @@
+.two-factor-page{position:relative;display:grid;place-items:start center;min-height:min(760px,calc(100svh - 140px));padding:clamp(28px,7vh,76px) clamp(16px,4vw,28px) 48px;color:var(--ds-text,#edf4ff)}
+.two-factor-card{box-sizing:border-box;width:min(100%,480px);padding:clamp(22px,5vw,36px);border:1px solid rgba(99,160,225,.24);border-radius:22px;background:radial-gradient(ellipse at 90% 0%,rgba(22,105,174,.2),transparent 52%),linear-gradient(145deg,#101d31,#0a1220 70%);box-shadow:0 24px 70px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.035)}
+.two-factor-eyebrow{display:inline-flex;align-items:center;gap:8px;margin:0 0 14px;color:#54d6c0;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.two-factor-eyebrow:before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 4px rgba(84,214,192,.12)}
+.two-factor-card h1{margin:0;font-size:clamp(28px,6vw,38px);line-height:1.12;letter-spacing:-.04em;color:#f3f7ff}
+.two-factor-intro{margin:14px 0 26px;color:#aebed3;font-size:15px;line-height:1.7}
+.two-factor-field{display:grid;gap:10px;margin:0 0 20px}
+.two-factor-field label{color:#dbe7f7;font-size:13px;font-weight:750}
+.two-factor-field input{box-sizing:border-box;width:100%;min-height:52px;padding:13px 15px;border:1px solid #2d4664;border-radius:12px;outline:0;background:#071224;color:#f4f8ff;font:inherit;letter-spacing:.04em;transition:border-color .15s,box-shadow .15s,background .15s}
+.two-factor-field input::placeholder{color:#71849e}
+.two-factor-field input:focus-visible{border-color:#35c7e8;box-shadow:0 0 0 3px rgba(53,199,232,.17);background:#08172b}
+.two-factor-actions{display:flex;flex-wrap:wrap;gap:10px}
+.two-factor-actions .account-btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:11px 17px;border:1px solid #2b4564;border-radius:11px;background:#14243a;color:#dce9fb;font:inherit;font-size:14px;font-weight:750;text-decoration:none;cursor:pointer}
+.two-factor-actions .account-btn--primary{border-color:transparent;background:linear-gradient(115deg,#36c5d9,#7ba5ff);color:#061426;box-shadow:0 8px 22px rgba(54,197,217,.16)}
+.two-factor-actions .account-btn:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.two-factor-actions .account-btn:focus-visible{outline:2px solid #5dd5ed;outline-offset:3px}
+.two-factor-card .account-alert{margin:0 0 18px;padding:12px 14px;border:1px solid rgba(248,113,113,.35);border-radius:11px;background:rgba(127,29,29,.2);color:#fecaca;line-height:1.5}
+.two-factor-note{margin:20px 0 0;color:#8094ad;font-size:12px;line-height:1.6}
+@media(max-width:480px){.two-factor-page{min-height:calc(100svh - 118px);padding:28px 14px 36px}.two-factor-card{border-radius:17px}.two-factor-actions{display:grid;grid-template-columns:1fr}.two-factor-actions .account-btn{box-sizing:border-box;width:100%}}
+@media(prefers-reduced-motion:reduce){.two-factor-field input,.two-factor-actions .account-btn{transition:none}}

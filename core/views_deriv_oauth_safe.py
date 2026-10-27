@@ -119,13 +119,12 @@ def callback(request):
     elif not identity_loginid and not websocket_verification_error:
         websocket_verification_error = "identity_missing"
 
-    if websocket_verification_error == "identity_mismatch":
-        return _fail(
-            request,
-            "Deriv verified a different account identity. No broker connection was changed; retry from the correct broker account.",
-            "deriv_oauth_identity_mismatch",
-        )
-
+    # The OAuth authorize response describes the token's default identity and
+    # is not authoritative for every account returned by the account-list API.
+    # In particular, a user may have both VRTC (demo) and CR (real) accounts.
+    # Do not reject the entire OAuth link because this optional identity probe
+    # reports another login ID; validate the selected account with its own OTP
+    # session through the canonical adapter below.
     broker, _ = Broker.objects.get_or_create(broker_type="deriv", defaults={"name":"Deriv","status":"active","supports_live":True,"websocket_endpoint":settings.DERIV_AUTH_WS_BASE_URL})
     # Deriv's provider-issued user_id is a stable ownership signal across a
     # user's DEMO/REAL login IDs. It may confirm that an existing account is
@@ -180,10 +179,9 @@ def callback(request):
             if current_id == selected_account_id:
                 return _fail(request, "That Deriv account is already connected to another AlgoBot user. Your dashboard was not opened.", "deriv_oauth_account_ownership_conflict")
             continue
-        # Only mark the selected account connected when the OAuth token was also
-        # successfully authorized over Deriv WebSocket and the provider identity
-        # matches that exact account. OAuth REST verification alone is not a live
-        # WebSocket/session health check, so all other accounts remain degraded.
+        # Initially mark only the selected account as verified when the optional
+        # identity probe matches. The account-scoped adapter check below is the
+        # authoritative validation and can promote a valid demo or real account.
         identity_loginid = str(deriv_identity.get("loginid") or deriv_identity.get("account_id") or "").strip()
         websocket_health = (
             "verified"
@@ -226,30 +224,31 @@ def callback(request):
     # Establish and persist the canonical broker connection only after the provider
     # identity check succeeded. OAuth token exchange by itself is not enough to
     # unlock the dashboard or report the broker as connected.
-    if not websocket_verification_error:
-        try:
-            from asgiref.sync import async_to_sync
-            from apps.brokers.services import BrokerConnectionService
-            async_to_sync(BrokerConnectionService().connect)(broker, selected_broker_account)
-            selected_broker_account.refresh_from_db()
-        except Exception as exc:
-            websocket_verification_error = exc.__class__.__name__
-            # The preliminary identity probe is not enough if the canonical
-            # adapter cannot establish a usable authenticated connection.
-            BrokerConnection.objects.filter(broker_account=selected_broker_account).update(
-                status="degraded",
-                last_ping=None,
-                heartbeat={
-                    "oauth_verified": True,
-                    "websocket_health": "verified",
-                    "connection_validation": "failed",
-                },
-            )
-            selected_broker_account.refresh_from_db()
-            logger.warning(
-                "deriv_oauth_connection_validation_failed",
-                extra={"error": websocket_verification_error},
-            )
+    try:
+        from asgiref.sync import async_to_sync
+        from apps.brokers.services import BrokerConnectionService
+        # Always validate the selected account via its account-scoped OTP
+        # session, regardless of the optional global authorize identity probe.
+        # This supports users whose OAuth grants include both demo and real IDs.
+        async_to_sync(BrokerConnectionService().connect)(broker, selected_broker_account)
+        selected_broker_account.refresh_from_db()
+        websocket_verification_error = None
+    except Exception as exc:
+        websocket_verification_error = exc.__class__.__name__
+        BrokerConnection.objects.filter(broker_account=selected_broker_account).update(
+            status="degraded",
+            last_ping=None,
+            heartbeat={
+                "oauth_verified": True,
+                "connection_validation": "failed",
+                "error_type": websocket_verification_error,
+            },
+        )
+        selected_broker_account.refresh_from_db()
+        logger.warning(
+            "deriv_oauth_connection_validation_failed",
+            extra={"error": websocket_verification_error},
+        )
 
     if selected_broker_account is None:
         return _fail(
@@ -264,8 +263,8 @@ def callback(request):
     if websocket_verification_error:
         messages.warning(
             request,
-            f"Deriv account {selected_account_id} was saved, but its live connection could not be verified. "
-            "Balance, equity, and trading remain unavailable until Broker Management completes a successful connection check.",
+            f"Deriv account {selected_account_id} was saved, but its broker connection could not be verified. "
+            "Demo/real account data and trading remain unavailable until Broker Management completes a successful connection check.",
         )
     else:
         messages.success(

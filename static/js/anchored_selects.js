@@ -12,10 +12,11 @@
   // cause country/profile dropdowns to inherit market search placeholders or ticker badges.
   const isCountryOrPhoneSelect = select => select.id === 'phone_country_code' || select.matches('[data-country-select],#country,#profile-country,[autocomplete="country-name"]');
   const isInstrumentSelect = select => !isCountryOrPhoneSelect(select) && (select.matches(MARKET_SELECTOR) || select.dataset.abSelectType === 'instrument');
+  const isWideCountryMenu = select => isCountryOrPhoneSelect(select);
   const optionLabel = option => String(option?.textContent || option?.label || option?.value || '').replace(/\s+/g, ' ').trim();
   const iconFor = (select, option) => {
-    if (!option || !option.value) return '<span class="ab-select-option-icon ab-select-option-icon--empty" aria-hidden="true"></span>';
-    if (isCountryOrPhoneSelect(select)) return '<span class="ab-select-option-icon ab-select-option-icon--country" aria-hidden="true"></span>';
+    // Only instrument controls receive artwork. Generic and country dropdowns have no icon placeholders.
+    if (!isInstrumentSelect(select) || !option || !option.value) return '';
     if (isInstrumentSelect(select)) {
       const row = {symbol: option.value, display_name: optionLabel(option) || option.value};
       const official = window.AlgoBotMarketAssets?.renderIcon?.(row);
@@ -189,7 +190,7 @@
       select.parentElement?.querySelectorAll(':scope > .market-picker-icon, :scope > .terminal-selected-market-icon, :scope > .analysis-market-icon').forEach(icon => { icon.hidden = true; });
     }
     const root = document.createElement('div');
-    root.className = 'ab-select-root' + (instrumentSelect ? ' ab-select-root--instrument' : '');
+    root.className = 'ab-select-root' + (instrumentSelect ? ' ab-select-root--instrument' : '') + (isWideCountryMenu(select) ? ' ab-select-root--country-phone' : '');
     root.dataset.abSelectRoot = '';
     const button = document.createElement('button');
     button.type = 'button';
@@ -215,8 +216,8 @@
     const search = document.createElement('input');
     search.type = 'search';
     search.className = 'ab-select-search';
-    search.placeholder = 'Search instruments…';
-    search.setAttribute('aria-label', search.placeholder);
+    search.placeholder = instrumentSelect ? 'Search instruments…' : 'Search options…';
+    search.setAttribute('aria-label', isWideCountryMenu(select) ? 'Search countries' : search.placeholder);
     search.hidden = true;
     const list = document.createElement('div');
     list.className = 'ab-select-options';

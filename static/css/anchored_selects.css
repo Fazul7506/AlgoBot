@@ -82,7 +82,12 @@
 .ab-select-option[aria-selected="true"] { background: color-mix(in srgb, var(--ds-accent, #8fb0ff) 17%, transparent); }
 .ab-select-option:disabled { opacity: .45; cursor: not-allowed; }
 .ab-select-option[hidden], .ab-select-group-label[hidden] { display: none !important; }
-.ab-select-option-label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.ab-select-option-label { flex: 1 1 auto; min-width: 0; overflow-wrap: normal; }
+/* Country/phone menus need room for full country names when the trigger is narrow. */
+.ab-select-root--country-phone .ab-select-menu { width: min(340px, calc(100vw - 32px)); min-width: min(280px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
+.ab-select-root--country-phone .ab-select-option { gap: 9px; white-space: nowrap; }
+.ab-select-root--country-phone .ab-select-option-label { white-space: nowrap; overflow-wrap: normal; }
+.ab-select-root--country-phone .ab-select-options { overflow-x: hidden; }
 .ab-select-option-icon { display: inline-flex; flex: 0 0 28px; align-items: center; justify-content: center; width: 28px; height: 28px; overflow: hidden; border-radius: 7px; color: var(--ds-muted, #aab8ca); background: var(--ds-surface-2, #101722); }
 .ab-select-option-icon--market { background: transparent; }
 .ab-select-option-icon--market .market-asset-verified { display: block; width: 26px; height: 26px; object-fit: contain; }

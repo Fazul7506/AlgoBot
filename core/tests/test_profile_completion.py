@@ -489,7 +489,9 @@ class ProfileCompletionTests(TestCase):
         self.assertIn("select.id === 'phone_country_code'", script)
         self.assertIn("const isCountryOrPhoneSelect", script)
         self.assertIn("const hasSearch = !isCountryOrPhoneSelect(select)", script)
-        self.assertIn("if (isCountryOrPhoneSelect(select)) return", script)
+        self.assertIn("const hasSearch = !isCountryOrPhoneSelect(select)", script)
+        self.assertIn("if (!isInstrumentSelect(select) || !option || !option.value) return ''", script)
+        self.assertIn("if (icon) icon.innerHTML = select.id === 'phone_country_code' ? '' : iconFor(select, current)", script)
         self.assertIn("(flag ? flag + ' ' : '') + current.value", script)
 
     def test_profile_edit_action_uses_a_dismissible_modal(self):

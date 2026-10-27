@@ -111,6 +111,42 @@ class DerivOAuthTests(TestCase):
         get.assert_called_once()
         fetch_identity.assert_called_once_with("token")
 
+    @patch("core.views_deriv_oauth_safe.fetch_deriv_identity", return_value={
+        "user_id": 12345,
+        "loginid": "CR999999",
+        "email": "deriv-user@example.com",
+        "fullname": "Deriv User",
+    })
+    @patch("core.views_deriv_oauth_safe.requests.get")
+    @patch("core.views_deriv_oauth_safe.requests.post")
+    def test_callback_checks_selected_demo_account_even_if_global_identity_differs(self, post, get, fetch_identity):
+        local_user = User.objects.create_user(
+            username="demo-account-with-real-login",
+            email="deriv-user@example.com",
+            password="Local-password-123!secure",
+        )
+        UserProfile.objects.update_or_create(user=local_user, defaults={"email_verified": True, "email_verified_at": timezone.now()})
+        self.client.force_login(local_user)
+        self._oauth_session()
+        self._mock_token_exchange(post)
+        self._mock_account_response(get, [{
+            "account_id": "VRTC123456",
+            "balance": 10000,
+            "currency": "USD",
+            "account_type": "demo",
+            "is_virtual": True,
+            "status": "active",
+        }])
+        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock) as connect:
+            result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
+        self.assertEqual(result.status_code, 302)
+        connect.assert_awaited_once()
+        account = BrokerAccount.objects.get(user=local_user, account_id="VRTC123456")
+        self.assertEqual(account.account_type, "demo")
+        # The global authorize identity can be another login ID; it must not
+        # prevent account-scoped verification from running for the selected ID.
+        self.assertNotEqual(fetch_identity.return_value["loginid"], account.account_id)
+
     @patch("core.views_deriv_oauth_safe.fetch_deriv_identity")
     @patch("core.views_deriv_oauth_safe.requests.get")
     @patch("core.views_deriv_oauth_safe.requests.post")
