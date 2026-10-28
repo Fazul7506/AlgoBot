@@ -1,6 +1,7 @@
 """Authenticated settings API for non-secret account and trading preferences."""
 import json
 import math
+from zoneinfo import available_timezones
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -39,6 +40,8 @@ ACCOUNT_PREFERENCE_CHOICES = {
     "accent": {"cyan", "blue", "teal", "violet", "amber"},
 }
 ACCOUNT_NOTIFICATION_CATEGORIES = set(ACCOUNT_PREFERENCE_DEFAULTS["notification_categories"])
+SUPPORTED_TIME_ZONES = available_timezones()
+SUPPORTED_PREFERENCE_FIELDS = set(ACCOUNT_PREFERENCE_CHOICES) | {"notification_categories"}
 
 
 TRADING_FLOAT_LIMITS = {
@@ -105,6 +108,8 @@ def account_settings_api(request):
         value = value.strip()
         if len(value) > limit:
             return JsonResponse({"detail": f"{field} must be {limit} characters or fewer."}, status=400)
+        if field == "timezone" and value not in SUPPORTED_TIME_ZONES:
+            return JsonResponse({"detail": "Choose a valid time zone."}, status=400)
         profile_updates[field] = value
 
     for field in PROFILE_BOOLEAN_FIELDS:
@@ -116,6 +121,10 @@ def account_settings_api(request):
 
     # Only explicitly supported preferences are accepted. Unknown values are rejected
     # so the UI cannot persist a setting that the application does not implement.
+    unsupported_preferences = set(preferences_data) - SUPPORTED_PREFERENCE_FIELDS
+    if unsupported_preferences:
+        return JsonResponse({"detail": "Unsupported account preference supplied."}, status=400)
+
     preference_updates = {}
     current_preferences = {**ACCOUNT_PREFERENCE_DEFAULTS, **(profile.account_preferences or {})}
     current_preferences["notification_categories"] = {
