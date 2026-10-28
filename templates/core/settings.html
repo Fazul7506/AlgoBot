@@ -1,52 +1,70 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Preferences | AlgoBot{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261028-preferences1"><link rel="stylesheet" href="{% static 'css/account_preferences.css' %}?v=20261028-preferences1">{% endblock %}
 {% block content %}
 <main class="account-page" data-account-settings data-settings-page>
   <header class="account-hero">
-    <div>
-      <p class="account-kicker">ACCOUNT MANAGEMENT</p>
-      <h1>Account Settings</h1>
-      <p class="account-subtitle">Manage your account settings, security, and preferences. Keep your account safe and personalized.</p>
-    </div>
-    <span class="account-state" data-settings-status role="status" aria-live="polite">Loading settings…</span>
+    <div><p class="account-kicker">ACCOUNT MANAGEMENT</p><h1>Account Settings</h1><p class="account-subtitle">Personalize the AlgoBot workspace and manage your account notification preferences.</p></div>
+    <span class="account-state" data-settings-status role="status" aria-live="polite">Loading preferences…</span>
   </header>
-
   <div class="account-layout">
     <nav class="account-nav" aria-label="Account settings">
-      <a href="{% url 'profile_page' %}">Profile</a>
-      <a href="{% url 'settings_page' %}" aria-current="page">Preferences</a>
-      <a href="{% url 'account_identity_page' %}">Login &amp; Identity</a>
-      <a href="{% url 'security_center' %}">Security</a>
+      <a href="{% url 'profile_page' %}">Profile</a><a href="{% url 'settings_page' %}" aria-current="page">Preferences</a><a href="{% url 'account_identity_page' %}">Login &amp; Identity</a><a href="{% url 'security_center' %}">Security</a>
     </nav>
-
-    <form class="account-content" data-settings-form>
+    <form class="account-content preferences-content" data-settings-form>
       {% csrf_token %}
-      <section class="account-card" id="workspace-preferences">
-        <div class="account-card__header"><div><h2>Workspace preferences</h2><p class="account-card__hint">Your profile and login identity are managed separately.</p></div><a class="account-btn" href="{% url 'profile_page' %}">Edit profile</a></div>
-        <div class="account-fields">
-          <div class="account-field"><label for="settings-username">Username</label><input id="settings-username" name="username" readonly aria-readonly="true"></div>
-          <div class="account-field"><label for="settings-email">Login email</label><input id="settings-email" name="email" type="email" readonly aria-readonly="true"></div>
-        </div>
-        <p class="account-help" style="margin-top:12px">To change your username or email, open Login &amp; Identity. Email changes require verification.</p>
+      <section class="account-card" id="appearance">
+        <div class="account-card__header"><div><h2>Appearance</h2><p class="account-card__hint">Choose how AlgoBot looks. These choices are saved to your account.</p></div></div>
+        <fieldset class="preferences-fieldset"><legend>Theme</legend><div class="preferences-choice-grid preferences-choice-grid--three">
+          <label class="preferences-choice"><input type="radio" name="theme" value="light"><span class="preferences-choice__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg></span><strong>Light</strong><small>Bright surfaces</small></label>
+          <label class="preferences-choice"><input type="radio" name="theme" value="dark"><span class="preferences-choice__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.2 15.1A8.7 8.7 0 0 1 8.9 3.8 8.9 8.9 0 1 0 20.2 15.1Z"/></svg></span><strong>Dark</strong><small>Low-light workspace</small></label>
+          <label class="preferences-choice"><input type="radio" name="theme" value="system"><span class="preferences-choice__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg></span><strong>System</strong><small>Follow your device</small></label>
+        </div></fieldset>
+        <fieldset class="preferences-fieldset"><legend>Interface density</legend><div class="preferences-choice-grid preferences-choice-grid--three">
+          <label class="preferences-choice preferences-choice--density"><input type="radio" name="density" value="compact"><span class="density-preview density-preview--compact" aria-hidden="true"><i></i><i></i><i></i></span><strong>Compact</strong><small>More on screen</small></label>
+          <label class="preferences-choice preferences-choice--density"><input type="radio" name="density" value="default"><span class="density-preview density-preview--default" aria-hidden="true"><i></i><i></i><i></i></span><strong>Default</strong><small>Balanced spacing</small></label>
+          <label class="preferences-choice preferences-choice--density"><input type="radio" name="density" value="comfortable"><span class="density-preview density-preview--comfortable" aria-hidden="true"><i></i><i></i><i></i></span><strong>Comfortable</strong><small>More breathing room</small></label>
+        </div></fieldset>
+        <fieldset class="preferences-fieldset"><legend>Accent colour</legend><div class="preferences-accent-list">
+          <label><input type="radio" name="accent" value="cyan"><span class="accent-swatch accent-swatch--cyan"></span><span>Cyan</span></label>
+          <label><input type="radio" name="accent" value="blue"><span class="accent-swatch accent-swatch--blue"></span><span>Blue</span></label>
+          <label><input type="radio" name="accent" value="teal"><span class="accent-swatch accent-swatch--teal"></span><span>Teal</span></label>
+          <label><input type="radio" name="accent" value="violet"><span class="accent-swatch accent-swatch--violet"></span><span>Violet</span></label>
+          <label><input type="radio" name="accent" value="amber"><span class="accent-swatch accent-swatch--amber"></span><span>Amber</span></label>
+        </div></fieldset>
       </section>
-
-      <section class="account-card" id="notifications">
-        <div class="account-card__header"><div><h2>Notifications</h2><p class="account-card__hint">Choose which account-level notification preferences are enabled.</p></div></div>
-        <div class="account-toggle-list">
-          <label class="account-toggle" for="pref-notifications"><span><strong>In-app notifications</strong><p>Allow AlgoBot to show account and workspace notifications.</p></span><input id="pref-notifications" name="notifications_enabled" type="checkbox"></label>
-          <label class="account-toggle" for="pref-email"><span><strong>Email notifications</strong><p>Allow notification emails according to your configured delivery channel.</p></span><input id="pref-email" name="email_notifications_enabled" type="checkbox"></label>
-          <label class="account-toggle" for="pref-telegram"><span><strong>Telegram notifications</strong><p>Use Telegram when a Telegram channel is configured and connected.</p></span><input id="pref-telegram" name="telegram_notifications_enabled" type="checkbox"></label>
+      <section class="account-card" id="notification-preferences">
+        <div class="account-card__header"><div><h2>Notification preferences</h2><p class="account-card__hint">Select the kinds of notifications you want to receive. Security alerts remain required.</p></div></div>
+        <div class="preferences-notification-list">
+          <label class="preferences-notification-row"><span class="preferences-notification-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18m-7-7 7 7 7-7M5 7l7-4 7 4"/></svg></span><span><strong>Trade alerts</strong><small>Updates related to trade execution and status.</small></span><input type="checkbox" name="trade_alerts"></label>
+          <label class="preferences-notification-row"><span class="preferences-notification-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 17 9 11l4 4 8-9"/><path d="M15 6h6v6"/></svg></span><span><strong>Price alerts</strong><small>Price movements and configured market thresholds.</small></span><input type="checkbox" name="price_alerts"></label>
+          <label class="preferences-notification-row"><span class="preferences-notification-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8m-8 4h8m-8 3h5"/></svg></span><span><strong>Market news</strong><small>Market headlines and relevant updates.</small></span><input type="checkbox" name="market_news"></label>
+          <label class="preferences-notification-row"><span class="preferences-notification-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14 9l6 3-6 2-2 7-2-7-6-2 6-3z"/></svg></span><span><strong>System updates</strong><small>Service announcements and platform changes.</small></span><input type="checkbox" name="system_updates"></label>
+          <label class="preferences-notification-row preferences-notification-row--required"><span class="preferences-notification-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg></span><span><strong>Security alerts</strong><small>Important account and sign-in security notices.</small></span><input type="checkbox" name="security_alerts" checked disabled aria-describedby="security-alerts-help"><small id="security-alerts-help" class="preferences-required-note">Always on</small></label>
         </div>
-        <p class="account-help">These preferences do not guarantee delivery. Manage channel connections and delivery status on the Notifications page.</p>
+        <div class="preferences-divider"></div>
+        <h3>Delivery channels</h3>
+        <p class="account-card__hint">These are account preferences, not a guarantee that a channel is connected or currently able to deliver.</p>
+        <div class="preferences-notification-list">
+          <label class="preferences-notification-row"><span class="preferences-notification-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span><span><strong>Email</strong><small>Send eligible notifications to your login email.</small></span><input type="checkbox" name="email_notifications_enabled"></label>
+          <label class="preferences-notification-row"><span class="preferences-notification-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Zm6-6V11a6 6 0 0 0-12 0v5l-2 2h16z"/></svg></span><span><strong>In-app notifications</strong><small>Show eligible notices inside AlgoBot.</small></span><input type="checkbox" name="notifications_enabled"></label>
+          <label class="preferences-notification-row"><span class="preferences-notification-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 4 3 11l7 2 2 7 9-16Z"/><path d="m10 13 11-9"/></svg></span><span><strong>Telegram</strong><small>Use Telegram only when a channel is configured and connected.</small></span><input type="checkbox" name="telegram_notifications_enabled"></label>
+        </div>
         <div class="account-actions"><a class="account-btn" href="/notifications/">Manage notification channels</a></div>
       </section>
-
-      <div class="account-actions">
-        <button type="submit" class="account-btn account-btn--primary" data-save-settings>Save preferences</button>
-        <span class="account-help" role="status" aria-live="polite" data-settings-message></span>
-      </div>
+      <section class="account-card" id="data-display">
+        <div class="account-card__header"><div><h2>Data &amp; display</h2><p class="account-card__hint">Set the time zone used by profile and account timestamps.</p></div></div>
+        <div class="account-fields">
+          <div class="account-field"><label for="settings-timezone">Time zone</label><select id="settings-timezone" name="timezone" autocomplete="off"><option value="UTC">UTC</option><option value="Africa/Nairobi">Africa/Nairobi (EAT)</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New_York</option><option value="Asia/Tokyo">Asia/Tokyo</option><option value="Australia/Sydney">Australia/Sydney</option></select><span class="account-help">This updates your saved profile time zone. Other pages must use this profile setting when formatting dates.</span></div>
+          <div class="account-field"><label for="settings-refresh">Auto-refresh preference</label><select id="settings-refresh" name="auto_refresh_seconds"><option value="5">Every 5 seconds</option><option value="15">Every 15 seconds</option><option value="30">Every 30 seconds</option><option value="60">Every minute</option><option value="120">Every 2 minutes</option></select><span class="account-help">Saved as a preference; this control does not start a separate refresh loop.</span></div>
+        </div>
+      </section>
+      <aside class="preferences-profile-summary">
+        <div class="preferences-profile-summary__mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
+        <div><h2 data-preferences-user>Account preferences</h2><p data-preferences-email>Settings apply to your signed-in AlgoBot account.</p><p class="account-help">Use Profile to update personal details and Login &amp; Identity to manage sign-in credentials.</p></div>
+      </aside>
+      <div class="account-actions preferences-save-row"><button type="submit" class="account-btn account-btn--primary" data-save-settings disabled>Save preferences</button><span class="account-help" role="status" aria-live="polite" data-settings-message></span></div>
     </form>
   </div>
 </main>
@@ -60,60 +78,95 @@
   const saveButton = root.querySelector('[data-save-settings]');
   const csrf = form.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
   const field = name => form.elements.namedItem(name);
-  const set = (name, value) => { if (field(name)) field(name).value = value ?? ''; };
+  const setRadio = (name, value) => { const input = form.querySelector('input[name="' + name + '"][value="' + value + '"]'); if (input) input.checked = true; };
   const check = (name, value) => { if (field(name)) field(name).checked = Boolean(value); };
-  const percent = value => Number(value || 0) * 100;
   const request = async (method, body) => {
-    const response = await fetch('/api/settings/', {
-      method, credentials: 'same-origin',
-      headers: {'Accept':'application/json', ...(body ? {'Content-Type':'application/json','X-CSRFToken':csrf} : {})},
-      ...(body ? {body:JSON.stringify(body)} : {})
-    });
+    const response = await fetch('/api/settings/', {method,credentials:'same-origin',headers:{'Accept':'application/json',...(body?{'Content-Type':'application/json','X-CSRFToken':csrf}:{})},...(body?{body:JSON.stringify(body)}:{})});
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.detail || data.message || 'Could not save settings. Please try again.');
     return data;
   };
+  const applyAppearance = (prefs) => {
+    const html = document.documentElement;
+    let theme = prefs.theme || 'dark';
+    if (theme === 'system') {
+      try { localStorage.removeItem('algobot-theme'); } catch (_) {}
+      theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    } else {
+      try { localStorage.setItem('algobot-theme', theme); } catch (_) {}
+    }
+    html.dataset.theme = theme;
+    html.dataset.density = prefs.density || 'default';
+    html.dataset.accent = prefs.accent || 'cyan';
+  };
   async function load() {
-    status.textContent = 'Loading settings…';
     const data = await request('GET');
-    set('username', data.user?.username); set('email', data.user?.email);
-    Object.entries(data.profile || {}).forEach(([key,value]) => {
-      if (['notifications_enabled','email_notifications_enabled','telegram_notifications_enabled'].includes(key)) check(key,value);
-    });
+    const profile = data.profile || {};
+    const prefs = profile.account_preferences || {};
+    setRadio('theme', prefs.theme || 'dark');
+    setRadio('density', prefs.density || 'default');
+    setRadio('accent', prefs.accent || 'cyan');
+    const categories = prefs.notification_categories || {};
+    ['trade_alerts','price_alerts','market_news','system_updates'].forEach(name => check(name, categories[name] !== false));
+    check('security_alerts', true);
+    check('notifications_enabled', profile.notifications_enabled);
+    check('email_notifications_enabled', profile.email_notifications_enabled);
+    check('telegram_notifications_enabled', profile.telegram_notifications_enabled);
+    if (field('timezone')) field('timezone').value = profile.timezone || 'UTC';
+    if (field('auto_refresh_seconds')) field('auto_refresh_seconds').value = String(prefs.auto_refresh_seconds || 30);
+    const username = data.user?.username || 'Your AlgoBot account';
+    const email = data.user?.email || 'No login email configured';
+    root.querySelector('[data-preferences-user]').textContent = username;
+    root.querySelector('[data-preferences-email]').textContent = email;
+    applyAppearance(prefs);
     status.textContent = 'Preferences loaded';
-    status.classList.remove('account-state--warn','account-state--bad');
-    status.classList.add('account-state--good');
+    status.classList.remove('account-state--warn','account-state--bad'); status.classList.add('account-state--good');
+    saveButton.disabled = false;
   }
+  form.addEventListener('change', event => {
+    const target = event.target;
+    if (target.name === 'theme' || target.name === 'density' || target.name === 'accent') {
+      applyAppearance({theme:field('theme').value,density:field('density').value,accent:field('accent').value});
+    }
+  });
   form.addEventListener('submit', async event => {
     event.preventDefault();
     if (!form.reportValidity()) return;
-    message.textContent = 'Saving…';
-    saveButton.disabled = true;
+    saveButton.disabled = true; message.textContent = 'Saving preferences…';
+    const preferences = {
+      theme: form.querySelector('input[name="theme"]:checked')?.value || 'dark',
+      density: form.querySelector('input[name="density"]:checked')?.value || 'default',
+      accent: form.querySelector('input[name="accent"]:checked')?.value || 'cyan',
+      auto_refresh_seconds: Number(field('auto_refresh_seconds').value),
+      notification_categories: {
+        trade_alerts: field('trade_alerts').checked,
+        price_alerts: field('price_alerts').checked,
+        market_news: field('market_news').checked,
+        system_updates: field('system_updates').checked,
+        security_alerts: true
+      }
+    };
+    const profile = {
+      timezone: field('timezone').value,
+      notifications_enabled: field('notifications_enabled').checked,
+      email_notifications_enabled: field('email_notifications_enabled').checked,
+      telegram_notifications_enabled: field('telegram_notifications_enabled').checked
+    };
     try {
-      const numeric = name => Number(field(name).value);
-      const profile = {
-        notifications_enabled: field('notifications_enabled').checked,
-        email_notifications_enabled: field('email_notifications_enabled').checked,
-        telegram_notifications_enabled: field('telegram_notifications_enabled').checked
-      };
-      const data = await request('PATCH', {profile});
+      const data = await request('PATCH', {profile, preferences});
+      applyAppearance(preferences);
       message.textContent = data.message || 'Preferences saved.';
-      status.textContent = 'All preferences saved';
-      status.classList.remove('account-state--warn','account-state--bad');
-      status.classList.add('account-state--good');
+      status.textContent = 'Preferences saved';
+      status.classList.remove('account-state--warn','account-state--bad'); status.classList.add('account-state--good');
     } catch (error) {
-      message.textContent = error.message || 'Could not save settings.';
+      message.textContent = error.message || 'Could not save preferences.';
       status.textContent = 'Save failed';
-      status.classList.remove('account-state--good');
-      status.classList.add('account-state--bad');
-    } finally {
-      saveButton.disabled = false;
-    }
+      status.classList.remove('account-state--good'); status.classList.add('account-state--bad');
+    } finally { saveButton.disabled = false; }
   });
   load().catch(error => {
-    status.textContent = 'Could not load';
-    status.classList.add('account-state--bad');
-    message.textContent = error.message || 'Could not load settings. Refresh the page to retry.';
+    status.textContent = 'Could not load preferences'; status.classList.add('account-state--bad');
+    message.textContent = error.message || 'Refresh the page to try again.';
     saveButton.disabled = true;
   });
 })();
