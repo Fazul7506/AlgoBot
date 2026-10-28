@@ -21,6 +21,34 @@ PROFILE_BOOLEAN_FIELDS = {
     "email_notifications_enabled",
     "telegram_notifications_enabled",
 }
+ACCOUNT_PREFERENCE_DEFAULTS = {
+    "theme": "dark",
+    "density": "default",
+    "accent": "cyan",
+    "layout": "classic",
+    "chart_position": "right",
+    "default_page": "dashboard",
+    "auto_refresh_seconds": 30,
+    "notification_categories": {
+        "trade_alerts": True,
+        "price_alerts": True,
+        "market_news": True,
+        "system_updates": True,
+        "security_alerts": True,
+    },
+}
+ACCOUNT_PREFERENCE_CHOICES = {
+    "theme": {"light", "dark", "system"},
+    "density": {"compact", "default", "comfortable"},
+    "accent": {"cyan", "blue", "teal", "violet", "amber"},
+    "layout": {"classic"},
+    "chart_position": {"right", "hidden"},
+    "default_page": {"dashboard", "markets", "signals", "positions"},
+}
+ACCOUNT_REFRESH_INTERVALS = {5, 15, 30, 60, 120}
+ACCOUNT_NOTIFICATION_CATEGORIES = set(ACCOUNT_PREFERENCE_DEFAULTS["notification_categories"])
+
+
 TRADING_FLOAT_LIMITS = {
     "max_daily_loss_pct": (0.0, 1.0),
     "risk_per_trade_pct": (0.0, 1.0),
@@ -51,6 +79,7 @@ def account_settings_api(request):
                 "notifications_enabled": profile.notifications_enabled,
                 "email_notifications_enabled": profile.email_notifications_enabled,
                 "telegram_notifications_enabled": profile.telegram_notifications_enabled,
+                "account_preferences": {**ACCOUNT_PREFERENCE_DEFAULTS, **(profile.account_preferences or {}), "notification_categories": {**ACCOUNT_PREFERENCE_DEFAULTS["notification_categories"], **((profile.account_preferences or {}).get("notification_categories") or {})}},
             },
             "trading": {
                 "default_strategy": bot.default_strategy,
@@ -70,8 +99,9 @@ def account_settings_api(request):
         return JsonResponse({"detail": "The request body must be an object."}, status=400)
     profile_data = payload.get("profile", {})
     trading_data = payload.get("trading", {})
-    if not isinstance(profile_data, dict) or not isinstance(trading_data, dict):
-        return JsonResponse({"detail": "Profile and trading settings must be objects."}, status=400)
+    preferences_data = payload.get("preferences", {})
+    if not isinstance(profile_data, dict) or not isinstance(trading_data, dict) or not isinstance(preferences_data, dict):
+        return JsonResponse({"detail": "Profile, trading and preferences settings must be objects."}, status=400)
 
     profile_updates = {}
     for field, limit in PROFILE_TEXT_LIMITS.items():
@@ -91,6 +121,42 @@ def account_settings_api(request):
         if not isinstance(profile_data[field], bool):
             return JsonResponse({"detail": f"{field} must be true or false."}, status=400)
         profile_updates[field] = profile_data[field]
+
+    # Only explicitly supported preferences are accepted. Unknown values are rejected
+    # so the UI cannot persist a setting that the application does not implement.
+    preference_updates = {}
+    current_preferences = {**ACCOUNT_PREFERENCE_DEFAULTS, **(profile.account_preferences or {})}
+    current_preferences["notification_categories"] = {
+        **ACCOUNT_PREFERENCE_DEFAULTS["notification_categories"],
+        **((profile.account_preferences or {}).get("notification_categories") or {}),
+    }
+    for field, choices in ACCOUNT_PREFERENCE_CHOICES.items():
+        if field not in preferences_data:
+            continue
+        value = preferences_data[field]
+        if not isinstance(value, str) or value not in choices:
+            return JsonResponse({"detail": f"Invalid value for preference: {field}."}, status=400)
+        preference_updates[field] = value
+
+    if "auto_refresh_seconds" in preferences_data:
+        value = preferences_data["auto_refresh_seconds"]
+        if isinstance(value, bool) or not isinstance(value, int) or value not in ACCOUNT_REFRESH_INTERVALS:
+            return JsonResponse({"detail": "auto_refresh_seconds must be one of the supported refresh intervals."}, status=400)
+        preference_updates["auto_refresh_seconds"] = value
+
+    if "notification_categories" in preferences_data:
+        categories = preferences_data["notification_categories"]
+        if not isinstance(categories, dict) or set(categories) - ACCOUNT_NOTIFICATION_CATEGORIES:
+            return JsonResponse({"detail": "notification_categories contains unsupported options."}, status=400)
+        if any(not isinstance(value, bool) for value in categories.values()):
+            return JsonResponse({"detail": "Notification category values must be true or false."}, status=400)
+        # Security alerts are mandatory; never permit them to be disabled by a client.
+        if categories.get("security_alerts") is False:
+            return JsonResponse({"detail": "Security alerts cannot be disabled."}, status=400)
+        preference_updates["notification_categories"] = {
+            **current_preferences["notification_categories"],
+            **categories,
+        }
 
     trading_updates = {}
     if "default_strategy" in trading_data:
@@ -127,6 +193,9 @@ def account_settings_api(request):
         if getattr(bot, field) != value
     }
 
+    updated_preferences = {**current_preferences, **preference_updates}
+    changed_preferences = bool(preference_updates) and updated_preferences != current_preferences
+
     with transaction.atomic():
         for field, value in changed_profile.items():
             setattr(profile, field, value)
@@ -136,5 +205,8 @@ def account_settings_api(request):
             profile.save(update_fields=[*changed_profile.keys(), "updated_at"])
         if changed_trading:
             bot.save(update_fields=[*changed_trading.keys(), "updated_at"])
+        if changed_preferences:
+            profile.account_preferences = updated_preferences
+            profile.save(update_fields=["account_preferences", "updated_at"])
 
-    return JsonResponse({"ok": True, "message": "Settings saved.", "changed": bool(changed_profile or changed_trading)})
+    return JsonResponse({"ok": True, "message": "Settings saved.", "changed": bool(changed_profile or changed_trading or changed_preferences)})
