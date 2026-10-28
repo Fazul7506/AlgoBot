@@ -289,7 +289,6 @@ class AccountSettingsPagesTests(TestCase):
                     "theme": "system",
                     "density": "comfortable",
                     "accent": "violet",
-                    "auto_refresh_seconds": 60,
                     "notification_categories": {
                         "trade_alerts": False,
                         "market_news": False,
@@ -305,7 +304,6 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(profile.account_preferences["theme"], "system")
         self.assertEqual(profile.account_preferences["density"], "comfortable")
         self.assertEqual(profile.account_preferences["accent"], "violet")
-        self.assertEqual(profile.account_preferences["auto_refresh_seconds"], 60)
         self.assertFalse(profile.account_preferences["notification_categories"]["trade_alerts"])
         self.assertFalse(profile.account_preferences["notification_categories"]["market_news"])
         self.assertTrue(profile.account_preferences["notification_categories"]["security_alerts"])
