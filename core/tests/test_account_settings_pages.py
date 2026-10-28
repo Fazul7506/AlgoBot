@@ -279,3 +279,63 @@ class AccountSettingsPagesTests(TestCase):
         self.assertRedirects(response, reverse("account_identity_page"))
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("A-strong-test-password-123!"))
+
+
+    def test_settings_api_persists_supported_account_preferences(self):
+        response = self.client.patch(
+            reverse("account_settings_api"),
+            data=json.dumps({
+                "preferences": {
+                    "theme": "system",
+                    "density": "comfortable",
+                    "accent": "violet",
+                    "auto_refresh_seconds": 60,
+                    "notification_categories": {
+                        "trade_alerts": False,
+                        "market_news": False,
+                    },
+                },
+                "profile": {"timezone": "Africa/Nairobi"},
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.timezone, "Africa/Nairobi")
+        self.assertEqual(profile.account_preferences["theme"], "system")
+        self.assertEqual(profile.account_preferences["density"], "comfortable")
+        self.assertEqual(profile.account_preferences["accent"], "violet")
+        self.assertEqual(profile.account_preferences["auto_refresh_seconds"], 60)
+        self.assertFalse(profile.account_preferences["notification_categories"]["trade_alerts"])
+        self.assertFalse(profile.account_preferences["notification_categories"]["market_news"])
+        self.assertTrue(profile.account_preferences["notification_categories"]["security_alerts"])
+
+        read_back = self.client.get(reverse("account_settings_api")).json()
+        self.assertEqual(read_back["profile"]["account_preferences"]["theme"], "system")
+        self.assertEqual(read_back["profile"]["account_preferences"]["density"], "comfortable")
+
+    def test_settings_api_rejects_unsupported_preference_without_partial_write(self):
+        response = self.client.patch(
+            reverse("account_settings_api"),
+            data=json.dumps({
+                "profile": {"country": "Changed"},
+                "preferences": {"theme": "ultra-neon"},
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.country, "")
+        self.assertEqual(profile.account_preferences, {})
+
+    def test_settings_api_does_not_allow_disabling_security_alerts(self):
+        response = self.client.patch(
+            reverse("account_settings_api"),
+            data=json.dumps({
+                "preferences": {"notification_categories": {"security_alerts": False}},
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertTrue(profile.account_preferences == {})
