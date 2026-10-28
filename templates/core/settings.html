@@ -88,7 +88,9 @@
   };
   const applyAppearance = (prefs) => {
     const html = document.documentElement;
-    let theme = prefs.theme || 'dark';
+    const preferenceTheme = ['light','dark','system'].includes(prefs.theme) ? prefs.theme : 'dark';
+    html.dataset.themePreference = preferenceTheme;
+    let theme = preferenceTheme;
     if (theme === 'system') {
       try { localStorage.removeItem('algobot-theme'); } catch (_) {}
       theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
