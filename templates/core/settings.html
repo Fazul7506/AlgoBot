@@ -57,7 +57,7 @@
         <div class="account-card__header"><div><h2>Data &amp; display</h2><p class="account-card__hint">Set the time zone used by profile and account timestamps.</p></div></div>
         <div class="account-fields">
           <div class="account-field"><label for="settings-timezone">Time zone</label><select id="settings-timezone" name="timezone" autocomplete="off"><option value="UTC">UTC</option><option value="Africa/Nairobi">Africa/Nairobi (EAT)</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New_York</option><option value="Asia/Tokyo">Asia/Tokyo</option><option value="Australia/Sydney">Australia/Sydney</option></select><span class="account-help">This updates your saved profile time zone. Other pages must use this profile setting when formatting dates.</span></div>
-          <div class="account-field"><label for="settings-refresh">Auto-refresh preference</label><select id="settings-refresh" name="auto_refresh_seconds"><option value="5">Every 5 seconds</option><option value="15">Every 15 seconds</option><option value="30">Every 30 seconds</option><option value="60">Every minute</option><option value="120">Every 2 minutes</option></select><span class="account-help">Saved as a preference; this control does not start a separate refresh loop.</span></div>
+          
         </div>
       </section>
       <aside class="preferences-profile-summary">
@@ -112,8 +112,11 @@
     check('notifications_enabled', profile.notifications_enabled);
     check('email_notifications_enabled', profile.email_notifications_enabled);
     check('telegram_notifications_enabled', profile.telegram_notifications_enabled);
-    if (field('timezone')) field('timezone').value = profile.timezone || 'UTC';
-    if (field('auto_refresh_seconds')) field('auto_refresh_seconds').value = String(prefs.auto_refresh_seconds || 30);
+    if (field('timezone')) {
+      const zone = profile.timezone || 'UTC';
+      if (![...field('timezone').options].some(option => option.value === zone)) field('timezone').add(new Option(zone, zone));
+      field('timezone').value = zone;
+    }
     const username = data.user?.username || 'Your AlgoBot account';
     const email = data.user?.email || 'No login email configured';
     root.querySelector('[data-preferences-user]').textContent = username;
@@ -137,7 +140,6 @@
       theme: form.querySelector('input[name="theme"]:checked')?.value || 'dark',
       density: form.querySelector('input[name="density"]:checked')?.value || 'default',
       accent: form.querySelector('input[name="accent"]:checked')?.value || 'cyan',
-      auto_refresh_seconds: Number(field('auto_refresh_seconds').value),
       notification_categories: {
         trade_alerts: field('trade_alerts').checked,
         price_alerts: field('price_alerts').checked,
