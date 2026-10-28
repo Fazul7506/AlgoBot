@@ -15,6 +15,8 @@ class UserProfile(models.Model):
     date_of_birth = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=32, blank=True)
     timezone = models.CharField(max_length=100, default='UTC')
+    # Non-secret, account-wide UI preferences; kept in the relational source of truth.
+    account_preferences = models.JSONField(default=dict, blank=True)
     email_verified = models.BooleanField(default=False)
     email_verification_token = models.CharField(max_length=255, blank=True)
     email_verification_token_created_at = models.DateTimeField(null=True, blank=True)

@@ -1,0 +1,16 @@
+/* Account preferences are global design-system tokens, not page-local styling. */
+:root { --ds-accent: var(--accent, #29d3ff); }
+html[data-accent="cyan"] { --ds-accent:#08d7f4; --accent:#08d7f4; }
+html[data-accent="blue"] { --ds-accent:#3988ff; --accent:#3988ff; }
+html[data-accent="teal"] { --ds-accent:#12d6b0; --accent:#12d6b0; }
+html[data-accent="violet"] { --ds-accent:#a78bfa; --accent:#a78bfa; }
+html[data-accent="amber"] { --ds-accent:#f5b942; --accent:#f5b942; }
+html[data-density="compact"] { --ds-space-2:6px; --ds-space-3:9px; --ds-space-4:12px; --ds-space-5:16px; --ds-space-6:20px; }
+html[data-density="comfortable"] { --ds-space-2:10px; --ds-space-3:15px; --ds-space-4:20px; --ds-space-5:26px; --ds-space-6:32px; }
+html[data-density="compact"] :where(.ds-card,.account-card,.panel,.kpi-card) { padding:clamp(10px, var(--ds-space-4), 14px); }
+html[data-density="comfortable"] :where(.ds-card,.account-card,.panel,.kpi-card) { padding:clamp(20px, var(--ds-space-5), 28px); }
+html[data-density="compact"] :where(button,.ds-btn,.account-btn,input,select,textarea) { min-height:34px; }
+html[data-density="comfortable"] :where(button,.ds-btn,.account-btn,input,select,textarea) { min-height:44px; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-density] *, html[data-density] *::before, html[data-density] *::after { scroll-behavior:auto; transition-duration:.01ms !important; animation-duration:.01ms !important; }
+}
