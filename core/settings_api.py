@@ -25,10 +25,6 @@ ACCOUNT_PREFERENCE_DEFAULTS = {
     "theme": "dark",
     "density": "default",
     "accent": "cyan",
-    "layout": "classic",
-    "chart_position": "right",
-    "default_page": "dashboard",
-    "auto_refresh_seconds": 30,
     "notification_categories": {
         "trade_alerts": True,
         "price_alerts": True,
@@ -41,11 +37,7 @@ ACCOUNT_PREFERENCE_CHOICES = {
     "theme": {"light", "dark", "system"},
     "density": {"compact", "default", "comfortable"},
     "accent": {"cyan", "blue", "teal", "violet", "amber"},
-    "layout": {"classic"},
-    "chart_position": {"right", "hidden"},
-    "default_page": {"dashboard", "markets", "signals", "positions"},
 }
-ACCOUNT_REFRESH_INTERVALS = {5, 15, 30, 60, 120}
 ACCOUNT_NOTIFICATION_CATEGORIES = set(ACCOUNT_PREFERENCE_DEFAULTS["notification_categories"])
 
 
@@ -137,12 +129,6 @@ def account_settings_api(request):
         if not isinstance(value, str) or value not in choices:
             return JsonResponse({"detail": f"Invalid value for preference: {field}."}, status=400)
         preference_updates[field] = value
-
-    if "auto_refresh_seconds" in preferences_data:
-        value = preferences_data["auto_refresh_seconds"]
-        if isinstance(value, bool) or not isinstance(value, int) or value not in ACCOUNT_REFRESH_INTERVALS:
-            return JsonResponse({"detail": "auto_refresh_seconds must be one of the supported refresh intervals."}, status=400)
-        preference_updates["auto_refresh_seconds"] = value
 
     if "notification_categories" in preferences_data:
         categories = preferences_data["notification_categories"]
