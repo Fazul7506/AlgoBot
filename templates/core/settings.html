@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Preferences | AlgoBot{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261028-preferences1"><link rel="stylesheet" href="{% static 'css/account_preferences.css' %}?v=20261028-preferences1">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1"><link rel="stylesheet" href="{% static 'css/account_preferences.css' %}?v=20261028-preferences1">{% endblock %}
 {% block content %}
 <main class="account-page" data-account-settings data-settings-page>
   <header class="account-hero">
@@ -15,7 +15,7 @@
     <form class="account-content preferences-content" data-settings-form>
       {% csrf_token %}
       <section class="account-card" id="appearance">
-        <div class="account-card__header"><div><h2>Appearance</h2><p class="account-card__hint">Choose how AlgoBot looks. These choices are saved to your account.</p></div></div>
+        <div class="account-card__header"><div><h2>Workspace preferences</h2><p class="account-card__hint">Appearance</p><p class="account-card__hint">Choose how AlgoBot looks. These choices are saved to your account.</p></div></div>
         <fieldset class="preferences-fieldset"><legend>Theme</legend><div class="preferences-choice-grid preferences-choice-grid--three">
           <label class="preferences-choice"><input type="radio" name="theme" value="light"><span class="preferences-choice__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg></span><strong>Light</strong><small>Bright surfaces</small></label>
           <label class="preferences-choice"><input type="radio" name="theme" value="dark"><span class="preferences-choice__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.2 15.1A8.7 8.7 0 0 1 8.9 3.8 8.9 8.9 0 1 0 20.2 15.1Z"/></svg></span><strong>Dark</strong><small>Low-light workspace</small></label>
@@ -35,7 +35,7 @@
         </div></fieldset>
       </section>
       <section class="account-card" id="notification-preferences">
-        <div class="account-card__header"><div><h2>Notification preferences</h2><p class="account-card__hint">Select the kinds of notifications you want to receive. Security alerts remain required.</p></div></div>
+        <div class="account-card__header"><div><h2>Notifications</h2><p class="account-card__hint">Notification preferences</p><p class="account-card__hint">Select the kinds of notifications you want to receive. Security alerts remain required.</p></div></div>
         <div class="preferences-notification-list">
           <label class="preferences-notification-row"><span class="preferences-notification-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18m-7-7 7 7 7-7M5 7l7-4 7 4"/></svg></span><span><strong>Trade alerts</strong><small>Updates related to trade execution and status.</small></span><input type="checkbox" name="trade_alerts"></label>
           <label class="preferences-notification-row"><span class="preferences-notification-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 17 9 11l4 4 8-9"/><path d="M15 6h6v6"/></svg></span><span><strong>Price alerts</strong><small>Price movements and configured market thresholds.</small></span><input type="checkbox" name="price_alerts"></label>
