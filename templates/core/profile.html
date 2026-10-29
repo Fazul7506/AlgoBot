@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Profile | AlgoBot{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261029-account-settings-global-layout5"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">{% endblock %}
 {% block content %}
 <main class="account-page" data-account-settings data-profile-page>
   <header class="account-hero">
@@ -15,7 +15,55 @@
     <nav class="account-nav" aria-label="Account settings">
       <a href="{% url 'profile_page' %}" aria-current="page">Profile</a><a href="{% url 'settings_page' %}">Preferences</a><a href="{% url 'account_identity_page' %}">Login &amp; Identity</a><a href="{% url 'security_center' %}">Security</a>
     </nav>
-    <div class="account-content"><section class="account-card profile-edit-launch"><div class="account-card__header"><div><h2>Personal information</h2><p class="account-card__hint">Review your profile details and open the editor to make changes.</p></div><button type="button" class="account-btn account-btn--primary" data-profile-edit-open>Edit profile</button></div><p class="account-help">Your personal details are private to your AlgoBot account. Login identity and broker settings remain managed separately.</p></section><div class="profile-edit-modal" data-profile-edit-modal hidden role="dialog" aria-modal="true" aria-labelledby="profile-edit-title"><div class="profile-edit-modal__panel"><div class="profile-edit-modal__heading"><div><p class="account-kicker">ACCOUNT PROFILE</p><h2 id="profile-edit-title">Edit profile</h2><p class="account-help">Update your personal information below.</p></div><button type="button" class="account-btn" data-profile-edit-close aria-label="Close profile editor">Close</button></div><form id="profile-edit-form" class="account-content profile-edit-modal__form" method="post" enctype="multipart/form-data" action="{% url 'profile_page' %}">
+    <div class="account-content profile-dashboard-content">
+      <aside class="account-card profile-summary-card" aria-label="Profile summary">
+        <div class="profile-summary-card__identity"><div class="account-profile-avatar profile-summary-card__avatar" aria-hidden="true">{% if profile.profile_picture_data or profile.avatar_url %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U.u' }}" alt="">{% else %}<span>{{ profile_initials }}</span>{% endif %}</div><div><h2>{{ request.user.get_full_name|default:request.user.username }}</h2><p>@{{ request.user.username }}</p></div></div>
+        <div class="profile-summary-card__status"><span class="account-state {% if profile.email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if profile.email_verified %}Email verified{% else %}Email not verified{% endif %}</span><span class="account-state {% if request.user.is_active %}account-state--good{% else %}account-state--bad{% endif %}">{% if request.user.is_active %}Account active{% else %}Account inactive{% endif %}</span></div>
+        <div class="profile-completion"><div class="profile-completion__label"><strong>Profile completion</strong><span>{{ profile_completion_percent }}%</span></div><div class="profile-completion__track" role="progressbar" aria-label="Profile completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ profile_completion_percent }}"><span style="width:{{ profile_completion_percent }}%"></span></div><p class="account-help">Calculated from your name, login email, country, time zone, phone and profile picture.</p></div>
+        <dl class="profile-summary-card__details"><div><dt>Username</dt><dd>{{ request.user.username }}</dd></div><div><dt>Login email</dt><dd>{{ request.user.email|default:"Not provided" }}</dd></div><div><dt>Country</dt><dd>{{ profile.country|default:"Not provided" }}</dd></div><div><dt>Time zone</dt><dd>{{ profile.timezone|default:"UTC" }}</dd></div></dl>
+        <div class="profile-quick-actions"><h3>Quick actions</h3><a href="{% url 'account_identity_page' %}">Manage login identity</a><a href="{% url 'settings_page' %}#notification-preferences">Notification preferences</a><a href="{% url 'security_center' %}">Review account security</a></div>
+      </aside>
+      <div class="profile-main-stack">
+      <section class="account-card profile-personal-card" aria-labelledby="profile-personal-title">
+        <div class="account-card__header"><div><h2 id="profile-personal-title">Personal Information</h2><p class="account-card__hint">Your saved AlgoBot profile details.</p></div><button type="button" class="account-btn account-btn--primary" data-profile-edit-open>Edit Profile</button></div>
+        <div class="profile-personal-fields">
+          <div class="profile-personal-field"><span>Full Name</span><strong>{{ request.user.get_full_name|default:"Not provided" }}</strong></div>
+          <div class="profile-personal-field"><span>Username</span><strong>{{ request.user.username }}</strong></div>
+          <div class="profile-personal-field"><span>Email Address</span><strong>{{ request.user.email|default:"Not provided" }}</strong><span class="account-state {% if profile.email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if profile.email_verified %}Verified{% else %}Not verified{% endif %}</span></div>
+          <div class="profile-personal-field"><span>Phone Number</span><strong>{{ profile.phone|default:"Not provided" }}</strong></div>
+          <div class="profile-personal-field"><span>Country</span><strong>{{ profile.country|default:"Not provided" }}</strong></div>
+          <div class="profile-personal-field"><span>Time Zone</span><strong>{{ profile.timezone|default:"UTC" }}</strong></div>
+        </div>
+      </section>
+      <div class="profile-secondary-grid">
+        <section class="account-card profile-picture-card" aria-labelledby="profile-picture-title">
+          <div class="account-card__header"><div><h2 id="profile-picture-title">Profile Picture</h2><p class="account-card__hint">Upload a new profile picture.</p></div></div>
+          <label class="profile-picture-upload" data-profile-picture-upload for="profile-picture" tabindex="0">
+            <span class="material-symbols-rounded" aria-hidden="true">cloud_upload</span>
+            <strong>Click to upload or drag and drop</strong>
+            <small>JPEG, PNG, WEBP or GIF (Max 5 MB)</small>
+          </label>
+        </section>
+        <section class="account-card profile-quick-actions-card" aria-labelledby="profile-quick-actions-title">
+          <div class="account-card__header"><div><h2 id="profile-quick-actions-title">Quick Actions</h2><p class="account-card__hint">Jump to common account controls.</p></div></div>
+          <div class="profile-quick-action-list">
+            <a href="{% url 'account_identity_page' %}"><span class="material-symbols-rounded" aria-hidden="true">lock</span><span><strong>Change Password</strong><small>Manage your sign-in credentials.</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
+            <a href="{% url 'security_center' %}"><span class="material-symbols-rounded" aria-hidden="true">verified_user</span><span><strong>Two-Factor Authentication</strong><small>Review additional sign-in protection.</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
+            <a href="{% url 'broker_marketplace_page' %}"><span class="material-symbols-rounded" aria-hidden="true">hub</span><span><strong>Manage Connected Accounts</strong><small>Review broker connections.</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
+            <a href="{% url 'settings_page' %}#notification-preferences"><span class="material-symbols-rounded" aria-hidden="true">notifications</span><span><strong>Notification Settings</strong><small>Choose account notification preferences.</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
+          </div>
+        </section>
+      </div>
+      <section class="account-card profile-security-banner" aria-label="Account security reminder">
+        <span class="material-symbols-rounded" aria-hidden="true">shield</span>
+        <div><strong>Keep your account secure</strong><p>Review email verification, password and two-factor authentication settings.</p></div>
+        <a class="account-btn account-btn--primary" href="{% url 'security_center' %}">Review Security</a>
+      </section>
+      <section class="account-card profile-activity-card" aria-labelledby="profile-activity-title">
+  <div class="account-card__header"><div><h2 id="profile-activity-title">Recent sign-in activity</h2><p class="account-card__hint">Recent authentication records associated with this account.</p></div><a class="account-btn" href="{% url 'account_identity_page' %}">Login &amp; Identity</a></div>
+  {% if recent_activity %}<div class="profile-activity-table-wrap"><table class="profile-activity-table"><thead><tr><th scope="col">Activity</th><th scope="col">Result</th><th scope="col">Time</th></tr></thead><tbody>{% for event in recent_activity %}<tr><td>{{ event.action|default:"Authentication event" }}</td><td><span class="account-state {% if event.outcome|lower == 'success' %}account-state--good{% else %}account-state--warn{% endif %}">{{ event.outcome|default:"Recorded"|title }}</span></td><td><time datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:"M j, Y H:i" }}</time></td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="account-help profile-activity-empty">No authentication activity is available for this account yet.</p>{% endif %}
+</section>
+    </div><div class="profile-edit-modal" data-profile-edit-modal hidden role="dialog" aria-modal="true" aria-labelledby="profile-edit-title"><div class="profile-edit-modal__panel"><div class="profile-edit-modal__heading"><div><p class="account-kicker">ACCOUNT PROFILE</p><h2 id="profile-edit-title">Edit profile</h2><p class="account-help">Update your personal information below.</p></div><button type="button" class="account-btn" data-profile-edit-close aria-label="Close profile editor">Close</button></div><form id="profile-edit-form" class="account-content profile-edit-modal__form" method="post" enctype="multipart/form-data" action="{% url 'profile_page' %}">
       {% csrf_token %}
       {% for message in messages %}<p class="account-alert {% if message.tags == 'error' %}account-alert--error{% elif message.tags == 'success' %}account-alert--success{% endif %}" role="status">{{ message }}</p>{% endfor %}
       <section class="account-card">
@@ -41,7 +89,10 @@
         </div>
       </section>
     </form></div></div>
+      </div>
+    </div>
   </div>
+
 
 <div class="avatar-editor" data-avatar-editor hidden role="dialog" aria-modal="true" aria-labelledby="avatar-editor-title">
   <div class="avatar-editor__panel">
@@ -71,6 +122,23 @@
     profileModal?.addEventListener('click', event => { if (event.target === profileModal) closeProfileModal(); });
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && profileModal && !profileModal.hidden) { closeProfileModal(); profileOpen?.focus(); } });
     const avatarInput = document.querySelector('#profile-picture');
+    const pictureUpload = document.querySelector('[data-profile-picture-upload]');
+    if (pictureUpload && avatarInput) {
+      pictureUpload.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); avatarInput.click(); }
+      });
+      pictureUpload.addEventListener('dragover', event => { event.preventDefault(); pictureUpload.classList.add('is-dragging'); });
+      pictureUpload.addEventListener('dragleave', () => pictureUpload.classList.remove('is-dragging'));
+      pictureUpload.addEventListener('drop', event => {
+        event.preventDefault();
+        pictureUpload.classList.remove('is-dragging');
+        const file = event.dataTransfer?.files?.[0];
+        if (!file || typeof DataTransfer !== 'function') return;
+        const transfer = new DataTransfer(); transfer.items.add(file);
+        avatarInput.files = transfer.files;
+        avatarInput.dispatchEvent(new Event('change', {bubbles:true}));
+      });
+    }
     const avatar = document.querySelector('[data-avatar-preview]');
     if (avatarInput && avatar) {
       const editor = document.querySelector('[data-avatar-editor]');

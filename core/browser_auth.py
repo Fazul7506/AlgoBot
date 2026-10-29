@@ -385,6 +385,14 @@ def reset_password_page(request, token=None):
 def account_identity_page(request):
     user = request.user
     profile, _ = UserProfile.objects.get_or_create(user=user)
+    # Show real, account-scoped authentication audit records only. Device and
+    # location data are omitted because the current audit contract does not
+    # provide trustworthy device/location fields.
+    from apps.observability.models import AuditEvent
+    login_events = list(
+        AuditEvent.objects.filter(actor_id=user.pk, resource_type="Authentication")
+        .order_by("-created_at")[:10]
+    )
     if request.method == "POST" and request.POST.get("identity_action") == "change_password":
         current_password = request.POST.get("current_password") or ""
         new_password = request.POST.get("new_password") or ""
@@ -439,6 +447,7 @@ def account_identity_page(request):
                 "username": username or user.username, "email": email or user.email,
                 "email_verified": profile.email_verified,
                 "password_required": user.has_usable_password(), "google_identity_linked": GoogleIdentity.objects.filter(user=user, provider="google").exists(), "errors": errors,
+                "login_events": login_events,
             })
         if username_changed:
             user.username = username
@@ -459,8 +468,11 @@ def account_identity_page(request):
     return render(request, "core/account_identity.html", {
         "username": user.username, "email": user.email,
         "email_verified": profile.email_verified,
+        "profile": profile,
+        "two_factor_enabled": bool(profile.two_factor_enabled),
         "password_required": user.has_usable_password(),
         "google_identity_linked": GoogleIdentity.objects.filter(user=user, provider="google").exists(),
+        "login_events": login_events,
     })
 
 

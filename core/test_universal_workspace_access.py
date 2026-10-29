@@ -114,7 +114,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             ("Analysis", "/analysis/"),
             ("Notifications", "/notifications/"),
             ("Audit Log", "/operations/audit/"),
-            ("Security Center", "/operations/security/"),
+            ("Account Settings", "/settings/"),
             ("Developer & API", "/developer/"),
         ):
             with self.subTest(label=label):

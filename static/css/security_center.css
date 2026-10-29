@@ -3,10 +3,10 @@
 [data-security-page] .account-hero{align-items:center;padding:clamp(18px,2.5vw,30px);border:1px solid var(--security-border);border-radius:16px;background:radial-gradient(ellipse at 82% 20%,rgba(18,93,174,.24),transparent 44%),linear-gradient(120deg,#081a34,#07152a);margin-bottom:18px}
 [data-security-page] .account-hero h1{display:flex;align-items:center;gap:12px}
 .security-title-icon{display:grid;place-items:center;width:58px;height:58px;border-radius:18px;background:linear-gradient(145deg,#1689ff,#1246a4);color:#fff;font-size:32px;box-shadow:0 8px 28px #0068ff33}
-[data-security-page] .account-layout{grid-template-columns:190px minmax(0,1fr);gap:16px}
+[data-security-page] .account-layout{grid-template-columns:minmax(0,1fr);gap:14px}
 [data-security-page] .account-nav{background:#061326;border-color:var(--security-border)}
 [data-security-page] .account-nav a[aria-current=page]{background:linear-gradient(90deg,#0b4c91,#0c3768);color:#fff}
-[data-security-page] .account-content{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:stretch}
+[data-security-page] .account-content{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:stretch}
 .security-status-banner,.security-summary-grid,.security-two-column,.security-tips-panel,.security-events-panel,.security-protection-checks,.security-two-factor,.account-content>.account-card{grid-column:1/-1;min-width:0}
 .security-status-banner{display:flex;align-items:center;gap:16px;padding:20px;border:1px solid var(--security-border);border-radius:15px;background:radial-gradient(ellipse at right,#0b2e56,transparent 60%),#07172d}
 .security-banner-icon{display:grid;place-items:center;flex:0 0 64px;height:64px;border-radius:20px;background:linear-gradient(145deg,#168bff,#1747a7);font-size:36px;color:white}
@@ -117,3 +117,30 @@
 .security-sms-backup-status strong{display:block;color:#f0e5cf;font-size:11px}
 .security-sms-backup-status p{margin:4px 0 0;color:#b9b0a0;font-size:10px;line-height:1.55}
 @media(max-width:700px){.security-sms-backup-status{flex-wrap:wrap}.security-sms-backup-status>.security-pill{margin-left:45px}}
+
+@media(max-width:600px){
+ [data-security-page] .account-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;scroll-snap-type:none}
+ [data-security-page] .account-nav a{min-width:0;min-height:44px;flex:none;white-space:normal;line-height:1.25;padding:9px 7px;font-size:11px;border-right:1px solid var(--security-border);border-bottom:1px solid var(--security-border)}
+ [data-security-page] .account-nav a:nth-last-child(-n+2){border-bottom:0}
+}
+
+/* Security reference layout: overview and MFA on the left; password, trusted devices and alerts on the right. */
+[data-security-page] .account-content.security-dashboard{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+[data-security-page] .security-dashboard>.security-status-banner{grid-column:1;grid-row:1}
+[data-security-page] .security-dashboard>.security-summary-grid{grid-column:1;grid-row:2;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start}
+[data-security-page] .security-dashboard>.security-password-management{grid-column:2;grid-row:1/span 2;display:flex;flex-direction:column;gap:12px}
+[data-security-page] .security-dashboard>.security-two-column{grid-column:1/-1;grid-row:3;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+[data-security-page] .security-two-column>.security-two-factor{grid-column:1}
+[data-security-page] .security-two-column>.trusted-devices-card{grid-column:2}
+[data-security-page] .security-dashboard>.security-reassurance-banner{grid-column:1;grid-row:4;display:grid;grid-template-columns:36px minmax(0,1fr);align-items:center;gap:10px;padding:16px;border:1px solid var(--security-border);border-radius:14px;background:var(--security-panel);color:var(--security-text)}
+[data-security-page] .security-reassurance-banner>.material-symbols-rounded{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--security-panel-2);color:var(--security-accent);font-size:24px}
+[data-security-page] .security-reassurance-banner strong{display:block}
+[data-security-page] .security-reassurance-banner p{margin:4px 0 0;color:var(--security-muted);font-size:12px}
+[data-security-page] .security-dashboard>.security-alerts-card{grid-column:2;grid-row:4}
+@media(max-width:900px){
+ [data-security-page] .account-content.security-dashboard{grid-template-columns:minmax(0,1fr)}
+ [data-security-page] .security-dashboard>.security-status-banner,[data-security-page] .security-dashboard>.security-summary-grid,[data-security-page] .security-dashboard>.security-password-management,[data-security-page] .security-dashboard>.security-two-column,[data-security-page] .security-dashboard>.security-reassurance-banner,[data-security-page] .security-dashboard>.security-alerts-card{grid-column:1;grid-row:auto}
+ [data-security-page] .security-dashboard>.security-summary-grid{grid-template-columns:minmax(0,1fr)}
+ [data-security-page] .security-dashboard>.security-two-column{grid-template-columns:minmax(0,1fr)}
+ [data-security-page] .security-two-column>.security-two-factor,[data-security-page] .security-two-column>.trusted-devices-card{grid-column:1}
+}

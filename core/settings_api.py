@@ -26,6 +26,11 @@ ACCOUNT_PREFERENCE_DEFAULTS = {
     "theme": "dark",
     "density": "default",
     "accent": "cyan",
+    "layout": "classic",
+    "chart_position": "right",
+    "default_page": "dashboard",
+    "auto_refresh_interval": "realtime",
+    "refresh_frequency": "1m",
     "notification_categories": {
         "trade_alerts": True,
         "price_alerts": True,
@@ -38,6 +43,11 @@ ACCOUNT_PREFERENCE_CHOICES = {
     "theme": {"light", "dark", "system"},
     "density": {"compact", "default", "comfortable"},
     "accent": {"cyan", "blue", "teal", "violet", "amber"},
+    "layout": {"classic", "wide", "focus"},
+    "chart_position": {"right", "left", "bottom"},
+    "default_page": {"dashboard", "markets", "analysis", "terminal", "positions"},
+    "auto_refresh_interval": {"realtime", "15s", "30s", "60s", "5m", "manual"},
+    "refresh_frequency": {"15s", "30s", "1m", "5m", "15m"},
 }
 ACCOUNT_NOTIFICATION_CATEGORIES = set(ACCOUNT_PREFERENCE_DEFAULTS["notification_categories"])
 SUPPORTED_TIME_ZONES = available_timezones()

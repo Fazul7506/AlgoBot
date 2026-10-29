@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Preferences | AlgoBot{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1"><link rel="stylesheet" href="{% static 'css/account_preferences.css' %}?v=20261028-preferences1">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261029-account-settings-global-layout5"><link rel="stylesheet" href="{% static 'css/account_preferences.css' %}?v=20261028-preferences1">{% endblock %}
 {% block content %}
 <main class="account-page" data-account-settings data-settings-page>
   <header class="account-hero">
@@ -53,17 +53,28 @@
         </div>
         <div class="account-actions"><a class="account-btn" href="/notifications/">Manage notification channels</a></div>
       </section>
+      <section class="account-card" id="layout-preferences">
+        <div class="account-card__header"><div><h2>Layout Preferences</h2><p class="account-card__hint">Customize how workspace content is arranged.</p></div></div>
+        <div class="account-fields"><div class="account-field"><label for="settings-layout">Default layout</label><select id="settings-layout" name="layout"><option value="classic">Classic (sidebar + main panel)</option><option value="wide">Wide workspace</option><option value="focus">Focus workspace</option></select><span class="account-help">Applied globally as a workspace layout preference.</span></div><div class="account-field"><label for="settings-chart-position">Chart position</label><select id="settings-chart-position" name="chart_position"><option value="right">Right side</option><option value="left">Left side</option><option value="bottom">Below main content</option></select><span class="account-help">Controls the chart position in the Analysis workspace.</span></div><div class="account-field"><label for="settings-default-page">Default page</label><select id="settings-default-page" name="default_page"><option value="dashboard">Dashboard</option><option value="markets">Markets</option><option value="analysis">Analysis</option><option value="terminal">Terminal</option><option value="positions">Positions</option></select><span class="account-help">Used when opening the Dashboard entry point.</span></div></div>
+      </section>
       <section class="account-card" id="data-display">
-        <div class="account-card__header"><div><h2>Data &amp; display</h2><p class="account-card__hint">Set the time zone used by profile and account timestamps.</p></div></div>
-        <div class="account-fields">
-          <div class="account-field"><label for="settings-timezone">Time zone</label><select id="settings-timezone" name="timezone" autocomplete="off"><option value="UTC">UTC</option><option value="Africa/Nairobi">Africa/Nairobi (EAT)</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New_York</option><option value="Asia/Tokyo">Asia/Tokyo</option><option value="Australia/Sydney">Australia/Sydney</option></select><span class="account-help">This updates your saved profile time zone. Other pages must use this profile setting when formatting dates.</span></div>
-          
-        </div>
+        <div class="account-card__header"><div><h2>Data &amp; Display</h2><p class="account-card__hint">Set the time zone used by profile and account timestamps, plus refresh behavior.</p></div></div>
+        <div class="account-fields"><div class="account-field"><label for="settings-timezone">Time zone</label><select id="settings-timezone" name="timezone" autocomplete="off"><option value="UTC">UTC</option><option value="Africa/Nairobi">Africa/Nairobi (EAT)</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New_York</option><option value="Asia/Tokyo">Asia/Tokyo</option><option value="Australia/Sydney">Australia/Sydney</option></select><span class="account-help">This updates your saved profile time zone. Other pages must use this profile setting when formatting dates.</span></div><div class="account-field"><label for="settings-auto-refresh">Auto-refresh interval</label><select id="settings-auto-refresh" name="auto_refresh_interval"><option value="realtime">Real-time (default)</option><option value="15s">15 seconds</option><option value="30s">30 seconds</option><option value="60s">60 seconds</option><option value="5m">5 minutes</option><option value="manual">Manual</option></select><span class="account-help">Manual disables scheduled refresh for supported consumers.</span></div><div class="account-field"><label for="settings-refresh-frequency">Data refresh frequency</label><select id="settings-refresh-frequency" name="refresh_frequency"><option value="15s">15 seconds</option><option value="30s">30 seconds</option><option value="1m">1 minute</option><option value="5m">5 minutes</option><option value="15m">15 minutes</option></select></div></div>
       </section>
       <aside class="preferences-profile-summary">
         <div class="preferences-profile-summary__mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
         <div><h2 data-preferences-user>Account preferences</h2><p data-preferences-email>Settings apply to your signed-in AlgoBot account.</p><p class="account-help">Use Profile to update personal details and Login &amp; Identity to manage sign-in credentials.</p></div>
       </aside>
+      <aside class="preferences-quick-preferences" aria-labelledby="preferences-quick-title">
+        <div class="account-card__header"><div><h2 id="preferences-quick-title">Quick Preferences</h2><p class="account-card__hint">Jump to the most important settings.</p></div></div>
+        <div class="preferences-quick-list">
+          <a href="#appearance"><span class="material-symbols-rounded" aria-hidden="true">palette</span><span><strong>Change Theme</strong><small>Switch between Light, Dark and System.</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
+          <a href="#notification-preferences"><span class="material-symbols-rounded" aria-hidden="true">notifications</span><span><strong>Notification Settings</strong><small>Manage alerts and delivery channels.</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
+          <a href="#data-display"><span class="material-symbols-rounded" aria-hidden="true">language</span><span><strong>Language &amp; Region</strong><small>Choose your time zone and regional display.</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
+          <a href="#data-display"><span class="material-symbols-rounded" aria-hidden="true">tune</span><span><strong>Data &amp; Display</strong><small>Customize refresh and display options.</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
+        </div>
+      </aside>
+      <aside class="preferences-experience-panel" aria-labelledby="preferences-experience-title"><p class="account-kicker">ALGOBOT WORKSPACE</p><h2 id="preferences-experience-title">Your workspace, your way</h2><p>Appearance, density, accent, notification categories, time zone, layout and refresh preferences are saved to your account. Refresh scheduling is applied to Dashboard, Analysis, Market Scanner, Risk and Monitoring; chart placement is applied to the Analysis workspace.</p><div class="preferences-quick-links"><a href="{% url 'profile_page' %}">Profile</a><a href="{% url 'account_identity_page' %}">Login &amp; Identity</a><a href="{% url 'security_center' %}">Security</a></div></aside>
       <div class="account-actions preferences-save-row"><button type="submit" class="account-btn account-btn--primary" data-save-settings disabled>Save preferences</button><span class="account-help" role="status" aria-live="polite" data-settings-message></span></div>
     </form>
   </div>
@@ -78,6 +89,18 @@
   const saveButton = root.querySelector('[data-save-settings]');
   const csrf = form.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
   const field = name => form.elements.namedItem(name);
+  let lastSavedFormState = null;
+  const captureFormState = () => [...form.elements].filter(control => control.name).map(control => ({name:control.name,type:control.type,value:control.value,checked:control.checked}));
+  const restoreFormState = state => {
+    if (!state) return;
+    state.forEach(saved => {
+      const control = [...form.elements].find(item => item.name === saved.name && item.type === saved.type && item.value === saved.value);
+      if (!control) return;
+      if (control.type === 'checkbox' || control.type === 'radio') control.checked = saved.checked;
+      else if (control.type !== 'submit' && control.type !== 'button') control.value = saved.value;
+    });
+    applyAppearance({theme:form.querySelector('input[name="theme"]:checked')?.value || 'dark',density:form.querySelector('input[name="density"]:checked')?.value || 'default',accent:form.querySelector('input[name="accent"]:checked')?.value || 'cyan'});
+  };
   const setRadio = (name, value) => { const input = form.querySelector('input[name="' + name + '"][value="' + value + '"]'); if (input) input.checked = true; };
   const check = (name, value) => { if (field(name)) field(name).checked = Boolean(value); };
   const request = async (method, body) => {
@@ -100,6 +123,11 @@
     html.dataset.theme = theme;
     html.dataset.density = prefs.density || 'default';
     html.dataset.accent = prefs.accent || 'cyan';
+    html.dataset.layout = prefs.layout || 'classic';
+    html.dataset.chartPosition = prefs.chart_position || 'right';
+    html.dataset.autoRefresh = prefs.auto_refresh_interval || 'realtime';
+    html.dataset.refreshFrequency = prefs.refresh_frequency || '1m';
+    html.dataset.defaultPage = prefs.default_page || 'dashboard';
   };
   async function load() {
     const data = await request('GET');
@@ -108,6 +136,7 @@
     setRadio('theme', prefs.theme || 'dark');
     setRadio('density', prefs.density || 'default');
     setRadio('accent', prefs.accent || 'cyan');
+    ['layout','chart_position','default_page','auto_refresh_interval','refresh_frequency'].forEach(name => { if (field(name)) field(name).value = prefs[name] || ({layout:'classic',chart_position:'right',default_page:'dashboard',auto_refresh_interval:'realtime',refresh_frequency:'1m'}[name]); });
     const categories = prefs.notification_categories || {};
     ['trade_alerts','price_alerts','market_news','system_updates'].forEach(name => check(name, categories[name] !== false));
     check('security_alerts', true);
@@ -124,6 +153,8 @@
     root.querySelector('[data-preferences-user]').textContent = username;
     root.querySelector('[data-preferences-email]').textContent = email;
     applyAppearance(prefs);
+    document.dispatchEvent(new CustomEvent('algobot:preferences-loaded', {detail: prefs}));
+    lastSavedFormState = captureFormState();
     status.textContent = 'Preferences loaded';
     status.classList.remove('account-state--warn','account-state--bad'); status.classList.add('account-state--good');
     saveButton.disabled = false;
@@ -142,6 +173,11 @@
       theme: form.querySelector('input[name="theme"]:checked')?.value || 'dark',
       density: form.querySelector('input[name="density"]:checked')?.value || 'default',
       accent: form.querySelector('input[name="accent"]:checked')?.value || 'cyan',
+      layout: field('layout').value,
+      chart_position: field('chart_position').value,
+      default_page: field('default_page').value,
+      auto_refresh_interval: field('auto_refresh_interval').value,
+      refresh_frequency: field('refresh_frequency').value,
       notification_categories: {
         trade_alerts: field('trade_alerts').checked,
         price_alerts: field('price_alerts').checked,
@@ -156,17 +192,29 @@
       email_notifications_enabled: field('email_notifications_enabled').checked,
       telegram_notifications_enabled: field('telegram_notifications_enabled').checked
     };
+    const submittedFormState = captureFormState();
+    // Lock the controls while this request is in flight. Otherwise users can
+    // change values after the payload is built and see unsaved values presented
+    // as though they were persisted by this request.
+    const controls = [...form.elements].filter(control => control !== saveButton);
+    controls.forEach(control => { control.disabled = true; });
     try {
       const data = await request('PATCH', {profile, preferences});
       applyAppearance(preferences);
+      document.dispatchEvent(new CustomEvent('algobot:preferences-loaded', {detail: preferences}));
+      lastSavedFormState = submittedFormState;
       message.textContent = data.message || 'Preferences saved.';
       status.textContent = 'Preferences saved';
       status.classList.remove('account-state--warn','account-state--bad'); status.classList.add('account-state--good');
     } catch (error) {
-      message.textContent = error.message || 'Could not save preferences.';
+      restoreFormState(lastSavedFormState);
+      message.textContent = error.message || 'Could not save preferences. Your previous saved settings have been restored.';
       status.textContent = 'Save failed';
       status.classList.remove('account-state--good'); status.classList.add('account-state--bad');
-    } finally { saveButton.disabled = false; }
+    } finally {
+      controls.forEach(control => { control.disabled = false; });
+      saveButton.disabled = false;
+    }
   });
   load().catch(error => {
     status.textContent = 'Could not load preferences'; status.classList.add('account-state--bad');

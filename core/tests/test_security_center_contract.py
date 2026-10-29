@@ -38,7 +38,10 @@ class SecurityCenterContractTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["keys_count"], 1)
-        self.assertContains(response, "active developer key")
+        # API-key lifecycle remains tracked by the backend, but is not mixed
+        # into the personal account-security overview UI.
+        self.assertNotContains(response, "active developer key")
+        self.assertNotContains(response, "Developer key expiry")
 
     def test_expired_active_key_is_reported_as_needing_attention(self):
         self._key(self.user, "expired", expires_at=timezone.now() - timedelta(seconds=1))
@@ -47,5 +50,5 @@ class SecurityCenterContractTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["keys_count"], 0)
-        self.assertContains(response, "Developer key expiry")
-        self.assertContains(response, "Needs attention")
+        self.assertNotContains(response, "Developer key expiry")
+        self.assertNotContains(response, "Needs attention")

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1"><script>
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261029-account-settings-global-layout5"><script>
 document.addEventListener("click", event => { const button = event.target.closest("[data-password-toggle]"); if (!button) return; const input = button.closest(".account-password-control")?.querySelector("[data-password-field]"); if (!input) return; const show = input.type === "password"; input.type = show ? "text" : "password"; button.textContent = show ? "Hide" : "Show"; button.setAttribute("aria-label", show ? "Hide password" : "Show password"); });
 
 document.addEventListener("submit", event => {
@@ -56,6 +56,14 @@ document.addEventListener("submit", event => {
       </div>
     </form>
 
+    <section class="account-card identity-verification-card" aria-labelledby="identity-verification-title">
+      <div class="account-card__header"><div><h2 id="identity-verification-title">Identity Verification</h2><p class="account-card__hint">Verification status comes from your saved account records.</p></div><span class="account-state {% if email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if email_verified %}Email verified{% else %}Email not verified{% endif %}</span></div>
+      <div class="identity-verification-grid">
+        <div><span>Full Name</span><strong>{{ request.user.get_full_name|default:"Not provided" }}</strong></div>
+        <div><span>Email Address</span><strong>{{ email|default:"Not provided" }}</strong></div>
+        <div><span>Phone Number</span><strong>{{ profile.phone|default:"Not provided" }}</strong><small>Phone verification status is not exposed by the current profile API.</small></div>
+      </div>
+    </section>
     <form class="account-card" method="post" action="{% url 'account_identity_page' %}" data-password-change>
       {% csrf_token %}
       <input type="hidden" name="identity_action" value="change_password">
@@ -85,6 +93,26 @@ document.addEventListener("submit", event => {
         <a class="account-btn account-btn--google" href="/auth/google/?intent=link"><svg aria-hidden="true" viewBox="0 0 48 48" width="20" height="20"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 3.03 13.22l7.98 6.19C12.9 13.72 18.01 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.72 7.18l7.62 5.91c4.45-4.11 7.14-10.16 7.14-17.56z"/><path fill="#FBBC05" d="M11.01 28.59A14.5 14.5 0 0 1 10.25 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.52 3.03 10.78l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.89l-7.62-5.91c-2.12 1.42-4.83 2.27-8.28 2.27-5.99 0-11.1-4.22-12.99-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Continue with Google</span></a>
       {% endif %}
     </aside>
+    <section class="account-card identity-activity-card" aria-labelledby="identity-activity-title">
+      <div class="account-card__header"><div><h2 id="identity-activity-title">Login activity</h2><p class="account-card__hint">Authentication events recorded for this account. IP addresses and credentials are not shown.</p></div></div>
+      {% if login_events %}<div class="profile-activity-table-wrap"><table class="profile-activity-table"><thead><tr><th scope="col">Event</th><th scope="col">Method</th><th scope="col">Result</th><th scope="col">Time</th></tr></thead><tbody>{% for event in login_events %}<tr><td>{{ event.action|default:"Authentication event" }}</td><td>{{ event.metadata.method|default:"Not recorded"|title }}</td><td><span class="account-state {% if event.outcome|lower == 'success' %}account-state--good{% else %}account-state--warn{% endif %}">{{ event.outcome|default:"Recorded"|title }}</span></td><td><time datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:"M j, Y H:i" }}</time></td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="account-help profile-activity-empty">No authentication events are available for this account yet.</p>{% endif %}
+    </section>
+    <section class="account-card identity-sessions-card" aria-labelledby="identity-sessions-title" data-session-panel>
+      <div class="account-card__header"><div><h2 id="identity-sessions-title">Active sessions</h2><p class="account-card__hint">Real signed-in browser sessions. Device names and locations are shown only when the backend provides them.</p></div><button type="button" class="account-btn" data-revoke-other-sessions disabled>Sign out other sessions</button></div>
+      <p class="account-help" data-session-status role="status" aria-live="polite">Loading active sessions…</p>
+      <div class="identity-session-list" data-session-list aria-live="polite"><p class="account-help">Loading session inventory…</p></div>
+    </section>
+
+    <section class="account-card identity-mfa-card" aria-labelledby="identity-mfa-title">
+      <div class="account-card__header"><div><h2 id="identity-mfa-title">Two-Factor Authentication (2FA)</h2><p class="account-card__hint">Add an extra layer of protection to sign-in.</p></div><span class="account-state {% if two_factor_enabled %}account-state--good{% else %}account-state--warn{% endif %}">{% if two_factor_enabled %}Enabled{% else %}Not enabled{% endif %}</span></div>
+      <p class="account-help">{% if two_factor_enabled %}An authenticator is configured for this account.{% else %}Two-factor authentication is not enabled for this account yet.{% endif %}</p>
+      <div class="account-actions"><a class="account-btn account-btn--primary" href="{% url 'security_center' %}#security-two-factor">Manage 2FA</a></div>
+    </section>
+    <section class="account-card identity-security-banner" aria-label="Account security summary">
+      <span class="material-symbols-rounded" aria-hidden="true">shield</span>
+      <div><strong>Your account security</strong><p>Email verification, two-factor authentication and session controls are available from these account settings.</p></div>
+      <a class="account-btn" href="{% url 'security_center' %}">Open Security</a>
+    </section>
   </div></div>
 </main>
 <script>
@@ -97,5 +125,85 @@ document.addEventListener('input',function(event){
  if(bar)bar.style.width=(score*20)+'%';
  if(label)label.textContent=!value?'Use 12 or more characters':score<=2?'Weak — add length and character variety':score<=3?'Fair — improve character variety':score===4?'Strong':'Very strong';
 });
+</script>
+<script>
+(() => {
+  const panel = document.querySelector('[data-session-panel]');
+  if (!panel) return;
+  const list = panel.querySelector('[data-session-list]');
+  const status = panel.querySelector('[data-session-status]');
+  const revokeOthers = panel.querySelector('[data-revoke-other-sessions]');
+  const csrf = () => {
+    const field = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (field?.value) return field.value;
+    const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  };
+  const request = async (url, method = 'GET') => {
+    const token = csrf();
+    const response = await fetch(url, {method, credentials:'same-origin', headers:{Accept:'application/json', ...(method !== 'GET' && token ? {'X-CSRFToken':token} : {})}});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || 'The session request failed. Please retry.');
+    return data;
+  };
+  let sessions = [];
+  const makeText = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; node.textContent = text; return node; };
+  const revoke = async session => {
+    if (!session || session.current) return;
+    const button = list.querySelector(`[data-revoke-session="${session.id}"]`);
+    if (button) { button.disabled = true; button.textContent = 'Signing out…'; }
+    try {
+      await request(`/api/security/sessions/${encodeURIComponent(session.id)}/revoke/`, 'POST');
+      status.textContent = 'Session signed out successfully.';
+      await load();
+    } catch (error) {
+      status.textContent = error.message || 'Could not sign out that session.';
+      if (button) { button.disabled = false; button.textContent = 'Sign out'; }
+    }
+  };
+  async function load() {
+    status.textContent = 'Refreshing session inventory…';
+    try {
+      const data = await request('/api/security/sessions/');
+      sessions = Array.isArray(data.sessions) ? data.sessions : [];
+      list.replaceChildren();
+      if (!sessions.length) list.append(makeText('p','account-help','No active browser sessions were returned for this account.'));
+      sessions.forEach(session => {
+        const row = makeText('article','identity-session-row','');
+        const detail = makeText('div','identity-session-row__detail','');
+        detail.append(makeText('strong','',session.current ? 'Current session' : (session.device || 'Other signed-in browser')));
+        const expiry = session.expires_at ? new Date(session.expires_at) : null;
+        detail.append(makeText('small','',expiry && !Number.isNaN(expiry.getTime()) ? `Session expires ${expiry.toLocaleString()}` : 'Expiry time unavailable'));
+        const badge = makeText('span',session.current ? 'account-state account-state--good' : 'account-state',session.current ? 'Current' : 'Active');
+        row.append(detail,badge);
+        if (!session.current && data.revocation_supported) {
+          const button = makeText('button','account-btn identity-session-revoke','Sign out');
+          button.type = 'button'; button.dataset.revokeSession = session.id;
+          button.addEventListener('click', () => revoke(session));
+          row.append(button);
+        }
+        list.append(row);
+      });
+      const otherCount = sessions.filter(session => !session.current).length;
+      revokeOthers.disabled = !data.revocation_supported || otherCount === 0;
+      status.textContent = `${sessions.length} active session${sessions.length === 1 ? '' : 's'} found.`;
+    } catch (error) {
+      list.replaceChildren(makeText('p','account-help','Session inventory is currently unavailable. No session status has been assumed.'));
+      revokeOthers.disabled = true;
+      status.textContent = error.message || 'Could not load active sessions. Retry by refreshing this page.';
+    }
+  }
+  revokeOthers.addEventListener('click', async () => {
+    const others = sessions.filter(session => !session.current);
+    if (!others.length) return;
+    revokeOthers.disabled = true;
+    status.textContent = `Signing out ${others.length} other session${others.length === 1 ? '' : 's'}…`;
+    const results = await Promise.allSettled(others.map(session => request(`/api/security/sessions/${encodeURIComponent(session.id)}/revoke/`, 'POST')));
+    const failed = results.filter(result => result.status === 'rejected').length;
+    status.textContent = failed ? `${others.length - failed} session(s) signed out; ${failed} could not be signed out.` : 'All other sessions have been signed out.';
+    await load();
+  });
+  load();
+})();
 </script>
 {% endblock %}

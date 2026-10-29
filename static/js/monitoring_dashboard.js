@@ -210,9 +210,16 @@
   let liveTimer = null;
   if (logBody) {
     loadLogs(true);
-    liveTimer = window.setInterval(() => {
-      if (!livePaused && !viewingOlder && document.visibilityState === 'visible') loadLogs(true);
-    }, 15000);
+    const scheduleLiveRefresh = () => {
+      if (liveTimer !== null) window.clearInterval(liveTimer);
+      if (window.AlgoBotPreferences?.autoRefreshEnabled?.() === false) return;
+      liveTimer = window.setInterval(() => {
+        if (!livePaused && !viewingOlder && document.visibilityState === 'visible') loadLogs(true);
+      }, window.AlgoBotPreferences?.intervalMs?.(15000) || 15000);
+    };
+    scheduleLiveRefresh();
+    document.addEventListener('algobot:preferences-loaded', scheduleLiveRefresh);
+    window.addEventListener('algobot:preferences-updated', scheduleLiveRefresh);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && !livePaused && !viewingOlder) loadLogs(true);
     });

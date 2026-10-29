@@ -153,7 +153,9 @@
 
   const start = () => {
     clearInterval(timer);
-    timer = setInterval(scan, 30000);
+    const delay = window.AlgoBotPreferences?.intervalMs?.(30000) || 30000;
+    if (window.AlgoBotPreferences?.autoRefreshEnabled?.() === false) return;
+    timer = setInterval(scan, delay);
   };
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
@@ -167,4 +169,6 @@
 
   scan();
   start();
+  document.addEventListener('algobot:preferences-loaded', start);
+  window.addEventListener('algobot:preferences-updated', start);
 })();

@@ -290,3 +290,20 @@ class GoogleIdentity(models.Model):
 
     def __str__(self):
         return f"{self.provider} identity for user {self.user_id}"
+
+
+class TrustedDevice(models.Model):
+    """User-approved browser trust record; bearer token is stored only as a hash."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="trusted_devices")
+    name = models.CharField(max_length=100, default="Trusted browser")
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-last_seen_at", "-created_at"]
+        indexes = [models.Index(fields=["user", "revoked_at"], name="core_trust_user_rev_idx")]
+
+    def __str__(self):
+        return f"{self.name} for user {self.user_id}"

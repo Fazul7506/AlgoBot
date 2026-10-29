@@ -1,6 +1,7 @@
 import io
 import json
 import re
+from pathlib import Path
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock, patch
@@ -11,6 +12,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
+from apps.observability.models import AuditEvent
 from core.models import UserProfile
 
 
@@ -35,6 +37,18 @@ class AccountSettingsPagesTests(TestCase):
         self.assertContains(response, "Email not verified")
         self.assertContains(response, "topbar-profile-unverified")
         self.assertNotContains(response, "AlgoBot account</span>")
+
+    def test_profile_summary_uses_real_completion_fields_and_user_scoped_auth_activity(self):
+        AuditEvent.objects.create(actor_id=self.user.pk, action="login_success", resource_type="Authentication", outcome="success", metadata={"method": "password"})
+        AuditEvent.objects.create(actor_id=self.other_user.pk, action="login_failed", resource_type="Authentication", outcome="failed", metadata={"method": "password"})
+        response = self.client.get(reverse("profile_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Profile completion")
+        self.assertContains(response, "Recent sign-in activity")
+        self.assertContains(response, "login_success")
+        self.assertNotContains(response, "login_failed")
+        self.assertEqual(response.context["profile_completion_percent"], 29)
+        self.assertEqual(len(response.context["recent_activity"]), 1)
 
     def test_profile_page_renders_editable_fields_and_settings_navigation(self):
         response = self.client.get(reverse("profile_page"))
@@ -174,6 +188,69 @@ class AccountSettingsPagesTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, "")
 
+    def test_global_theme_and_accent_contract_is_loaded_on_every_page(self):
+        response = self.client.get(reverse("settings_page"))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode("utf-8")
+        self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract11", html)
+        self.assertIn("localStorage.getItem('algobot-theme')", html)
+        css = (Path(__file__).resolve().parents[2] / "static/css/account_preferences_global.css").read_text()
+        for theme in ("dark", "light"):
+            self.assertIn(f'html[data-theme="{theme}"]', css)
+        for accent in ("cyan", "blue", "teal", "violet", "amber"):
+            self.assertIn(f'data-accent="{accent}"', css)
+        self.assertIn("--ds-surface-1:var(--panel)", css)
+        self.assertIn("overflow-wrap:anywhere", css)
+        self.assertIn('data-chart-position="left"', css)
+        self.assertIn('data-chart-position="right"', css)
+        analysis_template = (Path(__file__).resolve().parents[2] / "templates/core/analysis.html").read_text()
+        self.assertIn('data-chart-layout="side-by-side"', analysis_template)
+        self.assertIn('data-chart-panel', analysis_template)
+        profile_template = (Path(__file__).resolve().parents[2] / "templates/core/profile.html").read_text()
+        self.assertIn('profile-personal-fields', profile_template)
+        self.assertIn('profile-picture-upload', profile_template)
+        self.assertIn('profile-quick-action-list', profile_template)
+        self.assertIn('profile-security-banner', profile_template)
+        self.assertContains(response, 'name="layout"')
+        self.assertContains(response, 'name="chart_position"')
+        self.assertContains(response, 'name="default_page"')
+        self.assertContains(response, 'name="auto_refresh_interval"')
+        self.assertContains(response, 'name="refresh_frequency"')
+        self.assertContains(response, 'id="layout-preferences"')
+        self.assertContains(response, 'class="preferences-quick-preferences"')
+        settings_template = (Path(__file__).resolve().parents[2] / "templates/core/settings.html").read_text()
+        self.assertIn("Layout Preferences", settings_template)
+        self.assertIn("Quick Preferences", settings_template)
+        account_css = (Path(__file__).resolve().parents[2] / "static/css/account_settings.css").read_text()
+        self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;scroll-snap-type:none", account_css)
+
+    def test_primary_sidebar_uses_account_settings_label(self):
+        response = self.client.get(reverse("settings_page"))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode("utf-8")
+        self.assertIn('<span>Account Settings</span>', html)
+        self.assertNotIn('<span>Security Center</span></a>', html)
+
+    def test_login_identity_loads_real_session_inventory_and_revoke_controls(self):
+        response = self.client.get(reverse("account_identity_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-session-panel")
+        self.assertContains(response, "data-session-list")
+        self.assertContains(response, "data-revoke-other-sessions")
+        self.assertContains(response, "/api/security/sessions/")
+        self.assertNotContains(response, "The current backend does not expose an account-scoped session inventory")
+
+    def test_login_identity_renders_only_current_users_authentication_events(self):
+        AuditEvent.objects.create(actor_id=self.user.pk, action="login_success", resource_type="Authentication", outcome="success", metadata={"method": "password"})
+        AuditEvent.objects.create(actor_id=self.other_user.pk, action="login_failed", resource_type="Authentication", outcome="failed", metadata={"method": "password"})
+        response = self.client.get(reverse("account_identity_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Login activity")
+        self.assertContains(response, "login_success")
+        self.assertNotContains(response, "login_failed")
+        self.assertContains(response, "Active sessions")
+        self.assertEqual(len(response.context["login_events"]), 1)
+
     def test_settings_and_security_pages_render_for_authenticated_user(self):
         settings_response = self.client.get(reverse("settings_page"))
         security_response = self.client.get(reverse("security_center"))
@@ -181,7 +258,8 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(security_response.status_code, 200)
         self.assertContains(settings_response, "Workspace preferences")
         self.assertContains(settings_response, "Notifications")
-        self.assertContains(security_response, "Protection checks")
+        self.assertContains(security_response, "Password Management")
+        self.assertNotContains(security_response, "Protection checks")
 
     def test_all_account_settings_pages_share_reference_header_and_four_tab_navigation(self):
         urls = (
@@ -198,7 +276,7 @@ class AccountSettingsPagesTests(TestCase):
                 self.assertContains(response, "data-account-settings")
                 self.assertContains(response, "Login &amp; Identity")
                 html = response.content.decode("utf-8")
-                self.assertIn("reference-unified1", html)
+                self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract11", html)
                 nav_match = re.search(r'<nav class="account-nav"[^>]*>(.*?)</nav>', html, re.DOTALL)
                 self.assertIsNotNone(nav_match, "Account Settings navigation must render")
                 active_links = re.findall(r'<a href="([^"]+)" aria-current="page">', nav_match.group(1))
@@ -289,6 +367,11 @@ class AccountSettingsPagesTests(TestCase):
                     "theme": "system",
                     "density": "comfortable",
                     "accent": "violet",
+                    "layout": "wide",
+                    "chart_position": "left",
+                    "default_page": "markets",
+                    "auto_refresh_interval": "30s",
+                    "refresh_frequency": "5m",
                     "notification_categories": {
                         "trade_alerts": False,
                         "market_news": False,
@@ -304,6 +387,11 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(profile.account_preferences["theme"], "system")
         self.assertEqual(profile.account_preferences["density"], "comfortable")
         self.assertEqual(profile.account_preferences["accent"], "violet")
+        self.assertEqual(profile.account_preferences["layout"], "wide")
+        self.assertEqual(profile.account_preferences["chart_position"], "left")
+        self.assertEqual(profile.account_preferences["default_page"], "markets")
+        self.assertEqual(profile.account_preferences["auto_refresh_interval"], "30s")
+        self.assertEqual(profile.account_preferences["refresh_frequency"], "5m")
         self.assertFalse(profile.account_preferences["notification_categories"]["trade_alerts"])
         self.assertFalse(profile.account_preferences["notification_categories"]["market_news"])
         self.assertTrue(profile.account_preferences["notification_categories"]["security_alerts"])
@@ -311,6 +399,7 @@ class AccountSettingsPagesTests(TestCase):
         read_back = self.client.get(reverse("account_settings_api")).json()
         self.assertEqual(read_back["profile"]["account_preferences"]["theme"], "system")
         self.assertEqual(read_back["profile"]["account_preferences"]["density"], "comfortable")
+        self.assertEqual(read_back["profile"]["account_preferences"]["default_page"], "markets")
 
     def test_settings_api_rejects_unsupported_preference_without_partial_write(self):
         response = self.client.patch(
@@ -337,3 +426,14 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(response.status_code, 400)
         profile = UserProfile.objects.get(user=self.user)
         self.assertTrue(profile.account_preferences == {})
+
+
+    def test_security_reference_layout_has_dedicated_password_and_reassurance_panels(self):
+        response = self.client.get(reverse("security_center"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "security-password-management")
+        self.assertContains(response, "security-reassurance-banner")
+        security_css = (Path(__file__).resolve().parents[2] / "static/css/security_center.css").read_text()
+        self.assertIn("Security reference layout: overview and MFA on the left", security_css)
+        security_template = (Path(__file__).resolve().parents[2] / "templates/core/security_center.html").read_text()
+        self.assertNotIn('account-state account-state--good">Protected</span>', security_template)
