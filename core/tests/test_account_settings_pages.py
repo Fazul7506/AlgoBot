@@ -192,7 +192,7 @@ class AccountSettingsPagesTests(TestCase):
         response = self.client.get(reverse("settings_page"))
         self.assertEqual(response.status_code, 200)
         html = response.content.decode("utf-8")
-        self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract2", html)
+        self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract3", html)
         self.assertIn("localStorage.getItem('algobot-theme')", html)
         css = (Path(__file__).resolve().parents[2] / "static/css/account_preferences_global.css").read_text()
         for theme in ("dark", "light"):
@@ -201,6 +201,12 @@ class AccountSettingsPagesTests(TestCase):
             self.assertIn(f'data-accent="{accent}"', css)
         self.assertIn("--ds-surface-1:var(--panel)", css)
         self.assertIn("overflow-wrap:anywhere", css)
+        self.assertIn('data-chart-position="left"', css)
+        self.assertContains(response, 'name="layout"')
+        self.assertContains(response, 'name="chart_position"')
+        self.assertContains(response, 'name="default_page"')
+        self.assertContains(response, 'name="auto_refresh_interval"')
+        self.assertContains(response, 'name="refresh_frequency"')
 
     def test_primary_sidebar_uses_account_settings_label(self):
         response = self.client.get(reverse("settings_page"))
@@ -345,6 +351,11 @@ class AccountSettingsPagesTests(TestCase):
                     "theme": "system",
                     "density": "comfortable",
                     "accent": "violet",
+                    "layout": "wide",
+                    "chart_position": "left",
+                    "default_page": "markets",
+                    "auto_refresh_interval": "30s",
+                    "refresh_frequency": "5m",
                     "notification_categories": {
                         "trade_alerts": False,
                         "market_news": False,
@@ -360,6 +371,11 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(profile.account_preferences["theme"], "system")
         self.assertEqual(profile.account_preferences["density"], "comfortable")
         self.assertEqual(profile.account_preferences["accent"], "violet")
+        self.assertEqual(profile.account_preferences["layout"], "wide")
+        self.assertEqual(profile.account_preferences["chart_position"], "left")
+        self.assertEqual(profile.account_preferences["default_page"], "markets")
+        self.assertEqual(profile.account_preferences["auto_refresh_interval"], "30s")
+        self.assertEqual(profile.account_preferences["refresh_frequency"], "5m")
         self.assertFalse(profile.account_preferences["notification_categories"]["trade_alerts"])
         self.assertFalse(profile.account_preferences["notification_categories"]["market_news"])
         self.assertTrue(profile.account_preferences["notification_categories"]["security_alerts"])
@@ -367,6 +383,7 @@ class AccountSettingsPagesTests(TestCase):
         read_back = self.client.get(reverse("account_settings_api")).json()
         self.assertEqual(read_back["profile"]["account_preferences"]["theme"], "system")
         self.assertEqual(read_back["profile"]["account_preferences"]["density"], "comfortable")
+        self.assertEqual(read_back["profile"]["account_preferences"]["default_page"], "markets")
 
     def test_settings_api_rejects_unsupported_preference_without_partial_write(self):
         response = self.client.patch(
