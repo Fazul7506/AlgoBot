@@ -68,3 +68,11 @@ This change does not yet prove full reference-image parity or end-to-end backend
 - Still not verified: browser-based visual comparison against the four supplied reference images, mobile/tablet screenshot review, and deployment/production API checks. The reference images were not available as inspectable files in this repository workspace. The PR remains a draft until those visual checks and backend gaps are addressed.
 
 - Follow-up: the Security page now presents up to three genuine failed/blocked sign-in events as concise alerts, filtered to the authenticated user's audit records. The focused security suite passed (28 tests) and the final full suite passed (878 tests).
+
+## Follow-up: global theme and accent propagation (29 October 2026)
+
+- Extended `static/css/account_preferences_global.css` into a shared app-wide appearance contract: light/dark surface and text tokens, form and menu surfaces, selected/active navigation, contrast-aware accent values for cyan/blue/teal/violet/amber, global density spacing, and wrapping/min-width safeguards for long content.
+- `templates/base.html` now bootstraps the last explicitly selected light/dark theme from local storage before stylesheets render and bumps the shared stylesheet cache key. The existing authenticated `/api/settings/` preference loader continues to apply persisted theme, density, and accent values across routes.
+- Added a contract test in `core/tests/test_account_settings_pages.py` for the shared stylesheet/cache key, early theme bootstrap, all five accent values, global tokens, and text-wrapping guard.
+- Validation in the working box: `node --check static/js/base_shell.js`, `scripts/validate_frontend_structure.py`, `node static/js/market_asset_registry.test.js`, and `git diff --check` passed. Django tests could not run in this box because Django is not installed in its Python environment; CI must validate the added test.
+- Visual limitation: the four reference screenshots are now available and are the targets for visual review, but this environment has no installed browser/screenshot harness or Django runtime, so rendered desktop/tablet/mobile comparison remains unverified. Global theme rules cover common shell/card/form patterns; exhaustive contrast/overflow validation across every custom page still requires rendered browser testing.
