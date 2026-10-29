@@ -1,5 +1,5 @@
 /* Account preferences are global design-system tokens, not page-local styling. */
-:root { --ds-accent: var(--accent, #29d3ff); }
+:root { --ds-accent: var(--accent, #29d3ff); --accent-foreground:#06111f; }
 html[data-accent="cyan"] { --ds-accent:#08d7f4; --accent:#08d7f4; }
 html[data-accent="blue"] { --ds-accent:#3988ff; --accent:#3988ff; }
 html[data-accent="teal"] { --ds-accent:#12d6b0; --accent:#12d6b0; }
@@ -95,6 +95,13 @@ html[data-theme="dark"][data-accent="teal"] { --accent:#37e3c1; }
 html[data-theme="dark"][data-accent="violet"] { --accent:#c0a5ff; }
 html[data-theme="dark"][data-accent="amber"] { --accent:#ffd166; }
 html[data-theme="dark"][data-accent] { --ds-accent:var(--accent); --ds-info:var(--accent); }
+html[data-theme="dark"][data-accent="cyan"] { --accent-foreground:#06111f; }
+html[data-theme="dark"][data-accent="blue"] { --accent-foreground:#ffffff; }
+html[data-theme="dark"][data-accent="teal"] { --accent-foreground:#06111f; }
+html[data-theme="dark"][data-accent="violet"] { --accent-foreground:#160b2b; }
+html[data-theme="dark"][data-accent="amber"] { --accent-foreground:#211600; }
+html[data-theme="light"][data-accent] { --accent-foreground:#ffffff; }
+
 html[data-theme="light"][data-accent="cyan"] { --accent:#087e91; }
 html[data-theme="light"][data-accent="blue"] { --accent:#205fca; }
 html[data-theme="light"][data-accent="teal"] { --accent:#087b68; }
@@ -135,7 +142,7 @@ html[data-theme="light"] :where(pre,code,.code-block,.terminal-output,.log-outpu
 html[data-theme="light"] :where(button,a,input,select,textarea,[role="button"],[role="tab"],[role="switch"]) { text-shadow:none; filter:none; }
 html[data-theme="light"] :where(.app-content,.app-content *) { text-decoration-color:currentColor; }
 html[data-theme="light"] :where(.app-content img,.app-content svg,.app-content canvas,.app-content video) { opacity:1; filter:none; }
-html[data-theme="light"] :where(.app-content .btn-primary,.app-content .account-btn--primary,.app-content .ds-btn--primary,.app-content .primary-button) { color:#fff !important; background-color:var(--accent); }
+html[data-theme="light"] :where(.app-content .btn-primary,.app-content .account-btn--primary,.app-content .ds-btn--primary,.app-content .primary-button) { color:var(--accent-foreground,#fff) !important; background-color:var(--accent); }
 html[data-theme="light"] :where(.app-content .badge,.app-content .status-badge,.app-content .status-pill,.app-content .tag) { text-shadow:none; }
 html[data-theme="light"] :where(.app-content [style*="color: white"],.app-content [style*="color:#fff"],.app-content [style*="color: #fff"],.app-content [style*="color:#ffffff"],.app-content [style*="color: #ffffff"]) { color:var(--text) !important; }
 html[data-theme="light"] :where(.app-content [style*="background:#0"],.app-content [style*="background: #0"],.app-content [style*="background-color:#0"],.app-content [style*="background-color: #0"],.app-content [style*="background:#1"],.app-content [style*="background: #1"],.app-content [style*="background-color:#1"],.app-content [style*="background-color: #1"]) { background-color:var(--panel) !important; background-image:none !important; color:var(--text) !important; }
