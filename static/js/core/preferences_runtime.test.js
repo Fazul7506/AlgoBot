@@ -45,6 +45,7 @@ function contrastRatio(a, b) {
   const values = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
+const accountCss = fs.readFileSync('static/css/account_settings.css', 'utf8');
 const palette = {
   cyan: { darkAccent: '#08d7f4', darkText: '#06111f', lightAccent: '#087e91' },
   blue: { darkAccent: '#65a5ff', darkText: '#06111f', lightAccent: '#205fca' },
@@ -55,7 +56,11 @@ const palette = {
 for (const [name, values] of Object.entries(palette)) {
   assert.ok(contrastRatio(values.darkAccent, values.darkText) >= 4.5, name + ' dark primary-action contrast must meet WCAG AA');
   assert.ok(contrastRatio(values.lightAccent, '#ffffff') >= 4.5, name + ' light primary-action contrast must meet WCAG AA');
+  assert.ok(themeCss.includes('html[data-theme="dark"][data-accent="' + name + '"] { --accent:' + values.darkAccent + '; }'), name + ' dark accent matches the actual global palette');
+  assert.ok(themeCss.includes('html[data-theme="light"][data-accent="' + name + '"] { --accent:' + values.lightAccent + '; }'), name + ' light accent matches the actual global palette');
+  assert.ok(accountCss.includes('.accent-swatch--' + name + '{background:var(--palette-' + name + ','), name + ' swatch uses a theme-aware palette token');
   assert.ok(themeCss.includes('html[data-theme="dark"][data-accent="' + name + '"] { --accent-foreground:' + values.darkText + '; }'), name + ' uses its contrast-tested dark foreground');
 }
 assert.ok(themeCss.includes('color:var(--accent-foreground,#06111f);'), 'shared primary actions consume the tested foreground token');
+console.log('Theme-aware swatch palette tests passed for all five accents.');
 console.log('Accent foreground contrast tests passed (WCAG AA, all five accents in both themes).');
