@@ -415,3 +415,6 @@
 .account-page[data-settings-page] .accent-swatch--violet{background:var(--palette-violet,#6940b4)}
 .account-page[data-settings-page] .accent-swatch--amber{background:var(--palette-amber,#8a5100)}
 .account-page[data-settings-page] .preferences-accent-list input:checked+.accent-swatch{outline-color:var(--ds-text,var(--text))}
+
+html[data-theme="dark"] .account-page[data-settings-page]{--palette-cyan:#08d7f4;--palette-blue:#65a5ff;--palette-teal:#37e3c1;--palette-violet:#c0a5ff;--palette-amber:#ffd166}
+html[data-theme="light"] .account-page[data-settings-page]{--palette-cyan:#087e91;--palette-blue:#205fca;--palette-teal:#087b68;--palette-violet:#6940b4;--palette-amber:#8a5100}
