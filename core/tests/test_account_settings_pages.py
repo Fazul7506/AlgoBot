@@ -1,6 +1,7 @@
 import io
 import json
 import re
+from pathlib import Path
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock, patch
@@ -186,6 +187,20 @@ class AccountSettingsPagesTests(TestCase):
         self.assertContains(response, "First name is required")
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, "")
+
+    def test_global_theme_and_accent_contract_is_loaded_on_every_page(self):
+        response = self.client.get(reverse("settings_page"))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode("utf-8")
+        self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract2", html)
+        self.assertIn("localStorage.getItem('algobot-theme')", html)
+        css = (Path(__file__).resolve().parents[2] / "static/css/account_preferences_global.css").read_text()
+        for theme in ("dark", "light"):
+            self.assertIn(f'html[data-theme="{theme}"]', css)
+        for accent in ("cyan", "blue", "teal", "violet", "amber"):
+            self.assertIn(f'data-accent="{accent}"', css)
+        self.assertIn("--ds-surface-1:var(--panel)", css)
+        self.assertIn("overflow-wrap:anywhere", css)
 
     def test_primary_sidebar_uses_account_settings_label(self):
         response = self.client.get(reverse("settings_page"))
