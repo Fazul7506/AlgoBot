@@ -315,3 +315,72 @@ body:has(.analysis-hero){background:#041326}
 }
 .analysis-market-status[hidden] { display: none !important; }
 @media (max-width: 760px) { .analysis-market-status { margin: 0 12px 12px; } }
+
+
+/* Analysis layout hard reset: neutralize inherited RTL/right-alignment and
+   constrained flex/grid sizing that can collapse the dashboard into a column. */
+html:has(.analysis-dashboard) { direction: ltr; }
+body:has(.analysis-dashboard) { direction: ltr; text-align: left; }
+body:has(.analysis-dashboard) #main-content.analysis-dashboard {
+  display: grid !important;
+  direction: ltr !important;
+  text-align: left !important;
+  width: 100% !important;
+  max-width: 1680px !important;
+  min-width: 0 !important;
+  margin: 0 auto !important;
+  padding: 22px clamp(12px, 2vw, 28px) 32px !important;
+  box-sizing: border-box !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
+  justify-content: stretch !important;
+  align-content: start !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 16px !important;
+}
+.analysis-dashboard,
+.analysis-dashboard * {
+  box-sizing: border-box;
+  direction: ltr;
+}
+.analysis-dashboard > *,
+.analysis-dashboard .reference-page-heading,
+.analysis-dashboard .reference-kpis,
+.analysis-dashboard .reference-main-grid,
+.analysis-dashboard .analysis-secondary-grid,
+.analysis-dashboard .analysis-detail-grid,
+.analysis-dashboard .analysis-operations-grid {
+  min-width: 0;
+  max-width: 100%;
+}
+.analysis-dashboard > * { justify-self: stretch; }
+.analysis-dashboard :is(h1,h2,h3,h4,p,label,span,div,button,a,select,option,small,strong,em,li) {
+  text-align: left;
+}
+.analysis-dashboard .reference-page-heading { width: 100%; }
+.analysis-dashboard .reference-heading-copy { min-width: 0; flex: 1 1 auto; }
+.analysis-dashboard .reference-kpis { width: 100%; }
+.analysis-dashboard .reference-main-grid,
+.analysis-dashboard .analysis-secondary-grid,
+.analysis-dashboard .analysis-detail-grid,
+.analysis-dashboard .analysis-operations-grid {
+  width: 100%;
+}
+.analysis-dashboard .reference-table tbody td { text-align: right; }
+.analysis-dashboard .reference-table .empty,
+.analysis-dashboard .analysis-chart-footer,
+.analysis-dashboard .indicator-chart-wrap .empty { text-align: center; }
+@media (max-width: 760px) {
+  body:has(.analysis-dashboard) #main-content.analysis-dashboard {
+    padding: 12px 10px 24px !important;
+    gap: 12px !important;
+  }
+  .analysis-dashboard .reference-page-heading { align-items: flex-start; }
+  .analysis-dashboard .reference-kpis,
+  .analysis-dashboard .reference-main-grid,
+  .analysis-dashboard .analysis-secondary-grid,
+  .analysis-dashboard .analysis-detail-grid,
+  .analysis-dashboard .analysis-operations-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
