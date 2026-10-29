@@ -468,6 +468,8 @@ def account_identity_page(request):
     return render(request, "core/account_identity.html", {
         "username": user.username, "email": user.email,
         "email_verified": profile.email_verified,
+        "profile": profile,
+        "two_factor_enabled": bool(profile.two_factor_enabled),
         "password_required": user.has_usable_password(),
         "google_identity_linked": GoogleIdentity.objects.filter(user=user, provider="google").exists(),
         "login_events": login_events,
