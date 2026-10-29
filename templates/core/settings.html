@@ -122,6 +122,7 @@
     html.dataset.chartPosition = prefs.chart_position || 'right';
     html.dataset.autoRefresh = prefs.auto_refresh_interval || 'realtime';
     html.dataset.refreshFrequency = prefs.refresh_frequency || '1m';
+    html.dataset.defaultPage = prefs.default_page || 'dashboard';
   };
   async function load() {
     const data = await request('GET');
@@ -147,6 +148,7 @@
     root.querySelector('[data-preferences-user]').textContent = username;
     root.querySelector('[data-preferences-email]').textContent = email;
     applyAppearance(prefs);
+    document.dispatchEvent(new CustomEvent('algobot:preferences-loaded', {detail: prefs}));
     lastSavedFormState = captureFormState();
     status.textContent = 'Preferences loaded';
     status.classList.remove('account-state--warn','account-state--bad'); status.classList.add('account-state--good');
@@ -194,6 +196,7 @@
     try {
       const data = await request('PATCH', {profile, preferences});
       applyAppearance(preferences);
+      document.dispatchEvent(new CustomEvent('algobot:preferences-loaded', {detail: preferences}));
       lastSavedFormState = submittedFormState;
       message.textContent = data.message || 'Preferences saved.';
       status.textContent = 'Preferences saved';
