@@ -97,3 +97,14 @@ This change does not yet prove full reference-image parity or end-to-end backend
 - No production migration or deployment has been run. Migration `0016_trusted_device.py` is additive; it creates a new table and does not drop or rewrite existing tables.
 - Browser-based visual regression and desktop/tablet/mobile screenshot comparisons remain unverified. Global theme rules and the settings controls were implemented, but exhaustive review of every custom page and all hard-coded colours still requires a working browser/test deployment.
 - The refresh-frequency preference is persisted and exposed globally as a data attribute, but it does not automatically reconfigure every existing market/trading data poller unless that page consumes the shared preference contract. This is still an integration acceptance item and must not be described as universally implemented yet.
+
+
+| `core/models.py` | Backend/database | Adds user-scoped TrustedDevice model with hashed token, lifecycle timestamps, and revocation state | Python compile passed; Django migration check pending CI |
+| `core/migrations/0016_trusted_device.py` | Database | Additive table/index migration; does not alter or delete existing records | Migration validation pending CI; not run against production |
+| `core/security_settings_api.py` | Backend/API | Password-confirmed trusted-browser registration, hash-only token storage, user-scoped revoke, audit-derived alert feed | Python compile passed; Django API tests added, execution pending CI |
+| `core/security_settings_urls.py` | Backend/routing | Routes trusted-device inventory/registration/revocation and security-alert feed | Django URL checks pending CI |
+| `static/js/trusted_devices.js` | Frontend | Connects trusted-device UI and live alert refresh to authenticated APIs with safe DOM text rendering | Node syntax check passed; browser interaction test pending |
+| `templates/core/security_center.html` | Frontend | Adds password-confirmed trusted-device management and API-backed security alerts | Template validation pending CI; visual screenshot comparison pending |
+| `templates/core/settings.html` | Frontend | Adds layout, chart position, default-page and refresh preference selectors and persistence payload | Template validation pending CI; end-to-end data-poller integration remains partial |
+| `core/tests/test_security_settings_api.py` | Tests | Covers password-gated registration, hash-only token, ownership isolation, revocation and alert scoping | Added; Django test execution pending CI |
+| `core/tests/test_account_settings_pages.py` | Tests | Extends account preference persistence tests for layout, chart position, default page and refresh values | Added; Django test execution pending CI |
